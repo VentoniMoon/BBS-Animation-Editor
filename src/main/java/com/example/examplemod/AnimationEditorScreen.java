@@ -239,10 +239,12 @@ public class AnimationEditorScreen extends GuiScreen
         this.refreshBlockbusterRecordList();
 
         /*
-         * Temporary test bones.
+         * Create the editor bone structure.
+         *
+         * Keyframes will be populated from the
+         * selected Blockbuster actor later.
          */
-
-        createTemporaryTestBones();
+        createEmptyAnimationBones();
 
         /*
          * Timeline.
@@ -263,6 +265,105 @@ public class AnimationEditorScreen extends GuiScreen
         this.timeline.pause();
 
         this.playing = false;
+    }
+
+    private void createEmptyAnimationBones()
+    {
+        this.bones.clear();
+
+        AnimationBone anchor =
+                new AnimationBone("Anchor");
+
+        AnimationBone body =
+                new AnimationBone("Body");
+
+        AnimationBone head =
+                new AnimationBone("Head");
+
+        AnimationBone armLeft =
+                new AnimationBone("Arm.L");
+
+        AnimationBone armRight =
+                new AnimationBone("Arm.R");
+
+        AnimationBone legLeft =
+                new AnimationBone("Leg.L");
+
+        AnimationBone legRight =
+                new AnimationBone("Leg.R");
+
+        /*
+         * Bone hierarchy.
+         */
+
+        anchor.addChild(body);
+
+        body.addChild(head);
+
+        body.addChild(armLeft);
+
+        body.addChild(armRight);
+
+        body.addChild(legLeft);
+
+        body.addChild(legRight);
+
+        /*
+         * Static attachment positions.
+         */
+
+        body.setLocalPosition(
+                0.0F,
+                0.0F,
+                0.0F
+        );
+
+        head.setLocalPosition(
+                0.0F,
+                -55.0F,
+                0.0F
+        );
+
+        armLeft.setLocalPosition(
+                -30.0F,
+                0.0F,
+                0.0F
+        );
+
+        armRight.setLocalPosition(
+                30.0F,
+                0.0F,
+                0.0F
+        );
+
+        legLeft.setLocalPosition(
+                -12.0F,
+                65.0F,
+                0.0F
+        );
+
+        legRight.setLocalPosition(
+                12.0F,
+                65.0F,
+                0.0F
+        );
+
+        /*
+         * Add bones to the editor.
+         *
+         * No artificial keyframes are created.
+         */
+
+        this.bones.add(anchor);
+        this.bones.add(body);
+        this.bones.add(head);
+        this.bones.add(armLeft);
+        this.bones.add(armRight);
+        this.bones.add(legLeft);
+        this.bones.add(legRight);
+
+        this.selectedBone = 0;
+        this.selectedKeyframe = null;
     }
 
     private void createTemporaryTestBones()
@@ -642,6 +743,12 @@ public class AnimationEditorScreen extends GuiScreen
 
         this.playing = false;
 
+        this.selectedKeyframe = null;
+
+        /*
+         * Reset the timeline before importing
+         * the selected actor's recording.
+         */
         this.timeline.setTick(0);
 
         this.timeline.pause();
@@ -669,6 +776,21 @@ public class AnimationEditorScreen extends GuiScreen
                         + "Actor record: "
                         + data.hasRecord()
         );
+
+        if (data.hasRecord())
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "Actor record length: "
+                            + data.getLength()
+            );
+        }
+
+        /*
+         * Import the selected actor's actual
+         * Blockbuster recording into the editor.
+         */
+        loadCurrentRecordIntoAnimationBones();
     }
 
     /*
@@ -1403,6 +1525,16 @@ public class AnimationEditorScreen extends GuiScreen
         int y =
                 top + 28;
 
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "Drawing bones: "
+                        + this.bones.size()
+                        + " | top="
+                        + top
+                        + " | bottom="
+                        + bottom
+        );
+
         for (int i = 0;
              i < this.bones.size();
              i++)
@@ -1808,6 +1940,9 @@ public class AnimationEditorScreen extends GuiScreen
                         ? 0xFF3A3B3E
                         : 0xFF303134;
 
+        /*
+         * Фон строки кости.
+         */
         this.drawRect(
                 0,
                 trackY,
@@ -1817,12 +1952,36 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         /*
-         * Здесь намеренно НЕТ названия кости.
+         * Название кости.
          *
-         * Список Bones слева является
-         * единственным местом выбора кости.
+         * Теперь оно находится непосредственно
+         * в строке Timeline.
          */
+        this.drawString(
+                this.fontRenderer,
+                bone.getName(),
+                10,
+                trackY + 5,
+                selected
+                        ? 0xFFFFFF
+                        : 0xAAAAAA
+        );
 
+        /*
+         * Разделитель между названием кости
+         * и областью ключевых кадров.
+         */
+        this.drawRect(
+                timelineStartX - 1,
+                trackY,
+                timelineStartX,
+                trackY + TRACK_HEIGHT,
+                0xFF555555
+        );
+
+        /*
+         * Горизонтальная линия самой дорожки.
+         */
         this.drawRect(
                 timelineStartX,
                 trackY + 10,
@@ -1831,6 +1990,9 @@ public class AnimationEditorScreen extends GuiScreen
                 0xFF555555
         );
 
+        /*
+         * Ключевые кадры этой кости.
+         */
         for (
                 AnimationKeyframe keyframe :
                 bone.getKeyframes()
@@ -2738,6 +2900,172 @@ public class AnimationEditorScreen extends GuiScreen
      * Adapter
      * ------------------------------------------------------------
      */
+
+    private void loadCurrentRecordIntoAnimationBones()
+    {
+        BlockbusterRecord record =
+                getCurrentBlockbusterRecord();
+
+        if (record == null)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "No Blockbuster record selected."
+            );
+
+            return;
+        }
+
+        AnimationBone anchor =
+                findBoneByName("Anchor");
+
+        if (anchor == null)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "Anchor bone was not found."
+            );
+
+            return;
+        }
+
+        /*
+         * Remove previously imported keyframes.
+         *
+         * AnimationBone does not have clearKeyframes().
+         * We remove them using their frame numbers.
+         */
+        while (!anchor.getKeyframes().isEmpty())
+        {
+            int lastIndex =
+                    anchor.getKeyframes().size() - 1;
+
+            int frame =
+                    anchor.getKeyframes()
+                            .get(lastIndex)
+                            .getFrame();
+
+            anchor.removeKeyframe(frame);
+        }
+
+        int length =
+                record.getLength();
+
+        if (length <= 0)
+        {
+            this.timeline.setLength(1);
+            this.timeline.setTick(0);
+            this.currentFrame = 0;
+
+            return;
+        }
+
+        int importedFrames = 0;
+
+        for (int tick = 0; tick < length; tick++)
+        {
+            BlockbusterRecordFrame frame =
+                    record.getFrame(tick);
+
+            if (frame == null)
+            {
+                continue;
+            }
+
+            /*
+             * Create the keyframe through AnimationBone.
+             */
+            anchor.addKeyframe(tick);
+
+            AnimationKeyframe keyframe =
+                    anchor.getKeyframes()
+                            .get(
+                                    anchor.getKeyframes().size() - 1
+                            );
+
+            AnimationTransform transform =
+                    keyframe.getTransform();
+
+            /*
+             * Blockbuster stores actor position
+             * directly in the recording frame.
+             */
+            transform.setPosition(
+                    (float) frame.getX(),
+                    (float) frame.getY(),
+                    (float) frame.getZ()
+            );
+
+            /*
+             * Blockbuster:
+             *
+             * yaw   = Y axis
+             * pitch = X axis
+             *
+             * The editor transform uses:
+             *
+             * X = pitch
+             * Y = yaw
+             * Z = 0
+             */
+            transform.setRotation(
+                    frame.getPitch(),
+                    frame.getYaw(),
+                    0.0F
+            );
+
+            importedFrames++;
+        }
+
+        /*
+         * Synchronize the editor timeline
+         * with the imported Blockbuster record.
+         */
+        this.currentFrame = 0;
+
+        this.timeline.setLength(
+                Math.max(1, length)
+        );
+
+        this.timeline.setTick(0);
+
+        this.timeline.pause();
+
+        this.playing = false;
+
+        this.selectedKeyframe = null;
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "Imported "
+                        + importedFrames
+                        + " Blockbuster frames."
+        );
+    }
+
+    private AnimationBone findBoneByName(
+            String name)
+    {
+        if (name == null)
+        {
+            return null;
+        }
+
+        for (AnimationBone bone : this.bones)
+        {
+            if (bone == null)
+            {
+                continue;
+            }
+
+            if (name.equals(bone.getName()))
+            {
+                return bone;
+            }
+        }
+
+        return null;
+    }
 
     private void applyAdapters()
     {
