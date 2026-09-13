@@ -7,12 +7,12 @@ import net.minecraftforge.fml.common.Loader;
 public class BlockbusterAnimationAdapter
         implements AnimationAdapter
 {
-    private BlockbusterModelAccess modelAccess;
+    private final BlockbusterModelAccess modelAccess;
 
-    public BlockbusterAnimationAdapter()
+    public BlockbusterAnimationAdapter(
+            BlockbusterModelAccess modelAccess)
     {
-        this.modelAccess =
-                new BlockbusterModelAccess(null);
+        this.modelAccess = modelAccess;
     }
 
     /*
@@ -24,9 +24,7 @@ public class BlockbusterAnimationAdapter
     @Override
     public boolean supports()
     {
-        return Loader.isModLoaded(
-                "blockbuster"
-        );
+        return Loader.isModLoaded("blockbuster");
     }
 
     /*
@@ -34,24 +32,6 @@ public class BlockbusterAnimationAdapter
      * Model
      * ---------------------------------------------------------
      */
-
-    public void setModel(
-            Object model)
-    {
-        if (this.modelAccess == null)
-        {
-            this.modelAccess =
-                    new BlockbusterModelAccess(
-                            model
-                    );
-        }
-        else
-        {
-            this.modelAccess.setModel(
-                    model
-            );
-        }
-    }
 
     public Object getModel()
     {
@@ -69,52 +49,10 @@ public class BlockbusterAnimationAdapter
                 && this.modelAccess.isValid();
     }
 
-    public boolean loadModel(
-            String name)
-    {
-        if (!supports())
-        {
-            return false;
-        }
-
-        if (this.modelAccess == null)
-        {
-            this.modelAccess =
-                    new BlockbusterModelAccess(
-                            null
-                    );
-        }
-
-        return this.modelAccess.loadModelByName(
-                name
-        );
-    }
-
     /*
      * ---------------------------------------------------------
      * Apply animation
      * ---------------------------------------------------------
-     *
-     * Здесь намеренно НЕТ mapping-а:
-     *
-     * Anchor -> anchor
-     * Body   -> body
-     * ...
-     *
-     * AnimationBone теперь использует реальные имена
-     * Blockbuster-модели.
-     *
-     * Поэтому:
-     *
-     * AnimationBone "left_arm"
-     *              ↓
-     * ModelCustomRenderer "left_arm"
-     *
-     * AnimationBone "body_armor"
-     *              ↓
-     * ModelCustomRenderer "body_armor"
-     *
-     * и так далее для любого количества костей.
      */
 
     @Override
@@ -153,10 +91,6 @@ public class BlockbusterAnimationAdapter
                 continue;
             }
 
-            /*
-             * AnimationBone теперь содержит
-             * настоящее имя Blockbuster limb.
-             */
             Object renderer =
                     this.modelAccess.findBone(
                             boneName
@@ -168,16 +102,11 @@ public class BlockbusterAnimationAdapter
             }
 
             /*
-             * Snapshot, который приходит сюда,
-             * должен содержать LOCAL transform.
+             * Snapshot содержит LOCAL transform.
              *
-             * Это важно:
-             *
-             * Blockbuster сам применяет parent hierarchy
-             * через ModelCustomRenderer.parent.
-             *
-             * Поэтому мы не должны передавать сюда
-             * world transform.
+             * Hierarchy родитель -> ребёнок
+             * продолжает обрабатываться самим
+             * Blockbuster через ModelCustomRenderer.
              */
             this.modelAccess.applyTransform(
                     renderer,

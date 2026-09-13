@@ -294,6 +294,27 @@ public class TransformPanel
 
     /*
      * =========================
+     * FINISH EDITING
+     * =========================
+     */
+
+    public void finishEditing()
+    {
+        if (this.activeControl == null)
+        {
+            return;
+        }
+
+        if (this.activeControl.isEditing())
+        {
+            this.activeControl.finishEditing();
+        }
+
+        this.activeControl = null;
+    }
+
+    /*
+     * =========================
      * CLICK
      * =========================
      */
@@ -309,111 +330,211 @@ public class TransformPanel
             return false;
         }
 
-        if (mouseButton != 0)
+        /*
+         * Если сейчас какое-либо поле находится
+         * в текстовом режиме и пользователь кликнул
+         * вне него — завершаем ввод.
+         */
+
+        if (this.activeControl != null
+                && this.activeControl.isEditing())
         {
-            return false;
+            boolean insideActiveControl =
+                    this.activeControl.contains(
+                            mouseX,
+                            mouseY
+                    );
+
+            if (!insideActiveControl)
+            {
+                this.activeControl.finishEditing();
+                this.activeControl = null;
+            }
         }
 
-        this.activeControl = null;
+        /*
+         * POSITION X
+         */
 
-        if (positionXControl.mouseClicked(
+        if (this.positionXControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    positionXControl;
+                    this.positionXControl;
+
+            this.positionXControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (positionYControl.mouseClicked(
+        /*
+         * POSITION Y
+         */
+
+        if (this.positionYControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    positionYControl;
+                    this.positionYControl;
+
+            this.positionYControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (positionZControl.mouseClicked(
+        /*
+         * POSITION Z
+         */
+
+        if (this.positionZControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    positionZControl;
+                    this.positionZControl;
+
+            this.positionZControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (rotationXControl.mouseClicked(
+        /*
+         * ROTATION X
+         */
+
+        if (this.rotationXControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    rotationXControl;
+                    this.rotationXControl;
+
+            this.rotationXControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (rotationYControl.mouseClicked(
+        /*
+         * ROTATION Y
+         */
+
+        if (this.rotationYControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    rotationYControl;
+                    this.rotationYControl;
+
+            this.rotationYControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (rotationZControl.mouseClicked(
+        /*
+         * ROTATION Z
+         */
+
+        if (this.rotationZControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    rotationZControl;
+                    this.rotationZControl;
+
+            this.rotationZControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (scaleXControl.mouseClicked(
+        /*
+         * SCALE X
+         */
+
+        if (this.scaleXControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    scaleXControl;
+                    this.scaleXControl;
+
+            this.scaleXControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (scaleYControl.mouseClicked(
+        /*
+         * SCALE Y
+         */
+
+        if (this.scaleYControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    scaleYControl;
+                    this.scaleYControl;
+
+            this.scaleYControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
 
-        if (scaleZControl.mouseClicked(
+        /*
+         * SCALE Z
+         */
+
+        if (this.scaleZControl.contains(
                 mouseX,
-                mouseY,
-                mouseButton))
+                mouseY))
         {
             this.activeControl =
-                    scaleZControl;
+                    this.scaleZControl;
+
+            this.scaleZControl.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
 
             return true;
         }
+
+        /*
+         * Кликнули вне панели управления.
+         */
 
         return false;
     }
@@ -435,6 +556,16 @@ public class TransformPanel
         }
 
         if (this.activeControl == null)
+        {
+            return;
+        }
+
+        /*
+         * Во время текстового ввода
+         * перетягивание не работает.
+         */
+
+        if (this.activeControl.isEditing())
         {
             return;
         }
@@ -465,7 +596,13 @@ public class TransformPanel
             );
         }
 
-        if (mouseButton == 0)
+        if (
+                mouseButton == 0 &&
+                        (
+                                this.activeControl == null ||
+                                        !this.activeControl.isEditing()
+                        )
+        )
         {
             this.activeControl = null;
         }
@@ -477,29 +614,50 @@ public class TransformPanel
      * =========================
      */
 
-    public void keyTyped(
+    public boolean keyTyped(
             char typedChar,
             int keyCode,
             AnimationKeyframe keyframe)
     {
         if (keyframe == null)
         {
-            return;
+            return false;
         }
 
         if (this.activeControl == null)
         {
-            return;
+            return false;
         }
 
-        this.activeControl.keyTyped(
-                typedChar,
-                keyCode
-        );
+        boolean handled =
+                this.activeControl.keyTyped(
+                        typedChar,
+                        keyCode
+                );
 
-        writeControlsToKeyframe(
-                keyframe
-        );
+        /*
+         * Если клавиша была обработана,
+         * не передаём её дальше в AnimationEditorScreen.
+         */
+
+        if (handled)
+        {
+            /*
+             * После завершения редактирования
+             * записываем итоговое значение в keyframe.
+             */
+
+            if (!this.activeControl.isEditing())
+            {
+                writeControlsToKeyframe(
+                        keyframe
+                );
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     /*

@@ -8,19 +8,11 @@ import java.util.Map;
 
 public class BlockbusterModelAccess
 {
+    private static final Map<Object, List<BlockbusterLimbData>> SKELETON_CACHE =
+            new java.util.WeakHashMap<Object, List<BlockbusterLimbData>>();
+
     private Object model;
 
-    /*
-     * Исходная структура скелета Blockbuster.
-     *
-     * ВАЖНО:
-     *
-     * rotationPointX/Y/Z внутри ModelCustomRenderer
-     * являются изменяемыми runtime-значениями.
-     *
-     * Поэтому мы считываем их один раз при загрузке модели
-     * и дальше используем именно этот снимок.
-     */
     private final List<BlockbusterLimbData> originalLimbData =
             new ArrayList<BlockbusterLimbData>();
 
@@ -37,12 +29,20 @@ public class BlockbusterModelAccess
     public void setModel(Object model)
     {
         this.model = model;
-
-        /*
-         * При смене модели старые данные скелета
-         * больше использовать нельзя.
-         */
         this.originalLimbData.clear();
+
+        if (model == null)
+        {
+            return;
+        }
+
+        List<BlockbusterLimbData> cached =
+                SKELETON_CACHE.get(model);
+
+        if (cached != null)
+        {
+            this.originalLimbData.addAll(cached);
+        }
     }
 
     public boolean isValid()
@@ -103,21 +103,31 @@ public class BlockbusterModelAccess
              */
             this.model = loadedModel;
 
-            /*
-             * Очень важно:
-             *
-             * Считываем исходный скелет ДО того,
-             * как редактор начнёт применять свои transforms.
-             */
-            captureOriginalLimbData();
+            List<BlockbusterLimbData> cached =
+                    SKELETON_CACHE.get(this.model);
+
+            if (cached != null)
+            {
+                this.originalLimbData.clear();
+                this.originalLimbData.addAll(cached);
+            }
+            else
+            {
+                captureOriginalLimbData();
+
+                SKELETON_CACHE.put(
+                        this.model,
+                        new ArrayList<BlockbusterLimbData>(
+                                this.originalLimbData
+                        )
+                );
+            }
 
             System.out.println(
                     "[BBS Animation Editor] "
                             + "Loaded Blockbuster model: "
                             + name
             );
-
-            debugBones();
 
             return true;
         }

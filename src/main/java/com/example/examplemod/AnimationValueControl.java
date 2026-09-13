@@ -52,9 +52,9 @@ public class AnimationValueControl
             float value)
     {
         /*
-         * Никогда не перезаписываем значение,
-         * пока пользователь его редактирует
-         * или двигает мышью.
+         * Пока пользователь редактирует значение
+         * или двигает его мышью, внешний transform
+         * не должен перезаписывать состояние контрола.
          */
         if (
                 !this.dragging &&
@@ -80,7 +80,7 @@ public class AnimationValueControl
             return false;
         }
 
-        if (!isInside(mouseX, mouseY))
+        if (!contains(mouseX, mouseY))
         {
             return false;
         }
@@ -89,8 +89,8 @@ public class AnimationValueControl
                 System.currentTimeMillis();
 
         /*
-         * Второй клик быстро после первого
-         * переводит контрол в текстовый режим.
+         * Второй клик превращает контрол
+         * в текстовое поле.
          */
         if (
                 currentTime -
@@ -102,6 +102,9 @@ public class AnimationValueControl
         }
         else
         {
+            /*
+             * Обычный клик начинает drag.
+             */
             this.dragging = true;
             this.lastMouseX = mouseX;
         }
@@ -148,33 +151,37 @@ public class AnimationValueControl
         }
     }
 
-    public void keyTyped(
+    /**
+     * Обрабатывает клавиатуру.
+     *
+     * @return true если клавиша была обработана
+     */
+    public boolean keyTyped(
             char typedChar,
             int keyCode)
     {
         if (!this.editing)
         {
-            return;
+            return false;
         }
 
         /*
          * ESCAPE
          *
-         * Отмена текущего ввода.
+         * Отменяем только редактирование
+         * этого значения.
          */
         if (keyCode == Keyboard.KEY_ESCAPE)
         {
-            this.editing = false;
-            this.inputText = "";
-            this.selectAll = false;
+            cancelEditing();
 
-            return;
+            return true;
         }
 
         /*
          * ENTER
          *
-         * Подтвердить значение.
+         * Применяем введённое значение.
          */
         if (
                 keyCode == Keyboard.KEY_RETURN ||
@@ -184,14 +191,9 @@ public class AnimationValueControl
         {
             applyInput();
 
-            return;
+            return true;
         }
 
-        /*
-         * CTRL+A
-         *
-         * Выделить всё.
-         */
         boolean ctrlDown =
                 Keyboard.isKeyDown(
                         Keyboard.KEY_LCONTROL
@@ -201,6 +203,9 @@ public class AnimationValueControl
                                 Keyboard.KEY_RCONTROL
                         );
 
+        /*
+         * CTRL + A
+         */
         if (
                 ctrlDown &&
                         keyCode == Keyboard.KEY_A
@@ -208,7 +213,7 @@ public class AnimationValueControl
         {
             this.selectAll = true;
 
-            return;
+            return true;
         }
 
         /*
@@ -221,7 +226,7 @@ public class AnimationValueControl
                 this.inputText = "";
                 this.selectAll = false;
 
-                return;
+                return true;
             }
 
             if (
@@ -236,13 +241,11 @@ public class AnimationValueControl
                         );
             }
 
-            return;
+            return true;
         }
 
         /*
          * DELETE
-         *
-         * Если выделено всё — очищаем поле.
          */
         if (keyCode == Keyboard.KEY_DELETE)
         {
@@ -252,15 +255,13 @@ public class AnimationValueControl
                 this.selectAll = false;
             }
 
-            return;
+            return true;
         }
 
         /*
          * HOME / END
          *
-         * Сейчас полноценного курсора нет,
-         * поэтому эти клавиши просто
-         * снимают выделение.
+         * Полноценного курсора пока нет.
          */
         if (
                 keyCode == Keyboard.KEY_HOME ||
@@ -269,11 +270,11 @@ public class AnimationValueControl
         {
             this.selectAll = false;
 
-            return;
+            return true;
         }
 
         /*
-         * DIGITS
+         * ЦИФРЫ
          */
         if (Character.isDigit(typedChar))
         {
@@ -281,45 +282,43 @@ public class AnimationValueControl
                     typedChar
             );
 
-            return;
+            return true;
         }
 
         /*
-         * MINUS
+         * МИНУС
          */
         if (typedChar == '-')
         {
             if (
-                    this.inputText.length() == 0
+                    this.inputText.length() == 0 ||
+                            this.selectAll
             )
             {
-                appendInputChar(
-                        typedChar
-                );
+                appendInputChar('-');
             }
 
-            return;
+            return true;
         }
 
         /*
-         * PLUS
+         * ПЛЮС
          */
         if (typedChar == '+')
         {
             if (
-                    this.inputText.length() == 0
+                    this.inputText.length() == 0 ||
+                            this.selectAll
             )
             {
-                appendInputChar(
-                        typedChar
-                );
+                appendInputChar('+');
             }
 
-            return;
+            return true;
         }
 
         /*
-         * DECIMAL POINT
+         * ДЕСЯТИЧНАЯ ТОЧКА
          */
         if (
                 typedChar == '.' ||
@@ -327,16 +326,22 @@ public class AnimationValueControl
         )
         {
             if (
-                    this.inputText.indexOf(
-                            '.'
-                    ) == -1
+                    this.inputText.indexOf('.') == -1
             )
             {
-                appendInputChar(
-                        '.'
-                );
+                appendInputChar('.');
             }
+
+            return true;
         }
+
+        /*
+         * Любая другая клавиша во время
+         * редактирования также считается
+         * обработанной, чтобы она не уходила
+         * дальше в AnimationEditorScreen.
+         */
+        return true;
     }
 
     private void appendInputChar(
@@ -363,11 +368,18 @@ public class AnimationValueControl
                 );
 
         /*
-         * При первом вводе следующая
-         * напечатанная цифра заменит
-         * старое значение.
+         * Первая введённая цифра заменит
+         * текущее значение.
          */
         this.selectAll = true;
+    }
+
+    private void cancelEditing()
+    {
+        this.editing = false;
+        this.dragging = false;
+        this.inputText = "";
+        this.selectAll = false;
     }
 
     private void applyInput()
@@ -382,9 +394,7 @@ public class AnimationValueControl
                         this.inputText.equals("+.")
         )
         {
-            this.editing = false;
-            this.inputText = "";
-            this.selectAll = false;
+            cancelEditing();
 
             return;
         }
@@ -399,11 +409,13 @@ public class AnimationValueControl
         catch (NumberFormatException exception)
         {
             /*
-             * Оставляем старое значение.
+             * Если число некорректное,
+             * оставляем старое значение.
              */
         }
 
         this.editing = false;
+        this.dragging = false;
         this.inputText = "";
         this.selectAll = false;
     }
@@ -413,7 +425,7 @@ public class AnimationValueControl
         return this.editing;
     }
 
-    private boolean isInside(
+    public boolean contains(
             int mouseX,
             int mouseY)
     {
@@ -424,7 +436,6 @@ public class AnimationValueControl
                 && mouseY <=
                 this.y + this.height;
     }
-
     public void draw(
             Minecraft mc)
     {
@@ -495,4 +506,16 @@ public class AnimationValueControl
                 value
         );
     }
+    public boolean finishEditing()
+    {
+        if (!this.editing)
+        {
+            return false;
+        }
+
+        this.applyInput();
+
+        return true;
+    }
+
 }

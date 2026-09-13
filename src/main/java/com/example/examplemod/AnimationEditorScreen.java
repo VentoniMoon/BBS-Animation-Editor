@@ -8,9 +8,7 @@ import org.lwjgl.input.Mouse;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public class AnimationEditorScreen extends GuiScreen
 {
@@ -33,16 +31,7 @@ public class AnimationEditorScreen extends GuiScreen
 
     private BlockbusterModelAccess blockbusterModelAccess;
 
-    private BlockbusterSceneManager sceneManager;
-
-    private List<File> sceneFiles =
-            new ArrayList<File>();
-
-    private int selectedScene = -1;
-
     private boolean sceneDropdownOpen = false;
-
-    private int selectedActor = -1;
 
     private int currentFrame = 0;
 
@@ -53,8 +42,7 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorTimeline timeline =
             new EditorTimeline();
 
-    private final Map<String, ActorAnimationData> actorAnimations =
-            new LinkedHashMap<String, ActorAnimationData>();
+    private EditorSceneState sceneState;
 
     private List<AnimationBone> bones =
             new ArrayList<AnimationBone>();
@@ -102,47 +90,36 @@ public class AnimationEditorScreen extends GuiScreen
     {
         super.initGui();
 
-        this.sceneManager =
-                new BlockbusterSceneManager();
+        this.sceneState =
+                new EditorSceneState();
 
-        this.sceneFiles =
-                this.sceneManager.getSceneFiles();
+        this.sceneState.refreshScenes();
 
-        this.selectedScene = -1;
-        this.selectedActor = -1;
         this.sceneDropdownOpen = false;
 
         this.adapterManager =
                 new AnimationAdapterManager();
-
-        BlockbusterAnimationAdapter blockbusterAdapter =
-                new BlockbusterAnimationAdapter();
-
-        this.adapterManager.register(
-                blockbusterAdapter
-        );
 
         this.blockbusterModelAccess =
                 new BlockbusterModelAccess(
                         null
                 );
 
+        BlockbusterAnimationAdapter blockbusterAdapter =
+                new BlockbusterAnimationAdapter(
+                        this.blockbusterModelAccess
+                );
+
+        this.adapterManager.register(
+                blockbusterAdapter
+        );
+
         if (blockbusterAdapter.supports())
         {
             this.blockbusterModelAccess.loadModelByName(
                     "steve"
             );
-
-            blockbusterAdapter.loadModel(
-                    "steve"
-            );
         }
-
-        this.animationPreview.setReferencePosition(
-                0.0D,
-                0.0D,
-                0.0D
-        );
 
         resetTimeline(1);
     }
@@ -150,44 +127,38 @@ public class AnimationEditorScreen extends GuiScreen
     private ActorAnimationData getOrCreateActorAnimation(
             String actorId)
     {
-        if (actorId == null)
+        if (actorId == null || actorId.isEmpty())
         {
             return null;
         }
 
-        ActorAnimationData data =
-                this.actorAnimations.get(
-                        actorId
-                );
+        ActorAnimationData existing =
+                this.sceneState
+                        .getAnimationData()
+                        .getActor(actorId);
 
-        if (data == null)
+        if (existing != null)
         {
-            List<BlockbusterLimbData> limbs =
-                    new ArrayList<BlockbusterLimbData>();
-
-            if (
-                    this.blockbusterModelAccess != null
-                            && this.blockbusterModelAccess.isValid()
-            )
-            {
-                limbs =
-                        this.blockbusterModelAccess
-                                .getLimbData();
-            }
-
-            data =
-                    new ActorAnimationData(
-                            actorId,
-                            limbs
-                    );
-
-            this.actorAnimations.put(
-                    actorId,
-                    data
-            );
+            return existing;
         }
 
-        return data;
+        List<BlockbusterLimbData> limbs =
+                this.blockbusterModelAccess.getLimbData();
+
+        ActorAnimationData created =
+                new ActorAnimationData(
+                        actorId,
+                        limbs
+                );
+
+        this.sceneState
+                .getAnimationData()
+                .putActor(
+                        actorId,
+                        created
+                );
+
+        return created;
     }
 
     private void selectActorAnimation(
@@ -525,33 +496,14 @@ public class AnimationEditorScreen extends GuiScreen
 
     private void loadScene(int index)
     {
-        if (this.sceneManager == null)
-        {
-            return;
-        }
-
-        if (
-                index < 0 ||
-                        index >= this.sceneFiles.size()
-        )
-        {
-            return;
-        }
-
-        File file =
-                this.sceneFiles.get(index);
-
         try
         {
-            this.sceneManager.load(
-                    file
-            );
+            if (!this.sceneState.loadScene(index))
+            {
+                return;
+            }
 
-            this.selectedScene = index;
-            this.selectedActor = -1;
             this.sceneDropdownOpen = false;
-
-            this.actorAnimations.clear();
 
             this.bones =
                     new ArrayList<AnimationBone>();
@@ -578,81 +530,45 @@ public class AnimationEditorScreen extends GuiScreen
 
     private int getSceneLength()
     {
-        if (this.sceneManager == null)
+        if (this.sceneState == null)
         {
             return 0;
         }
 
-        int maximumLength = 0;
-
-        for (
-                BlockbusterSceneActorData data :
-                this.sceneManager.getActorData()
-        )
-        {
-            if (
-                    data == null ||
-                            !data.hasRecord()
-            )
-            {
-                continue;
-            }
-
-            maximumLength =
-                    Math.max(
-                            maximumLength,
-                            data.getLength()
-                    );
-        }
-
-        return maximumLength;
+        return this.sceneState.getSceneLength();
     }
 
     private List<BlockbusterSceneActorData>
     getSceneActors()
     {
-        if (this.sceneManager == null)
+        if (this.sceneState == null)
         {
             return new ArrayList<BlockbusterSceneActorData>();
         }
 
-        return this.sceneManager.getActorData();
+        return this.sceneState.getActors();
     }
 
     private BlockbusterSceneActorData
     getSelectedActor()
     {
-        List<BlockbusterSceneActorData> actors =
-                getSceneActors();
-
-        if (
-                this.selectedActor < 0 ||
-                        this.selectedActor >=
-                                actors.size()
-        )
+        if (this.sceneState == null)
         {
             return null;
         }
 
-        return actors.get(
-                this.selectedActor
-        );
+        return this.sceneState.getSelectedActorData();
     }
 
-    private BlockbusterRecord getSelectedActorRecord()
+    private BlockbusterRecord
+    getSelectedActorRecord()
     {
-        BlockbusterSceneActorData actor =
-                getSelectedActor();
-
-        if (
-                actor == null ||
-                        !actor.hasRecord()
-        )
+        if (this.sceneState == null)
         {
             return null;
         }
 
-        return actor.getRecord();
+        return this.sceneState.getSelectedActorRecord();
     }
 
     private BlockbusterRecordFrame getCurrentRecordFrame()
@@ -691,7 +607,7 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        this.selectedActor = index;
+        this.sceneState.setSelectedActor(index);
 
         selectActorAnimation(
                 data.getId()
@@ -781,16 +697,24 @@ public class AnimationEditorScreen extends GuiScreen
         String sceneName =
                 "Select Scene";
 
-        if (
-                this.selectedScene >= 0 &&
-                        this.selectedScene <
-                                this.sceneFiles.size()
-        )
+        if (this.sceneState != null)
         {
-            sceneName =
-                    this.sceneFiles
-                            .get(this.selectedScene)
-                            .getName();
+            int selectedScene =
+                    this.sceneState.getSelectedScene();
+
+            List<File> sceneFiles =
+                    this.sceneState.getSceneFiles();
+
+            if (
+                    selectedScene >= 0 &&
+                            selectedScene < sceneFiles.size()
+            )
+            {
+                sceneName =
+                        sceneFiles
+                                .get(selectedScene)
+                                .getName();
+            }
         }
 
         if (sceneName.length() > 22)
@@ -845,10 +769,16 @@ public class AnimationEditorScreen extends GuiScreen
         int rowHeight = 18;
         int maxVisible = 8;
 
+        List<File> sceneFiles =
+                this.sceneState.getSceneFiles();
+
+        int selectedScene =
+                this.sceneState.getSelectedScene();
+
         int count =
                 Math.min(
                         maxVisible,
-                        this.sceneFiles.size()
+                        sceneFiles.size()
                 );
 
         int height =
@@ -873,7 +803,7 @@ public class AnimationEditorScreen extends GuiScreen
                 0xFF292A2D
         );
 
-        if (this.sceneFiles.isEmpty())
+        if (sceneFiles.isEmpty())
         {
             this.drawString(
                     this.fontRenderer,
@@ -893,14 +823,14 @@ public class AnimationEditorScreen extends GuiScreen
         )
         {
             File file =
-                    this.sceneFiles.get(i);
+                    sceneFiles.get(i);
 
             int rowY =
                     y +
                             i * rowHeight;
 
             boolean selected =
-                    i == this.selectedScene;
+                    i == selectedScene;
 
             if (selected)
             {
@@ -1004,7 +934,7 @@ public class AnimationEditorScreen extends GuiScreen
             }
 
             boolean selected =
-                    i == this.selectedActor;
+                    i == this.sceneState.getSelectedActor();
 
             if (selected)
             {
@@ -1905,7 +1835,9 @@ public class AnimationEditorScreen extends GuiScreen
             int count =
                     Math.min(
                             8,
-                            this.sceneFiles.size()
+                            this.sceneState
+                                    .getSceneFiles()
+                                    .size()
                     );
 
             if (
@@ -1926,7 +1858,9 @@ public class AnimationEditorScreen extends GuiScreen
                 if (
                         sceneIndex >= 0 &&
                                 sceneIndex <
-                                        this.sceneFiles.size()
+                                        this.sceneState
+                                                .getSceneFiles()
+                                                .size()
                 )
                 {
                     loadScene(
