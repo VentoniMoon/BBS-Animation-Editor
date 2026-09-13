@@ -24,6 +24,8 @@ public class AnimationValueControl
 
     private String inputText = "";
 
+    private boolean selectAll = false;
+
     private long lastClickTime = 0L;
 
     private static final long DOUBLE_CLICK_TIME = 300L;
@@ -46,9 +48,18 @@ public class AnimationValueControl
         this.y = y;
     }
 
-    public void setValue(float value)
+    public void setValue(
+            float value)
     {
-        if (!this.dragging && !this.editing)
+        /*
+         * Никогда не перезаписываем значение,
+         * пока пользователь его редактирует
+         * или двигает мышью.
+         */
+        if (
+                !this.dragging &&
+                        !this.editing
+        )
         {
             this.value = value;
         }
@@ -77,8 +88,13 @@ public class AnimationValueControl
         long currentTime =
                 System.currentTimeMillis();
 
+        /*
+         * Второй клик быстро после первого
+         * переводит контрол в текстовый режим.
+         */
         if (
-                currentTime - this.lastClickTime
+                currentTime -
+                        this.lastClickTime
                         <= DOUBLE_CLICK_TIME
         )
         {
@@ -90,7 +106,8 @@ public class AnimationValueControl
             this.lastMouseX = mouseX;
         }
 
-        this.lastClickTime = currentTime;
+        this.lastClickTime =
+                currentTime;
 
         return true;
     }
@@ -99,27 +116,26 @@ public class AnimationValueControl
             int mouseX,
             int mouseY)
     {
-        if (!this.dragging || this.editing)
+        if (
+                !this.dragging ||
+                        this.editing
+        )
         {
             return;
         }
 
-        /*
-         * Horizontal movement controls the value.
-         *
-         * Mouse right  -> increase
-         * Mouse left   -> decrease
-         */
-
         int difference =
-                mouseX - this.lastMouseX;
+                mouseX -
+                        this.lastMouseX;
 
         if (difference != 0)
         {
             this.value +=
-                    difference * this.step;
+                    difference *
+                            this.step;
 
-            this.lastMouseX = mouseX;
+            this.lastMouseX =
+                    mouseX;
         }
     }
 
@@ -141,17 +157,29 @@ public class AnimationValueControl
             return;
         }
 
+        /*
+         * ESCAPE
+         *
+         * Отмена текущего ввода.
+         */
         if (keyCode == Keyboard.KEY_ESCAPE)
         {
             this.editing = false;
             this.inputText = "";
+            this.selectAll = false;
 
             return;
         }
 
+        /*
+         * ENTER
+         *
+         * Подтвердить значение.
+         */
         if (
                 keyCode == Keyboard.KEY_RETURN ||
-                        keyCode == Keyboard.KEY_NUMPADENTER
+                        keyCode ==
+                                Keyboard.KEY_NUMPADENTER
         )
         {
             applyInput();
@@ -159,9 +187,47 @@ public class AnimationValueControl
             return;
         }
 
+        /*
+         * CTRL+A
+         *
+         * Выделить всё.
+         */
+        boolean ctrlDown =
+                Keyboard.isKeyDown(
+                        Keyboard.KEY_LCONTROL
+                )
+                        ||
+                        Keyboard.isKeyDown(
+                                Keyboard.KEY_RCONTROL
+                        );
+
+        if (
+                ctrlDown &&
+                        keyCode == Keyboard.KEY_A
+        )
+        {
+            this.selectAll = true;
+
+            return;
+        }
+
+        /*
+         * BACKSPACE
+         */
         if (keyCode == Keyboard.KEY_BACK)
         {
-            if (this.inputText.length() > 0)
+            if (this.selectAll)
+            {
+                this.inputText = "";
+                this.selectAll = false;
+
+                return;
+            }
+
+            if (
+                    this.inputText.length() >
+                            0
+            )
             {
                 this.inputText =
                         this.inputText.substring(
@@ -173,21 +239,117 @@ public class AnimationValueControl
             return;
         }
 
+        /*
+         * DELETE
+         *
+         * Если выделено всё — очищаем поле.
+         */
+        if (keyCode == Keyboard.KEY_DELETE)
+        {
+            if (this.selectAll)
+            {
+                this.inputText = "";
+                this.selectAll = false;
+            }
+
+            return;
+        }
+
+        /*
+         * HOME / END
+         *
+         * Сейчас полноценного курсора нет,
+         * поэтому эти клавиши просто
+         * снимают выделение.
+         */
         if (
-                Character.isDigit(typedChar) ||
-                        typedChar == '-' ||
-                        typedChar == '+' ||
-                        typedChar == '.' ||
+                keyCode == Keyboard.KEY_HOME ||
+                        keyCode == Keyboard.KEY_END
+        )
+        {
+            this.selectAll = false;
+
+            return;
+        }
+
+        /*
+         * DIGITS
+         */
+        if (Character.isDigit(typedChar))
+        {
+            appendInputChar(
+                    typedChar
+            );
+
+            return;
+        }
+
+        /*
+         * MINUS
+         */
+        if (typedChar == '-')
+        {
+            if (
+                    this.inputText.length() == 0
+            )
+            {
+                appendInputChar(
+                        typedChar
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * PLUS
+         */
+        if (typedChar == '+')
+        {
+            if (
+                    this.inputText.length() == 0
+            )
+            {
+                appendInputChar(
+                        typedChar
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * DECIMAL POINT
+         */
+        if (
+                typedChar == '.' ||
                         typedChar == ','
         )
         {
-            if (typedChar == ',')
+            if (
+                    this.inputText.indexOf(
+                            '.'
+                    ) == -1
+            )
             {
-                typedChar = '.';
+                appendInputChar(
+                        '.'
+                );
             }
-
-            this.inputText += typedChar;
         }
+    }
+
+    private void appendInputChar(
+            char character)
+    {
+        if (this.selectAll)
+        {
+            this.inputText = "";
+            this.selectAll = false;
+        }
+
+        this.inputText +=
+                character;
     }
 
     private void startEditing()
@@ -196,11 +358,37 @@ public class AnimationValueControl
         this.editing = true;
 
         this.inputText =
-                format(this.value);
+                format(
+                        this.value
+                );
+
+        /*
+         * При первом вводе следующая
+         * напечатанная цифра заменит
+         * старое значение.
+         */
+        this.selectAll = true;
     }
 
     private void applyInput()
     {
+        if (
+                this.inputText == null ||
+                        this.inputText.length() == 0 ||
+                        this.inputText.equals("-") ||
+                        this.inputText.equals("+") ||
+                        this.inputText.equals(".") ||
+                        this.inputText.equals("-.") ||
+                        this.inputText.equals("+.")
+        )
+        {
+            this.editing = false;
+            this.inputText = "";
+            this.selectAll = false;
+
+            return;
+        }
+
         try
         {
             this.value =
@@ -208,15 +396,16 @@ public class AnimationValueControl
                             this.inputText
                     );
         }
-        catch (NumberFormatException e)
+        catch (NumberFormatException exception)
         {
             /*
-             * Leave the old value unchanged.
+             * Оставляем старое значение.
              */
         }
 
         this.editing = false;
         this.inputText = "";
+        this.selectAll = false;
     }
 
     public boolean isEditing()
@@ -229,9 +418,11 @@ public class AnimationValueControl
             int mouseY)
     {
         return mouseX >= this.x
-                && mouseX <= this.x + this.width
+                && mouseX <=
+                this.x + this.width
                 && mouseY >= this.y
-                && mouseY <= this.y + this.height;
+                && mouseY <=
+                this.y + this.height;
     }
 
     public void draw(
@@ -241,7 +432,8 @@ public class AnimationValueControl
                 mc.fontRenderer;
 
         int backgroundColor =
-                this.editing || this.dragging
+                this.editing ||
+                        this.dragging
                         ? 0xFF55575A
                         : 0xFF3A3B3E;
 
@@ -260,19 +452,33 @@ public class AnimationValueControl
                 0xFFFFFF
         );
 
-        String text =
-                this.editing
-                        ? this.inputText + "_"
-                        : format(this.value);
+        String text;
+
+        if (this.editing)
+        {
+            text =
+                    this.inputText +
+                            "_";
+        }
+        else
+        {
+            text =
+                    format(
+                            this.value
+                    );
+        }
 
         int valueWidth =
-                font.getStringWidth(text);
+                font.getStringWidth(
+                        text
+                );
 
         font.drawString(
                 text,
-                this.x + this.width
-                        - valueWidth
-                        - 5,
+                this.x +
+                        this.width -
+                        valueWidth -
+                        5,
                 this.y + 4,
                 this.editing
                         ? 0xFFFFFF

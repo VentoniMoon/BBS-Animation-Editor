@@ -3,57 +3,35 @@ package com.example.examplemod;
 import net.minecraft.client.gui.GuiScreen;
 
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class AnimationEditorScreen extends GuiScreen
 {
     private static final int TOP_BAR_HEIGHT = 25;
-
     private static final int LEFT_PANEL_WIDTH = 180;
+    private static final int ACTOR_PANEL_HEIGHT = 120;
+    private static final int INTERPOLATION_PANEL_HEIGHT = 100;
 
-    private static final int TIMELINE_HEIGHT = 180;
-
-    /*
-     * Левая колонка.
-     *
-     * Actors        — выбор персонажа.
-     * Interpolation — настройки выбранного keyframe.
-     * Bones         — выбор кости.
-     */
-
-    private static final int ACTOR_PANEL_HEIGHT = 125;
-
-    private static final int INTERPOLATION_PANEL_HEIGHT = 105;
-
-    private static final float BASE_FRAME_WIDTH = 6.0F;
-
+    private static final int BASE_FRAME_WIDTH = 6;
     private static final int FIRST_FRAME = 0;
+    private static final int TRACK_HEIGHT = 20;
+
+    private static final float MIN_TIMELINE_ZOOM = 0.25F;
+    private static final float MAX_TIMELINE_ZOOM = 4.0F;
+    private static final float TIMELINE_ZOOM_STEP = 0.25F;
 
     private float timelineZoom = 1.0F;
 
-    private static final float MIN_TIMELINE_ZOOM = 0.25F;
-
-    private static final float MAX_TIMELINE_ZOOM = 4.0F;
-
-    private static final float TIMELINE_ZOOM_STEP = 0.25F;
-
-    private static final int TRACK_HEIGHT = 20;
-
-    /*
-     * Animation system.
-     */
-
     private AnimationAdapterManager adapterManager;
 
-    private BlockbusterAnimationAdapter blockbusterAdapter;
-
-    /*
-     * Scene system.
-     */
+    private BlockbusterModelAccess blockbusterModelAccess;
 
     private BlockbusterSceneManager sceneManager;
 
@@ -62,51 +40,9 @@ public class AnimationEditorScreen extends GuiScreen
 
     private int selectedScene = -1;
 
-    private String sceneStatus =
-            "No scene selected";
-
     private boolean sceneDropdownOpen = false;
 
-    /*
-     * Actor system.
-     */
-
     private int selectedActor = -1;
-
-    private String actorStatus =
-            "No actor selected";
-
-    /*
-     * Old recording system.
-     *
-     * Пока оставляем для совместимости.
-     */
-
-    private BlockbusterRecordManager recordManager;
-
-    private List<File> recordingFiles =
-            new ArrayList<File>();
-
-    private int selectedRecording = -1;
-
-    private String recordingStatus =
-            "No recording selected";
-
-    /*
-     * Temporary record manager.
-     */
-
-    private BlockbusterRecordManager
-            blockbusterRecordManager;
-
-    private List<File> blockbusterRecordFiles =
-            new ArrayList<File>();
-
-    private int selectedRecord = -1;
-
-    /*
-     * Timeline.
-     */
 
     private int currentFrame = 0;
 
@@ -117,14 +53,10 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorTimeline timeline =
             new EditorTimeline();
 
-    /*
-     * Temporary bones.
-     *
-     * Позже полностью заменим их
-     * реальной иерархией костей модели.
-     */
+    private final Map<String, ActorAnimationData> actorAnimations =
+            new LinkedHashMap<String, ActorAnimationData>();
 
-    private final List<AnimationBone> bones =
+    private List<AnimationBone> bones =
             new ArrayList<AnimationBone>();
 
     private int selectedBone = 0;
@@ -133,8 +65,31 @@ public class AnimationEditorScreen extends GuiScreen
             null;
 
     /*
-     * Editor panels.
+     * TRUE только тогда, когда пользователь
+     * действительно начал drag внутри TransformPanel.
+     *
+     * Это запрещает случайное изменение keyframe
+     * при перетаскивании мыши по Timeline или Preview.
      */
+    private boolean transformDragging = false;
+
+    /*
+     * Base actor state from Blockbuster Record.
+     *
+     * These values are not animation keyframes.
+     */
+
+    private final BlockbusterRecordPose currentRecordPose =
+            new BlockbusterRecordPose();
+
+    private final AnimationFrameResolver frameResolver =
+            new AnimationFrameResolver();
+
+    private final ActorPose currentActorPose =
+            new ActorPose();
+
+    private final AnimationPose currentAnimationPose =
+            new AnimationPose();
 
     private final TransformPanel transformPanel =
             new TransformPanel();
@@ -147,10 +102,6 @@ public class AnimationEditorScreen extends GuiScreen
     {
         super.initGui();
 
-        /*
-         * Scene manager.
-         */
-
         this.sceneManager =
                 new BlockbusterSceneManager();
 
@@ -158,380 +109,418 @@ public class AnimationEditorScreen extends GuiScreen
                 this.sceneManager.getSceneFiles();
 
         this.selectedScene = -1;
-
         this.selectedActor = -1;
-
         this.sceneDropdownOpen = false;
-
-        if (this.sceneFiles.isEmpty())
-        {
-            this.sceneStatus =
-                    "No Blockbuster scenes found";
-        }
-        else
-        {
-            this.sceneStatus =
-                    this.sceneFiles.size()
-                            + " scene(s) found";
-        }
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Editor scene list size: "
-                        + this.sceneFiles.size()
-        );
-
-        for (int i = 0;
-             i < this.sceneFiles.size();
-             i++)
-        {
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "Editor scene ["
-                            + i
-                            + "]: "
-                            + this.sceneFiles
-                            .get(i)
-                            .getAbsolutePath()
-            );
-        }
-
-        /*
-         * Old record manager.
-         */
-
-        this.recordManager =
-                new BlockbusterRecordManager();
-
-        this.recordingFiles =
-                this.recordManager
-                        .getRecordingFiles();
-
-        this.selectedRecording = -1;
-
-        /*
-         * Animation adapters.
-         */
 
         this.adapterManager =
                 new AnimationAdapterManager();
 
-        this.blockbusterAdapter =
+        BlockbusterAnimationAdapter blockbusterAdapter =
                 new BlockbusterAnimationAdapter();
 
         this.adapterManager.register(
-                this.blockbusterAdapter
+                blockbusterAdapter
         );
 
-        if (this.blockbusterAdapter.supports())
+        this.blockbusterModelAccess =
+                new BlockbusterModelAccess(
+                        null
+                );
+
+        if (blockbusterAdapter.supports())
         {
-            this.blockbusterAdapter
-                    .loadModel("steve");
+            this.blockbusterModelAccess.loadModelByName(
+                    "steve"
+            );
+
+            blockbusterAdapter.loadModel(
+                    "steve"
+            );
         }
 
-        /*
-         * Blockbuster records.
-         */
-
-        this.blockbusterRecordManager =
-                new BlockbusterRecordManager();
-
-        this.refreshBlockbusterRecordList();
-
-        /*
-         * Create the editor bone structure.
-         *
-         * Keyframes will be populated from the
-         * selected Blockbuster actor later.
-         */
-        createEmptyAnimationBones();
-
-        /*
-         * Timeline.
-         */
-
-        this.timelineZoom = 1.0F;
-
-        this.timelineOffset = 0;
-
-        this.currentFrame = 0;
-
-        this.timeline.setLength(
-                getMaximumFrame() + 1
+        this.animationPreview.setReferencePosition(
+                0.0D,
+                0.0D,
+                0.0D
         );
 
-        this.timeline.rewind();
-
-        this.timeline.pause();
-
-        this.playing = false;
+        resetTimeline(1);
     }
 
-    private void createEmptyAnimationBones()
+    private ActorAnimationData getOrCreateActorAnimation(
+            String actorId)
     {
-        this.bones.clear();
+        if (actorId == null)
+        {
+            return null;
+        }
 
-        AnimationBone anchor =
-                new AnimationBone("Anchor");
+        ActorAnimationData data =
+                this.actorAnimations.get(
+                        actorId
+                );
 
-        AnimationBone body =
-                new AnimationBone("Body");
+        if (data == null)
+        {
+            List<BlockbusterLimbData> limbs =
+                    new ArrayList<BlockbusterLimbData>();
 
-        AnimationBone head =
-                new AnimationBone("Head");
+            if (
+                    this.blockbusterModelAccess != null
+                            && this.blockbusterModelAccess.isValid()
+            )
+            {
+                limbs =
+                        this.blockbusterModelAccess
+                                .getLimbData();
+            }
 
-        AnimationBone armLeft =
-                new AnimationBone("Arm.L");
+            data =
+                    new ActorAnimationData(
+                            actorId,
+                            limbs
+                    );
 
-        AnimationBone armRight =
-                new AnimationBone("Arm.R");
+            this.actorAnimations.put(
+                    actorId,
+                    data
+            );
+        }
 
-        AnimationBone legLeft =
-                new AnimationBone("Leg.L");
-
-        AnimationBone legRight =
-                new AnimationBone("Leg.R");
-
-        /*
-         * Bone hierarchy.
-         */
-
-        anchor.addChild(body);
-
-        body.addChild(head);
-
-        body.addChild(armLeft);
-
-        body.addChild(armRight);
-
-        body.addChild(legLeft);
-
-        body.addChild(legRight);
-
-        /*
-         * Static attachment positions.
-         */
-
-        body.setLocalPosition(
-                0.0F,
-                0.0F,
-                0.0F
-        );
-
-        head.setLocalPosition(
-                0.0F,
-                -55.0F,
-                0.0F
-        );
-
-        armLeft.setLocalPosition(
-                -30.0F,
-                0.0F,
-                0.0F
-        );
-
-        armRight.setLocalPosition(
-                30.0F,
-                0.0F,
-                0.0F
-        );
-
-        legLeft.setLocalPosition(
-                -12.0F,
-                65.0F,
-                0.0F
-        );
-
-        legRight.setLocalPosition(
-                12.0F,
-                65.0F,
-                0.0F
-        );
-
-        /*
-         * Add bones to the editor.
-         *
-         * No artificial keyframes are created.
-         */
-
-        this.bones.add(anchor);
-        this.bones.add(body);
-        this.bones.add(head);
-        this.bones.add(armLeft);
-        this.bones.add(armRight);
-        this.bones.add(legLeft);
-        this.bones.add(legRight);
-
-        this.selectedBone = 0;
-        this.selectedKeyframe = null;
+        return data;
     }
 
-    private void createTemporaryTestBones()
+    private void selectActorAnimation(
+            String actorId)
     {
-        this.bones.clear();
-
-        AnimationBone anchor =
-                new AnimationBone("Anchor");
-
-        AnimationBone body =
-                new AnimationBone("Body");
-
-        AnimationBone head =
-                new AnimationBone("Head");
-
-        AnimationBone armLeft =
-                new AnimationBone("Arm.L");
-
-        AnimationBone armRight =
-                new AnimationBone("Arm.R");
-
-        AnimationBone legLeft =
-                new AnimationBone("Leg.L");
-
-        AnimationBone legRight =
-                new AnimationBone("Leg.R");
-
-        anchor.addChild(body);
-
-        body.addChild(head);
-
-        body.addChild(armLeft);
-
-        body.addChild(armRight);
-
-        body.addChild(legLeft);
-
-        body.addChild(legRight);
-
-        body.setLocalPosition(
-                0.0F,
-                0.0F,
-                0.0F
-        );
-
-        head.setLocalPosition(
-                0.0F,
-                -55.0F,
-                0.0F
-        );
-
-        armLeft.setLocalPosition(
-                -30.0F,
-                0.0F,
-                0.0F
-        );
-
-        armRight.setLocalPosition(
-                30.0F,
-                0.0F,
-                0.0F
-        );
-
-        legLeft.setLocalPosition(
-                -12.0F,
-                65.0F,
-                0.0F
-        );
-
-        legRight.setLocalPosition(
-                12.0F,
-                65.0F,
-                0.0F
-        );
-
-        body.addKeyframe(0);
-
-        body.addKeyframe(20);
-
-        body.addKeyframe(40);
-
-        body.getKeyframes()
-                .get(0)
-                .getTransform()
-                .setPosition(
-                        0.0F,
-                        0.0F,
-                        0.0F
+        ActorAnimationData data =
+                getOrCreateActorAnimation(
+                        actorId
                 );
 
-        body.getKeyframes()
-                .get(1)
-                .getTransform()
-                .setPosition(
-                        20.0F,
-                        0.0F,
-                        0.0F
-                );
+        if (data == null)
+        {
+            this.bones =
+                    new ArrayList<AnimationBone>();
 
-        body.getKeyframes()
-                .get(2)
-                .getTransform()
-                .setPosition(
-                        40.0F,
-                        0.0F,
-                        0.0F
-                );
+            this.selectedBone = 0;
+            this.selectedKeyframe = null;
+            this.transformDragging = false;
 
-        head.addKeyframe(0);
+            return;
+        }
 
-        head.addKeyframe(30);
+        this.bones =
+                data.getBones();
 
-        armLeft.addKeyframe(0);
-
-        armRight.addKeyframe(0);
-
-        legLeft.addKeyframe(0);
-
-        legRight.addKeyframe(0);
-
-        this.bones.add(anchor);
-
-        this.bones.add(body);
-
-        this.bones.add(head);
-
-        this.bones.add(armLeft);
-
-        this.bones.add(armRight);
-
-        this.bones.add(legLeft);
-
-        this.bones.add(legRight);
-
-        this.selectedBone = 0;
+        if (
+                this.selectedBone >=
+                        this.bones.size()
+        )
+        {
+            this.selectedBone = 0;
+        }
 
         this.selectedKeyframe = null;
+        this.transformDragging = false;
+
+        debugAnimationPose();
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Scene
-     * ------------------------------------------------------------
+    /**
+     * Establishes the first Record frame as the
+     * reference position of the Preview.
+     *
+     * The absolute Blockbuster world coordinates
+     * are therefore never used directly as GUI
+     * coordinates.
      */
-
-    private void refreshSceneList()
+    private void resetPreviewReference()
     {
-        if (this.sceneManager == null)
+        BlockbusterRecord record =
+                getSelectedActorRecord();
+
+        if (record == null)
+        {
+            this.animationPreview.setReferencePosition(
+                    0.0D,
+                    0.0D,
+                    0.0D
+            );
+
+            return;
+        }
+
+        BlockbusterRecordFrame firstFrame =
+                record.getFrame(0);
+
+        if (firstFrame == null)
+        {
+            this.animationPreview.setReferencePosition(
+                    0.0D,
+                    0.0D,
+                    0.0D
+            );
+
+            return;
+        }
+
+        this.animationPreview.setReferencePosition(
+                firstFrame.getX(),
+                firstFrame.getY(),
+                firstFrame.getZ()
+        );
+    }
+
+    private void applyRecordFrame()
+    {
+        BlockbusterRecord record =
+                getSelectedActorRecord();
+
+        if (record == null)
         {
             return;
         }
 
-        this.sceneFiles =
-                this.sceneManager.getSceneFiles();
+        BlockbusterRecordPose pose =
+                this.frameResolver.resolveRecordPose(
+                        record,
+                        this.currentFrame
+                );
 
-        if (this.sceneFiles == null)
+        this.currentRecordPose.setPosition(
+                pose.getX(),
+                pose.getY(),
+                pose.getZ()
+        );
+
+        this.currentRecordPose.setRotation(
+                pose.getYaw(),
+                pose.getPitch()
+        );
+
+        AnimationActorTransform actorTransform =
+                this.frameResolver.resolveActorTransform(
+                        record,
+                        this.currentFrame
+                );
+
+        this.currentActorPose.setPosition(
+                actorTransform.getX(),
+                actorTransform.getY(),
+                actorTransform.getZ()
+        );
+
+        this.currentActorPose.setRotation(
+                actorTransform.getYaw(),
+                actorTransform.getPitch()
+        );
+    }
+
+    private void buildAnimationPose()
+    {
+        this.currentAnimationPose.clear();
+
+        if (this.bones == null)
         {
-            this.sceneFiles =
-                    new ArrayList<File>();
+            return;
         }
 
-        if (
-                this.selectedScene >=
-                        this.sceneFiles.size()
+        AnimationPose pose =
+                AnimationPoseBuilder.build(
+                        this.bones,
+                        this.currentFrame
+                );
+
+        for (
+                java.util.Map.Entry<String, AnimationTransform> entry :
+                pose.getTransforms().entrySet()
         )
         {
-            this.selectedScene = -1;
+            this.currentAnimationPose.setTransform(
+                    entry.getKey(),
+                    entry.getValue()
+            );
         }
+    }
+
+    private void debugAnimationPose()
+    {
+        if (
+                this.bones == null
+                        || this.bones.isEmpty()
+        )
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "Cannot debug animation pose: "
+                            + "no bones"
+            );
+
+            return;
+        }
+
+        AnimationFrameState state =
+                AnimationFrameStateBuilder.build(
+                        this.bones,
+                        this.currentFrame
+                );
+
+        AnimationPose pose =
+                AnimationPoseBuilder.build(
+                        this.bones,
+                        state
+                );
+
+        System.out.println("");
+        System.out.println(
+                "=============================================="
+        );
+        System.out.println(
+                "[BBS Animation Editor] ANIMATION POSE DEBUG"
+        );
+        System.out.println(
+                "=============================================="
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] Frame: "
+                        + this.currentFrame
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] Bones: "
+                        + this.bones.size()
+        );
+
+        for (
+                AnimationBone bone :
+                this.bones
+        )
+        {
+            if (bone == null)
+            {
+                continue;
+            }
+
+            /*
+             * Дополнительная диагностика.
+             *
+             * Показываем:
+             *
+             * LOCAL =
+             * статическая точка привязки Blockbuster.
+             *
+             * KEYFRAMES =
+             * количество пользовательских keyframe
+             * именно у этой кости.
+             *
+             * Это позволяет определить,
+             * не повреждается ли иерархия
+             * при работе с Timeline.
+             */
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + bone.getName()
+                            + " LOCAL=("
+                            + bone.getLocalX()
+                            + ", "
+                            + bone.getLocalY()
+                            + ", "
+                            + bone.getLocalZ()
+                            + ")"
+                            + " KEYFRAMES="
+                            + bone.getKeyframes().size()
+            );
+
+            AnimationTransform transform =
+                    pose.getTransform(
+                            bone.getName()
+                    );
+
+            if (transform == null)
+            {
+                System.out.println(
+                        "[BBS Animation Editor] "
+                                + bone.getName()
+                                + " -> NO TRANSFORM"
+                );
+
+                continue;
+            }
+
+            String parentName =
+                    bone.getParent() == null
+                            ? "ROOT"
+                            : bone.getParent().getName();
+
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + bone.getName()
+                            + " parent="
+                            + parentName
+                            + " WORLD=("
+                            + transform.getPositionX()
+                            + ", "
+                            + transform.getPositionY()
+                            + ", "
+                            + transform.getPositionZ()
+                            + ") ROT=("
+                            + transform.getRotationX()
+                            + ", "
+                            + transform.getRotationY()
+                            + ", "
+                            + transform.getRotationZ()
+                            + ") SCALE=("
+                            + transform.getScaleX()
+                            + ", "
+                            + transform.getScaleY()
+                            + ", "
+                            + transform.getScaleZ()
+                            + ")"
+            );
+        }
+
+        System.out.println(
+                "=============================================="
+        );
+        System.out.println("");
+    }
+
+    private void applyAnimationPose()
+    {
+        /*
+         * Положение и вращение самого актёра
+         * полностью определяется Blockbuster Record.
+         *
+         * AnimationBone не изменяет мировое положение
+         * ActorPose.
+         */
+        this.currentRecordPose.applyTo(
+                this.currentActorPose
+        );
+    }
+
+    private void resetTimeline(int length)
+    {
+        this.currentFrame = 0;
+        this.timelineOffset = 0;
+        this.playing = false;
+        this.selectedKeyframe = null;
+        this.transformDragging = false;
+
+        this.timeline.setLength(
+                Math.max(
+                        1,
+                        length
+                )
+        );
+
+        this.timeline.rewind();
+        this.timeline.pause();
+
+        applyRecordFrame();
+        applyAnimationPose();
     }
 
     private void loadScene(int index)
@@ -543,8 +532,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         if (
                 index < 0 ||
-                        index >=
-                                this.sceneFiles.size()
+                        index >= this.sceneFiles.size()
         )
         {
             return;
@@ -555,91 +543,35 @@ public class AnimationEditorScreen extends GuiScreen
 
         try
         {
-            BlockbusterScene scene =
-                    this.sceneManager.load(file);
+            this.sceneManager.load(
+                    file
+            );
 
             this.selectedScene = index;
-
             this.selectedActor = -1;
-
-            this.actorStatus =
-                    "No actor selected";
-
             this.sceneDropdownOpen = false;
 
-            this.currentFrame = 0;
+            this.actorAnimations.clear();
 
-            this.timelineOffset = 0;
+            this.bones =
+                    new ArrayList<AnimationBone>();
 
-            this.playing = false;
-
-            int sceneLength =
-                    getSceneLength();
-
-            this.timeline.setLength(
-                    Math.max(
-                            1,
-                            sceneLength
-                    )
-            );
-
-            this.timeline.rewind();
-
-            this.timeline.pause();
-
+            this.selectedBone = 0;
             this.selectedKeyframe = null;
+            this.transformDragging = false;
 
-            this.sceneStatus =
-                    "Scene loaded: "
-                            + file.getName();
-
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "Loaded scene into editor: "
-                            + file.getName()
+            this.animationPreview.setReferencePosition(
+                    0.0D,
+                    0.0D,
+                    0.0D
             );
 
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "Scene actors: "
-                            + scene.getActors().size()
+            resetTimeline(
+                    getSceneLength()
             );
-
-            for (
-                    BlockbusterSceneActorData data :
-                    this.sceneManager
-                            .getActorData()
-            )
-            {
-                if (data == null)
-                {
-                    continue;
-                }
-
-                System.out.println(
-                        "[BBS Animation Editor] "
-                                + "Scene actor: "
-                                + data.getId()
-                                + " | name="
-                                + data.getName()
-                                + " | morph="
-                                + data.getMorphName()
-                                + " | record="
-                                + data.hasRecord()
-                );
-            }
         }
         catch (IOException exception)
         {
-            this.sceneStatus =
-                    "Failed to load scene";
-
-            System.err.println(
-                    "[BBS Animation Editor] "
-                            + "Could not load scene: "
-                            + file.getAbsolutePath()
-            );
-
             exception.printStackTrace();
         }
     }
@@ -655,8 +587,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         for (
                 BlockbusterSceneActorData data :
-                this.sceneManager
-                        .getActorData()
+                this.sceneManager.getActorData()
         )
         {
             if (
@@ -682,12 +613,10 @@ public class AnimationEditorScreen extends GuiScreen
     {
         if (this.sceneManager == null)
         {
-            return new ArrayList<
-                    BlockbusterSceneActorData>();
+            return new ArrayList<BlockbusterSceneActorData>();
         }
 
-        return this.sceneManager
-                .getActorData();
+        return this.sceneManager.getActorData();
     }
 
     private BlockbusterSceneActorData
@@ -707,6 +636,37 @@ public class AnimationEditorScreen extends GuiScreen
 
         return actors.get(
                 this.selectedActor
+        );
+    }
+
+    private BlockbusterRecord getSelectedActorRecord()
+    {
+        BlockbusterSceneActorData actor =
+                getSelectedActor();
+
+        if (
+                actor == null ||
+                        !actor.hasRecord()
+        )
+        {
+            return null;
+        }
+
+        return actor.getRecord();
+    }
+
+    private BlockbusterRecordFrame getCurrentRecordFrame()
+    {
+        BlockbusterRecord record =
+                getSelectedActorRecord();
+
+        if (record == null)
+        {
+            return null;
+        }
+
+        return record.getFrame(
+                this.currentFrame
         );
     }
 
@@ -733,217 +693,28 @@ public class AnimationEditorScreen extends GuiScreen
 
         this.selectedActor = index;
 
-        this.actorStatus =
-                "Actor selected: "
-                        + data.getId();
+        selectActorAnimation(
+                data.getId()
+        );
 
         this.currentFrame = 0;
-
         this.timelineOffset = 0;
-
         this.playing = false;
-
         this.selectedKeyframe = null;
+        this.transformDragging = false;
 
-        /*
-         * Reset the timeline before importing
-         * the selected actor's recording.
-         */
         this.timeline.setTick(0);
-
         this.timeline.pause();
 
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Selected scene actor: "
-                        + data.getId()
-        );
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Actor name: "
-                        + data.getName()
-        );
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Actor morph: "
-                        + data.getMorphName()
-        );
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Actor record: "
-                        + data.hasRecord()
-        );
-
-        if (data.hasRecord())
-        {
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "Actor record length: "
-                            + data.getLength()
-            );
-        }
-
         /*
-         * Import the selected actor's actual
-         * Blockbuster recording into the editor.
+         * The first Record frame becomes the
+         * Preview reference point.
          */
-        loadCurrentRecordIntoAnimationBones();
+        resetPreviewReference();
+
+        applyRecordFrame();
+        applyAnimationPose();
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Records
-     * ------------------------------------------------------------
-     */
-
-    private void refreshBlockbusterRecordList()
-    {
-        if (
-                this.blockbusterRecordManager ==
-                        null
-        )
-        {
-            return;
-        }
-
-        this.blockbusterRecordFiles =
-                this.blockbusterRecordManager
-                        .getRecordingFiles();
-
-        if (
-                this.blockbusterRecordFiles ==
-                        null
-        )
-        {
-            this.blockbusterRecordFiles =
-                    new ArrayList<File>();
-        }
-
-        if (
-                this.selectedRecord >=
-                        this.blockbusterRecordFiles
-                                .size()
-        )
-        {
-            this.selectedRecord = -1;
-        }
-    }
-
-    private void loadBlockbusterRecord(
-            int index)
-    {
-        if (
-                this.blockbusterRecordManager ==
-                        null
-        )
-        {
-            return;
-        }
-
-        if (
-                index < 0 ||
-                        index >=
-                                this.blockbusterRecordFiles
-                                        .size()
-        )
-        {
-            return;
-        }
-
-        File file =
-                this.blockbusterRecordFiles
-                        .get(index);
-
-        try
-        {
-            this.blockbusterRecordManager
-                    .load(file);
-
-            this.selectedRecord = index;
-
-            this.currentFrame = 0;
-
-            this.timelineOffset = 0;
-
-            this.playing = false;
-
-            this.timeline.setLength(
-                    this.blockbusterRecordManager
-                            .getCurrentRecord()
-                            .getFullLength()
-            );
-
-            this.timeline.rewind();
-
-            this.timeline.pause();
-
-            this.selectedKeyframe = null;
-
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "Loaded recording into editor: "
-                            + file.getName()
-            );
-        }
-        catch (IOException e)
-        {
-            System.err.println(
-                    "[BBS Animation Editor] "
-                            + "Could not load recording: "
-                            + file.getAbsolutePath()
-            );
-
-            e.printStackTrace();
-        }
-    }
-
-    private BlockbusterRecord
-    getCurrentBlockbusterRecord()
-    {
-        BlockbusterSceneActorData actor =
-                getSelectedActor();
-
-        if (
-                actor != null &&
-                        actor.hasRecord()
-        )
-        {
-            return actor.getRecord();
-        }
-
-        if (
-                this.blockbusterRecordManager ==
-                        null
-        )
-        {
-            return null;
-        }
-
-        return this.blockbusterRecordManager
-                .getCurrentRecord();
-    }
-
-    private int getBlockbusterRecordLength()
-    {
-        BlockbusterRecord record =
-                getCurrentBlockbusterRecord();
-
-        if (record == null)
-        {
-            return 0;
-        }
-
-        return record.getLength();
-    }
-
-    /*
-     * ------------------------------------------------------------
-     * GUI
-     * ------------------------------------------------------------
-     */
 
     @Override
     public void drawScreen(
@@ -960,25 +731,10 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         drawTopBar();
-
         drawActorPanel();
-
         drawInterpolationPanel();
-
-        drawBonePanel();
-
         drawPreview();
-
-        drawTimeline(
-                mouseX,
-                mouseY
-        );
-
-        /*
-         * Dropdown рисуется последним,
-         * чтобы он находился поверх остальных
-         * элементов GUI.
-         */
+        drawTimeline();
 
         if (this.sceneDropdownOpen)
         {
@@ -991,12 +747,6 @@ public class AnimationEditorScreen extends GuiScreen
                 partialTicks
         );
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Top bar
-     * ------------------------------------------------------------
-     */
 
     private void drawTopBar()
     {
@@ -1016,12 +766,7 @@ public class AnimationEditorScreen extends GuiScreen
                 0xFFFFFF
         );
 
-        /*
-         * Scene selector.
-         */
-
         int sceneButtonX = 175;
-
         int sceneButtonWidth = 180;
 
         this.drawRect(
@@ -1054,8 +799,7 @@ public class AnimationEditorScreen extends GuiScreen
                     sceneName.substring(
                             0,
                             19
-                    )
-                            + "...";
+                    ) + "...";
         }
 
         this.drawString(
@@ -1067,10 +811,6 @@ public class AnimationEditorScreen extends GuiScreen
                 8,
                 0xFFFFFF
         );
-
-        /*
-         * Selected actor.
-         */
 
         BlockbusterSceneActorData actor =
                 getSelectedActor();
@@ -1087,10 +827,6 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
-        /*
-         * Current frame.
-         */
-
         this.drawString(
                 this.fontRenderer,
                 "Frame: "
@@ -1101,23 +837,12 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Scene dropdown
-     * ------------------------------------------------------------
-     */
-
     private void drawSceneDropdown()
     {
         int x = 175;
-
-        int y =
-                TOP_BAR_HEIGHT + 2;
-
+        int y = TOP_BAR_HEIGHT + 2;
         int width = 180;
-
         int rowHeight = 18;
-
         int maxVisible = 8;
 
         int count =
@@ -1161,9 +886,11 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        for (int i = 0;
-             i < count;
-             i++)
+        for (
+                int i = 0;
+                i < count;
+                i++
+        )
         {
             File file =
                     this.sceneFiles.get(i);
@@ -1195,8 +922,7 @@ public class AnimationEditorScreen extends GuiScreen
                         name.substring(
                                 0,
                                 21
-                        )
-                                + "...";
+                        ) + "...";
             }
 
             this.drawString(
@@ -1211,16 +937,9 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Actors
-     * ------------------------------------------------------------
-     */
-
     private void drawActorPanel()
     {
         int top = TOP_BAR_HEIGHT;
-
         int bottom =
                 top +
                         ACTOR_PANEL_HEIGHT;
@@ -1260,11 +979,13 @@ public class AnimationEditorScreen extends GuiScreen
         int actorY =
                 top + 30;
 
-        final int rowHeight = 31;
+        final int actorRowHeight = 31;
 
-        for (int i = 0;
-             i < actors.size();
-             i++)
+        for (
+                int i = 0;
+                i < actors.size();
+                i++
+        )
         {
             BlockbusterSceneActorData actor =
                     actors.get(i);
@@ -1275,7 +996,7 @@ public class AnimationEditorScreen extends GuiScreen
             }
 
             if (
-                    actorY + rowHeight >
+                    actorY + actorRowHeight >
                             bottom - 3
             )
             {
@@ -1291,7 +1012,9 @@ public class AnimationEditorScreen extends GuiScreen
                         5,
                         actorY - 2,
                         LEFT_PANEL_WIDTH - 5,
-                        actorY + rowHeight - 2,
+                        actorY +
+                                actorRowHeight -
+                                2,
                         0xFF45474A
                 );
             }
@@ -1326,8 +1049,7 @@ public class AnimationEditorScreen extends GuiScreen
                         id.substring(
                                 0,
                                 19
-                        )
-                                + "...";
+                        ) + "...";
             }
 
             if (name.length() > 22)
@@ -1336,8 +1058,7 @@ public class AnimationEditorScreen extends GuiScreen
                         name.substring(
                                 0,
                                 19
-                        )
-                                + "...";
+                        ) + "...";
             }
 
             this.drawString(
@@ -1360,15 +1081,9 @@ public class AnimationEditorScreen extends GuiScreen
                             : 0x888888
             );
 
-            actorY += rowHeight;
+            actorY += actorRowHeight;
         }
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Interpolation
-     * ------------------------------------------------------------
-     */
 
     private void drawInterpolationPanel()
     {
@@ -1489,101 +1204,6 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Bones
-     * ------------------------------------------------------------
-     */
-
-    private void drawBonePanel()
-    {
-        int top =
-                TOP_BAR_HEIGHT +
-                        ACTOR_PANEL_HEIGHT +
-                        INTERPOLATION_PANEL_HEIGHT;
-
-        int bottom =
-                this.height -
-                        TIMELINE_HEIGHT;
-
-        this.drawRect(
-                0,
-                top,
-                LEFT_PANEL_WIDTH,
-                bottom,
-                0xFF252629
-        );
-
-        this.drawString(
-                this.fontRenderer,
-                "BONES",
-                10,
-                top + 8,
-                0xFFFFFF
-        );
-
-        int y =
-                top + 28;
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Drawing bones: "
-                        + this.bones.size()
-                        + " | top="
-                        + top
-                        + " | bottom="
-                        + bottom
-        );
-
-        for (int i = 0;
-             i < this.bones.size();
-             i++)
-        {
-            AnimationBone bone =
-                    this.bones.get(i);
-
-            boolean selected =
-                    i == this.selectedBone;
-
-            if (selected)
-            {
-                this.drawRect(
-                        5,
-                        y - 3,
-                        LEFT_PANEL_WIDTH - 5,
-                        y + 13,
-                        0xFF45474A
-                );
-            }
-
-            this.drawString(
-                    this.fontRenderer,
-                    bone.getName(),
-                    15,
-                    y,
-                    selected
-                            ? 0xFFFFFF
-                            : 0xAAAAAA
-            );
-
-            y += TRACK_HEIGHT;
-
-            if (
-                    y >
-                            bottom - 10
-            )
-            {
-                break;
-            }
-        }
-    }
-
-    /*
-     * ------------------------------------------------------------
-     * Preview
-     * ------------------------------------------------------------
-     */
-
     private void drawPreview()
     {
         int left =
@@ -1597,7 +1217,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         int bottom =
                 this.height -
-                        TIMELINE_HEIGHT;
+                        this.getTimelineHeight();
 
         this.drawRect(
                 left,
@@ -1614,28 +1234,24 @@ public class AnimationEditorScreen extends GuiScreen
                 );
 
         int previewHeight =
-                bottom - top;
+                Math.max(
+                        1,
+                        bottom - top
+                );
 
-        animationPreview.setBounds(
+        this.animationPreview.setBounds(
                 left,
                 top,
                 previewWidth,
                 previewHeight
         );
 
-        if (this.bones.size() >= 7)
-        {
-            animationPreview.draw(
-                    this.mc,
-                    this.bones.get(1),
-                    this.bones.get(2),
-                    this.bones.get(3),
-                    this.bones.get(4),
-                    this.bones.get(5),
-                    this.bones.get(6),
-                    this.currentFrame
-            );
-        }
+        this.animationPreview.draw(
+                this.mc,
+                this.currentActorPose,
+                this.bones,
+                this.currentFrame
+        );
 
         int panelX =
                 right - 185;
@@ -1643,12 +1259,12 @@ public class AnimationEditorScreen extends GuiScreen
         int panelY =
                 top + 10;
 
-        transformPanel.setPosition(
+        this.transformPanel.setPosition(
                 panelX,
                 panelY
         );
 
-        transformPanel.draw(
+        this.transformPanel.draw(
                 this.mc,
                 this.selectedKeyframe,
                 getCurrentTransform(),
@@ -1656,19 +1272,11 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Timeline
-     * ------------------------------------------------------------
-     */
-
-    private void drawTimeline(
-            int mouseX,
-            int mouseY)
+    private void drawTimeline()
     {
         int timelineTop =
                 this.height -
-                        TIMELINE_HEIGHT;
+                        this.getTimelineHeight();
 
         this.drawRect(
                 0,
@@ -1728,9 +1336,11 @@ public class AnimationEditorScreen extends GuiScreen
         int tracksTop =
                 timelineTop + 35;
 
-        for (int i = 0;
-             i < this.bones.size();
-             i++)
+        for (
+                int i = 0;
+                i < this.bones.size();
+                i++
+        )
         {
             AnimationBone bone =
                     this.bones.get(i);
@@ -1738,6 +1348,14 @@ public class AnimationEditorScreen extends GuiScreen
             int trackY =
                     tracksTop +
                             i * TRACK_HEIGHT;
+
+            if (
+                    trackY >
+                            this.height - 25
+            )
+            {
+                break;
+            }
 
             drawBoneTrack(
                     bone,
@@ -1784,6 +1402,23 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+    private int getTimelineHeight()
+    {
+        int requiredHeight =
+                35 +
+                        this.bones.size() *
+                                TRACK_HEIGHT +
+                        25;
+
+        return Math.min(
+                220,
+                Math.max(
+                        180,
+                        requiredHeight
+                )
+        );
+    }
+
     private void drawTimelineRuler(
             int timelineTop,
             int timelineStartX)
@@ -1793,13 +1428,11 @@ public class AnimationEditorScreen extends GuiScreen
 
         if (
                 maximumFrame <
-                        EditorTimeline
-                                .TICKS_PER_SECOND
+                        EditorTimeline.TICKS_PER_SECOND
         )
         {
             maximumFrame =
-                    EditorTimeline
-                            .TICKS_PER_SECOND;
+                    EditorTimeline.TICKS_PER_SECOND;
         }
 
         float pixelsPerFrame =
@@ -1868,8 +1501,7 @@ public class AnimationEditorScreen extends GuiScreen
 
             boolean second =
                     frame %
-                            EditorTimeline
-                                    .TICKS_PER_SECOND
+                            EditorTimeline.TICKS_PER_SECOND
                             == 0;
 
             boolean halfSecond =
@@ -1887,8 +1519,7 @@ public class AnimationEditorScreen extends GuiScreen
 
                 int seconds =
                         frame /
-                                EditorTimeline
-                                        .TICKS_PER_SECOND;
+                                EditorTimeline.TICKS_PER_SECOND;
 
                 this.drawString(
                         this.fontRenderer,
@@ -1940,9 +1571,6 @@ public class AnimationEditorScreen extends GuiScreen
                         ? 0xFF3A3B3E
                         : 0xFF303134;
 
-        /*
-         * Фон строки кости.
-         */
         this.drawRect(
                 0,
                 trackY,
@@ -1951,12 +1579,6 @@ public class AnimationEditorScreen extends GuiScreen
                 trackColor
         );
 
-        /*
-         * Название кости.
-         *
-         * Теперь оно находится непосредственно
-         * в строке Timeline.
-         */
         this.drawString(
                 this.fontRenderer,
                 bone.getName(),
@@ -1967,10 +1589,6 @@ public class AnimationEditorScreen extends GuiScreen
                         : 0xAAAAAA
         );
 
-        /*
-         * Разделитель между названием кости
-         * и областью ключевых кадров.
-         */
         this.drawRect(
                 timelineStartX - 1,
                 trackY,
@@ -1979,9 +1597,6 @@ public class AnimationEditorScreen extends GuiScreen
                 0xFF555555
         );
 
-        /*
-         * Горизонтальная линия самой дорожки.
-         */
         this.drawRect(
                 timelineStartX,
                 trackY + 10,
@@ -1990,9 +1605,6 @@ public class AnimationEditorScreen extends GuiScreen
                 0xFF555555
         );
 
-        /*
-         * Ключевые кадры этой кости.
-         */
         for (
                 AnimationKeyframe keyframe :
                 bone.getKeyframes()
@@ -2012,14 +1624,11 @@ public class AnimationEditorScreen extends GuiScreen
                 continue;
             }
 
-            boolean keyframeSelected =
-                    keyframe ==
-                            this.selectedKeyframe;
-
             drawKeyframe(
                     x,
                     trackY + 10,
-                    keyframeSelected
+                    keyframe ==
+                            this.selectedKeyframe
             );
         }
     }
@@ -2075,19 +1684,14 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Timeline helpers
-     * ------------------------------------------------------------
-     */
-
     private float getPixelsPerFrame()
     {
         return BASE_FRAME_WIDTH *
                 this.timelineZoom;
     }
 
-    private int getFrameX(int frame)
+    private int getFrameX(
+            int frame)
     {
         return LEFT_PANEL_WIDTH
                 + Math.round(
@@ -2123,6 +1727,11 @@ public class AnimationEditorScreen extends GuiScreen
             AnimationBone bone,
             int frame)
     {
+        if (bone == null)
+        {
+            return null;
+        }
+
         for (
                 AnimationKeyframe keyframe :
                 bone.getKeyframes()
@@ -2143,9 +1752,13 @@ public class AnimationEditorScreen extends GuiScreen
     private AnimationKeyframe findKeyframeAt(
             AnimationBone bone,
             int mouseX,
-            int frame,
             int radius)
     {
+        if (bone == null)
+        {
+            return null;
+        }
+
         for (
                 AnimationKeyframe keyframe :
                 bone.getKeyframes()
@@ -2194,7 +1807,8 @@ public class AnimationEditorScreen extends GuiScreen
 
     private int getMaximumFrame()
     {
-        int maximum = 2000;
+        int maximum =
+                FIRST_FRAME;
 
         int timelineLast =
                 this.timeline.getLastTick();
@@ -2222,6 +1836,11 @@ public class AnimationEditorScreen extends GuiScreen
                 this.bones
         )
         {
+            if (bone == null)
+            {
+                continue;
+            }
+
             for (
                     AnimationKeyframe keyframe :
                     bone.getKeyframes()
@@ -2238,12 +1857,6 @@ public class AnimationEditorScreen extends GuiScreen
         return maximum;
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Mouse
-     * ------------------------------------------------------------
-     */
-
     @Override
     protected void mouseClicked(
             int mouseX,
@@ -2252,12 +1865,19 @@ public class AnimationEditorScreen extends GuiScreen
             throws IOException
     {
         /*
-         * Scene dropdown button.
+         * Любой новый mouse click сначала
+         * прекращает предыдущий Transform drag.
          */
+        this.transformDragging = false;
 
         int sceneButtonX = 175;
-
         int sceneButtonWidth = 180;
+
+        /*
+         * =========================
+         * SCENE DROPDOWN
+         * =========================
+         */
 
         if (
                 mouseX >= sceneButtonX &&
@@ -2275,19 +1895,11 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        /*
-         * Scene dropdown list.
-         */
-
         if (this.sceneDropdownOpen)
         {
             int x = 175;
-
-            int y =
-                    TOP_BAR_HEIGHT + 2;
-
+            int y = TOP_BAR_HEIGHT + 2;
             int width = 180;
-
             int rowHeight = 18;
 
             int count =
@@ -2298,7 +1910,8 @@ public class AnimationEditorScreen extends GuiScreen
 
             if (
                     mouseX >= x &&
-                            mouseX <= x + width &&
+                            mouseX <=
+                                    x + width &&
                             mouseY >= y &&
                             mouseY <
                                     y +
@@ -2307,15 +1920,13 @@ public class AnimationEditorScreen extends GuiScreen
             )
             {
                 int sceneIndex =
-                        (
-                                mouseY - y
-                        ) / rowHeight;
+                        (mouseY - y) /
+                                rowHeight;
 
                 if (
                         sceneIndex >= 0 &&
                                 sceneIndex <
-                                        this.sceneFiles
-                                                .size()
+                                        this.sceneFiles.size()
                 )
                 {
                     loadScene(
@@ -2330,7 +1941,9 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         /*
-         * Actor selection.
+         * =========================
+         * ACTOR PANEL
+         * =========================
          */
 
         int actorTop =
@@ -2344,9 +1957,12 @@ public class AnimationEditorScreen extends GuiScreen
 
         if (
                 mouseX >= 0 &&
-                        mouseX <= LEFT_PANEL_WIDTH &&
-                        mouseY >= actorTop + 30 &&
-                        mouseY < actorBottom
+                        mouseX <=
+                                LEFT_PANEL_WIDTH &&
+                        mouseY >=
+                                actorTop + 30 &&
+                        mouseY <
+                                actorBottom
         )
         {
             int relativeY =
@@ -2373,54 +1989,70 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         /*
-         * Bone selection.
+         * =========================
+         * TRANSFORM PANEL
+         * =========================
+         *
+         * TransformPanel находится справа
+         * поверх Preview, поэтому его нужно
+         * обработать ДО Timeline.
          */
 
-        int bonePanelTop =
-                TOP_BAR_HEIGHT +
-                        ACTOR_PANEL_HEIGHT +
-                        INTERPOLATION_PANEL_HEIGHT;
-
-        int timelineTop =
-                this.height -
-                        TIMELINE_HEIGHT;
-
-        if (
-                mouseX >= 0 &&
-                        mouseX <= LEFT_PANEL_WIDTH &&
-                        mouseY >=
-                                bonePanelTop + 28 &&
-                        mouseY <
-                                timelineTop
-        )
+        if (this.selectedKeyframe != null)
         {
-            int relativeY =
-                    mouseY -
-                            (bonePanelTop + 28);
+            int transformPanelX =
+                    this.width - 185;
 
-            int boneIndex =
-                    relativeY /
-                            TRACK_HEIGHT;
+            int transformPanelY =
+                    TOP_BAR_HEIGHT + 10;
 
-            if (
-                    boneIndex >= 0 &&
-                            boneIndex <
-                                    this.bones.size()
-            )
+            int transformPanelWidth =
+                    175;
+
+            int transformPanelHeight =
+                    245;
+
+            boolean insideTransformPanel =
+                    mouseX >= transformPanelX &&
+                            mouseX <=
+                                    transformPanelX +
+                                            transformPanelWidth &&
+                            mouseY >= transformPanelY &&
+                            mouseY <=
+                                    transformPanelY +
+                                            transformPanelHeight;
+
+            if (insideTransformPanel)
             {
-                this.selectedBone =
-                        boneIndex;
+                if (
+                        this.transformPanel.mouseClicked(
+                                mouseX,
+                                mouseY,
+                                mouseButton,
+                                this.selectedKeyframe
+                        )
+                )
+                {
+                    /*
+                     * Только здесь начинается настоящий
+                     * drag TransformPanel.
+                     */
+                    this.transformDragging = true;
 
-                this.selectedKeyframe =
-                        null;
-
-                return;
+                    return;
+                }
             }
         }
 
         /*
-         * Timeline.
+         * =========================
+         * TIMELINE
+         * =========================
          */
+
+        int timelineTop =
+                this.height -
+                        this.getTimelineHeight();
 
         if (
                 mouseY >= timelineTop &&
@@ -2443,6 +2075,12 @@ public class AnimationEditorScreen extends GuiScreen
                                     this.bones.size()
             )
             {
+                /*
+                 * Timeline selection всегда
+                 * прекращает Transform drag.
+                 */
+                this.transformDragging = false;
+
                 this.selectedBone =
                         boneIndex;
 
@@ -2459,32 +2097,25 @@ public class AnimationEditorScreen extends GuiScreen
                 int maximumFrame =
                         getMaximumFrame();
 
-                if (frame < FIRST_FRAME)
-                {
-                    frame =
-                            FIRST_FRAME;
-                }
-
-                if (frame > maximumFrame)
-                {
-                    frame =
-                            maximumFrame;
-                }
+                frame =
+                        Math.max(
+                                FIRST_FRAME,
+                                Math.min(
+                                        frame,
+                                        maximumFrame
+                                )
+                        );
 
                 if (mouseButton == 0)
                 {
-                    AnimationKeyframe
-                            clickedKeyframe =
+                    AnimationKeyframe clickedKeyframe =
                             findKeyframeAt(
                                     bone,
                                     mouseX,
-                                    frame,
                                     6
                             );
 
-                    if (
-                            clickedKeyframe != null
-                    )
+                    if (clickedKeyframe != null)
                     {
                         this.selectedKeyframe =
                                 clickedKeyframe;
@@ -2495,8 +2126,10 @@ public class AnimationEditorScreen extends GuiScreen
                         );
 
                         this.currentFrame =
-                                this.timeline
-                                        .getTick();
+                                this.timeline.getTick();
+
+                        applyRecordFrame();
+                        applyAnimationPose();
                     }
                     else
                     {
@@ -2505,43 +2138,44 @@ public class AnimationEditorScreen extends GuiScreen
                         );
 
                         this.currentFrame =
-                                this.timeline
-                                        .getTick();
+                                this.timeline.getTick();
 
-                        if (
-                                findKeyframe(
-                                        bone,
-                                        frame
-                                ) == null
-                        )
-                        {
-                            bone.addKeyframe(
-                                    frame
-                            );
-                        }
+                        applyRecordFrame();
+                        applyAnimationPose();
 
-                        this.selectedKeyframe =
+                        AnimationKeyframe keyframe =
                                 findKeyframe(
                                         bone,
                                         frame
                                 );
+
+                        if (keyframe == null)
+                        {
+                            bone.addKeyframe(
+                                    frame
+                            );
+
+                            keyframe =
+                                    findKeyframe(
+                                            bone,
+                                            frame
+                                    );
+                        }
+
+                        this.selectedKeyframe =
+                                keyframe;
                     }
                 }
-
-                if (mouseButton == 1)
+                else if (mouseButton == 1)
                 {
-                    AnimationKeyframe
-                            clickedKeyframe =
+                    AnimationKeyframe clickedKeyframe =
                             findKeyframeAt(
                                     bone,
                                     mouseX,
-                                    frame,
                                     6
                             );
 
-                    if (
-                            clickedKeyframe != null
-                    )
+                    if (clickedKeyframe != null)
                     {
                         if (
                                 clickedKeyframe ==
@@ -2568,12 +2202,6 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Mouse drag
-     * ------------------------------------------------------------
-     */
-
     @Override
     protected void mouseClickMove(
             int mouseX,
@@ -2581,8 +2209,21 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        /*
+         * ВАЖНО:
+         *
+         * Раньше TransformPanel получал mouseDragged()
+         * при любом движении мыши, если существовал
+         * selectedKeyframe.
+         *
+         * Теперь изменение keyframe разрешено
+         * только если drag действительно начался
+         * внутри TransformPanel.
+         */
         if (
-                this.selectedKeyframe != null
+                this.transformDragging
+                        && this.selectedKeyframe != null
+                        && clickedMouseButton == 0
         )
         {
             this.transformPanel.mouseDragged(
@@ -2610,18 +2251,18 @@ public class AnimationEditorScreen extends GuiScreen
                 state
         );
 
+        /*
+         * После отпускания мыши drag больше
+         * не должен продолжаться.
+         */
+        this.transformDragging = false;
+
         super.mouseReleased(
                 mouseX,
                 mouseY,
                 state
         );
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Mouse wheel
-     * ------------------------------------------------------------
-     */
 
     @Override
     public void handleMouseInput()
@@ -2630,8 +2271,7 @@ public class AnimationEditorScreen extends GuiScreen
         super.handleMouseInput();
 
         int wheel =
-                org.lwjgl.input.Mouse
-                        .getEventDWheel();
+                Mouse.getEventDWheel();
 
         if (wheel == 0)
         {
@@ -2639,22 +2279,20 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         int mouseX =
-                org.lwjgl.input.Mouse
-                        .getEventX()
+                Mouse.getEventX()
                         * this.width
                         / this.mc.displayWidth;
 
         int mouseY =
                 this.height
-                        - org.lwjgl.input.Mouse
-                        .getEventY()
+                        - Mouse.getEventY()
                         * this.height
                         / this.mc.displayHeight
                         - 1;
 
         int timelineTop =
                 this.height -
-                        TIMELINE_HEIGHT;
+                        this.getTimelineHeight();
 
         if (mouseY < timelineTop)
         {
@@ -2691,23 +2329,14 @@ public class AnimationEditorScreen extends GuiScreen
                         TIMELINE_ZOOM_STEP;
             }
 
-            if (
-                    this.timelineZoom <
-                            MIN_TIMELINE_ZOOM
-            )
-            {
-                this.timelineZoom =
-                        MIN_TIMELINE_ZOOM;
-            }
-
-            if (
-                    this.timelineZoom >
-                            MAX_TIMELINE_ZOOM
-            )
-            {
-                this.timelineZoom =
-                        MAX_TIMELINE_ZOOM;
-            }
+            this.timelineZoom =
+                    Math.max(
+                            MIN_TIMELINE_ZOOM,
+                            Math.min(
+                                    MAX_TIMELINE_ZOOM,
+                                    this.timelineZoom
+                            )
+                    );
 
             if (
                     oldZoom !=
@@ -2749,26 +2378,15 @@ public class AnimationEditorScreen extends GuiScreen
         int maxOffset =
                 getMaximumTimelineOffset();
 
-        if (this.timelineOffset < 0)
-        {
-            this.timelineOffset = 0;
-        }
-
-        if (
-                this.timelineOffset >
-                        maxOffset
-        )
-        {
-            this.timelineOffset =
-                    maxOffset;
-        }
+        this.timelineOffset =
+                Math.max(
+                        0,
+                        Math.min(
+                                this.timelineOffset,
+                                maxOffset
+                        )
+                );
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Keyboard
-     * ------------------------------------------------------------
-     */
 
     @Override
     protected void keyTyped(
@@ -2776,12 +2394,6 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws IOException
     {
-        this.transformPanel.keyTyped(
-                typedChar,
-                keyCode,
-                this.selectedKeyframe
-        );
-
         if (keyCode == 1)
         {
             this.mc.displayGuiScreen(
@@ -2791,20 +2403,30 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
+        this.transformPanel.keyTyped(
+                typedChar,
+                keyCode,
+                this.selectedKeyframe
+        );
+
         if (keyCode == 203)
         {
             this.timeline.previousTick();
-
             this.currentFrame =
                     this.timeline.getTick();
+
+            applyRecordFrame();
+            applyAnimationPose();
         }
 
         if (keyCode == 205)
         {
             this.timeline.nextTick();
-
             this.currentFrame =
                     this.timeline.getTick();
+
+            applyRecordFrame();
+            applyAnimationPose();
         }
 
         if (keyCode == 57)
@@ -2816,28 +2438,10 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Update
-     * ------------------------------------------------------------
-     */
-
     @Override
     public void updateScreen()
     {
         super.updateScreen();
-
-        BlockbusterSceneLoaderDebug.update();
-
-        BlockbusterRecordDebug.update();
-
-        BlockbusterRecordRoundTripDebug.update();
-
-        BlockbusterActionsDebug.update();
-
-        BlockbusterActionStructureDebug.update();
-
-        BlockbusterActionViewDebug.update();
 
         this.timeline.update();
 
@@ -2847,14 +2451,11 @@ public class AnimationEditorScreen extends GuiScreen
         this.playing =
                 this.timeline.isPlaying();
 
+        applyRecordFrame();
+        applyAnimationPose();
+        buildAnimationPose();
         applyAdapters();
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Selected objects
-     * ------------------------------------------------------------
-     */
 
     public AnimationKeyframe
     getSelectedKeyframe()
@@ -2890,181 +2491,44 @@ public class AnimationEditorScreen extends GuiScreen
             return new AnimationTransform();
         }
 
+        /*
+         * Если выбранный keyframe действительно
+         * принадлежит этой кости — используем его
+         * transform.
+         *
+         * Если keyframe выбран от другой кости,
+         * полностью игнорируем его.
+         *
+         * Это защищает редактор от ситуации,
+         * когда selectedKeyframe остаётся после
+         * переключения строки Timeline.
+         */
+        if (this.selectedKeyframe != null)
+        {
+            boolean belongsToBone =
+                    false;
+
+            for (
+                    AnimationKeyframe keyframe :
+                    bone.getKeyframes()
+            )
+            {
+                if (keyframe == this.selectedKeyframe)
+                {
+                    belongsToBone = true;
+                    break;
+                }
+            }
+
+            if (!belongsToBone)
+            {
+                return new AnimationTransform();
+            }
+        }
+
         return bone.getTransformAt(
                 this.currentFrame
         );
-    }
-
-    /*
-     * ------------------------------------------------------------
-     * Adapter
-     * ------------------------------------------------------------
-     */
-
-    private void loadCurrentRecordIntoAnimationBones()
-    {
-        BlockbusterRecord record =
-                getCurrentBlockbusterRecord();
-
-        if (record == null)
-        {
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "No Blockbuster record selected."
-            );
-
-            return;
-        }
-
-        AnimationBone anchor =
-                findBoneByName("Anchor");
-
-        if (anchor == null)
-        {
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "Anchor bone was not found."
-            );
-
-            return;
-        }
-
-        /*
-         * Remove previously imported keyframes.
-         *
-         * AnimationBone does not have clearKeyframes().
-         * We remove them using their frame numbers.
-         */
-        while (!anchor.getKeyframes().isEmpty())
-        {
-            int lastIndex =
-                    anchor.getKeyframes().size() - 1;
-
-            int frame =
-                    anchor.getKeyframes()
-                            .get(lastIndex)
-                            .getFrame();
-
-            anchor.removeKeyframe(frame);
-        }
-
-        int length =
-                record.getLength();
-
-        if (length <= 0)
-        {
-            this.timeline.setLength(1);
-            this.timeline.setTick(0);
-            this.currentFrame = 0;
-
-            return;
-        }
-
-        int importedFrames = 0;
-
-        for (int tick = 0; tick < length; tick++)
-        {
-            BlockbusterRecordFrame frame =
-                    record.getFrame(tick);
-
-            if (frame == null)
-            {
-                continue;
-            }
-
-            /*
-             * Create the keyframe through AnimationBone.
-             */
-            anchor.addKeyframe(tick);
-
-            AnimationKeyframe keyframe =
-                    anchor.getKeyframes()
-                            .get(
-                                    anchor.getKeyframes().size() - 1
-                            );
-
-            AnimationTransform transform =
-                    keyframe.getTransform();
-
-            /*
-             * Blockbuster stores actor position
-             * directly in the recording frame.
-             */
-            transform.setPosition(
-                    (float) frame.getX(),
-                    (float) frame.getY(),
-                    (float) frame.getZ()
-            );
-
-            /*
-             * Blockbuster:
-             *
-             * yaw   = Y axis
-             * pitch = X axis
-             *
-             * The editor transform uses:
-             *
-             * X = pitch
-             * Y = yaw
-             * Z = 0
-             */
-            transform.setRotation(
-                    frame.getPitch(),
-                    frame.getYaw(),
-                    0.0F
-            );
-
-            importedFrames++;
-        }
-
-        /*
-         * Synchronize the editor timeline
-         * with the imported Blockbuster record.
-         */
-        this.currentFrame = 0;
-
-        this.timeline.setLength(
-                Math.max(1, length)
-        );
-
-        this.timeline.setTick(0);
-
-        this.timeline.pause();
-
-        this.playing = false;
-
-        this.selectedKeyframe = null;
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Imported "
-                        + importedFrames
-                        + " Blockbuster frames."
-        );
-    }
-
-    private AnimationBone findBoneByName(
-            String name)
-    {
-        if (name == null)
-        {
-            return null;
-        }
-
-        for (AnimationBone bone : this.bones)
-        {
-            if (bone == null)
-            {
-                continue;
-            }
-
-            if (name.equals(bone.getName()))
-            {
-                return bone;
-            }
-        }
-
-        return null;
     }
 
     private void applyAdapters()
@@ -3083,14 +2547,71 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        AnimationAdapterData data =
-                AnimationAdapterDataBuilder.build(
-                        this.bones,
-                        this.currentFrame
-                );
+        if (
+                this.bones == null
+                        || this.bones.isEmpty()
+        )
+        {
+            return;
+        }
+
+        java.util.List<AnimationBoneSnapshot>
+                snapshots =
+                new java.util.ArrayList<AnimationBoneSnapshot>();
+
+        for (
+                AnimationBone bone :
+                this.bones
+        )
+        {
+            if (bone == null)
+            {
+                continue;
+            }
+
+            /*
+             * Получаем именно пользовательскую
+             * локальную трансформацию этой кости.
+             *
+             * Не getWorldTransformAt().
+             *
+             * Blockbuster самостоятельно применит
+             * parent hierarchy.
+             */
+            AnimationTransform transform =
+                    bone.getTransformAt(
+                            this.currentFrame
+                    );
+
+            if (transform == null)
+            {
+                continue;
+            }
+
+            String parentName =
+                    null;
+
+            if (bone.getParent() != null)
+            {
+                parentName =
+                        bone.getParent()
+                                .getName();
+            }
+
+            AnimationBoneSnapshot snapshot =
+                    new AnimationBoneSnapshot(
+                            bone.getName(),
+                            parentName,
+                            transform
+                    );
+
+            snapshots.add(
+                    snapshot
+            );
+        }
 
         adapter.apply(
-                data.getBones(),
+                snapshots,
                 this.currentFrame
         );
     }

@@ -7,23 +7,43 @@ public class AnimationBone
 {
     private final String name;
 
+    /*
+     * Пользовательские ключевые кадры этой кости.
+     *
+     * ВАЖНО:
+     *
+     * Здесь находятся только изменения,
+     * созданные пользователем редактора.
+     *
+     * Кадры Blockbuster Record сюда НЕ импортируются.
+     */
     private final List<AnimationKeyframe> keyframes;
 
+    /*
+     * Иерархия модели.
+     */
     private AnimationBone parent;
 
     private final List<AnimationBone> children;
 
     /*
-     * Static local position of the bone.
+     * Статическая позиция точки привязки кости
+     * внутри исходной Blockbuster-модели.
      *
-     * This defines the bone's default attachment
-     * position inside the model.
+     * Эти значения приходят из ModelCustomRenderer:
+     *
+     * rotationPointX
+     * rotationPointY
+     * rotationPointZ
+     *
+     * Они НЕ являются анимацией.
      */
     private float localX;
     private float localY;
     private float localZ;
 
-    public AnimationBone(String name)
+    public AnimationBone(
+            String name)
     {
         this.name = name;
 
@@ -40,6 +60,12 @@ public class AnimationBone
         this.localZ = 0.0F;
     }
 
+    /*
+     * ---------------------------------------------------------
+     * Basic information
+     * ---------------------------------------------------------
+     */
+
     public String getName()
     {
         return this.name;
@@ -52,7 +78,7 @@ public class AnimationBone
 
     /*
      * ---------------------------------------------------------
-     * Local attachment position
+     * Static local attachment
      * ---------------------------------------------------------
      */
 
@@ -95,19 +121,30 @@ public class AnimationBone
     public void setParent(
             AnimationBone parent)
     {
+        /*
+         * Нельзя сделать кость родителем самой себя.
+         */
         if (parent == this)
         {
             return;
         }
 
+        /*
+         * Нельзя создать цикл:
+         *
+         * A -> B -> C -> A
+         */
         if (
-                parent != null &&
-                        parent.isChildOf(this)
+                parent != null
+                        && parent.isChildOf(this)
         )
         {
             return;
         }
 
+        /*
+         * Удаляем кость из старого родителя.
+         */
         if (this.parent != null)
         {
             this.parent.children.remove(this);
@@ -115,9 +152,12 @@ public class AnimationBone
 
         this.parent = parent;
 
+        /*
+         * Добавляем кость новому родителю.
+         */
         if (
-                this.parent != null &&
-                        !this.parent.children.contains(this)
+                this.parent != null
+                        && !this.parent.children.contains(this)
         )
         {
             this.parent.children.add(this);
@@ -172,7 +212,8 @@ public class AnimationBone
                 return true;
             }
 
-            current = current.parent;
+            current =
+                    current.parent;
         }
 
         return false;
@@ -193,8 +234,8 @@ public class AnimationBone
         )
         {
             if (
-                    keyframe.getFrame() ==
-                            frame
+                    keyframe != null
+                            && keyframe.getFrame() == frame
             )
             {
                 return true;
@@ -207,14 +248,18 @@ public class AnimationBone
     public void addKeyframe(
             int frame)
     {
-        if (!hasKeyframe(frame))
+        if (hasKeyframe(frame))
         {
-            this.keyframes.add(
-                    new AnimationKeyframe(frame)
-            );
-
-            sortKeyframes();
+            return;
         }
+
+        this.keyframes.add(
+                new AnimationKeyframe(
+                        frame
+                )
+        );
+
+        sortKeyframes();
     }
 
     public void removeKeyframe(
@@ -227,14 +272,16 @@ public class AnimationBone
                 i--
         )
         {
+            AnimationKeyframe keyframe =
+                    this.keyframes.get(i);
+
             if (
-                    this.keyframes
-                            .get(i)
-                            .getFrame() ==
-                            frame
+                    keyframe != null
+                            && keyframe.getFrame() == frame
             )
             {
                 this.keyframes.remove(i);
+
                 return;
             }
         }
@@ -244,16 +291,22 @@ public class AnimationBone
     getPreviousKeyframe(
             int frame)
     {
-        AnimationKeyframe previous = null;
+        AnimationKeyframe previous =
+                null;
 
         for (
                 AnimationKeyframe keyframe :
                 this.keyframes
         )
         {
+            if (keyframe == null)
+            {
+                continue;
+            }
+
             if (
-                    keyframe.getFrame() <=
-                            frame
+                    keyframe.getFrame()
+                            <= frame
             )
             {
                 previous = keyframe;
@@ -276,9 +329,14 @@ public class AnimationBone
                 this.keyframes
         )
         {
+            if (keyframe == null)
+            {
+                continue;
+            }
+
             if (
-                    keyframe.getFrame() >=
-                            frame
+                    keyframe.getFrame()
+                            >= frame
             )
             {
                 return keyframe;
@@ -288,15 +346,23 @@ public class AnimationBone
         return null;
     }
 
+    /*
+     * Получает пользовательскую трансформацию
+     * этой кости на конкретном кадре.
+     */
     public AnimationTransform
     getTransformAt(
             int frame)
     {
         AnimationKeyframe previous =
-                getPreviousKeyframe(frame);
+                getPreviousKeyframe(
+                        frame
+                );
 
         AnimationKeyframe next =
-                getNextKeyframe(frame);
+                getNextKeyframe(
+                        frame
+                );
 
         return AnimationInterpolator.interpolate(
                 previous,
@@ -307,7 +373,7 @@ public class AnimationBone
 
     /*
      * ---------------------------------------------------------
-     * Adapter snapshot
+     * Snapshot
      * ---------------------------------------------------------
      */
 
@@ -316,9 +382,12 @@ public class AnimationBone
             int frame)
     {
         AnimationTransform transform =
-                getTransformAt(frame);
+                getWorldTransformAt(
+                        frame
+                );
 
-        String parentName = null;
+        String parentName =
+                null;
 
         if (this.parent != null)
         {
@@ -335,85 +404,122 @@ public class AnimationBone
 
     /*
      * ---------------------------------------------------------
-     * Anchor
+     * Root
      * ---------------------------------------------------------
-     *
-     * The Anchor is the ONLY parent whose animated
-     * transform is inherited by all model bones.
      */
 
-    private AnimationBone
-    getAnchorBone()
+    /**
+     * Возвращает корневую кость этой иерархии.
+     *
+     * Никакого специального имени вроде "Anchor"
+     * здесь нет.
+     */
+    public AnimationBone
+    getRootBone()
     {
-        AnimationBone current = this;
+        AnimationBone root =
+                this;
 
-        while (
-                current.parent != null
-        )
+        while (root.parent != null)
         {
-            current = current.parent;
+            root =
+                    root.parent;
         }
 
-        return current;
+        return root;
     }
 
     /*
      * ---------------------------------------------------------
-     * Anchor
+     * Root transform
      * ---------------------------------------------------------
-     *
-     * The Anchor is the ONLY parent whose animated
-     * transform is inherited by all model bones.
      */
 
+    /**
+     * Совместимость со старым кодом.
+     *
+     * Раньше метод был завязан на Anchor.
+     *
+     * Теперь он просто получает transform
+     * настоящей корневой кости.
+     */
     public AnimationTransform
     getAnchorTransformAt(
             int frame)
     {
-        AnimationBone anchor =
-                getAnchorBone();
+        AnimationBone root =
+                getRootBone();
 
-        return anchor.getTransformAt(
+        return root.getTransformAt(
                 frame
         );
     }
 
     /*
      * ---------------------------------------------------------
-     * Model transform
+     * World transform
      * ---------------------------------------------------------
      *
-     * Anchor transform affects the whole model.
+     * Здесь находится основная логика иерархии.
      *
-     * The current bone's own animation transform
-     * affects only this bone.
+     * Например:
      *
-     * Parent bone animation transforms are NOT inherited.
+     * anchor
+     *   |
+     *  body
+     *   |
+     * left_arm
+     *
+     * Итоговый transform left_arm:
+     *
+     * anchor
+     *      +
+     * body
+     *      +
+     * left_arm
+     *
+     * Причём это работает для любого количества
+     * уровней вложенности.
      */
 
     public AnimationTransform
     getWorldTransformAt(
             int frame)
     {
-        AnimationTransform anchorTransform =
-                getAnchorTransformAt(
-                        frame
-                );
-
         AnimationTransform localTransform =
                 getTransformAt(
                         frame
                 );
 
         /*
-         * The bone's static attachment position
-         * belongs to the model coordinate system.
+         * Если у кости нет пользовательских
+         * ключевых кадров, interpolator должен
+         * вернуть базовую пустую трансформацию.
+         *
+         * На всякий случай создаём её здесь.
          */
+        if (localTransform == null)
+        {
+            localTransform =
+                    new AnimationTransform();
+        }
 
-        AnimationTransform boneTransform =
+        /*
+         * Сначала создаём локальную трансформацию
+         * этой кости.
+         *
+         * localX/Y/Z:
+         *
+         * статическая точка привязки Blockbuster.
+         *
+         * AnimationTransform:
+         *
+         * пользовательское изменение.
+         */
+        AnimationTransform local =
                 new AnimationTransform();
 
-        boneTransform.setPosition(
+        local.setPosition(
                 this.localX
                         + localTransform.getPositionX(),
 
@@ -424,24 +530,59 @@ public class AnimationBone
                         + localTransform.getPositionZ()
         );
 
-        boneTransform.setRotation(
+        local.setRotation(
                 localTransform.getRotationX(),
                 localTransform.getRotationY(),
                 localTransform.getRotationZ()
         );
 
-        boneTransform.setScale(
+        local.setScale(
                 localTransform.getScaleX(),
                 localTransform.getScaleY(),
                 localTransform.getScaleZ()
         );
 
         /*
-         * Anchor is the global model transform.
+         * Корневая кость не имеет родителя.
+         *
+         * Поэтому её локальный transform
+         * одновременно является мировым.
          */
+        if (this.parent == null)
+        {
+            return local;
+        }
 
-        return anchorTransform.combine(
-                boneTransform
+        /*
+         * Получаем уже вычисленный мировой transform
+         * родителя.
+         *
+         * В результате рекурсия идёт вверх:
+         *
+         * left_leg_shoe
+         *      ↓
+         * left_leg
+         *      ↓
+         * body
+         *      ↓
+         * anchor
+         */
+        AnimationTransform parentWorld =
+                this.parent.getWorldTransformAt(
+                        frame
+                );
+
+        if (parentWorld == null)
+        {
+            return local;
+        }
+
+        /*
+         * Накладываем локальный transform этой кости
+         * на мировой transform родителя.
+         */
+        return parentWorld.combine(
+                local
         );
     }
 
@@ -449,29 +590,34 @@ public class AnimationBone
      * ---------------------------------------------------------
      * World pivot
      * ---------------------------------------------------------
+     *
+     * Pivot использует ту же иерархию, что и world
+     * transform.
+     *
+     * Это важно для редактора:
+     *
+     * если родитель повернулся,
+     * pivot ребёнка должен переместиться вместе
+     * с родителем.
      */
 
     public AnimationTransform
     getWorldPivotAt(
             int frame)
     {
-        AnimationTransform anchorTransform =
-                getAnchorTransformAt(
-                        frame
-                );
-
         AnimationTransform localTransform =
                 getTransformAt(
                         frame
                 );
 
+        if (localTransform == null)
+        {
+            localTransform =
+                    new AnimationTransform();
+        }
+
         AnimationTransform pivot =
                 new AnimationTransform();
-
-        /*
-         * Static attachment position + this bone's
-         * own animated position.
-         */
 
         pivot.setPosition(
                 this.localX
@@ -483,13 +629,6 @@ public class AnimationBone
                 this.localZ
                         + localTransform.getPositionZ()
         );
-
-        /*
-         * The pivot itself does not need to inherit
-         * the bone's rotation for positioning.
-         *
-         * Its rotation is still returned for consistency.
-         */
 
         pivot.setRotation(
                 localTransform.getRotationX(),
@@ -503,7 +642,29 @@ public class AnimationBone
                 localTransform.getScaleZ()
         );
 
-        return anchorTransform.combine(
+        /*
+         * Для корня pivot является мировым.
+         */
+        if (this.parent == null)
+        {
+            return pivot;
+        }
+
+        /*
+         * Pivot ребёнка также находится
+         * в системе координат родителя.
+         */
+        AnimationTransform parentPivot =
+                this.parent.getWorldPivotAt(
+                        frame
+                );
+
+        if (parentPivot == null)
+        {
+            return pivot;
+        }
+
+        return parentPivot.combine(
                 pivot
         );
     }
@@ -516,6 +677,13 @@ public class AnimationBone
 
     private void sortKeyframes()
     {
+        /*
+         * Оставляем простую сортировку.
+         *
+         * Количество пользовательских ключей обычно
+         * небольшое, поэтому здесь важнее простота
+         * и совместимость с Java 8.
+         */
         for (
                 int i = 0;
                 i < this.keyframes.size() - 1;
@@ -533,6 +701,14 @@ public class AnimationBone
 
                 AnimationKeyframe next =
                         this.keyframes.get(j + 1);
+
+                if (
+                        current == null
+                                || next == null
+                )
+                {
+                    continue;
+                }
 
                 if (
                         current.getFrame()

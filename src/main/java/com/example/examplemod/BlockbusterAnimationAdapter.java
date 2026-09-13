@@ -1,51 +1,55 @@
 package com.example.examplemod;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import net.minecraftforge.fml.common.Loader;
 
-public class BlockbusterAnimationAdapter implements AnimationAdapter
+public class BlockbusterAnimationAdapter
+        implements AnimationAdapter
 {
     private BlockbusterModelAccess modelAccess;
 
-    /**
-     * Соответствие костей нашего Animation Editor
-     * костям Blockbuster.
-     */
-    private final Map<String, String> boneMapping;
-
     public BlockbusterAnimationAdapter()
     {
-        this.modelAccess = new BlockbusterModelAccess(null);
-
-        this.boneMapping = new HashMap<String, String>();
-
-        this.boneMapping.put("Anchor", "anchor");
-        this.boneMapping.put("Body", "body");
-        this.boneMapping.put("Head", "head");
-        this.boneMapping.put("Arm.L", "left_arm");
-        this.boneMapping.put("Arm.R", "right_arm");
-        this.boneMapping.put("Leg.L", "left_leg");
-        this.boneMapping.put("Leg.R", "right_leg");
+        this.modelAccess =
+                new BlockbusterModelAccess(null);
     }
+
+    /*
+     * ---------------------------------------------------------
+     * Blockbuster availability
+     * ---------------------------------------------------------
+     */
 
     @Override
     public boolean supports()
     {
-        return Loader.isModLoaded("blockbuster");
+        return Loader.isModLoaded(
+                "blockbuster"
+        );
     }
 
-    public void setModel(Object model)
+    /*
+     * ---------------------------------------------------------
+     * Model
+     * ---------------------------------------------------------
+     */
+
+    public void setModel(
+            Object model)
     {
         if (this.modelAccess == null)
         {
-            this.modelAccess = new BlockbusterModelAccess(model);
+            this.modelAccess =
+                    new BlockbusterModelAccess(
+                            model
+                    );
         }
         else
         {
-            this.modelAccess.setModel(model);
+            this.modelAccess.setModel(
+                    model
+            );
         }
     }
 
@@ -65,7 +69,8 @@ public class BlockbusterAnimationAdapter implements AnimationAdapter
                 && this.modelAccess.isValid();
     }
 
-    public boolean loadModel(String name)
+    public boolean loadModel(
+            String name)
     {
         if (!supports())
         {
@@ -74,110 +79,110 @@ public class BlockbusterAnimationAdapter implements AnimationAdapter
 
         if (this.modelAccess == null)
         {
-            this.modelAccess = new BlockbusterModelAccess(null);
+            this.modelAccess =
+                    new BlockbusterModelAccess(
+                            null
+                    );
         }
 
-        return this.modelAccess.loadModelByName(name);
+        return this.modelAccess.loadModelByName(
+                name
+        );
     }
 
-    /**
-     * Возвращает имя кости Blockbuster
-     * для кости нашего редактора.
+    /*
+     * ---------------------------------------------------------
+     * Apply animation
+     * ---------------------------------------------------------
+     *
+     * Здесь намеренно НЕТ mapping-а:
+     *
+     * Anchor -> anchor
+     * Body   -> body
+     * ...
+     *
+     * AnimationBone теперь использует реальные имена
+     * Blockbuster-модели.
+     *
+     * Поэтому:
+     *
+     * AnimationBone "left_arm"
+     *              ↓
+     * ModelCustomRenderer "left_arm"
+     *
+     * AnimationBone "body_armor"
+     *              ↓
+     * ModelCustomRenderer "body_armor"
+     *
+     * и так далее для любого количества костей.
      */
-    private String getBlockbusterBoneName(String editorBoneName)
-    {
-        if (editorBoneName == null)
-        {
-            return null;
-        }
-
-        String mappedName = this.boneMapping.get(editorBoneName);
-
-        if (mappedName != null)
-        {
-            return mappedName;
-        }
-
-        return editorBoneName;
-    }
 
     @Override
     public void apply(
             List<AnimationBoneSnapshot> bones,
-            int frame
-    )
+            int frame)
     {
-        if (!supports()
-                || this.modelAccess == null
-                || !this.modelAccess.isValid()
-                || bones == null)
+        if (
+                !supports()
+                        || this.modelAccess == null
+                        || !this.modelAccess.isValid()
+                        || bones == null
+        )
         {
             return;
         }
 
-        for (AnimationBoneSnapshot bone : bones)
+        for (
+                AnimationBoneSnapshot bone :
+                bones
+        )
         {
             if (bone == null)
             {
                 continue;
             }
 
-            String editorBoneName = bone.getName();
+            String boneName =
+                    bone.getName();
 
-            String blockbusterBoneName =
-                    getBlockbusterBoneName(editorBoneName);
-
-            if (blockbusterBoneName == null)
+            if (
+                    boneName == null
+                            || boneName.isEmpty()
+            )
             {
                 continue;
             }
 
+            /*
+             * AnimationBone теперь содержит
+             * настоящее имя Blockbuster limb.
+             */
             Object renderer =
-                    this.modelAccess.findBone(blockbusterBoneName);
+                    this.modelAccess.findBone(
+                            boneName
+                    );
 
             if (renderer == null)
             {
                 continue;
             }
 
-            boolean applied =
-                    this.modelAccess.applyTransform(
-                            renderer,
-                            bone
-                    );
-
-            if (applied)
-            {
-                System.out.println(
-                        "[BBS Animation Editor] Applied "
-                                + editorBoneName
-                                + " -> "
-                                + blockbusterBoneName
-                                + " | frame="
-                                + frame
-                                + " | pos=("
-                                + bone.getPositionX()
-                                + ", "
-                                + bone.getPositionY()
-                                + ", "
-                                + bone.getPositionZ()
-                                + ")"
-                                + " | rot=("
-                                + bone.getRotationX()
-                                + ", "
-                                + bone.getRotationY()
-                                + ", "
-                                + bone.getRotationZ()
-                                + ")"
-                                + " | scale=("
-                                + bone.getScaleX()
-                                + ", "
-                                + bone.getScaleY()
-                                + ", "
-                                + bone.getScaleZ()
-                                + ")"
-                );
-            }
+            /*
+             * Snapshot, который приходит сюда,
+             * должен содержать LOCAL transform.
+             *
+             * Это важно:
+             *
+             * Blockbuster сам применяет parent hierarchy
+             * через ModelCustomRenderer.parent.
+             *
+             * Поэтому мы не должны передавать сюда
+             * world transform.
+             */
+            this.modelAccess.applyTransform(
+                    renderer,
+                    bone
+            );
         }
     }
 }

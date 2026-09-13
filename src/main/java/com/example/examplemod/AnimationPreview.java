@@ -1,5 +1,7 @@
 package com.example.examplemod;
 
+import java.util.List;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.renderer.GlStateManager;
@@ -11,12 +13,30 @@ public class AnimationPreview
     private int width;
     private int height;
 
+    /*
+     * World position of the actor when the preview
+     * reference was established.
+     */
+    private double referenceX;
+    private double referenceY;
+    private double referenceZ;
+
+    /*
+     * Temporary scale used by the transitional
+     * 2D preview.
+     */
+    private static final float WORLD_TO_SCREEN = 8.0F;
+
     public AnimationPreview()
     {
         this.x = 0;
         this.y = 0;
         this.width = 300;
         this.height = 300;
+
+        this.referenceX = 0.0D;
+        this.referenceY = 0.0D;
+        this.referenceZ = 0.0D;
     }
 
     public void setBounds(
@@ -31,18 +51,35 @@ public class AnimationPreview
         this.height = height;
     }
 
+    public void setReferencePosition(
+            double x,
+            double y,
+            double z)
+    {
+        this.referenceX = x;
+        this.referenceY = y;
+        this.referenceZ = z;
+    }
+
+    /**
+     * Рисует временное 2D-представление
+     * всех костей текущего Blockbuster-скелета.
+     *
+     * Количество костей больше не фиксировано.
+     */
     public void draw(
             Minecraft mc,
-            AnimationBone body,
-            AnimationBone head,
-            AnimationBone armLeft,
-            AnimationBone armRight,
-            AnimationBone legLeft,
-            AnimationBone legRight,
+            ActorPose actorPose,
+            List<AnimationBone> bones,
             int currentFrame)
     {
+        if (mc == null || actorPose == null)
+        {
+            return;
+        }
+
         /*
-         * Background
+         * Background.
          */
 
         Gui.drawRect(
@@ -61,9 +98,7 @@ public class AnimationPreview
         );
 
         /*
-         * Model origin.
-         *
-         * This belongs to Anchor.
+         * Preview origin.
          */
 
         int centerX =
@@ -73,103 +108,109 @@ public class AnimationPreview
                 this.y + this.height / 2;
 
         /*
-         * Body
+         * Actor movement relative to the
+         * reference position.
          */
 
-        drawBone(
-                body,
-                currentFrame,
-                centerX,
-                centerY,
-                32,
-                50,
-                0xFFAAAAAA
-        );
+        float actorOffsetX =
+                (float)
+                        (
+                                actorPose.getX()
+                                        - this.referenceX
+                        )
+                        * WORLD_TO_SCREEN;
+
+        float actorOffsetY =
+                (float)
+                        (
+                                actorPose.getY()
+                                        - this.referenceY
+                        )
+                        * WORLD_TO_SCREEN;
+
+        float actorOffsetZ =
+                (float)
+                        (
+                                actorPose.getZ()
+                                        - this.referenceZ
+                        )
+                        * WORLD_TO_SCREEN;
+
+        int actorX =
+                (int)
+                        (
+                                centerX
+                                        + actorOffsetX
+                        );
+
+        int actorY =
+                (int)
+                        (
+                                centerY
+                                        - actorOffsetY
+                                        - actorOffsetZ
+                        );
 
         /*
-         * Child bones.
+         * Draw every bone dynamically.
          *
-         * Their positions are calculated from
-         * the parent hierarchy.
+         * We intentionally do not assume
+         * any specific bone names.
          */
+        if (bones == null)
+        {
+            return;
+        }
 
-        drawBone(
-                head,
-                currentFrame,
-                centerX,
-                centerY,
-                24,
-                24,
-                0xFFE0E0E0
-        );
+        for (
+                AnimationBone bone :
+                bones
+        )
+        {
+            if (bone == null)
+            {
+                continue;
+            }
 
-        drawBone(
-                armLeft,
-                currentFrame,
-                centerX,
-                centerY,
-                18,
-                42,
-                0xFFAAAAAA
-        );
-
-        drawBone(
-                armRight,
-                currentFrame,
-                centerX,
-                centerY,
-                18,
-                42,
-                0xFFAAAAAA
-        );
-
-        drawBone(
-                legLeft,
-                currentFrame,
-                centerX,
-                centerY,
-                18,
-                45,
-                0xFF999999
-        );
-
-        drawBone(
-                legRight,
-                currentFrame,
-                centerX,
-                centerY,
-                18,
-                45,
-                0xFF999999
-        );
+            drawBone(
+                    bone,
+                    currentFrame,
+                    actorX,
+                    actorY
+            );
+        }
     }
 
     private void drawBone(
             AnimationBone bone,
             int currentFrame,
             int originX,
-            int originY,
-            int boneWidth,
-            int boneHeight,
-            int color)
+            int originY)
     {
-        /*
-         * Position of the attachment point in world space.
-         */
+        if (bone == null)
+        {
+            return;
+        }
 
         AnimationTransform pivot =
                 bone.getWorldPivotAt(
                         currentFrame
                 );
 
-        /*
-         * Complete world transform.
-         */
+        if (pivot == null)
+        {
+            return;
+        }
 
         AnimationTransform transform =
                 bone.getWorldTransformAt(
                         currentFrame
                 );
+
+        if (transform == null)
+        {
+            return;
+        }
 
         float x =
                 originX
@@ -188,6 +229,15 @@ public class AnimationPreview
         float rotation =
                 transform.getRotationZ();
 
+        /*
+         * Temporary generic bone size.
+         *
+         * The real Blockbuster renderer will later
+         * obtain the actual geometry from ModelCustom.
+         */
+        int boneWidth = 12;
+        int boneHeight = 24;
+
         float finalWidth =
                 Math.max(
                         2.0F,
@@ -201,8 +251,12 @@ public class AnimationPreview
                 );
 
         /*
-         * Draw the bone around its attachment point.
+         * Different shade for root bones.
          */
+        int color =
+                bone.getParent() == null
+                        ? 0xFFE0E0E0
+                        : 0xFFAAAAAA;
 
         GlStateManager.pushMatrix();
 

@@ -156,33 +156,49 @@ public class AnimationTransform
 
     /*
      * ---------------------------------------------------------
-     * WORLD TRANSFORM
+     * COMBINE
      * ---------------------------------------------------------
      *
-     * Combines this local transform with a parent transform.
+     * Объединяет:
      *
-     * Position:
-     *   child position is first affected by parent scale,
-     *   then rotated by parent rotation,
-     *   then translated by parent position.
+     * this  = transform родителя
+     * child = локальный transform ребёнка
      *
-     * Rotation:
-     *   parent + child.
+     * Результат:
      *
-     * Scale:
-     *   parent * child.
+     * parent * child
      *
+     * Позиция ребёнка:
+     *
+     * 1. масштабируется родителем
+     * 2. вращается родителем
+     * 3. переносится в позицию родителя
+     *
+     * Вращение:
+     *
+     * объединяется через матрицы вращения,
+     * а не простым сложением углов.
+     *
+     * Масштаб:
+     *
+     * перемножается.
      */
 
     public AnimationTransform combine(
             AnimationTransform child)
     {
+        if (child == null)
+        {
+            return this.copy();
+        }
+
         AnimationTransform result =
                 new AnimationTransform();
 
         /*
-         * Scale child's local position
-         * by parent's scale.
+         * -----------------------------------------------------
+         * CHILD POSITION
+         * -----------------------------------------------------
          */
 
         float x =
@@ -198,29 +214,138 @@ public class AnimationTransform
                         * this.scaleZ;
 
         /*
-         * Rotate the position by the parent's
-         * X, Y and Z rotations.
+         * Применяем вращение родителя
+         * к локальной позиции ребёнка.
          */
-
-        double rx =
-                Math.toRadians(
-                        this.rotationX
-                );
-
-        double ry =
-                Math.toRadians(
-                        this.rotationY
-                );
-
-        double rz =
-                Math.toRadians(
+        float[] rotated =
+                rotateVector(
+                        x,
+                        y,
+                        z,
+                        this.rotationX,
+                        this.rotationY,
                         this.rotationZ
                 );
 
         /*
-         * Rotation around X.
+         * Переводим позицию ребёнка
+         * в мировое пространство.
+         */
+        result.setPosition(
+                this.positionX + rotated[0],
+                this.positionY + rotated[1],
+                this.positionZ + rotated[2]
+        );
+
+        /*
+         * -----------------------------------------------------
+         * ROTATION
+         * -----------------------------------------------------
+         *
+         * Вращения объединяются через матрицы.
+         *
+         * Порядок:
+         *
+         * parentRotation * childRotation
+         *
+         * Это принципиально отличается от:
+         *
+         * parentX + childX
+         *
+         * потому что вращения в 3D
+         * не являются коммутативными.
          */
 
+        float[][] parentMatrix =
+                createRotationMatrix(
+                        this.rotationX,
+                        this.rotationY,
+                        this.rotationZ
+                );
+
+        float[][] childMatrix =
+                createRotationMatrix(
+                        child.getRotationX(),
+                        child.getRotationY(),
+                        child.getRotationZ()
+                );
+
+        float[][] worldMatrix =
+                multiplyMatrix(
+                        parentMatrix,
+                        childMatrix
+                );
+
+        float[] worldRotation =
+                matrixToEuler(
+                        worldMatrix
+                );
+
+        result.setRotation(
+                worldRotation[0],
+                worldRotation[1],
+                worldRotation[2]
+        );
+
+        /*
+         * -----------------------------------------------------
+         * SCALE
+         * -----------------------------------------------------
+         */
+
+        result.setScale(
+                this.scaleX
+                        * child.getScaleX(),
+
+                this.scaleY
+                        * child.getScaleY(),
+
+                this.scaleZ
+                        * child.getScaleZ()
+        );
+
+        return result;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * VECTOR ROTATION
+     * ---------------------------------------------------------
+     *
+     * Используется для перемещения точки ребёнка
+     * относительно вращённого родителя.
+     *
+     * Порядок вращения соответствует:
+     *
+     * X -> Y -> Z
+     */
+
+    private static float[] rotateVector(
+            float x,
+            float y,
+            float z,
+            float rotationX,
+            float rotationY,
+            float rotationZ)
+    {
+        double rx =
+                Math.toRadians(
+                        rotationX
+                );
+
+        double ry =
+                Math.toRadians(
+                        rotationY
+                );
+
+        double rz =
+                Math.toRadians(
+                        rotationZ
+                );
+
+        /*
+         * X
+         */
         float cosX =
                 (float) Math.cos(rx);
 
@@ -239,9 +364,8 @@ public class AnimationTransform
         z = rotatedZ;
 
         /*
-         * Rotation around Y.
+         * Y
          */
-
         float cosY =
                 (float) Math.cos(ry);
 
@@ -260,9 +384,8 @@ public class AnimationTransform
         z = rotatedZ;
 
         /*
-         * Rotation around Z.
+         * Z
          */
-
         float cosZ =
                 (float) Math.cos(rz);
 
@@ -280,46 +403,253 @@ public class AnimationTransform
         x = rotatedX;
         y = rotatedY;
 
+        return new float[]
+                {
+                        x,
+                        y,
+                        z
+                };
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * ROTATION MATRIX
+     * ---------------------------------------------------------
+     */
+
+    private static float[][] createRotationMatrix(
+            float rotationX,
+            float rotationY,
+            float rotationZ)
+    {
+        double rx =
+                Math.toRadians(
+                        rotationX
+                );
+
+        double ry =
+                Math.toRadians(
+                        rotationY
+                );
+
+        double rz =
+                Math.toRadians(
+                        rotationZ
+                );
+
+        float cx =
+                (float) Math.cos(rx);
+
+        float sx =
+                (float) Math.sin(rx);
+
+        float cy =
+                (float) Math.cos(ry);
+
+        float sy =
+                (float) Math.sin(ry);
+
+        float cz =
+                (float) Math.cos(rz);
+
+        float sz =
+                (float) Math.sin(rz);
+
         /*
-         * Translate into parent's world position.
+         * X rotation.
          */
-
-        result.setPosition(
-                this.positionX + x,
-                this.positionY + y,
-                this.positionZ + z
-        );
+        float[][] matrixX =
+                new float[][]
+                        {
+                                {
+                                        1.0F, 0.0F, 0.0F
+                                },
+                                {
+                                        0.0F, cx, -sx
+                                },
+                                {
+                                        0.0F, sx, cx
+                                }
+                        };
 
         /*
-         * Combine rotations.
+         * Y rotation.
          */
-
-        result.setRotation(
-                this.rotationX
-                        + child.getRotationX(),
-
-                this.rotationY
-                        + child.getRotationY(),
-
-                this.rotationZ
-                        + child.getRotationZ()
-        );
+        float[][] matrixY =
+                new float[][]
+                        {
+                                {
+                                        cy, 0.0F, sy
+                                },
+                                {
+                                        0.0F, 1.0F, 0.0F
+                                },
+                                {
+                                        -sy, 0.0F, cy
+                                }
+                        };
 
         /*
-         * Combine scales.
+         * Z rotation.
          */
+        float[][] matrixZ =
+                new float[][]
+                        {
+                                {
+                                        cz, -sz, 0.0F
+                                },
+                                {
+                                        sz, cz, 0.0F
+                                },
+                                {
+                                        0.0F, 0.0F, 1.0F
+                                }
+                        };
 
-        result.setScale(
-                this.scaleX
-                        * child.getScaleX(),
-
-                this.scaleY
-                        * child.getScaleY(),
-
-                this.scaleZ
-                        * child.getScaleZ()
+        /*
+         * X -> Y -> Z
+         */
+        return multiplyMatrix(
+                multiplyMatrix(
+                        matrixZ,
+                        matrixY
+                ),
+                matrixX
         );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * MATRIX MULTIPLICATION
+     * ---------------------------------------------------------
+     */
+
+    private static float[][] multiplyMatrix(
+            float[][] a,
+            float[][] b)
+    {
+        float[][] result =
+                new float[3][3];
+
+        for (
+                int row = 0;
+                row < 3;
+                row++
+        )
+        {
+            for (
+                    int column = 0;
+                    column < 3;
+                    column++
+            )
+            {
+                float value = 0.0F;
+
+                for (
+                        int i = 0;
+                        i < 3;
+                        i++
+                )
+                {
+                    value +=
+                            a[row][i]
+                                    * b[i][column];
+                }
+
+                result[row][column] =
+                        value;
+            }
+        }
 
         return result;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * MATRIX -> EULER
+     * ---------------------------------------------------------
+     *
+     * Преобразует итоговую матрицу вращения
+     * обратно в три угла.
+     *
+     * Это необходимо потому, что остальные части
+     * нашего редактора работают с Euler angles.
+     */
+
+    private static float[] matrixToEuler(
+            float[][] matrix)
+    {
+        /*
+         * Для используемой последовательности
+         * вращений проверяем наличие gimbal lock.
+         */
+
+        float m20 =
+                matrix[2][0];
+
+        if (m20 < 1.0F
+                && m20 > -1.0F)
+        {
+            float rotationY =
+                    (float) Math.asin(
+                            -m20
+                    );
+
+            float rotationX =
+                    (float) Math.atan2(
+                            matrix[2][1],
+                            matrix[2][2]
+                    );
+
+            float rotationZ =
+                    (float) Math.atan2(
+                            matrix[1][0],
+                            matrix[0][0]
+                    );
+
+            return new float[]
+                    {
+                            (float) Math.toDegrees(
+                                    rotationX
+                            ),
+
+                            (float) Math.toDegrees(
+                                    rotationY
+                            ),
+
+                            (float) Math.toDegrees(
+                                    rotationZ
+                            )
+                    };
+        }
+
+        /*
+         * Gimbal lock.
+         *
+         * В этом случае фиксируем Z
+         * и восстанавливаем X.
+         */
+
+        float rotationY =
+                m20 <= -1.0F
+                        ? 90.0F
+                        : -90.0F;
+
+        float rotationX =
+                (float) Math.atan2(
+                        -matrix[0][1],
+                        matrix[1][1]
+                );
+
+        return new float[]
+                {
+                        (float) Math.toDegrees(
+                                rotationX
+                        ),
+
+                        rotationY,
+
+                        0.0F
+                };
     }
 }
