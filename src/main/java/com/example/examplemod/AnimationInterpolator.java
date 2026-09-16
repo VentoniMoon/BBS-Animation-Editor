@@ -1,39 +1,84 @@
 package com.example.examplemod;
 
+import mchorse.mclib.utils.keyframes.Keyframe;
+
+/**
+ * Интерполяция AnimationKeyframe через оригинальную
+ * систему интерполяции McLib.
+ */
 public class AnimationInterpolator
 {
+    private static final int CHANNEL_POSITION_X = 0;
+    private static final int CHANNEL_POSITION_Y = 1;
+    private static final int CHANNEL_POSITION_Z = 2;
+
+    private static final int CHANNEL_ROTATION_X = 3;
+    private static final int CHANNEL_ROTATION_Y = 4;
+    private static final int CHANNEL_ROTATION_Z = 5;
+
+    private static final int CHANNEL_SCALE_X = 6;
+    private static final int CHANNEL_SCALE_Y = 7;
+    private static final int CHANNEL_SCALE_Z = 8;
+
+    private AnimationInterpolator()
+    {
+    }
+
     /**
-     * Вычисляет трансформацию между двумя ключевыми кадрами.
+     * Совместимый старый вызов.
      *
-     * @param previous предыдущий ключевой кадр
-     * @param next следующий ключевой кадр
-     * @param frame текущий кадр
-     *
-     * @return вычисленная трансформация
+     * Используется, если соседние keyframe
+     * ещё не переданы.
      */
     public static AnimationTransform interpolate(
             AnimationKeyframe previous,
             AnimationKeyframe next,
             int frame)
     {
-        if (previous == null && next == null)
-        {
-            return new AnimationTransform();
-        }
+        return interpolate(
+                null,
+                previous,
+                next,
+                null,
+                frame
+        );
+    }
 
+    /**
+     * Полная интерполяция с четырьмя точками:
+     *
+     * previousPrevious -> previous -> next -> nextNext
+     *
+     * Такая структура необходима оригинальному McLib
+     * для HERMITE.
+     */
+    public static AnimationTransform interpolate(
+            AnimationKeyframe previousPrevious,
+            AnimationKeyframe previous,
+            AnimationKeyframe next,
+            AnimationKeyframe nextNext,
+            int frame)
+    {
         if (previous == null)
         {
-            return copyTransform(
-                    next.getTransform()
-            );
+            if (next == null)
+            {
+                return new AnimationTransform();
+            }
+
+            return next.getTransform().copy();
         }
 
         if (next == null)
         {
-            return copyTransform(
-                    previous.getTransform()
-            );
+            return previous.getTransform().copy();
         }
+
+        AnimationTransform previousTransform =
+                previous.getTransform();
+
+        AnimationTransform nextTransform =
+                next.getTransform();
 
         int previousFrame =
                 previous.getFrame();
@@ -41,169 +86,335 @@ public class AnimationInterpolator
         int nextFrame =
                 next.getFrame();
 
-        /*
-         * Если оба ключа находятся
-         * на одном кадре.
-         */
         if (previousFrame == nextFrame)
         {
-            return copyTransform(
-                    previous.getTransform()
-            );
+            return previousTransform.copy();
         }
 
-        /*
-         * Вычисляем положение текущего
-         * кадра между двумя ключами.
-         *
-         * Например:
-         *
-         * previous = 0
-         * next     = 20
-         * frame    = 5
-         *
-         * progress = 0.25
-         */
-        float progress =
-                (float) (
-                        frame - previousFrame
-                )
+        float factor =
+                (float)
+                        (frame - previousFrame)
                         /
-                        (float) (
-                                nextFrame - previousFrame
-                        );
+                        (float)
+                                (nextFrame - previousFrame);
 
-        /*
-         * Защита от выхода за пределы
-         * диапазона.
-         */
-        if (progress < 0.0F)
-        {
-            progress = 0.0F;
-        }
-
-        if (progress > 1.0F)
-        {
-            progress = 1.0F;
-        }
-
-        AnimationTransform a =
-                previous.getTransform();
-
-        AnimationTransform b =
-                next.getTransform();
+        factor =
+                Math.max(
+                        0.0F,
+                        Math.min(
+                                1.0F,
+                                factor
+                        )
+                );
 
         AnimationTransform result =
                 new AnimationTransform();
 
         /*
-         * POSITION
+         * -----------------------------------------------------
+         * Position
+         * -----------------------------------------------------
          */
+
+        float positionX =
+                interpolateChannel(
+                        CHANNEL_POSITION_X,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
+        float positionY =
+                interpolateChannel(
+                        CHANNEL_POSITION_Y,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
+        float positionZ =
+                interpolateChannel(
+                        CHANNEL_POSITION_Z,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
         result.setPosition(
-                lerp(
-                        a.getPositionX(),
-                        b.getPositionX(),
-                        progress
-                ),
-                lerp(
-                        a.getPositionY(),
-                        b.getPositionY(),
-                        progress
-                ),
-                lerp(
-                        a.getPositionZ(),
-                        b.getPositionZ(),
-                        progress
-                )
+                positionX,
+                positionY,
+                positionZ
         );
 
         /*
-         * ROTATION
+         * -----------------------------------------------------
+         * Rotation
+         * -----------------------------------------------------
          */
+
+        float rotationX =
+                interpolateChannel(
+                        CHANNEL_ROTATION_X,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
+        float rotationY =
+                interpolateChannel(
+                        CHANNEL_ROTATION_Y,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
+        float rotationZ =
+                interpolateChannel(
+                        CHANNEL_ROTATION_Z,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
         result.setRotation(
-                lerp(
-                        a.getRotationX(),
-                        b.getRotationX(),
-                        progress
-                ),
-                lerp(
-                        a.getRotationY(),
-                        b.getRotationY(),
-                        progress
-                ),
-                lerp(
-                        a.getRotationZ(),
-                        b.getRotationZ(),
-                        progress
-                )
+                rotationX,
+                rotationY,
+                rotationZ
         );
 
         /*
-         * SCALE
+         * -----------------------------------------------------
+         * Scale
+         * -----------------------------------------------------
          */
+
+        float scaleX =
+                interpolateChannel(
+                        CHANNEL_SCALE_X,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
+        float scaleY =
+                interpolateChannel(
+                        CHANNEL_SCALE_Y,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
+        float scaleZ =
+                interpolateChannel(
+                        CHANNEL_SCALE_Z,
+                        previousPrevious,
+                        previous,
+                        next,
+                        nextNext,
+                        factor
+                );
+
         result.setScale(
-                lerp(
-                        a.getScaleX(),
-                        b.getScaleX(),
-                        progress
-                ),
-                lerp(
-                        a.getScaleY(),
-                        b.getScaleY(),
-                        progress
-                ),
-                lerp(
-                        a.getScaleZ(),
-                        b.getScaleZ(),
-                        progress
-                )
+                scaleX,
+                scaleY,
+                scaleZ
         );
 
         return result;
     }
 
     /**
-     * Линейная интерполяция.
-     *
-     * a = начальное значение
-     * b = конечное значение
-     * t = положение между ними от 0 до 1
+     * Интерполирует один конкретный канал.
      */
-    private static float lerp(
-            float a,
-            float b,
-            float t)
+    private static float interpolateChannel(
+            int channel,
+            AnimationKeyframe previousPrevious,
+            AnimationKeyframe previous,
+            AnimationKeyframe next,
+            AnimationKeyframe nextNext,
+            float factor)
     {
-        return a + (b - a) * t;
+        /*
+         * Если внешнего соседа нет, используем
+         * ближайший существующий keyframe.
+         *
+         * Это соответствует безопасной граничной
+         * обработке для нашей редакторской системы.
+         */
+        if (previousPrevious == null)
+        {
+            previousPrevious = previous;
+        }
+
+        if (nextNext == null)
+        {
+            nextNext = next;
+        }
+
+        Keyframe mcPreviousPrevious =
+                createMcLibKeyframe(
+                        previousPrevious,
+                        channel
+                );
+
+        Keyframe mcPrevious =
+                createMcLibKeyframe(
+                        previous,
+                        channel
+                );
+
+        Keyframe mcNext =
+                createMcLibKeyframe(
+                        next,
+                        channel
+                );
+
+        Keyframe mcNextNext =
+                createMcLibKeyframe(
+                        nextNext,
+                        channel
+                );
+
+        /*
+         * Настоящая структура McLib:
+         *
+         * previousPrevious
+         *        ↓
+         *     previous
+         *        ↓
+         *       next
+         *        ↓
+         *     nextNext
+         */
+        mcPreviousPrevious.next =
+                mcPrevious;
+
+        mcPrevious.prev =
+                mcPreviousPrevious;
+
+        mcPrevious.next =
+                mcNext;
+
+        mcNext.prev =
+                mcPrevious;
+
+        mcNext.next =
+                mcNextNext;
+
+        mcNextNext.prev =
+                mcNext;
+
+        /*
+         * McLib KeyframeInterpolation.interpolate()
+         * читает interpolation/easing именно
+         * с первого keyframe пары.
+         */
+        return (float)
+                mcPrevious.interpolate(
+                        mcNext,
+                        factor
+                );
     }
 
     /**
-     * Создаёт независимую копию трансформации.
+     * Создаёт временный оригинальный McLib Keyframe
+     * для одного канала AnimationTransform.
      */
-    private static AnimationTransform copyTransform(
-            AnimationTransform source)
+    private static Keyframe createMcLibKeyframe(
+            AnimationKeyframe source,
+            int channel)
     {
-        AnimationTransform result =
-                new AnimationTransform();
+        float value =
+                getChannelValue(
+                        source,
+                        channel
+                );
 
-        result.setPosition(
-                source.getPositionX(),
-                source.getPositionY(),
-                source.getPositionZ()
-        );
+        Keyframe keyframe =
+                new Keyframe(
+                        source.getFrame(),
+                        value
+                );
 
-        result.setRotation(
-                source.getRotationX(),
-                source.getRotationY(),
-                source.getRotationZ()
-        );
+        keyframe.interp =
+                source.getInterpolation();
 
-        result.setScale(
-                source.getScaleX(),
-                source.getScaleY(),
-                source.getScaleZ()
-        );
+        keyframe.easing =
+                source.getEasing();
 
-        return result;
+        keyframe.rx =
+                source.getRX();
+
+        keyframe.ry =
+                source.getRY();
+
+        keyframe.lx =
+                source.getLX();
+
+        keyframe.ly =
+                source.getLY();
+
+        return keyframe;
+    }
+
+    /**
+     * Получает конкретное значение из
+     * AnimationTransform.
+     */
+    private static float getChannelValue(
+            AnimationKeyframe keyframe,
+            int channel)
+    {
+        AnimationTransform transform =
+                keyframe.getTransform();
+
+        switch (channel)
+        {
+            case CHANNEL_POSITION_X:
+                return transform.getPositionX();
+
+            case CHANNEL_POSITION_Y:
+                return transform.getPositionY();
+
+            case CHANNEL_POSITION_Z:
+                return transform.getPositionZ();
+
+            case CHANNEL_ROTATION_X:
+                return transform.getRotationX();
+
+            case CHANNEL_ROTATION_Y:
+                return transform.getRotationY();
+
+            case CHANNEL_ROTATION_Z:
+                return transform.getRotationZ();
+
+            case CHANNEL_SCALE_X:
+                return transform.getScaleX();
+
+            case CHANNEL_SCALE_Y:
+                return transform.getScaleY();
+
+            case CHANNEL_SCALE_Z:
+                return transform.getScaleZ();
+
+            default:
+                return 0.0F;
+        }
     }
 }

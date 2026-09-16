@@ -15,6 +15,16 @@ public class EditorSceneState
     private int selectedScene;
     private int selectedActor;
 
+    /*
+     * Мировая позиция текущей сцены.
+     *
+     * Пока координаты будут заполняться отдельно
+     * при загрузке Record.
+     */
+    private double sceneX;
+    private double sceneY;
+    private double sceneZ;
+
     public EditorSceneState()
     {
         this.sceneManager =
@@ -28,6 +38,10 @@ public class EditorSceneState
 
         this.selectedScene = -1;
         this.selectedActor = -1;
+
+        this.sceneX = 0.0D;
+        this.sceneY = 0.0D;
+        this.sceneZ = 0.0D;
     }
 
     /**
@@ -168,6 +182,12 @@ public class EditorSceneState
          */
         this.animationData.clear();
 
+        /*
+         * Восстанавливаем исходную мировую позицию
+         * из первого кадра первого подходящего Record.
+         */
+        this.updateScenePositionFromRecords();
+
         return true;
     }
 
@@ -260,5 +280,92 @@ public class EditorSceneState
         }
 
         return maximumLength;
+    }
+    public double getSceneX()
+    {
+        return this.sceneX;
+    }
+
+    public double getSceneY()
+    {
+        return this.sceneY;
+    }
+
+    public double getSceneZ()
+    {
+        return this.sceneZ;
+    }
+
+    public void setScenePosition(
+            double x,
+            double y,
+            double z)
+    {
+        this.sceneX = x;
+        this.sceneY = y;
+        this.sceneZ = z;
+    }
+    /**
+     * Восстанавливает мировую позицию сцены
+     * из первого актёра, у которого есть Record.
+     *
+     * Для этого используется первый кадр Record.
+     */
+    private void updateScenePositionFromRecords()
+    {
+        List<BlockbusterSceneActorData> actors =
+                getActors();
+
+        for (
+                BlockbusterSceneActorData actor :
+                actors
+        )
+        {
+            if (
+                    actor == null ||
+                            !actor.hasRecord()
+            )
+            {
+                continue;
+            }
+
+            BlockbusterRecord record =
+                    actor.getRecord();
+
+            if (
+                    record == null ||
+                            record.getFrames().isEmpty()
+            )
+            {
+                continue;
+            }
+
+            BlockbusterRecordFrame frame =
+                    record.getFrame(0);
+
+            if (frame == null)
+            {
+                continue;
+            }
+
+            this.sceneX =
+                    frame.getX();
+
+            this.sceneY =
+                    frame.getY();
+
+            this.sceneZ =
+                    frame.getZ();
+
+            return;
+        }
+
+        /*
+         * Если ни у одного актёра нет подходящего
+         * Record, оставляем безопасную точку начала.
+         */
+        this.sceneX = 0.0D;
+        this.sceneY = 0.0D;
+        this.sceneZ = 0.0D;
     }
 }

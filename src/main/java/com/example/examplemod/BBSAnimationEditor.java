@@ -33,6 +33,10 @@ public class BBSAnimationEditor
     @EventHandler
     public void init(FMLInitializationEvent event)
     {
-        logger.info("BBS Animation Editor: Initialization complete.");
+        System.out.println(
+                "[BBS Animation Editor] Initialization complete."
+        );
+
+        InterpolationDebug.runTest();
     }
 }

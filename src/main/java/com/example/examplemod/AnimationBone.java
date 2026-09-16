@@ -364,9 +364,68 @@ public class AnimationBone
                         frame
                 );
 
+        /*
+         * Если у нас нет ни одного пользовательского
+         * keyframe, возвращаем пустую трансформацию.
+         */
+        if (previous == null && next == null)
+        {
+            return new AnimationTransform();
+        }
+
+        /*
+         * Ищем предыдущий keyframe перед previous.
+         */
+        AnimationKeyframe previousPrevious =
+                null;
+
+        /*
+         * Ищем следующий keyframe после next.
+         */
+        AnimationKeyframe nextNext =
+                null;
+
+        if (previous != null)
+        {
+            int previousIndex =
+                    this.keyframes.indexOf(
+                            previous
+                    );
+
+            if (previousIndex > 0)
+            {
+                previousPrevious =
+                        this.keyframes.get(
+                                previousIndex - 1
+                        );
+            }
+        }
+
+        if (next != null)
+        {
+            int nextIndex =
+                    this.keyframes.indexOf(
+                            next
+                    );
+
+            if (
+                    nextIndex >= 0
+                            && nextIndex + 1
+                            < this.keyframes.size()
+            )
+            {
+                nextNext =
+                        this.keyframes.get(
+                                nextIndex + 1
+                        );
+            }
+        }
+
         return AnimationInterpolator.interpolate(
+                previousPrevious,
                 previous,
                 next,
+                nextNext,
                 frame
         );
     }
