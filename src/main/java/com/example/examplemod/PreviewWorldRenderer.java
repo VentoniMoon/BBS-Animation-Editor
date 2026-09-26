@@ -1,16 +1,20 @@
 package com.example.examplemod;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.IntBuffer;
+
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.VboRenderList;
 import net.minecraft.client.renderer.ViewFrustum;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.chunk.CompiledChunk;
 import net.minecraft.client.renderer.chunk.RenderChunk;
-import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.TextureMap;
+import net.minecraft.entity.Entity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
@@ -18,27 +22,50 @@ import net.minecraft.util.math.BlockPos;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
-import java.lang.reflect.Field;
-import java.nio.IntBuffer;
-
 
 /**
- * Отдельный renderer настоящего Minecraft World
- * для Preview framebuffer.
+ * Рендер настоящего Minecraft World внутри Preview.
  *
- * Использует:
+ * =========================================================
+ * ОСНОВНАЯ АРХИТЕКТУРА
+ * =========================================================
  *
- * - настоящий Minecraft RenderGlobal
- * - настоящий ViewFrustum
- * - настоящие RenderChunk
- * - настоящие Minecraft VBO
- * - отдельный PreviewSkyRenderer
- * - отдельный PreviewFogRenderer
- * - настоящий vanilla Cloud Renderer
- * - настоящий lightmap
+ * Preview имеет собственный render pipeline.
  *
- * PreviewWorldRenderer не создаёт собственную
- * геометрию блоков.
+ * OptiFine:
+ *
+ *     Shaders.beginRender()
+ *             ↓
+ *     Preview Sky / Shader Sky
+ *             ↓
+ *     Minecraft terrain
+ *             ↓
+ *     Blockbuster actor
+ *             ↓
+ *     другие элементы Preview
+ *             ↓
+ *     Shaders.endRender()
+ *
+ *
+ * SKY:
+ *
+ * Без shaderpack:
+ *
+ *     PreviewSkyRenderer
+ *
+ * С shaderpack:
+ *
+ *     RenderGlobal.renderSky()
+ *             ↓
+ *     Shaders.beginSky()
+ *             ↓
+ *     shaderpack sky
+ *             ↓
+ *     Shaders.endSky()
+ *
+ *
+ * Это соответствует тому, как обычный Minecraft
+ * EntityRenderer передаёт sky в OptiFine shader pipeline.
  */
 public class PreviewWorldRenderer
 {
@@ -46,9 +73,23 @@ public class PreviewWorldRenderer
 
     private final VboRenderList renderList;
 
+    /*
+     * =========================================================
+     * CUSTOM PREVIEW SKY
+     * =========================================================
+     *
+     * Используется только когда shaderpack НЕ активен.
+     */
     private final PreviewSkyRenderer skyRenderer;
 
     private final PreviewFogRenderer fogRenderer;
+
+
+    /*
+     * =========================================================
+     * MINECRAFT VIEW FRUSTUM
+     * =========================================================
+     */
 
     private Field viewFrustumField;
 
@@ -58,31 +99,111 @@ public class PreviewWorldRenderer
 
     private boolean initialized;
 
+
+    /*
+     * =========================================================
+     * CAMERA
+     * =========================================================
+     */
+
     private double cameraX;
+
     private double cameraY;
+
     private double cameraZ;
 
 
     /*
      * =========================================================
-     * SPLIT RENDER STATE
+     * SPLIT RENDER
      * =========================================================
      */
 
     private boolean splitRenderActive;
 
+    private boolean cameraPrepared;
+
     private int savedMatrixMode;
 
     private int savedViewportX;
+
     private int savedViewportY;
+
     private int savedViewportWidth;
+
     private int savedViewportHeight;
 
     private float renderAspect;
+
     private float renderFov;
+
     private float renderNearPlane;
+
     private float renderTerrainFarPlane;
 
+
+    /*
+     * =========================================================
+     * OPTIFINE
+     * =========================================================
+     */
+
+    private boolean optiFineChecked;
+
+    private boolean optiFinePresent;
+
+    /*
+     * Config.isShaders()
+     */
+    private Method optiFineIsShadersMethod;
+
+    /*
+     * Shaders.setCamera()
+     */
+    private Method optiFineSetCameraMethod;
+
+    private Field optiFineCameraPositionXField;
+
+    private Field optiFineCameraPositionYField;
+
+    private Field optiFineCameraPositionZField;
+
+
+    /*
+     * =========================================================
+     * OPTIFINE SKY
+     * =========================================================
+     *
+     * Нужны для настоящего shader sky.
+     *
+     * RenderGlobal.renderSky() должен выполняться
+     * между beginSky() и endSky().
+     */
+    private Method optiFineBeginSkyMethod;
+
+    private Method optiFineEndSkyMethod;
+
+
+    /*
+     * =========================================================
+     * OPTIFINE ENTITIES
+     * =========================================================
+     */
+
+    private Method optiFineBeginEntitiesMethod;
+
+    private Method optiFineEndEntitiesMethod;
+
+    private Method optiFineNextEntityMethod;
+
+    private boolean optiFineEntitiesActive;
+
+
+    /*
+     * =========================================================
+     * CONSTRUCTOR
+     * =========================================================
+     */
 
     public PreviewWorldRenderer(Minecraft mc)
     {
@@ -101,7 +222,13 @@ public class PreviewWorldRenderer
                         mc
                 );
 
+        this.optiFineEntitiesActive = false;
+
+        this.cameraPrepared = false;
+
         this.initializeReflection();
+
+        this.initializeOptiFineReflection();
     }
 
 
@@ -120,15 +247,297 @@ public class PreviewWorldRenderer
                             "viewFrustum"
                     );
 
-            this.viewFrustumField.setAccessible(true);
+            this.viewFrustumField.setAccessible(
+                    true
+            );
 
             this.initialized = true;
         }
-        catch (Exception e)
+        catch (Throwable e)
         {
             this.initialized = false;
 
+            System.out.println(
+                    "[BBS Animation Editor] Failed to access Minecraft ViewFrustum."
+            );
+
             e.printStackTrace();
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * OPTIFINE REFLECTION
+     * =========================================================
+     */
+
+    private void initializeOptiFineReflection()
+    {
+        if (this.optiFineChecked)
+        {
+            return;
+        }
+
+        this.optiFineChecked = true;
+
+        this.optiFinePresent = false;
+
+
+        try
+        {
+            Class<?> shadersClass =
+                    Class.forName(
+                            "net.optifine.shaders.Shaders"
+                    );
+
+            Class<?> configClass =
+                    Class.forName(
+                            "net.optifine.Config"
+                    );
+
+
+            /*
+             * =====================================================
+             * CONFIG.isShaders()
+             * =====================================================
+             *
+             * Это именно проверка активного shaderpack,
+             * а не просто наличия OptiFine.
+             */
+
+            try
+            {
+                this.optiFineIsShadersMethod =
+                        configClass.getDeclaredMethod(
+                                "isShaders"
+                        );
+
+                this.optiFineIsShadersMethod.setAccessible(
+                        true
+                );
+            }
+            catch (Throwable ignored)
+            {
+                this.optiFineIsShadersMethod =
+                        null;
+            }
+
+
+            /*
+             * =====================================================
+             * CAMERA
+             * =====================================================
+             */
+
+            try
+            {
+                this.optiFineSetCameraMethod =
+                        shadersClass.getDeclaredMethod(
+                                "setCamera",
+                                float.class
+                        );
+
+                this.optiFineSetCameraMethod.setAccessible(
+                        true
+                );
+            }
+            catch (Throwable ignored)
+            {
+                this.optiFineSetCameraMethod =
+                        null;
+            }
+
+
+            /*
+             * =====================================================
+             * CAMERA POSITION
+             * =====================================================
+             */
+
+            try
+            {
+                this.optiFineCameraPositionXField =
+                        shadersClass.getDeclaredField(
+                                "cameraPositionX"
+                        );
+
+                this.optiFineCameraPositionXField.setAccessible(
+                        true
+                );
+            }
+            catch (Throwable ignored)
+            {
+                this.optiFineCameraPositionXField =
+                        null;
+            }
+
+
+            try
+            {
+                this.optiFineCameraPositionYField =
+                        shadersClass.getDeclaredField(
+                                "cameraPositionY"
+                        );
+
+                this.optiFineCameraPositionYField.setAccessible(
+                        true
+                );
+            }
+            catch (Throwable ignored)
+            {
+                this.optiFineCameraPositionYField =
+                        null;
+            }
+
+
+            try
+            {
+                this.optiFineCameraPositionZField =
+                        shadersClass.getDeclaredField(
+                                "cameraPositionZ"
+                        );
+
+                this.optiFineCameraPositionZField.setAccessible(
+                        true
+                );
+            }
+            catch (Throwable ignored)
+            {
+                this.optiFineCameraPositionZField =
+                        null;
+            }
+
+
+            /*
+             * =====================================================
+             * SKY
+             * =====================================================
+             */
+
+            try
+            {
+                this.optiFineBeginSkyMethod =
+                        shadersClass.getDeclaredMethod(
+                                "beginSky"
+                        );
+
+                this.optiFineBeginSkyMethod.setAccessible(
+                        true
+                );
+
+                this.optiFineEndSkyMethod =
+                        shadersClass.getDeclaredMethod(
+                                "endSky"
+                        );
+
+                this.optiFineEndSkyMethod.setAccessible(
+                        true
+                );
+            }
+            catch (Throwable ignored)
+            {
+                this.optiFineBeginSkyMethod =
+                        null;
+
+                this.optiFineEndSkyMethod =
+                        null;
+            }
+
+
+            /*
+             * =====================================================
+             * ENTITIES
+             * =====================================================
+             */
+
+            try
+            {
+                this.optiFineBeginEntitiesMethod =
+                        shadersClass.getDeclaredMethod(
+                                "beginEntities"
+                        );
+
+                this.optiFineBeginEntitiesMethod.setAccessible(
+                        true
+                );
+
+                this.optiFineEndEntitiesMethod =
+                        shadersClass.getDeclaredMethod(
+                                "endEntities"
+                        );
+
+                this.optiFineEndEntitiesMethod.setAccessible(
+                        true
+                );
+            }
+            catch (Throwable ignored)
+            {
+                this.optiFineBeginEntitiesMethod =
+                        null;
+
+                this.optiFineEndEntitiesMethod =
+                        null;
+            }
+
+
+            /*
+             * =====================================================
+             * nextEntity(Entity)
+             * =====================================================
+             */
+
+            for (
+                    Method method :
+                    shadersClass.getDeclaredMethods())
+            {
+                if (!method.getName().equals(
+                        "nextEntity"))
+                {
+                    continue;
+                }
+
+                if (method.getParameterTypes().length != 1)
+                {
+                    continue;
+                }
+
+                this.optiFineNextEntityMethod =
+                        method;
+
+                this.optiFineNextEntityMethod.setAccessible(
+                        true
+                );
+
+                break;
+            }
+
+
+            this.optiFinePresent = true;
+        }
+        catch (Throwable e)
+        {
+            this.optiFinePresent = false;
+
+            this.optiFineIsShadersMethod = null;
+
+            this.optiFineSetCameraMethod = null;
+
+            this.optiFineCameraPositionXField = null;
+
+            this.optiFineCameraPositionYField = null;
+
+            this.optiFineCameraPositionZField = null;
+
+            this.optiFineBeginSkyMethod = null;
+
+            this.optiFineEndSkyMethod = null;
+
+            this.optiFineBeginEntitiesMethod = null;
+
+            this.optiFineEndEntitiesMethod = null;
+
+            this.optiFineNextEntityMethod = null;
         }
     }
 
@@ -152,23 +561,28 @@ public class PreviewWorldRenderer
             return;
         }
 
-        this.renderOpaqueWorld();
+        try
+        {
+            this.renderOpaqueWorld();
 
-        this.renderAfterActor();
+            this.renderAfterActor();
 
-        this.renderClouds();
-
-        this.endSplitRender();
+            this.renderClouds();
+        }
+        finally
+        {
+            this.endSplitRender();
+        }
     }
 
 
     /*
      * =========================================================
-     * BEGIN SPLIT RENDER
+     * PREPARE SHADER CAMERA
      * =========================================================
      */
 
-    public boolean beginSplitRender(
+    public boolean prepareShaderCamera(
             EditorCamera camera,
             int width,
             int height)
@@ -178,13 +592,17 @@ public class PreviewWorldRenderer
             return false;
         }
 
+        if (this.cameraPrepared)
+        {
+            return true;
+        }
+
         if (camera == null)
         {
             return false;
         }
 
-        if (width <= 0 ||
-                height <= 0)
+        if (width <= 0 || height <= 0)
         {
             return false;
         }
@@ -209,24 +627,11 @@ public class PreviewWorldRenderer
             return false;
         }
 
-
-        /*
-         * ---------------------------------------------------------
-         * ViewFrustum
-         * ---------------------------------------------------------
-         */
-
         if (!this.getViewFrustum())
         {
             return false;
         }
 
-
-        /*
-         * ---------------------------------------------------------
-         * Camera position
-         * ---------------------------------------------------------
-         */
 
         this.cameraX =
                 camera.getCameraX();
@@ -237,12 +642,6 @@ public class PreviewWorldRenderer
         this.cameraZ =
                 camera.getCameraZ();
 
-
-        /*
-         * ---------------------------------------------------------
-         * Perspective
-         * ---------------------------------------------------------
-         */
 
         this.renderAspect =
                 (float) width /
@@ -257,130 +656,24 @@ public class PreviewWorldRenderer
         this.renderTerrainFarPlane =
                 Math.max(
                         256.0F,
-                        this.mc.gameSettings.renderDistanceChunks
+                        this.mc.gameSettings
+                                .renderDistanceChunks
                                 * 16.0F
                 );
 
-        float skyFarPlane =
-                this.renderTerrainFarPlane * 2.0F;
 
-
-        /*
-         * =========================================================
-         * SAVE OPENGL STATE
-         * =========================================================
-         */
-
-        this.savedMatrixMode =
-                GL11.glGetInteger(
-                        GL11.GL_MATRIX_MODE
-                );
-
-        IntBuffer viewportBuffer =
-                BufferUtils.createIntBuffer(
-                        16
-                );
-
-        GL11.glGetInteger(
-                GL11.GL_VIEWPORT,
-                viewportBuffer
-        );
-
-        this.savedViewportX =
-                viewportBuffer.get(0);
-
-        this.savedViewportY =
-                viewportBuffer.get(1);
-
-        this.savedViewportWidth =
-                viewportBuffer.get(2);
-
-        this.savedViewportHeight =
-                viewportBuffer.get(3);
+        this.saveOpenGLState();
 
         GL11.glPushAttrib(
                 GL11.GL_ALL_ATTRIB_BITS
         );
 
 
-        /*
-         * =========================================================
-         * PROJECTION
-         * =========================================================
-         */
-
         GL11.glMatrixMode(
                 GL11.GL_PROJECTION
         );
 
         GL11.glPushMatrix();
-
-        GL11.glLoadIdentity();
-
-        this.setupPerspective(
-                this.renderAspect,
-                this.renderFov,
-                this.renderNearPlane,
-                skyFarPlane
-        );
-
-
-        /*
-         * =========================================================
-         * MODELVIEW
-         * =========================================================
-         */
-
-        GL11.glMatrixMode(
-                GL11.GL_MODELVIEW
-        );
-
-        GL11.glPushMatrix();
-
-        GL11.glLoadIdentity();
-
-
-        /*
-         * =========================================================
-         * CAMERA ROTATION
-         * =========================================================
-         */
-
-        this.applyCameraRotation(
-                camera
-        );
-
-
-        /*
-         * =========================================================
-         * SKY
-         * =========================================================
-         */
-
-        this.fogRenderer.begin(
-                this.mc.getRenderPartialTicks(),
-                skyFarPlane
-        );
-
-        this.skyRenderer.render(
-                camera,
-                this.mc.getRenderPartialTicks(),
-                this.renderAspect,
-                this.renderFov,
-                this.renderNearPlane,
-                skyFarPlane
-        );
-
-
-        /*
-         * =========================================================
-         * TERRAIN PROJECTION
-         * =========================================================
-         */
-
-        GL11.glMatrixMode(
-                GL11.GL_PROJECTION
-        );
 
         GL11.glLoadIdentity();
 
@@ -391,9 +684,192 @@ public class PreviewWorldRenderer
                 this.renderTerrainFarPlane
         );
 
+
         GL11.glMatrixMode(
                 GL11.GL_MODELVIEW
         );
+
+        GL11.glPushMatrix();
+
+        GL11.glLoadIdentity();
+
+        this.applyCameraRotation(
+                camera
+        );
+
+
+        this.updateOptiFineCamera();
+
+        this.cameraPrepared = true;
+
+        return true;
+    }
+
+
+    /*
+     * =========================================================
+     * BEGIN SPLIT RENDER
+     * =========================================================
+     */
+
+    public boolean beginSplitRender(
+            EditorCamera camera,
+            int width,
+            int height)
+    {
+        if (this.splitRenderActive)
+        {
+            return false;
+        }
+
+        if (camera == null)
+        {
+            return false;
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        if (this.mc == null)
+        {
+            return false;
+        }
+
+        if (this.mc.world == null)
+        {
+            return false;
+        }
+
+        if (this.mc.renderGlobal == null)
+        {
+            return false;
+        }
+
+        if (!this.initialized)
+        {
+            return false;
+        }
+
+        if (!this.getViewFrustum())
+        {
+            return false;
+        }
+
+
+        boolean prepared =
+                this.cameraPrepared;
+
+
+        if (!prepared)
+        {
+            this.cameraX =
+                    camera.getCameraX();
+
+            this.cameraY =
+                    camera.getCameraY();
+
+            this.cameraZ =
+                    camera.getCameraZ();
+
+
+            this.renderAspect =
+                    (float) width /
+                            (float) height;
+
+            this.renderFov =
+                    60.0F;
+
+            this.renderNearPlane =
+                    0.05F;
+
+            this.renderTerrainFarPlane =
+                    Math.max(
+                            256.0F,
+                            this.mc.gameSettings
+                                    .renderDistanceChunks
+                                    * 16.0F
+                    );
+
+
+            this.saveOpenGLState();
+
+            GL11.glPushAttrib(
+                    GL11.GL_ALL_ATTRIB_BITS
+            );
+
+
+            /*
+             * PROJECTION
+             */
+
+            GL11.glMatrixMode(
+                    GL11.GL_PROJECTION
+            );
+
+            GL11.glPushMatrix();
+
+            GL11.glLoadIdentity();
+
+            this.setupPerspective(
+                    this.renderAspect,
+                    this.renderFov,
+                    this.renderNearPlane,
+                    this.renderTerrainFarPlane
+            );
+
+
+            /*
+             * MODELVIEW
+             */
+
+            GL11.glMatrixMode(
+                    GL11.GL_MODELVIEW
+            );
+
+            GL11.glPushMatrix();
+
+            GL11.glLoadIdentity();
+
+            this.applyCameraRotation(
+                    camera
+            );
+
+            this.updateOptiFineCamera();
+        }
+
+
+        /*
+         * =========================================================
+         * SKY
+         * =========================================================
+         *
+         * Без shaderpack:
+         *
+         *     PreviewSkyRenderer
+         *
+         * С shaderpack:
+         *
+         *     RenderGlobal.renderSky()
+         *     внутри beginSky/endSky
+         *
+         * Именно так vanilla EntityRenderer передаёт sky
+         * OptiFine shader pipeline.
+         */
+
+        if (this.isShaderPackActive())
+        {
+            this.renderShaderSky();
+        }
+        else
+        {
+            this.renderPreviewSky(
+                    camera,
+                    width,
+                    height
+            );
+        }
 
 
         /*
@@ -407,7 +883,7 @@ public class PreviewWorldRenderer
 
         /*
          * =========================================================
-         * FOG FOR TERRAIN
+         * FOG
          * =========================================================
          */
 
@@ -448,10 +924,7 @@ public class PreviewWorldRenderer
          * =========================================================
          */
 
-        EntityRenderer entityRenderer =
-                this.mc.entityRenderer;
-
-        entityRenderer.enableLightmap();
+        this.mc.entityRenderer.enableLightmap();
 
 
         /*
@@ -462,7 +935,197 @@ public class PreviewWorldRenderer
 
         this.splitRenderActive = true;
 
+        this.cameraPrepared = false;
+
         return true;
+    }
+
+
+    /*
+     * =========================================================
+     * DETECT ACTIVE SHADERPACK
+     * =========================================================
+     *
+     * OptiFine может быть установлен, но shaderpack
+     * при этом выключен.
+     *
+     * Поэтому optiFinePresent недостаточно.
+     *
+     * Здесь используется Config.isShaders().
+     */
+    private boolean isShaderPackActive()
+    {
+        if (!this.optiFinePresent)
+        {
+            return false;
+        }
+
+        if (this.optiFineIsShadersMethod == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            Object result =
+                    this.optiFineIsShadersMethod.invoke(
+                            null
+                    );
+
+            return result instanceof Boolean &&
+                    ((Boolean) result).booleanValue();
+        }
+        catch (Throwable ignored)
+        {
+            return false;
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * SHADER SKY
+     * =========================================================
+     *
+     * ВАЖНО:
+     *
+     * PreviewSkyRenderer здесь НЕ вызывается.
+     *
+     * RenderGlobal.renderSky() является настоящим Minecraft
+     * sky renderer.
+     *
+     * beginSky/endSky переключают OptiFine в sky pass,
+     * после чего shaderpack сам обрабатывает:
+     *
+     *     sky
+     *     sun
+     *     moon
+     *     stars
+     *     atmosphere
+     *     custom shader effects
+     */
+    private void renderShaderSky()
+    {
+        if (this.mc == null)
+        {
+            return;
+        }
+
+        if (this.mc.world == null)
+        {
+            return;
+        }
+
+        if (this.mc.renderGlobal == null)
+        {
+            return;
+        }
+
+
+        float partialTicks =
+                this.mc.getRenderPartialTicks();
+
+
+        /*
+         * =====================================================
+         * CAMERA
+         * =====================================================
+         */
+
+        this.updateOptiFineCamera();
+
+
+        /*
+         * =====================================================
+         * SKY PASS
+         * =====================================================
+         */
+
+        this.beginOptiFineSky();
+
+        try
+        {
+            /*
+             * pass = 2
+             *
+             * Это тот же pass, который используется
+             * EntityRenderer для обычного shader render.
+             */
+            this.mc.renderGlobal.renderSky(
+                    partialTicks,
+                    2
+            );
+        }
+        finally
+        {
+            this.endOptiFineSky();
+        }
+
+
+        /*
+         * =====================================================
+         * CAMERA RESTORE
+         * =====================================================
+         */
+
+        this.updateOptiFineCamera();
+    }
+
+
+    /*
+     * =========================================================
+     * CUSTOM PREVIEW SKY
+     * =========================================================
+     *
+     * Используется только без shaderpack.
+     */
+
+    private void renderPreviewSky(
+            EditorCamera camera,
+            int width,
+            int height)
+    {
+        if (this.mc == null)
+        {
+            return;
+        }
+
+        if (this.mc.world == null)
+        {
+            return;
+        }
+
+        if (camera == null)
+        {
+            return;
+        }
+
+
+        float partialTicks =
+                this.mc.getRenderPartialTicks();
+
+
+        float aspect =
+                height > 0
+                        ? (float) width /
+                        (float) height
+                        : 1.0F;
+
+
+        this.updateOptiFineCamera();
+
+
+        this.skyRenderer.render(
+                camera,
+                partialTicks,
+                aspect,
+                this.renderFov,
+                this.renderNearPlane,
+                this.renderTerrainFarPlane
+        );
+
+
+        this.updateOptiFineCamera();
     }
 
 
@@ -503,22 +1166,104 @@ public class PreviewWorldRenderer
 
     /*
      * =========================================================
+     * ACTOR SHADER PASS
+     * =========================================================
+     */
+
+    public void beginActorRender()
+    {
+        if (!this.splitRenderActive)
+        {
+            return;
+        }
+
+        if (this.optiFineEntitiesActive)
+        {
+            this.endActorRender();
+        }
+
+        this.updateOptiFineCamera();
+
+        this.beginOptiFineEntities();
+
+        if (this.optiFinePresent &&
+                this.optiFineBeginEntitiesMethod != null)
+        {
+            this.optiFineEntitiesActive = true;
+        }
+    }
+
+
+    public void endActorRender()
+    {
+        if (!this.splitRenderActive)
+        {
+            return;
+        }
+
+        if (!this.optiFineEntitiesActive)
+        {
+            return;
+        }
+
+        try
+        {
+            this.endOptiFineEntities();
+        }
+        finally
+        {
+            this.optiFineEntitiesActive = false;
+
+            this.updateOptiFineCamera();
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * ACTOR ENTITY HOOK
+     * =========================================================
+     */
+
+    public void nextActor(Entity entity)
+    {
+        if (!this.splitRenderActive)
+        {
+            return;
+        }
+
+        if (entity == null)
+        {
+            return;
+        }
+
+        if (!this.optiFinePresent)
+        {
+            return;
+        }
+
+        if (this.optiFineNextEntityMethod == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.optiFineNextEntityMethod.invoke(
+                    null,
+                    entity
+            );
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+
+    /*
+     * =========================================================
      * AFTER ACTOR
      * =========================================================
-     *
-     * Actor уже отрисован.
-     *
-     * Здесь рисуется только TRANSLUCENT terrain.
-     *
-     * Clouds намеренно вынесены в отдельный метод
-     * renderClouds().
-     *
-     * Это необходимо для порядка:
-     *
-     * Actor
-     * TRANSLUCENT
-     * Weather
-     * Clouds
      */
 
     public void renderAfterActor()
@@ -528,36 +1273,17 @@ public class PreviewWorldRenderer
             return;
         }
 
-
-        /*
-         * ---------------------------------------------------------
-         * TERRAIN STATE
-         * ---------------------------------------------------------
-         */
+        if (this.optiFineEntitiesActive)
+        {
+            this.endActorRender();
+        }
 
         this.prepareTerrainState();
 
-        EntityRenderer entityRenderer =
-                this.mc.entityRenderer;
-
-        entityRenderer.enableLightmap();
-
-
-        /*
-         * ---------------------------------------------------------
-         * CRITICAL:
-         * RESTORE BLOCK ATLAS AFTER ACTOR
-         * ---------------------------------------------------------
-         */
+        this.mc.entityRenderer.enableLightmap();
 
         this.bindBlockTexture();
 
-
-        /*
-         * ---------------------------------------------------------
-         * TRANSLUCENT STATE
-         * ---------------------------------------------------------
-         */
 
         GlStateManager.enableDepth();
 
@@ -580,13 +1306,8 @@ public class PreviewWorldRenderer
                 GlStateManager.SourceFactor.SRC_ALPHA,
                 GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
                 GlStateManager.SourceFactor.ONE,
-                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA
+                GlStateManager.DestFactor.ZERO
         );
-
-        /*
-         * Прозрачный terrain не записывает
-         * собственную глубину.
-         */
 
         GlStateManager.depthMask(false);
 
@@ -600,23 +1321,11 @@ public class PreviewWorldRenderer
         );
 
 
-        /*
-         * ---------------------------------------------------------
-         * FOG
-         * ---------------------------------------------------------
-         */
-
         this.fogRenderer.begin(
                 this.mc.getRenderPartialTicks(),
                 this.renderTerrainFarPlane
         );
 
-
-        /*
-         * ---------------------------------------------------------
-         * TRANSLUCENT TERRAIN
-         * ---------------------------------------------------------
-         */
 
         this.bindBlockTexture();
 
@@ -625,13 +1334,9 @@ public class PreviewWorldRenderer
         );
 
 
-        /*
-         * ---------------------------------------------------------
-         * RESTORE TERRAIN STATE
-         * ---------------------------------------------------------
-         */
-
         this.prepareTerrainState();
+
+        this.updateOptiFineCamera();
     }
 
 
@@ -639,12 +1344,6 @@ public class PreviewWorldRenderer
      * =========================================================
      * CLOUDS
      * =========================================================
-     *
-     * Отдельный этап рендера облаков.
-     *
-     * Вызывается ПОСЛЕ Weather.
-     *
-     * Здесь split-render НЕ завершается.
      */
 
     public void renderClouds()
@@ -673,112 +1372,115 @@ public class PreviewWorldRenderer
     {
         if (!this.splitRenderActive)
         {
+            if (this.cameraPrepared)
+            {
+                try
+                {
+                    GL11.glMatrixMode(
+                            GL11.GL_MODELVIEW
+                    );
+
+                    GL11.glPopMatrix();
+
+                    GL11.glMatrixMode(
+                            GL11.GL_PROJECTION
+                    );
+
+                    GL11.glPopMatrix();
+
+                    GL11.glPopAttrib();
+
+                    GL11.glMatrixMode(
+                            this.savedMatrixMode
+                    );
+                }
+                catch (Throwable ignored)
+                {
+                }
+
+                this.cameraPrepared = false;
+            }
+
             return;
         }
 
 
-        /*
-         * ---------------------------------------------------------
-         * LIGHTMAP OFF
-         * ---------------------------------------------------------
-         */
-
-        EntityRenderer entityRenderer =
-                this.mc.entityRenderer;
-
-        entityRenderer.disableLightmap();
+        try
+        {
+            if (this.optiFineEntitiesActive)
+            {
+                this.endActorRender();
+            }
 
 
-        /*
-         * ---------------------------------------------------------
-         * ACTIVE TEXTURE
-         * ---------------------------------------------------------
-         */
+            this.mc.entityRenderer.disableLightmap();
 
-        OpenGlHelper.setActiveTexture(
-                OpenGlHelper.defaultTexUnit
-        );
+            OpenGlHelper.setActiveTexture(
+                    OpenGlHelper.defaultTexUnit
+            );
 
+            this.frustum = null;
 
-        /*
-         * ---------------------------------------------------------
-         * CLEANUP
-         * ---------------------------------------------------------
-         */
-
-        this.frustum = null;
+            this.fogRenderer.end();
 
 
-        /*
-         * ---------------------------------------------------------
-         * FOG OFF
-         * ---------------------------------------------------------
-         */
+            /*
+             * MODELVIEW
+             */
 
-        this.fogRenderer.end();
+            GL11.glMatrixMode(
+                    GL11.GL_MODELVIEW
+            );
 
-
-        /*
-         * ---------------------------------------------------------
-         * RESTORE MODELVIEW
-         * ---------------------------------------------------------
-         */
-
-        GL11.glMatrixMode(
-                GL11.GL_MODELVIEW
-        );
-
-        GL11.glPopMatrix();
+            GL11.glPopMatrix();
 
 
-        /*
-         * ---------------------------------------------------------
-         * RESTORE PROJECTION
-         * ---------------------------------------------------------
-         */
+            /*
+             * PROJECTION
+             */
 
-        GL11.glMatrixMode(
-                GL11.GL_PROJECTION
-        );
+            GL11.glMatrixMode(
+                    GL11.GL_PROJECTION
+            );
 
-        GL11.glPopMatrix();
+            GL11.glPopMatrix();
 
 
-        /*
-         * ---------------------------------------------------------
-         * RESTORE VIEWPORT
-         * ---------------------------------------------------------
-         */
+            /*
+             * VIEWPORT
+             */
 
-        GL11.glViewport(
-                this.savedViewportX,
-                this.savedViewportY,
-                this.savedViewportWidth,
-                this.savedViewportHeight
-        );
+            GL11.glViewport(
+                    this.savedViewportX,
+                    this.savedViewportY,
+                    this.savedViewportWidth,
+                    this.savedViewportHeight
+            );
 
 
-        /*
-         * ---------------------------------------------------------
-         * RESTORE OPENGL ATTRIBUTES
-         * ---------------------------------------------------------
-         */
+            /*
+             * ATTRIBUTES
+             */
 
-        GL11.glPopAttrib();
+            GL11.glPopAttrib();
 
 
-        /*
-         * ---------------------------------------------------------
-         * RESTORE MATRIX MODE
-         * ---------------------------------------------------------
-         */
+            /*
+             * MATRIX MODE
+             */
 
-        GL11.glMatrixMode(
-                this.savedMatrixMode
-        );
+            GL11.glMatrixMode(
+                    this.savedMatrixMode
+            );
+        }
+        finally
+        {
+            this.optiFineEntitiesActive = false;
 
+            this.splitRenderActive = false;
 
-        this.splitRenderActive = false;
+            this.cameraPrepared = false;
+        }
     }
 
 
@@ -808,9 +1510,7 @@ public class PreviewWorldRenderer
 
 
         /*
-         * =========================================================
          * PROJECTION
-         * =========================================================
          */
 
         GL11.glMatrixMode(
@@ -830,9 +1530,7 @@ public class PreviewWorldRenderer
 
 
         /*
-         * =========================================================
          * MODELVIEW
-         * =========================================================
          */
 
         GL11.glMatrixMode(
@@ -843,9 +1541,7 @@ public class PreviewWorldRenderer
 
 
         /*
-         * ---------------------------------------------------------
          * FOG
-         * ---------------------------------------------------------
          */
 
         this.fogRenderer.begin(
@@ -855,9 +1551,7 @@ public class PreviewWorldRenderer
 
 
         /*
-         * ---------------------------------------------------------
          * CLOUD STATE
-         * ---------------------------------------------------------
          */
 
         GlStateManager.enableFog();
@@ -880,6 +1574,7 @@ public class PreviewWorldRenderer
                 GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ZERO
         );
+
         GlStateManager.disableCull();
 
         GlStateManager.color(
@@ -891,24 +1586,38 @@ public class PreviewWorldRenderer
 
 
         /*
-         * ---------------------------------------------------------
-         * CLOUDS
-         * ---------------------------------------------------------
+         * OPTIFINE CAMERA
          */
 
-        this.mc.renderGlobal.renderClouds(
-                this.mc.getRenderPartialTicks(),
-                2,
-                this.cameraX,
-                this.cameraY,
-                this.cameraZ
-        );
+        this.updateOptiFineCamera();
 
 
         /*
-         * ---------------------------------------------------------
-         * RESTORE MODELVIEW
-         * ---------------------------------------------------------
+         * =====================================================
+         * VANILLA CLOUD SKY PASS
+         * =====================================================
+         */
+
+        this.beginOptiFineSky();
+
+        try
+        {
+            this.mc.renderGlobal.renderClouds(
+                    this.mc.getRenderPartialTicks(),
+                    2,
+                    this.cameraX,
+                    this.cameraY,
+                    this.cameraZ
+            );
+        }
+        finally
+        {
+            this.endOptiFineSky();
+        }
+
+
+        /*
+         * RESTORE MATRICES
          */
 
         GL11.glMatrixMode(
@@ -917,12 +1626,6 @@ public class PreviewWorldRenderer
 
         GL11.glPopMatrix();
 
-
-        /*
-         * ---------------------------------------------------------
-         * RESTORE PROJECTION
-         * ---------------------------------------------------------
-         */
 
         GL11.glMatrixMode(
                 GL11.GL_PROJECTION
@@ -931,24 +1634,14 @@ public class PreviewWorldRenderer
         GL11.glPopMatrix();
 
 
-        /*
-         * ---------------------------------------------------------
-         * RETURN TO MODELVIEW
-         * ---------------------------------------------------------
-         */
-
         GL11.glMatrixMode(
                 GL11.GL_MODELVIEW
         );
 
 
-        /*
-         * ---------------------------------------------------------
-         * RESTORE TERRAIN STATE
-         * ---------------------------------------------------------
-         */
-
         this.prepareTerrainState();
+
+        this.updateOptiFineCamera();
     }
 
 
@@ -970,10 +1663,8 @@ public class PreviewWorldRenderer
 
             return this.viewFrustum != null;
         }
-        catch (Exception e)
+        catch (Throwable e)
         {
-            e.printStackTrace();
-
             this.viewFrustum = null;
 
             return false;
@@ -997,9 +1688,13 @@ public class PreviewWorldRenderer
                 fov * 0.5F;
 
         float top =
-                (float) Math.tan(
-                        Math.toRadians(halfFov)
-                ) * nearPlane;
+                (float)
+                        Math.tan(
+                                Math.toRadians(
+                                        halfFov
+                                )
+                        )
+                        * nearPlane;
 
         float bottom =
                 -top;
@@ -1112,27 +1807,11 @@ public class PreviewWorldRenderer
             return;
         }
 
-
-        /*
-         * ---------------------------------------------------------
-         * CRITICAL:
-         * Terrain должен всегда использовать block atlas.
-         * ---------------------------------------------------------
-         */
-
         this.bindBlockTexture();
 
-
         boolean translucent =
-                layer ==
-                        BlockRenderLayer.TRANSLUCENT;
+                layer == BlockRenderLayer.TRANSLUCENT;
 
-
-        /*
-         * ---------------------------------------------------------
-         * LAYER STATE
-         * ---------------------------------------------------------
-         */
 
         if (translucent)
         {
@@ -1155,12 +1834,6 @@ public class PreviewWorldRenderer
         }
 
 
-        /*
-         * ---------------------------------------------------------
-         * VBO CAMERA POSITION
-         * ---------------------------------------------------------
-         */
-
         this.renderList.initialize(
                 this.cameraX,
                 this.cameraY,
@@ -1168,22 +1841,14 @@ public class PreviewWorldRenderer
         );
 
 
-        /*
-         * ---------------------------------------------------------
-         * COLLECT VISIBLE CHUNKS
-         * ---------------------------------------------------------
-         */
-
         for (
                 RenderChunk renderChunk :
-                this.viewFrustum.renderChunks
-        )
+                this.viewFrustum.renderChunks)
         {
             if (renderChunk == null)
             {
                 continue;
             }
-
 
             BlockPos position =
                     renderChunk.getPosition();
@@ -1193,7 +1858,6 @@ public class PreviewWorldRenderer
                 continue;
             }
 
-
             AxisAlignedBB boundingBox =
                     renderChunk.boundingBox;
 
@@ -1202,13 +1866,11 @@ public class PreviewWorldRenderer
                 continue;
             }
 
-
             if (!this.frustum.isBoundingBoxInFrustum(
                     boundingBox))
             {
                 continue;
             }
-
 
             CompiledChunk compiledChunk =
                     renderChunk.getCompiledChunk();
@@ -1218,27 +1880,21 @@ public class PreviewWorldRenderer
                 continue;
             }
 
-
-            if (compiledChunk ==
-                    CompiledChunk.DUMMY)
+            if (compiledChunk == CompiledChunk.DUMMY)
             {
                 continue;
             }
 
-
-            if (compiledChunk.isLayerEmpty(
-                    layer))
+            if (compiledChunk.isLayerEmpty(layer))
             {
                 continue;
             }
-
 
             if (renderChunk.getVertexBufferByLayer(
                     layer.ordinal()) == null)
             {
                 continue;
             }
-
 
             this.renderList.addRenderChunk(
                     renderChunk,
@@ -1247,22 +1903,10 @@ public class PreviewWorldRenderer
         }
 
 
-        /*
-         * ---------------------------------------------------------
-         * DRAW VBOs
-         * ---------------------------------------------------------
-         */
-
         this.renderPreparedChunks(
                 layer
         );
 
-
-        /*
-         * ---------------------------------------------------------
-         * RESTORE TRANSLUCENT STATE
-         * ---------------------------------------------------------
-         */
 
         if (translucent)
         {
@@ -1287,23 +1931,9 @@ public class PreviewWorldRenderer
             return;
         }
 
-
-        /*
-         * ---------------------------------------------------------
-         * VERTEX ARRAY
-         * ---------------------------------------------------------
-         */
-
         GlStateManager.glEnableClientState(
                 GL11.GL_VERTEX_ARRAY
         );
-
-
-        /*
-         * ---------------------------------------------------------
-         * TEXTURE COORDINATES
-         * ---------------------------------------------------------
-         */
 
         OpenGlHelper.setClientActiveTexture(
                 OpenGlHelper.defaultTexUnit
@@ -1312,13 +1942,6 @@ public class PreviewWorldRenderer
         GlStateManager.glEnableClientState(
                 GL11.GL_TEXTURE_COORD_ARRAY
         );
-
-
-        /*
-         * ---------------------------------------------------------
-         * LIGHTMAP COORDINATES
-         * ---------------------------------------------------------
-         */
 
         OpenGlHelper.setClientActiveTexture(
                 OpenGlHelper.lightmapTexUnit
@@ -1328,13 +1951,6 @@ public class PreviewWorldRenderer
                 GL11.GL_TEXTURE_COORD_ARRAY
         );
 
-
-        /*
-         * ---------------------------------------------------------
-         * COLOR ARRAY
-         * ---------------------------------------------------------
-         */
-
         OpenGlHelper.setClientActiveTexture(
                 OpenGlHelper.defaultTexUnit
         );
@@ -1343,28 +1959,15 @@ public class PreviewWorldRenderer
                 GL11.GL_COLOR_ARRAY
         );
 
-
-        /*
-         * ---------------------------------------------------------
-         * ACTUAL MINECRAFT VBO RENDERING
-         * ---------------------------------------------------------
-         */
 
         this.renderList.renderChunkLayer(
                 layer
         );
 
 
-        /*
-         * ---------------------------------------------------------
-         * CLEANUP
-         * ---------------------------------------------------------
-         */
-
         GlStateManager.glDisableClientState(
                 GL11.GL_VERTEX_ARRAY
         );
-
 
         OpenGlHelper.setClientActiveTexture(
                 OpenGlHelper.defaultTexUnit
@@ -1373,7 +1976,6 @@ public class PreviewWorldRenderer
         GlStateManager.glDisableClientState(
                 GL11.GL_TEXTURE_COORD_ARRAY
         );
-
 
         OpenGlHelper.setClientActiveTexture(
                 OpenGlHelper.lightmapTexUnit
@@ -1383,18 +1985,12 @@ public class PreviewWorldRenderer
                 GL11.GL_TEXTURE_COORD_ARRAY
         );
 
-
         OpenGlHelper.setClientActiveTexture(
                 OpenGlHelper.defaultTexUnit
         );
 
         GlStateManager.glDisableClientState(
                 GL11.GL_COLOR_ARRAY
-        );
-
-
-        OpenGlHelper.setClientActiveTexture(
-                OpenGlHelper.defaultTexUnit
         );
 
         OpenGlHelper.setActiveTexture(
@@ -1407,7 +2003,7 @@ public class PreviewWorldRenderer
 
     /*
      * =========================================================
-     * CAMERA
+     * CAMERA ROTATION
      * =========================================================
      */
 
@@ -1427,6 +2023,214 @@ public class PreviewWorldRenderer
                 1.0F,
                 0.0F
         );
+    }
+
+
+    /*
+     * =========================================================
+     * OPTIFINE CAMERA
+     * =========================================================
+     */
+
+    private void updateOptiFineCamera()
+    {
+        if (!this.optiFinePresent)
+        {
+            return;
+        }
+
+
+        if (this.optiFineSetCameraMethod != null)
+        {
+            try
+            {
+                this.optiFineSetCameraMethod.invoke(
+                        null,
+                        Float.valueOf(
+                                this.mc.getRenderPartialTicks()
+                        )
+                );
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+
+
+        try
+        {
+            if (this.optiFineCameraPositionXField != null)
+            {
+                this.optiFineCameraPositionXField.setDouble(
+                        null,
+                        this.cameraX
+                );
+            }
+
+            if (this.optiFineCameraPositionYField != null)
+            {
+                this.optiFineCameraPositionYField.setDouble(
+                        null,
+                        this.cameraY
+                );
+            }
+
+            if (this.optiFineCameraPositionZField != null)
+            {
+                this.optiFineCameraPositionZField.setDouble(
+                        null,
+                        this.cameraZ
+                );
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * OPTIFINE SKY
+     * =========================================================
+     */
+
+    private void beginOptiFineSky()
+    {
+        if (!this.optiFinePresent)
+        {
+            return;
+        }
+
+        if (this.optiFineBeginSkyMethod == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.optiFineBeginSkyMethod.invoke(
+                    null
+            );
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+
+    private void endOptiFineSky()
+    {
+        if (!this.optiFinePresent)
+        {
+            return;
+        }
+
+        if (this.optiFineEndSkyMethod == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.optiFineEndSkyMethod.invoke(
+                    null
+            );
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * OPTIFINE ENTITIES
+     * =========================================================
+     */
+
+    private void beginOptiFineEntities()
+    {
+        if (!this.optiFinePresent)
+        {
+            return;
+        }
+
+        if (this.optiFineBeginEntitiesMethod == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.optiFineBeginEntitiesMethod.invoke(
+                    null
+            );
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+
+    private void endOptiFineEntities()
+    {
+        if (!this.optiFinePresent)
+        {
+            return;
+        }
+
+        if (this.optiFineEndEntitiesMethod == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.optiFineEndEntitiesMethod.invoke(
+                    null
+            );
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * OPENGL STATE
+     * =========================================================
+     */
+
+    private void saveOpenGLState()
+    {
+        this.savedMatrixMode =
+                GL11.glGetInteger(
+                        GL11.GL_MATRIX_MODE
+                );
+
+        IntBuffer viewportBuffer =
+                BufferUtils.createIntBuffer(
+                        16
+                );
+
+        GL11.glGetInteger(
+                GL11.GL_VIEWPORT,
+                viewportBuffer
+        );
+
+        this.savedViewportX =
+                viewportBuffer.get(0);
+
+        this.savedViewportY =
+                viewportBuffer.get(1);
+
+        this.savedViewportWidth =
+                viewportBuffer.get(2);
+
+        this.savedViewportHeight =
+                viewportBuffer.get(3);
     }
 
 
@@ -1463,5 +2267,17 @@ public class PreviewWorldRenderer
     public PreviewFogRenderer getFogRenderer()
     {
         return this.fogRenderer;
+    }
+
+
+    public boolean isOptiFinePresent()
+    {
+        return this.optiFinePresent;
+    }
+
+
+    public boolean isSplitRenderActive()
+    {
+        return this.splitRenderActive;
     }
 }

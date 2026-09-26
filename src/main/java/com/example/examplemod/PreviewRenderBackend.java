@@ -6,13 +6,17 @@ import net.minecraft.client.Minecraft;
 /**
  * Центральный менеджер 3D Preview.
  *
- * Этот класс намеренно не занимается OpenGL state.
- *
- * Его задача только:
+ * Отвечает только за общий lifecycle Preview:
  *
  *     beginPreviewRender()
  *             ↓
+ *     подготовка EditorCamera
+ *             ↓
+ *     beginOptiFineRender()
+ *             ↓
  *     Minecraft / Actor / Weather rendering
+ *             ↓
+ *     OptiFine endRender()
  *             ↓
  *     endPreviewRender()
  *
@@ -60,6 +64,7 @@ public class PreviewRenderBackend
         return this.shaderBridge;
     }
 
+
     public void setPreviewBounds(
             int x,
             int y,
@@ -74,14 +79,11 @@ public class PreviewRenderBackend
         );
     }
 
+
     /*
      * =========================================================
      * LEGACY ACCESS
      * =========================================================
-     *
-     * Старый PreviewFramebuffer больше не принадлежит Backend.
-     *
-     * Метод оставлен для совместимости с остальным проектом.
      */
 
     public PreviewFramebuffer getPreviewFramebuffer()
@@ -134,6 +136,15 @@ public class PreviewRenderBackend
         }
 
 
+        /*
+         * Только создаём Preview FBO
+         * и подготавливаем базовое состояние.
+         *
+         * OptiFine здесь намеренно НЕ запускается.
+         *
+         * EditorSceneViewport сначала должен установить
+         * projection/modelview EditorCamera.
+         */
         if (!this.shaderBridge.beginPreview())
         {
             return;
@@ -141,6 +152,72 @@ public class PreviewRenderBackend
 
 
         this.previewRenderActive = true;
+    }
+
+
+    /*
+     * =========================================================
+     * BEGIN OPTIFINE
+     * =========================================================
+     *
+     * Этот метод вызывается ПОСЛЕ того, как
+     * PreviewWorldRenderer установил EditorCamera.
+     */
+
+    public boolean beginOptiFineRender()
+    {
+        if (!this.previewRenderActive)
+        {
+            return false;
+        }
+
+        if (this.mc == null)
+        {
+            return false;
+        }
+
+        if (!this.shaderBridge.shouldUseShaderPipeline())
+        {
+            return false;
+        }
+
+
+        /*
+         * Если OptiFine уже запущен,
+         * повторно beginRender() не вызываем.
+         */
+        if (this.shaderBridge.isOptiFineRendering())
+        {
+            return true;
+        }
+
+
+        float partialTicks =
+                this.mc.getRenderPartialTicks();
+
+        long finishTimeNano =
+                System.nanoTime();
+
+
+        boolean shaderStarted =
+                this.shaderBridge.beginOptiFineRender(
+                        partialTicks,
+                        finishTimeNano
+                );
+
+
+        if (!shaderStarted)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "OptiFine Preview pipeline "
+                            + "could not be started. "
+                            + "Continuing with normal Preview."
+            );
+        }
+
+
+        return shaderStarted;
     }
 
 
@@ -160,6 +237,11 @@ public class PreviewRenderBackend
 
         try
         {
+            /*
+             * PreviewShaderBridge.endPreview()
+             * самостоятельно завершит OptiFine lifecycle,
+             * если он был запущен.
+             */
             this.shaderBridge.endPreview();
         }
         finally
@@ -199,10 +281,6 @@ public class PreviewRenderBackend
         }
 
 
-        /*
-         * PreviewShaderBridge полностью отвечает
-         * за вывод Preview в GUI.
-         */
         this.shaderBridge.renderPreviewTexture(
                 x,
                 y,

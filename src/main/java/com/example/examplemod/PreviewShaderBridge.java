@@ -1,5 +1,7 @@
 package com.example.examplemod;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.IntBuffer;
 
 import net.minecraft.client.Minecraft;
@@ -13,115 +15,159 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 
-
 /**
  * Центральный framebuffer-мост Preview.
  *
- * Preview использует собственный framebuffer размером
- * с экран Minecraft, но реальный 3D render viewport
- * ограничивается только областью Preview.
+ * Основная задача класса:
  *
- * После рендера в GUI выводится только эта область
- * framebuffer.
+ *     Minecraft world / Actor
+ *              ↓
+ *        Preview FBO
+ *              ↓
+ *       Preview texture
+ *              ↓
+ *          GUI Editor
  *
- * Благодаря этому:
+ * Дополнительно здесь находится безопасный reflection-мост
+ * к OptiFine Shaders.
  *
- * 1. Preview не занимает весь framebuffer визуально;
- * 2. верхняя серая область не попадает внутрь Preview;
- * 3. aspect ratio мира остаётся равным aspect ratio Preview;
- * 4. Minecraft / OptiFine framebuffer не ломается;
- * 5. Preview не запускает отдельный OptiFine shader lifecycle;
- * 6. каждый кадр полностью очищает Preview framebuffer.
+ * OptiFine является полностью необязательной зависимостью.
+ * При отсутствии OptiFine обычный Preview продолжает работать.
  */
 public class PreviewShaderBridge
 {
     private final Minecraft mc;
 
-
-    /*
-     * =========================================================
-     * PREVIEW FRAMEBUFFER
-     * =========================================================
-     */
+    // =========================================================
+    // PREVIEW FRAMEBUFFER
+    // =========================================================
 
     private Framebuffer previewFramebuffer;
 
-
-    /*
-     * =========================================================
-     * PREVIEW GUI BOUNDS
-     * =========================================================
-     */
+    // =========================================================
+    // PREVIEW GUI BOUNDS
+    // =========================================================
 
     private int previewX;
-
     private int previewY;
-
     private int previewWidth;
-
     private int previewHeight;
 
-
-    /*
-     * =========================================================
-     * STATUS
-     * =========================================================
-     */
+    // =========================================================
+    // PREVIEW STATE
+    // =========================================================
 
     private boolean initialized;
-
-    private boolean optiFinePresent;
-
-    private boolean shaderPackLoaded;
-
-
-    /*
-     * =========================================================
-     * RENDER STATE
-     * =========================================================
-     */
-
     private boolean rendering;
 
+    // =========================================================
+    // OPTIFINE STATE
+    // =========================================================
+
+    private boolean optiFinePresent;
+    private boolean shaderPackLoaded;
+
+    private Class<?> shadersClass;
+
+    // =========================================================
+    // OPTIFINE REFLECTED FIELDS
+    // =========================================================
+
+    private Field fieldShaderPackLoaded;
+
+    private Field fieldDfb;
+    private Field fieldDfbColorTextures;
+    private Field fieldDfbDepthTextures;
+
+    private Field fieldUsedColorBuffers;
+    private Field fieldUsedDepthBuffers;
+
+    private Field fieldRenderWidth;
+    private Field fieldRenderHeight;
+
+    private Field fieldProgramFinal;
+    private Field fieldProgramsComposite;
+    private Field fieldProgramsDeferred;
+
+    /*
+     * Minecraft.framebuffer.
+     *
+     * На время полноценного OptiFine Preview pipeline
+     * эта ссылка будет временно указывать на Preview FBO.
+     */
+    private Field fieldMinecraftFramebuffer;
+
+    // =========================================================
+    // OPTIFINE REFLECTED METHODS
+    // =========================================================
+
+    private Method methodSetCamera;
+
+    private Method methodBeginRender;
+
+    private Method methodBeginRenderPass;
+
+    private Method methodEndRender;
+
+    private Method methodRenderDeferred;
+
+    private Method methodRenderCompositeFinal;
+
+    // =========================================================
+    // SAVED OPENGL STATE
+    // =========================================================
 
     private int previousFramebuffer;
 
     private int previousViewportX;
-
     private int previousViewportY;
-
     private int previousViewportWidth;
-
     private int previousViewportHeight;
 
+    // =========================================================
+    // SAVED MINECRAFT FRAMEBUFFER
+    // =========================================================
+
+    private Framebuffer previousMinecraftFramebuffer;
+
+    private boolean optiFineRenderActive;
+
+    // =========================================================
+    // LOGGING
+    // =========================================================
+
+    private boolean loggedPipelineState;
+    private boolean loggedOptiFineResources;
+
+    // =========================================================
+    // CONSTRUCTOR
+    // =========================================================
 
     public PreviewShaderBridge(Minecraft mc)
     {
         this.mc = mc;
 
         this.initialized = false;
-
-        this.optiFinePresent = false;
-
-        this.shaderPackLoaded = false;
-
         this.rendering = false;
 
+        this.optiFinePresent = false;
+        this.shaderPackLoaded = false;
+
+        this.loggedPipelineState = false;
+        this.loggedOptiFineResources = false;
+
         this.previewX = 0;
-
         this.previewY = 0;
-
         this.previewWidth = 0;
-
         this.previewHeight = 0;
+
+        this.previousMinecraftFramebuffer = null;
+        this.optiFineRenderActive = false;
     }
 
-
-    /*
-     * =========================================================
-     * PREVIEW BOUNDS
-     * =========================================================
-     */
+    // =========================================================
+    // PREVIEW BOUNDS
+    // =========================================================
 
     public void setPreviewBounds(
             int x,
@@ -130,104 +176,34 @@ public class PreviewShaderBridge
             int height)
     {
         this.previewX = x;
-
         this.previewY = y;
-
         this.previewWidth = width;
-
         this.previewHeight = height;
     }
 
-
-    /*
-     * =========================================================
-     * INITIALIZATION
-     * =========================================================
-     */
-
-    private void initialize()
+    public int getPreviewX()
     {
-        if (this.initialized)
-        {
-            return;
-        }
-
-        this.initialized = true;
-
-        this.optiFinePresent = false;
-
-        this.shaderPackLoaded = false;
-
-
-        try
-        {
-            Class.forName(
-                    "net.optifine.shaders.Shaders"
-            );
-
-            this.optiFinePresent = true;
-        }
-        catch (Throwable ignored)
-        {
-            this.optiFinePresent = false;
-        }
-
-
-        if (this.optiFinePresent)
-        {
-            try
-            {
-                Class<?> shadersClass =
-                        Class.forName(
-                                "net.optifine.shaders.Shaders"
-                        );
-
-                java.lang.reflect.Field field =
-                        shadersClass.getDeclaredField(
-                                "shaderPackLoaded"
-                        );
-
-                field.setAccessible(true);
-
-                this.shaderPackLoaded =
-                        field.getBoolean(null);
-            }
-            catch (Throwable ignored)
-            {
-                this.shaderPackLoaded = false;
-            }
-        }
-
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Preview framebuffer bridge initialized."
-        );
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "OptiFine present: "
-                        + this.optiFinePresent
-        );
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Shader pack loaded: "
-                        + this.shaderPackLoaded
-        );
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "Preview uses isolated framebuffer: true"
-        );
+        return this.previewX;
     }
 
+    public int getPreviewY()
+    {
+        return this.previewY;
+    }
 
-    /*
-     * =========================================================
-     * STATUS
-     * =========================================================
-     */
+    public int getPreviewWidth()
+    {
+        return this.previewWidth;
+    }
+
+    public int getPreviewHeight()
+    {
+        return this.previewHeight;
+    }
+
+    // =========================================================
+    // STATUS
+    // =========================================================
 
     public boolean isOptiFinePresent()
     {
@@ -236,66 +212,71 @@ public class PreviewShaderBridge
         return this.optiFinePresent;
     }
 
-
     public boolean isShaderPackLoaded()
     {
         this.initialize();
 
-        if (!this.optiFinePresent)
-        {
-            return false;
-        }
-
-        try
-        {
-            Class<?> shadersClass =
-                    Class.forName(
-                            "net.optifine.shaders.Shaders"
-                    );
-
-            java.lang.reflect.Field field =
-                    shadersClass.getDeclaredField(
-                            "shaderPackLoaded"
-                    );
-
-            field.setAccessible(true);
-
-            this.shaderPackLoaded =
-                    field.getBoolean(null);
-        }
-        catch (Throwable ignored)
-        {
-            this.shaderPackLoaded = false;
-        }
+        this.updateShaderPackState();
 
         return this.shaderPackLoaded;
     }
-
 
     public boolean isShadersActive()
     {
         return this.isShaderPackLoaded();
     }
 
-
-    public boolean isShaderPipelineActive()
+    public boolean shouldUseShaderPipeline()
     {
         return this.isOptiFinePresent()
                 && this.isShaderPackLoaded();
     }
 
-
-    public boolean shouldUseShaderPipeline()
+    public boolean isShaderPipelineActive()
     {
-        return false;
+        return this.shouldUseShaderPipeline();
     }
 
+    public boolean isRenderingPreview()
+    {
+        return this.rendering;
+    }
 
-    /*
-     * =========================================================
-     * BEGIN PREVIEW
-     * =========================================================
+    /**
+     * Показывает, находится ли Preview сейчас
+     * внутри полноценного OptiFine render lifecycle.
      */
+    public boolean isOptiFineRendering()
+    {
+        return this.optiFineRenderActive;
+    }
+
+    // =========================================================
+    // PREVIEW FRAMEBUFFER API
+    // =========================================================
+
+    public Framebuffer getPreviewFramebuffer()
+    {
+        this.ensurePreviewFramebuffer();
+
+        return this.previewFramebuffer;
+    }
+
+    public int getPreviewTexture()
+    {
+        this.ensurePreviewFramebuffer();
+
+        if (this.previewFramebuffer == null)
+        {
+            return 0;
+        }
+
+        return this.previewFramebuffer.framebufferTexture;
+    }
+
+    // =========================================================
+    // BEGIN PREVIEW
+    // =========================================================
 
     public boolean beginPreview()
     {
@@ -309,16 +290,13 @@ public class PreviewShaderBridge
             return false;
         }
 
-        if (this.previewWidth <= 0 ||
-                this.previewHeight <= 0)
+        if (this.previewWidth <= 0
+                || this.previewHeight <= 0)
         {
             ScaledResolution resolution =
-                    new ScaledResolution(
-                            this.mc
-                    );
+                    new ScaledResolution(this.mc);
 
             this.previewX = 0;
-
             this.previewY = 0;
 
             this.previewWidth =
@@ -337,17 +315,132 @@ public class PreviewShaderBridge
             return false;
         }
 
-
         this.saveRenderState();
-
 
         try
         {
+            /*
+             * =====================================================
+             * PREVIEW FBO
+             * =====================================================
+             */
+
             this.bindPreviewFramebuffer();
 
             this.clearPreviewFramebuffer();
 
             this.preparePreviewState();
+
+
+            /*
+             * =====================================================
+             * DIAGNOSTICS
+             * =====================================================
+             */
+
+            if (!this.loggedPipelineState)
+            {
+                System.out.println(
+                        "[BBS Animation Editor] PreviewShaderBridge:"
+                );
+
+                System.out.println(
+                        "  OptiFine present: "
+                                + this.optiFinePresent
+                );
+
+                System.out.println(
+                        "  Shader pack loaded: "
+                                + this.shaderPackLoaded
+                );
+
+                System.out.println(
+                        "  Shader pipeline available: "
+                                + this.shouldUseShaderPipeline()
+                );
+
+                this.loggedPipelineState = true;
+            }
+
+
+            /*
+             * =====================================================
+             * OPTIFINE RESOURCES
+             * =====================================================
+             */
+
+            if (this.shouldUseShaderPipeline())
+            {
+                this.logOptiFineResources();
+            }
+
+
+            /*
+             * =====================================================
+             * FULL OPTIFINE PIPELINE
+             * =====================================================
+             *
+             * Раньше здесь pipeline вообще НЕ запускался.
+             *
+             * Теперь Preview FBO временно становится
+             * Minecraft framebuffer, после чего OptiFine
+             * запускает свой настоящий world render lifecycle.
+             *
+             * Это принципиально важно для:
+             *
+             *     gbuffers_skybasic
+             *     gbuffers_skytextured
+             *     deferred
+             *     composite
+             *     final
+             *
+             */
+
+            if (this.shouldUseShaderPipeline())
+            {
+                float partialTicks =
+                        this.mc.getRenderPartialTicks();
+
+                /*
+                 * Даём OptiFine небольшой запас времени.
+                 *
+                 * Это значение используется OptiFine как
+                 * finishTimeNano во время render lifecycle.
+                 */
+                long finishTimeNano =
+                        System.nanoTime()
+                                + 1000000000L;
+
+
+                boolean shaderStarted =
+                        this.beginOptiFineRender(
+                                partialTicks,
+                                finishTimeNano
+                        );
+
+
+                if (!shaderStarted)
+                {
+                    System.out.println(
+                            "[BBS Animation Editor] "
+                                    + "OptiFine pipeline could not be started."
+                    );
+
+                    /*
+                     * В случае ошибки НЕ ломаем Preview.
+                     *
+                     * Просто продолжаем без shader pipeline.
+                     */
+                    this.optiFineRenderActive = false;
+                }
+            }
+
+
+            /*
+             * =====================================================
+             * PREVIEW ACTIVE
+             * =====================================================
+             */
 
             this.rendering = true;
 
@@ -364,110 +457,26 @@ public class PreviewShaderBridge
 
             this.rendering = false;
 
+            if (this.optiFineRenderActive)
+            {
+                try
+                {
+                    this.endOptiFineRender();
+                }
+                catch (Throwable ignored)
+                {
+                }
+            }
+
             this.restorePreviousFramebuffer();
 
             return false;
         }
     }
 
-
-    /*
-     * =========================================================
-     * RENDER PASS
-     * =========================================================
-     */
-
-    public void beginRenderPass(
-            int pass,
-            float partialTicks,
-            long finishTimeNano)
-    {
-    }
-
-
-    public void renderDeferred()
-    {
-    }
-
-
-    public void renderComposites()
-    {
-    }
-
-
-    /*
-     * =========================================================
-     * TEXTURE ACCESS
-     * =========================================================
-     */
-
-    public int getCurrentColorTexture(
-            int attachment)
-    {
-        if (attachment != 0)
-        {
-            return 0;
-        }
-
-        return this.getPreviewTexture();
-    }
-
-
-    public int getOptiFineFramebuffer()
-    {
-        return 0;
-    }
-
-
-    public int getOptiFineRenderWidth()
-    {
-        this.initialize();
-
-        if (this.mc == null)
-        {
-            return 0;
-        }
-
-        return this.mc.displayWidth;
-    }
-
-
-    public int getOptiFineRenderHeight()
-    {
-        this.initialize();
-
-        if (this.mc == null)
-        {
-            return 0;
-        }
-
-        return this.mc.displayHeight;
-    }
-
-
-    public int getUsedColorBuffers()
-    {
-        return 1;
-    }
-
-
-    /*
-     * =========================================================
-     * COPY SHADER RESULT
-     * =========================================================
-     */
-
-    public void copyOptiFineTextureToPreview(
-            int attachment)
-    {
-    }
-
-
-    /*
-     * =========================================================
-     * END PREVIEW
-     * =========================================================
-     */
+    // =========================================================
+    // END PREVIEW
+    // =========================================================
 
     public void endPreview()
     {
@@ -478,6 +487,15 @@ public class PreviewShaderBridge
 
         try
         {
+            /*
+             * Если полноценный OptiFine pipeline уже был
+             * запущен, сначала корректно завершаем его.
+             */
+            if (this.optiFineRenderActive)
+            {
+                this.endOptiFineRender();
+            }
+
             this.rendering = false;
 
             this.restorePreviousFramebuffer();
@@ -492,25 +510,580 @@ public class PreviewShaderBridge
         }
     }
 
+    // =========================================================
+    // OPTIFINE PREVIEW RENDER
+    // =========================================================
 
-    /*
-     * =========================================================
-     * RENDER PREVIEW TEXTURE
-     * =========================================================
+    /**
+     * Запускает штатный OptiFine world render lifecycle,
+     * но временно заставляет Minecraft считать наш Preview FBO
+     * своим главным framebuffer.
+     *
+     * Это позволяет штатному OptiFine renderFinal()
+     * вывести результат не на экран, а в Preview FBO.
      *
      * ВАЖНО:
      *
-     * Здесь мы больше не пытаемся вручную восстановить
-     * каждое состояние OpenGL.
-     *
-     * Весь state, который меняется для вывода FBO,
-     * помещается под GL_PUSH_ATTRIB.
-     *
-     * После quad выполняется GL_POP_ATTRIB.
-     *
-     * Это предотвращает утечку состояния Preview
-     * в Minecraft GUI / FontRenderer.
+     * Метод пока НЕ вызывается автоматически из beginPreview().
+     * Он будет подключён следующим этапом после проверки
+     * этого моста.
      */
+    public boolean beginOptiFineRender(
+            float partialTicks,
+            long finishTimeNano)
+    {
+        this.initialize();
+
+        if (!this.shouldUseShaderPipeline())
+        {
+            return false;
+        }
+
+        if (this.methodBeginRender == null)
+        {
+            return false;
+        }
+
+        if (this.fieldMinecraftFramebuffer == null)
+        {
+            return false;
+        }
+
+        if (this.previewFramebuffer == null)
+        {
+            this.ensurePreviewFramebuffer();
+        }
+
+        if (this.previewFramebuffer == null)
+        {
+            return false;
+        }
+
+        if (this.optiFineRenderActive)
+        {
+            return true;
+        }
+
+        try
+        {
+            /*
+             * Запоминаем настоящий Minecraft framebuffer.
+             */
+            Object framebuffer =
+                    this.fieldMinecraftFramebuffer.get(
+                            this.mc
+                    );
+
+            if (framebuffer instanceof Framebuffer)
+            {
+                this.previousMinecraftFramebuffer =
+                        (Framebuffer) framebuffer;
+            }
+            else
+            {
+                this.previousMinecraftFramebuffer = null;
+            }
+
+
+            /*
+             * Временно подменяем Minecraft framebuffer
+             * нашим Preview FBO.
+             *
+             * Preview FBO имеет полный размер displayWidth x displayHeight,
+             * поэтому OptiFine renderFinal() сможет использовать
+             * его как обычный экранный framebuffer.
+             */
+            this.fieldMinecraftFramebuffer.set(
+                    this.mc,
+                    this.previewFramebuffer
+            );
+
+
+            /*
+             * Очень важно:
+             *
+             * Minecraft.framebuffer теперь указывает на Preview FBO,
+             * но OpenGL framebuffer тоже должен быть явно привязан.
+             */
+            this.previewFramebuffer.bindFramebuffer(true);
+
+
+            /*
+             * После bindFramebuffer Minecraft может изменить viewport,
+             * поэтому возвращаем viewport Preview.
+             */
+            this.bindPreviewFramebuffer();
+
+
+            /*
+             * Запускаем настоящий OptiFine pipeline.
+             */
+            this.methodBeginRender.invoke(
+                    null,
+                    this.mc,
+                    Float.valueOf(partialTicks),
+                    Long.valueOf(finishTimeNano)
+            );
+
+
+            this.optiFineRenderActive = true;
+
+            return true;
+        }
+        catch (Throwable e)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "OptiFine beginRender failed."
+            );
+
+            e.printStackTrace();
+
+            this.restoreMinecraftFramebufferReference();
+
+            this.optiFineRenderActive = false;
+
+            return false;
+        }
+    }
+
+    // =========================================================
+    // END OPTIFINE PREVIEW RENDER
+    // =========================================================
+
+    /**
+     * Завершает штатный OptiFine world render lifecycle.
+     *
+     * OptiFine сам выполнит свои deferred/composite/final stages
+     * внутри endRender().
+     */
+    public void endOptiFineRender()
+    {
+        if (!this.optiFineRenderActive)
+        {
+            return;
+        }
+
+        try
+        {
+            if (this.methodEndRender != null)
+            {
+                this.methodEndRender.invoke(
+                        null
+                );
+            }
+        }
+        catch (Throwable e)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "OptiFine endRender failed."
+            );
+
+            e.printStackTrace();
+        }
+        finally
+        {
+            this.restoreMinecraftFramebufferReference();
+
+            this.optiFineRenderActive = false;
+
+            /*
+             * Возвращаем Preview FBO после OptiFine final/composite,
+             * пока endPreview() ещё не восстановил основной Minecraft FBO.
+             *
+             * Это особенно важно для custom Preview pipeline.
+             */
+            if (this.rendering
+                    && this.previewFramebuffer != null)
+            {
+                this.previewFramebuffer.bindFramebuffer(true);
+
+                this.bindPreviewFramebuffer();
+            }
+        }
+    }
+
+    // =========================================================
+    // OPTIFINE RENDER PASS
+    // =========================================================
+
+    /**
+     * Запускает штатный OptiFine render pass.
+     *
+     * Этот метод будет использоваться после подключения
+     * полного Preview world lifecycle.
+     */
+    public void beginRenderPass(
+            int pass,
+            float partialTicks,
+            long finishTimeNano)
+    {
+        if (!this.shouldUseShaderPipeline())
+        {
+            return;
+        }
+
+        if (this.methodBeginRenderPass == null)
+        {
+            return;
+        }
+
+        if (!this.optiFineRenderActive)
+        {
+            return;
+        }
+
+        try
+        {
+            this.methodBeginRenderPass.invoke(
+                    null,
+                    Integer.valueOf(pass),
+                    Float.valueOf(partialTicks),
+                    Long.valueOf(finishTimeNano)
+            );
+        }
+        catch (Throwable e)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "OptiFine beginRenderPass failed."
+            );
+
+            e.printStackTrace();
+        }
+    }
+
+    // =========================================================
+    // DEFERRED
+    // =========================================================
+
+    /**
+     * Пока напрямую не вызывается.
+     *
+     * Штатный OptiFine endRender() самостоятельно
+     * управляет deferred/composite/final stages.
+     */
+    public void renderDeferred()
+    {
+        if (!this.shouldUseShaderPipeline())
+        {
+            return;
+        }
+
+        if (!this.optiFineRenderActive)
+        {
+            return;
+        }
+
+        if (this.methodRenderDeferred == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.methodRenderDeferred.invoke(
+                    null
+            );
+        }
+        catch (Throwable e)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "OptiFine renderDeferred failed."
+            );
+
+            e.printStackTrace();
+        }
+    }
+
+    // =========================================================
+    // COMPOSITE
+    // =========================================================
+
+    /**
+     * Пока напрямую не вызывается.
+     *
+     * Штатный OptiFine endRender() должен выполнять
+     * необходимую последовательность самостоятельно.
+     */
+    public void renderComposites()
+    {
+        if (!this.shouldUseShaderPipeline())
+        {
+            return;
+        }
+
+        if (!this.optiFineRenderActive)
+        {
+            return;
+        }
+
+        if (this.methodRenderCompositeFinal == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.methodRenderCompositeFinal.invoke(
+                    null
+            );
+        }
+        catch (Throwable e)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "OptiFine renderCompositeFinal failed."
+            );
+
+            e.printStackTrace();
+        }
+    }
+
+    // =========================================================
+    // FUTURE TEXTURE COPY
+    // =========================================================
+
+    public void copyOptiFineTextureToPreview(
+            int attachment)
+    {
+        /*
+         * На этом этапе не требуется.
+         *
+         * Полный pipeline будет писать непосредственно
+         * в Preview FBO через временную подмену
+         * Minecraft.framebuffer.
+         */
+    }
+
+    // =========================================================
+    // PREVIEW COLOR TEXTURE
+    // =========================================================
+
+    public int getCurrentColorTexture(
+            int attachment)
+    {
+        if (attachment != 0)
+        {
+            return 0;
+        }
+
+        return this.getPreviewTexture();
+    }
+
+    // =========================================================
+    // OPTIFINE FRAMEBUFFER INFO
+    // =========================================================
+
+    public int getOptiFineFramebuffer()
+    {
+        this.initialize();
+
+        if (!this.optiFinePresent)
+        {
+            return 0;
+        }
+
+        Object dfb =
+                this.getStaticFieldValue(
+                        this.fieldDfb
+                );
+
+        if (dfb == null)
+        {
+            return 0;
+        }
+
+        Integer id =
+                this.findIntegerField(
+                        dfb,
+                        "framebuffer",
+                        "framebufferObject",
+                        "framebufferID",
+                        "id"
+                );
+
+        return id == null
+                ? 0
+                : id.intValue();
+    }
+
+    // =========================================================
+    // OPTIFINE RENDER SIZE
+    // =========================================================
+
+    public int getOptiFineRenderWidth()
+    {
+        this.initialize();
+
+        Integer value =
+                this.getStaticInteger(
+                        this.fieldRenderWidth
+                );
+
+        if (value != null
+                && value.intValue() > 0)
+        {
+            return value.intValue();
+        }
+
+        return this.mc == null
+                ? 0
+                : this.mc.displayWidth;
+    }
+
+    public int getOptiFineRenderHeight()
+    {
+        this.initialize();
+
+        Integer value =
+                this.getStaticInteger(
+                        this.fieldRenderHeight
+                );
+
+        if (value != null
+                && value.intValue() > 0)
+        {
+            return value.intValue();
+        }
+
+        return this.mc == null
+                ? 0
+                : this.mc.displayHeight;
+    }
+
+    // =========================================================
+    // OPTIFINE COLOR BUFFER COUNT
+    // =========================================================
+
+    public int getUsedColorBuffers()
+    {
+        this.initialize();
+
+        Integer value =
+                this.getStaticInteger(
+                        this.fieldUsedColorBuffers
+                );
+
+        if (value == null)
+        {
+            return 0;
+        }
+
+        return value.intValue();
+    }
+
+    public int getUsedDepthBuffers()
+    {
+        this.initialize();
+
+        Integer value =
+                this.getStaticInteger(
+                        this.fieldUsedDepthBuffers
+                );
+
+        if (value == null)
+        {
+            return 0;
+        }
+
+        return value.intValue();
+    }
+
+    // =========================================================
+    // OPTIFINE TEXTURES
+    // =========================================================
+
+    public int getOptiFineColorTexture(
+            int attachment)
+    {
+        this.initialize();
+
+        if (!this.optiFinePresent
+                || attachment < 0)
+        {
+            return 0;
+        }
+
+        Object textures =
+                this.getStaticFieldValue(
+                        this.fieldDfbColorTextures
+                );
+
+        return this.getTextureFromArray(
+                textures,
+                attachment
+        );
+    }
+
+    public int getOptiFineDepthTexture(
+            int attachment)
+    {
+        this.initialize();
+
+        if (!this.optiFinePresent
+                || attachment < 0)
+        {
+            return 0;
+        }
+
+        Object textures =
+                this.getStaticFieldValue(
+                        this.fieldDfbDepthTextures
+                );
+
+        return this.getTextureFromArray(
+                textures,
+                attachment
+        );
+    }
+
+    // =========================================================
+    // CAMERA BRIDGE
+    // =========================================================
+
+    public boolean setOptiFineCamera(
+            float partialTicks)
+    {
+        this.initialize();
+
+        if (!this.optiFinePresent)
+        {
+            return false;
+        }
+
+        if (this.methodSetCamera == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            this.methodSetCamera.invoke(
+                    null,
+                    Float.valueOf(partialTicks)
+            );
+
+            return true;
+        }
+        catch (Throwable e)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "OptiFine setCamera failed."
+            );
+
+            e.printStackTrace();
+
+            return false;
+        }
+    }
+
+    // =========================================================
+    // RENDER PREVIEW TO GUI
+    // =========================================================
 
     public void renderPreviewTexture(
             int x,
@@ -518,47 +1091,31 @@ public class PreviewShaderBridge
             int width,
             int height)
     {
-        if (this.mc == null)
-        {
-            return;
-        }
-
-        if (width <= 0 ||
-                height <= 0)
+        if (this.mc == null
+                || width <= 0
+                || height <= 0)
         {
             return;
         }
 
         this.ensurePreviewFramebuffer();
 
-        if (this.previewFramebuffer == null)
+        if (this.previewFramebuffer == null
+                || this.previewFramebuffer.framebufferTexture == 0)
         {
             return;
         }
-
-        if (this.previewFramebuffer.framebufferTexture == 0)
-        {
-            return;
-        }
-
 
         this.previewX = x;
-
         this.previewY = y;
-
         this.previewWidth = width;
-
         this.previewHeight = height;
 
-
         ScaledResolution resolution =
-                new ScaledResolution(
-                        this.mc
-                );
+                new ScaledResolution(this.mc);
 
         int scaleFactor =
                 resolution.getScaleFactor();
-
 
         int px =
                 x * scaleFactor;
@@ -572,31 +1129,23 @@ public class PreviewShaderBridge
         int ph =
                 height * scaleFactor;
 
-
-        if (pw <= 0 ||
-                ph <= 0)
+        if (pw <= 0 || ph <= 0)
         {
             return;
         }
 
-
-        float framebufferWidth =
+        float fbWidth =
                 this.previewFramebuffer.framebufferWidth;
 
-        float framebufferHeight =
+        float fbHeight =
                 this.previewFramebuffer.framebufferHeight;
-
 
         float regionX =
                 x * scaleFactor;
 
         float regionY =
-                framebufferHeight
-                        -
-                        (
-                                (y + height)
-                                        * scaleFactor
-                        );
+                fbHeight
+                        - ((y + height) * scaleFactor);
 
         float regionWidth =
                 width * scaleFactor;
@@ -604,89 +1153,35 @@ public class PreviewShaderBridge
         float regionHeight =
                 height * scaleFactor;
 
-
         float u1 =
-                regionX /
-                        framebufferWidth;
+                regionX / fbWidth;
 
         float u2 =
-                (
-                        regionX +
-                                regionWidth
-                )
-                        /
-                        framebufferWidth;
+                (regionX + regionWidth) / fbWidth;
 
         float v1 =
-                regionY /
-                        framebufferHeight;
+                regionY / fbHeight;
 
         float v2 =
-                (
-                        regionY +
-                                regionHeight
-                )
-                        /
-                        framebufferHeight;
+                (regionY + regionHeight) / fbHeight;
 
-
-        if (u1 < 0F)
-        {
-            u1 = 0F;
-        }
-
-        if (u1 > 1F)
-        {
-            u1 = 1F;
-        }
-
-        if (u2 < 0F)
-        {
-            u2 = 0F;
-        }
-
-        if (u2 > 1F)
-        {
-            u2 = 1F;
-        }
-
-        if (v1 < 0F)
-        {
-            v1 = 0F;
-        }
-
-        if (v1 > 1F)
-        {
-            v1 = 1F;
-        }
-
-        if (v2 < 0F)
-        {
-            v2 = 0F;
-        }
-
-        if (v2 > 1F)
-        {
-            v2 = 1F;
-        }
+        u1 = clamp01(u1);
+        u2 = clamp01(u2);
+        v1 = clamp01(v1);
+        v2 = clamp01(v2);
 
 
         /*
-         * =========================================================
-         * SAVE ALL OPENGL ATTRIBUTE STATE
-         * =========================================================
+         * НЕ МЕНЯТЬ ЭТУ СХЕМУ БЕЗ НЕОБХОДИМОСТИ.
+         *
+         * GL_ALL_ATTRIB_BITS нужен для того,
+         * чтобы Preview не оставлял после себя состояние,
+         * которое портит GUI.
          */
 
         GL11.glPushAttrib(
                 GL11.GL_ALL_ATTRIB_BITS
         );
-
-
-        /*
-         * =========================================================
-         * SAVE MATRICES
-         * =========================================================
-         */
 
         int oldMatrixMode =
                 GL11.glGetInteger(
@@ -710,7 +1205,6 @@ public class PreviewShaderBridge
                 1
         );
 
-
         GL11.glMatrixMode(
                 GL11.GL_MODELVIEW
         );
@@ -720,11 +1214,9 @@ public class PreviewShaderBridge
         GL11.glLoadIdentity();
 
 
-        /*
-         * =========================================================
-         * GUI TEXTURE PASS
-         * =========================================================
-         */
+        // =====================================================
+        // GUI STATE
+        // =====================================================
 
         GL20.glUseProgram(0);
 
@@ -790,29 +1282,19 @@ public class PreviewShaderBridge
         );
 
 
-        /*
-         * =========================================================
-         * PREVIEW TEXTURE
-         * =========================================================
-         */
+        // =====================================================
+        // DRAW
+        // =====================================================
 
         GL11.glBindTexture(
                 GL11.GL_TEXTURE_2D,
                 this.previewFramebuffer.framebufferTexture
         );
 
-
-        /*
-         * =========================================================
-         * QUAD
-         * =========================================================
-         */
-
         GL11.glBegin(
                 GL11.GL_QUADS
         );
 
-
         GL11.glTexCoord2f(
                 u1,
                 v2
@@ -822,7 +1304,6 @@ public class PreviewShaderBridge
                 px,
                 py
         );
-
 
         GL11.glTexCoord2f(
                 u2,
@@ -834,7 +1315,6 @@ public class PreviewShaderBridge
                 py
         );
 
-
         GL11.glTexCoord2f(
                 u2,
                 v1
@@ -845,7 +1325,6 @@ public class PreviewShaderBridge
                 py + ph
         );
 
-
         GL11.glTexCoord2f(
                 u1,
                 v1
@@ -855,19 +1334,15 @@ public class PreviewShaderBridge
                 px,
                 py + ph
         );
-
 
         GL11.glEnd();
 
 
-        /*
-         * =========================================================
-         * RESTORE MATRICES
-         * =========================================================
-         */
+        // =====================================================
+        // RESTORE
+        // =====================================================
 
         GL11.glPopMatrix();
-
 
         GL11.glMatrixMode(
                 GL11.GL_PROJECTION
@@ -875,88 +1350,366 @@ public class PreviewShaderBridge
 
         GL11.glPopMatrix();
 
-
         GL11.glMatrixMode(
                 oldMatrixMode
         );
 
-
-        /*
-         * =========================================================
-         * RESTORE ALL OPENGL ATTRIBUTE STATE
-         * =========================================================
-         */
-
         GL11.glPopAttrib();
     }
 
+    // =========================================================
+    // INITIALIZATION
+    // =========================================================
 
-    /*
-     * =========================================================
-     * FRAMEBUFFER ACCESS
-     * =========================================================
-     */
-
-    public Framebuffer getPreviewFramebuffer()
+    private void initialize()
     {
-        this.ensurePreviewFramebuffer();
-
-        return this.previewFramebuffer;
-    }
-
-
-    public int getPreviewTexture()
-    {
-        this.ensurePreviewFramebuffer();
-
-        if (this.previewFramebuffer == null)
+        if (this.initialized)
         {
-            return 0;
+            return;
         }
 
-        return this.previewFramebuffer.framebufferTexture;
+        this.initialized = true;
+
+        this.optiFinePresent = false;
+        this.shaderPackLoaded = false;
+
+        try
+        {
+            this.shadersClass =
+                    Class.forName(
+                            "net.optifine.shaders.Shaders"
+                    );
+
+            this.optiFinePresent = true;
+
+            this.prepareOptiFineReflection();
+        }
+        catch (Throwable e)
+        {
+            this.optiFinePresent = false;
+            this.shadersClass = null;
+        }
+
+        if (this.optiFinePresent)
+        {
+            this.updateShaderPackState();
+        }
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "PreviewShaderBridge initialized."
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "OptiFine present: "
+                        + this.optiFinePresent
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "Shader pack loaded: "
+                        + this.shaderPackLoaded
+        );
     }
 
+    // =========================================================
+    // OPTIFINE REFLECTION SETUP
+    // =========================================================
 
-    public boolean isRenderingPreview()
+    private void prepareOptiFineReflection()
     {
-        return this.rendering;
+        if (this.shadersClass == null)
+        {
+            return;
+        }
+
+        this.fieldShaderPackLoaded =
+                findField(
+                        this.shadersClass,
+                        "shaderPackLoaded"
+                );
+
+        this.fieldDfb =
+                findField(
+                        this.shadersClass,
+                        "dfb"
+                );
+
+        this.fieldDfbColorTextures =
+                findField(
+                        this.shadersClass,
+                        "dfbColorTextures"
+                );
+
+        this.fieldDfbDepthTextures =
+                findField(
+                        this.shadersClass,
+                        "dfbDepthTextures"
+                );
+
+        this.fieldUsedColorBuffers =
+                findField(
+                        this.shadersClass,
+                        "usedColorBuffers"
+                );
+
+        this.fieldUsedDepthBuffers =
+                findField(
+                        this.shadersClass,
+                        "usedDepthBuffers"
+                );
+
+        this.fieldRenderWidth =
+                findField(
+                        this.shadersClass,
+                        "renderWidth"
+                );
+
+        this.fieldRenderHeight =
+                findField(
+                        this.shadersClass,
+                        "renderHeight"
+                );
+
+        this.fieldProgramFinal =
+                findField(
+                        this.shadersClass,
+                        "ProgramFinal"
+                );
+
+        this.fieldProgramsComposite =
+                findField(
+                        this.shadersClass,
+                        "ProgramsComposite"
+                );
+
+        this.fieldProgramsDeferred =
+                findField(
+                        this.shadersClass,
+                        "ProgramsDeferred"
+                );
+
+        this.methodSetCamera =
+                findMethod(
+                        this.shadersClass,
+                        "setCamera",
+                        float.class
+                );
+
+        this.methodBeginRender =
+                findMethod(
+                        this.shadersClass,
+                        "beginRender",
+                        Minecraft.class,
+                        float.class,
+                        long.class
+                );
+
+        this.methodBeginRenderPass =
+                findMethod(
+                        this.shadersClass,
+                        "beginRenderPass",
+                        int.class,
+                        float.class,
+                        long.class
+                );
+
+        this.methodEndRender =
+                findMethod(
+                        this.shadersClass,
+                        "endRender"
+                );
+
+        this.methodRenderDeferred =
+                findMethod(
+                        this.shadersClass,
+                        "renderDeferred"
+                );
+
+        this.methodRenderCompositeFinal =
+                findMethod(
+                        this.shadersClass,
+                        "renderCompositeFinal"
+                );
+
+        this.fieldMinecraftFramebuffer =
+                findField(
+                        Minecraft.class,
+                        "framebuffer"
+                );
     }
 
+    // =========================================================
+    // SHADER PACK STATE
+    // =========================================================
 
-    public boolean isOptiFineRendering()
+    private void updateShaderPackState()
     {
-        return false;
+        if (!this.optiFinePresent
+                || this.fieldShaderPackLoaded == null)
+        {
+            this.shaderPackLoaded = false;
+
+            return;
+        }
+
+        try
+        {
+            Object value =
+                    this.fieldShaderPackLoaded.get(null);
+
+            this.shaderPackLoaded =
+                    value instanceof Boolean
+                            && ((Boolean) value).booleanValue();
+        }
+        catch (Throwable ignored)
+        {
+            this.shaderPackLoaded = false;
+        }
     }
 
+    // =========================================================
+    // OPTIFINE DIAGNOSTICS
+    // =========================================================
 
-    /*
-     * =========================================================
-     * FRAMEBUFFER CREATION
-     * =========================================================
-     */
+    private void logOptiFineResources()
+    {
+        if (this.loggedOptiFineResources)
+        {
+            return;
+        }
+
+        this.loggedOptiFineResources = true;
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "===== OptiFine Preview Bridge ====="
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "DFB = "
+                        + this.getOptiFineFramebuffer()
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "render size = "
+                        + this.getOptiFineRenderWidth()
+                        + "x"
+                        + this.getOptiFineRenderHeight()
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "used color buffers = "
+                        + this.getUsedColorBuffers()
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "used depth buffers = "
+                        + this.getUsedDepthBuffers()
+        );
+
+        for (int i = 0; i < 16; i++)
+        {
+            int color =
+                    this.getOptiFineColorTexture(i);
+
+            if (color != 0)
+            {
+                System.out.println(
+                        "[BBS Animation Editor] "
+                                + "colortex"
+                                + i
+                                + " = "
+                                + color
+                );
+            }
+        }
+
+        for (int i = 0; i < 8; i++)
+        {
+            int depth =
+                    this.getOptiFineDepthTexture(i);
+
+            if (depth != 0)
+            {
+                System.out.println(
+                        "[BBS Animation Editor] "
+                                + "depthtex"
+                                + i
+                                + " = "
+                                + depth
+                );
+            }
+        }
+
+        Object programFinal =
+                this.getStaticFieldValue(
+                        this.fieldProgramFinal
+                );
+
+        Object programsComposite =
+                this.getStaticFieldValue(
+                        this.fieldProgramsComposite
+                );
+
+        Object programsDeferred =
+                this.getStaticFieldValue(
+                        this.fieldProgramsDeferred
+                );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "ProgramFinal = "
+                        + describeObject(
+                        programFinal
+                )
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "ProgramsComposite = "
+                        + describeObject(
+                        programsComposite
+                )
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "ProgramsDeferred = "
+                        + describeObject(
+                        programsDeferred
+                )
+        );
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        + "===================================="
+        );
+    }
+
+    // =========================================================
+    // FRAMEBUFFER CREATION
+    // =========================================================
 
     private void ensurePreviewFramebuffer()
     {
-        if (this.mc == null)
+        if (this.mc == null
+                || this.mc.displayWidth <= 0
+                || this.mc.displayHeight <= 0)
         {
             return;
         }
-
-        if (this.mc.displayWidth <= 0 ||
-                this.mc.displayHeight <= 0)
-        {
-            return;
-        }
-
 
         if (this.previewFramebuffer == null
-                ||
-                this.previewFramebuffer.framebufferWidth
-                        != this.mc.displayWidth
-                ||
-                this.previewFramebuffer.framebufferHeight
-                        != this.mc.displayHeight)
+                || this.previewFramebuffer.framebufferWidth
+                != this.mc.displayWidth
+                || this.previewFramebuffer.framebufferHeight
+                != this.mc.displayHeight)
         {
             if (this.previewFramebuffer != null)
             {
@@ -965,14 +1718,12 @@ public class PreviewShaderBridge
                 this.previewFramebuffer = null;
             }
 
-
             this.previewFramebuffer =
                     new Framebuffer(
                             this.mc.displayWidth,
                             this.mc.displayHeight,
                             true
                     );
-
 
             this.previewFramebuffer.setFramebufferColor(
                     0.08F,
@@ -983,34 +1734,9 @@ public class PreviewShaderBridge
         }
     }
 
-
-    /*
-     * =========================================================
-     * SCALE FACTOR
-     * =========================================================
-     */
-
-    private int getScaleFactor()
-    {
-        if (this.mc == null)
-        {
-            return 1;
-        }
-
-        ScaledResolution resolution =
-                new ScaledResolution(
-                        this.mc
-                );
-
-        return resolution.getScaleFactor();
-    }
-
-
-    /*
-     * =========================================================
-     * BIND PREVIEW FRAMEBUFFER
-     * =========================================================
-     */
+    // =========================================================
+    // BIND PREVIEW FRAMEBUFFER
+    // =========================================================
 
     private void bindPreviewFramebuffer()
     {
@@ -1019,145 +1745,76 @@ public class PreviewShaderBridge
             return;
         }
 
+        this.previewFramebuffer.bindFramebuffer(true);
 
-        this.previewFramebuffer.bindFramebuffer(
-                true
-        );
-
-
-        int framebufferWidth =
+        int fbWidth =
                 this.previewFramebuffer.framebufferWidth;
 
-        int framebufferHeight =
+        int fbHeight =
                 this.previewFramebuffer.framebufferHeight;
 
-
-        if (this.previewWidth <= 0 ||
-                this.previewHeight <= 0)
+        if (this.previewWidth <= 0
+                || this.previewHeight <= 0)
         {
             GL11.glViewport(
                     0,
                     0,
-                    framebufferWidth,
-                    framebufferHeight
+                    fbWidth,
+                    fbHeight
             );
 
             return;
         }
 
-
-        int scaleFactor =
+        int scale =
                 this.getScaleFactor();
 
+        int vx =
+                this.previewX * scale;
 
-        int viewportX =
-                this.previewX *
-                        scaleFactor;
+        int vy =
+                fbHeight
+                        - ((this.previewY
+                        + this.previewHeight) * scale);
 
-        int viewportWidth =
-                this.previewWidth *
-                        scaleFactor;
+        int vw =
+                this.previewWidth * scale;
 
-        int viewportHeight =
-                this.previewHeight *
-                        scaleFactor;
+        int vh =
+                this.previewHeight * scale;
 
+        vx = Math.max(0, vx);
+        vy = Math.max(0, vy);
 
-        int viewportY =
-                framebufferHeight
-                        -
-                        (
-                                (this.previewY
-                                        +
-                                        this.previewHeight)
-                                        *
-                                        scaleFactor
-                        );
-
-
-        if (viewportX < 0)
+        if (vx + vw > fbWidth)
         {
-            viewportX = 0;
+            vw = fbWidth - vx;
         }
 
-        if (viewportY < 0)
+        if (vy + vh > fbHeight)
         {
-            viewportY = 0;
+            vh = fbHeight - vy;
         }
 
-        if (viewportX >= framebufferWidth)
+        if (vw <= 0 || vh <= 0)
         {
-            viewportX = 0;
+            vx = 0;
+            vy = 0;
+            vw = fbWidth;
+            vh = fbHeight;
         }
-
-        if (viewportY >= framebufferHeight)
-        {
-            viewportY = 0;
-        }
-
-
-        if (viewportWidth <= 0)
-        {
-            viewportWidth =
-                    framebufferWidth;
-        }
-
-        if (viewportHeight <= 0)
-        {
-            viewportHeight =
-                    framebufferHeight;
-        }
-
-
-        if (viewportX +
-                viewportWidth >
-                framebufferWidth)
-        {
-            viewportWidth =
-                    framebufferWidth -
-                            viewportX;
-        }
-
-
-        if (viewportY +
-                viewportHeight >
-                framebufferHeight)
-        {
-            viewportHeight =
-                    framebufferHeight -
-                            viewportY;
-        }
-
-
-        if (viewportWidth <= 0 ||
-                viewportHeight <= 0)
-        {
-            viewportX = 0;
-
-            viewportY = 0;
-
-            viewportWidth =
-                    framebufferWidth;
-
-            viewportHeight =
-                    framebufferHeight;
-        }
-
 
         GL11.glViewport(
-                viewportX,
-                viewportY,
-                viewportWidth,
-                viewportHeight
+                vx,
+                vy,
+                vw,
+                vh
         );
     }
 
-
-    /*
-     * =========================================================
-     * CLEAR PREVIEW FRAMEBUFFER
-     * =========================================================
-     */
+    // =========================================================
+    // CLEAR PREVIEW
+    // =========================================================
 
     private void clearPreviewFramebuffer()
     {
@@ -1166,7 +1823,6 @@ public class PreviewShaderBridge
             return;
         }
 
-
         GL11.glClearColor(
                 0.08F,
                 0.09F,
@@ -1174,18 +1830,13 @@ public class PreviewShaderBridge
                 1F
         );
 
-
         GL11.glDepthMask(true);
-
 
         GL11.glClear(
                 GL11.GL_COLOR_BUFFER_BIT
-                        |
-                        GL11.GL_DEPTH_BUFFER_BIT
-                        |
-                        GL11.GL_STENCIL_BUFFER_BIT
+                        | GL11.GL_DEPTH_BUFFER_BIT
+                        | GL11.GL_STENCIL_BUFFER_BIT
         );
-
 
         GL11.glColor4f(
                 1F,
@@ -1195,139 +1846,9 @@ public class PreviewShaderBridge
         );
     }
 
-
-    /*
-     * =========================================================
-     * SAVE STATE
-     * =========================================================
-     */
-
-    private void saveRenderState()
-    {
-        this.previousFramebuffer =
-                GL11.glGetInteger(
-                        EXTFramebufferObject.GL_FRAMEBUFFER_BINDING_EXT
-                );
-
-
-        IntBuffer viewport =
-                BufferUtils.createIntBuffer(
-                        16
-                );
-
-
-        GL11.glGetInteger(
-                GL11.GL_VIEWPORT,
-                viewport
-        );
-
-
-        viewport.rewind();
-
-
-        this.previousViewportX =
-                viewport.get();
-
-        this.previousViewportY =
-                viewport.get();
-
-        this.previousViewportWidth =
-                viewport.get();
-
-        this.previousViewportHeight =
-                viewport.get();
-    }
-
-
-    /*
-     * =========================================================
-     * RESTORE PREVIOUS FRAMEBUFFER
-     * =========================================================
-     */
-
-    private void restorePreviousFramebuffer()
-    {
-        if (this.previousFramebuffer == 0)
-        {
-            this.restoreMinecraftFramebuffer();
-
-            return;
-        }
-
-
-        try
-        {
-            EXTFramebufferObject.glBindFramebufferEXT(
-                    EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
-                    this.previousFramebuffer
-            );
-
-
-            GL11.glViewport(
-                    this.previousViewportX,
-                    this.previousViewportY,
-                    this.previousViewportWidth,
-                    this.previousViewportHeight
-            );
-
-
-            this.restoreGuiState();
-        }
-        catch (Throwable e)
-        {
-            e.printStackTrace();
-
-            this.restoreMinecraftFramebuffer();
-        }
-    }
-
-
-    /*
-     * =========================================================
-     * RESTORE MINECRAFT FRAMEBUFFER
-     * =========================================================
-     */
-
-    private void restoreMinecraftFramebuffer()
-    {
-        if (this.mc == null)
-        {
-            return;
-        }
-
-
-        try
-        {
-            this.mc.getFramebuffer().bindFramebuffer(
-                    false
-            );
-        }
-        catch (Throwable e)
-        {
-            EXTFramebufferObject.glBindFramebufferEXT(
-                    EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
-                    0
-            );
-        }
-
-
-        GL11.glViewport(
-                0,
-                0,
-                this.mc.displayWidth,
-                this.mc.displayHeight
-        );
-
-
-        this.restoreGuiState();
-    }
-
-
-    /*
-     * =========================================================
-     * PREVIEW STATE
-     * =========================================================
-     */
+    // =========================================================
+    // PREVIEW GL STATE
+    // =========================================================
 
     private void preparePreviewState()
     {
@@ -1362,9 +1883,7 @@ public class PreviewShaderBridge
                 GL11.GL_LEQUAL
         );
 
-        GlStateManager.depthMask(
-                true
-        );
+        GlStateManager.depthMask(true);
 
         GlStateManager.enableCull();
 
@@ -1382,12 +1901,145 @@ public class PreviewShaderBridge
         );
     }
 
+    // =========================================================
+    // SAVE GL STATE
+    // =========================================================
 
-    /*
-     * =========================================================
-     * GUI STATE
-     * =========================================================
-     */
+    private void saveRenderState()
+    {
+        this.previousFramebuffer =
+                GL11.glGetInteger(
+                        EXTFramebufferObject.GL_FRAMEBUFFER_BINDING_EXT
+                );
+
+        IntBuffer viewport =
+                BufferUtils.createIntBuffer(16);
+
+        GL11.glGetInteger(
+                GL11.GL_VIEWPORT,
+                viewport
+        );
+
+        viewport.rewind();
+
+        this.previousViewportX =
+                viewport.get();
+
+        this.previousViewportY =
+                viewport.get();
+
+        this.previousViewportWidth =
+                viewport.get();
+
+        this.previousViewportHeight =
+                viewport.get();
+    }
+
+    // =========================================================
+    // RESTORE PREVIOUS FRAMEBUFFER
+    // =========================================================
+
+    private void restorePreviousFramebuffer()
+    {
+        if (this.previousFramebuffer == 0)
+        {
+            this.restoreMinecraftFramebuffer();
+
+            return;
+        }
+
+        try
+        {
+            EXTFramebufferObject.glBindFramebufferEXT(
+                    EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
+                    this.previousFramebuffer
+            );
+
+            GL11.glViewport(
+                    this.previousViewportX,
+                    this.previousViewportY,
+                    this.previousViewportWidth,
+                    this.previousViewportHeight
+            );
+
+            this.restoreGuiState();
+        }
+        catch (Throwable e)
+        {
+            e.printStackTrace();
+
+            this.restoreMinecraftFramebuffer();
+        }
+    }
+
+    // =========================================================
+    // RESTORE MINECRAFT FRAMEBUFFER REFERENCE
+    // =========================================================
+
+    private void restoreMinecraftFramebufferReference()
+    {
+        if (this.mc == null)
+        {
+            return;
+        }
+
+        if (this.fieldMinecraftFramebuffer == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.fieldMinecraftFramebuffer.set(
+                    this.mc,
+                    this.previousMinecraftFramebuffer
+            );
+        }
+        catch (Throwable e)
+        {
+            e.printStackTrace();
+        }
+
+        this.previousMinecraftFramebuffer = null;
+    }
+
+    // =========================================================
+    // RESTORE MINECRAFT FRAMEBUFFER
+    // =========================================================
+
+    private void restoreMinecraftFramebuffer()
+    {
+        if (this.mc == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.mc.getFramebuffer()
+                    .bindFramebuffer(false);
+        }
+        catch (Throwable e)
+        {
+            EXTFramebufferObject.glBindFramebufferEXT(
+                    EXTFramebufferObject.GL_FRAMEBUFFER_EXT,
+                    0
+            );
+        }
+
+        GL11.glViewport(
+                0,
+                0,
+                this.mc.displayWidth,
+                this.mc.displayHeight
+        );
+
+        this.restoreGuiState();
+    }
+
+    // =========================================================
+    // GUI STATE
+    // =========================================================
 
     private void restoreGuiState()
     {
@@ -1447,16 +2099,252 @@ public class PreviewShaderBridge
         );
     }
 
+    // =========================================================
+    // SCALE
+    // =========================================================
 
-    /*
-     * =========================================================
-     * DIAGNOSTICS
-     * =========================================================
-     */
+    private int getScaleFactor()
+    {
+        if (this.mc == null)
+        {
+            return 1;
+        }
+
+        return new ScaledResolution(this.mc)
+                .getScaleFactor();
+    }
+
+    // =========================================================
+    // REFLECTION HELPERS
+    // =========================================================
+
+    private static Field findField(
+            Class<?> owner,
+            String name)
+    {
+        if (owner == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            Field field =
+                    owner.getDeclaredField(name);
+
+            field.setAccessible(true);
+
+            return field;
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private static Method findMethod(
+            Class<?> owner,
+            String name,
+            Class<?>... parameterTypes)
+    {
+        if (owner == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            Method method =
+                    owner.getDeclaredMethod(
+                            name,
+                            parameterTypes
+                    );
+
+            method.setAccessible(true);
+
+            return method;
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private Object getStaticFieldValue(
+            Field field)
+    {
+        if (field == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return field.get(null);
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private Integer getStaticInteger(
+            Field field)
+    {
+        Object value =
+                this.getStaticFieldValue(field);
+
+        if (value instanceof Integer)
+        {
+            return (Integer) value;
+        }
+
+        return null;
+    }
+
+    // =========================================================
+    // TEXTURE ARRAY ACCESS
+    // =========================================================
+
+    private int getTextureFromArray(
+            Object array,
+            int index)
+    {
+        if (array == null
+                || index < 0)
+        {
+            return 0;
+        }
+
+        try
+        {
+            if (array instanceof int[])
+            {
+                int[] values =
+                        (int[]) array;
+
+                if (index >= values.length)
+                {
+                    return 0;
+                }
+
+                return values[index];
+            }
+
+            if (array instanceof Integer[])
+            {
+                Integer[] values =
+                        (Integer[]) array;
+
+                if (index >= values.length
+                        || values[index] == null)
+                {
+                    return 0;
+                }
+
+                return values[index].intValue();
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+
+        return 0;
+    }
+
+    // =========================================================
+    // GENERIC OBJECT FIELD SEARCH
+    // =========================================================
+
+    private Integer findIntegerField(
+            Object object,
+            String... names)
+    {
+        if (object == null)
+        {
+            return null;
+        }
+
+        Class<?> type =
+                object.getClass();
+
+        for (String name : names)
+        {
+            try
+            {
+                Field field =
+                        type.getDeclaredField(name);
+
+                field.setAccessible(true);
+
+                Object value =
+                        field.get(object);
+
+                if (value instanceof Integer)
+                {
+                    return (Integer) value;
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    // =========================================================
+    // OBJECT DESCRIPTION
+    // =========================================================
+
+    private static String describeObject(
+            Object object)
+    {
+        if (object == null)
+        {
+            return "null";
+        }
+
+        if (object.getClass().isArray())
+        {
+            return object.getClass()
+                    .getComponentType()
+                    .getName()
+                    + "[]";
+        }
+
+        return object.getClass().getName();
+    }
+
+    // =========================================================
+    // CLAMP
+    // =========================================================
+
+    private static float clamp01(
+            float value)
+    {
+        if (value < 0F)
+        {
+            return 0F;
+        }
+
+        if (value > 1F)
+        {
+            return 1F;
+        }
+
+        return value;
+    }
+
+    // =========================================================
+    // DIAGNOSTICS
+    // =========================================================
 
     public void printDiagnostics()
     {
         this.initialize();
+
+        this.updateShaderPackState();
 
         System.out.println(
                 "[BBS Animation Editor] "
@@ -1465,27 +2353,27 @@ public class PreviewShaderBridge
 
         System.out.println(
                 "  OptiFine present: "
-                        + this.isOptiFinePresent()
+                        + this.optiFinePresent
         );
 
         System.out.println(
                 "  Shader pack loaded: "
-                        + this.isShaderPackLoaded()
+                        + this.shaderPackLoaded
         );
 
         System.out.println(
-                "  Minecraft shader pipeline active: "
-                        + this.isShaderPipelineActive()
-        );
-
-        System.out.println(
-                "  Preview shader pipeline enabled: "
+                "  Shader pipeline available: "
                         + this.shouldUseShaderPipeline()
         );
 
         System.out.println(
                 "  Rendering preview: "
                         + this.rendering
+        );
+
+        System.out.println(
+                "  OptiFine rendering: "
+                        + this.optiFineRenderActive
         );
 
         System.out.println(
@@ -1504,41 +2392,42 @@ public class PreviewShaderBridge
                         + this.getPreviewTexture()
         );
 
+        System.out.println(
+                "  OptiFine DFB: "
+                        + this.getOptiFineFramebuffer()
+        );
+
+        System.out.println(
+                "  OptiFine render size: "
+                        + this.getOptiFineRenderWidth()
+                        + "x"
+                        + this.getOptiFineRenderHeight()
+        );
+
+        System.out.println(
+                "  OptiFine color buffers: "
+                        + this.getUsedColorBuffers()
+        );
+
+        System.out.println(
+                "  OptiFine depth buffers: "
+                        + this.getUsedDepthBuffers()
+        );
+
         if (this.mc != null)
         {
             System.out.println(
-                    "  Minecraft display size: "
+                    "  Minecraft display: "
                             + this.mc.displayWidth
                             + "x"
                             + this.mc.displayHeight
             );
         }
 
-        System.out.println(
-                "  Previous framebuffer: "
-                        + this.previousFramebuffer
-        );
-
-        System.out.println(
-                "  Previous viewport: "
-                        + this.previousViewportX
-                        + ","
-                        + this.previousViewportY
-                        + " "
-                        + this.previousViewportWidth
-                        + "x"
-                        + this.previousViewportHeight
-        );
-
         if (this.previewFramebuffer != null)
         {
             System.out.println(
-                    "  Preview framebuffer: "
-                            + this.previewFramebuffer.framebufferObject
-            );
-
-            System.out.println(
-                    "  Preview framebuffer size: "
+                    "  Preview FBO size: "
                             + this.previewFramebuffer.framebufferWidth
                             + "x"
                             + this.previewFramebuffer.framebufferHeight
@@ -1547,20 +2436,29 @@ public class PreviewShaderBridge
         else
         {
             System.out.println(
-                    "  Preview framebuffer: null"
+                    "  Preview FBO: null"
             );
         }
     }
 
-
-    /*
-     * =========================================================
-     * DELETE
-     * =========================================================
-     */
+    // =========================================================
+    // CLEANUP
+    // =========================================================
 
     public void delete()
     {
+        try
+        {
+            if (this.optiFineRenderActive)
+            {
+                this.endOptiFineRender();
+            }
+        }
+        catch (Throwable ignored)
+        {
+            this.restoreMinecraftFramebufferReference();
+        }
+
         try
         {
             if (this.rendering)
@@ -1581,7 +2479,6 @@ public class PreviewShaderBridge
             }
         }
 
-
         try
         {
             if (this.previewFramebuffer != null)
@@ -1596,7 +2493,10 @@ public class PreviewShaderBridge
             e.printStackTrace();
         }
 
-
         this.rendering = false;
+
+        this.optiFineRenderActive = false;
+
+        this.previousMinecraftFramebuffer = null;
     }
 }
