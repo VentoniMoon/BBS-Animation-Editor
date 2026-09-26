@@ -361,15 +361,10 @@ public class EditorCamera
 
     public double getCameraY()
     {
-        double pitchRadians =
-                Math.toRadians(
-                        this.pitch
-                );
+        double pitchRadians = Math.toRadians(this.pitch);
 
         return this.targetY
-                + Math.sin(
-                pitchRadians
-        )
+                - Math.sin(pitchRadians)
                 * this.distance;
     }
 

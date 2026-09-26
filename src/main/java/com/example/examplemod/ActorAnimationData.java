@@ -5,6 +5,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import mchorse.emoticons.skin_n_bones.api.bobj.BOBJArmature;
+import mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+
 public class ActorAnimationData
 {
     private final String actorId;
@@ -12,17 +16,16 @@ public class ActorAnimationData
     private final List<AnimationBone> bones =
             new ArrayList<AnimationBone>();
 
+
     public ActorAnimationData(
             String actorId)
     {
         this.actorId = actorId;
     }
 
+
     /**
-     * Создаёт AnimationBone непосредственно
-     * из реальной структуры Blockbuster-модели.
-     *
-     * Никаких заранее заданных имён костей здесь нет.
+     * Создаёт AnimationBone из BlockbusterLimbData.
      */
     public ActorAnimationData(
             String actorId,
@@ -30,20 +33,41 @@ public class ActorAnimationData
     {
         this.actorId = actorId;
 
-        createBones(
+        createBonesFromBlockbuster(
                 limbs
         );
     }
+
+
+    /**
+     * Создаёт AnimationBone непосредственно
+     * из реального Emoticons AnimatedMorph.
+     *
+     * Источником скелета является BOBJArmature/BOBJBone.
+     */
+    public ActorAnimationData(
+            String actorId,
+            AnimatedMorph morph)
+    {
+        this.actorId = actorId;
+
+        createBonesFromEmoticons(
+                morph
+        );
+    }
+
 
     public String getActorId()
     {
         return this.actorId;
     }
 
+
     public List<AnimationBone> getBones()
     {
         return this.bones;
     }
+
 
     public AnimationBone getBone(
             String name)
@@ -58,10 +82,13 @@ public class ActorAnimationData
                 this.bones
         )
         {
-            if (bone != null
-                    && name.equals(
-                    bone.getName()
-            ))
+            if (
+                    bone != null
+                            &&
+                            name.equals(
+                                    bone.getName()
+                            )
+            )
             {
                 return bone;
             }
@@ -70,18 +97,14 @@ public class ActorAnimationData
         return null;
     }
 
+
     /**
-     * Строит полную иерархию AnimationBone
-     * из BlockbusterLimbData.
-     *
-     * Важно:
-     *
-     * порядок limbs не имеет значения.
-     *
-     * Сначала создаются ВСЕ AnimationBone,
-     * затем отдельно устанавливаются parent/child связи.
+     * =========================================================
+     * BLOCKBUSTER
+     * =========================================================
      */
-    private void createBones(
+
+    private void createBonesFromBlockbuster(
             List<BlockbusterLimbData> limbs)
     {
         this.bones.clear();
@@ -91,15 +114,13 @@ public class ActorAnimationData
             return;
         }
 
-        /*
-         * Первый проход:
-         *
-         * создаём AnimationBone для каждого
-         * реального limb.
-         */
         Map<String, AnimationBone> boneMap =
                 new HashMap<String, AnimationBone>();
 
+        /*
+         * Первый проход:
+         * создаём все кости.
+         */
         for (
                 BlockbusterLimbData limb :
                 limbs
@@ -113,17 +134,15 @@ public class ActorAnimationData
             String name =
                     limb.getName();
 
-            if (name == null
-                    || name.isEmpty())
+            if (
+                    name == null
+                            ||
+                            name.isEmpty()
+            )
             {
                 continue;
             }
 
-            /*
-             * Не создаём дубликат,
-             * если Blockbuster каким-либо образом
-             * вернул одинаковое имя.
-             */
             if (boneMap.containsKey(name))
             {
                 continue;
@@ -134,11 +153,6 @@ public class ActorAnimationData
                             name
                     );
 
-            /*
-             * Позиция attachment point
-             * берётся непосредственно из
-             * Blockbuster-модели.
-             */
             bone.setLocalPosition(
                     limb.getX(),
                     limb.getY(),
@@ -157,9 +171,7 @@ public class ActorAnimationData
 
         /*
          * Второй проход:
-         *
-         * устанавливаем реальные связи
-         * parent -> child.
+         * устанавливаем parent/child.
          */
         for (
                 BlockbusterLimbData limb :
@@ -174,8 +186,11 @@ public class ActorAnimationData
             String name =
                     limb.getName();
 
-            if (name == null
-                    || name.isEmpty())
+            if (
+                    name == null
+                            ||
+                            name.isEmpty()
+            )
             {
                 continue;
             }
@@ -191,12 +206,12 @@ public class ActorAnimationData
             String parentName =
                     limb.getParentName();
 
-            if (parentName == null
-                    || parentName.isEmpty())
+            if (
+                    parentName == null
+                            ||
+                            parentName.isEmpty()
+            )
             {
-                /*
-                 * Это корневая кость.
-                 */
                 continue;
             }
 
@@ -205,13 +220,6 @@ public class ActorAnimationData
 
             if (parent == null)
             {
-                /*
-                 * Родитель указан Blockbuster,
-                 * но отсутствует среди импортированных
-                 * limbs.
-                 *
-                 * Не создаём искусственную кость.
-                 */
                 continue;
             }
 
@@ -219,5 +227,285 @@ public class ActorAnimationData
                     bone
             );
         }
+    }
+
+
+    /**
+     * =========================================================
+     * EMOTICONS
+     * =========================================================
+     */
+
+    private void createBonesFromEmoticons(
+            AnimatedMorph morph)
+    {
+        this.bones.clear();
+
+        if (morph == null)
+        {
+            return;
+        }
+
+        List<BOBJArmature> armatures =
+                EmoticonsModelAccess.getArmatures(
+                        morph
+                );
+
+        if (
+                armatures == null
+                        ||
+                        armatures.isEmpty()
+        )
+        {
+            return;
+        }
+
+        /*
+         * Один Emoticons morph может иметь
+         * несколько meshes, ссылающихся на одну
+         * и ту же armature.
+         *
+         * Поэтому используем identity map,
+         * чтобы одна и та же armature не
+         * добавлялась несколько раз.
+         */
+        List<BOBJArmature> uniqueArmatures =
+                new ArrayList<BOBJArmature>();
+
+        for (
+                BOBJArmature armature :
+                armatures
+        )
+        {
+            if (armature == null)
+            {
+                continue;
+            }
+
+            if (
+                    !containsArmature(
+                            uniqueArmatures,
+                            armature
+                    )
+            )
+            {
+                uniqueArmatures.add(
+                        armature
+                );
+            }
+        }
+
+        /*
+         * В настоящее время AnimatedMorph обычно
+         * использует одну armature.
+         *
+         * Если их несколько, объединяем их
+         * в один список AnimationBone.
+         */
+        Map<String, AnimationBone> boneMap =
+                new HashMap<String, AnimationBone>();
+
+        for (
+                BOBJArmature armature :
+                uniqueArmatures
+        )
+        {
+            List<BOBJBone> sourceBones =
+                    getArmatureBones(
+                            armature
+                    );
+
+            for (
+                    BOBJBone sourceBone :
+                    sourceBones
+            )
+            {
+                if (sourceBone == null)
+                {
+                    continue;
+                }
+
+                String name =
+                        sourceBone.name;
+
+                if (
+                        name == null
+                                ||
+                                name.isEmpty()
+                )
+                {
+                    continue;
+                }
+
+                if (boneMap.containsKey(name))
+                {
+                    continue;
+                }
+
+                AnimationBone bone =
+                        new AnimationBone(
+                                name
+                        );
+
+                bone.setLocalPosition(
+                        sourceBone.x,
+                        sourceBone.y,
+                        sourceBone.z
+                );
+
+                boneMap.put(
+                        name,
+                        bone
+                );
+
+                this.bones.add(
+                        bone
+                );
+            }
+        }
+
+        /*
+         * Второй проход:
+         * устанавливаем иерархию.
+         */
+        for (
+                BOBJArmature armature :
+                uniqueArmatures
+        )
+        {
+            List<BOBJBone> sourceBones =
+                    getArmatureBones(
+                            armature
+                    );
+
+            for (
+                    BOBJBone sourceBone :
+                    sourceBones
+            )
+            {
+                if (sourceBone == null)
+                {
+                    continue;
+                }
+
+                String name =
+                        sourceBone.name;
+
+                if (
+                        name == null
+                                ||
+                                name.isEmpty()
+                )
+                {
+                    continue;
+                }
+
+                AnimationBone bone =
+                        boneMap.get(name);
+
+                if (bone == null)
+                {
+                    continue;
+                }
+
+                String parentName =
+                        EmoticonsModelAccess.getParentName(
+                                sourceBone
+                        );
+
+                if (
+                        parentName == null
+                                ||
+                                parentName.isEmpty()
+                )
+                {
+                    continue;
+                }
+
+                AnimationBone parent =
+                        boneMap.get(parentName);
+
+                if (parent == null)
+                {
+                    continue;
+                }
+
+                parent.addChild(
+                        bone
+                );
+            }
+        }
+    }
+
+
+    private List<BOBJBone> getArmatureBones(
+            BOBJArmature armature)
+    {
+        List<BOBJBone> result =
+                new ArrayList<BOBJBone>();
+
+        if (armature == null)
+        {
+            return result;
+        }
+
+        if (
+                armature.orderedBones != null
+                        &&
+                        !armature.orderedBones.isEmpty()
+        )
+        {
+            for (
+                    BOBJBone bone :
+                    armature.orderedBones
+            )
+            {
+                if (bone != null)
+                {
+                    result.add(
+                            bone
+                    );
+                }
+            }
+
+            return result;
+        }
+
+        if (armature.bones != null)
+        {
+            for (
+                    BOBJBone bone :
+                    armature.bones.values()
+            )
+            {
+                if (bone != null)
+                {
+                    result.add(
+                            bone
+                    );
+                }
+            }
+        }
+
+        return result;
+    }
+
+
+    private boolean containsArmature(
+            List<BOBJArmature> armatures,
+            BOBJArmature target)
+    {
+        for (
+                BOBJArmature armature :
+                armatures
+        )
+        {
+            if (armature == target)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

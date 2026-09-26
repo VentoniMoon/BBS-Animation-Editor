@@ -14,7 +14,7 @@ public class AnimationEditorScreen extends GuiScreen
 {
     private static final int TOP_BAR_HEIGHT = 25;
     private static final int LEFT_PANEL_WIDTH = 180;
-    private static final int ACTOR_PANEL_HEIGHT = 120;
+    private static final int ACTOR_PANEL_HEIGHT = 150;
     private static final int INTERPOLATION_PANEL_HEIGHT = 100;
 
     private static final int BASE_FRAME_WIDTH = 6;
@@ -33,10 +33,16 @@ public class AnimationEditorScreen extends GuiScreen
 
     private boolean sceneDropdownOpen = false;
 
+    /*
+     * currentFrame — целый кадр Record/Timeline.
+     *
+     * currentAnimationFrame — дробный кадр для плавной
+     * интерполяции AnimationBone во время воспроизведения.
+     */
     private int currentFrame = 0;
+    private float currentAnimationFrame = 0.0F;
 
     private int timelineOffset = 0;
-
     private int boneScroll = 0;
 
     private EditorSceneViewport sceneViewport;
@@ -56,20 +62,7 @@ public class AnimationEditorScreen extends GuiScreen
     private AnimationKeyframe selectedKeyframe =
             null;
 
-    /*
-     * TRUE только тогда, когда пользователь
-     * действительно начал drag внутри TransformPanel.
-     *
-     * Это запрещает случайное изменение keyframe
-     * при перетаскивании мыши по Timeline или Preview.
-     */
     private boolean transformDragging = false;
-
-    /*
-     * Base actor state from Blockbuster Record.
-     *
-     * These values are not animation keyframes.
-     */
 
     private final BlockbusterRecordPose currentRecordPose =
             new BlockbusterRecordPose();
@@ -89,10 +82,14 @@ public class AnimationEditorScreen extends GuiScreen
     private final InterpolationPanel interpolationPanel =
             new InterpolationPanel();
 
+
     @Override
     public void initGui()
     {
         super.initGui();
+
+        BlockbusterPreviewAnimationState.clear();
+        EmoticonsPreviewAnimationState.clear();
 
         this.sceneState =
                 new EditorSceneState();
@@ -119,6 +116,13 @@ public class AnimationEditorScreen extends GuiScreen
 
         this.adapterManager.register(
                 blockbusterAdapter
+        );
+
+        EmoticonsAnimationAdapter emoticonsAdapter =
+                new EmoticonsAnimationAdapter();
+
+        this.adapterManager.register(
+                emoticonsAdapter
         );
 
         if (blockbusterAdapter.supports())
@@ -156,9 +160,8 @@ public class AnimationEditorScreen extends GuiScreen
                 );
 
         resetTimeline(1);
-
-        resetTimeline(1);
     }
+
 
     private ActorAnimationData getOrCreateActorAnimation(
             String actorId)
@@ -178,14 +181,15 @@ public class AnimationEditorScreen extends GuiScreen
             return existing;
         }
 
-        List<BlockbusterLimbData> limbs =
-                this.blockbusterModelAccess.getLimbData();
-
         ActorAnimationData created =
-                new ActorAnimationData(
-                        actorId,
-                        limbs
+                createAnimationDataForActor(
+                        actorId
                 );
+
+        if (created == null)
+        {
+            return null;
+        }
 
         this.sceneState
                 .getAnimationData()
@@ -196,6 +200,91 @@ public class AnimationEditorScreen extends GuiScreen
 
         return created;
     }
+
+
+    private ActorAnimationData createAnimationDataForActor(
+            String actorId)
+    {
+        BlockbusterSceneActorData actorData =
+                getSelectedActor();
+
+        if (actorData == null)
+        {
+            return null;
+        }
+
+        BlockbusterSceneActor sceneActor =
+                actorData.getActor();
+
+        if (sceneActor == null)
+        {
+            return null;
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * EMOTICONS
+         * ---------------------------------------------------------
+         */
+
+        net.minecraft.nbt.NBTTagCompound morphNBT =
+                sceneActor.getMorph();
+
+        if (morphNBT != null)
+        {
+            try
+            {
+                mchorse.metamorph.api.morphs.AbstractMorph morph =
+                        mchorse.metamorph.api.MorphManager.INSTANCE
+                                .morphFromNBT(
+                                        morphNBT.copy()
+                                );
+
+                if (
+                        morph instanceof
+                                mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph
+                )
+                {
+                    mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph animatedMorph =
+                            (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+                                    morph;
+
+                    EmoticonsActorPreviewRenderer.prepareMorph(
+                            animatedMorph
+                    );
+
+                    return new ActorAnimationData(
+                            actorId,
+                            animatedMorph
+                    );
+                }
+            }
+            catch (Exception exception)
+            {
+                System.out.println(
+                        "[BBS Animation Editor] "
+                                + "Failed to create Emoticons animation data"
+                );
+
+                exception.printStackTrace();
+            }
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * BLOCKBUSTER
+         * ---------------------------------------------------------
+         */
+
+        List<BlockbusterLimbData> limbs =
+                this.blockbusterModelAccess.getLimbData();
+
+        return new ActorAnimationData(
+                actorId,
+                limbs
+        );
+    }
+
 
     private void selectActorAnimation(
             String actorId)
@@ -214,6 +303,9 @@ public class AnimationEditorScreen extends GuiScreen
             this.selectedKeyframe = null;
             this.transformDragging = false;
 
+            BlockbusterPreviewAnimationState.clear();
+            EmoticonsPreviewAnimationState.clear();
+
             return;
         }
 
@@ -230,16 +322,12 @@ public class AnimationEditorScreen extends GuiScreen
 
         this.selectedKeyframe = null;
         this.transformDragging = false;
+
+        BlockbusterPreviewAnimationState.clear();
+        EmoticonsPreviewAnimationState.clear();
     }
 
-    /**
-     * Establishes the first Record frame as the
-     * reference position of the Preview.
-     *
-     * The absolute Blockbuster world coordinates
-     * are therefore never used directly as GUI
-     * coordinates.
-     */
+
     private void resetPreviewReference()
     {
         BlockbusterRecord record =
@@ -276,6 +364,7 @@ public class AnimationEditorScreen extends GuiScreen
                 firstFrame.getZ()
         );
     }
+
 
     private void applyRecordFrame()
     {
@@ -322,25 +411,22 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+
     private void applyAnimationPose()
     {
-        /*
-         * Положение и вращение самого актёра
-         * полностью определяется Blockbuster Record.
-         *
-         * AnimationBone не изменяет мировое положение
-         * ActorPose.
-         */
         this.currentRecordPose.applyTo(
                 this.currentActorPose
         );
     }
 
+
     private void resetTimeline(int length)
     {
         this.currentFrame = 0;
+        this.currentAnimationFrame = 0.0F;
         this.timelineOffset = 0;
         this.playing = false;
+
         this.selectedKeyframe = null;
         this.transformDragging = false;
 
@@ -354,9 +440,18 @@ public class AnimationEditorScreen extends GuiScreen
         this.timeline.rewind();
         this.timeline.pause();
 
+        BlockbusterPreviewAnimationState.clear();
+        EmoticonsPreviewAnimationState.clear();
+
+        BlockbusterPreviewAnimationState.setPlaying(
+                false
+        );
+
         applyRecordFrame();
         applyAnimationPose();
+        applyAdapters();
     }
+
 
     private void loadScene(int index)
     {
@@ -376,6 +471,9 @@ public class AnimationEditorScreen extends GuiScreen
             this.selectedKeyframe = null;
             this.transformDragging = false;
 
+            BlockbusterPreviewAnimationState.clear();
+            EmoticonsPreviewAnimationState.clear();
+
             this.animationPreview.setReferencePosition(
                     0.0D,
                     0.0D,
@@ -394,6 +492,7 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
+
     private int getSceneLength()
     {
         if (this.sceneState == null)
@@ -403,6 +502,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         return this.sceneState.getSceneLength();
     }
+
 
     private List<BlockbusterSceneActorData>
     getSceneActors()
@@ -415,6 +515,7 @@ public class AnimationEditorScreen extends GuiScreen
         return this.sceneState.getActors();
     }
 
+
     private BlockbusterSceneActorData
     getSelectedActor()
     {
@@ -426,6 +527,7 @@ public class AnimationEditorScreen extends GuiScreen
         return this.sceneState.getSelectedActorData();
     }
 
+
     private BlockbusterRecord
     getSelectedActorRecord()
     {
@@ -436,6 +538,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         return this.sceneState.getSelectedActorRecord();
     }
+
 
     private BlockbusterRecordFrame getCurrentRecordFrame()
     {
@@ -451,6 +554,7 @@ public class AnimationEditorScreen extends GuiScreen
                 this.currentFrame
         );
     }
+
 
     private void selectActor(int index)
     {
@@ -480,23 +584,30 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         this.currentFrame = 0;
+        this.currentAnimationFrame = 0.0F;
         this.timelineOffset = 0;
         this.playing = false;
+
         this.selectedKeyframe = null;
         this.transformDragging = false;
 
         this.timeline.setTick(0);
         this.timeline.pause();
 
-        /*
-         * The first Record frame becomes the
-         * Preview reference point.
-         */
+        BlockbusterPreviewAnimationState.clear();
+        EmoticonsPreviewAnimationState.clear();
+
+        BlockbusterPreviewAnimationState.setPlaying(
+                false
+        );
+
         resetPreviewReference();
 
         applyRecordFrame();
         applyAnimationPose();
+        applyAdapters();
     }
+
 
     @Override
     public void drawScreen(
@@ -504,6 +615,22 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             float partialTicks)
     {
+        /*
+         * Во время воспроизведения используем дробный кадр.
+         * На паузе остаёмся на текущем целом кадре.
+         */
+
+        if (this.playing)
+        {
+            this.currentAnimationFrame =
+                    this.timeline.getCurrentFrameFloat();
+        }
+        else
+        {
+            this.currentAnimationFrame =
+                    (float) this.currentFrame;
+        }
+
         this.drawRect(
                 0,
                 0,
@@ -515,11 +642,13 @@ public class AnimationEditorScreen extends GuiScreen
         drawTopBar();
         drawActorPanel();
         drawPreview();
+
+        drawTimeline();
+
         drawInterpolationPanel(
                 mouseX,
                 mouseY
         );
-        drawTimeline();
 
         if (this.sceneDropdownOpen)
         {
@@ -532,6 +661,7 @@ public class AnimationEditorScreen extends GuiScreen
                 partialTicks
         );
     }
+
 
     private void drawTopBar()
     {
@@ -629,6 +759,7 @@ public class AnimationEditorScreen extends GuiScreen
                 0xCCCCCC
         );
     }
+
 
     private void drawSceneDropdown()
     {
@@ -736,9 +867,11 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
+
     private void drawActorPanel()
     {
         int top = TOP_BAR_HEIGHT;
+
         int bottom =
                 top +
                         ACTOR_PANEL_HEIGHT;
@@ -884,6 +1017,7 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
+
     private void drawInterpolationPanel(
             int mouseX,
             int mouseY)
@@ -926,6 +1060,7 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+
     private void drawPreview()
     {
         int left =
@@ -934,25 +1069,20 @@ public class AnimationEditorScreen extends GuiScreen
         int top =
                 TOP_BAR_HEIGHT;
 
-        int right =
-                this.width;
+        int rightPanelWidth = 185;
+
+        int previewRight =
+                this.width -
+                        rightPanelWidth;
 
         int bottom =
                 this.height -
                         this.getTimelineHeight();
 
-        this.drawRect(
-                left,
-                top,
-                right,
-                bottom,
-                0xFF1E1F21
-        );
-
         int previewWidth =
                 Math.max(
                         150,
-                        (right - left) - 195
+                        previewRight - left
                 );
 
         int previewHeight =
@@ -961,12 +1091,36 @@ public class AnimationEditorScreen extends GuiScreen
                         bottom - top
                 );
 
+        this.drawRect(
+                left,
+                top,
+                previewRight,
+                bottom,
+                0xFF1E1F21
+        );
+
         this.sceneViewport.setBounds(
                 left,
                 top,
                 previewWidth,
                 previewHeight
         );
+
+        /*
+         * Во время воспроизведения адаптеры получают
+         * дробный кадр только здесь, непосредственно
+         * перед отрисовкой Preview.
+         *
+         * Это предотвращает ситуацию, когда updateScreen()
+         * сначала записывает целый кадр, а render-frame
+         * затем записывает дробный.
+         */
+        if (this.playing)
+        {
+            applyAdapters(
+                    this.currentAnimationFrame
+            );
+        }
 
         this.sceneViewport.draw(
                 this.mc,
@@ -981,8 +1135,20 @@ public class AnimationEditorScreen extends GuiScreen
                 this.getCurrentRecordFrame()
         );
 
+        this.sceneViewport.finishPreviewRender();
+
+        this.sceneViewport.renderPreviewToScreen();
+
+
+        /*
+         * =========================================================
+         * TRANSFORM PANEL
+         * =========================================================
+         */
+
         int panelX =
-                right - 185;
+                this.width -
+                        rightPanelWidth;
 
         int panelY =
                 top + 10;
@@ -999,6 +1165,7 @@ public class AnimationEditorScreen extends GuiScreen
                 this.currentFrame
         );
     }
+
 
     private void drawTimeline()
     {
@@ -1159,22 +1326,12 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+
     private int getTimelineHeight()
     {
-        int requiredHeight =
-                35 +
-                        this.bones.size() *
-                                TRACK_HEIGHT +
-                        25;
-
-        return Math.min(
-                220,
-                Math.max(
-                        180,
-                        requiredHeight
-                )
-        );
+        return 180;
     }
+
 
     private void drawTimelineRuler(
             int timelineTop,
@@ -1317,6 +1474,7 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
+
     private void drawBoneTrack(
             AnimationBone bone,
             int trackY,
@@ -1390,6 +1548,7 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
+
     private void drawCurrentFrameLine(
             int timelineTop,
             int timelineStartX)
@@ -1413,6 +1572,7 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
     }
+
 
     private void drawKeyframe(
             int x,
@@ -1441,11 +1601,13 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+
     private float getPixelsPerFrame()
     {
         return BASE_FRAME_WIDTH *
                 this.timelineZoom;
     }
+
 
     private int getFrameX(
             int frame)
@@ -1457,6 +1619,7 @@ public class AnimationEditorScreen extends GuiScreen
         )
                 - this.timelineOffset;
     }
+
 
     private int getFrameFromMouseX(
             int mouseX)
@@ -1479,6 +1642,7 @@ public class AnimationEditorScreen extends GuiScreen
                         pixelsPerFrame
         );
     }
+
 
     private AnimationKeyframe findKeyframe(
             AnimationBone bone,
@@ -1505,6 +1669,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         return null;
     }
+
 
     private AnimationKeyframe findKeyframeAt(
             AnimationBone bone,
@@ -1540,6 +1705,7 @@ public class AnimationEditorScreen extends GuiScreen
         return null;
     }
 
+
     private int getMaximumTimelineOffset()
     {
         int maximumFrame =
@@ -1561,6 +1727,7 @@ public class AnimationEditorScreen extends GuiScreen
                         timelineWidth
         );
     }
+
 
     private int getMaximumFrame()
     {
@@ -1614,6 +1781,7 @@ public class AnimationEditorScreen extends GuiScreen
         return maximum;
     }
 
+
     @Override
     protected void mouseClicked(
             int mouseX,
@@ -1621,20 +1789,10 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws IOException
     {
-        /*
-         * Любой новый mouse click сначала
-         * прекращает предыдущий Transform drag.
-         */
         this.transformDragging = false;
 
         int sceneButtonX = 175;
         int sceneButtonWidth = 180;
-
-        /*
-         * =========================
-         * SCENE DROPDOWN
-         * =========================
-         */
 
         if (
                 mouseX >= sceneButtonX &&
@@ -1701,11 +1859,6 @@ public class AnimationEditorScreen extends GuiScreen
             this.sceneDropdownOpen = false;
         }
 
-        /*
-         * =========================
-         * INTERPOLATION PANEL
-         * =========================
-         */
 
         if (this.interpolationPanel != null)
         {
@@ -1721,11 +1874,6 @@ public class AnimationEditorScreen extends GuiScreen
             }
         }
 
-        /*
-         * =========================
-         * ACTOR PANEL
-         * =========================
-         */
 
         int actorTop =
                 TOP_BAR_HEIGHT;
@@ -1769,15 +1917,6 @@ public class AnimationEditorScreen extends GuiScreen
             }
         }
 
-        /*
-         * =========================
-         * TRANSFORM PANEL
-         * =========================
-         *
-         * TransformPanel находится справа
-         * поверх Preview, поэтому его нужно
-         * обработать ДО Timeline.
-         */
 
         if (this.selectedKeyframe != null)
         {
@@ -1814,10 +1953,6 @@ public class AnimationEditorScreen extends GuiScreen
                         )
                 )
                 {
-                    /*
-                     * Только здесь начинается настоящий
-                     * drag TransformPanel.
-                     */
                     this.transformDragging = true;
 
                     return;
@@ -1825,17 +1960,6 @@ public class AnimationEditorScreen extends GuiScreen
             }
         }
 
-        /*
-         * =========================
-         * SCENE VIEWPORT
-         * =========================
-         *
-         * Обрабатываем клик по Preview
-         * только после TransformPanel.
-         *
-         * Это важно, потому что TransformPanel
-         * находится поверх viewport.
-         */
 
         if (
                 this.sceneViewport != null
@@ -1850,11 +1974,6 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        /*
-         * =========================
-         * TIMELINE
-         * =========================
-         */
 
         int timelineTop =
                 this.height -
@@ -1885,10 +2004,6 @@ public class AnimationEditorScreen extends GuiScreen
                                     this.bones.size()
             )
             {
-                /*
-                 * Timeline selection всегда
-                 * прекращает Transform drag.
-                 */
                 this.transformDragging = false;
 
                 this.selectedBone =
@@ -1938,8 +2053,12 @@ public class AnimationEditorScreen extends GuiScreen
                         this.currentFrame =
                                 this.timeline.getTick();
 
+                        this.currentAnimationFrame =
+                                (float) this.currentFrame;
+
                         applyRecordFrame();
                         applyAnimationPose();
+                        applyAdapters();
                     }
                     else
                     {
@@ -1949,6 +2068,9 @@ public class AnimationEditorScreen extends GuiScreen
 
                         this.currentFrame =
                                 this.timeline.getTick();
+
+                        this.currentAnimationFrame =
+                                (float) this.currentFrame;
 
                         applyRecordFrame();
                         applyAnimationPose();
@@ -1974,6 +2096,8 @@ public class AnimationEditorScreen extends GuiScreen
 
                         this.selectedKeyframe =
                                 keyframe;
+
+                        applyAdapters();
                     }
                 }
                 else if (mouseButton == 1)
@@ -2000,6 +2124,8 @@ public class AnimationEditorScreen extends GuiScreen
                                 clickedKeyframe
                                         .getFrame()
                         );
+
+                        applyAdapters();
                     }
                 }
             }
@@ -2012,6 +2138,7 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+
     @Override
     protected void mouseClickMove(
             int mouseX,
@@ -2019,14 +2146,6 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
-        /*
-         * =========================
-         * TRANSFORM PANEL DRAG
-         * =========================
-         *
-         * TransformPanel имеет приоритет,
-         * если drag был начат внутри него.
-         */
         if (
                 this.transformDragging
                         && this.selectedKeyframe != null
@@ -2039,6 +2158,8 @@ public class AnimationEditorScreen extends GuiScreen
                     this.selectedKeyframe
             );
 
+            applyAdapters();
+
             super.mouseClickMove(
                     mouseX,
                     mouseY,
@@ -2049,14 +2170,7 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        /*
-         * =========================
-         * SCENE VIEWPORT DRAG
-         * =========================
-         *
-         * Если TransformPanel не используется,
-         * передаём движение в камеру Preview.
-         */
+
         if (
                 this.sceneViewport != null
                         &&
@@ -2069,9 +2183,7 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        /*
-         * Остальная стандартная обработка Minecraft.
-         */
+
         super.mouseClickMove(
                 mouseX,
                 mouseY,
@@ -2079,6 +2191,7 @@ public class AnimationEditorScreen extends GuiScreen
                 timeSinceLastClick
         );
     }
+
 
     @Override
     protected void mouseReleased(
@@ -2090,10 +2203,6 @@ public class AnimationEditorScreen extends GuiScreen
                 state
         );
 
-        /*
-         * Передаём отпускание мыши
-         * в Scene Viewport.
-         */
         if (this.sceneViewport != null)
         {
             this.sceneViewport.mouseReleased(
@@ -2103,10 +2212,6 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
-        /*
-         * После отпускания мыши drag больше
-         * не должен продолжаться.
-         */
         this.transformDragging = false;
 
         super.mouseReleased(
@@ -2115,6 +2220,7 @@ public class AnimationEditorScreen extends GuiScreen
                 state
         );
     }
+
 
     @Override
     public void handleMouseInput()
@@ -2142,9 +2248,7 @@ public class AnimationEditorScreen extends GuiScreen
                         / this.mc.displayHeight
                         - 1;
 
-        /*
-         * Interpolation dropdown scrolling.
-         */
+
         if (this.interpolationPanel != null)
         {
             if (this.interpolationPanel.mouseScrolled(
@@ -2156,14 +2260,8 @@ public class AnimationEditorScreen extends GuiScreen
                 return;
             }
         }
-        /*
-         * =========================
-         * SCENE VIEWPORT SCROLL
-         * =========================
-         *
-         * Колесо над Preview управляет
-         * расстоянием камеры.
-         */
+
+
         if (
                 this.sceneViewport != null
                         &&
@@ -2176,18 +2274,13 @@ public class AnimationEditorScreen extends GuiScreen
         {
             return;
         }
+
+
         int timelineTop =
                 this.height -
                         this.getTimelineHeight();
 
-        /*
-         * =========================
-         * BONE LIST SCROLL
-         * =========================
-         *
-         * Колесо над левой частью Timeline
-         * прокручивает список костей.
-         */
+
         if (
                 mouseY >= timelineTop
                         &&
@@ -2199,10 +2292,6 @@ public class AnimationEditorScreen extends GuiScreen
             int tracksTop =
                     timelineTop + 35;
 
-            /*
-             * Заголовок Timeline не прокручивает
-             * список костей.
-             */
             if (mouseY >= tracksTop)
             {
                 int visibleBoneCount =
@@ -2243,10 +2332,12 @@ public class AnimationEditorScreen extends GuiScreen
             }
         }
 
+
         if (mouseY < timelineTop)
         {
             return;
         }
+
 
         boolean ctrlDown =
                 Keyboard.isKeyDown(
@@ -2306,6 +2397,7 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
+
         int scrollAmount = 60;
 
         if (wheel > 0)
@@ -2322,6 +2414,7 @@ public class AnimationEditorScreen extends GuiScreen
         clampTimelineOffset();
     }
 
+
     private void clampTimelineOffset()
     {
         int maxOffset =
@@ -2337,6 +2430,7 @@ public class AnimationEditorScreen extends GuiScreen
                 );
     }
 
+
     @Override
     protected void keyTyped(
             char typedChar,
@@ -2345,6 +2439,9 @@ public class AnimationEditorScreen extends GuiScreen
     {
         if (keyCode == 1)
         {
+            BlockbusterPreviewAnimationState.clear();
+            EmoticonsPreviewAnimationState.clear();
+
             this.mc.displayGuiScreen(
                     null
             );
@@ -2358,25 +2455,38 @@ public class AnimationEditorScreen extends GuiScreen
                 this.selectedKeyframe
         );
 
+
         if (keyCode == 203)
         {
             this.timeline.previousTick();
+
             this.currentFrame =
                     this.timeline.getTick();
 
+            this.currentAnimationFrame =
+                    (float) this.currentFrame;
+
             applyRecordFrame();
             applyAnimationPose();
+            applyAdapters();
         }
+
 
         if (keyCode == 205)
         {
             this.timeline.nextTick();
+
             this.currentFrame =
                     this.timeline.getTick();
 
+            this.currentAnimationFrame =
+                    (float) this.currentFrame;
+
             applyRecordFrame();
             applyAnimationPose();
+            applyAdapters();
         }
+
 
         if (keyCode == 57)
         {
@@ -2384,8 +2494,13 @@ public class AnimationEditorScreen extends GuiScreen
 
             this.playing =
                     this.timeline.isPlaying();
+
+            BlockbusterPreviewAnimationState.setPlaying(
+                    this.playing
+            );
         }
     }
+
 
     @Override
     public void updateScreen()
@@ -2396,6 +2511,7 @@ public class AnimationEditorScreen extends GuiScreen
                     this.mc
             );
         }
+
         super.updateScreen();
 
         this.timeline.update();
@@ -2403,19 +2519,44 @@ public class AnimationEditorScreen extends GuiScreen
         this.currentFrame =
                 this.timeline.getTick();
 
+        this.currentAnimationFrame =
+                this.timeline.getCurrentFrameFloat();
+
         this.playing =
                 this.timeline.isPlaying();
 
+        BlockbusterPreviewAnimationState.setPlaying(
+                this.playing
+        );
+
         applyRecordFrame();
         applyAnimationPose();
-        applyAdapters();
+
+        /*
+         * Во время воспроизведения applyAdapters()
+         * здесь НЕ вызывается.
+         *
+         * Это важно: drawPreview() применяет состояние
+         * непосредственно перед рендером с дробным
+         * currentAnimationFrame.
+         *
+         * На паузе же целый кадр применяется здесь,
+         * чтобы изменения Timeline/Record сразу отражались
+         * в Preview.
+         */
+        if (!this.playing)
+        {
+            applyAdapters();
+        }
     }
+
 
     public AnimationKeyframe
     getSelectedKeyframe()
     {
         return this.selectedKeyframe;
     }
+
 
     public AnimationBone
     getSelectedBone()
@@ -2434,6 +2575,7 @@ public class AnimationEditorScreen extends GuiScreen
         return null;
     }
 
+
     public AnimationTransform
     getCurrentTransform()
     {
@@ -2445,18 +2587,6 @@ public class AnimationEditorScreen extends GuiScreen
             return new AnimationTransform();
         }
 
-        /*
-         * Если выбранный keyframe действительно
-         * принадлежит этой кости — используем его
-         * transform.
-         *
-         * Если keyframe выбран от другой кости,
-         * полностью игнорируем его.
-         *
-         * Это защищает редактор от ситуации,
-         * когда selectedKeyframe остаётся после
-         * переключения строки Timeline.
-         */
         if (this.selectedKeyframe != null)
         {
             boolean belongsToBone =
@@ -2485,33 +2615,37 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+
+    /*
+     * =========================================================
+     * ANIMATION -> BLOCKBUSTER / EMOTICONS PREVIEW
+     * =========================================================
+     */
+
     private void applyAdapters()
     {
-        if (this.adapterManager == null)
-        {
-            return;
-        }
+        applyAdapters(
+                (float) this.currentFrame
+        );
+    }
 
-        AnimationAdapter adapter =
-                this.adapterManager
-                        .findSupportedAdapter();
 
-        if (adapter == null)
-        {
-            return;
-        }
+    private void applyAdapters(
+            float animationFrame)
+    {
+        List<AnimationBoneSnapshot> snapshots =
+                new ArrayList<AnimationBoneSnapshot>();
 
         if (
-                this.bones == null
-                        || this.bones.isEmpty()
+                this.bones == null ||
+                        this.bones.isEmpty()
         )
         {
+            BlockbusterPreviewAnimationState.clear();
+            EmoticonsPreviewAnimationState.clear();
+
             return;
         }
-
-        java.util.List<AnimationBoneSnapshot>
-                snapshots =
-                new java.util.ArrayList<AnimationBoneSnapshot>();
 
         for (
                 AnimationBone bone :
@@ -2523,18 +2657,9 @@ public class AnimationEditorScreen extends GuiScreen
                 continue;
             }
 
-            /*
-             * Получаем именно пользовательскую
-             * локальную трансформацию этой кости.
-             *
-             * Не getWorldTransformAt().
-             *
-             * Blockbuster самостоятельно применит
-             * parent hierarchy.
-             */
             AnimationTransform transform =
                     bone.getTransformAt(
-                            this.currentFrame
+                            animationFrame
                     );
 
             if (transform == null)
@@ -2542,8 +2667,7 @@ public class AnimationEditorScreen extends GuiScreen
                 continue;
             }
 
-            String parentName =
-                    null;
+            String parentName = null;
 
             if (bone.getParent() != null)
             {
@@ -2564,11 +2688,18 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
-        adapter.apply(
+        if (this.adapterManager == null)
+        {
+            return;
+        }
+
+        this.adapterManager.applyAll(
                 snapshots,
                 this.currentFrame
         );
     }
+
+
     private void updateSceneViewportPosition()
     {
         if (
@@ -2584,5 +2715,15 @@ public class AnimationEditorScreen extends GuiScreen
                 this.sceneState.getSceneY(),
                 this.sceneState.getSceneZ()
         );
+    }
+
+
+    @Override
+    public void onGuiClosed()
+    {
+        BlockbusterPreviewAnimationState.clear();
+        EmoticonsPreviewAnimationState.clear();
+
+        super.onGuiClosed();
     }
 }

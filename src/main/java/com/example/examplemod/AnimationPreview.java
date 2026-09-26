@@ -1,10 +1,12 @@
 package com.example.examplemod;
 
+import java.nio.FloatBuffer;
 import java.util.List;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 
@@ -15,9 +17,16 @@ public class AnimationPreview
     private int width;
     private int height;
 
+    /*
+     * =========================================================
+     * PREVIEW SCENE POSITION
+     * =========================================================
+     */
+
     private double referenceX;
     private double referenceY;
     private double referenceZ;
+
     private double worldX;
     private double worldY;
     private double worldZ;
@@ -32,6 +41,10 @@ public class AnimationPreview
         this.referenceX = 0.0D;
         this.referenceY = 0.0D;
         this.referenceZ = 0.0D;
+
+        this.worldX = 0.0D;
+        this.worldY = 0.0D;
+        this.worldZ = 0.0D;
     }
 
     public void setBounds(
@@ -54,24 +67,19 @@ public class AnimationPreview
         this.referenceX = x;
         this.referenceY = y;
         this.referenceZ = z;
+
         this.worldX = 0.0D;
         this.worldY = 0.0D;
         this.worldZ = 0.0D;
     }
 
     /**
-     * Настоящий 3D viewport.
+     * =========================================================
+     * TECHNICAL PREVIEW SCENE
+     * =========================================================
      *
-     * На этом этапе здесь находится
-     * техническая сцена:
-     *
-     * - перспективная камера;
-     * - сетка;
-     * - мировые оси;
-     * - центральный куб.
-     *
-     * Позже сюда будет подключён настоящий
-     * Minecraft world + Blockbuster actors.
+     * Preview временно меняет OpenGL-состояние, но перед
+     * завершением полностью возвращает его в исходное состояние.
      */
     public void draw(
             Minecraft mc,
@@ -90,165 +98,97 @@ public class AnimationPreview
             return;
         }
 
-        /*
-         * =========================
-         * GUI SCALE
-         * =========================
-         *
-         * Координаты нашего редактора
-         * находятся в системе GuiScreen.
-         *
-         * OpenGL viewport использует
-         * реальные пиксели дисплея.
-         */
-        int scaleFactor =
-                mc.gameSettings.guiScale;
+        int viewportWidth = mc.displayWidth;
+        int viewportHeight = mc.displayHeight;
+
+        if (viewportWidth <= 0 || viewportHeight <= 0)
+        {
+            return;
+        }
 
         /*
-         * Minecraft internally determines
-         * the actual scale factor.
-         *
-         * Для GuiScreen надёжнее вычислить
-         * его через displayWidth / scaledWidth.
+         * =========================================================
+         * SAVE OPENGL CAPABILITIES
+         * =========================================================
          */
-        net.minecraft.client.gui.ScaledResolution scaledResolution =
-                new net.minecraft.client.gui.ScaledResolution(
-                        mc
-                );
 
-        int scaledWidth =
-                scaledResolution.getScaledWidth();
+        boolean oldTexture =
+                GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
 
-        int scaledHeight =
-                scaledResolution.getScaledHeight();
+        boolean oldLighting =
+                GL11.glIsEnabled(GL11.GL_LIGHTING);
 
-        float scaleX =
-                (float) mc.displayWidth
-                        / (float) scaledWidth;
+        boolean oldCull =
+                GL11.glIsEnabled(GL11.GL_CULL_FACE);
 
-        float scaleY =
-                (float) mc.displayHeight
-                        / (float) scaledHeight;
+        boolean oldBlend =
+                GL11.glIsEnabled(GL11.GL_BLEND);
 
-        /*
-         * Перевод GUI-координат в реальные
-         * координаты OpenGL.
-         */
-        int viewportX =
-                Math.round(
-                        this.x * scaleX
-                );
+        boolean oldAlpha =
+                GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
 
-        int viewportWidth =
-                Math.round(
-                        this.width * scaleX
-                );
+        boolean oldFog =
+                GL11.glIsEnabled(GL11.GL_FOG);
 
-        int viewportHeight =
-                Math.round(
-                        this.height * scaleY
-                );
+        boolean oldDepth =
+                GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
 
-        /*
-         * OpenGL считает Y снизу вверх.
-         */
-        int viewportY =
-                mc.displayHeight
-                        - Math.round(
-                        (this.y + this.height)
-                                * scaleY
-                );
-
-        /*
-         * =========================
-         * SAVE STATE
-         * =========================
-         */
+        boolean oldScissor =
+                GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
 
         int oldMatrixMode =
-                GL11.glGetInteger(
-                        GL11.GL_MATRIX_MODE
-                );
-
-        GL11.glPushAttrib(
-                GL11.GL_ALL_ATTRIB_BITS
-        );
+                GL11.glGetInteger(GL11.GL_MATRIX_MODE);
 
         /*
-         * =========================
-         * VIEWPORT
-         * =========================
+         * =========================================================
+         * SAVE CURRENT COLOR
+         * =========================================================
+         *
+         * LWJGL 2 требует FloatBuffer для glGetFloat().
          */
 
-        GL11.glViewport(
-                viewportX,
-                viewportY,
-                viewportWidth,
-                viewportHeight
+        FloatBuffer oldColorBuffer =
+                BufferUtils.createFloatBuffer(4);
+
+        GL11.glGetFloat(
+                GL11.GL_CURRENT_COLOR,
+                oldColorBuffer
         );
 
-        GL11.glEnable(
-                GL11.GL_SCISSOR_TEST
-        );
+        float oldRed =
+                oldColorBuffer.get(0);
 
-        GL11.glScissor(
-                viewportX,
-                viewportY,
-                viewportWidth,
-                viewportHeight
-        );
+        float oldGreen =
+                oldColorBuffer.get(1);
+
+        float oldBlue =
+                oldColorBuffer.get(2);
+
+        float oldAlphaValue =
+                oldColorBuffer.get(3);
 
         /*
-         * =========================
-         * CLEAR
-         * =========================
+         * =========================================================
+         * SCISSOR
+         * =========================================================
          */
 
-        GL11.glClearColor(
-                0.08F,
-                0.09F,
-                0.11F,
-                1.0F
-        );
-
-        GL11.glClear(
-                GL11.GL_COLOR_BUFFER_BIT
-                        |
-                        GL11.GL_DEPTH_BUFFER_BIT
-        );
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
         /*
-         * =========================
-         * DEPTH
-         * =========================
-         */
-
-        GL11.glEnable(
-                GL11.GL_DEPTH_TEST
-        );
-
-        GL11.glDepthFunc(
-                GL11.GL_LEQUAL
-        );
-
-        /*
-         * =========================
+         * =========================================================
          * PROJECTION
-         * =========================
+         * =========================================================
          */
 
-        GL11.glMatrixMode(
-                GL11.GL_PROJECTION
-        );
+        GlStateManager.matrixMode(GL11.GL_PROJECTION);
+        GlStateManager.pushMatrix();
 
-        GL11.glPushMatrix();
-
-        GL11.glLoadIdentity();
+        GlStateManager.loadIdentity();
 
         float aspect =
-                (float) this.width
-                        /
-                        (float) this.height;
+                (float) viewportWidth /
+                        (float) viewportHeight;
 
         GLU.gluPerspective(
                 60.0F,
@@ -258,161 +198,206 @@ public class AnimationPreview
         );
 
         /*
-         * =========================
+         * =========================================================
          * MODELVIEW
-         * =========================
+         * =========================================================
          */
 
-        GL11.glMatrixMode(
-                GL11.GL_MODELVIEW
-        );
+        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
+        GlStateManager.pushMatrix();
 
-        GL11.glPushMatrix();
-
-        GL11.glLoadIdentity();
+        GlStateManager.loadIdentity();
 
         /*
-         * =========================
+         * =========================================================
          * CAMERA
-         * =========================
+         * =========================================================
          */
 
-        GL11.glRotatef(
+        GlStateManager.rotate(
                 -camera.getPitch(),
                 1.0F,
                 0.0F,
                 0.0F
         );
 
-        GL11.glRotatef(
+        GlStateManager.rotate(
                 -camera.getYaw(),
                 0.0F,
                 1.0F,
                 0.0F
         );
 
-        GL11.glTranslated(
+        GlStateManager.translate(
                 -camera.getTargetX(),
                 -camera.getTargetY(),
                 -camera.getTargetZ()
         );
 
-        GL11.glTranslated(
+        GlStateManager.translate(
                 0.0D,
                 0.0D,
                 -camera.getDistance()
         );
 
         /*
-         * =========================
-         * RENDER
-         * =========================
+         * =========================================================
+         * PREVIEW OPENGL STATE
+         * =========================================================
          */
 
-        GL11.glDisable(
-                GL11.GL_TEXTURE_2D
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableLighting();
+        GlStateManager.disableCull();
+        GlStateManager.disableBlend();
+        GlStateManager.disableAlpha();
+        GlStateManager.disableFog();
+        GlStateManager.disableDepth();
+
+        GlStateManager.color(
+                1.0F,
+                1.0F,
+                1.0F,
+                1.0F
         );
 
-        GL11.glDisable(
-                GL11.GL_LIGHTING
-        );
-
-        GL11.glDisable(
-                GL11.GL_CULL_FACE
-        );
+        /*
+         * =========================================================
+         * GRID
+         * =========================================================
+         */
 
         drawGrid();
 
+        /*
+         * =========================================================
+         * AXES
+         * =========================================================
+         */
+
         drawAxes();
 
-        drawTestCube();
-
         /*
-         * =========================
-         * RESTORE MATRICES
-         * =========================
-         *
-         * Это КРИТИЧЕСКИ важно.
-         *
-         * После popMatrix()
-         * Minecraft получает свои исходные
-         * GUI projection/modelview matrices.
+         * =========================================================
+         * DIAGNOSTIC CUBE
+         * =========================================================
          */
 
-        GL11.glMatrixMode(
-                GL11.GL_MODELVIEW
+        drawDiagnosticCube();
+
+        /*
+         * =========================================================
+         * RESTORE MODELVIEW
+         * =========================================================
+         */
+
+        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
+        GlStateManager.popMatrix();
+
+        /*
+         * =========================================================
+         * RESTORE PROJECTION
+         * =========================================================
+         */
+
+        GlStateManager.matrixMode(GL11.GL_PROJECTION);
+        GlStateManager.popMatrix();
+
+        /*
+         * =========================================================
+         * RESTORE MATRIX MODE
+         * =========================================================
+         */
+
+        GlStateManager.matrixMode(oldMatrixMode);
+
+        /*
+         * =========================================================
+         * RESTORE OPENGL CAPABILITIES
+         * =========================================================
+         */
+
+        restoreCapability(
+                GL11.GL_TEXTURE_2D,
+                oldTexture
         );
 
-        GL11.glPopMatrix();
-
-        GL11.glMatrixMode(
-                GL11.GL_PROJECTION
+        restoreCapability(
+                GL11.GL_LIGHTING,
+                oldLighting
         );
 
-        GL11.glPopMatrix();
-
-        /*
-         * Возвращаем исходный matrix mode.
-         */
-        GL11.glMatrixMode(
-                oldMatrixMode
+        restoreCapability(
+                GL11.GL_CULL_FACE,
+                oldCull
         );
 
-        /*
-         * =========================
-         * RESTORE ATTRIBUTES
-         * =========================
-         */
+        restoreCapability(
+                GL11.GL_BLEND,
+                oldBlend
+        );
 
-        GL11.glPopAttrib();
+        restoreCapability(
+                GL11.GL_ALPHA_TEST,
+                oldAlpha
+        );
 
-        /*
-         * =========================
-         * RESTORE FULL SCREEN VIEWPORT
-         * =========================
-         *
-         * Здесь возвращаем полный физический
-         * viewport Minecraft.
-         */
-        GL11.glViewport(
-                0,
-                0,
-                mc.displayWidth,
-                mc.displayHeight
+        restoreCapability(
+                GL11.GL_FOG,
+                oldFog
+        );
+
+        restoreCapability(
+                GL11.GL_DEPTH_TEST,
+                oldDepth
+        );
+
+        restoreCapability(
+                GL11.GL_SCISSOR_TEST,
+                oldScissor
         );
 
         /*
-         * Scissor должен быть выключен
-         * после восстановления viewport.
+         * =========================================================
+         * RESTORE COLOR
+         * =========================================================
          */
-        GL11.glDisable(
-                GL11.GL_SCISSOR_TEST
-        );
 
-        /*
-         * Minecraft GUI снова получает
-         * обычное 2D-состояние.
-         *
-         * При этом мы НЕ трогаем projection
-         * и modelview через glLoadIdentity().
-         */
-        GlStateManager.enableTexture2D();
-        GlStateManager.disableDepth();
-        GlStateManager.disableLighting();
-
-        GL11.glMatrixMode(
-                oldMatrixMode
+        GlStateManager.color(
+                oldRed,
+                oldGreen,
+                oldBlue,
+                oldAlphaValue
         );
     }
 
     /**
-     * Сетка XZ.
+     * =========================================================
+     * RESTORE CAPABILITY
+     * =========================================================
+     */
+    private void restoreCapability(
+            int capability,
+            boolean enabled)
+    {
+        if (enabled)
+        {
+            GL11.glEnable(capability);
+        }
+        else
+        {
+            GL11.glDisable(capability);
+        }
+    }
+
+    /**
+     * =========================================================
+     * GRID
+     * =========================================================
      */
     private void drawGrid()
     {
-        GL11.glLineWidth(
-                1.0F
-        );
+        GL11.glLineWidth(1.0F);
 
         GL11.glColor3f(
                 0.35F,
@@ -420,15 +405,14 @@ public class AnimationPreview
                 0.35F
         );
 
-        GL11.glBegin(
-                GL11.GL_LINES
-        );
+        GL11.glBegin(GL11.GL_LINES);
 
         for (int i = -20; i <= 20; i++)
         {
             /*
-             * Линии вдоль Z.
+             * X
              */
+
             GL11.glVertex3d(
                     i,
                     0.0D,
@@ -442,8 +426,9 @@ public class AnimationPreview
             );
 
             /*
-             * Линии вдоль X.
+             * Z
              */
+
             GL11.glVertex3d(
                     -20.0D,
                     0.0D,
@@ -467,25 +452,20 @@ public class AnimationPreview
     }
 
     /**
-     * Мировые оси:
-     *
-     * X = красная
-     * Y = зелёная
-     * Z = синяя
+     * =========================================================
+     * AXES
+     * =========================================================
      */
     private void drawAxes()
     {
-        GL11.glLineWidth(
-                3.0F
-        );
+        GL11.glLineWidth(3.0F);
 
-        GL11.glBegin(
-                GL11.GL_LINES
-        );
+        GL11.glBegin(GL11.GL_LINES);
 
         /*
-         * X.
+         * X — RED
          */
+
         GL11.glColor3f(
                 1.0F,
                 0.2F,
@@ -505,8 +485,9 @@ public class AnimationPreview
         );
 
         /*
-         * Y.
+         * Y — GREEN
          */
+
         GL11.glColor3f(
                 0.2F,
                 1.0F,
@@ -526,8 +507,9 @@ public class AnimationPreview
         );
 
         /*
-         * Z.
+         * Z — BLUE
          */
+
         GL11.glColor3f(
                 0.2F,
                 0.4F,
@@ -556,192 +538,117 @@ public class AnimationPreview
     }
 
     /**
-     * Тестовый куб в мировом центре.
+     * =========================================================
+     * DIAGNOSTIC CUBE
+     * =========================================================
      */
-    private void drawTestCube()
+    private void drawDiagnosticCube()
     {
-        float size = 1.0F;
+        GlStateManager.pushMatrix();
 
-        GL11.glColor3f(
-                0.75F,
-                0.75F,
-                0.80F
-        );
+        /*
+         * CAMERA SPACE
+         */
 
-        GL11.glBegin(
-                GL11.GL_QUADS
+        GlStateManager.translate(
+                0.0D,
+                0.0D,
+                -5.0D
         );
 
         /*
-         * Передняя грань.
+         * ABSOLUTELY BRIGHT
          */
-        GL11.glVertex3f(
-                -size,
-                -size,
-                size
-        );
 
-        GL11.glVertex3f(
-                size,
-                -size,
-                size
-        );
+        GlStateManager.disableTexture2D();
+        GlStateManager.disableLighting();
+        GlStateManager.disableBlend();
+        GlStateManager.disableAlpha();
+        GlStateManager.disableCull();
+        GlStateManager.disableFog();
+        GlStateManager.disableDepth();
 
-        GL11.glVertex3f(
-                size,
-                size,
-                size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                size,
-                size
-        );
-
-        /*
-         * Задняя грань.
-         */
-        GL11.glVertex3f(
-                size,
-                -size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                -size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                size,
-                size,
-                -size
-        );
-
-        /*
-         * Левая грань.
-         */
-        GL11.glVertex3f(
-                -size,
-                -size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                -size,
-                size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                size,
-                size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                size,
-                -size
-        );
-
-        /*
-         * Правая грань.
-         */
-        GL11.glVertex3f(
-                size,
-                -size,
-                size
-        );
-
-        GL11.glVertex3f(
-                size,
-                -size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                size,
-                size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                size,
-                size,
-                size
-        );
-
-        /*
-         * Верхняя грань.
-         */
-        GL11.glVertex3f(
-                -size,
-                size,
-                size
-        );
-
-        GL11.glVertex3f(
-                size,
-                size,
-                size
-        );
-
-        GL11.glVertex3f(
-                size,
-                size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                size,
-                -size
-        );
-
-        /*
-         * Нижняя грань.
-         */
-        GL11.glVertex3f(
-                -size,
-                -size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                size,
-                -size,
-                -size
-        );
-
-        GL11.glVertex3f(
-                size,
-                -size,
-                size
-        );
-
-        GL11.glVertex3f(
-                -size,
-                -size,
-                size
-        );
-
-        GL11.glEnd();
-
-        GL11.glColor3f(
+        GlStateManager.color(
+                1.0F,
                 1.0F,
                 1.0F,
                 1.0F
         );
+
+        /*
+         * CUBE
+         */
+
+        float s = 1.0F;
+
+        GL11.glBegin(GL11.GL_QUADS);
+
+        /*
+         * FRONT
+         */
+
+        GL11.glVertex3f(-s, -s, s);
+        GL11.glVertex3f( s, -s, s);
+        GL11.glVertex3f( s,  s, s);
+        GL11.glVertex3f(-s,  s, s);
+
+        /*
+         * BACK
+         */
+
+        GL11.glVertex3f( s, -s, -s);
+        GL11.glVertex3f(-s, -s, -s);
+        GL11.glVertex3f(-s,  s, -s);
+        GL11.glVertex3f( s,  s, -s);
+
+        /*
+         * LEFT
+         */
+
+        GL11.glVertex3f(-s, -s, -s);
+        GL11.glVertex3f(-s, -s,  s);
+        GL11.glVertex3f(-s,  s,  s);
+        GL11.glVertex3f(-s,  s, -s);
+
+        /*
+         * RIGHT
+         */
+
+        GL11.glVertex3f(s, -s,  s);
+        GL11.glVertex3f(s, -s, -s);
+        GL11.glVertex3f(s,  s, -s);
+        GL11.glVertex3f(s,  s,  s);
+
+        /*
+         * TOP
+         */
+
+        GL11.glVertex3f(-s, s,  s);
+        GL11.glVertex3f( s, s,  s);
+        GL11.glVertex3f( s, s, -s);
+        GL11.glVertex3f(-s, s, -s);
+
+        /*
+         * BOTTOM
+         */
+
+        GL11.glVertex3f(-s, -s, -s);
+        GL11.glVertex3f( s, -s, -s);
+        GL11.glVertex3f( s, -s,  s);
+        GL11.glVertex3f(-s, -s,  s);
+
+        GL11.glEnd();
+
+        GlStateManager.color(
+                1.0F,
+                1.0F,
+                1.0F,
+                1.0F
+        );
+
+        GlStateManager.popMatrix();
     }
+
     public void setWorldPosition(
             double x,
             double y,

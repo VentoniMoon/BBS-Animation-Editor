@@ -9,29 +9,22 @@ public class BlockbusterAnimationAdapter
 {
     private final BlockbusterModelAccess modelAccess;
 
+
     public BlockbusterAnimationAdapter(
             BlockbusterModelAccess modelAccess)
     {
         this.modelAccess = modelAccess;
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Blockbuster availability
-     * ---------------------------------------------------------
-     */
 
     @Override
     public boolean supports()
     {
-        return Loader.isModLoaded("blockbuster");
+        return Loader.isModLoaded(
+                "blockbuster"
+        );
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Model
-     * ---------------------------------------------------------
-     */
 
     public Object getModel()
     {
@@ -43,75 +36,38 @@ public class BlockbusterAnimationAdapter
         return this.modelAccess.getModel();
     }
 
+
     public boolean hasModel()
     {
         return this.modelAccess != null
                 && this.modelAccess.isValid();
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Apply animation
-     * ---------------------------------------------------------
-     */
 
     @Override
     public void apply(
             List<AnimationBoneSnapshot> bones,
             int frame)
     {
-        if (
-                !supports()
-                        || this.modelAccess == null
-                        || !this.modelAccess.isValid()
-                        || bones == null
-        )
+        if (!supports())
         {
             return;
         }
 
-        for (
-                AnimationBoneSnapshot bone :
-                bones
-        )
-        {
-            if (bone == null)
-            {
-                continue;
-            }
-
-            String boneName =
-                    bone.getName();
-
-            if (
-                    boneName == null
-                            || boneName.isEmpty()
-            )
-            {
-                continue;
-            }
-
-            Object renderer =
-                    this.modelAccess.findBone(
-                            boneName
-                    );
-
-            if (renderer == null)
-            {
-                continue;
-            }
-
-            /*
-             * Snapshot содержит LOCAL transform.
-             *
-             * Hierarchy родитель -> ребёнок
-             * продолжает обрабатываться самим
-             * Blockbuster через ModelCustomRenderer.
-             */
-            this.modelAccess.applyTransform(
-                    renderer,
-                    bone
-            );
-        }
+        /*
+         * =====================================================
+         * PREVIEW STATE
+         * =====================================================
+         *
+         * Передаём текущую позу Timeline
+         * непосредственно в Preview Renderer.
+         *
+         * Preview Renderer уже сам применяет
+         * эти данные к CustomMorph.
+         */
+        BlockbusterPreviewAnimationState.set(
+                bones,
+                frame
+        );
     }
 }

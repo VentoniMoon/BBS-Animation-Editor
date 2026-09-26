@@ -1,12 +1,19 @@
 package com.example.examplemod;
 
+import java.util.List;
+
+import mchorse.blockbuster.api.ModelPose;
+import mchorse.blockbuster.api.ModelTransform;
 import mchorse.blockbuster.common.entity.EntityActor;
+import mchorse.blockbuster_pack.morphs.CustomMorph;
 import mchorse.metamorph.api.MorphManager;
 import mchorse.metamorph.api.morphs.AbstractMorph;
 
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.nbt.NBTTagCompound;
 
@@ -19,46 +26,34 @@ public class BlockbusterActorPreviewRenderer
 
     private String loadedMorphSignature = "";
 
-    /*
-     * ---------------------------------------------------------
-     * LIMB ANIMATION STATE
-     * ---------------------------------------------------------
-     *
-     * Эти значения нужны для процедурной анимации
-     * движения конечностей Blockbuster ModelCustom.
-     */
-
     private double previousX;
     private double previousY;
     private double previousZ;
 
     private boolean hasPreviousPosition;
 
-    private float limbSwing;
+    private int lastPreviewFrame = -1;
+
+    private int lastEmoticonsUpdateFrame = -1;
 
 
     /*
-     * ---------------------------------------------------------
-     * ACTOR
-     * ---------------------------------------------------------
+     * =========================================================
+     * ACTOR CREATION
+     * =========================================================
      */
 
-    private EntityActor getOrCreateActor(
-            Minecraft mc)
+    private EntityActor getOrCreateActor(Minecraft mc)
     {
-        if (
-                mc == null ||
-                        mc.world == null
-        )
+        if (mc == null ||
+                mc.world == null)
         {
             return null;
         }
 
-        if (
-                this.actor == null ||
-                        this.actor.world != mc.world ||
-                        this.actor.isDead
-        )
+        if (this.actor == null ||
+                this.actor.world != mc.world ||
+                this.actor.isDead)
         {
             this.actor =
                     new EntityActor(
@@ -70,17 +65,14 @@ public class BlockbusterActorPreviewRenderer
 
             this.loadedMorphSignature = "";
 
-            /*
-             * После создания EntityActor
-             * предыдущего положения ещё нет.
-             */
             this.previousX = 0.0D;
             this.previousY = 0.0D;
             this.previousZ = 0.0D;
 
             this.hasPreviousPosition = false;
 
-            this.limbSwing = 0.0F;
+            this.lastPreviewFrame = -1;
+            this.lastEmoticonsUpdateFrame = -1;
         }
 
         return this.actor;
@@ -88,9 +80,9 @@ public class BlockbusterActorPreviewRenderer
 
 
     /*
-     * ---------------------------------------------------------
+     * =========================================================
      * MORPH
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     private void updateMorph(
@@ -98,11 +90,9 @@ public class BlockbusterActorPreviewRenderer
             BlockbusterSceneActorData actorData,
             EntityActor entityActor)
     {
-        if (
-                mc == null ||
-                        actorData == null ||
-                        entityActor == null
-        )
+        if (mc == null ||
+                actorData == null ||
+                entityActor == null)
         {
             return;
         }
@@ -126,11 +116,8 @@ public class BlockbusterActorPreviewRenderer
         String signature =
                 morphNBT.toString();
 
-        if (
-                signature.equals(
-                        this.loadedMorphSignature
-                )
-        )
+        if (signature.equals(
+                this.loadedMorphSignature))
         {
             return;
         }
@@ -144,25 +131,401 @@ public class BlockbusterActorPreviewRenderer
 
             if (morph != null)
             {
+                if (EmoticonsActorPreviewRenderer
+                        .isSupported(morph))
+                {
+                    EmoticonsActorPreviewRenderer
+                            .prepareMorph(
+                                    (AnimatedMorph) morph
+                            );
+                }
+
                 entityActor.morph.setDirect(
                         morph
                 );
 
                 this.loadedMorphSignature =
                         signature;
+
+                this.previousX = 0.0D;
+                this.previousY = 0.0D;
+                this.previousZ = 0.0D;
+
+                this.hasPreviousPosition = false;
+
+                this.lastPreviewFrame = -1;
+
+                this.lastEmoticonsUpdateFrame = -1;
             }
         }
         catch (Exception exception)
         {
+            System.out.println(
+                    "[BBS Animation Editor] Failed to load actor morph"
+            );
+
             exception.printStackTrace();
         }
     }
 
 
     /*
-     * ---------------------------------------------------------
+     * =========================================================
+     * BBS ANIMATION POSE
+     * =========================================================
+     */
+
+    private void applyAnimationPose(
+            EntityActor entityActor)
+    {
+        if (entityActor == null)
+        {
+            return;
+        }
+
+        AbstractMorph currentMorph =
+                entityActor.getMorph();
+
+        if (!(currentMorph instanceof CustomMorph))
+        {
+            return;
+        }
+
+        CustomMorph customMorph =
+                (CustomMorph) currentMorph;
+
+        List<AnimationBoneSnapshot> snapshots =
+                BlockbusterPreviewAnimationState
+                        .getSnapshots();
+
+        if (snapshots == null ||
+                snapshots.isEmpty())
+        {
+            customMorph.customPose = null;
+            return;
+        }
+
+        Minecraft mc =
+                Minecraft.getMinecraft();
+
+        if (mc == null)
+        {
+            return;
+        }
+
+        float partialTicks;
+
+        if (BlockbusterPreviewAnimationState.isPlaying())
+        {
+            partialTicks =
+                    mc.getRenderPartialTicks();
+        }
+        else
+        {
+            partialTicks =
+                    0.0F;
+        }
+
+        ModelPose basePose =
+                customMorph.getPose(
+                        entityActor,
+                        true,
+                        partialTicks
+                );
+
+        if (basePose == null)
+        {
+            return;
+        }
+
+        CustomMorph.ModelProperties animationPose =
+                customMorph.convertProp(
+                        basePose.copy()
+                );
+
+        if (animationPose == null)
+        {
+            return;
+        }
+
+        for (AnimationBoneSnapshot snapshot :
+                snapshots)
+        {
+            if (snapshot == null)
+            {
+                continue;
+            }
+
+            String boneName =
+                    snapshot.getName();
+
+            if (boneName == null ||
+                    boneName.isEmpty())
+            {
+                continue;
+            }
+
+            ModelTransform transform =
+                    animationPose.limbs.get(
+                            boneName
+                    );
+
+            if (transform == null)
+            {
+                continue;
+            }
+
+            transform.translate[0] +=
+                    snapshot.getPositionX();
+
+            transform.translate[1] +=
+                    snapshot.getPositionY();
+
+            transform.translate[2] +=
+                    snapshot.getPositionZ();
+
+            transform.rotate[0] +=
+                    snapshot.getRotationX();
+
+            transform.rotate[1] +=
+                    snapshot.getRotationY();
+
+            transform.rotate[2] +=
+                    snapshot.getRotationZ();
+
+            transform.scale[0] *=
+                    snapshot.getScaleX();
+
+            transform.scale[1] *=
+                    snapshot.getScaleY();
+
+            transform.scale[2] *=
+                    snapshot.getScaleZ();
+        }
+
+        customMorph.customPose =
+                animationPose;
+    }
+
+
+    /*
+     * =========================================================
+     * MOVEMENT
+     * =========================================================
+     */
+
+    private void updateMovementState(
+            EntityActor entityActor,
+            BlockbusterRecordFrame frame,
+            int previewFrame)
+    {
+        if (entityActor == null ||
+                frame == null)
+        {
+            return;
+        }
+
+        /*
+         * =====================================================
+         * SAME FRAME
+         * =====================================================
+         *
+         * При паузе текущий кадр постоянно приходит снова.
+         * Поэтому не изменяем состояние движения повторно.
+         */
+
+        if (this.lastPreviewFrame ==
+                previewFrame)
+        {
+            if (!BlockbusterPreviewAnimationState.isPlaying())
+            {
+                entityActor.prevLimbSwingAmount =
+                        entityActor.limbSwingAmount;
+            }
+
+            return;
+        }
+
+        /*
+         * =====================================================
+         * FIRST FRAME
+         * =====================================================
+         */
+
+        if (!this.hasPreviousPosition)
+        {
+            this.previousX =
+                    frame.getX();
+
+            this.previousY =
+                    frame.getY();
+
+            this.previousZ =
+                    frame.getZ();
+
+            entityActor.prevLimbSwingAmount =
+                    0.0F;
+
+            entityActor.limbSwingAmount =
+                    0.0F;
+
+            entityActor.limbSwing =
+                    0.0F;
+
+            this.hasPreviousPosition =
+                    true;
+
+            this.lastPreviewFrame =
+                    previewFrame;
+
+            return;
+        }
+
+        /*
+         * =====================================================
+         * CALCULATE MOVEMENT
+         * =====================================================
+         */
+
+        double dx =
+                frame.getX() -
+                        this.previousX;
+
+        double dz =
+                frame.getZ() -
+                        this.previousZ;
+
+        float movement =
+                (float) Math.sqrt(
+                        dx * dx +
+                                dz * dz
+                ) * 4.0F;
+
+        if (movement > 1.0F)
+        {
+            movement = 1.0F;
+        }
+
+        /*
+         * =====================================================
+         * LIMB SWING
+         * =====================================================
+         *
+         * В Minecraft 1.12.2 у используемого здесь EntityActor
+         * нет поля prevLimbSwing.
+         *
+         * Поэтому работаем только с доступными:
+         *
+         * limbSwing
+         * limbSwingAmount
+         * prevLimbSwingAmount
+         *
+         * prevLimbSwingAmount сохраняет предыдущее значение
+         * интенсивности движения ног.
+         */
+
+        entityActor.prevLimbSwingAmount =
+                entityActor.limbSwingAmount;
+
+        entityActor.limbSwingAmount +=
+                (
+                        movement -
+                                entityActor.limbSwingAmount
+                ) * 0.4F;
+
+        entityActor.limbSwing +=
+                entityActor.limbSwingAmount;
+
+        /*
+         * =====================================================
+         * SAVE POSITION
+         * =====================================================
+         */
+
+        this.previousX =
+                frame.getX();
+
+        this.previousY =
+                frame.getY();
+
+        this.previousZ =
+                frame.getZ();
+
+        this.lastPreviewFrame =
+                previewFrame;
+    }
+
+
+    /*
+     * =========================================================
+     * EMOTICONS
+     * =========================================================
+     */
+
+    private void updateEmoticonsAnimation(
+            EntityActor entityActor,
+            int previewFrame)
+    {
+        if (entityActor == null)
+        {
+            return;
+        }
+
+        AbstractMorph currentMorph =
+                entityActor.getMorph();
+
+        if (!(currentMorph instanceof AnimatedMorph))
+        {
+            return;
+        }
+
+        if (this.lastEmoticonsUpdateFrame ==
+                previewFrame)
+        {
+            return;
+        }
+
+        AnimatedMorph animatedMorph =
+                (AnimatedMorph) currentMorph;
+
+        EmoticonsActorPreviewRenderer
+                .updateMorph(
+                        animatedMorph,
+                        entityActor
+                );
+
+        this.lastEmoticonsUpdateFrame =
+                previewFrame;
+    }
+
+
+    /*
+     * =========================================================
+     * ENTITY TICK STATE
+     * =========================================================
+     */
+
+    private void updateEntityTickState(
+            EntityActor entityActor,
+            int previewFrame)
+    {
+        if (entityActor == null)
+        {
+            return;
+        }
+
+        entityActor.ticksExisted =
+                Math.max(
+                        0,
+                        previewFrame
+                );
+    }
+
+
+    /*
+     * =========================================================
      * DRAW ACTOR
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     public void drawActor(
@@ -175,15 +538,13 @@ public class BlockbusterActorPreviewRenderer
             int viewportWidth,
             int viewportHeight)
     {
-        if (
-                mc == null ||
-                        mc.world == null ||
-                        actorData == null ||
-                        frame == null ||
-                        camera == null ||
-                        viewportWidth <= 0 ||
-                        viewportHeight <= 0
-        )
+        if (mc == null ||
+                mc.world == null ||
+                actorData == null ||
+                frame == null ||
+                camera == null ||
+                viewportWidth <= 0 ||
+                viewportHeight <= 0)
         {
             return;
         }
@@ -196,12 +557,6 @@ public class BlockbusterActorPreviewRenderer
             return;
         }
 
-        /*
-         * -----------------------------------------------------
-         * MORPH
-         * -----------------------------------------------------
-         */
-
         updateMorph(
                 mc,
                 actorData,
@@ -211,33 +566,87 @@ public class BlockbusterActorPreviewRenderer
         BlockbusterSceneActor sceneActor =
                 actorData.getActor();
 
-        if (
-                sceneActor == null ||
-                        !sceneActor.isEnabled() ||
-                        sceneActor.isInvisible()
-        )
+        if (sceneActor == null)
         {
-            /*
-             * Даже если актёр невидим,
-             * сбрасываем состояние движения,
-             * чтобы при повторном появлении
-             * не было скачка limbSwing.
-             */
+            return;
+        }
+
+        if (!sceneActor.isEnabled() ||
+                sceneActor.isInvisible())
+        {
             this.hasPreviousPosition = false;
-            this.limbSwing = 0.0F;
+            this.lastPreviewFrame = -1;
+            this.lastEmoticonsUpdateFrame = -1;
+
+            AbstractMorph morph =
+                    entityActor.getMorph();
+
+            if (morph instanceof CustomMorph)
+            {
+                ((CustomMorph) morph).customPose = null;
+            }
+
+            EmoticonsPreviewAnimationState.clear();
 
             return;
         }
 
+        entityActor.isDead = false;
+        entityActor.noClip = true;
+
+        boolean playing =
+                BlockbusterPreviewAnimationState.isPlaying();
 
         /*
          * =====================================================
-         * ACTOR POSITION
+         * PARTIAL TICKS
+         * =====================================================
+         *
+         * При воспроизведении используем Minecraft render
+         * partial ticks.
+         *
+         * При паузе строго 0, чтобы актёр не продолжал
+         * визуально интерполироваться между состояниями.
+         */
+
+        float actorPartialTicks;
+
+        if (playing)
+        {
+            actorPartialTicks =
+                    mc.getRenderPartialTicks();
+        }
+        else
+        {
+            actorPartialTicks =
+                    0.0F;
+        }
+
+        int previewFrame =
+                BlockbusterPreviewAnimationState
+                        .getFrame();
+
+        if (previewFrame < 0)
+        {
+            previewFrame = 0;
+        }
+
+        /*
+         * =====================================================
+         * ENTITY TICK
          * =====================================================
          */
 
-        entityActor.isDead = false;
-        entityActor.noClip = true;
+        updateEntityTickState(
+                entityActor,
+                previewFrame
+        );
+
+        /*
+         * =====================================================
+         * POSITION
+         * =====================================================
+         */
 
         entityActor.posX =
                 frame.getX();
@@ -248,31 +657,39 @@ public class BlockbusterActorPreviewRenderer
         entityActor.posZ =
                 frame.getZ();
 
-        /*
-         * -----------------------------------------------------
-         * PREVIOUS POSITION
-         * -----------------------------------------------------
-         *
-         * Здесь намеренно сохраняем предыдущее положение
-         * EntityActor отдельно от текущего.
-         */
-
-        if (this.hasPreviousPosition)
+        if (playing)
         {
-            entityActor.prevPosX =
-                    this.previousX;
+            if (this.hasPreviousPosition)
+            {
+                entityActor.prevPosX =
+                        this.previousX;
 
-            entityActor.prevPosY =
-                    this.previousY;
+                entityActor.prevPosY =
+                        this.previousY;
 
-            entityActor.prevPosZ =
-                    this.previousZ;
+                entityActor.prevPosZ =
+                        this.previousZ;
+            }
+            else
+            {
+                entityActor.prevPosX =
+                        entityActor.posX;
+
+                entityActor.prevPosY =
+                        entityActor.posY;
+
+                entityActor.prevPosZ =
+                        entityActor.posZ;
+            }
         }
         else
         {
             /*
-             * Первый отображаемый кадр.
+             * На паузе prevPos и pos должны быть одинаковыми.
+             * Иначе Minecraft может продолжать интерполяцию
+             * положения даже при остановленном Timeline.
              */
+
             entityActor.prevPosX =
                     entityActor.posX;
 
@@ -283,178 +700,137 @@ public class BlockbusterActorPreviewRenderer
                     entityActor.posZ;
         }
 
-
         /*
          * =====================================================
-         * LIMB SWING
+         * MOVEMENT
          * =====================================================
-         *
-         * Blockbuster ModelCustom использует:
-         *
-         * limbSwing
-         * limbSwingAmount
-         *
-         * для процедурного движения рук и ног.
-         *
-         * Record не содержит готовых углов ног/рук,
-         * поэтому восстанавливаем фазу шага
-         * из фактического движения Actor между кадрами.
          */
 
-        if (this.hasPreviousPosition)
-        {
-            double dx =
-                    frame.getX() -
-                            this.previousX;
-
-            double dy =
-                    frame.getY() -
-                            this.previousY;
-
-            double dz =
-                    frame.getZ() -
-                            this.previousZ;
-
-            /*
-             * Используем только горизонтальное
-             * перемещение.
-             *
-             * Прыжок / падение не должны
-             * превращаться в шаг.
-             */
-            double horizontalDistance =
-                    Math.sqrt(
-                            dx * dx +
-                                    dz * dz
-                    );
-
-            /*
-             * Сила движения.
-             *
-             * Коэффициент подобран так,
-             * чтобы нормальная скорость записи
-             * давала заметную анимацию ног,
-             * но не превращала персонажа
-             * в "ветряную мельницу".
-             */
-            float swingAmount =
-                    (float)
-                            Math.min(
-                                    1.0D,
-                                    horizontalDistance * 4.0D
-                            );
-
-            /*
-             * Наращиваем фазу движения.
-             */
-            this.limbSwing +=
-                    (float)
-                            horizontalDistance * 1.5F;
-
-            /*
-             * Не даём float бесконечно расти
-             * при длинном воспроизведении.
-             */
-            if (
-                    this.limbSwing >
-                            100000.0F
-            )
-            {
-                this.limbSwing -=
-                        100000.0F;
-            }
-
-            if (
-                    this.limbSwing <
-                            -100000.0F
-            )
-            {
-                this.limbSwing +=
-                        100000.0F;
-            }
-
-            entityActor.limbSwing =
-                    this.limbSwing;
-
-            entityActor.limbSwingAmount =
-                    swingAmount;
-        }
-        else
-        {
-            /*
-             * Первый кадр:
-             * персонаж стоит спокойно.
-             */
-            entityActor.limbSwing =
-                    this.limbSwing;
-
-            entityActor.limbSwingAmount =
-                    0.0F;
-
-            this.hasPreviousPosition =
-                    true;
-        }
+        updateMovementState(
+                entityActor,
+                frame,
+                previewFrame
+        );
 
         /*
-         * Запоминаем текущую позицию
-         * для следующего кадра.
+         * При паузе полностью фиксируем интенсивность
+         * движения ног.
          */
-        this.previousX =
-                frame.getX();
 
-        this.previousY =
-                frame.getY();
-
-        this.previousZ =
-                frame.getZ();
-
+        if (!playing)
+        {
+            entityActor.prevLimbSwingAmount =
+                    entityActor.limbSwingAmount;
+        }
 
         /*
          * =====================================================
          * ROTATION
          * =====================================================
+         *
+         * Сохраняем предыдущее состояние поворота перед
+         * установкой нового кадра.
+         *
+         * Это позволяет Minecraft корректно интерполировать
+         * вращение во время воспроизведения.
          */
 
-        entityActor.rotationYaw =
+        float newYaw =
                 frame.getYaw();
 
-        entityActor.rotationPitch =
+        float newPitch =
                 frame.getPitch();
 
-        entityActor.prevRotationYaw =
-                entityActor.rotationYaw;
-
-        entityActor.prevRotationPitch =
-                entityActor.rotationPitch;
-
-        entityActor.rotationYawHead =
+        float newYawHead =
                 frame.getYawHead();
 
-        entityActor.prevRotationYawHead =
-                entityActor.rotationYawHead;
-
-
-        /*
-         * Body yaw.
-         */
+        float newBodyYaw;
 
         if (frame.hasBodyYaw())
         {
-            entityActor.renderYawOffset =
-                    frame.getBodyYaw();
-
-            entityActor.prevRenderYawOffset =
+            newBodyYaw =
                     frame.getBodyYaw();
         }
         else
         {
-            entityActor.renderYawOffset =
-                    frame.getYaw();
-
-            entityActor.prevRenderYawOffset =
-                    frame.getYaw();
+            newBodyYaw =
+                    newYaw;
         }
 
+
+        /*
+         * =====================================================
+         * PAUSED
+         * =====================================================
+         *
+         * На паузе никакой интерполяции быть не должно.
+         */
+
+        if (!playing)
+        {
+            entityActor.rotationYaw =
+                    newYaw;
+
+            entityActor.prevRotationYaw =
+                    newYaw;
+
+            entityActor.rotationPitch =
+                    newPitch;
+
+            entityActor.prevRotationPitch =
+                    newPitch;
+
+            entityActor.rotationYawHead =
+                    newYawHead;
+
+            entityActor.prevRotationYawHead =
+                    newYawHead;
+
+            entityActor.renderYawOffset =
+                    newBodyYaw;
+
+            entityActor.prevRenderYawOffset =
+                    newBodyYaw;
+        }
+        else
+        {
+            /*
+             * =================================================
+             * PLAYING
+             * =================================================
+             *
+             * Сначала сохраняем старое значение.
+             */
+
+            entityActor.prevRotationYaw =
+                    entityActor.rotationYaw;
+
+            entityActor.prevRotationPitch =
+                    entityActor.rotationPitch;
+
+            entityActor.prevRotationYawHead =
+                    entityActor.rotationYawHead;
+
+            entityActor.prevRenderYawOffset =
+                    entityActor.renderYawOffset;
+
+
+            /*
+             * Затем устанавливаем состояние нового кадра.
+             */
+
+            entityActor.rotationYaw =
+                    newYaw;
+
+            entityActor.rotationPitch =
+                    newPitch;
+
+            entityActor.rotationYawHead =
+                    newYawHead;
+
+            entityActor.renderYawOffset =
+                    newBodyYaw;
+        }
 
         /*
          * =====================================================
@@ -476,67 +852,94 @@ public class BlockbusterActorPreviewRenderer
         entityActor.fallDistance =
                 frame.getFallDistance();
 
-
         /*
          * =====================================================
-         * GUI → DISPLAY COORDINATES
+         * SWING
          * =====================================================
          */
 
-        ScaledResolution resolution =
-                new ScaledResolution(mc);
+        entityActor.prevSwingProgress =
+                entityActor.swingProgress;
 
-        int scaledWidth =
-                resolution.getScaledWidth();
-
-        int scaledHeight =
-                resolution.getScaledHeight();
-
-        float scaleX =
-                (float) mc.displayWidth /
-                        (float) scaledWidth;
-
-        float scaleY =
-                (float) mc.displayHeight /
-                        (float) scaledHeight;
-
-        int realViewportX =
-                Math.round(
-                        viewportX * scaleX
-                );
-
-        int realViewportY =
-                mc.displayHeight
-                        - Math.round(
-                        (viewportY + viewportHeight)
-                                * scaleY
-                );
-
-        int realViewportWidth =
-                Math.round(
-                        viewportWidth * scaleX
-                );
-
-        int realViewportHeight =
-                Math.round(
-                        viewportHeight * scaleY
-                );
-
+        entityActor.swingProgress =
+                0.0F;
 
         /*
          * =====================================================
-         * SAVE OPENGL
+         * CUSTOM ANIMATION POSE
          * =====================================================
          */
+
+        applyAnimationPose(
+                entityActor
+        );
+
+        /*
+         * =====================================================
+         * EMOTICONS ANIMATION
+         * =====================================================
+         */
+
+        updateEmoticonsAnimation(
+                entityActor,
+                previewFrame
+        );
+
+        /*
+         * =====================================================
+         * RENDER MANAGER
+         * =====================================================
+         */
+
+        RenderManager renderManager =
+                mc.getRenderManager();
+
+        if (renderManager == null)
+        {
+            return;
+        }
+
+        double oldViewerPosX =
+                renderManager.viewerPosX;
+
+        double oldViewerPosY =
+                renderManager.viewerPosY;
+
+        double oldViewerPosZ =
+                renderManager.viewerPosZ;
+
+        int framebufferWidth =
+                mc.displayWidth;
+
+        int framebufferHeight =
+                mc.displayHeight;
+
+        if (framebufferWidth <= 0 ||
+                framebufferHeight <= 0)
+        {
+            return;
+        }
 
         int oldMatrixMode =
                 GL11.glGetInteger(
                         GL11.GL_MATRIX_MODE
                 );
 
+        /*
+         * =====================================================
+         * SAVE OPENGL STATE
+         * =====================================================
+         */
+
         GL11.glPushAttrib(
                 GL11.GL_ALL_ATTRIB_BITS
         );
+
+        /*
+         * =====================================================
+         * SAVE MATRICES
+         * =====================================================
+         */
 
         GL11.glMatrixMode(
                 GL11.GL_PROJECTION
@@ -550,31 +953,20 @@ public class BlockbusterActorPreviewRenderer
 
         GL11.glPushMatrix();
 
-
         /*
          * =====================================================
-         * VIEWPORT + SCISSOR
+         * RENDER MANAGER CAMERA
          * =====================================================
          */
 
-        GL11.glViewport(
-                realViewportX,
-                realViewportY,
-                realViewportWidth,
-                realViewportHeight
-        );
+        renderManager.viewerPosX =
+                0.0D;
 
-        GL11.glEnable(
-                GL11.GL_SCISSOR_TEST
-        );
+        renderManager.viewerPosY =
+                0.0D;
 
-        GL11.glScissor(
-                realViewportX,
-                realViewportY,
-                realViewportWidth,
-                realViewportHeight
-        );
-
+        renderManager.viewerPosZ =
+                0.0D;
 
         /*
          * =====================================================
@@ -589,8 +981,8 @@ public class BlockbusterActorPreviewRenderer
         GL11.glLoadIdentity();
 
         float aspect =
-                (float) viewportWidth /
-                        (float) viewportHeight;
+                (float) framebufferWidth /
+                        (float) framebufferHeight;
 
         GLU.gluPerspective(
                 60.0F,
@@ -598,7 +990,6 @@ public class BlockbusterActorPreviewRenderer
                 0.05F,
                 500.0F
         );
-
 
         /*
          * =====================================================
@@ -611,12 +1002,6 @@ public class BlockbusterActorPreviewRenderer
         );
 
         GL11.glLoadIdentity();
-
-
-        /*
-         * Та же камера,
-         * что используется Preview.
-         */
 
         GL11.glRotatef(
                 -camera.getPitch(),
@@ -632,49 +1017,40 @@ public class BlockbusterActorPreviewRenderer
                 0.0F
         );
 
-        GL11.glTranslated(
-                -camera.getTargetX(),
-                -camera.getTargetY(),
-                -camera.getTargetZ()
-        );
+        double cameraX =
+                camera.getCameraX();
+
+        double cameraY =
+                camera.getCameraY();
+
+        double cameraZ =
+                camera.getCameraZ();
 
         GL11.glTranslated(
-                0.0D,
-                0.0D,
-                -camera.getDistance()
+                -cameraX,
+                -cameraY,
+                -cameraZ
         );
-
 
         /*
          * =====================================================
-         * RENDER POSITION
-         * =====================================================
-         */
-
-        RenderManager renderManager =
-                mc.getRenderManager();
-
-        renderManager.setRenderPosition(
-                camera.getCameraX(),
-                camera.getCameraY(),
-                camera.getCameraZ()
-        );
-
-
-        /*
-         * =====================================================
-         * RENDER STATE
+         * ACTOR RENDER STATE
          * =====================================================
          */
 
         GlStateManager.enableDepth();
+
+        GlStateManager.depthFunc(
+                GL11.GL_LEQUAL
+        );
+
         GlStateManager.depthMask(true);
 
         GlStateManager.enableAlpha();
-        GlStateManager.enableBlend();
-        GlStateManager.enableTexture2D();
 
-        GlStateManager.disableLighting();
+        GlStateManager.enableBlend();
+
+        GlStateManager.enableTexture2D();
 
         GlStateManager.color(
                 1.0F,
@@ -683,10 +1059,13 @@ public class BlockbusterActorPreviewRenderer
                 1.0F
         );
 
+        GlStateManager.enableLighting();
+
+        RenderHelper.enableStandardItemLighting();
 
         /*
          * =====================================================
-         * RENDER ACTOR
+         * ACTOR RENDER
          * =====================================================
          */
 
@@ -696,14 +1075,21 @@ public class BlockbusterActorPreviewRenderer
                 entityActor.posY,
                 entityActor.posZ,
                 entityActor.rotationYaw,
-                0.0F,
+                actorPartialTicks,
                 true
         );
 
+        /*
+         * =====================================================
+         * LIGHTING
+         * =====================================================
+         */
+
+        RenderHelper.disableStandardItemLighting();
 
         /*
          * =====================================================
-         * RESTORE
+         * RESTORE MATRICES
          * =====================================================
          */
 
@@ -719,41 +1105,48 @@ public class BlockbusterActorPreviewRenderer
 
         GL11.glPopMatrix();
 
-        GL11.glMatrixMode(
-                oldMatrixMode
-        );
-
-        GL11.glDisable(
-                GL11.GL_SCISSOR_TEST
-        );
-
-        GL11.glPopAttrib();
-
-
         /*
          * =====================================================
-         * GUI SAFETY
+         * RESTORE RENDER MANAGER
          * =====================================================
          */
 
-        GlStateManager.enableTexture2D();
-        GlStateManager.disableDepth();
-        GlStateManager.enableAlpha();
-        GlStateManager.enableBlend();
+        renderManager.viewerPosX =
+                oldViewerPosX;
 
-        GL11.glViewport(
-                0,
-                0,
-                mc.displayWidth,
-                mc.displayHeight
+        renderManager.viewerPosY =
+                oldViewerPosY;
+
+        renderManager.viewerPosZ =
+                oldViewerPosZ;
+
+        /*
+         * =====================================================
+         * RESTORE OPENGL STATE
+         * =====================================================
+         *
+         * После glPopAttrib() намеренно не вызываем
+         * enable/disable GL-состояний.
+         */
+
+        GL11.glPopAttrib();
+
+        /*
+         * =====================================================
+         * RESTORE MATRIX MODE
+         * =====================================================
+         */
+
+        GL11.glMatrixMode(
+                oldMatrixMode
         );
     }
 
 
     /*
-     * ---------------------------------------------------------
-     * ACCESS
-     * ---------------------------------------------------------
+     * =========================================================
+     * GET ACTOR
+     * =========================================================
      */
 
     public EntityActor getActor()
@@ -763,9 +1156,9 @@ public class BlockbusterActorPreviewRenderer
 
 
     /*
-     * ---------------------------------------------------------
+     * =========================================================
      * RESET
-     * ---------------------------------------------------------
+     * =========================================================
      */
 
     public void reset()
@@ -785,6 +1178,10 @@ public class BlockbusterActorPreviewRenderer
 
         this.hasPreviousPosition = false;
 
-        this.limbSwing = 0.0F;
+        this.lastPreviewFrame = -1;
+
+        this.lastEmoticonsUpdateFrame = -1;
+
+        EmoticonsPreviewAnimationState.clear();
     }
 }

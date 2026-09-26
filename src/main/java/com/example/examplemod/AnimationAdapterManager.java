@@ -32,6 +32,13 @@ public class AnimationAdapterManager
         return this.adapters;
     }
 
+    /*
+     * Старый метод оставляем.
+     *
+     * Он всё ещё может пригодиться позже,
+     * когда понадобится получить конкретный
+     * подходящий адаптер.
+     */
     public AnimationAdapter findSupportedAdapter()
     {
         for (
@@ -39,12 +46,48 @@ public class AnimationAdapterManager
                 this.adapters
         )
         {
-            if (adapter.supports())
+            if (adapter != null &&
+                    adapter.supports())
             {
                 return adapter;
             }
         }
 
         return null;
+    }
+
+    /*
+     * Новый основной метод.
+     *
+     * Один и тот же набор snapshots
+     * передаётся ВСЕМ подходящим адаптерам.
+     *
+     * Это важно, потому что в редакторе одновременно
+     * могут быть подключены Blockbuster и Emoticons.
+     */
+    public void applyAll(
+            List<AnimationBoneSnapshot> bones,
+            int frame)
+    {
+        for (
+                AnimationAdapter adapter :
+                this.adapters
+        )
+        {
+            if (adapter == null)
+            {
+                continue;
+            }
+
+            if (!adapter.supports())
+            {
+                continue;
+            }
+
+            adapter.apply(
+                    bones,
+                    frame
+            );
+        }
     }
 }

@@ -19,14 +19,9 @@ public class EditorSceneViewport
     private final MinecraftWorldPreview minecraftWorldPreview;
     private final EditorCamera camera;
     private final BlockbusterActorPreviewRenderer actorPreviewRenderer;
+    private final PreviewRenderBackend renderBackend;
+    private final PreviewWeatherRenderer weatherRenderer;
 
-    /*
-     * ПКМ используется для вращения камеры.
-     *
-     * ЛКМ специально НЕ используется здесь.
-     * Позже он понадобится для выбора актёров
-     * и костей мышью.
-     */
     private boolean rotatingCamera;
 
     private int lastMouseX;
@@ -35,6 +30,10 @@ public class EditorSceneViewport
     private double sceneX;
     private double sceneY;
     private double sceneZ;
+
+    private boolean worldAfterActorRendered;
+    private boolean weatherRendered;
+
 
     public EditorSceneViewport()
     {
@@ -47,11 +46,23 @@ public class EditorSceneViewport
         this.sceneY = 0.0D;
         this.sceneZ = 0.0D;
 
+        this.worldAfterActorRendered = false;
+        this.weatherRendered = false;
+
+        this.renderBackend =
+                new PreviewRenderBackend(
+                        Minecraft.getMinecraft()
+                );
+
+        this.renderBackend.printDiagnostics();
+
         this.animationPreview =
                 new AnimationPreview();
 
         this.minecraftWorldPreview =
                 new MinecraftWorldPreview();
+
+        this.minecraftWorldPreview.clearScene();
 
         this.minecraftWorldPreview.setWorldPosition(
                 this.sceneX,
@@ -64,7 +75,13 @@ public class EditorSceneViewport
 
         this.camera =
                 new EditorCamera();
+
+        this.weatherRenderer =
+                new PreviewWeatherRenderer(
+                        Minecraft.getMinecraft()
+                );
     }
+
 
     public void setBounds(
             int x,
@@ -85,6 +102,7 @@ public class EditorSceneViewport
         );
     }
 
+
     public void draw(
             Minecraft mc,
             ActorPose actorPose,
@@ -96,24 +114,40 @@ public class EditorSceneViewport
             return;
         }
 
-        /*
-         * ==================================================
-         * 1. СТАРЫЙ EDITOR PREVIEW
-         * ==================================================
-         */
+        if (this.width <= 0 ||
+                this.height <= 0)
+        {
+            return;
+        }
 
-        this.animationPreview.draw(
-                mc,
-                actorPose,
-                bones,
-                currentFrame,
-                this.camera
+        /*
+         * Очень важно:
+         *
+         * PreviewShaderBridge должен знать реальную
+         * область Preview ДО создания render pass.
+         */
+        this.renderBackend.setPreviewBounds(
+                this.x,
+                this.y,
+                this.width,
+                this.height
         );
 
         /*
-         * ==================================================
-         * 2. REAL MINECRAFT WORLD
-         * ==================================================
+         * =========================================================
+         * BEGIN PREVIEW
+         * =========================================================
+         */
+
+        this.renderBackend.beginPreviewRender();
+
+        this.worldAfterActorRendered = false;
+        this.weatherRendered = false;
+
+        /*
+         * =========================================================
+         * WORLD FIRST PASS
+         * =========================================================
          */
 
         this.minecraftWorldPreview.draw(
@@ -124,13 +158,16 @@ public class EditorSceneViewport
                 this.width,
                 this.height
         );
+
+        /*
+         * =========================================================
+         * CLOUDS
+         * =========================================================
+         */
+
+        this.minecraftWorldPreview.renderClouds();
     }
 
-    /*
-     * =========================================================
-     * CAMERA API
-     * =========================================================
-     */
 
     public void rotateCamera(
             float deltaYaw,
@@ -142,6 +179,7 @@ public class EditorSceneViewport
         );
     }
 
+
     public void zoomCamera(
             double amount)
     {
@@ -150,10 +188,12 @@ public class EditorSceneViewport
         );
     }
 
+
     public void resetCamera()
     {
         this.camera.reset();
     }
+
 
     public void focusCamera(
             double x,
@@ -167,84 +207,94 @@ public class EditorSceneViewport
         );
     }
 
+
     public EditorCamera getCamera()
     {
         return this.camera;
     }
 
-    /*
-     * =========================================================
-     * BOUNDS
-     * =========================================================
-     */
+
+    public PreviewRenderBackend getRenderBackend()
+    {
+        return this.renderBackend;
+    }
+
 
     public int getX()
     {
         return this.x;
     }
 
+
     public int getY()
     {
         return this.y;
     }
+
 
     public int getWidth()
     {
         return this.width;
     }
 
+
     public int getHeight()
     {
         return this.height;
     }
 
-    /*
-     * =========================================================
-     * CAMERA POSITION
-     * =========================================================
-     */
 
     public double getCameraX()
     {
         return this.camera.getCameraX();
     }
 
+
     public double getCameraY()
     {
         return this.camera.getCameraY();
     }
+
 
     public double getCameraZ()
     {
         return this.camera.getCameraZ();
     }
 
-    /*
-     * =========================================================
-     * PREVIEWS
-     * =========================================================
-     */
 
     public AnimationPreview getAnimationPreview()
     {
         return this.animationPreview;
     }
 
+
     public MinecraftWorldPreview getMinecraftWorldPreview()
     {
         return this.minecraftWorldPreview;
     }
+
 
     public void drawActor(
             Minecraft mc,
             BlockbusterSceneActorData actorData,
             BlockbusterRecordFrame frame)
     {
-        if (
-                this.actorPreviewRenderer == null ||
-                        actorData == null ||
-                        frame == null
-        )
+        if (mc == null)
+        {
+            return;
+        }
+
+        if (this.actorPreviewRenderer == null)
+        {
+            return;
+        }
+
+        if (actorData == null)
+        {
+            return;
+        }
+
+        if (frame == null)
         {
             return;
         }
@@ -259,13 +309,83 @@ public class EditorSceneViewport
                 this.width,
                 this.height
         );
+
+        System.out.println(
+                "[BBS PREVIEW] ACTOR RENDER FINISHED"
+        );
+
+        this.renderWorldAfterActor();
     }
 
-    /*
-     * =========================================================
-     * MOUSE / VIEWPORT
-     * =========================================================
-     */
+
+    private void renderWorldAfterActor()
+    {
+        if (this.worldAfterActorRendered)
+        {
+            return;
+        }
+
+        this.minecraftWorldPreview.drawAfterActor();
+
+        this.worldAfterActorRendered = true;
+    }
+
+
+    private void renderWeather(
+            Minecraft mc)
+    {
+        if (this.weatherRendered)
+        {
+            return;
+        }
+
+        if (mc == null)
+        {
+            return;
+        }
+
+        this.weatherRenderer.render(
+                this.camera,
+                mc.getRenderPartialTicks()
+        );
+
+        this.weatherRendered = true;
+    }
+
+
+    private void endWorldRender()
+    {
+        this.minecraftWorldPreview.endRender();
+    }
+
+
+    public void finishPreviewRender()
+    {
+        Minecraft mc =
+                Minecraft.getMinecraft();
+
+        this.renderWorldAfterActor();
+
+        this.renderWeather(
+                mc
+        );
+
+        this.endWorldRender();
+
+        this.renderBackend.endPreviewRender();
+    }
+
+
+    public void renderPreviewToScreen()
+    {
+        this.renderBackend.renderPreviewToScreen(
+                this.x,
+                this.y,
+                this.width,
+                this.height
+        );
+    }
+
 
     public boolean isInside(
             int mouseX,
@@ -277,15 +397,6 @@ public class EditorSceneViewport
                 && mouseY < this.y + this.height;
     }
 
-    /*
-     * =========================================================
-     * MOUSE PRESS
-     * =========================================================
-     *
-     * ПКМ = вращение камеры.
-     *
-     * ЛКМ здесь специально не обрабатывается.
-     */
 
     public boolean mousePressed(
             int mouseX,
@@ -299,9 +410,6 @@ public class EditorSceneViewport
             return false;
         }
 
-        /*
-         * ПКМ.
-         */
         if (button == 1)
         {
             this.rotatingCamera = true;
@@ -312,18 +420,9 @@ public class EditorSceneViewport
             return true;
         }
 
-        /*
-         * ЛКМ оставляем свободным
-         * для будущего выбора объектов.
-         */
         return false;
     }
 
-    /*
-     * =========================================================
-     * MOUSE DRAG
-     * =========================================================
-     */
 
     public boolean mouseDragged(
             int mouseX,
@@ -345,10 +444,8 @@ public class EditorSceneViewport
         this.lastMouseX = mouseX;
         this.lastMouseY = mouseY;
 
-        /*
-         * Чувствительность вращения.
-         */
-        float sensitivity = 0.5F;
+        float sensitivity =
+                0.5F;
 
         this.camera.rotate(
                 deltaX * sensitivity,
@@ -358,11 +455,6 @@ public class EditorSceneViewport
         return true;
     }
 
-    /*
-     * =========================================================
-     * MOUSE RELEASE
-     * =========================================================
-     */
 
     public boolean mouseReleased(
             int mouseX,
@@ -380,11 +472,6 @@ public class EditorSceneViewport
         return false;
     }
 
-    /*
-     * =========================================================
-     * SCROLL
-     * =========================================================
-     */
 
     public boolean mouseScrolled(
             int mouseX,
@@ -411,20 +498,9 @@ public class EditorSceneViewport
             );
         }
 
-        return true;
+        return false;
     }
 
-    /*
-     * =========================================================
-     * WASD CAMERA MOVEMENT
-     * =========================================================
-     *
-     * Метод вызывается из AnimationEditorScreen.updateScreen().
-     *
-     * Важно:
-     * Mouse.getX()/getY() здесь переводятся из
-     * физических координат окна в координаты GUI Minecraft.
-     */
 
     public void updateCameraMovement(
             Minecraft mc)
@@ -434,10 +510,6 @@ public class EditorSceneViewport
             return;
         }
 
-        /*
-         * Если окно Preview не имеет размеров,
-         * ничего делать не нужно.
-         */
         if (this.width <= 0 ||
                 this.height <= 0)
         {
@@ -453,13 +525,6 @@ public class EditorSceneViewport
         int scaledHeight =
                 resolution.getScaledHeight();
 
-        /*
-         * Mouse.getX() имеет начало координат
-         * снизу слева.
-         *
-         * GUI Minecraft:
-         * начало координат сверху слева.
-         */
         int mouseX =
                 Mouse.getX()
                         * scaledWidth
@@ -472,9 +537,6 @@ public class EditorSceneViewport
                                 / mc.displayHeight
                         - 1;
 
-        /*
-         * WASD работает только внутри Preview.
-         */
         if (!this.isInside(
                 mouseX,
                 mouseY))
@@ -482,9 +544,6 @@ public class EditorSceneViewport
             return;
         }
 
-        /*
-         * Направление движения.
-         */
         boolean forward =
                 Keyboard.isKeyDown(
                         Keyboard.KEY_W
@@ -506,22 +565,24 @@ public class EditorSceneViewport
                 );
 
         boolean up =
-                Keyboard.isKeyDown(Keyboard.KEY_LSHIFT);
-        boolean down =
-                Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
-                || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
+                Keyboard.isKeyDown(
+                        Keyboard.KEY_LSHIFT
+                );
 
-        /*
-         * Ctrl = ускоренное перемещение.
-         */
+        boolean down =
+                Keyboard.isKeyDown(
+                        Keyboard.KEY_LCONTROL
+                )
+                        ||
+                        Keyboard.isKeyDown(
+                                Keyboard.KEY_RCONTROL
+                        );
+
         boolean fast =
                 Keyboard.isKeyDown(
                         Keyboard.KEY_LCONTROL
                 );
 
-        /*
-         * Ничего не нажато.
-         */
         if (!forward &&
                 !backward &&
                 !left &&
@@ -532,12 +593,14 @@ public class EditorSceneViewport
             return;
         }
 
-        /*
-         * Собираем направление.
-         */
-        double forwardAmount = 0.0D;
-        double strafeAmount = 0.0D;
-        double verticalAmount = 0.0D;
+        double forwardAmount =
+                0.0D;
+
+        double strafeAmount =
+                0.0D;
+
+        double verticalAmount =
+                0.0D;
 
         if (forward)
         {
@@ -569,19 +632,6 @@ public class EditorSceneViewport
             verticalAmount -= 1.0D;
         }
 
-        /*
-         * Нормализуем диагональное движение.
-         *
-         * Например:
-         *
-         * W
-         *
-         * и
-         *
-         * W + D
-         *
-         * должны иметь одинаковую скорость.
-         */
         if (forwardAmount != 0.0D &&
                 strafeAmount != 0.0D)
         {
@@ -601,9 +651,6 @@ public class EditorSceneViewport
                     length;
         }
 
-        /*
-         * Передаём движение настоящей камере.
-         */
         this.camera.move(
                 forwardAmount,
                 strafeAmount,
@@ -612,11 +659,6 @@ public class EditorSceneViewport
         );
     }
 
-    /*
-     * =========================================================
-     * SCENE POSITION
-     * =========================================================
-     */
 
     public void setScenePosition(
             double x,
@@ -639,11 +681,10 @@ public class EditorSceneViewport
                 z
         );
 
-        /*
-         * При загрузке новой сцены
-         * камера автоматически смотрит
-         * на её начало.
-         */
+        this.minecraftWorldPreview.setSceneAvailable(
+                true
+        );
+
         this.camera.setTarget(
                 x,
                 y + 1.0D,
@@ -651,18 +692,30 @@ public class EditorSceneViewport
         );
     }
 
-    public double getSceneX()
+
+    public void clearScene()
     {
-        return this.sceneX;
+        this.sceneX = 0.0D;
+        this.sceneY = 0.0D;
+        this.sceneZ = 0.0D;
+
+        this.animationPreview.setWorldPosition(
+                0.0D,
+                0.0D,
+                0.0D
+        );
+
+        this.minecraftWorldPreview.clearScene();
+
+        this.camera.reset();
+
+        this.worldAfterActorRendered = false;
+        this.weatherRendered = false;
     }
 
-    public double getSceneY()
-    {
-        return this.sceneY;
-    }
 
-    public double getSceneZ()
+    public boolean hasScene()
     {
-        return this.sceneZ;
+        return this.minecraftWorldPreview.isSceneAvailable();
     }
 }

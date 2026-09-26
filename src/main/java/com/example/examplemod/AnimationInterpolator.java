@@ -25,10 +25,10 @@ public class AnimationInterpolator
     }
 
     /**
-     * Совместимый старый вызов.
+     * Старый вызов с целым кадром.
      *
-     * Используется, если соседние keyframe
-     * ещё не переданы.
+     * Оставляем его для совместимости
+     * с остальным кодом проекта.
      */
     public static AnimationTransform interpolate(
             AnimationKeyframe previous,
@@ -40,17 +40,14 @@ public class AnimationInterpolator
                 previous,
                 next,
                 null,
-                frame
+                (float) frame
         );
     }
 
     /**
-     * Полная интерполяция с четырьмя точками:
+     * Старый полный вызов с целым кадром.
      *
-     * previousPrevious -> previous -> next -> nextNext
-     *
-     * Такая структура необходима оригинальному McLib
-     * для HERMITE.
+     * Оставляем его для совместимости.
      */
     public static AnimationTransform interpolate(
             AnimationKeyframe previousPrevious,
@@ -58,6 +55,37 @@ public class AnimationInterpolator
             AnimationKeyframe next,
             AnimationKeyframe nextNext,
             int frame)
+    {
+        return interpolate(
+                previousPrevious,
+                previous,
+                next,
+                nextNext,
+                (float) frame
+        );
+    }
+
+    /**
+     * Полная интерполяция с четырьмя точками
+     * и ДРОБНЫМ номером кадра.
+     *
+     * Например:
+     *
+     * 10.0
+     * 10.25
+     * 10.50
+     * 10.75
+     * 11.0
+     *
+     * Благодаря этому Preview больше не обязан
+     * прыгать только между целыми кадрами.
+     */
+    public static AnimationTransform interpolate(
+            AnimationKeyframe previousPrevious,
+            AnimationKeyframe previous,
+            AnimationKeyframe next,
+            AnimationKeyframe nextNext,
+            float frame)
     {
         if (previous == null)
         {
@@ -92,8 +120,7 @@ public class AnimationInterpolator
         }
 
         float factor =
-                (float)
-                        (frame - previousFrame)
+                (frame - (float) previousFrame)
                         /
                         (float)
                                 (nextFrame - previousFrame);
@@ -253,9 +280,6 @@ public class AnimationInterpolator
         /*
          * Если внешнего соседа нет, используем
          * ближайший существующий keyframe.
-         *
-         * Это соответствует безопасной граничной
-         * обработке для нашей редакторской системы.
          */
         if (previousPrevious == null)
         {
@@ -292,15 +316,8 @@ public class AnimationInterpolator
                 );
 
         /*
-         * Настоящая структура McLib:
-         *
-         * previousPrevious
-         *        ↓
-         *     previous
-         *        ↓
-         *       next
-         *        ↓
-         *     nextNext
+         * Связываем keyframe так же,
+         * как это делает оригинальная система McLib.
          */
         mcPreviousPrevious.next =
                 mcPrevious;
@@ -321,9 +338,8 @@ public class AnimationInterpolator
                 mcNext;
 
         /*
-         * McLib KeyframeInterpolation.interpolate()
-         * читает interpolation/easing именно
-         * с первого keyframe пары.
+         * McLib использует interpolation/easing
+         * первого keyframe пары.
          */
         return (float)
                 mcPrevious.interpolate(

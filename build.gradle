@@ -18,6 +18,7 @@ group = 'com.example.examplemod'
 archivesBaseName = 'bbs-animation-editor'
 
 sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
+compileJava.options.encoding = 'UTF-8'
 
 repositories {
     flatDir {
@@ -49,11 +50,11 @@ dependencies {
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2860'
 
     compile files('run/mods/blockbuster-2.7.1-1.12.2.jar')
+    compileOnly files('run/mods/emoticons-1.1.2-1.12.2.jar')
+    compile files('run/mods/mclib-2.4.3-1.12.2.jar')
 
     compile fg.deobf('blank:metamorph-1.4:1.12.2')
     compile fg.deobf('blank:aperture-1.8.2:1.12.2')
-
-    compile files('run/mods/mclib-2.4.3-1.12.2.jar')
 }
 
 jar {

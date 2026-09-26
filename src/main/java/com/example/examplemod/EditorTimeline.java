@@ -2,285 +2,284 @@ package com.example.examplemod;
 
 public class EditorTimeline
 {
-    /**
-     * В Minecraft 20 игровых тиков = 1 секунда.
-     */
     public static final int TICKS_PER_SECOND = 20;
 
-    private int currentTick;
-    private int length;
+    private int currentTick = 0;
+    private int lastTick = 0;
 
-    private boolean playing;
+    private boolean playing = false;
 
-    /**
+    /*
+     * Fractional playback position.
+     *
+     * Например:
+     *
+     * currentTick = 10
+     * playbackAccumulator = 0.5
+     *
+     * => реальная позиция = 10.5
+     */
+    private double playbackAccumulator = 0.0D;
+
+    private long lastUpdateTime = 0L;
+
+    /*
      * Скорость воспроизведения.
      *
-     * 1.0 = реальное время.
-     * 0.5 = половина скорости.
-     * 2.0 = двойная скорость.
+     * 1.0 = один Minecraft tick/frame за один tick времени.
      */
-    private float playbackSpeed;
+    private double playbackSpeed = 1.0D;
 
-    private float playbackAccumulator;
 
     public EditorTimeline()
     {
-        this.currentTick = 0;
-        this.length = 0;
-
-        this.playing = false;
-
-        this.playbackSpeed = 1.0F;
-        this.playbackAccumulator = 0.0F;
+        this.lastUpdateTime = System.nanoTime();
     }
 
-    /**
-     * Установить длину временной шкалы в тиках.
-     */
+
     public void setLength(int length)
     {
-        if (length < 0)
+        this.lastTick = Math.max(0, length - 1);
+
+        if (this.currentTick > this.lastTick)
         {
-            length = 0;
+            this.currentTick = this.lastTick;
         }
 
-        this.length = length;
-
-        if (this.currentTick > this.getLastTick())
-        {
-            this.currentTick = this.getLastTick();
-        }
+        this.playbackAccumulator = 0.0D;
     }
 
-    /**
-     * Получить длину временной шкалы в тиках.
-     */
-    public int getLength()
-    {
-        return this.length;
-    }
 
-    /**
-     * Получить последний допустимый тик.
-     */
-    public int getLastTick()
-    {
-        if (this.length <= 0)
-        {
-            return 0;
-        }
-
-        return this.length - 1;
-    }
-
-    /**
-     * Установить текущий тик.
-     */
-    public void setTick(int tick)
-    {
-        if (tick < 0)
-        {
-            tick = 0;
-        }
-
-        if (tick > this.getLastTick())
-        {
-            tick = this.getLastTick();
-        }
-
-        this.currentTick = tick;
-        this.playbackAccumulator = 0.0F;
-    }
-
-    /**
-     * Получить текущий тик.
-     */
     public int getTick()
     {
         return this.currentTick;
     }
 
+
+    public int getLastTick()
+    {
+        return this.lastTick;
+    }
+
+
     /**
-     * Получить текущую позицию в секундах.
+     * Возвращает текущую дробную позицию Timeline.
      *
      * Например:
      *
-     * 0  -> 0.0 сек
-     * 10 -> 0.5 сек
-     * 20 -> 1.0 сек
-     * 40 -> 2.0 сек
+     * 10.0
+     * 10.25
+     * 10.5
+     * 10.75
      */
-    public float getCurrentSeconds()
+    public float getCurrentFrameFloat()
     {
-        return (float) this.currentTick /
-                (float) TICKS_PER_SECOND;
-    }
-
-    /**
-     * Получить длительность записи в секундах.
-     */
-    public float getLengthSeconds()
-    {
-        return (float) this.length /
-                (float) TICKS_PER_SECOND;
-    }
-
-    /**
-     * Получить длительность последнего тика в секундах.
-     */
-    public float getLastTickSeconds()
-    {
-        return (float) this.getLastTick() /
-                (float) TICKS_PER_SECOND;
-    }
-
-    /**
-     * Перейти на следующий тик.
-     */
-    public void nextTick()
-    {
-        if (this.currentTick < this.getLastTick())
+        if (!this.playing)
         {
-            this.currentTick++;
-        }
-    }
-
-    /**
-     * Перейти на предыдущий тик.
-     */
-    public void previousTick()
-    {
-        if (this.currentTick > 0)
-        {
-            this.currentTick--;
-        }
-    }
-
-    /**
-     * Перейти в начало.
-     */
-    public void rewind()
-    {
-        this.currentTick = 0;
-        this.playbackAccumulator = 0.0F;
-    }
-
-    /**
-     * Перейти в конец.
-     */
-    public void end()
-    {
-        this.currentTick = this.getLastTick();
-        this.playbackAccumulator = 0.0F;
-    }
-
-    /**
-     * Начать воспроизведение.
-     */
-    public void play()
-    {
-        if (this.length <= 0)
-        {
-            return;
+            return (float) this.currentTick;
         }
 
-        this.playing = true;
+        return (float)
+                (
+                        (double) this.currentTick
+                                + this.playbackAccumulator
+                );
     }
 
-    /**
-     * Остановить воспроизведение.
-     */
-    public void pause()
+
+    public double getPlaybackSpeed()
     {
-        this.playing = false;
-        this.playbackAccumulator = 0.0F;
+        return this.playbackSpeed;
     }
 
-    /**
-     * Переключить состояние воспроизведения.
-     */
-    public void togglePlaying()
+
+    public void setPlaybackSpeed(double speed)
     {
-        if (this.playing)
-        {
-            this.pause();
-        }
-        else
-        {
-            this.play();
-        }
+        this.playbackSpeed =
+                Math.max(
+                        0.0D,
+                        speed
+                );
     }
 
-    /**
-     * Проверить, проигрывается ли таймлайн.
-     */
+
     public boolean isPlaying()
     {
         return this.playing;
     }
 
-    /**
-     * Установить скорость воспроизведения.
-     *
-     * 1.0 = нормальная скорость.
-     * 0.5 = половина.
-     * 2.0 = двойная.
-     */
-    public void setPlaybackSpeed(float speed)
+
+    public void play()
     {
-        if (speed <= 0.0F)
+        if (this.lastTick <= 0)
         {
-            speed = 1.0F;
+            this.playing = false;
+            return;
         }
 
-        this.playbackSpeed = speed;
+        this.playing = true;
+        this.lastUpdateTime = System.nanoTime();
     }
 
-    /**
-     * Получить скорость воспроизведения.
-     */
-    public float getPlaybackSpeed()
+
+    public void pause()
     {
-        return this.playbackSpeed;
+        this.playing = false;
+        this.playbackAccumulator = 0.0D;
+        this.lastUpdateTime = System.nanoTime();
     }
 
-    /**
-     * Обновить таймлайн на один игровой тик.
-     *
-     * При speed = 1.0:
-     *
-     * 20 обновлений = 20 тиков записи = 1 секунда.
-     *
-     * При speed = 2.0:
-     *
-     * 20 обновлений = 40 тиков записи = 2 секунды
-     * анимации проходят за 1 секунду.
-     */
+
+    public void togglePlaying()
+    {
+        if (this.playing)
+        {
+            pause();
+        }
+        else
+        {
+            play();
+        }
+    }
+
+
+    public void rewind()
+    {
+        this.currentTick = 0;
+        this.playbackAccumulator = 0.0D;
+        this.lastUpdateTime = System.nanoTime();
+    }
+
+
+    public void setTick(int tick)
+    {
+        this.currentTick =
+                Math.max(
+                        0,
+                        Math.min(
+                                tick,
+                                this.lastTick
+                        )
+                );
+
+        this.playbackAccumulator = 0.0D;
+        this.lastUpdateTime = System.nanoTime();
+    }
+
+
+    public void previousTick()
+    {
+        this.currentTick =
+                Math.max(
+                        0,
+                        this.currentTick - 1
+                );
+
+        this.playbackAccumulator = 0.0D;
+        this.lastUpdateTime = System.nanoTime();
+    }
+
+
+    public void nextTick()
+    {
+        this.currentTick =
+                Math.min(
+                        this.lastTick,
+                        this.currentTick + 1
+                );
+
+        this.playbackAccumulator = 0.0D;
+        this.lastUpdateTime = System.nanoTime();
+    }
+
+
     public void update()
     {
-        if (!this.playing || this.length <= 0)
+        long now = System.nanoTime();
+
+        /*
+         * Первый update после создания / паузы.
+         */
+        if (this.lastUpdateTime == 0L)
+        {
+            this.lastUpdateTime = now;
+            return;
+        }
+
+        long elapsedNanos =
+                now - this.lastUpdateTime;
+
+        this.lastUpdateTime = now;
+
+        if (!this.playing)
         {
             return;
         }
 
-        this.playbackAccumulator +=
-                this.playbackSpeed;
-
-        while (this.playbackAccumulator >= 1.0F)
+        if (elapsedNanos <= 0L)
         {
-            this.playbackAccumulator -= 1.0F;
+            return;
+        }
 
-            if (this.currentTick < this.getLastTick())
+        /*
+         * Переводим реальное прошедшее время
+         * в Minecraft ticks.
+         *
+         * 20 ticks = 1 секунда.
+         */
+        double elapsedTicks =
+                (
+                        (double) elapsedNanos
+                                /
+                                1000000000.0D
+                )
+                        *
+                        (double) TICKS_PER_SECOND;
+
+        elapsedTicks *= this.playbackSpeed;
+
+        this.playbackAccumulator += elapsedTicks;
+
+        /*
+         * Переходим через целые кадры,
+         * сохраняя дробную часть.
+         */
+        while (
+                this.playbackAccumulator >= 1.0D
+        )
+        {
+            this.playbackAccumulator -= 1.0D;
+
+            if (this.currentTick < this.lastTick)
             {
                 this.currentTick++;
             }
             else
             {
+                /*
+                 * Дошли до конца.
+                 *
+                 * Зацикливаем воспроизведение
+                 * с начала Timeline.
+                 */
                 this.currentTick = 0;
-                this.playbackAccumulator = 0.0F;
-
-                break;
+                this.playbackAccumulator = 0.0D;
             }
+        }
+
+        /*
+         * Защита от возможного накопления
+         * слишком большого значения.
+         */
+        if (this.playbackAccumulator < 0.0D)
+        {
+            this.playbackAccumulator = 0.0D;
+        }
+
+        if (this.playbackAccumulator >= 1.0D)
+        {
+            this.playbackAccumulator =
+                    this.playbackAccumulator % 1.0D;
         }
     }
 }
