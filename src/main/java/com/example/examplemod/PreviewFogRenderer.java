@@ -1,309 +1,158 @@
 package com.example.examplemod;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.util.math.Vec3d;
-
-import org.lwjgl.opengl.GL11;
-
 import java.nio.FloatBuffer;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.math.Vec3d;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL11;
 
-/**
- * Fog renderer для Minecraft World Preview.
- *
- * Работает только внутри Preview viewport.
- *
- * Не изменяет постоянное состояние Minecraft:
- * после завершения rendering fog отключается.
- */
 public class PreviewFogRenderer
 {
+    private static final float FOG_START_FACTOR = 0.35F;
+    private static final float FOG_END_FACTOR = 0.80F;
+
+    private static final float MIN_FOG_END = 48.0F;
+    private static final float MAX_FOG_END = 128.0F;
+
     private final Minecraft mc;
+    private final FloatBuffer fogColorBuffer;
 
-    /*
-     * Минимальные значения fog.
-     */
-    private static final float DEFAULT_FOG_START = 0.0F;
+    private boolean active;
 
-    private static final float DEFAULT_FOG_END = 256.0F;
-
-
-    public PreviewFogRenderer(
-            Minecraft mc)
+    public PreviewFogRenderer(Minecraft mc)
     {
         this.mc = mc;
+        this.fogColorBuffer = BufferUtils.createFloatBuffer(4);
+        this.active = false;
     }
 
-
-    /*
-     * =========================================================
-     * BEGIN
-     * =========================================================
+    /**
+     * Starts preview fog.
+     *
+     * The fog distance is intentionally shorter than the normal
+     * Minecraft render distance because the editor viewport is small.
      */
-
-    public void begin(
-            float partialTicks,
-            float farPlane)
+    public void begin(float partialTicks, float terrainFarPlane)
     {
-        this.setup(
-                partialTicks,
-                farPlane
-        );
-    }
+        Vec3d color;
 
-
-    /*
-     * =========================================================
-     * SETUP
-     * =========================================================
-     */
-
-    public void setup(
-            float partialTicks,
-            float farPlane)
-    {
-        if (this.mc == null)
+        if (this.mc != null && this.mc.world != null)
         {
-            return;
+            color = this.mc.world.getFogColor(partialTicks);
+        }
+        else
+        {
+            color = new Vec3d(0.75D, 0.80D, 0.85D);
         }
 
-        if (this.mc.world == null)
+        float red = clamp((float) color.x, 0.0F, 1.0F);
+        float green = clamp((float) color.y, 0.0F, 1.0F);
+        float blue = clamp((float) color.z, 0.0F, 1.0F);
+
+        float safeFarPlane = terrainFarPlane;
+
+        if (safeFarPlane < 1.0F)
         {
-            return;
+            safeFarPlane = 256.0F;
         }
 
+        float fogEnd = safeFarPlane * FOG_END_FACTOR;
 
-        /*
-         * ---------------------------------------------------------
-         * FOG COLOR
-         * ---------------------------------------------------------
-         */
-
-        Vec3d fogColor =
-                this.getFogColor(
-                        partialTicks
-                );
-
-
-        /*
-         * ---------------------------------------------------------
-         * FOG DISTANCE
-         * ---------------------------------------------------------
-         */
-
-        float fogEnd =
-                Math.max(
-                        DEFAULT_FOG_END,
-                        farPlane
-                );
-
-
-        /*
-         * Туман начинает появляться примерно
-         * после 55% дальности rendering.
-         *
-         * Это пока базовый вариант.
-         *
-         * Позже сюда можно добавить:
-         *
-         * - rain
-         * - thunder
-         * - biome
-         * - water
-         * - lava
-         * - blindness
-         * - shader fog
-         */
-        float fogStart =
-                Math.max(
-                        DEFAULT_FOG_START,
-                        fogEnd * 0.55F
-                );
-
-
-        /*
-         * ---------------------------------------------------------
-         * ENABLE FOG
-         * ---------------------------------------------------------
-         */
-
-        GlStateManager.enableFog();
-
-
-        /*
-         * ---------------------------------------------------------
-         * FOG MODE
-         * ---------------------------------------------------------
-         *
-         * Используем glFogi напрямую.
-         *
-         * В Forge 1.12.2 это надёжнее,
-         * чем GlStateManager.glFog(...).
-         */
-
-        GL11.glFogi(
-                GL11.GL_FOG_MODE,
-                GL11.GL_LINEAR
-        );
-
-
-        /*
-         * ---------------------------------------------------------
-         * FOG START
-         * ---------------------------------------------------------
-         */
-
-        GL11.glFogf(
-                GL11.GL_FOG_START,
-                fogStart
-        );
-
-
-        /*
-         * ---------------------------------------------------------
-         * FOG END
-         * ---------------------------------------------------------
-         */
-
-        GL11.glFogf(
-                GL11.GL_FOG_END,
-                fogEnd
-        );
-
-
-        /*
-         * ---------------------------------------------------------
-         * FOG COLOR
-         * ---------------------------------------------------------
-         */
-
-        FloatBuffer colorBuffer =
-                this.createColorBuffer(
-                        fogColor
-                );
-
-        GL11.glFog(
-                GL11.GL_FOG_COLOR,
-                colorBuffer
-        );
-    }
-
-
-    /*
-     * =========================================================
-     * FOG COLOR
-     * =========================================================
-     */
-
-    private Vec3d getFogColor(
-            float partialTicks)
-    {
-        Vec3d color =
-                this.mc.world.getFogColor(
-                        partialTicks
-                );
-
-        if (color == null)
+        if (fogEnd < MIN_FOG_END)
         {
-            return new Vec3d(
-                    0.75D,
-                    0.80D,
-                    0.85D
-            );
+            fogEnd = MIN_FOG_END;
         }
 
-        return color;
-    }
+        if (fogEnd > MAX_FOG_END)
+        {
+            fogEnd = MAX_FOG_END;
+        }
 
+        float fogStart = fogEnd * (FOG_START_FACTOR / FOG_END_FACTOR);
 
-    /*
-     * =========================================================
-     * COLOR BUFFER
-     * =========================================================
-     */
+        if (fogStart < 0.0F)
+        {
+            fogStart = 0.0F;
+        }
 
-    private FloatBuffer createColorBuffer(
-            Vec3d color)
-    {
+        if (fogStart >= fogEnd)
+        {
+            fogStart = fogEnd * 0.5F;
+        }
+
         /*
-         * LWJGL BufferUtils создаёт native FloatBuffer.
-         *
-         * Используем его для GL11.glFog().
+         * OpenGL fog color.
          */
-        FloatBuffer buffer =
-                org.lwjgl.BufferUtils.createFloatBuffer(
-                        4
-                );
+        this.fogColorBuffer.clear();
+        this.fogColorBuffer.put(red);
+        this.fogColorBuffer.put(green);
+        this.fogColorBuffer.put(blue);
+        this.fogColorBuffer.put(1.0F);
+        this.fogColorBuffer.flip();
 
-        buffer.put(
-                (float) color.x
-        );
+        /*
+         * Use OpenGL directly.
+         *
+         * GlStateManager.setFog(int) is private in the
+         * Forge 1.12.2 mappings used by this project.
+         */
+        GL11.glEnable(GL11.GL_FOG);
 
-        buffer.put(
-                (float) color.y
-        );
+        GL11.glFogi(GL11.GL_FOG_MODE, GL11.GL_LINEAR);
 
-        buffer.put(
-                (float) color.z
-        );
+        GL11.glFogf(GL11.GL_FOG_START, fogStart);
+        GL11.glFogf(GL11.GL_FOG_END, fogEnd);
 
-        buffer.put(
-                1.0F
-        );
+        GL11.glFog(GL11.GL_FOG_COLOR, this.fogColorBuffer);
 
-        buffer.flip();
+        GL11.glHint(GL11.GL_FOG_HINT, GL11.GL_NICEST);
 
-        return buffer;
+        this.active = true;
     }
 
-
-    /*
-     * =========================================================
-     * END
-     * =========================================================
+    /**
+     * Ends preview fog.
      */
-
     public void end()
     {
-        this.reset();
+        GL11.glDisable(GL11.GL_FOG);
+
+        /*
+         * Restore reasonable OpenGL fog parameters.
+         */
+        GL11.glFogi(GL11.GL_FOG_MODE, GL11.GL_LINEAR);
+        GL11.glFogf(GL11.GL_FOG_START, 0.0F);
+        GL11.glFogf(GL11.GL_FOG_END, 256.0F);
+
+        this.active = false;
     }
 
-
-    /*
-     * =========================================================
-     * RESET
-     * =========================================================
+    /**
+     * Completely resets the fog state.
      */
-
     public void reset()
     {
-        /*
-         * Самое главное:
-         *
-         * Preview fog никогда не должен
-         * остаться включённым после rendering.
-         */
-        GlStateManager.disableFog();
+        this.end();
+    }
 
+    public boolean isActive()
+    {
+        return this.active;
+    }
 
-        /*
-         * Возвращаем базовые параметры.
-         */
+    private static float clamp(float value, float min, float max)
+    {
+        if (value < min)
+        {
+            return min;
+        }
 
-        GL11.glFogi(
-                GL11.GL_FOG_MODE,
-                GL11.GL_LINEAR
-        );
+        if (value > max)
+        {
+            return max;
+        }
 
-        GL11.glFogf(
-                GL11.GL_FOG_START,
-                0.0F
-        );
-
-        GL11.glFogf(
-                GL11.GL_FOG_END,
-                256.0F
-        );
+        return value;
     }
 }

@@ -64,8 +64,13 @@ import org.lwjgl.opengl.GL11;
  *     Shaders.endSky()
  *
  *
- * Это соответствует тому, как обычный Minecraft
- * EntityRenderer передаёт sky в OptiFine shader pipeline.
+ * ВАЖНО:
+ *
+ * Наличие OptiFine само по себе НЕ означает,
+ * что Preview должен обращаться к OptiFine shader API.
+ *
+ * Все OptiFine hooks выполняются только если
+ * Config.isShaders() == true.
  */
 public class PreviewWorldRenderer
 {
@@ -173,12 +178,8 @@ public class PreviewWorldRenderer
      * =========================================================
      * OPTIFINE SKY
      * =========================================================
-     *
-     * Нужны для настоящего shader sky.
-     *
-     * RenderGlobal.renderSky() должен выполняться
-     * между beginSky() и endSky().
      */
+
     private Method optiFineBeginSkyMethod;
 
     private Method optiFineEndSkyMethod;
@@ -225,6 +226,8 @@ public class PreviewWorldRenderer
         this.optiFineEntitiesActive = false;
 
         this.cameraPrepared = false;
+
+        this.splitRenderActive = false;
 
         this.initializeReflection();
 
@@ -302,8 +305,7 @@ public class PreviewWorldRenderer
              * CONFIG.isShaders()
              * =====================================================
              *
-             * Это именно проверка активного shaderpack,
-             * а не просто наличия OptiFine.
+             * Это проверка именно активного shaderpack.
              */
 
             try
@@ -698,6 +700,12 @@ public class PreviewWorldRenderer
         );
 
 
+        /*
+         * ВАЖНО:
+         *
+         * OptiFine здесь будет затронут только если
+         * shaderpack действительно активен.
+         */
         this.updateOptiFineCamera();
 
         this.cameraPrepared = true;
@@ -844,18 +852,6 @@ public class PreviewWorldRenderer
          * =========================================================
          * SKY
          * =========================================================
-         *
-         * Без shaderpack:
-         *
-         *     PreviewSkyRenderer
-         *
-         * С shaderpack:
-         *
-         *     RenderGlobal.renderSky()
-         *     внутри beginSky/endSky
-         *
-         * Именно так vanilla EntityRenderer передаёт sky
-         * OptiFine shader pipeline.
          */
 
         if (this.isShaderPackActive())
@@ -945,14 +941,8 @@ public class PreviewWorldRenderer
      * =========================================================
      * DETECT ACTIVE SHADERPACK
      * =========================================================
-     *
-     * OptiFine может быть установлен, но shaderpack
-     * при этом выключен.
-     *
-     * Поэтому optiFinePresent недостаточно.
-     *
-     * Здесь используется Config.isShaders().
      */
+
     private boolean isShaderPackActive()
     {
         if (!this.optiFinePresent)
@@ -986,26 +976,15 @@ public class PreviewWorldRenderer
      * =========================================================
      * SHADER SKY
      * =========================================================
-     *
-     * ВАЖНО:
-     *
-     * PreviewSkyRenderer здесь НЕ вызывается.
-     *
-     * RenderGlobal.renderSky() является настоящим Minecraft
-     * sky renderer.
-     *
-     * beginSky/endSky переключают OptiFine в sky pass,
-     * после чего shaderpack сам обрабатывает:
-     *
-     *     sky
-     *     sun
-     *     moon
-     *     stars
-     *     atmosphere
-     *     custom shader effects
      */
+
     private void renderShaderSky()
     {
+        if (!this.isShaderPackActive())
+        {
+            return;
+        }
+
         if (this.mc == null)
         {
             return;
@@ -1026,31 +1005,13 @@ public class PreviewWorldRenderer
                 this.mc.getRenderPartialTicks();
 
 
-        /*
-         * =====================================================
-         * CAMERA
-         * =====================================================
-         */
-
         this.updateOptiFineCamera();
 
-
-        /*
-         * =====================================================
-         * SKY PASS
-         * =====================================================
-         */
 
         this.beginOptiFineSky();
 
         try
         {
-            /*
-             * pass = 2
-             *
-             * Это тот же pass, который используется
-             * EntityRenderer для обычного shader render.
-             */
             this.mc.renderGlobal.renderSky(
                     partialTicks,
                     2
@@ -1062,12 +1023,6 @@ public class PreviewWorldRenderer
         }
 
 
-        /*
-         * =====================================================
-         * CAMERA RESTORE
-         * =====================================================
-         */
-
         this.updateOptiFineCamera();
     }
 
@@ -1076,8 +1031,6 @@ public class PreviewWorldRenderer
      * =========================================================
      * CUSTOM PREVIEW SKY
      * =========================================================
-     *
-     * Используется только без shaderpack.
      */
 
     private void renderPreviewSky(
@@ -1112,6 +1065,12 @@ public class PreviewWorldRenderer
                         : 1.0F;
 
 
+        /*
+         * ВАЖНО:
+         *
+         * Здесь updateOptiFineCamera() больше ничего
+         * не делает, если shaderpack выключен.
+         */
         this.updateOptiFineCamera();
 
 
@@ -1182,12 +1141,25 @@ public class PreviewWorldRenderer
             this.endActorRender();
         }
 
+
+        /*
+         * Если shaderpack выключен, OptiFine здесь вообще
+         * не должен участвовать.
+         */
+        if (!this.isShaderPackActive())
+        {
+            this.optiFineEntitiesActive = false;
+
+            return;
+        }
+
+
         this.updateOptiFineCamera();
 
         this.beginOptiFineEntities();
 
-        if (this.optiFinePresent &&
-                this.optiFineBeginEntitiesMethod != null)
+
+        if (this.optiFineBeginEntitiesMethod != null)
         {
             this.optiFineEntitiesActive = true;
         }
@@ -1237,7 +1209,13 @@ public class PreviewWorldRenderer
             return;
         }
 
-        if (!this.optiFinePresent)
+        /*
+         * Самая важная проверка:
+         *
+         * OptiFine nextEntity() вызывается только
+         * при реально активном shaderpack.
+         */
+        if (!this.isShaderPackActive())
         {
             return;
         }
@@ -1401,31 +1379,51 @@ public class PreviewWorldRenderer
                 this.cameraPrepared = false;
             }
 
+            this.optiFineEntitiesActive = false;
+
             return;
         }
 
 
         try
         {
+            /*
+             * Если Actor pass ещё открыт,
+             * обязательно закрываем его.
+             */
             if (this.optiFineEntitiesActive)
             {
                 this.endActorRender();
             }
 
 
+            /*
+             * Minecraft lightmap.
+             */
             this.mc.entityRenderer.disableLightmap();
 
+
+            /*
+             * Возвращаем стандартный texture unit.
+             */
             OpenGlHelper.setActiveTexture(
                     OpenGlHelper.defaultTexUnit
             );
 
+
             this.frustum = null;
 
+
+            /*
+             * Preview fog.
+             */
             this.fogRenderer.end();
 
 
             /*
+             * =====================================================
              * MODELVIEW
+             * =====================================================
              */
 
             GL11.glMatrixMode(
@@ -1436,7 +1434,9 @@ public class PreviewWorldRenderer
 
 
             /*
+             * =====================================================
              * PROJECTION
+             * =====================================================
              */
 
             GL11.glMatrixMode(
@@ -1447,7 +1447,9 @@ public class PreviewWorldRenderer
 
 
             /*
+             * =====================================================
              * VIEWPORT
+             * =====================================================
              */
 
             GL11.glViewport(
@@ -1459,14 +1461,18 @@ public class PreviewWorldRenderer
 
 
             /*
+             * =====================================================
              * ATTRIBUTES
+             * =====================================================
              */
 
             GL11.glPopAttrib();
 
 
             /*
+             * =====================================================
              * MATRIX MODE
+             * =====================================================
              */
 
             GL11.glMatrixMode(
@@ -1475,7 +1481,13 @@ public class PreviewWorldRenderer
         }
         finally
         {
+            /*
+             * OptiFine больше не должен считаться активным
+             * внутри Preview.
+             */
             this.optiFineEntitiesActive = false;
+
+            this.frustum = null;
 
             this.splitRenderActive = false;
 
@@ -1587,6 +1599,8 @@ public class PreviewWorldRenderer
 
         /*
          * OPTIFINE CAMERA
+         *
+         * Ничего не делает при выключенном shaderpack.
          */
 
         this.updateOptiFineCamera();
@@ -1594,13 +1608,34 @@ public class PreviewWorldRenderer
 
         /*
          * =====================================================
-         * VANILLA CLOUD SKY PASS
+         * VANILLA CLOUD PASS
          * =====================================================
+         *
+         * beginSky/endSky являются OptiFine hooks.
+         *
+         * При отключенном shaderpack они НЕ вызываются.
          */
 
-        this.beginOptiFineSky();
+        if (this.isShaderPackActive())
+        {
+            this.beginOptiFineSky();
 
-        try
+            try
+            {
+                this.mc.renderGlobal.renderClouds(
+                        this.mc.getRenderPartialTicks(),
+                        2,
+                        this.cameraX,
+                        this.cameraY,
+                        this.cameraZ
+                );
+            }
+            finally
+            {
+                this.endOptiFineSky();
+            }
+        }
+        else
         {
             this.mc.renderGlobal.renderClouds(
                     this.mc.getRenderPartialTicks(),
@@ -1609,10 +1644,6 @@ public class PreviewWorldRenderer
                     this.cameraY,
                     this.cameraZ
             );
-        }
-        finally
-        {
-            this.endOptiFineSky();
         }
 
 
@@ -2030,11 +2061,25 @@ public class PreviewWorldRenderer
      * =========================================================
      * OPTIFINE CAMERA
      * =========================================================
+     *
+     * КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ:
+     *
+     * OptiFine camera state изменяется ТОЛЬКО при
+     * реально активном shaderpack.
+     *
+     * Если OptiFine установлен, но shaders выключены,
+     * этот метод полностью ничего не делает.
      */
 
     private void updateOptiFineCamera()
     {
-        if (!this.optiFinePresent)
+        if (!this.isShaderPackActive())
+        {
+            return;
+        }
+
+
+        if (this.mc == null)
         {
             return;
         }
@@ -2097,7 +2142,7 @@ public class PreviewWorldRenderer
 
     private void beginOptiFineSky()
     {
-        if (!this.optiFinePresent)
+        if (!this.isShaderPackActive())
         {
             return;
         }
@@ -2121,7 +2166,7 @@ public class PreviewWorldRenderer
 
     private void endOptiFineSky()
     {
-        if (!this.optiFinePresent)
+        if (!this.isShaderPackActive())
         {
             return;
         }
@@ -2151,7 +2196,7 @@ public class PreviewWorldRenderer
 
     private void beginOptiFineEntities()
     {
-        if (!this.optiFinePresent)
+        if (!this.isShaderPackActive())
         {
             return;
         }
@@ -2175,7 +2220,7 @@ public class PreviewWorldRenderer
 
     private void endOptiFineEntities()
     {
-        if (!this.optiFinePresent)
+        if (!this.isShaderPackActive())
         {
             return;
         }

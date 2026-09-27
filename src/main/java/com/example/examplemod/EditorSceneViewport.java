@@ -34,8 +34,6 @@ public class EditorSceneViewport
     private boolean worldAfterActorRendered;
     private boolean weatherRendered;
 
-    private boolean actorShaderPassActive;
-
 
     public EditorSceneViewport()
     {
@@ -50,14 +48,11 @@ public class EditorSceneViewport
 
         this.worldAfterActorRendered = false;
         this.weatherRendered = false;
-        this.actorShaderPassActive = false;
 
         this.renderBackend =
                 new PreviewRenderBackend(
                         Minecraft.getMinecraft()
                 );
-
-        this.renderBackend.printDiagnostics();
 
         this.animationPreview =
                 new AnimationPreview();
@@ -125,9 +120,11 @@ public class EditorSceneViewport
 
 
         /*
-         * PreviewShaderBridge должен знать реальную
-         * область Preview ДО создания render pass.
+         * =========================================================
+         * PREVIEW BOUNDS
+         * =========================================================
          */
+
         this.renderBackend.setPreviewBounds(
                 this.x,
                 this.y,
@@ -141,7 +138,13 @@ public class EditorSceneViewport
          * BEGIN PREVIEW FBO
          * =========================================================
          *
-         * Здесь OptiFine ещё НЕ запускается.
+         * ВАЖНО:
+         *
+         * Здесь больше НЕТ никаких вызовов OptiFine.
+         *
+         * Shader pipeline временно полностью исключён из
+         * EditorSceneViewport. Мы вернём его после завершения
+         * основной архитектуры Preview.
          */
 
         this.renderBackend.beginPreviewRender();
@@ -149,52 +152,6 @@ public class EditorSceneViewport
 
         this.worldAfterActorRendered = false;
         this.weatherRendered = false;
-        this.actorShaderPassActive = false;
-
-
-        /*
-         * =========================================================
-         * PREPARE EDITOR CAMERA
-         * =========================================================
-         *
-         * Очень важный новый порядок.
-         *
-         * PreviewWorldRenderer устанавливает projection/modelview
-         * EditorCamera ДО вызова OptiFine.beginRender().
-         */
-
-        PreviewWorldRenderer worldRenderer =
-                this.minecraftWorldPreview.getWorldRenderer();
-
-
-        boolean cameraPrepared = false;
-
-
-        if (worldRenderer != null)
-        {
-            cameraPrepared =
-                    worldRenderer.prepareShaderCamera(
-                            this.camera,
-                            this.width,
-                            this.height
-                    );
-        }
-
-
-        /*
-         * =========================================================
-         * START OPTIFINE
-         * =========================================================
-         *
-         * Теперь shadow map и остальные внутренние OptiFine
-         * стадии должны увидеть EditorCamera.
-         */
-
-        if (cameraPrepared &&
-                this.renderBackend.shouldUseShaderPipeline())
-        {
-            this.renderBackend.beginOptiFineRender();
-        }
 
 
         /*
@@ -202,9 +159,18 @@ public class EditorSceneViewport
          * WORLD FIRST PASS
          * =========================================================
          *
-         * beginSplitRender() увидит cameraPrepared=true
-         * и продолжит уже существующие matrices,
-         * не создавая вторую пару projection/modelview.
+         * MinecraftWorldPreview сам подготавливает:
+         *
+         * - EditorCamera
+         * - projection
+         * - modelview
+         * - sky
+         * - fog
+         * - terrain
+         * - lighting
+         *
+         * Никаких дополнительных camera/shader операций здесь
+         * больше не выполняем.
          */
 
         this.minecraftWorldPreview.draw(
@@ -360,50 +326,30 @@ public class EditorSceneViewport
 
         /*
          * =========================================================
-         * OPTIFINE ENTITY PASS
+         * ACTOR
          * =========================================================
+         *
+         * OptiFine entity/shader pass больше здесь НЕ запускается.
+         *
+         * Актёр просто рисуется поверх первого прохода мира.
          */
 
-        PreviewWorldRenderer worldRenderer =
-                this.minecraftWorldPreview.getWorldRenderer();
+        this.actorPreviewRenderer.drawActor(
+                mc,
+                actorData,
+                frame,
+                this.camera,
+                this.x,
+                this.y,
+                this.width,
+                this.height
+        );
 
 
-        if (worldRenderer != null)
-        {
-            worldRenderer.beginActorRender();
-
-            this.actorShaderPassActive = true;
-        }
-
-
-        try
-        {
-            this.actorPreviewRenderer.drawActor(
-                    mc,
-                    actorData,
-                    frame,
-                    this.camera,
-                    this.x,
-                    this.y,
-                    this.width,
-                    this.height
-            );
-
-            System.out.println(
-                    "[BBS PREVIEW] ACTOR RENDER FINISHED"
-            );
-        }
-        finally
-        {
-            if (worldRenderer != null &&
-                    this.actorShaderPassActive)
-            {
-                worldRenderer.endActorRender();
-            }
-
-            this.actorShaderPassActive = false;
-        }
-
+        /*
+         * После актёра дорисовываем прозрачные/поздние
+         * слои мира.
+         */
 
         this.renderWorldAfterActor();
     }
@@ -456,30 +402,39 @@ public class EditorSceneViewport
                 Minecraft.getMinecraft();
 
 
-        if (this.actorShaderPassActive)
-        {
-            PreviewWorldRenderer worldRenderer =
-                    this.minecraftWorldPreview.getWorldRenderer();
-
-            if (worldRenderer != null)
-            {
-                worldRenderer.endActorRender();
-            }
-
-            this.actorShaderPassActive = false;
-        }
-
+        /*
+         * =========================================================
+         * WORLD AFTER ACTOR
+         * =========================================================
+         */
 
         this.renderWorldAfterActor();
 
+
+        /*
+         * =========================================================
+         * WEATHER
+         * =========================================================
+         */
 
         this.renderWeather(
                 mc
         );
 
 
+        /*
+         * =========================================================
+         * END WORLD
+         * =========================================================
+         */
+
         this.endWorldRender();
 
+
+        /*
+         * =========================================================
+         * END PREVIEW FBO
+         * ========================================================= */
 
         this.renderBackend.endPreviewRender();
     }
@@ -518,6 +473,10 @@ public class EditorSceneViewport
         {
             return false;
         }
+
+        /*
+         * Правая кнопка мыши — вращение камеры.
+         */
 
         if (button == 1)
         {
@@ -692,6 +651,7 @@ public class EditorSceneViewport
                         Keyboard.KEY_LCONTROL
                 );
 
+
         if (!forward &&
                 !backward &&
                 !left &&
@@ -702,6 +662,7 @@ public class EditorSceneViewport
             return;
         }
 
+
         double forwardAmount =
                 0.0D;
 
@@ -710,6 +671,7 @@ public class EditorSceneViewport
 
         double verticalAmount =
                 0.0D;
+
 
         if (forward)
         {
@@ -741,6 +703,11 @@ public class EditorSceneViewport
             verticalAmount -= 1.0D;
         }
 
+
+        /*
+         * Нормализация диагонального движения.
+         */
+
         if (forwardAmount != 0.0D &&
                 strafeAmount != 0.0D)
         {
@@ -760,6 +727,7 @@ public class EditorSceneViewport
                     length;
         }
 
+
         this.camera.move(
                 forwardAmount,
                 strafeAmount,
@@ -778,11 +746,13 @@ public class EditorSceneViewport
         this.sceneY = y;
         this.sceneZ = z;
 
+
         this.animationPreview.setWorldPosition(
                 x,
                 y,
                 z
         );
+
 
         this.minecraftWorldPreview.setWorldPosition(
                 x,
@@ -790,9 +760,15 @@ public class EditorSceneViewport
                 z
         );
 
+
         this.minecraftWorldPreview.setSceneAvailable(
                 true
         );
+
+
+        /*
+         * При смене сцены камера смотрит на её начало.
+         */
 
         this.camera.setTarget(
                 x,
@@ -808,19 +784,22 @@ public class EditorSceneViewport
         this.sceneY = 0.0D;
         this.sceneZ = 0.0D;
 
+
         this.animationPreview.setWorldPosition(
                 0.0D,
                 0.0D,
                 0.0D
         );
 
+
         this.minecraftWorldPreview.clearScene();
+
 
         this.camera.reset();
 
+
         this.worldAfterActorRendered = false;
         this.weatherRendered = false;
-        this.actorShaderPassActive = false;
     }
 
 

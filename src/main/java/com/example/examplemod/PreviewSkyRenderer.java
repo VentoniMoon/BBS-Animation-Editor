@@ -57,11 +57,11 @@ public class PreviewSkyRenderer
      * =========================================================
      */
 
-    private static final float ATMOSPHERE_HORIZON_HEIGHT = 0.30F;
+    private static final float ATMOSPHERE_HORIZON_HEIGHT = 0.24F;
 
-    private static final float ATMOSPHERE_HORIZON_POWER = 1.35F;
+    private static final float ATMOSPHERE_HORIZON_POWER = 1.8F;
 
-    private static final float ATMOSPHERE_STRENGTH = 0.90F;
+    private static final float ATMOSPHERE_STRENGTH = 0.70F;
 
 
     /*
@@ -70,17 +70,17 @@ public class PreviewSkyRenderer
      * =========================================================
      */
 
-    private static final float SUNSET_HORIZON_HEIGHT = 0.35F;
+    private static final float SUNSET_HORIZON_HEIGHT = 0.30F;
 
-    private static final float SUNSET_HORIZON_POWER = 1.35F;
+    private static final float SUNSET_HORIZON_POWER = 1.7F;
 
-    private static final float SUNSET_DIRECTION_START_DEGREES = 85.0F;
+    private static final float SUNSET_DIRECTION_START_DEGREES = 70.0F;
 
-    private static final float SUNSET_DIRECTION_END_DEGREES = 8.0F;
+    private static final float SUNSET_DIRECTION_END_DEGREES = 5.0F;
 
     private static final float SUNSET_DIRECTION_POWER = 1.15F;
 
-    private static final float SUNSET_STRENGTH = 0.85F;
+    private static final float SUNSET_STRENGTH = 0.55F;
 
 
     private final Minecraft mc;
@@ -149,7 +149,20 @@ public class PreviewSkyRenderer
 
             GlStateManager.disableAlpha();
 
-            GlStateManager.enableFog();
+            /*
+             * ВАЖНО:
+             *
+             * Туман НЕ должен применяться к небесной сфере.
+             *
+             * PreviewSkyRenderer сам рисует сферу радиусом 256
+             * блоков. Если включить OpenGL fog здесь, вершины
+             * сферы дополнительно смешиваются с цветом тумана.
+             *
+             * Это особенно сильно заметно во время заката:
+             * рассчитанный цвет неба начинает перекрываться
+             * цветом fogColor и всё небо получает бледный оттенок.
+             */
+            GlStateManager.disableFog();
 
             GlStateManager.disableDepth();
 
@@ -216,6 +229,13 @@ public class PreviewSkyRenderer
 
             GlStateManager.depthMask(true);
 
+            /*
+             * Возвращаем fog для состояния мира.
+             *
+             * GL11.glPopAttrib() ниже дополнительно восстановит
+             * исходное состояние, поэтому это не протекает наружу
+             * из PreviewSkyRenderer.
+             */
             GlStateManager.enableFog();
 
             GlStateManager.enableAlpha();
@@ -629,6 +649,12 @@ public class PreviewSkyRenderer
                     z / length;
 
 
+            /*
+             * =====================================================
+             * ATMOSPHERIC HORIZON
+             * =====================================================
+             */
+
             float horizon =
                     1.0F -
                             (
@@ -692,6 +718,12 @@ public class PreviewSkyRenderer
                                     atmosphereFactor;
 
 
+            /*
+             * =====================================================
+             * SUNSET
+             * =====================================================
+             */
+
             if (
                     sunriseColors != null &&
                             sunriseStrength > 0.0F)
@@ -699,8 +731,7 @@ public class PreviewSkyRenderer
                 float sunsetHorizon =
                         1.0F -
                                 (
-                                        (float)
-                                                Math.abs(ny) /
+                                        (float) ny /
                                                 SUNSET_HORIZON_HEIGHT
                                 );
 
@@ -728,120 +759,151 @@ public class PreviewSkyRenderer
                                 );
 
 
-                float celestialAngle =
-                        this.mc.world.getCelestialAngle(
-                                partialTicks
-                        );
+                if (ny > 0.0D)
+                {
+                    float celestialAngle =
+                            this.mc.world.getCelestialAngle(
+                                    partialTicks
+                            );
 
-                double celestialRadians =
-                        celestialAngle *
-                                Math.PI *
-                                2.0D;
-
-
-                double sunX =
-                        -Math.sin(
-                                celestialRadians
-                        );
-
-                double sunY =
-                        Math.cos(
-                                celestialRadians
-                        );
-
-                double sunZ =
-                        0.0D;
+                    double celestialRadians =
+                            celestialAngle *
+                                    Math.PI *
+                                    2.0D;
 
 
-                double dot =
-                        nx * sunX +
-                                ny * sunY +
-                                nz * sunZ;
+                    double sunX =
+                            -Math.sin(
+                                    celestialRadians
+                            );
+
+                    double sunY =
+                            Math.cos(
+                                    celestialRadians
+                            );
+
+                    double sunZ =
+                            0.0D;
 
 
-                float sunsetStart =
-                        (float)
-                                Math.cos(
-                                        Math.toRadians(
-                                                SUNSET_DIRECTION_START_DEGREES
-                                        )
-                                );
-
-                float sunsetEnd =
-                        (float)
-                                Math.cos(
-                                        Math.toRadians(
-                                                SUNSET_DIRECTION_END_DEGREES
-                                        )
-                                );
+                    double dot =
+                            nx * sunX +
+                                    ny * sunY +
+                                    nz * sunZ;
 
 
-                float sunFactor =
-                        (float)
-                                MathHelper.clamp(
-                                        (
-                                                dot -
-                                                        sunsetStart
-                                        ) /
-                                                (
-                                                        sunsetEnd -
-                                                                sunsetStart
-                                                ),
-                                        0.0F,
-                                        1.0F
-                                );
+                    float sunsetStart =
+                            (float)
+                                    Math.cos(
+                                            Math.toRadians(
+                                                    SUNSET_DIRECTION_START_DEGREES
+                                            )
+                                    );
+
+                    float sunsetEnd =
+                            (float)
+                                    Math.cos(
+                                            Math.toRadians(
+                                                    SUNSET_DIRECTION_END_DEGREES
+                                            )
+                                    );
 
 
-                sunFactor =
-                        sunFactor *
-                                sunFactor *
-                                (
-                                        3.0F -
-                                                2.0F *
-                                                        sunFactor
-                                );
-
-                sunFactor =
-                        (float)
-                                Math.pow(
-                                        sunFactor,
-                                        SUNSET_DIRECTION_POWER
-                                );
-
-
-                float factor =
-                        sunriseStrength *
-                                sunsetHorizon *
-                                sunFactor *
-                                SUNSET_STRENGTH;
-
-                factor =
-                        MathHelper.clamp(
-                                factor,
-                                0.0F,
-                                1.0F
-                        );
+                    float sunFactor =
+                            (float)
+                                    MathHelper.clamp(
+                                            (
+                                                    dot -
+                                                            sunsetStart
+                                            ) /
+                                                    (
+                                                            sunsetEnd -
+                                                                    sunsetStart
+                                                    ),
+                                            0.0F,
+                                            1.0F
+                                    );
 
 
-                red =
-                        red *
-                                (1.0F - factor) +
-                                sunriseColors[0] *
-                                        factor;
+                    sunFactor =
+                            sunFactor *
+                                    sunFactor *
+                                    (
+                                            3.0F -
+                                                    2.0F *
+                                                            sunFactor
+                                    );
 
-                green =
-                        green *
-                                (1.0F - factor) +
-                                sunriseColors[1] *
-                                        factor;
+                    sunFactor =
+                            (float)
+                                    Math.pow(
+                                            sunFactor,
+                                            SUNSET_DIRECTION_POWER
+                                    );
 
-                blue =
-                        blue *
-                                (1.0F - factor) +
-                                sunriseColors[2] *
-                                        factor;
+
+                    float factor =
+                            sunriseStrength *
+                                    sunsetHorizon *
+                                    sunFactor *
+                                    SUNSET_STRENGTH;
+
+                    factor =
+                            MathHelper.clamp(
+                                    factor,
+                                    0.0F,
+                                    0.55F
+                            );
+
+
+                    red =
+                            red *
+                                    (1.0F - factor) +
+                                    sunriseColors[0] *
+                                            factor;
+
+                    green =
+                            green *
+                                    (1.0F - factor) +
+                                    sunriseColors[1] *
+                                            factor;
+
+                    blue =
+                            blue *
+                                    (1.0F - factor) +
+                                    sunriseColors[2] *
+                                            factor;
+                }
             }
         }
+
+
+        /*
+         * =====================================================
+         * FINAL COLOR
+         * =====================================================
+         */
+
+        red =
+                MathHelper.clamp(
+                        red,
+                        0.0F,
+                        1.0F
+                );
+
+        green =
+                MathHelper.clamp(
+                        green,
+                        0.0F,
+                        1.0F
+                );
+
+        blue =
+                MathHelper.clamp(
+                        blue,
+                        0.0F,
+                        1.0F
+                );
 
 
         buffer.pos(
@@ -910,9 +972,6 @@ public class PreviewSkyRenderer
          * =====================================================
          * SUN + MOON STATE
          * =====================================================
-         *
-         * Это состояние максимально близко к ванильному
-         * RenderGlobal 1.12.2.
          */
 
         GlStateManager.enableTexture2D();
@@ -927,13 +986,6 @@ public class PreviewSkyRenderer
         );
 
         GlStateManager.enableAlpha();
-
-        /*
-         * Ванильный alpha test.
-         *
-         * Полностью прозрачные пиксели sun.png/moon_phases.png
-         * не должны превращаться в чёрный прямоугольник.
-         */
 
         GlStateManager.alphaFunc(
                 GL11.GL_GREATER,
@@ -1099,10 +1151,6 @@ public class PreviewSkyRenderer
                 30.0F;
 
 
-        /*
-         * Используем именно ванильную геометрию.
-         */
-
         this.mc.getTextureManager().bindTexture(
                 SUN_TEXTURES
         );
@@ -1222,10 +1270,6 @@ public class PreviewSkyRenderer
                 DefaultVertexFormats.POSITION_TEX
         );
 
-
-        /*
-         * Это соответствует ванильному порядку UV.
-         */
 
         buffer.pos(
                 -size,
