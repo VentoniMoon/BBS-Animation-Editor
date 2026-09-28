@@ -634,17 +634,13 @@ public class EditorSceneViewport
 
         boolean up =
                 Keyboard.isKeyDown(
-                        Keyboard.KEY_LSHIFT
+                        Keyboard.KEY_SPACE
                 );
 
         boolean down =
                 Keyboard.isKeyDown(
-                        Keyboard.KEY_LCONTROL
-                )
-                        ||
-                        Keyboard.isKeyDown(
-                                Keyboard.KEY_RCONTROL
-                        );
+                        Keyboard.KEY_LSHIFT
+                );
 
         boolean fast =
                 Keyboard.isKeyDown(

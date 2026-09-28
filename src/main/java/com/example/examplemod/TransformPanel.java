@@ -12,11 +12,35 @@ public class TransformPanel
     private static final float ROTATION_STEP = 1.0F;
     private static final float SCALE_STEP = 0.01F;
 
-    private int x;
-    private int y;
+    /*
+     * =========================================================
+     * COLORS
+     * =========================================================
+     */
+
+    private static final int PANEL_BACKGROUND = 0xFF252629;
+    private static final int PANEL_BORDER = 0xFF111214;
+
+    private static final int HEADER_BACKGROUND = 0xFF303134;
+    private static final int HEADER_BOTTOM = 0xFF18191B;
+
+    private static final int SECTION_LINE = 0xFF3A3B3E;
+
+    private static final int TEXT = 0xFFE0E0E0;
+    private static final int TEXT_SECONDARY = 0xFF999999;
 
     /*
+     * Section accents
+     */
+
+    private static final int POSITION_ACCENT = 0xFF55FFFF;
+    private static final int ROTATION_ACCENT = 0xFF55FF55;
+    private static final int SCALE_ACCENT = 0xFFFFFF55;
+
+    /*
+     * =========================================================
      * POSITION
+     * =========================================================
      */
 
     private final AnimationValueControl positionXControl =
@@ -41,7 +65,9 @@ public class TransformPanel
             );
 
     /*
+     * =========================================================
      * ROTATION
+     * =========================================================
      */
 
     private final AnimationValueControl rotationXControl =
@@ -66,7 +92,9 @@ public class TransformPanel
             );
 
     /*
+     * =========================================================
      * SCALE
+     * =========================================================
      */
 
     private final AnimationValueControl scaleXControl =
@@ -91,10 +119,15 @@ public class TransformPanel
             );
 
     /*
-     * Currently edited control.
+     * =========================================================
+     * CURRENT CONTROL
+     * =========================================================
      */
 
     private AnimationValueControl activeControl;
+
+    private int x;
+    private int y;
 
     public TransformPanel()
     {
@@ -107,6 +140,12 @@ public class TransformPanel
         this.x = x;
         this.y = y;
     }
+
+    /*
+     * =========================================================
+     * DRAW
+     * =========================================================
+     */
 
     public void draw(
             Minecraft mc,
@@ -131,11 +170,20 @@ public class TransformPanel
 
         drawRect(
                 mc,
+                x - 1,
+                y - 1,
+                x + PANEL_WIDTH + 1,
+                y + PANEL_HEIGHT + 1,
+                PANEL_BORDER
+        );
+
+        drawRect(
+                mc,
                 x,
                 y,
                 x + PANEL_WIDTH,
                 y + PANEL_HEIGHT,
-                0xFF292A2D
+                PANEL_BACKGROUND
         );
 
         /*
@@ -147,33 +195,68 @@ public class TransformPanel
                 x,
                 y,
                 x + PANEL_WIDTH,
-                y + 20,
-                0xFF303134
+                y + 22,
+                HEADER_BACKGROUND
+        );
+
+        drawRect(
+                mc,
+                x,
+                y + 21,
+                x + PANEL_WIDTH,
+                y + 22,
+                HEADER_BOTTOM
+        );
+
+        /*
+         * Header accent.
+         */
+
+        drawRect(
+                mc,
+                x,
+                y,
+                x + 3,
+                y + 22,
+                0xFF66CCFF
         );
 
         font.drawString(
                 "Transform",
-                x + 8,
+                x + 9,
                 y + 6,
-                0xFFFFFF
+                TEXT
         );
 
+        String keyText =
+                "Key " +
+                        keyframe.getFrame();
+
+        int keyWidth =
+                font.getStringWidth(
+                        keyText
+                );
+
         font.drawString(
-                "Key: " + keyframe.getFrame(),
-                x + 95,
+                keyText,
+                x + PANEL_WIDTH - keyWidth - 8,
                 y + 6,
-                0xAAAAAA
+                TEXT_SECONDARY
         );
 
         /*
+         * =====================================================
          * POSITION
+         * =====================================================
          */
 
-        font.drawString(
+        drawSectionHeader(
+                mc,
+                font,
                 "Position",
-                x + 8,
+                x + 7,
                 y + 28,
-                0x55FFFF
+                POSITION_ACCENT
         );
 
         positionXControl.setPosition(
@@ -208,14 +291,31 @@ public class TransformPanel
         positionZControl.draw(mc);
 
         /*
-         * ROTATION
+         * Separator.
          */
 
-        font.drawString(
-                "Rotation",
+        drawRect(
+                mc,
                 x + 8,
+                y + 96,
+                x + PANEL_WIDTH - 8,
+                y + 97,
+                SECTION_LINE
+        );
+
+        /*
+         * =====================================================
+         * ROTATION
+         * =====================================================
+         */
+
+        drawSectionHeader(
+                mc,
+                font,
+                "Rotation",
+                x + 7,
                 y + 101,
-                0x55FF55
+                ROTATION_ACCENT
         );
 
         rotationXControl.setPosition(
@@ -250,14 +350,31 @@ public class TransformPanel
         rotationZControl.draw(mc);
 
         /*
-         * SCALE
+         * Separator.
          */
 
-        font.drawString(
-                "Scale",
+        drawRect(
+                mc,
                 x + 8,
+                y + 169,
+                x + PANEL_WIDTH - 8,
+                y + 170,
+                SECTION_LINE
+        );
+
+        /*
+         * =====================================================
+         * SCALE
+         * =====================================================
+         */
+
+        drawSectionHeader(
+                mc,
+                font,
+                "Scale",
+                x + 7,
                 y + 174,
-                0xFFFF55
+                SCALE_ACCENT
         );
 
         scaleXControl.setPosition(
@@ -293,9 +410,40 @@ public class TransformPanel
     }
 
     /*
-     * =========================
+     * =========================================================
+     * SECTION HEADER
+     * =========================================================
+     */
+
+    private void drawSectionHeader(
+            Minecraft mc,
+            FontRenderer font,
+            String title,
+            int drawX,
+            int drawY,
+            int accent)
+    {
+        drawRect(
+                mc,
+                drawX,
+                drawY + 1,
+                drawX + 3,
+                drawY + 10,
+                accent
+        );
+
+        font.drawString(
+                title,
+                drawX + 7,
+                drawY,
+                accent
+        );
+    }
+
+    /*
+     * =========================================================
      * FINISH EDITING
-     * =========================
+     * =========================================================
      */
 
     public void finishEditing()
@@ -314,9 +462,9 @@ public class TransformPanel
     }
 
     /*
-     * =========================
+     * =========================================================
      * CLICK
-     * =========================
+     * =========================================================
      */
 
     public boolean mouseClicked(
@@ -330,14 +478,10 @@ public class TransformPanel
             return false;
         }
 
-        /*
-         * Если сейчас какое-либо поле находится
-         * в текстовом режиме и пользователь кликнул
-         * вне него — завершаем ввод.
-         */
-
-        if (this.activeControl != null
-                && this.activeControl.isEditing())
+        if (
+                this.activeControl != null &&
+                        this.activeControl.isEditing()
+        )
         {
             boolean insideActiveControl =
                     this.activeControl.contains(
@@ -352,13 +496,12 @@ public class TransformPanel
             }
         }
 
-        /*
-         * POSITION X
-         */
-
-        if (this.positionXControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.positionXControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.positionXControl;
@@ -372,13 +515,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * POSITION Y
-         */
-
-        if (this.positionYControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.positionYControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.positionYControl;
@@ -392,13 +534,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * POSITION Z
-         */
-
-        if (this.positionZControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.positionZControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.positionZControl;
@@ -412,13 +553,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * ROTATION X
-         */
-
-        if (this.rotationXControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.rotationXControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.rotationXControl;
@@ -432,13 +572,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * ROTATION Y
-         */
-
-        if (this.rotationYControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.rotationYControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.rotationYControl;
@@ -452,13 +591,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * ROTATION Z
-         */
-
-        if (this.rotationZControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.rotationZControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.rotationZControl;
@@ -472,13 +610,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * SCALE X
-         */
-
-        if (this.scaleXControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.scaleXControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.scaleXControl;
@@ -492,13 +629,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * SCALE Y
-         */
-
-        if (this.scaleYControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.scaleYControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.scaleYControl;
@@ -512,13 +648,12 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * SCALE Z
-         */
-
-        if (this.scaleZControl.contains(
-                mouseX,
-                mouseY))
+        if (
+                this.scaleZControl.contains(
+                        mouseX,
+                        mouseY
+                )
+        )
         {
             this.activeControl =
                     this.scaleZControl;
@@ -532,17 +667,13 @@ public class TransformPanel
             return true;
         }
 
-        /*
-         * Кликнули вне панели управления.
-         */
-
         return false;
     }
 
     /*
-     * =========================
+     * =========================================================
      * DRAG
-     * =========================
+     * =========================================================
      */
 
     public void mouseDragged(
@@ -560,11 +691,6 @@ public class TransformPanel
             return;
         }
 
-        /*
-         * Во время текстового ввода
-         * перетягивание не работает.
-         */
-
         if (this.activeControl.isEditing())
         {
             return;
@@ -581,9 +707,9 @@ public class TransformPanel
     }
 
     /*
-     * =========================
+     * =========================================================
      * RELEASE
-     * =========================
+     * =========================================================
      */
 
     public void mouseReleased(
@@ -609,9 +735,9 @@ public class TransformPanel
     }
 
     /*
-     * =========================
+     * =========================================================
      * KEYBOARD
-     * =========================
+     * =========================================================
      */
 
     public boolean keyTyped(
@@ -635,18 +761,8 @@ public class TransformPanel
                         keyCode
                 );
 
-        /*
-         * Если клавиша была обработана,
-         * не передаём её дальше в AnimationEditorScreen.
-         */
-
         if (handled)
         {
-            /*
-             * После завершения редактирования
-             * записываем итоговое значение в keyframe.
-             */
-
             if (!this.activeControl.isEditing())
             {
                 writeControlsToKeyframe(
@@ -661,9 +777,9 @@ public class TransformPanel
     }
 
     /*
-     * =========================
+     * =========================================================
      * SAVE VALUES
-     * =========================
+     * =========================================================
      */
 
     private void writeControlsToKeyframe(
@@ -692,9 +808,9 @@ public class TransformPanel
     }
 
     /*
-     * =========================
+     * =========================================================
      * DRAW RECT
-     * =========================
+     * =========================================================
      */
 
     private void drawRect(

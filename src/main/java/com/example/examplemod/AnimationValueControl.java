@@ -9,7 +9,7 @@ public class AnimationValueControl
     private int x;
     private int y;
 
-    private int width = 85;
+    private int width = 159;
     private int height = 16;
 
     private String label;
@@ -30,6 +30,51 @@ public class AnimationValueControl
 
     private static final long DOUBLE_CLICK_TIME = 300L;
 
+    /*
+     * =========================================================
+     * COLORS
+     * =========================================================
+     */
+
+    private static final int BACKGROUND =
+            0xFF303134;
+
+    private static final int BACKGROUND_HOVER =
+            0xFF3A3B3E;
+
+    private static final int BACKGROUND_ACTIVE =
+            0xFF4A4C4F;
+
+    private static final int BACKGROUND_EDITING =
+            0xFF55575A;
+
+    private static final int BORDER =
+            0xFF18191B;
+
+    private static final int BORDER_HOVER =
+            0xFF55575A;
+
+    private static final int BORDER_EDITING =
+            0xFF66CCFF;
+
+    private static final int LABEL_BACKGROUND =
+            0xFF292A2D;
+
+    private static final int LABEL_TEXT =
+            0xFFAAAAAA;
+
+    private static final int VALUE_TEXT =
+            0xFFD6D6D6;
+
+    private static final int ACTIVE_TEXT =
+            0xFFFFFFFF;
+
+    /*
+     * =========================================================
+     * CONSTRUCTOR
+     * =========================================================
+     */
+
     public AnimationValueControl(
             String label,
             float value,
@@ -40,6 +85,12 @@ public class AnimationValueControl
         this.step = step;
     }
 
+    /*
+     * =========================================================
+     * POSITION
+     * =========================================================
+     */
+
     public void setPosition(
             int x,
             int y)
@@ -47,6 +98,12 @@ public class AnimationValueControl
         this.x = x;
         this.y = y;
     }
+
+    /*
+     * =========================================================
+     * VALUE
+     * =========================================================
+     */
 
     public void setValue(
             float value)
@@ -70,6 +127,12 @@ public class AnimationValueControl
         return this.value;
     }
 
+    /*
+     * =========================================================
+     * CLICK
+     * =========================================================
+     */
+
     public boolean mouseClicked(
             int mouseX,
             int mouseY,
@@ -92,6 +155,7 @@ public class AnimationValueControl
          * Второй клик превращает контрол
          * в текстовое поле.
          */
+
         if (
                 currentTime -
                         this.lastClickTime
@@ -105,6 +169,7 @@ public class AnimationValueControl
             /*
              * Обычный клик начинает drag.
              */
+
             this.dragging = true;
             this.lastMouseX = mouseX;
         }
@@ -114,6 +179,12 @@ public class AnimationValueControl
 
         return true;
     }
+
+    /*
+     * =========================================================
+     * DRAG
+     * =========================================================
+     */
 
     public void mouseDragged(
             int mouseX,
@@ -142,6 +213,12 @@ public class AnimationValueControl
         }
     }
 
+    /*
+     * =========================================================
+     * RELEASE
+     * =========================================================
+     */
+
     public void mouseReleased(
             int mouseButton)
     {
@@ -150,6 +227,12 @@ public class AnimationValueControl
             this.dragging = false;
         }
     }
+
+    /*
+     * =========================================================
+     * KEYBOARD
+     * =========================================================
+     */
 
     /**
      * Обрабатывает клавиатуру.
@@ -171,6 +254,7 @@ public class AnimationValueControl
          * Отменяем только редактирование
          * этого значения.
          */
+
         if (keyCode == Keyboard.KEY_ESCAPE)
         {
             cancelEditing();
@@ -183,6 +267,7 @@ public class AnimationValueControl
          *
          * Применяем введённое значение.
          */
+
         if (
                 keyCode == Keyboard.KEY_RETURN ||
                         keyCode ==
@@ -206,6 +291,7 @@ public class AnimationValueControl
         /*
          * CTRL + A
          */
+
         if (
                 ctrlDown &&
                         keyCode == Keyboard.KEY_A
@@ -219,6 +305,7 @@ public class AnimationValueControl
         /*
          * BACKSPACE
          */
+
         if (keyCode == Keyboard.KEY_BACK)
         {
             if (this.selectAll)
@@ -247,6 +334,7 @@ public class AnimationValueControl
         /*
          * DELETE
          */
+
         if (keyCode == Keyboard.KEY_DELETE)
         {
             if (this.selectAll)
@@ -263,6 +351,7 @@ public class AnimationValueControl
          *
          * Полноценного курсора пока нет.
          */
+
         if (
                 keyCode == Keyboard.KEY_HOME ||
                         keyCode == Keyboard.KEY_END
@@ -276,6 +365,7 @@ public class AnimationValueControl
         /*
          * ЦИФРЫ
          */
+
         if (Character.isDigit(typedChar))
         {
             appendInputChar(
@@ -288,6 +378,7 @@ public class AnimationValueControl
         /*
          * МИНУС
          */
+
         if (typedChar == '-')
         {
             if (
@@ -304,6 +395,7 @@ public class AnimationValueControl
         /*
          * ПЛЮС
          */
+
         if (typedChar == '+')
         {
             if (
@@ -320,6 +412,7 @@ public class AnimationValueControl
         /*
          * ДЕСЯТИЧНАЯ ТОЧКА
          */
+
         if (
                 typedChar == '.' ||
                         typedChar == ','
@@ -337,12 +430,17 @@ public class AnimationValueControl
 
         /*
          * Любая другая клавиша во время
-         * редактирования также считается
-         * обработанной, чтобы она не уходила
-         * дальше в AnimationEditorScreen.
+         * редактирования считается обработанной.
          */
+
         return true;
     }
+
+    /*
+     * =========================================================
+     * INPUT
+     * =========================================================
+     */
 
     private void appendInputChar(
             char character)
@@ -371,6 +469,7 @@ public class AnimationValueControl
          * Первая введённая цифра заменит
          * текущее значение.
          */
+
         this.selectAll = true;
     }
 
@@ -420,10 +519,22 @@ public class AnimationValueControl
         this.selectAll = false;
     }
 
+    /*
+     * =========================================================
+     * STATE
+     * =========================================================
+     */
+
     public boolean isEditing()
     {
         return this.editing;
     }
+
+    /*
+     * =========================================================
+     * HITBOX
+     * =========================================================
+     */
 
     public boolean contains(
             int mouseX,
@@ -436,32 +547,159 @@ public class AnimationValueControl
                 && mouseY <=
                 this.y + this.height;
     }
+
+    /*
+     * =========================================================
+     * DRAW
+     * =========================================================
+     */
+
     public void draw(
             Minecraft mc)
     {
         FontRenderer font =
                 mc.fontRenderer;
 
-        int backgroundColor =
-                this.editing ||
-                        this.dragging
-                        ? 0xFF55575A
-                        : 0xFF3A3B3E;
+        /*
+         * Получаем положение мыши.
+         *
+         * Нам нужен только hover-визуал,
+         * он никак не влияет на механику.
+         */
+
+        int mouseX =
+                MouseHelper.getMouseX(
+                        mc
+                );
+
+        int mouseY =
+                MouseHelper.getMouseY(
+                        mc
+                );
+
+        boolean hovered =
+                contains(
+                        mouseX,
+                        mouseY
+                );
+
+        /*
+         * =====================================================
+         * BACKGROUND
+         * =====================================================
+         */
+
+        int backgroundColor;
+
+        if (this.editing)
+        {
+            backgroundColor =
+                    BACKGROUND_EDITING;
+        }
+        else if (this.dragging)
+        {
+            backgroundColor =
+                    BACKGROUND_ACTIVE;
+        }
+        else if (hovered)
+        {
+            backgroundColor =
+                    BACKGROUND_HOVER;
+        }
+        else
+        {
+            backgroundColor =
+                    BACKGROUND;
+        }
+
+        /*
+         * Outer border.
+         */
+
+        int borderColor;
+
+        if (this.editing)
+        {
+            borderColor =
+                    BORDER_EDITING;
+        }
+        else if (hovered || this.dragging)
+        {
+            borderColor =
+                    BORDER_HOVER;
+        }
+        else
+        {
+            borderColor =
+                    BORDER;
+        }
 
         net.minecraft.client.gui.Gui.drawRect(
                 this.x,
                 this.y,
                 this.x + this.width,
                 this.y + this.height,
+                borderColor
+        );
+
+        /*
+         * Inner background.
+         */
+
+        net.minecraft.client.gui.Gui.drawRect(
+                this.x + 1,
+                this.y + 1,
+                this.x + this.width - 1,
+                this.y + this.height - 1,
                 backgroundColor
         );
 
-        font.drawString(
-                this.label + ":",
-                this.x + 5,
-                this.y + 4,
-                0xFFFFFF
+        /*
+         * =====================================================
+         * LABEL AREA
+         * =====================================================
+         */
+
+        net.minecraft.client.gui.Gui.drawRect(
+                this.x + 1,
+                this.y + 1,
+                this.x + 25,
+                this.y + this.height - 1,
+                LABEL_BACKGROUND
         );
+
+        /*
+         * Vertical separator between label and value.
+         */
+
+        net.minecraft.client.gui.Gui.drawRect(
+                this.x + 25,
+                this.y + 3,
+                this.x + 26,
+                this.y + this.height - 3,
+                0xFF45474A
+        );
+
+        /*
+         * =====================================================
+         * LABEL
+         * =====================================================
+         */
+
+        font.drawString(
+                this.label,
+                this.x + 9,
+                this.y + 4,
+                this.editing
+                        ? ACTIVE_TEXT
+                        : LABEL_TEXT
+        );
+
+        /*
+         * =====================================================
+         * VALUE
+         * =====================================================
+         */
 
         String text;
 
@@ -489,13 +727,46 @@ public class AnimationValueControl
                 this.x +
                         this.width -
                         valueWidth -
-                        5,
+                        6,
                 this.y + 4,
                 this.editing
-                        ? 0xFFFFFF
-                        : 0xCCCCCC
+                        ? ACTIVE_TEXT
+                        : VALUE_TEXT
         );
+
+        /*
+         * =====================================================
+         * ACTIVE INDICATOR
+         * =====================================================
+         */
+
+        if (this.editing)
+        {
+            net.minecraft.client.gui.Gui.drawRect(
+                    this.x + 1,
+                    this.y + this.height - 2,
+                    this.x + this.width - 1,
+                    this.y + this.height - 1,
+                    BORDER_EDITING
+            );
+        }
+        else if (this.dragging)
+        {
+            net.minecraft.client.gui.Gui.drawRect(
+                    this.x + 1,
+                    this.y + this.height - 2,
+                    this.x + this.width - 1,
+                    this.y + this.height - 1,
+                    0xFF888A8D
+            );
+        }
     }
+
+    /*
+     * =========================================================
+     * FORMAT
+     * =========================================================
+     */
 
     private String format(
             float value)
@@ -506,6 +777,13 @@ public class AnimationValueControl
                 value
         );
     }
+
+    /*
+     * =========================================================
+     * FINISH EDITING
+     * =========================================================
+     */
+
     public boolean finishEditing()
     {
         if (!this.editing)
@@ -518,4 +796,42 @@ public class AnimationValueControl
         return true;
     }
 
+    /*
+     * =========================================================
+     * MOUSE POSITION HELPER
+     * =========================================================
+     *
+     * Отдельный маленький helper нужен только для hover.
+     * Он не участвует в обработке кликов.
+     *
+     * ВАЖНО:
+     * класс находится внутри AnimationValueControl,
+     * поэтому никаких дополнительных файлов не требуется.
+     */
+
+    private static class MouseHelper
+    {
+        public static int getMouseX(
+                Minecraft mc)
+        {
+            return org.lwjgl.input.Mouse.getX()
+                    *
+                    mc.currentScreen.width
+                    /
+                    mc.displayWidth;
+        }
+
+        public static int getMouseY(
+                Minecraft mc)
+        {
+            return mc.currentScreen.height
+                    -
+                    org.lwjgl.input.Mouse.getY()
+                            *
+                            mc.currentScreen.height
+                            /
+                            mc.displayHeight
+                    - 1;
+        }
+    }
 }

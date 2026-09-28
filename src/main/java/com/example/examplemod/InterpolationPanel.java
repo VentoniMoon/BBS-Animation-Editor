@@ -12,6 +12,99 @@ import java.util.List;
 
 public class InterpolationPanel
 {
+    /*
+     * =========================================================
+     * COLORS
+     * =========================================================
+     */
+
+    private static final int PANEL_BACKGROUND =
+            0xFF252629;
+
+    private static final int PANEL_BORDER =
+            0xFF111214;
+
+    private static final int HEADER_BACKGROUND =
+            0xFF303134;
+
+    private static final int HEADER_BOTTOM =
+            0xFF18191B;
+
+    private static final int HEADER_ACCENT =
+            0xFF66CCFF;
+
+    private static final int FIELD_BACKGROUND =
+            0xFF303134;
+
+    private static final int FIELD_HOVER =
+            0xFF3A3B3E;
+
+    private static final int FIELD_ACTIVE =
+            0xFF45474A;
+
+    private static final int FIELD_BORDER =
+            0xFF18191B;
+
+    private static final int FIELD_ACTIVE_BORDER =
+            0xFF66CCFF;
+
+    private static final int TEXT =
+            0xFFE0E0E0;
+
+    private static final int TEXT_BRIGHT =
+            0xFFF5F5F5;
+
+    private static final int TEXT_SECONDARY =
+            0xFFAAAAAA;
+
+    private static final int TEXT_MUTED =
+            0xFF777777;
+
+    private static final int TEXT_DARK =
+            0xFF55585C;
+
+    private static final int ACCENT =
+            0xFF66CCFF;
+
+    private static final int ACCENT_BRIGHT =
+            0xFF8BE1FF;
+
+    private static final int GRAPH_BACKGROUND =
+            0xFF18191B;
+
+    private static final int GRAPH_GRID =
+            0xFF2A2C2F;
+
+    private static final int GRAPH_AXIS =
+            0xFF484B4F;
+
+    private static final int GRAPH_BORDER =
+            0xFF36383B;
+
+    private static final int GRAPH_CURVE =
+            0xFF66CCFF;
+
+    private static final int GRAPH_POINT =
+            0xFFFFFFFF;
+
+    private static final int DROPDOWN_BACKGROUND =
+            0xFF202124;
+
+    private static final int DROPDOWN_SELECTED =
+            0xFF34373A;
+
+    private static final int DROPDOWN_HOVER =
+            0xFF3A3D40;
+
+    private static final int DROPDOWN_BORDER =
+            0xFF111214;
+
+    /*
+     * =========================================================
+     * STATE
+     * =========================================================
+     */
+
     private final Minecraft mc;
 
     private int x;
@@ -36,7 +129,8 @@ public class InterpolationPanel
 
     public InterpolationPanel()
     {
-        this.mc = Minecraft.getMinecraft();
+        this.mc =
+                Minecraft.getMinecraft();
 
         this.selectedInterpolation =
                 KeyframeInterpolation.LINEAR;
@@ -44,11 +138,14 @@ public class InterpolationPanel
         this.selectedEasing =
                 KeyframeEasing.IN;
 
-        this.hoveredInterpolation = null;
+        this.hoveredInterpolation =
+                null;
 
-        this.dropdownOpen = false;
+        this.dropdownOpen =
+                false;
 
-        this.dropdownScroll = 0;
+        this.dropdownScroll =
+                0;
 
         this.animationStartTime =
                 System.currentTimeMillis();
@@ -56,12 +153,22 @@ public class InterpolationPanel
         this.interpolations =
                 new ArrayList<KeyframeInterpolation>();
 
-        for (KeyframeInterpolation interpolation :
-                KeyframeInterpolation.values())
+        for (
+                KeyframeInterpolation interpolation :
+                KeyframeInterpolation.values()
+        )
         {
-            this.interpolations.add(interpolation);
+            this.interpolations.add(
+                    interpolation
+            );
         }
     }
+
+    /*
+     * =========================================================
+     * BOUNDS
+     * =========================================================
+     */
 
     public void setBounds(
             int x,
@@ -74,6 +181,12 @@ public class InterpolationPanel
         this.width = width;
         this.height = height;
     }
+
+    /*
+     * =========================================================
+     * INTERPOLATION
+     * =========================================================
+     */
 
     public void setSelectedInterpolation(
             KeyframeInterpolation interpolation)
@@ -94,21 +207,36 @@ public class InterpolationPanel
         return this.selectedInterpolation;
     }
 
+    /*
+     * =========================================================
+     * EASING
+     * =========================================================
+     */
+
     public void setSelectedEasing(
             KeyframeEasing easing)
     {
         if (easing == null)
         {
-            easing = KeyframeEasing.IN;
+            easing =
+                    KeyframeEasing.IN;
         }
 
-        this.selectedEasing = easing;
+        this.selectedEasing =
+                easing;
     }
 
-    public KeyframeEasing getSelectedEasing()
+    public KeyframeEasing
+    getSelectedEasing()
     {
         return this.selectedEasing;
     }
+
+    /*
+     * =========================================================
+     * CALLBACK
+     * =========================================================
+     */
 
     public void setInterpolationChanged(
             Runnable interpolationChanged)
@@ -122,38 +250,188 @@ public class InterpolationPanel
         return this.dropdownOpen;
     }
 
+    /*
+     * =========================================================
+     * DRAW
+     * =========================================================
+     */
+
     public void draw(
             int mouseX,
             int mouseY)
     {
-        if (this.width <= 0 || this.height <= 0)
+        if (
+                this.width <= 0 ||
+                        this.height <= 0
+        )
         {
             return;
         }
 
         /*
-         * Main panel.
+         * =====================================================
+         * PANEL FRAME
+         * =====================================================
          */
+
+        Gui.drawRect(
+                this.x - 1,
+                this.y - 1,
+                this.x + this.width + 1,
+                this.y + this.height + 1,
+                PANEL_BORDER
+        );
+
         Gui.drawRect(
                 this.x,
                 this.y,
                 this.x + this.width,
                 this.y + this.height,
-                0xE0181818
+                PANEL_BACKGROUND
         );
 
         /*
-         * Header.
+         * =====================================================
+         * HEADER
+         * =====================================================
          */
-        int headerHeight = 20;
+
+        final int headerHeight = 25;
 
         Gui.drawRect(
                 this.x,
                 this.y,
                 this.x + this.width,
                 this.y + headerHeight,
-                0xFF242424
+                HEADER_BACKGROUND
         );
+
+        /*
+         * Cyan marker.
+         */
+
+        Gui.drawRect(
+                this.x + 8,
+                this.y + 7,
+                this.x + 10,
+                this.y + 18,
+                HEADER_ACCENT
+        );
+
+        /*
+         * Header title.
+         */
+
+        this.mc.fontRenderer.drawString(
+                "INTERPOLATION",
+                this.x + 16,
+                this.y + 8,
+                TEXT
+        );
+
+        /*
+         * Header bottom line.
+         */
+
+        Gui.drawRect(
+                this.x,
+                this.y + headerHeight - 1,
+                this.x + this.width,
+                this.y + headerHeight,
+                HEADER_BOTTOM
+        );
+
+        /*
+         * =====================================================
+         * SELECTOR
+         * =====================================================
+         */
+
+        int selectorX =
+                this.x + 7;
+
+        int selectorY =
+                this.y + 30;
+
+        int selectorWidth =
+                this.width - 14;
+
+        int selectorHeight =
+                20;
+
+        boolean selectorHovered =
+                isInside(
+                        mouseX,
+                        mouseY,
+                        selectorX,
+                        selectorY,
+                        selectorWidth,
+                        selectorHeight
+                );
+
+        int selectorBackground;
+
+        if (this.dropdownOpen)
+        {
+            selectorBackground =
+                    FIELD_ACTIVE;
+        }
+        else if (selectorHovered)
+        {
+            selectorBackground =
+                    FIELD_HOVER;
+        }
+        else
+        {
+            selectorBackground =
+                    FIELD_BACKGROUND;
+        }
+
+        /*
+         * Outer border.
+         */
+
+        Gui.drawRect(
+                selectorX,
+                selectorY,
+                selectorX + selectorWidth,
+                selectorY + selectorHeight,
+                FIELD_BORDER
+        );
+
+        /*
+         * Inner field.
+         */
+
+        Gui.drawRect(
+                selectorX + 1,
+                selectorY + 1,
+                selectorX + selectorWidth - 1,
+                selectorY + selectorHeight - 1,
+                selectorBackground
+        );
+
+        /*
+         * Active/hover accent.
+         */
+
+        if (
+                this.dropdownOpen ||
+                        selectorHovered
+        )
+        {
+            Gui.drawRect(
+                    selectorX + 1,
+                    selectorY + selectorHeight - 2,
+                    selectorX + selectorWidth - 1,
+                    selectorY + selectorHeight - 1,
+                    FIELD_ACTIVE_BORDER
+            );
+        }
+
+        /*
+         * Selected interpolation name.
+         */
 
         String selectedName =
                 getInterpolationName(
@@ -162,64 +440,156 @@ public class InterpolationPanel
 
         this.mc.fontRenderer.drawString(
                 selectedName,
-                this.x + 6,
-                this.y + 6,
-                0xFFFFFFFF
+                selectorX + 7,
+                selectorY + 6,
+                this.dropdownOpen
+                        ? TEXT_BRIGHT
+                        : TEXT
         );
 
         /*
-         * Arrow.
+         * Dropdown arrow.
          */
+
         String arrow =
                 this.dropdownOpen
                         ? "▲"
                         : "▼";
 
+        int arrowWidth =
+                this.mc.fontRenderer.getStringWidth(
+                        arrow
+                );
+
         this.mc.fontRenderer.drawString(
                 arrow,
-                this.x + this.width - 12,
-                this.y + 6,
-                0xFFFFFFFF
+                selectorX +
+                        selectorWidth -
+                        arrowWidth -
+                        7,
+                selectorY + 6,
+                this.dropdownOpen
+                        ? ACCENT_BRIGHT
+                        : TEXT_SECONDARY
         );
 
         /*
-         * Closed state:
-         * show the selected interpolation graph.
+         * =====================================================
+         * EASING
+         * =====================================================
          */
+
+        /*
+         * Small section marker.
+         */
+
+        Gui.drawRect(
+                this.x + 8,
+                this.y + 57,
+                this.x + 10,
+                this.y + 67,
+                0xFF55585C
+        );
+
+        this.mc.fontRenderer.drawString(
+                "Easing",
+                this.x + 15,
+                this.y + 58,
+                TEXT_MUTED
+        );
+
+        String easingName =
+                getEasingName(
+                        this.selectedEasing
+                );
+
+        int easingWidth =
+                this.mc.fontRenderer.getStringWidth(
+                        easingName
+                );
+
+        this.mc.fontRenderer.drawString(
+                easingName,
+                this.x +
+                        this.width -
+                        easingWidth -
+                        8,
+                this.y + 58,
+                TEXT_SECONDARY
+        );
+
+        /*
+         * =====================================================
+         * GRAPH
+         * =====================================================
+         */
+
+        int graphX =
+                this.x + 8;
+
+        int graphY =
+                this.y + 72;
+
+        int graphWidth =
+                this.width - 16;
+
+        int graphHeight =
+                Math.max(
+                        18,
+                        this.height - 80
+                );
+
         if (!this.dropdownOpen)
         {
-            return;
+            drawGraph(
+                    this.selectedInterpolation,
+                    this.selectedEasing,
+                    graphX,
+                    graphY,
+                    graphWidth,
+                    graphHeight
+            );
         }
 
         /*
-         * Open state:
-         * draw the dropdown and determine
-         * which interpolation is hovered.
+         * =====================================================
+         * DROPDOWN
+         * =====================================================
          */
-        drawDropdown(
-                mouseX,
-                mouseY
-        );
+
+        if (this.dropdownOpen)
+        {
+            drawDropdown(
+                    mouseX,
+                    mouseY
+            );
+        }
     }
+
+    /*
+     * =========================================================
+     * DROPDOWN
+     * =========================================================
+     */
 
     private void drawDropdown(
             int mouseX,
             int mouseY)
     {
-        int headerHeight = 20;
-        int itemHeight = 18;
+        final int headerHeight = 25;
+        final int itemHeight = 18;
 
-        int dropdownX = this.x;
+        int dropdownX =
+                this.x;
+
         int dropdownY =
-                this.y + headerHeight;
+                this.y +
+                        headerHeight +
+                        25;
 
         int dropdownWidth =
                 this.width;
 
-        /*
-         * Показываем максимум столько элементов,
-         * сколько реально помещается в высоту панели.
-         */
         int visibleItems =
                 Math.max(
                         1,
@@ -241,76 +611,186 @@ public class InterpolationPanel
                 );
 
         int dropdownHeight =
-                visibleItems * itemHeight;
+                visibleItems *
+                        itemHeight;
 
         /*
-         * Background.
+         * =====================================================
+         * SHADOW
+         * =====================================================
          */
+
+        Gui.drawRect(
+                dropdownX - 3,
+                dropdownY - 3,
+                dropdownX +
+                        dropdownWidth +
+                        3,
+                dropdownY +
+                        dropdownHeight +
+                        3,
+                0xDD080909
+        );
+
+        /*
+         * =====================================================
+         * FRAME
+         * =====================================================
+         */
+
+        Gui.drawRect(
+                dropdownX - 1,
+                dropdownY - 1,
+                dropdownX +
+                        dropdownWidth +
+                        1,
+                dropdownY +
+                        dropdownHeight +
+                        1,
+                DROPDOWN_BORDER
+        );
+
         Gui.drawRect(
                 dropdownX,
                 dropdownY,
                 dropdownX + dropdownWidth,
                 dropdownY + dropdownHeight,
-                0xFF181818
+                DROPDOWN_BACKGROUND
         );
 
-        this.hoveredInterpolation = null;
+        /*
+         * Top accent.
+         */
+
+        Gui.drawRect(
+                dropdownX,
+                dropdownY,
+                dropdownX + dropdownWidth,
+                dropdownY + 1,
+                ACCENT
+        );
+
+        this.hoveredInterpolation =
+                null;
 
         /*
-         * Draw visible interpolation items.
+         * =====================================================
+         * ITEMS
+         * =====================================================
          */
-        for (int visibleIndex = 0;
-             visibleIndex < visibleItems;
-             visibleIndex++)
+
+        for (
+                int visibleIndex = 0;
+                visibleIndex < visibleItems;
+                visibleIndex++
+        )
         {
             int index =
-                    this.dropdownScroll
-                            + visibleIndex;
+                    this.dropdownScroll +
+                            visibleIndex;
 
-            if (index >= this.interpolations.size())
+            if (
+                    index >=
+                            this.interpolations.size()
+            )
             {
                 break;
             }
 
             KeyframeInterpolation interpolation =
-                    this.interpolations.get(index);
+                    this.interpolations.get(
+                            index
+                    );
 
             int itemY =
-                    dropdownY
-                            + visibleIndex * itemHeight;
+                    dropdownY +
+                            visibleIndex *
+                                    itemHeight;
 
             boolean hovered =
                     mouseX >= dropdownX
-                            && mouseX < dropdownX + dropdownWidth
-                            && mouseY >= itemY
-                            && mouseY < itemY + itemHeight;
+                            &&
+                            mouseX <
+                                    dropdownX +
+                                            dropdownWidth
+                            &&
+                            mouseY >= itemY
+                            &&
+                            mouseY <
+                                    itemY +
+                                            itemHeight;
+
+            boolean selected =
+                    interpolation ==
+                            this.selectedInterpolation;
+
+            /*
+             * Row background.
+             */
+
+            if (selected)
+            {
+                Gui.drawRect(
+                        dropdownX + 1,
+                        itemY,
+                        dropdownX +
+                                dropdownWidth - 1,
+                        itemY +
+                                itemHeight,
+                        hovered
+                                ? DROPDOWN_HOVER
+                                : DROPDOWN_SELECTED
+                );
+            }
+            else if (hovered)
+            {
+                Gui.drawRect(
+                        dropdownX + 1,
+                        itemY,
+                        dropdownX +
+                                dropdownWidth - 1,
+                        itemY +
+                                itemHeight,
+                        DROPDOWN_HOVER
+                );
+            }
 
             if (hovered)
             {
                 this.hoveredInterpolation =
                         interpolation;
+            }
 
+            /*
+             * Selected marker.
+             */
+
+            if (selected)
+            {
                 Gui.drawRect(
-                        dropdownX,
+                        dropdownX + 1,
                         itemY,
-                        dropdownX + dropdownWidth,
+                        dropdownX + 4,
                         itemY + itemHeight,
-                        0xFF3A3A3A
+                        ACCENT
                 );
             }
 
             /*
-             * Selected interpolation marker.
+             * Hover marker.
              */
-            if (interpolation ==
-                    this.selectedInterpolation)
+
+            if (
+                    hovered &&
+                            !selected
+            )
             {
                 Gui.drawRect(
-                        dropdownX,
+                        dropdownX + 1,
                         itemY,
                         dropdownX + 3,
                         itemY + itemHeight,
-                        0xFFFFFFFF
+                        0xFF55585C
                 );
             }
 
@@ -321,53 +801,109 @@ public class InterpolationPanel
 
             this.mc.fontRenderer.drawString(
                     name,
-                    dropdownX + 7,
+                    dropdownX + 10,
                     itemY + 5,
-                    0xFFFFFFFF
+                    selected
+                            ? TEXT_BRIGHT
+                            : hovered
+                            ? TEXT
+                            : TEXT_SECONDARY
             );
         }
 
         /*
-         * Scroll indicators.
+         * =====================================================
+         * SCROLL INDICATORS
+         * =====================================================
          */
+
         if (this.dropdownScroll > 0)
         {
+            Gui.drawRect(
+                    dropdownX,
+                    dropdownY,
+                    dropdownX +
+                            dropdownWidth,
+                    dropdownY + 1,
+                    ACCENT
+            );
+
             this.mc.fontRenderer.drawString(
                     "▲",
-                    dropdownX + dropdownWidth - 12,
+                    dropdownX +
+                            dropdownWidth -
+                            12,
                     dropdownY + 2,
-                    0xFFFFFFFF
+                    ACCENT_BRIGHT
             );
         }
 
         if (this.dropdownScroll < maxScroll)
         {
+            Gui.drawRect(
+                    dropdownX,
+                    dropdownY +
+                            dropdownHeight -
+                            1,
+                    dropdownX +
+                            dropdownWidth,
+                    dropdownY +
+                            dropdownHeight,
+                    ACCENT
+            );
+
             this.mc.fontRenderer.drawString(
                     "▼",
-                    dropdownX + dropdownWidth - 12,
-                    dropdownY
-                            + dropdownHeight
-                            - 10,
-                    0xFFFFFFFF
+                    dropdownX +
+                            dropdownWidth -
+                            12,
+                    dropdownY +
+                            dropdownHeight -
+                            10,
+                    ACCENT_BRIGHT
             );
         }
 
         /*
-         * Graph preview of the interpolation
-         * currently under the mouse.
+         * =====================================================
+         * FLOATING GRAPH
+         * =====================================================
          */
-        if (this.hoveredInterpolation != null)
+
+        if (
+                this.hoveredInterpolation != null
+        )
         {
-            int graphWidth = 110;
-            int graphHeight = 75;
+            int graphWidth =
+                    125;
+
+            int graphHeight =
+                    82;
 
             int graphX =
-                    dropdownX
-                            + dropdownWidth
-                            + 6;
+                    dropdownX +
+                            dropdownWidth +
+                            7;
 
             int graphY =
                     dropdownY;
+
+            /*
+             * Prevent the graph from going too far
+             * outside the screen.
+             */
+
+            if (
+                    graphX +
+                            graphWidth >
+                            this.mc.currentScreen.width
+            )
+            {
+                graphX =
+                        dropdownX -
+                                graphWidth -
+                                7;
+            }
 
             drawFloatingGraph(
                     this.hoveredInterpolation,
@@ -380,7 +916,138 @@ public class InterpolationPanel
         }
     }
 
+    /*
+     * =========================================================
+     * FLOATING GRAPH
+     * =========================================================
+     */
+
     private void drawFloatingGraph(
+            KeyframeInterpolation interpolation,
+            KeyframeEasing easing,
+            int graphX,
+            int graphY,
+            int graphWidth,
+            int graphHeight)
+    {
+        /*
+         * Shadow.
+         */
+
+        Gui.drawRect(
+                graphX - 3,
+                graphY - 3,
+                graphX +
+                        graphWidth +
+                        3,
+                graphY +
+                        graphHeight +
+                        3,
+                0xDD080909
+        );
+
+        /*
+         * Frame.
+         */
+
+        Gui.drawRect(
+                graphX - 1,
+                graphY - 1,
+                graphX +
+                        graphWidth +
+                        1,
+                graphY +
+                        graphHeight +
+                        1,
+                DROPDOWN_BORDER
+        );
+
+        Gui.drawRect(
+                graphX,
+                graphY,
+                graphX + graphWidth,
+                graphY + graphHeight,
+                GRAPH_BACKGROUND
+        );
+
+        /*
+         * Top accent.
+         */
+
+        Gui.drawRect(
+                graphX,
+                graphY,
+                graphX + graphWidth,
+                graphY + 1,
+                ACCENT
+        );
+
+        /*
+         * Bottom and side borders.
+         */
+
+        Gui.drawRect(
+                graphX,
+                graphY +
+                        graphHeight -
+                        1,
+                graphX + graphWidth,
+                graphY + graphHeight,
+                GRAPH_BORDER
+        );
+
+        Gui.drawRect(
+                graphX,
+                graphY,
+                graphX + 1,
+                graphY + graphHeight,
+                GRAPH_BORDER
+        );
+
+        Gui.drawRect(
+                graphX +
+                        graphWidth -
+                        1,
+                graphY,
+                graphX + graphWidth,
+                graphY + graphHeight,
+                GRAPH_BORDER
+        );
+
+        drawGraphGrid(
+                graphX,
+                graphY,
+                graphWidth,
+                graphHeight
+        );
+
+        drawCurve(
+                interpolation,
+                easing,
+                graphX,
+                graphY,
+                graphWidth,
+                graphHeight,
+                GRAPH_CURVE
+        );
+
+        drawAnimatedPoint(
+                interpolation,
+                easing,
+                graphX,
+                graphY,
+                graphWidth,
+                graphHeight
+        );
+    }
+
+    /*
+     * =========================================================
+     * GRAPH
+     * =========================================================
+     */
+
+    private void drawGraph(
             KeyframeInterpolation interpolation,
             KeyframeEasing easing,
             int graphX,
@@ -391,31 +1058,35 @@ public class InterpolationPanel
         /*
          * Background.
          */
+
         Gui.drawRect(
-                graphX - 2,
-                graphY - 2,
-                graphX + graphWidth + 2,
-                graphY + graphHeight + 2,
-                0xF0202020
+                graphX,
+                graphY,
+                graphX + graphWidth,
+                graphY + graphHeight,
+                GRAPH_BACKGROUND
         );
 
         /*
          * Border.
          */
+
         Gui.drawRect(
                 graphX,
                 graphY,
                 graphX + graphWidth,
                 graphY + 1,
-                0xFF606060
+                GRAPH_BORDER
         );
 
         Gui.drawRect(
                 graphX,
-                graphY + graphHeight - 1,
+                graphY +
+                        graphHeight -
+                        1,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                0xFF606060
+                GRAPH_BORDER
         );
 
         Gui.drawRect(
@@ -423,30 +1094,191 @@ public class InterpolationPanel
                 graphY,
                 graphX + 1,
                 graphY + graphHeight,
-                0xFF606060
+                GRAPH_BORDER
         );
 
         Gui.drawRect(
-                graphX + graphWidth - 1,
+                graphX +
+                        graphWidth -
+                        1,
                 graphY,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                0xFF606060
+                GRAPH_BORDER
+        );
+
+        drawGraphGrid(
+                graphX,
+                graphY,
+                graphWidth,
+                graphHeight
+        );
+
+        drawCurve(
+                interpolation,
+                easing,
+                graphX,
+                graphY,
+                graphWidth,
+                graphHeight,
+                GRAPH_CURVE
+        );
+
+        drawAnimatedPoint(
+                interpolation,
+                easing,
+                graphX,
+                graphY,
+                graphWidth,
+                graphHeight
+        );
+    }
+
+    /*
+     * =========================================================
+     * GRAPH GRID
+     * =========================================================
+     */
+
+    private void drawGraphGrid(
+            int graphX,
+            int graphY,
+            int graphWidth,
+            int graphHeight)
+    {
+        /*
+         * Quarter horizontal line.
+         */
+
+        int quarterY =
+                graphY +
+                        graphHeight / 4;
+
+        Gui.drawRect(
+                graphX + 1,
+                quarterY,
+                graphX + graphWidth - 1,
+                quarterY + 1,
+                GRAPH_GRID
         );
 
         /*
-         * Animated mathematical curve.
+         * Middle horizontal axis.
          */
-        int previousX = graphX;
+
+        int middleY =
+                graphY +
+                        graphHeight / 2;
+
+        Gui.drawRect(
+                graphX + 1,
+                middleY,
+                graphX + graphWidth - 1,
+                middleY + 1,
+                GRAPH_AXIS
+        );
+
+        /*
+         * Three-quarter horizontal line.
+         */
+
+        int threeQuarterY =
+                graphY +
+                        graphHeight * 3 / 4;
+
+        Gui.drawRect(
+                graphX + 1,
+                threeQuarterY,
+                graphX + graphWidth - 1,
+                threeQuarterY + 1,
+                GRAPH_GRID
+        );
+
+        /*
+         * Vertical center.
+         */
+
+        int middleX =
+                graphX +
+                        graphWidth / 2;
+
+        Gui.drawRect(
+                middleX,
+                graphY + 1,
+                middleX + 1,
+                graphY +
+                        graphHeight -
+                        1,
+                GRAPH_GRID
+        );
+
+        /*
+         * Quarter vertical lines.
+         */
+
+        int quarterX =
+                graphX +
+                        graphWidth / 4;
+
+        int threeQuarterX =
+                graphX +
+                        graphWidth * 3 / 4;
+
+        Gui.drawRect(
+                quarterX,
+                graphY + 1,
+                quarterX + 1,
+                graphY +
+                        graphHeight -
+                        1,
+                GRAPH_GRID
+        );
+
+        Gui.drawRect(
+                threeQuarterX,
+                graphY + 1,
+                threeQuarterX + 1,
+                graphY +
+                        graphHeight -
+                        1,
+                GRAPH_GRID
+        );
+    }
+
+    /*
+     * =========================================================
+     * CURVE
+     * =========================================================
+     */
+
+    private void drawCurve(
+            KeyframeInterpolation interpolation,
+            KeyframeEasing easing,
+            int graphX,
+            int graphY,
+            int graphWidth,
+            int graphHeight,
+            int color)
+    {
+        int previousX =
+                graphX;
+
         int previousY =
-                graphY + graphHeight;
+                graphY +
+                        graphHeight;
 
-        int samples = 60;
+        int samples =
+                60;
 
-        for (int i = 0; i <= samples; i++)
+        for (
+                int i = 0;
+                i <= samples;
+                i++
+        )
         {
             float factor =
-                    i / (float) samples;
+                    i /
+                            (float) samples;
 
             double value =
                     calculateInterpolation(
@@ -463,27 +1295,30 @@ public class InterpolationPanel
                     );
 
             int pointX =
-                    graphX
-                            + Math.round(
-                            factor
-                                    * graphWidth
-                    );
+                    graphX +
+                            Math.round(
+                                    factor *
+                                            graphWidth
+                            );
 
             int pointY =
-                    graphY
-                            + graphHeight
-                            - Math.round(
-                            (float)
-                                    ((value + 0.25D)
-                                            / 1.5D
-                                            * graphHeight)
-                    );
+                    graphY +
+                            graphHeight -
+                            Math.round(
+                                    (float)
+                                            (
+                                                    (value + 0.25D)
+                                                            / 1.5D
+                                                            * graphHeight
+                                            )
+                            );
 
             pointY =
                     clamp(
                             pointY,
                             graphY,
-                            graphY + graphHeight
+                            graphY +
+                                    graphHeight
                     );
 
             if (i > 0)
@@ -493,72 +1328,25 @@ public class InterpolationPanel
                         previousY,
                         pointX,
                         pointY,
-                        0xFFFFFFFF
+                        color
                 );
             }
 
-            previousX = pointX;
-            previousY = pointY;
+            previousX =
+                    pointX;
+
+            previousY =
+                    pointY;
         }
-
-        /*
-         * Animated point.
-         */
-        float animationFactor =
-                getAnimationFactor();
-
-        double animatedValue =
-                calculateInterpolation(
-                        interpolation,
-                        easing,
-                        animationFactor
-                );
-
-        animatedValue =
-                clamp(
-                        animatedValue,
-                        -0.25D,
-                        1.25D
-                );
-
-        int pointX =
-                graphX
-                        + Math.round(
-                        animationFactor
-                                * graphWidth
-                );
-
-        int pointY =
-                graphY
-                        + graphHeight
-                        - Math.round(
-                        (float)
-                                ((animatedValue + 0.25D)
-                                        / 1.5D
-                                        * graphHeight)
-                );
-
-        pointY =
-                clamp(
-                        pointY,
-                        graphY,
-                        graphY + graphHeight
-                );
-
-        /*
-         * Draw a small mathematical
-         * animation marker.
-         */
-        Gui.drawRect(
-                pointX - 2,
-                pointY - 2,
-                pointX + 3,
-                pointY + 3,
-                0xFFFFFFFF
-        );
     }
 
-    private void drawGraph(
+    /*
+     * =========================================================
+     * ANIMATED POINT
+     * =========================================================
+     */
+
+    private void drawAnimatedPoint(
             KeyframeInterpolation interpolation,
             KeyframeEasing easing,
             int graphX,
@@ -566,77 +1354,6 @@ public class InterpolationPanel
             int graphWidth,
             int graphHeight)
     {
-        Gui.drawRect(
-                graphX,
-                graphY,
-                graphX + graphWidth,
-                graphY + graphHeight,
-                0xFF101010
-        );
-
-        int previousX = graphX;
-        int previousY =
-                graphY + graphHeight;
-
-        int samples = 60;
-
-        for (int i = 0; i <= samples; i++)
-        {
-            float factor =
-                    i / (float) samples;
-
-            double value =
-                    calculateInterpolation(
-                            interpolation,
-                            easing,
-                            factor
-                    );
-
-            value =
-                    clamp(
-                            value,
-                            -0.25D,
-                            1.25D
-                    );
-
-            int pointX =
-                    graphX
-                            + Math.round(
-                            factor * graphWidth
-                    );
-
-            int pointY =
-                    graphY
-                            + graphHeight
-                            - Math.round(
-                            (float)
-                                    ((value + 0.25D)
-                                            / 1.5D
-                                            * graphHeight)
-                    );
-
-            pointY =
-                    clamp(
-                            pointY,
-                            graphY,
-                            graphY + graphHeight
-                    );
-
-            if (i > 0)
-            {
-                drawLine(
-                        previousX,
-                        previousY,
-                        pointX,
-                        pointY,
-                        0xFFCCCCCC
-                );
-            }
-
-            previousX = pointX;
-            previousY = pointY;
-        }
-
         float animationFactor =
                 getAnimationFactor();
 
@@ -655,49 +1372,80 @@ public class InterpolationPanel
                 );
 
         int pointX =
-                graphX
-                        + Math.round(
-                        animationFactor * graphWidth
-                );
+                graphX +
+                        Math.round(
+                                animationFactor *
+                                        graphWidth
+                        );
 
         int pointY =
-                graphY
-                        + graphHeight
-                        - Math.round(
-                        (float)
-                                ((animatedValue + 0.25D)
-                                        / 1.5D
-                                        * graphHeight)
-                );
+                graphY +
+                        graphHeight -
+                        Math.round(
+                                (float)
+                                        (
+                                                (animatedValue + 0.25D)
+                                                        / 1.5D
+                                                        * graphHeight
+                                        )
+                        );
 
         pointY =
                 clamp(
                         pointY,
                         graphY,
-                        graphY + graphHeight
+                        graphY +
+                                graphHeight
                 );
+
+        /*
+         * Outer glow.
+         */
+
+        Gui.drawRect(
+                pointX - 4,
+                pointY - 4,
+                pointX + 5,
+                pointY + 5,
+                0xFF252629
+        );
+
+        /*
+         * Cyan center border.
+         */
+
+        Gui.drawRect(
+                pointX - 3,
+                pointY - 3,
+                pointX + 4,
+                pointY + 4,
+                ACCENT
+        );
+
+        /*
+         * White center.
+         */
 
         Gui.drawRect(
                 pointX - 2,
                 pointY - 2,
                 pointX + 3,
                 pointY + 3,
-                0xFFFFFFFF
+                GRAPH_POINT
         );
     }
+
+    /*
+     * =========================================================
+     * INTERPOLATION CALCULATION
+     * =========================================================
+     */
 
     private double calculateInterpolation(
             KeyframeInterpolation interpolation,
             KeyframeEasing easing,
             float factor)
     {
-        /*
-         * These are real McLib keyframes.
-         *
-         * We deliberately use the same
-         * KeyframeInterpolation.interpolate()
-         * path used by AnimationInterpolator.
-         */
         Keyframe previous =
                 new Keyframe(
                         0,
@@ -758,22 +1506,30 @@ public class InterpolationPanel
         );
     }
 
+    /*
+     * =========================================================
+     * ANIMATION
+     * =========================================================
+     */
+
     private float getAnimationFactor()
     {
         long elapsed =
                 System.currentTimeMillis()
-                        - this.animationStartTime;
+                        -
+                        this.animationStartTime;
 
-        /*
-         * 1200 ms for one complete
-         * mathematical movement.
-         */
-        float factor =
-                (elapsed % 1200L)
-                        / 1200.0F;
-
-        return factor;
+        return (
+                elapsed % 1200L
+        ) /
+                1200.0F;
     }
+
+    /*
+     * =========================================================
+     * NAMES
+     * =========================================================
+     */
 
     private String getInterpolationName(
             KeyframeInterpolation interpolation)
@@ -787,10 +1543,14 @@ public class InterpolationPanel
                 interpolation.getKey();
 
         String localized =
-                I18n.format(key);
+                I18n.format(
+                        key
+                );
 
-        if (localized == null
-                || localized.equals(key))
+        if (
+                localized == null ||
+                        localized.equals(key)
+        )
         {
             return makeReadableName(
                     interpolation.name()
@@ -879,23 +1639,126 @@ public class InterpolationPanel
         return name;
     }
 
+    private String getEasingName(
+            KeyframeEasing easing)
+    {
+        if (easing == null)
+        {
+            return "In";
+        }
+
+        String name =
+                easing.name();
+
+        if (
+                name == null ||
+                        name.length() == 0
+        )
+        {
+            return "In";
+        }
+
+        String lower =
+                name.toLowerCase();
+
+        if (lower.equals("in"))
+        {
+            return "In";
+        }
+
+        if (lower.equals("out"))
+        {
+            return "Out";
+        }
+
+        if (
+                lower.equals("in_out") ||
+                        lower.equals("inout")
+        )
+        {
+            return "In / Out";
+        }
+
+        String result =
+                name.substring(
+                        0,
+                        1
+                ).toUpperCase();
+
+        if (name.length() > 1)
+        {
+            result +=
+                    name.substring(
+                            1
+                    ).toLowerCase();
+        }
+
+        return result;
+    }
+
+    /*
+     * =========================================================
+     * CLICK
+     * =========================================================
+     */
+
     public boolean mouseClicked(
             int mouseX,
             int mouseY,
             int mouseButton)
     {
         /*
-         * Left click on header opens/closes
-         * the dropdown.
+         * Header toggles dropdown.
          */
-        if (mouseButton == 0
-                && isInside(
-                mouseX,
-                mouseY,
-                this.x,
-                this.y,
-                this.width,
-                20))
+
+        if (
+                mouseButton == 0 &&
+                        isInside(
+                                mouseX,
+                                mouseY,
+                                this.x,
+                                this.y,
+                                this.width,
+                                25
+                        )
+        )
+        {
+            this.dropdownOpen =
+                    !this.dropdownOpen;
+
+            this.hoveredInterpolation =
+                    null;
+
+            return true;
+        }
+
+        /*
+         * Selector toggles dropdown.
+         */
+
+        int selectorX =
+                this.x + 7;
+
+        int selectorY =
+                this.y + 30;
+
+        int selectorWidth =
+                this.width - 14;
+
+        int selectorHeight =
+                20;
+
+        if (
+                mouseButton == 0 &&
+                        isInside(
+                                mouseX,
+                                mouseY,
+                                selectorX,
+                                selectorY,
+                                selectorWidth,
+                                selectorHeight
+                        )
+        )
         {
             this.dropdownOpen =
                     !this.dropdownOpen;
@@ -911,10 +1774,13 @@ public class InterpolationPanel
             return false;
         }
 
-        int itemHeight = 18;
+        final int headerHeight = 25;
+        final int itemHeight = 18;
 
         int dropdownY =
-                this.y + 20;
+                this.y +
+                        headerHeight +
+                        25;
 
         int visibleItems =
                 Math.max(
@@ -937,39 +1803,58 @@ public class InterpolationPanel
                 );
 
         /*
-         * Select an interpolation.
+         * =====================================================
+         * SELECT INTERPOLATION
+         * =====================================================
          */
+
         if (mouseButton == 0)
         {
-            for (int i = 0;
-                 i < this.interpolations.size();
-                 i++)
+            for (
+                    int i = 0;
+                    i <
+                            this.interpolations.size();
+                    i++
+            )
             {
                 int visibleIndex =
-                        i - this.dropdownScroll;
+                        i -
+                                this.dropdownScroll;
 
-                if (visibleIndex < 0
-                        || visibleIndex >= visibleItems)
+                if (
+                        visibleIndex < 0 ||
+                                visibleIndex >=
+                                        visibleItems
+                )
                 {
                     continue;
                 }
 
                 int itemY =
-                        dropdownY
-                                + visibleIndex * itemHeight;
+                        dropdownY +
+                                visibleIndex *
+                                        itemHeight;
 
-                if (isInside(
-                        mouseX,
-                        mouseY,
-                        this.x,
-                        itemY,
-                        this.width,
-                        itemHeight))
+                if (
+                        isInside(
+                                mouseX,
+                                mouseY,
+                                this.x,
+                                itemY,
+                                this.width,
+                                itemHeight
+                        )
+                )
                 {
                     this.selectedInterpolation =
-                            this.interpolations.get(i);
+                            this.interpolations.get(
+                                    i
+                            );
 
-                    if (this.interpolationChanged != null)
+                    if (
+                            this.interpolationChanged
+                                    != null
+                    )
                     {
                         this.interpolationChanged.run();
                     }
@@ -989,16 +1874,39 @@ public class InterpolationPanel
         }
 
         /*
-         * Clicking outside closes
-         * the dropdown.
+         * =====================================================
+         * CLICK OUTSIDE
+         * =====================================================
          */
-        if (!isInside(
-                mouseX,
-                mouseY,
-                this.x,
-                this.y,
-                this.width,
-                this.height))
+
+        int dropdownHeight =
+                visibleItems *
+                        itemHeight;
+
+        boolean insideDropdown =
+                isInside(
+                        mouseX,
+                        mouseY,
+                        this.x,
+                        dropdownY,
+                        this.width,
+                        dropdownHeight
+                );
+
+        boolean insideSelector =
+                isInside(
+                        mouseX,
+                        mouseY,
+                        selectorX,
+                        selectorY,
+                        selectorWidth,
+                        selectorHeight
+                );
+
+        if (
+                !insideDropdown &&
+                        !insideSelector
+        )
         {
             this.dropdownOpen =
                     false;
@@ -1012,6 +1920,12 @@ public class InterpolationPanel
         return false;
     }
 
+    /*
+     * =========================================================
+     * RELEASE
+     * =========================================================
+     */
+
     public boolean mouseReleased(
             int mouseX,
             int mouseY,
@@ -1019,6 +1933,12 @@ public class InterpolationPanel
     {
         return false;
     }
+
+    /*
+     * =========================================================
+     * MOUSE OVER
+     * =========================================================
+     */
 
     public boolean isMouseOver(
             int mouseX,
@@ -1034,104 +1954,12 @@ public class InterpolationPanel
         );
     }
 
-    private boolean isInside(
-            int mouseX,
-            int mouseY,
-            int x,
-            int y,
-            int width,
-            int height)
-    {
-        return mouseX >= x
-                && mouseX < x + width
-                && mouseY >= y
-                && mouseY < y + height;
-    }
+    /*
+     * =========================================================
+     * SCROLL
+     * =========================================================
+     */
 
-    private void drawLine(
-            int x1,
-            int y1,
-            int x2,
-            int y2,
-            int color)
-    {
-        int distance =
-                Math.max(
-                        Math.abs(x2 - x1),
-                        Math.abs(y2 - y1)
-                );
-
-        if (distance <= 0)
-        {
-            Gui.drawRect(
-                    x1,
-                    y1,
-                    x1 + 1,
-                    y1 + 1,
-                    color
-            );
-
-            return;
-        }
-
-        for (int i = 0;
-             i <= distance;
-             i++)
-        {
-            float t =
-                    i / (float) distance;
-
-            int x =
-                    Math.round(
-                            x1
-                                    + (x2 - x1)
-                                    * t
-                    );
-
-            int y =
-                    Math.round(
-                            y1
-                                    + (y2 - y1)
-                                    * t
-                    );
-
-            Gui.drawRect(
-                    x,
-                    y,
-                    x + 1,
-                    y + 1,
-                    color
-            );
-        }
-    }
-
-    private double clamp(
-            double value,
-            double min,
-            double max)
-    {
-        return Math.max(
-                min,
-                Math.min(
-                        max,
-                        value
-                )
-        );
-    }
-
-    private int clamp(
-            int value,
-            int min,
-            int max)
-    {
-        return Math.max(
-                min,
-                Math.min(
-                        max,
-                        value
-                )
-        );
-    }
     public boolean mouseScrolled(
             int mouseX,
             int mouseY,
@@ -1142,7 +1970,7 @@ public class InterpolationPanel
             return false;
         }
 
-        int itemHeight = 18;
+        final int itemHeight = 18;
 
         int visibleItems =
                 Math.max(
@@ -1182,4 +2010,127 @@ public class InterpolationPanel
         return true;
     }
 
+    /*
+     * =========================================================
+     * HIT TEST
+     * =========================================================
+     */
+
+    private boolean isInside(
+            int mouseX,
+            int mouseY,
+            int x,
+            int y,
+            int width,
+            int height)
+    {
+        return mouseX >= x
+                && mouseX < x + width
+                && mouseY >= y
+                && mouseY < y + height;
+    }
+
+    /*
+     * =========================================================
+     * LINE
+     * =========================================================
+     */
+
+    private void drawLine(
+            int x1,
+            int y1,
+            int x2,
+            int y2,
+            int color)
+    {
+        int distance =
+                Math.max(
+                        Math.abs(
+                                x2 - x1
+                        ),
+                        Math.abs(
+                                y2 - y1
+                        )
+                );
+
+        if (distance <= 0)
+        {
+            Gui.drawRect(
+                    x1,
+                    y1,
+                    x1 + 1,
+                    y1 + 1,
+                    color
+            );
+
+            return;
+        }
+
+        for (
+                int i = 0;
+                i <= distance;
+                i++
+        )
+        {
+            float t =
+                    i /
+                            (float) distance;
+
+            int drawX =
+                    Math.round(
+                            x1 +
+                                    (x2 - x1) *
+                                            t
+                    );
+
+            int drawY =
+                    Math.round(
+                            y1 +
+                                    (y2 - y1) *
+                                            t
+                    );
+
+            Gui.drawRect(
+                    drawX,
+                    drawY,
+                    drawX + 1,
+                    drawY + 1,
+                    color
+            );
+        }
+    }
+
+    /*
+     * =========================================================
+     * CLAMP
+     * =========================================================
+     */
+
+    private double clamp(
+            double value,
+            double min,
+            double max)
+    {
+        return Math.max(
+                min,
+                Math.min(
+                        max,
+                        value
+                )
+        );
+    }
+
+    private int clamp(
+            int value,
+            int min,
+            int max)
+    {
+        return Math.max(
+                min,
+                Math.min(
+                        max,
+                        value
+                )
+        );
+    }
 }

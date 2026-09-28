@@ -1,9 +1,9 @@
 package com.example.examplemod;
 
-import net.minecraft.client.gui.GuiScreen;
-
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
+
+import net.minecraft.client.gui.GuiScreen;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,72 +12,198 @@ import java.util.List;
 
 public class AnimationEditorScreen extends GuiScreen
 {
+    /*
+     * =========================================================
+     * EDITOR MODE
+     * =========================================================
+     */
+
+    private final EditorModeController editorModeController =
+            new EditorModeController();
+
     private static final int TOP_BAR_HEIGHT = 25;
     private static final int LEFT_PANEL_WIDTH = 180;
     private static final int ACTOR_PANEL_HEIGHT = 150;
     private static final int INTERPOLATION_PANEL_HEIGHT = 100;
 
-    private static final int BASE_FRAME_WIDTH = 6;
-    private static final int FIRST_FRAME = 0;
-    private static final int TRACK_HEIGHT = 20;
+    /*
+     * =========================================================
+     * PREVIEW CONTROLS
+     * =========================================================
+     */
 
-    private static final float MIN_TIMELINE_ZOOM = 0.25F;
-    private static final float MAX_TIMELINE_ZOOM = 4.0F;
-    private static final float TIMELINE_ZOOM_STEP = 0.25F;
-
-    private float timelineZoom = 1.0F;
-
-    private AnimationAdapterManager adapterManager;
-
-    private BlockbusterModelAccess blockbusterModelAccess;
-
-    private boolean sceneDropdownOpen = false;
+    private static final int PREVIEW_BUTTON_WIDTH = 30;
+    private static final int PREVIEW_BUTTON_HEIGHT = 20;
+    private static final int PREVIEW_BUTTON_GAP = 5;
 
     /*
-     * currentFrame — целый кадр Record/Timeline.
-     *
-     * currentAnimationFrame — дробный кадр для плавной
-     * интерполяции AnimationBone во время воспроизведения.
+     * =========================================================
+     * DELETE DIALOG
+     * =========================================================
      */
-    private int currentFrame = 0;
-    private float currentAnimationFrame = 0.0F;
 
-    private int timelineOffset = 0;
-    private int boneScroll = 0;
+    private static final int DELETE_DIALOG_WIDTH = 280;
+    private static final int DELETE_DIALOG_HEIGHT = 105;
+
+    private static final int DELETE_BUTTON_WIDTH = 90;
+    private static final int DELETE_BUTTON_HEIGHT = 20;
+
+    /*
+     * =========================================================
+     * VISUAL CONSTANTS
+     * =========================================================
+     */
+
+    private static final int COLOR_PANEL =
+            0xFF17191B;
+
+    private static final int COLOR_PANEL_DARK =
+            0xFF111315;
+
+    private static final int COLOR_PANEL_LIGHT =
+            0xFF1D2023;
+
+    private static final int COLOR_PANEL_HOVER =
+            0xFF25292D;
+
+    private static final int COLOR_SELECTED =
+            0xFF28343A;
+
+    private static final int COLOR_SELECTED_EDGE =
+            0xFF5CC9E8;
+
+    private static final int COLOR_BORDER =
+            0xFF303438;
+
+    private static final int COLOR_BORDER_DARK =
+            0xFF0D0F10;
+
+    private static final int COLOR_TEXT =
+            0xFFE2E5E7;
+
+    private static final int COLOR_TEXT_SECONDARY =
+            0xFF9AA1A6;
+
+    private static final int COLOR_TEXT_MUTED =
+            0xFF666D72;
+
+    private static final int COLOR_CYAN =
+            0xFF66CCFF;
+
+    private static final int COLOR_CYAN_BRIGHT =
+            0xFF8BE1FF;
+
+    /*
+     * =========================================================
+     * SERVICES
+     * =========================================================
+     */
+
+    private EditorSceneState sceneState;
 
     private EditorSceneViewport sceneViewport;
 
-    private boolean playing = false;
+    private final EditorActorPreviewController actorPreviewController =
+            new EditorActorPreviewController();
+
+    /*
+     * =========================================================
+     * TIMELINE / PLAYBACK
+     * =========================================================
+     */
 
     private final EditorTimeline timeline =
             new EditorTimeline();
 
-    private EditorSceneState sceneState;
+    private final EditorPlaybackController playbackController =
+            new EditorPlaybackController(
+                    this.timeline
+            );
 
-    private List<AnimationBone> bones =
-            new ArrayList<AnimationBone>();
+    /*
+     * =========================================================
+     * CHARACTER MODE
+     * =========================================================
+     */
 
-    private int selectedBone = 0;
+    private final CharacterEditorController characterController =
+            new CharacterEditorController(
+                    this.playbackController
+            );
 
-    private AnimationKeyframe selectedKeyframe =
-            null;
+    private final CharacterEditorPanel characterEditorPanel =
+            new CharacterEditorPanel(
+                    this.characterController
+            );
+
+    /*
+     * Отдельный UI-контроллер Character Timeline.
+     *
+     * Он специально вынесен из AnimationEditorScreen,
+     * чтобы этот класс не разрастался логикой Character Mode.
+     */
+    private final CharacterTimelineEditorController
+            characterTimelineEditorController =
+            new CharacterTimelineEditorController();
+
+    /*
+     * =========================================================
+     * KEYFRAME CONTROLLER
+     * =========================================================
+     */
+
+    private final EditorKeyframeController keyframeController =
+            new EditorKeyframeController(
+                    this.timeline,
+                    LEFT_PANEL_WIDTH
+            );
+
+    /*
+     * =========================================================
+     * TIMELINE CONTROLLER
+     * =========================================================
+     */
+
+    private final EditorTimelineController timelineController =
+            new EditorTimelineController(
+                    this.timeline,
+                    this.keyframeController,
+                    this.playbackController,
+                    this.actorPreviewController
+            );
+
+    /*
+     * =========================================================
+     * RECORD CONTROLLER
+     * =========================================================
+     */
+
+    private final EditorRecordController recordController =
+            new EditorRecordController(
+                    this.playbackController
+            );
+
+    /*
+     * =========================================================
+     * SCENE
+     * =========================================================
+     */
+
+    private boolean sceneDropdownOpen = false;
+
+    /*
+     * =========================================================
+     * TRANSFORM
+     * =========================================================
+     */
 
     private boolean transformDragging = false;
 
-    private final BlockbusterRecordPose currentRecordPose =
-            new BlockbusterRecordPose();
-
-    private final AnimationFrameResolver frameResolver =
-            new AnimationFrameResolver();
-
-    private final ActorPose currentActorPose =
-            new ActorPose();
-
-    private final TransformPanel transformPanel =
-            new TransformPanel();
-
-    private final AnimationPreview animationPreview =
-            new AnimationPreview();
+    /*
+     * =========================================================
+     * INTERPOLATION
+     * =========================================================
+     */
 
     private final InterpolationPanel interpolationPanel =
             new InterpolationPanel();
@@ -89,6 +215,7 @@ public class AnimationEditorScreen extends GuiScreen
         super.initGui();
 
         BlockbusterPreviewAnimationState.clear();
+
         EmoticonsPreviewAnimationState.clear();
 
         this.sceneState =
@@ -101,36 +228,8 @@ public class AnimationEditorScreen extends GuiScreen
         this.sceneViewport =
                 new EditorSceneViewport();
 
-        this.adapterManager =
-                new AnimationAdapterManager();
-
-        this.blockbusterModelAccess =
-                new BlockbusterModelAccess(
-                        null
-                );
-
-        BlockbusterAnimationAdapter blockbusterAdapter =
-                new BlockbusterAnimationAdapter(
-                        this.blockbusterModelAccess
-                );
-
-        this.adapterManager.register(
-                blockbusterAdapter
-        );
-
-        EmoticonsAnimationAdapter emoticonsAdapter =
-                new EmoticonsAnimationAdapter();
-
-        this.adapterManager.register(
-                emoticonsAdapter
-        );
-
-        if (blockbusterAdapter.supports())
-        {
-            this.blockbusterModelAccess.loadModelByName(
-                    "steve"
-            );
-        }
+        this.actorPreviewController
+                .initializeAdapters();
 
         this.interpolationPanel
                 .setInterpolationChanged(
@@ -139,6 +238,22 @@ public class AnimationEditorScreen extends GuiScreen
                             @Override
                             public void run()
                             {
+                                /*
+                                 * Interpolation относится только
+                                 * к Pose Mode.
+                                 */
+                                if (
+                                        editorModeController.getMode()
+                                                != EditorModeController.EditorMode.POSE
+                                )
+                                {
+                                    return;
+                                }
+
+                                AnimationKeyframe selectedKeyframe =
+                                        keyframeController
+                                                .getSelectedKeyframe();
+
                                 if (
                                         selectedKeyframe != null
                                 )
@@ -159,276 +274,95 @@ public class AnimationEditorScreen extends GuiScreen
                         }
                 );
 
+        /*
+         * Если SceneState уже имеет выбранного Actor,
+         * сразу синхронизируем его с Character Timeline.
+         */
+        syncCharacterTimelineActor();
+
         resetTimeline(1);
     }
 
 
-    private ActorAnimationData getOrCreateActorAnimation(
-            String actorId)
+    /*
+     * =========================================================
+     * CHARACTER TIMELINE SYNC
+     * =========================================================
+     */
+
+    /**
+     * Передаёт текущего Actor в Character Timeline Editor.
+     *
+     * Character Timeline хранится внутри
+     * BlockbusterSceneActorData, поэтому здесь мы только
+     * передаём ссылку на выбранного Actor.
+     */
+    private void syncCharacterTimelineActor()
     {
-        if (actorId == null || actorId.isEmpty())
-        {
-            return null;
-        }
-
-        ActorAnimationData existing =
-                this.sceneState
-                        .getAnimationData()
-                        .getActor(actorId);
-
-        if (existing != null)
-        {
-            return existing;
-        }
-
-        ActorAnimationData created =
-                createAnimationDataForActor(
-                        actorId
+        this.characterTimelineEditorController
+                .setSelectedActor(
+                        getSelectedActor()
                 );
-
-        if (created == null)
-        {
-            return null;
-        }
-
-        this.sceneState
-                .getAnimationData()
-                .putActor(
-                        actorId,
-                        created
-                );
-
-        return created;
     }
 
 
-    private ActorAnimationData createAnimationDataForActor(
-            String actorId)
-    {
-        BlockbusterSceneActorData actorData =
-                getSelectedActor();
-
-        if (actorData == null)
-        {
-            return null;
-        }
-
-        BlockbusterSceneActor sceneActor =
-                actorData.getActor();
-
-        if (sceneActor == null)
-        {
-            return null;
-        }
-
-        /*
-         * ---------------------------------------------------------
-         * EMOTICONS
-         * ---------------------------------------------------------
-         */
-
-        net.minecraft.nbt.NBTTagCompound morphNBT =
-                sceneActor.getMorph();
-
-        if (morphNBT != null)
-        {
-            try
-            {
-                mchorse.metamorph.api.morphs.AbstractMorph morph =
-                        mchorse.metamorph.api.MorphManager.INSTANCE
-                                .morphFromNBT(
-                                        morphNBT.copy()
-                                );
-
-                if (
-                        morph instanceof
-                                mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph
-                )
-                {
-                    mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph animatedMorph =
-                            (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
-                                    morph;
-
-                    EmoticonsActorPreviewRenderer.prepareMorph(
-                            animatedMorph
-                    );
-
-                    return new ActorAnimationData(
-                            actorId,
-                            animatedMorph
-                    );
-                }
-            }
-            catch (Exception exception)
-            {
-                System.out.println(
-                        "[BBS Animation Editor] "
-                                + "Failed to create Emoticons animation data"
-                );
-
-                exception.printStackTrace();
-            }
-        }
-
-        /*
-         * ---------------------------------------------------------
-         * BLOCKBUSTER
-         * ---------------------------------------------------------
-         */
-
-        List<BlockbusterLimbData> limbs =
-                this.blockbusterModelAccess.getLimbData();
-
-        return new ActorAnimationData(
-                actorId,
-                limbs
-        );
-    }
-
-
-    private void selectActorAnimation(
-            String actorId)
-    {
-        ActorAnimationData data =
-                getOrCreateActorAnimation(
-                        actorId
-                );
-
-        if (data == null)
-        {
-            this.bones =
-                    new ArrayList<AnimationBone>();
-
-            this.selectedBone = 0;
-            this.selectedKeyframe = null;
-            this.transformDragging = false;
-
-            BlockbusterPreviewAnimationState.clear();
-            EmoticonsPreviewAnimationState.clear();
-
-            return;
-        }
-
-        this.bones =
-                data.getBones();
-
-        if (
-                this.selectedBone >=
-                        this.bones.size()
-        )
-        {
-            this.selectedBone = 0;
-        }
-
-        this.selectedKeyframe = null;
-        this.transformDragging = false;
-
-        BlockbusterPreviewAnimationState.clear();
-        EmoticonsPreviewAnimationState.clear();
-    }
-
-
-    private void resetPreviewReference()
-    {
-        BlockbusterRecord record =
-                getSelectedActorRecord();
-
-        if (record == null)
-        {
-            this.animationPreview.setReferencePosition(
-                    0.0D,
-                    0.0D,
-                    0.0D
-            );
-
-            return;
-        }
-
-        BlockbusterRecordFrame firstFrame =
-                record.getFrame(0);
-
-        if (firstFrame == null)
-        {
-            this.animationPreview.setReferencePosition(
-                    0.0D,
-                    0.0D,
-                    0.0D
-            );
-
-            return;
-        }
-
-        this.animationPreview.setReferencePosition(
-                firstFrame.getX(),
-                firstFrame.getY(),
-                firstFrame.getZ()
-        );
-    }
-
+    /*
+     * =========================================================
+     * RECORD / PREVIEW
+     * =========================================================
+     */
 
     private void applyRecordFrame()
     {
-        BlockbusterRecord record =
-                getSelectedActorRecord();
-
-        if (record == null)
-        {
-            return;
-        }
-
-        BlockbusterRecordPose pose =
-                this.frameResolver.resolveRecordPose(
-                        record,
-                        this.currentFrame
-                );
-
-        this.currentRecordPose.setPosition(
-                pose.getX(),
-                pose.getY(),
-                pose.getZ()
+        this.recordController.applyRecordFrame(
+                getSelectedActorRecord()
         );
 
-        this.currentRecordPose.setRotation(
-                pose.getYaw(),
-                pose.getPitch()
-        );
+        this.recordController.applyAnimationPose();
+    }
 
-        AnimationActorTransform actorTransform =
-                this.frameResolver.resolveActorTransform(
-                        record,
-                        this.currentFrame
-                );
 
-        this.currentActorPose.setPosition(
-                actorTransform.getX(),
-                actorTransform.getY(),
-                actorTransform.getZ()
-        );
-
-        this.currentActorPose.setRotation(
-                actorTransform.getYaw(),
-                actorTransform.getPitch()
+    private void applyAdapters()
+    {
+        this.actorPreviewController.applyAdapters(
+                this.playbackController
+                        .getCurrentFrame()
         );
     }
 
 
-    private void applyAnimationPose()
+    private void applyAdapters(
+            float animationFrame)
     {
-        this.currentRecordPose.applyTo(
-                this.currentActorPose
+        this.actorPreviewController.applyAdapters(
+                animationFrame
         );
     }
 
 
-    private void resetTimeline(int length)
-    {
-        this.currentFrame = 0;
-        this.currentAnimationFrame = 0.0F;
-        this.timelineOffset = 0;
-        this.playing = false;
+    /*
+     * =========================================================
+     * RESET TIMELINE
+     * =========================================================
+     */
 
-        this.selectedKeyframe = null;
-        this.transformDragging = false;
+    private void resetTimeline(
+            int length)
+    {
+        this.playbackController
+                .setCurrentFrame(0);
+
+        this.playbackController
+                .pause();
+
+        this.keyframeController
+                .reset();
+
+        this.timelineController
+                .reset();
+
+        this.transformDragging =
+                false;
 
         this.timeline.setLength(
                 Math.max(
@@ -438,22 +372,39 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         this.timeline.rewind();
+
         this.timeline.pause();
 
+        this.timeline.resetOffset();
+
+        this.timeline.setZoom(
+                1.0F
+        );
+
         BlockbusterPreviewAnimationState.clear();
+
         EmoticonsPreviewAnimationState.clear();
 
         BlockbusterPreviewAnimationState.setPlaying(
                 false
         );
 
+        syncCharacterTimelineActor();
+
         applyRecordFrame();
-        applyAnimationPose();
+
         applyAdapters();
     }
 
 
-    private void loadScene(int index)
+    /*
+     * =========================================================
+     * LOAD SCENE
+     * =========================================================
+     */
+
+    private void loadScene(
+            int index)
     {
         try
         {
@@ -462,25 +413,36 @@ public class AnimationEditorScreen extends GuiScreen
                 return;
             }
 
-            this.sceneDropdownOpen = false;
+            this.sceneDropdownOpen =
+                    false;
 
-            this.bones =
-                    new ArrayList<AnimationBone>();
+            this.actorPreviewController
+                    .clearBones();
 
-            this.selectedBone = 0;
-            this.selectedKeyframe = null;
-            this.transformDragging = false;
+            this.keyframeController
+                    .reset();
+
+            this.timelineController
+                    .reset();
+
+            this.transformDragging =
+                    false;
 
             BlockbusterPreviewAnimationState.clear();
+
             EmoticonsPreviewAnimationState.clear();
 
-            this.animationPreview.setReferencePosition(
-                    0.0D,
-                    0.0D,
-                    0.0D
-            );
+            this.actorPreviewController
+                    .getAnimationPreview()
+                    .setReferencePosition(
+                            0.0D,
+                            0.0D,
+                            0.0D
+                    );
 
             this.updateSceneViewportPosition();
+
+            syncCharacterTimelineActor();
 
             resetTimeline(
                     getSceneLength()
@@ -493,6 +455,12 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
 
+    /*
+     * =========================================================
+     * SCENE HELPERS
+     * =========================================================
+     */
+
     private int getSceneLength()
     {
         if (this.sceneState == null)
@@ -500,7 +468,8 @@ public class AnimationEditorScreen extends GuiScreen
             return 0;
         }
 
-        return this.sceneState.getSceneLength();
+        return this.sceneState
+                .getSceneLength();
     }
 
 
@@ -512,7 +481,8 @@ public class AnimationEditorScreen extends GuiScreen
             return new ArrayList<BlockbusterSceneActorData>();
         }
 
-        return this.sceneState.getActors();
+        return this.sceneState
+                .getActors();
     }
 
 
@@ -524,7 +494,15 @@ public class AnimationEditorScreen extends GuiScreen
             return null;
         }
 
-        return this.sceneState.getSelectedActorData();
+        return this.sceneState
+                .getSelectedActorData();
+    }
+
+
+    public BlockbusterSceneActorData
+    getSelectedActorForTimeline()
+    {
+        return getSelectedActor();
     }
 
 
@@ -536,27 +514,29 @@ public class AnimationEditorScreen extends GuiScreen
             return null;
         }
 
-        return this.sceneState.getSelectedActorRecord();
+        return this.sceneState
+                .getSelectedActorRecord();
     }
 
 
-    private BlockbusterRecordFrame getCurrentRecordFrame()
+    private BlockbusterRecordFrame
+    getCurrentRecordFrame()
     {
-        BlockbusterRecord record =
-                getSelectedActorRecord();
-
-        if (record == null)
-        {
-            return null;
-        }
-
-        return record.getFrame(
-                this.currentFrame
-        );
+        return this.recordController
+                .getCurrentRecordFrame(
+                        getSelectedActorRecord()
+                );
     }
 
 
-    private void selectActor(int index)
+    /*
+     * =========================================================
+     * SELECT ACTOR
+     * =========================================================
+     */
+
+    private void selectActor(
+            int index)
     {
         List<BlockbusterSceneActorData> actors =
                 getSceneActors();
@@ -577,37 +557,66 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        this.sceneState.setSelectedActor(index);
+        this.sceneState
+                .setSelectedActor(index);
 
-        selectActorAnimation(
-                data.getId()
-        );
+        /*
+         * Character Timeline получает нового Actor.
+         */
+        this.characterTimelineEditorController
+                .setSelectedActor(
+                        data
+                );
 
-        this.currentFrame = 0;
-        this.currentAnimationFrame = 0.0F;
-        this.timelineOffset = 0;
-        this.playing = false;
+        this.actorPreviewController
+                .selectActorAnimation(
+                        data.getId(),
+                        this.sceneState,
+                        this.keyframeController
+                );
 
-        this.selectedKeyframe = null;
-        this.transformDragging = false;
+        this.playbackController
+                .setCurrentFrame(0);
+
+        this.playbackController
+                .pause();
+
+        this.timeline.resetOffset();
+
+        this.timelineController
+                .reset();
+
+        this.keyframeController
+                .resetSelectionOnly();
 
         this.timeline.setTick(0);
+
         this.timeline.pause();
 
         BlockbusterPreviewAnimationState.clear();
+
         EmoticonsPreviewAnimationState.clear();
 
         BlockbusterPreviewAnimationState.setPlaying(
                 false
         );
 
-        resetPreviewReference();
+        this.actorPreviewController
+                .resetPreviewReference(
+                        getSelectedActorRecord()
+                );
 
         applyRecordFrame();
-        applyAnimationPose();
+
         applyAdapters();
     }
 
+
+    /*
+     * =========================================================
+     * MAIN DRAW
+     * =========================================================
+     */
 
     @Override
     public void drawScreen(
@@ -615,33 +624,22 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             float partialTicks)
     {
-        /*
-         * Во время воспроизведения используем дробный кадр.
-         * На паузе остаёмся на текущем целом кадре.
-         */
-
-        if (this.playing)
-        {
-            this.currentAnimationFrame =
-                    this.timeline.getCurrentFrameFloat();
-        }
-        else
-        {
-            this.currentAnimationFrame =
-                    (float) this.currentFrame;
-        }
-
         this.drawRect(
                 0,
                 0,
                 this.width,
                 this.height,
-                0xFF202124
+                EditorVisualStyle.BACKGROUND
         );
 
         drawTopBar();
+
         drawActorPanel();
-        drawPreview();
+
+        drawPreview(
+                mouseX,
+                mouseY
+        );
 
         drawTimeline();
 
@@ -655,13 +653,35 @@ public class AnimationEditorScreen extends GuiScreen
             drawSceneDropdown();
         }
 
+        if (
+                this.editorModeController
+                        .isDropdownOpen()
+        )
+        {
+            drawEditorModeDropdown();
+        }
+
         super.drawScreen(
                 mouseX,
                 mouseY,
                 partialTicks
         );
+
+        if (isDeleteDialogOpen())
+        {
+            drawDeleteDialog(
+                    mouseX,
+                    mouseY
+            );
+        }
     }
 
+
+    /*
+     * =========================================================
+     * TOP BAR
+     * =========================================================
+     */
 
     private void drawTopBar()
     {
@@ -670,27 +690,57 @@ public class AnimationEditorScreen extends GuiScreen
                 0,
                 this.width,
                 TOP_BAR_HEIGHT,
-                0xFF303134
+                COLOR_PANEL_DARK
         );
 
-        this.drawString(
+        this.drawRect(
+                0,
+                TOP_BAR_HEIGHT - 1,
+                this.width,
+                TOP_BAR_HEIGHT,
+                COLOR_BORDER
+        );
+
+        this.drawRect(
+                8,
+                TOP_BAR_HEIGHT - 2,
+                145,
+                TOP_BAR_HEIGHT - 1,
+                COLOR_CYAN
+        );
+
+        EditorVisualStyle.title(
+                this,
                 this.fontRenderer,
                 "BBS Animation Editor",
                 10,
-                8,
-                0xFFFFFF
+                8
         );
 
-        int sceneButtonX = 175;
-        int sceneButtonWidth = 180;
+        /*
+         * SCENE
+         */
 
-        this.drawRect(
+        int sceneButtonX =
+                175;
+
+        int sceneButtonWidth =
+                180;
+
+        boolean sceneHovered =
+                isMouseInside(
+                        sceneButtonX,
+                        3,
+                        sceneButtonWidth,
+                        TOP_BAR_HEIGHT - 6
+                );
+
+        drawToolbarButton(
                 sceneButtonX,
                 3,
-                sceneButtonX +
-                        sceneButtonWidth,
-                TOP_BAR_HEIGHT - 3,
-                0xFF45474A
+                sceneButtonWidth,
+                TOP_BAR_HEIGHT - 6,
+                sceneHovered || sceneDropdownOpen
         );
 
         String sceneName =
@@ -699,10 +749,12 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.sceneState != null)
         {
             int selectedScene =
-                    this.sceneState.getSelectedScene();
+                    this.sceneState
+                            .getSelectedScene();
 
             List<File> sceneFiles =
-                    this.sceneState.getSceneFiles();
+                    this.sceneState
+                            .getSceneFiles();
 
             if (
                     selectedScene >= 0 &&
@@ -725,55 +777,386 @@ public class AnimationEditorScreen extends GuiScreen
                     ) + "...";
         }
 
+        String sceneText =
+                "SCENE: " + sceneName;
+
         this.drawString(
                 this.fontRenderer,
-                "Scene: "
-                        + sceneName
-                        + " ▼",
+                sceneText,
                 sceneButtonX + 8,
                 8,
-                0xFFFFFF
+                sceneDropdownOpen
+                        ? COLOR_CYAN_BRIGHT
+                        : COLOR_TEXT
         );
+
+        this.drawString(
+                this.fontRenderer,
+                "▼",
+                sceneButtonX +
+                        sceneButtonWidth -
+                        13,
+                8,
+                COLOR_TEXT_SECONDARY
+        );
+
+        /*
+         * ACTOR
+         */
 
         BlockbusterSceneActorData actor =
                 getSelectedActor();
 
+        int actorX =
+                sceneButtonX +
+                        sceneButtonWidth +
+                        15;
+
+        String actorText =
+                "ACTOR: —";
+
         if (actor != null)
         {
-            this.drawString(
-                    this.fontRenderer,
-                    "Actor: "
-                            + actor.getId(),
-                    375,
-                    8,
-                    0x66CCFF
-            );
+            String actorName =
+                    actor.getId();
+
+            if (
+                    actorName == null ||
+                            actorName.length() == 0
+            )
+            {
+                actorName = "Unnamed";
+            }
+
+            if (actorName.length() > 20)
+            {
+                actorName =
+                        actorName.substring(
+                                0,
+                                17
+                        ) + "...";
+            }
+
+            actorText =
+                    "ACTOR: " + actorName;
         }
 
         this.drawString(
                 this.fontRenderer,
-                "Frame: "
-                        + this.currentFrame,
-                this.width - 100,
+                actorText,
+                actorX,
                 8,
-                0xCCCCCC
+                actor != null
+                        ? COLOR_CYAN
+                        : COLOR_TEXT_MUTED
+        );
+
+        /*
+         * MODE
+         */
+
+        int modeX =
+                this.editorModeController
+                        .getButtonX(
+                                this.width
+                        );
+
+        int mouseX =
+                Mouse.getX()
+                        *
+                        this.width
+                        /
+                        this.mc.displayWidth;
+
+        int mouseY =
+                this.height
+                        -
+                        Mouse.getY()
+                                *
+                                this.height
+                                /
+                                this.mc.displayHeight
+                        -
+                        1;
+
+        boolean modeHovered =
+                this.editorModeController
+                        .isMouseOverButton(
+                                this.width,
+                                mouseX,
+                                mouseY
+                        );
+
+        drawToolbarButton(
+                modeX,
+                3,
+                EditorModeController.MODE_BUTTON_WIDTH,
+                TOP_BAR_HEIGHT - 6,
+                modeHovered ||
+                        this.editorModeController
+                                .isDropdownOpen()
+        );
+
+        String modeText =
+                "MODE: " +
+                        this.editorModeController
+                                .getModeName();
+
+        this.drawString(
+                this.fontRenderer,
+                modeText,
+                modeX + 8,
+                8,
+                this.editorModeController
+                        .isDropdownOpen()
+                        ? COLOR_CYAN_BRIGHT
+                        : COLOR_TEXT
+        );
+
+        this.drawString(
+                this.fontRenderer,
+                "▼",
+                modeX +
+                        EditorModeController.MODE_BUTTON_WIDTH -
+                        13,
+                8,
+                COLOR_TEXT_SECONDARY
+        );
+
+        /*
+         * FRAME
+         */
+
+        int frame =
+                this.playbackController
+                        .getCurrentFrame();
+
+        String frameText =
+                "FRAME  " + frame;
+
+        int frameWidth =
+                this.fontRenderer
+                        .getStringWidth(
+                                frameText
+                        );
+
+        this.drawString(
+                this.fontRenderer,
+                frameText,
+                this.width -
+                        frameWidth -
+                        12,
+                8,
+                COLOR_TEXT_SECONDARY
         );
     }
 
 
+    private void drawToolbarButton(
+            int x,
+            int y,
+            int width,
+            int height,
+            boolean hovered)
+    {
+        this.drawRect(
+                x,
+                y,
+                x + width,
+                y + height,
+                hovered
+                        ? COLOR_PANEL_HOVER
+                        : COLOR_PANEL_LIGHT
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + width,
+                y + 1,
+                hovered
+                        ? COLOR_CYAN
+                        : COLOR_BORDER
+        );
+
+        this.drawRect(
+                x,
+                y + height - 1,
+                x + width,
+                y + height,
+                COLOR_BORDER_DARK
+        );
+    }
+
+
+    /*
+     * =========================================================
+     * MODE DROPDOWN
+     * =========================================================
+     */
+
+    private void drawEditorModeDropdown()
+    {
+        int x =
+                this.editorModeController
+                        .getDropdownX(
+                                this.width
+                        );
+
+        int y =
+                this.editorModeController
+                        .getDropdownY();
+
+        int width =
+                this.editorModeController
+                        .getDropdownWidth();
+
+        int rowHeight =
+                this.editorModeController
+                        .getDropdownRowHeight();
+
+        int height =
+                this.editorModeController
+                        .getDropdownHeight();
+
+        drawDropdownFrame(
+                x,
+                y,
+                width,
+                height
+        );
+
+        EditorModeController.EditorMode[] modes =
+                new EditorModeController.EditorMode[]
+                        {
+                                EditorModeController.EditorMode.CHARACTER,
+                                EditorModeController.EditorMode.POSE,
+                                EditorModeController.EditorMode.BODY_PARTS
+                        };
+
+        for (
+                int i = 0;
+                i < modes.length;
+                i++
+        )
+        {
+            EditorModeController.EditorMode mode =
+                    modes[i];
+
+            int rowY =
+                    y +
+                            i *
+                                    rowHeight;
+
+            int mouseX =
+                    Mouse.getX()
+                            *
+                            this.width
+                            /
+                            this.mc.displayWidth;
+
+            int mouseY =
+                    this.height
+                            -
+                            Mouse.getY()
+                                    *
+                                    this.height
+                                    /
+                                    this.mc.displayHeight
+                            -
+                            1;
+
+            boolean hovered =
+                    mouseX >= x
+                            &&
+                            mouseX < x + width
+                            &&
+                            mouseY >= rowY
+                            &&
+                            mouseY < rowY + rowHeight;
+
+            boolean selected =
+                    this.editorModeController
+                            .isModeSelected(
+                                    mode
+                            );
+
+            if (selected)
+            {
+                this.drawRect(
+                        x,
+                        rowY,
+                        x + 2,
+                        rowY + rowHeight,
+                        COLOR_CYAN
+                );
+
+                this.drawRect(
+                        x + 2,
+                        rowY,
+                        x + width,
+                        rowY + rowHeight,
+                        hovered
+                                ? COLOR_PANEL_HOVER
+                                : COLOR_SELECTED
+                );
+            }
+            else if (hovered)
+            {
+                this.drawRect(
+                        x,
+                        rowY,
+                        x + width,
+                        rowY + rowHeight,
+                        COLOR_PANEL_HOVER
+                );
+            }
+
+            String name =
+                    this.editorModeController
+                            .getModeName(
+                                    mode
+                            );
+
+            this.drawString(
+                    this.fontRenderer,
+                    name,
+                    x + 9,
+                    rowY + 5,
+                    selected
+                            ? COLOR_CYAN_BRIGHT
+                            : COLOR_TEXT
+            );
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * SCENE DROPDOWN
+     * =========================================================
+     */
+
     private void drawSceneDropdown()
     {
         int x = 175;
-        int y = TOP_BAR_HEIGHT + 2;
+
+        int y =
+                TOP_BAR_HEIGHT + 2;
+
         int width = 180;
-        int rowHeight = 18;
+
+        int rowHeight = 19;
+
         int maxVisible = 8;
 
         List<File> sceneFiles =
-                this.sceneState.getSceneFiles();
+                this.sceneState
+                        .getSceneFiles();
 
         int selectedScene =
-                this.sceneState.getSelectedScene();
+                this.sceneState
+                        .getSelectedScene();
 
         int count =
                 Math.min(
@@ -787,20 +1170,11 @@ public class AnimationEditorScreen extends GuiScreen
                         count * rowHeight
                 );
 
-        this.drawRect(
-                x - 2,
-                y - 2,
-                x + width + 2,
-                y + height + 2,
-                0xFF111111
-        );
-
-        this.drawRect(
+        drawDropdownFrame(
                 x,
                 y,
-                x + width,
-                y + height,
-                0xFF292A2D
+                width,
+                height
         );
 
         if (sceneFiles.isEmpty())
@@ -808,9 +1182,9 @@ public class AnimationEditorScreen extends GuiScreen
             this.drawString(
                     this.fontRenderer,
                     "No scenes found",
-                    x + 8,
-                    y + 5,
-                    0x777777
+                    x + 9,
+                    y + 6,
+                    COLOR_TEXT_MUTED
             );
 
             return;
@@ -827,19 +1201,64 @@ public class AnimationEditorScreen extends GuiScreen
 
             int rowY =
                     y +
-                            i * rowHeight;
+                            i *
+                                    rowHeight;
 
             boolean selected =
                     i == selectedScene;
+
+            int mouseX =
+                    Mouse.getX()
+                            *
+                            this.width
+                            /
+                            this.mc.displayWidth;
+
+            int mouseY =
+                    this.height
+                            -
+                            Mouse.getY()
+                                    *
+                                    this.height
+                                    /
+                                    this.mc.displayHeight
+                            -
+                            1;
+
+            boolean hovered =
+                    mouseX >= x &&
+                            mouseX < x + width &&
+                            mouseY >= rowY &&
+                            mouseY < rowY + rowHeight;
 
             if (selected)
             {
                 this.drawRect(
                         x,
                         rowY,
+                        x + 2,
+                        rowY + rowHeight,
+                        COLOR_CYAN
+                );
+
+                this.drawRect(
+                        x + 2,
+                        rowY,
                         x + width,
                         rowY + rowHeight,
-                        0xFF45474A
+                        hovered
+                                ? COLOR_PANEL_HOVER
+                                : COLOR_SELECTED
+                );
+            }
+            else if (hovered)
+            {
+                this.drawRect(
+                        x,
+                        rowY,
+                        x + width,
+                        rowY + rowHeight,
+                        COLOR_PANEL_HOVER
                 );
             }
 
@@ -858,19 +1277,82 @@ public class AnimationEditorScreen extends GuiScreen
             this.drawString(
                     this.fontRenderer,
                     name,
-                    x + 8,
-                    rowY + 5,
+                    x + 9,
+                    rowY + 6,
                     selected
-                            ? 0xFFFFFF
-                            : 0xAAAAAA
+                            ? COLOR_CYAN_BRIGHT
+                            : COLOR_TEXT
             );
         }
     }
 
 
+    private void drawDropdownFrame(
+            int x,
+            int y,
+            int width,
+            int height)
+    {
+        this.drawRect(
+                x - 3,
+                y - 2,
+                x + width + 3,
+                y + height + 3,
+                0xCC080909
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + width,
+                y + height,
+                COLOR_PANEL
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + width,
+                y + 1,
+                COLOR_CYAN
+        );
+
+        this.drawRect(
+                x,
+                y + height - 1,
+                x + width,
+                y + height,
+                COLOR_BORDER
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + 1,
+                y + height,
+                COLOR_BORDER
+        );
+
+        this.drawRect(
+                x + width - 1,
+                y,
+                x + width,
+                y + height,
+                COLOR_BORDER
+        );
+    }
+
+
+    /*
+     * =========================================================
+     * ACTOR PANEL
+     * =========================================================
+     */
+
     private void drawActorPanel()
     {
-        int top = TOP_BAR_HEIGHT;
+        int top =
+                TOP_BAR_HEIGHT;
 
         int bottom =
                 top +
@@ -881,15 +1363,22 @@ public class AnimationEditorScreen extends GuiScreen
                 top,
                 LEFT_PANEL_WIDTH,
                 bottom,
-                0xFF292A2D
+                COLOR_PANEL
         );
 
-        this.drawString(
-                this.fontRenderer,
+        this.drawRect(
+                LEFT_PANEL_WIDTH - 1,
+                top,
+                LEFT_PANEL_WIDTH,
+                bottom,
+                COLOR_BORDER
+        );
+
+        drawPanelHeader(
                 "ACTORS",
-                10,
-                top + 10,
-                0x66CCFF
+                0,
+                top,
+                LEFT_PANEL_WIDTH
         );
 
         List<BlockbusterSceneActorData> actors =
@@ -900,9 +1389,9 @@ public class AnimationEditorScreen extends GuiScreen
             this.drawString(
                     this.fontRenderer,
                     "No actors",
-                    10,
-                    top + 32,
-                    0x777777
+                    12,
+                    top + 38,
+                    COLOR_TEXT_MUTED
             );
 
             return;
@@ -911,7 +1400,8 @@ public class AnimationEditorScreen extends GuiScreen
         int actorY =
                 top + 30;
 
-        final int actorRowHeight = 31;
+        final int actorRowHeight =
+                31;
 
         for (
                 int i = 0;
@@ -936,7 +1426,34 @@ public class AnimationEditorScreen extends GuiScreen
             }
 
             boolean selected =
-                    i == this.sceneState.getSelectedActor();
+                    i ==
+                            this.sceneState
+                                    .getSelectedActor();
+
+            int mouseX =
+                    Mouse.getX()
+                            *
+                            this.width
+                            /
+                            this.mc.displayWidth;
+
+            int mouseY =
+                    this.height
+                            -
+                            Mouse.getY()
+                                    *
+                                    this.height
+                                    /
+                                    this.mc.displayHeight
+                            -
+                            1;
+
+            boolean hovered =
+                    mouseX >= 5 &&
+                            mouseX < LEFT_PANEL_WIDTH - 5 &&
+                            mouseY >= actorY - 2 &&
+                            mouseY < actorY +
+                                    actorRowHeight - 2;
 
             if (selected)
             {
@@ -945,9 +1462,28 @@ public class AnimationEditorScreen extends GuiScreen
                         actorY - 2,
                         LEFT_PANEL_WIDTH - 5,
                         actorY +
-                                actorRowHeight -
-                                2,
-                        0xFF45474A
+                                actorRowHeight - 2,
+                        COLOR_SELECTED
+                );
+
+                this.drawRect(
+                        5,
+                        actorY - 2,
+                        7,
+                        actorY +
+                                actorRowHeight - 2,
+                        COLOR_CYAN
+                );
+            }
+            else if (hovered)
+            {
+                this.drawRect(
+                        5,
+                        actorY - 2,
+                        LEFT_PANEL_WIDTH - 5,
+                        actorY +
+                                actorRowHeight - 2,
+                        COLOR_PANEL_HOVER
                 );
             }
 
@@ -996,27 +1532,74 @@ public class AnimationEditorScreen extends GuiScreen
             this.drawString(
                     this.fontRenderer,
                     id,
-                    12,
+                    13,
                     actorY + 1,
                     selected
-                            ? 0xFFFFFF
-                            : 0xBBBBBB
+                            ? COLOR_TEXT
+                            : COLOR_TEXT_SECONDARY
             );
 
             this.drawString(
                     this.fontRenderer,
                     name,
-                    12,
+                    13,
                     actorY + 13,
                     selected
-                            ? 0x66CCFF
-                            : 0x888888
+                            ? COLOR_CYAN
+                            : COLOR_TEXT_MUTED
             );
 
-            actorY += actorRowHeight;
+            actorY +=
+                    actorRowHeight;
         }
     }
 
+
+    private void drawPanelHeader(
+            String text,
+            int x,
+            int y,
+            int width)
+    {
+        this.drawRect(
+                x,
+                y,
+                x + width,
+                y + 25,
+                COLOR_PANEL_DARK
+        );
+
+        this.drawRect(
+                x,
+                y + 24,
+                x + width,
+                y + 25,
+                COLOR_BORDER
+        );
+
+        this.drawRect(
+                x + 9,
+                y + 7,
+                x + 11,
+                y + 18,
+                COLOR_CYAN
+        );
+
+        this.drawString(
+                this.fontRenderer,
+                text,
+                x + 16,
+                y + 8,
+                COLOR_TEXT
+        );
+    }
+
+
+    /*
+     * =========================================================
+     * INTERPOLATION
+     * =========================================================
+     */
 
     private void drawInterpolationPanel(
             int mouseX,
@@ -1026,30 +1609,56 @@ public class AnimationEditorScreen extends GuiScreen
                 TOP_BAR_HEIGHT +
                         ACTOR_PANEL_HEIGHT;
 
-        int panelWidth =
-                LEFT_PANEL_WIDTH;
+        this.interpolationPanel
+                .setBounds(
+                        0,
+                        top,
+                        LEFT_PANEL_WIDTH,
+                        INTERPOLATION_PANEL_HEIGHT
+                );
 
-        int panelHeight =
-                INTERPOLATION_PANEL_HEIGHT;
-
-        this.interpolationPanel.setBounds(
+        this.drawRect(
                 0,
                 top,
-                panelWidth,
-                panelHeight
+                LEFT_PANEL_WIDTH,
+                top +
+                        INTERPOLATION_PANEL_HEIGHT,
+                COLOR_PANEL
         );
 
-        if (this.selectedKeyframe != null)
+        this.drawRect(
+                LEFT_PANEL_WIDTH - 1,
+                top,
+                LEFT_PANEL_WIDTH,
+                top +
+                        INTERPOLATION_PANEL_HEIGHT,
+                COLOR_BORDER
+        );
+
+        /*
+         * Interpolation используется только Pose,
+         * но сам существующий визуальный блок пока
+         * оставляем без изменений.
+         */
+        AnimationKeyframe selectedKeyframe =
+                this.keyframeController
+                        .getSelectedKeyframe();
+
+        if (
+                selectedKeyframe != null &&
+                        this.editorModeController.getMode()
+                                == EditorModeController.EditorMode.POSE
+        )
         {
             this.interpolationPanel
                     .setSelectedInterpolation(
-                            this.selectedKeyframe
+                            selectedKeyframe
                                     .getInterpolation()
                     );
 
             this.interpolationPanel
                     .setSelectedEasing(
-                            this.selectedKeyframe
+                            selectedKeyframe
                                     .getEasing()
                     );
         }
@@ -1061,7 +1670,15 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
 
-    private void drawPreview()
+    /*
+     * =========================================================
+     * PREVIEW
+     * =========================================================
+     */
+
+    private void drawPreview(
+            int mouseX,
+            int mouseY)
     {
         int left =
                 LEFT_PANEL_WIDTH;
@@ -1069,7 +1686,8 @@ public class AnimationEditorScreen extends GuiScreen
         int top =
                 TOP_BAR_HEIGHT;
 
-        int rightPanelWidth = 185;
+        int rightPanelWidth =
+                185;
 
         int previewRight =
                 this.width -
@@ -1077,7 +1695,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         int bottom =
                 this.height -
-                        this.getTimelineHeight();
+                        getTimelineHeight();
 
         int previewWidth =
                 Math.max(
@@ -1091,14 +1709,42 @@ public class AnimationEditorScreen extends GuiScreen
                         bottom - top
                 );
 
+        /*
+         * Preview background.
+         */
         this.drawRect(
                 left,
                 top,
                 previewRight,
                 bottom,
-                0xFF1E1F21
+                0xFF0E1011
         );
 
+        /*
+         * Preview top border.
+         */
+        this.drawRect(
+                left,
+                top,
+                previewRight,
+                top + 1,
+                COLOR_BORDER
+        );
+
+        /*
+         * Preview right separator.
+         */
+        this.drawRect(
+                previewRight - 1,
+                top,
+                previewRight,
+                bottom,
+                COLOR_BORDER
+        );
+
+        /*
+         * Preview viewport.
+         */
         this.sceneViewport.setBounds(
                 left,
                 top,
@@ -1107,26 +1753,31 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         /*
-         * Во время воспроизведения адаптеры получают
-         * дробный кадр только здесь, непосредственно
-         * перед отрисовкой Preview.
+         * Smooth playback.
          *
-         * Это предотвращает ситуацию, когда updateScreen()
-         * сначала записывает целый кадр, а render-frame
-         * затем записывает дробный.
+         * Не изменяем существующую логику паузы:
+         * во время воспроизведения используются
+         * дробные animation frames.
          */
-        if (this.playing)
+        if (
+                this.playbackController
+                        .isPlaying()
+        )
         {
             applyAdapters(
-                    this.currentAnimationFrame
+                    this.playbackController
+                            .getCurrentAnimationFrame()
             );
         }
 
         this.sceneViewport.draw(
                 this.mc,
-                this.currentActorPose,
-                this.bones,
-                this.currentFrame
+                this.recordController
+                        .getCurrentActorPose(),
+                this.actorPreviewController
+                        .getBones(),
+                this.playbackController
+                        .getCurrentFrame()
         );
 
         this.sceneViewport.drawActor(
@@ -1135,15 +1786,41 @@ public class AnimationEditorScreen extends GuiScreen
                 this.getCurrentRecordFrame()
         );
 
-        this.sceneViewport.finishPreviewRender();
+        this.sceneViewport
+                .finishPreviewRender();
 
-        this.sceneViewport.renderPreviewToScreen();
+        this.sceneViewport
+                .renderPreviewToScreen();
 
+        drawPreviewFrame(
+                left,
+                top,
+                previewRight,
+                bottom
+        );
+
+        drawPreviewControls(
+                left,
+                previewRight,
+                top,
+                bottom
+        );
 
         /*
-         * =========================================================
-         * TRANSFORM PANEL
-         * =========================================================
+         * =====================================================
+         * RIGHT EDITOR PANEL
+         * =====================================================
+         *
+         * Character Mode:
+         *     CharacterEditorPanel
+         *
+         * Pose Mode:
+         *     TransformPanel
+         *
+         * Body Parts:
+         *     Пока отдельная панель ещё не подключена.
+         *
+         * Preview при этом НЕ меняется.
          */
 
         int panelX =
@@ -1151,636 +1828,417 @@ public class AnimationEditorScreen extends GuiScreen
                         rightPanelWidth;
 
         int panelY =
-                top + 10;
+                top;
 
-        this.transformPanel.setPosition(
+        this.drawRect(
                 panelX,
-                panelY
+                top,
+                this.width,
+                bottom,
+                COLOR_PANEL
         );
 
-        this.transformPanel.draw(
-                this.mc,
-                this.selectedKeyframe,
-                getCurrentTransform(),
-                this.currentFrame
+        this.drawRect(
+                panelX,
+                top,
+                panelX + 1,
+                bottom,
+                COLOR_BORDER
+        );
+
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
+        )
+        {
+            this.characterEditorPanel
+                    .setBounds(
+                            panelX,
+                            panelY,
+                            rightPanelWidth,
+                            bottom - panelY
+                    );
+
+            this.characterEditorPanel.draw(
+                    this.mc,
+                    mouseX,
+                    mouseY
+            );
+        }
+        else if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+        )
+        {
+            /*
+             * Transform остаётся исключительно
+             * частью Pose Mode.
+             */
+            this.actorPreviewController
+                    .getTransformPanel()
+                    .setPosition(
+                            panelX,
+                            panelY + 10
+                    );
+
+            this.actorPreviewController
+                    .getTransformPanel()
+                    .draw(
+                            this.mc,
+                            this.keyframeController
+                                    .getSelectedKeyframe(),
+                            getCurrentTransform(),
+                            this.playbackController
+                                    .getCurrentFrame()
+                    );
+        }
+    }
+
+
+    private void drawPreviewFrame(
+            int left,
+            int top,
+            int right,
+            int bottom)
+    {
+        this.drawRect(
+                left,
+                top,
+                right,
+                top + 1,
+                COLOR_BORDER
+        );
+
+        this.drawRect(
+                left,
+                bottom - 1,
+                right,
+                bottom,
+                COLOR_BORDER
+        );
+
+        this.drawRect(
+                left + 7,
+                top + 7,
+                left + 32,
+                top + 8,
+                COLOR_CYAN
+        );
+
+        this.drawString(
+                this.fontRenderer,
+                "PREVIEW",
+                left + 7,
+                top + 10,
+                COLOR_TEXT_MUTED
         );
     }
 
 
+    private void drawPreviewControls(
+            int left,
+            int right,
+            int top,
+            int bottom)
+    {
+        int totalWidth =
+                PREVIEW_BUTTON_WIDTH * 3
+                        +
+                        PREVIEW_BUTTON_GAP * 2;
+
+        int centerX =
+                left +
+                        (
+                                right - left
+                        ) / 2;
+
+        int startX =
+                centerX -
+                        totalWidth / 2;
+
+        int buttonY =
+                bottom -
+                        PREVIEW_BUTTON_HEIGHT -
+                        12;
+
+        int mouseX =
+                Mouse.getX()
+                        *
+                        this.width
+                        /
+                        this.mc.displayWidth;
+
+        int mouseY =
+                this.height -
+                        Mouse.getY()
+                                *
+                                this.height
+                                /
+                                this.mc.displayHeight
+                        -
+                        1;
+
+        int previousX =
+                startX;
+
+        boolean previousHovered =
+                isMouseInside(
+                        mouseX,
+                        mouseY,
+                        previousX,
+                        buttonY,
+                        PREVIEW_BUTTON_WIDTH,
+                        PREVIEW_BUTTON_HEIGHT
+                );
+
+        drawPreviewButton(
+                previousX,
+                buttonY,
+                "|<",
+                previousHovered
+        );
+
+        int playX =
+                previousX +
+                        PREVIEW_BUTTON_WIDTH +
+                        PREVIEW_BUTTON_GAP;
+
+        boolean playHovered =
+                isMouseInside(
+                        mouseX,
+                        mouseY,
+                        playX,
+                        buttonY,
+                        PREVIEW_BUTTON_WIDTH,
+                        PREVIEW_BUTTON_HEIGHT
+                );
+
+        drawPreviewButton(
+                playX,
+                buttonY,
+                this.playbackController
+                        .isPlaying()
+                        ? "||"
+                        : ">",
+                playHovered
+        );
+
+        int nextX =
+                playX +
+                        PREVIEW_BUTTON_WIDTH +
+                        PREVIEW_BUTTON_GAP;
+
+        boolean nextHovered =
+                isMouseInside(
+                        mouseX,
+                        mouseY,
+                        nextX,
+                        buttonY,
+                        PREVIEW_BUTTON_WIDTH,
+                        PREVIEW_BUTTON_HEIGHT
+                );
+
+        drawPreviewButton(
+                nextX,
+                buttonY,
+                ">|",
+                nextHovered
+        );
+    }
+
+
+    private void drawPreviewButton(
+            int x,
+            int y,
+            String text,
+            boolean hovered)
+    {
+        int background =
+                hovered
+                        ? COLOR_SELECTED
+                        : COLOR_PANEL_DARK;
+
+        this.drawRect(
+                x,
+                y,
+                x + PREVIEW_BUTTON_WIDTH,
+                y + PREVIEW_BUTTON_HEIGHT,
+                background
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + PREVIEW_BUTTON_WIDTH,
+                y + 1,
+                hovered
+                        ? COLOR_CYAN
+                        : COLOR_BORDER
+        );
+
+        this.drawRect(
+                x,
+                y +
+                        PREVIEW_BUTTON_HEIGHT -
+                        1,
+                x + PREVIEW_BUTTON_WIDTH,
+                y +
+                        PREVIEW_BUTTON_HEIGHT,
+                COLOR_BORDER_DARK
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + 1,
+                y + PREVIEW_BUTTON_HEIGHT,
+                COLOR_BORDER
+        );
+
+        this.drawRect(
+                x +
+                        PREVIEW_BUTTON_WIDTH -
+                        1,
+                y,
+                x +
+                        PREVIEW_BUTTON_WIDTH,
+                y +
+                        PREVIEW_BUTTON_HEIGHT,
+                COLOR_BORDER
+        );
+
+        int textWidth =
+                this.fontRenderer
+                        .getStringWidth(
+                                text
+                        );
+
+        this.drawString(
+                this.fontRenderer,
+                text,
+                x +
+                        (
+                                PREVIEW_BUTTON_WIDTH -
+                                        textWidth
+                        ) / 2,
+                y + 6,
+                hovered
+                        ? COLOR_CYAN_BRIGHT
+                        : COLOR_TEXT
+        );
+    }
+
+
+    /*
+     * =========================================================
+     * TIMELINE
+     * =========================================================
+     */
+
     private void drawTimeline()
     {
-        int timelineTop =
+        /*
+         * =====================================================
+         * CHARACTER MODE
+         * =====================================================
+         */
+
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
+        )
+        {
+            syncCharacterTimelineActor();
+
+            int timelineHeight =
+                    this.characterTimelineEditorController
+                            .getTimelineHeight();
+
+            int top =
+                    this.height -
+                            timelineHeight;
+
+            this.characterTimelineEditorController
+                    .draw(
+                            this,
+                            this.width,
+                            this.height,
+                            0,
+                            top,
+                            this.playbackController
+                                    .getCurrentFrame(),
+                            getSceneLength()
+                    );
+
+            return;
+        }
+
+        /*
+         * =====================================================
+         * POSE / EXISTING TIMELINE
+         * =====================================================
+         */
+
+        int timelineHeight =
+                getTimelineHeight();
+
+        int top =
                 this.height -
-                        this.getTimelineHeight();
+                        timelineHeight;
 
         this.drawRect(
                 0,
-                timelineTop,
+                top,
                 this.width,
                 this.height,
-                0xFF292A2D
+                COLOR_PANEL_DARK
         );
 
-        this.drawString(
-                this.fontRenderer,
-                "TIMELINE",
-                10,
-                timelineTop + 8,
-                0xFFFFFF
+        this.drawRect(
+                0,
+                top,
+                this.width,
+                top + 1,
+                COLOR_CYAN
         );
 
-        int sceneLength =
-                getSceneLength();
-
-        if (sceneLength > 0)
-        {
-            this.drawString(
-                    this.fontRenderer,
-                    "Scene: "
-                            + sceneLength
-                            + " frames",
-                    80,
-                    timelineTop + 8,
-                    0x55FFAA
-            );
-        }
-
-        BlockbusterSceneActorData actor =
-                getSelectedActor();
-
-        if (actor != null)
-        {
-            this.drawString(
-                    this.fontRenderer,
-                    "Actor: "
-                            + actor.getId(),
-                    210,
-                    timelineTop + 8,
-                    0x66CCFF
-            );
-        }
-
-        int timelineStartX =
-                LEFT_PANEL_WIDTH;
-
-        drawTimelineRuler(
-                timelineTop,
-                timelineStartX
-        );
-
-        int tracksTop =
-                timelineTop + 35;
-
-        int visibleBoneCount =
-                Math.max(
-                        0,
-                        (this.height - 25 - tracksTop)
-                                / TRACK_HEIGHT
-                );
-
-        int maxBoneScroll =
-                Math.max(
-                        0,
-                        this.bones.size()
-                                - visibleBoneCount
-                );
-
-        this.boneScroll =
-                Math.max(
-                        0,
-                        Math.min(
-                                this.boneScroll,
-                                maxBoneScroll
-                        )
-                );
-
-        for (
-                int visibleIndex = 0;
-                visibleIndex < visibleBoneCount;
-                visibleIndex++
-        )
-        {
-            int boneIndex =
-                    this.boneScroll +
-                            visibleIndex;
-
-            if (
-                    boneIndex >=
-                            this.bones.size()
-            )
-            {
-                break;
-            }
-
-            AnimationBone bone =
-                    this.bones.get(
-                            boneIndex
-                    );
-
-            int trackY =
-                    tracksTop +
-                            visibleIndex * TRACK_HEIGHT;
-
-            drawBoneTrack(
-                    bone,
-                    trackY,
-                    boneIndex == this.selectedBone,
-                    timelineStartX
-            );
-        }
-
-        drawCurrentFrameLine(
-                timelineTop,
-                timelineStartX
-        );
-
-        String playbackText =
-                this.playing
-                        ? "Playing"
-                        : "Paused";
-
-        this.drawString(
-                this.fontRenderer,
-                playbackText,
-                10,
-                this.height - 25,
-                this.playing
-                        ? 0x55FF55
-                        : 0xAAAAAA
-        );
-
-        String zoomText =
-                "Zoom: "
-                        + Math.round(
-                        this.timelineZoom *
-                                100.0F
-                )
-                        + "%";
-
-        this.drawString(
-                this.fontRenderer,
-                zoomText,
-                this.width - 80,
-                timelineTop + 8,
-                0xAAAAAA
+        this.timelineController.draw(
+                this.width,
+                this.height,
+                LEFT_PANEL_WIDTH,
+                getSceneLength(),
+                getSelectedActor()
         );
     }
 
 
     private int getTimelineHeight()
     {
-        return 180;
-    }
-
-
-    private void drawTimelineRuler(
-            int timelineTop,
-            int timelineStartX)
-    {
-        int maximumFrame =
-                getMaximumFrame();
-
+        /*
+         * Character Timeline имеет собственную высоту.
+         *
+         * Это также гарантирует, что Preview и его нижняя
+         * граница используют ту же высоту, что и Timeline.
+         */
         if (
-                maximumFrame <
-                        EditorTimeline.TICKS_PER_SECOND
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
         )
         {
-            maximumFrame =
-                    EditorTimeline.TICKS_PER_SECOND;
+            return this.characterTimelineEditorController
+                    .getTimelineHeight();
         }
 
-        float pixelsPerFrame =
-                getPixelsPerFrame();
-
-        int firstVisibleFrame =
-                Math.max(
-                        FIRST_FRAME,
-                        (int) Math.floor(
-                                this.timelineOffset /
-                                        pixelsPerFrame
-                        )
-                );
-
-        int visibleWidth =
-                this.width -
-                        timelineStartX;
-
-        int lastVisibleFrame =
-                Math.min(
-                        maximumFrame,
-                        (int) Math.ceil(
-                                (
-                                        this.timelineOffset +
-                                                visibleWidth
-                                ) /
-                                        pixelsPerFrame
-                        )
-                );
-
-        int minorStep;
-
-        if (this.timelineZoom >= 2.0F)
-        {
-            minorStep = 1;
-        }
-        else if (this.timelineZoom >= 1.0F)
-        {
-            minorStep = 5;
-        }
-        else if (this.timelineZoom >= 0.5F)
-        {
-            minorStep = 10;
-        }
-        else
-        {
-            minorStep = 20;
-        }
-
-        for (
-                int frame = firstVisibleFrame;
-                frame <= lastVisibleFrame;
-                frame += minorStep
-        )
-        {
-            int x =
-                    getFrameX(frame);
-
-            if (
-                    x < timelineStartX ||
-                            x > this.width
-            )
-            {
-                continue;
-            }
-
-            boolean second =
-                    frame %
-                            EditorTimeline.TICKS_PER_SECOND
-                            == 0;
-
-            boolean halfSecond =
-                    frame % 10 == 0;
-
-            if (second)
-            {
-                this.drawRect(
-                        x,
-                        timelineTop + 20,
-                        x + 1,
-                        timelineTop + 42,
-                        0xFF777777
-                );
-
-                int seconds =
-                        frame /
-                                EditorTimeline.TICKS_PER_SECOND;
-
-                this.drawString(
-                        this.fontRenderer,
-                        seconds + "s",
-                        x + 3,
-                        timelineTop + 27,
-                        0xFFFFFF
-                );
-            }
-            else if (halfSecond)
-            {
-                this.drawRect(
-                        x,
-                        timelineTop + 25,
-                        x + 1,
-                        timelineTop + 40,
-                        0xFF555555
-                );
-
-                this.drawString(
-                        this.fontRenderer,
-                        String.valueOf(frame),
-                        x + 3,
-                        timelineTop + 27,
-                        0x999999
-                );
-            }
-            else
-            {
-                this.drawRect(
-                        x,
-                        timelineTop + 30,
-                        x + 1,
-                        timelineTop + 38,
-                        0xFF444444
-                );
-            }
-        }
+        return this.timelineController
+                .getTimelineHeight();
     }
 
 
-    private void drawBoneTrack(
-            AnimationBone bone,
-            int trackY,
-            boolean selected,
-            int timelineStartX)
-    {
-        int trackColor =
-                selected
-                        ? 0xFF3A3B3E
-                        : 0xFF303134;
-
-        this.drawRect(
-                0,
-                trackY,
-                this.width,
-                trackY + TRACK_HEIGHT,
-                trackColor
-        );
-
-        this.drawString(
-                this.fontRenderer,
-                bone.getName(),
-                10,
-                trackY + 5,
-                selected
-                        ? 0xFFFFFF
-                        : 0xAAAAAA
-        );
-
-        this.drawRect(
-                timelineStartX - 1,
-                trackY,
-                timelineStartX,
-                trackY + TRACK_HEIGHT,
-                0xFF555555
-        );
-
-        this.drawRect(
-                timelineStartX,
-                trackY + 10,
-                this.width,
-                trackY + 11,
-                0xFF555555
-        );
-
-        for (
-                AnimationKeyframe keyframe :
-                bone.getKeyframes()
-        )
-        {
-            int frame =
-                    keyframe.getFrame();
-
-            int x =
-                    getFrameX(frame);
-
-            if (
-                    x < timelineStartX ||
-                            x > this.width
-            )
-            {
-                continue;
-            }
-
-            drawKeyframe(
-                    x,
-                    trackY + 10,
-                    keyframe ==
-                            this.selectedKeyframe
-            );
-        }
-    }
-
-
-    private void drawCurrentFrameLine(
-            int timelineTop,
-            int timelineStartX)
-    {
-        int currentX =
-                getFrameX(
-                        this.currentFrame
-                );
-
-        if (
-                currentX >= timelineStartX &&
-                        currentX <= this.width
-        )
-        {
-            this.drawRect(
-                    currentX,
-                    timelineTop + 20,
-                    currentX + 2,
-                    this.height,
-                    0xFFFF5555
-            );
-        }
-    }
-
-
-    private void drawKeyframe(
-            int x,
-            int y,
-            boolean selected)
-    {
-        int color =
-                selected
-                        ? 0xFFFFAA00
-                        : 0xFFFFFFFF;
-
-        this.drawRect(
-                x - 5,
-                y - 5,
-                x + 5,
-                y + 5,
-                color
-        );
-
-        this.drawRect(
-                x - 3,
-                y - 3,
-                x + 3,
-                y + 3,
-                0xFF292A2D
-        );
-    }
-
-
-    private float getPixelsPerFrame()
-    {
-        return BASE_FRAME_WIDTH *
-                this.timelineZoom;
-    }
-
-
-    private int getFrameX(
-            int frame)
-    {
-        return LEFT_PANEL_WIDTH
-                + Math.round(
-                frame *
-                        this.getPixelsPerFrame()
-        )
-                - this.timelineOffset;
-    }
-
-
-    private int getFrameFromMouseX(
-            int mouseX)
-    {
-        int relativeX =
-                mouseX
-                        - LEFT_PANEL_WIDTH
-                        + this.timelineOffset;
-
-        float pixelsPerFrame =
-                this.getPixelsPerFrame();
-
-        if (pixelsPerFrame <= 0.0F)
-        {
-            return FIRST_FRAME;
-        }
-
-        return Math.round(
-                (float) relativeX /
-                        pixelsPerFrame
-        );
-    }
-
-
-    private AnimationKeyframe findKeyframe(
-            AnimationBone bone,
-            int frame)
-    {
-        if (bone == null)
-        {
-            return null;
-        }
-
-        for (
-                AnimationKeyframe keyframe :
-                bone.getKeyframes()
-        )
-        {
-            if (
-                    keyframe.getFrame() ==
-                            frame
-            )
-            {
-                return keyframe;
-            }
-        }
-
-        return null;
-    }
-
-
-    private AnimationKeyframe findKeyframeAt(
-            AnimationBone bone,
-            int mouseX,
-            int radius)
-    {
-        if (bone == null)
-        {
-            return null;
-        }
-
-        for (
-                AnimationKeyframe keyframe :
-                bone.getKeyframes()
-        )
-        {
-            int keyframeX =
-                    getFrameX(
-                            keyframe.getFrame()
-                    );
-
-            if (
-                    Math.abs(
-                            keyframeX -
-                                    mouseX
-                    ) <= radius
-            )
-            {
-                return keyframe;
-            }
-        }
-
-        return null;
-    }
-
-
-    private int getMaximumTimelineOffset()
-    {
-        int maximumFrame =
-                getMaximumFrame();
-
-        int timelineWidth =
-                this.width -
-                        LEFT_PANEL_WIDTH;
-
-        int contentWidth =
-                Math.round(
-                        (maximumFrame + 1) *
-                                getPixelsPerFrame()
-                );
-
-        return Math.max(
-                0,
-                contentWidth -
-                        timelineWidth
-        );
-    }
-
-
-    private int getMaximumFrame()
-    {
-        int maximum =
-                FIRST_FRAME;
-
-        int timelineLast =
-                this.timeline.getLastTick();
-
-        if (timelineLast > maximum)
-        {
-            maximum =
-                    timelineLast;
-        }
-
-        int sceneLength =
-                getSceneLength();
-
-        if (sceneLength > 0)
-        {
-            maximum =
-                    Math.max(
-                            maximum,
-                            sceneLength - 1
-                    );
-        }
-
-        for (
-                AnimationBone bone :
-                this.bones
-        )
-        {
-            if (bone == null)
-            {
-                continue;
-            }
-
-            for (
-                    AnimationKeyframe keyframe :
-                    bone.getKeyframes()
-            )
-            {
-                maximum =
-                        Math.max(
-                                maximum,
-                                keyframe.getFrame()
-                        );
-            }
-        }
-
-        return maximum;
-    }
-
+    /*
+     * =========================================================
+     * INPUT
+     * =========================================================
+     */
 
     @Override
     protected void mouseClicked(
@@ -1789,9 +2247,103 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws IOException
     {
-        this.transformDragging = false;
+        if (isDeleteDialogOpen())
+        {
+            handleDeleteDialogClick(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            );
+
+            return;
+        }
+
+        this.transformDragging =
+                false;
+
+        /*
+         * =====================================================
+         * MODE BUTTON
+         * =====================================================
+         */
+
+        if (
+                this.editorModeController
+                        .isMouseOverButton(
+                                this.width,
+                                mouseX,
+                                mouseY
+                        )
+        )
+        {
+            if (mouseButton == 0)
+            {
+                this.editorModeController
+                        .toggleDropdown();
+
+                this.sceneDropdownOpen =
+                        false;
+            }
+
+            return;
+        }
+
+        /*
+         * =====================================================
+         * MODE DROPDOWN
+         * =====================================================
+         */
+
+        if (
+                this.editorModeController
+                        .isDropdownOpen()
+        )
+        {
+            EditorModeController.EditorMode selectedMode =
+                    this.editorModeController
+                            .getModeAtMouse(
+                                    this.width,
+                                    mouseX,
+                                    mouseY
+                            );
+
+            if (selectedMode != null)
+            {
+                this.editorModeController
+                        .setMode(
+                                selectedMode
+                        );
+
+                /*
+                 * Pose selection сбрасывается только
+                 * при смене режима.
+                 */
+                this.keyframeController
+                        .resetSelectionOnly();
+
+                this.transformDragging =
+                        false;
+
+                /*
+                 * Character Timeline получает текущего Actor.
+                 */
+                syncCharacterTimelineActor();
+
+                return;
+            }
+
+            this.editorModeController
+                    .closeDropdown();
+        }
+
+        /*
+         * =====================================================
+         * SCENE BUTTON
+         * =====================================================
+         */
 
         int sceneButtonX = 175;
+
         int sceneButtonWidth = 180;
 
         if (
@@ -1807,15 +2359,28 @@ public class AnimationEditorScreen extends GuiScreen
             this.sceneDropdownOpen =
                     !this.sceneDropdownOpen;
 
+            this.editorModeController
+                    .closeDropdown();
+
             return;
         }
+
+        /*
+         * =====================================================
+         * SCENE DROPDOWN
+         * =====================================================
+         */
 
         if (this.sceneDropdownOpen)
         {
             int x = 175;
-            int y = TOP_BAR_HEIGHT + 2;
+
+            int y =
+                    TOP_BAR_HEIGHT + 2;
+
             int width = 180;
-            int rowHeight = 18;
+
+            int rowHeight = 19;
 
             int count =
                     Math.min(
@@ -1827,8 +2392,7 @@ public class AnimationEditorScreen extends GuiScreen
 
             if (
                     mouseX >= x &&
-                            mouseX <=
-                                    x + width &&
+                            mouseX <= x + width &&
                             mouseY >= y &&
                             mouseY <
                                     y +
@@ -1837,7 +2401,9 @@ public class AnimationEditorScreen extends GuiScreen
             )
             {
                 int sceneIndex =
-                        (mouseY - y) /
+                        (
+                                mouseY - y
+                        ) /
                                 rowHeight;
 
                 if (
@@ -1856,24 +2422,91 @@ public class AnimationEditorScreen extends GuiScreen
                 }
             }
 
-            this.sceneDropdownOpen = false;
+            this.sceneDropdownOpen =
+                    false;
+
+            this.editorModeController
+                    .closeDropdown();
         }
 
+        /*
+         * =====================================================
+         * CHARACTER PANEL
+         * =====================================================
+         */
 
-        if (this.interpolationPanel != null)
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
+        )
+        {
+            int rightPanelWidth = 185;
+
+            int panelX =
+                    this.width -
+                            rightPanelWidth;
+
+            int panelY =
+                    TOP_BAR_HEIGHT;
+
+            int panelBottom =
+                    this.height -
+                            getTimelineHeight();
+
+            if (
+                    mouseX >= panelX &&
+                            mouseX < this.width &&
+                            mouseY >= panelY &&
+                            mouseY < panelBottom
+            )
+            {
+                if (
+                        this.characterEditorPanel
+                                .mouseClicked(
+                                        mouseX,
+                                        mouseY,
+                                        mouseButton
+                                )
+                )
+                {
+                    return;
+                }
+            }
+        }
+
+        /*
+         * =====================================================
+         * INTERPOLATION
+         * =====================================================
+         *
+         * Только Pose Mode.
+         */
+
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+                        &&
+                        this.interpolationPanel != null
+        )
         {
             if (
-                    this.interpolationPanel.mouseClicked(
-                            mouseX,
-                            mouseY,
-                            mouseButton
-                    )
+                    this.interpolationPanel
+                            .mouseClicked(
+                                    mouseX,
+                                    mouseY,
+                                    mouseButton
+                            )
             )
             {
                 return;
             }
         }
 
+        /*
+         * =====================================================
+         * ACTOR LIST
+         * =====================================================
+         */
 
         int actorTop =
                 TOP_BAR_HEIGHT;
@@ -1882,21 +2515,21 @@ public class AnimationEditorScreen extends GuiScreen
                 actorTop +
                         ACTOR_PANEL_HEIGHT;
 
-        final int actorRowHeight = 31;
+        final int actorRowHeight =
+                31;
 
         if (
                 mouseX >= 0 &&
-                        mouseX <=
-                                LEFT_PANEL_WIDTH &&
-                        mouseY >=
-                                actorTop + 30 &&
-                        mouseY <
-                                actorBottom
+                        mouseX <= LEFT_PANEL_WIDTH &&
+                        mouseY >= actorTop + 30 &&
+                        mouseY < actorBottom
         )
         {
             int relativeY =
                     mouseY -
-                            (actorTop + 30);
+                            (
+                                    actorTop + 30
+                            );
 
             int actorIndex =
                     relativeY /
@@ -1917,53 +2550,172 @@ public class AnimationEditorScreen extends GuiScreen
             }
         }
 
+        /*
+         * =====================================================
+         * PREVIEW BUTTONS
+         * =====================================================
+         */
 
-        if (this.selectedKeyframe != null)
+        int previewBottom =
+                this.height -
+                        getTimelineHeight();
+
+        int previewRight =
+                this.width - 185;
+
+        int totalWidth =
+                PREVIEW_BUTTON_WIDTH * 3
+                        +
+                        PREVIEW_BUTTON_GAP * 2;
+
+        int centerX =
+                LEFT_PANEL_WIDTH +
+                        (
+                                previewRight -
+                                        LEFT_PANEL_WIDTH
+                        ) / 2;
+
+        int startX =
+                centerX -
+                        totalWidth / 2;
+
+        int buttonY =
+                previewBottom -
+                        PREVIEW_BUTTON_HEIGHT -
+                        12;
+
+        int previousX =
+                startX;
+
+        if (
+                mouseX >= previousX &&
+                        mouseX <
+                                previousX +
+                                        PREVIEW_BUTTON_WIDTH &&
+                        mouseY >= buttonY &&
+                        mouseY <
+                                buttonY +
+                                        PREVIEW_BUTTON_HEIGHT
+        )
         {
-            int transformPanelX =
-                    this.width - 185;
+            stepTimeline(-1);
 
-            int transformPanelY =
-                    TOP_BAR_HEIGHT + 10;
+            return;
+        }
 
-            int transformPanelWidth =
-                    175;
+        int playX =
+                previousX +
+                        PREVIEW_BUTTON_WIDTH +
+                        PREVIEW_BUTTON_GAP;
 
-            int transformPanelHeight =
-                    245;
+        if (
+                mouseX >= playX &&
+                        mouseX <
+                                playX +
+                                        PREVIEW_BUTTON_WIDTH &&
+                        mouseY >= buttonY &&
+                        mouseY <
+                                buttonY +
+                                        PREVIEW_BUTTON_HEIGHT
+        )
+        {
+            toggleTimelinePlayback();
 
-            boolean insideTransformPanel =
-                    mouseX >= transformPanelX &&
-                            mouseX <=
-                                    transformPanelX +
-                                            transformPanelWidth &&
-                            mouseY >= transformPanelY &&
-                            mouseY <=
-                                    transformPanelY +
-                                            transformPanelHeight;
+            return;
+        }
 
-            if (insideTransformPanel)
+        int nextX =
+                playX +
+                        PREVIEW_BUTTON_WIDTH +
+                        PREVIEW_BUTTON_GAP;
+
+        if (
+                mouseX >= nextX &&
+                        mouseX <
+                                nextX +
+                                        PREVIEW_BUTTON_WIDTH &&
+                        mouseY >= buttonY &&
+                        mouseY <
+                                buttonY +
+                                        PREVIEW_BUTTON_HEIGHT
+        )
+        {
+            stepTimeline(1);
+
+            return;
+        }
+
+        /*
+         * =====================================================
+         * TRANSFORM PANEL
+         * =====================================================
+         *
+         * Только Pose Mode.
+         */
+
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+        )
+        {
+            AnimationKeyframe selectedKeyframe =
+                    this.keyframeController
+                            .getSelectedKeyframe();
+
+            if (selectedKeyframe != null)
             {
-                if (
-                        this.transformPanel.mouseClicked(
-                                mouseX,
-                                mouseY,
-                                mouseButton,
-                                this.selectedKeyframe
-                        )
-                )
-                {
-                    this.transformDragging = true;
+                int transformPanelX =
+                        this.width - 185;
 
-                    return;
+                int transformPanelY =
+                        TOP_BAR_HEIGHT + 10;
+
+                int transformPanelWidth =
+                        175;
+
+                int transformPanelHeight =
+                        245;
+
+                boolean insideTransformPanel =
+                        mouseX >= transformPanelX &&
+                                mouseX <=
+                                        transformPanelX +
+                                                transformPanelWidth &&
+                                mouseY >= transformPanelY &&
+                                mouseY <=
+                                        transformPanelY +
+                                                transformPanelHeight;
+
+                if (insideTransformPanel)
+                {
+                    if (
+                            this.actorPreviewController
+                                    .getTransformPanel()
+                                    .mouseClicked(
+                                            mouseX,
+                                            mouseY,
+                                            mouseButton,
+                                            selectedKeyframe
+                                    )
+                    )
+                    {
+                        this.transformDragging =
+                                true;
+
+                        return;
+                    }
                 }
             }
         }
 
+        /*
+         * =====================================================
+         * SCENE VIEWPORT
+         * =====================================================
+         */
 
         if (
-                this.sceneViewport != null
-                        &&
+                this.sceneViewport != null &&
                         this.sceneViewport.mousePressed(
                                 mouseX,
                                 mouseY,
@@ -1974,160 +2726,65 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-
-        int timelineTop =
-                this.height -
-                        this.getTimelineHeight();
+        /*
+         * =====================================================
+         * CHARACTER TIMELINE
+         * =====================================================
+         */
 
         if (
-                mouseY >= timelineTop &&
-                        mouseY <= this.height
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
         )
         {
-            int tracksTop =
-                    timelineTop + 35;
-
-            int relativeY =
-                    mouseY - tracksTop;
-
-            int visibleBoneIndex =
-                    relativeY /
-                            TRACK_HEIGHT;
-
-            int boneIndex =
-                    this.boneScroll +
-                            visibleBoneIndex;
+            syncCharacterTimelineActor();
 
             if (
-                    boneIndex >= 0 &&
-                            boneIndex <
-                                    this.bones.size()
+                    this.characterTimelineEditorController
+                            .mouseClicked(
+                                    mouseX,
+                                    mouseY,
+                                    mouseButton,
+                                    this.width,
+                                    this.height -
+                                            getTimelineHeight(),
+                                    0
+                            )
             )
             {
-                this.transformDragging = false;
+                return;
+            }
+        }
 
-                this.selectedBone =
-                        boneIndex;
+        /*
+         * =====================================================
+         * EXISTING POSE TIMELINE
+         * =====================================================
+         */
 
-                AnimationBone bone =
-                        this.bones.get(
-                                this.selectedBone
-                        );
-
-                int frame =
-                        getFrameFromMouseX(
-                                mouseX
-                        );
-
-                int maximumFrame =
-                        getMaximumFrame();
-
-                frame =
-                        Math.max(
-                                FIRST_FRAME,
-                                Math.min(
-                                        frame,
-                                        maximumFrame
-                                )
-                        );
-
-                if (mouseButton == 0)
-                {
-                    AnimationKeyframe clickedKeyframe =
-                            findKeyframeAt(
-                                    bone,
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+        )
+        {
+            if (
+                    this.timelineController
+                            .mouseClicked(
                                     mouseX,
-                                    6
-                            );
+                                    mouseY,
+                                    mouseButton,
+                                    this.width,
+                                    this.height,
+                                    LEFT_PANEL_WIDTH,
+                                    getSceneLength()
+                            )
+            )
+            {
+                applyRecordFrame();
 
-                    if (clickedKeyframe != null)
-                    {
-                        this.selectedKeyframe =
-                                clickedKeyframe;
+                applyAdapters();
 
-                        this.timeline.setTick(
-                                clickedKeyframe
-                                        .getFrame()
-                        );
-
-                        this.currentFrame =
-                                this.timeline.getTick();
-
-                        this.currentAnimationFrame =
-                                (float) this.currentFrame;
-
-                        applyRecordFrame();
-                        applyAnimationPose();
-                        applyAdapters();
-                    }
-                    else
-                    {
-                        this.timeline.setTick(
-                                frame
-                        );
-
-                        this.currentFrame =
-                                this.timeline.getTick();
-
-                        this.currentAnimationFrame =
-                                (float) this.currentFrame;
-
-                        applyRecordFrame();
-                        applyAnimationPose();
-
-                        AnimationKeyframe keyframe =
-                                findKeyframe(
-                                        bone,
-                                        frame
-                                );
-
-                        if (keyframe == null)
-                        {
-                            bone.addKeyframe(
-                                    frame
-                            );
-
-                            keyframe =
-                                    findKeyframe(
-                                            bone,
-                                            frame
-                                    );
-                        }
-
-                        this.selectedKeyframe =
-                                keyframe;
-
-                        applyAdapters();
-                    }
-                }
-                else if (mouseButton == 1)
-                {
-                    AnimationKeyframe clickedKeyframe =
-                            findKeyframeAt(
-                                    bone,
-                                    mouseX,
-                                    6
-                            );
-
-                    if (clickedKeyframe != null)
-                    {
-                        if (
-                                clickedKeyframe ==
-                                        this.selectedKeyframe
-                        )
-                        {
-                            this.selectedKeyframe =
-                                    null;
-                        }
-
-                        bone.removeKeyframe(
-                                clickedKeyframe
-                                        .getFrame()
-                        );
-
-                        applyAdapters();
-                    }
-                }
+                return;
             }
         }
 
@@ -2139,6 +2796,64 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
 
+    /*
+     * =========================================================
+     * PLAYBACK
+     * =========================================================
+     */
+
+    private void toggleTimelinePlayback()
+    {
+        this.playbackController
+                .togglePlayback();
+
+        BlockbusterPreviewAnimationState
+                .setPlaying(
+                        this.playbackController
+                                .isPlaying()
+                );
+
+        /*
+         * ВАЖНО:
+         * при паузе остаёмся на целочисленном tick.
+         */
+        if (
+                !this.playbackController
+                        .isPlaying()
+        )
+        {
+            applyRecordFrame();
+
+            applyAdapters();
+        }
+    }
+
+
+    private void stepTimeline(
+            int direction)
+    {
+        this.playbackController
+                .step(
+                        direction
+                );
+
+        BlockbusterPreviewAnimationState
+                .setPlaying(
+                        false
+                );
+
+        applyRecordFrame();
+
+        applyAdapters();
+    }
+
+
+    /*
+     * =========================================================
+     * MOUSE DRAG
+     * =========================================================
+     */
+
     @Override
     protected void mouseClickMove(
             int mouseX,
@@ -2146,17 +2861,90 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        /*
+         * =====================================================
+         * CHARACTER TIMELINE DRAG
+         * =====================================================
+         */
+
         if (
-                this.transformDragging
-                        && this.selectedKeyframe != null
-                        && clickedMouseButton == 0
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
         )
         {
-            this.transformPanel.mouseDragged(
-                    mouseX,
-                    mouseY,
-                    this.selectedKeyframe
-            );
+            if (
+                    this.characterTimelineEditorController
+                            .mouseClickMove(
+                                    mouseX,
+                                    mouseY,
+                                    clickedMouseButton,
+                                    this.width,
+                                    this.height -
+                                            getTimelineHeight(),
+                                    0
+                            )
+            )
+            {
+                return;
+            }
+        }
+
+        /*
+         * =====================================================
+         * EXISTING POSE TIMELINE KEYFRAME DRAG
+         * =====================================================
+         */
+
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+        )
+        {
+            if (
+                    this.timelineController
+                            .mouseClickMove(
+                                    mouseX,
+                                    mouseY,
+                                    clickedMouseButton
+                            )
+            )
+            {
+                applyRecordFrame();
+
+                applyAdapters();
+
+                return;
+            }
+        }
+
+        /*
+         * =====================================================
+         * TRANSFORM PANEL DRAG
+         * =====================================================
+         *
+         * Только Pose Mode.
+         */
+
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+                        &&
+                        this.transformDragging
+                        &&
+                        this.keyframeController
+                                .getSelectedKeyframe() != null
+                        &&
+                        clickedMouseButton == 0
+        )
+        {
+            this.actorPreviewController
+                    .getTransformPanel()
+                    .mouseDragged(
+                            mouseX,
+                            mouseY,
+                            this.keyframeController
+                                    .getSelectedKeyframe()
+                    );
 
             applyAdapters();
 
@@ -2170,6 +2958,11 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
+        /*
+         * =====================================================
+         * SCENE VIEWPORT DRAG
+         * =====================================================
+         */
 
         if (
                 this.sceneViewport != null
@@ -2183,7 +2976,6 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-
         super.mouseClickMove(
                 mouseX,
                 mouseY,
@@ -2193,15 +2985,44 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
 
+    /*
+     * =========================================================
+     * MOUSE RELEASE
+     * =========================================================
+     */
+
     @Override
     protected void mouseReleased(
             int mouseX,
             int mouseY,
             int state)
     {
-        this.transformPanel.mouseReleased(
-                state
-        );
+        /*
+         * Character Timeline.
+         */
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
+        )
+        {
+            this.characterTimelineEditorController
+                    .mouseReleased();
+        }
+
+        /*
+         * TransformPanel относится только к Pose Mode.
+         */
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+        )
+        {
+            this.actorPreviewController
+                    .getTransformPanel()
+                    .mouseReleased(
+                            state
+                    );
+        }
 
         if (this.sceneViewport != null)
         {
@@ -2212,7 +3033,14 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
-        this.transformDragging = false;
+        /*
+         * Старый Timeline.
+         */
+        this.timelineController
+                .mouseReleased();
+
+        this.transformDragging =
+                false;
 
         super.mouseReleased(
                 mouseX,
@@ -2222,11 +3050,22 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
 
+    /*
+     * =========================================================
+     * MOUSE WHEEL
+     * =========================================================
+     */
+
     @Override
     public void handleMouseInput()
             throws IOException
     {
         super.handleMouseInput();
+
+        if (isDeleteDialogOpen())
+        {
+            return;
+        }
 
         int wheel =
                 Mouse.getEventDWheel();
@@ -2238,198 +3077,141 @@ public class AnimationEditorScreen extends GuiScreen
 
         int mouseX =
                 Mouse.getEventX()
-                        * this.width
-                        / this.mc.displayWidth;
+                        *
+                        this.width
+                        /
+                        this.mc.displayWidth;
 
         int mouseY =
                 this.height
-                        - Mouse.getEventY()
-                        * this.height
-                        / this.mc.displayHeight
-                        - 1;
+                        -
+                        Mouse.getEventY()
+                                *
+                                this.height
+                                /
+                                this.mc.displayHeight
+                        -
+                        1;
 
+        /*
+         * =====================================================
+         * CHARACTER TIMELINE
+         * =====================================================
+         */
 
-        if (this.interpolationPanel != null)
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
+        )
         {
-            if (this.interpolationPanel.mouseScrolled(
-                    mouseX,
-                    mouseY,
-                    wheel > 0 ? 1 : -1
-            ))
+            if (
+                    this.characterTimelineEditorController
+                            .mouseScrolled(
+                                    mouseX,
+                                    mouseY,
+                                    wheel > 0
+                                            ? 1
+                                            : -1,
+                                    this.width,
+                                    this.height -
+                                            getTimelineHeight(),
+                                    0
+                            )
+            )
             {
                 return;
             }
         }
 
+        /*
+         * =====================================================
+         * INTERPOLATION
+         * =====================================================
+         *
+         * Только Pose.
+         */
+
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+                        &&
+                        this.interpolationPanel != null
+        )
+        {
+            if (
+                    this.interpolationPanel
+                            .mouseScrolled(
+                                    mouseX,
+                                    mouseY,
+                                    wheel > 0
+                                            ? 1
+                                            : -1
+                            )
+            )
+            {
+                return;
+            }
+        }
+
+        /*
+         * =====================================================
+         * SCENE VIEWPORT
+         * =====================================================
+         */
 
         if (
                 this.sceneViewport != null
                         &&
-                        this.sceneViewport.mouseScrolled(
-                                mouseX,
-                                mouseY,
-                                wheel > 0 ? 1 : -1
-                        )
+                        this.sceneViewport
+                                .mouseScrolled(
+                                        mouseX,
+                                        mouseY,
+                                        wheel > 0
+                                                ? 1
+                                                : -1
+                                )
         )
         {
             return;
         }
 
-
-        int timelineTop =
-                this.height -
-                        this.getTimelineHeight();
-
+        /*
+         * =====================================================
+         * EXISTING POSE TIMELINE
+         * =====================================================
+         */
 
         if (
-                mouseY >= timelineTop
-                        &&
-                        mouseX >= 0
-                        &&
-                        mouseX < LEFT_PANEL_WIDTH
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
         )
         {
-            int tracksTop =
-                    timelineTop + 35;
-
-            if (mouseY >= tracksTop)
-            {
-                int visibleBoneCount =
-                        Math.max(
-                                0,
-                                (this.height - 25 - tracksTop)
-                                        / TRACK_HEIGHT
-                        );
-
-                int maxBoneScroll =
-                        Math.max(
-                                0,
-                                this.bones.size()
-                                        - visibleBoneCount
-                        );
-
-                if (maxBoneScroll > 0)
-                {
-                    if (wheel > 0)
-                    {
-                        this.boneScroll =
-                                Math.max(
-                                        0,
-                                        this.boneScroll - 1
-                                );
-                    }
-                    else
-                    {
-                        this.boneScroll =
-                                Math.min(
-                                        maxBoneScroll,
-                                        this.boneScroll + 1
-                                );
-                    }
-
-                    return;
-                }
-            }
-        }
-
-
-        if (mouseY < timelineTop)
-        {
-            return;
-        }
-
-
-        boolean ctrlDown =
-                Keyboard.isKeyDown(
-                        Keyboard.KEY_LCONTROL
-                )
-                        ||
-                        Keyboard.isKeyDown(
-                                Keyboard.KEY_RCONTROL
-                        );
-
-        if (ctrlDown)
-        {
-            int mouseFrame =
-                    getFrameFromMouseX(
-                            mouseX
-                    );
-
-            float oldZoom =
-                    this.timelineZoom;
-
-            if (wheel > 0)
-            {
-                this.timelineZoom +=
-                        TIMELINE_ZOOM_STEP;
-            }
-            else
-            {
-                this.timelineZoom -=
-                        TIMELINE_ZOOM_STEP;
-            }
-
-            this.timelineZoom =
-                    Math.max(
-                            MIN_TIMELINE_ZOOM,
-                            Math.min(
-                                    MAX_TIMELINE_ZOOM,
-                                    this.timelineZoom
-                            )
-                    );
-
             if (
-                    oldZoom !=
-                            this.timelineZoom
+                    this.timelineController
+                            .mouseScrolled(
+                                    mouseX,
+                                    mouseY,
+                                    wheel > 0
+                                            ? 1
+                                            : -1,
+                                    this.width,
+                                    this.height,
+                                    LEFT_PANEL_WIDTH,
+                                    getSceneLength()
+                            )
             )
             {
-                this.timelineOffset =
-                        LEFT_PANEL_WIDTH
-                                + Math.round(
-                                mouseFrame *
-                                        getPixelsPerFrame()
-                        )
-                                - mouseX;
-
-                clampTimelineOffset();
+                return;
             }
-
-            return;
         }
-
-
-        int scrollAmount = 60;
-
-        if (wheel > 0)
-        {
-            this.timelineOffset -=
-                    scrollAmount;
-        }
-        else
-        {
-            this.timelineOffset +=
-                    scrollAmount;
-        }
-
-        clampTimelineOffset();
     }
 
 
-    private void clampTimelineOffset()
-    {
-        int maxOffset =
-                getMaximumTimelineOffset();
-
-        this.timelineOffset =
-                Math.max(
-                        0,
-                        Math.min(
-                                this.timelineOffset,
-                                maxOffset
-                        )
-                );
-    }
-
+    /*
+     * =========================================================
+     * KEYBOARD
+     * =========================================================
+     */
 
     @Override
     protected void keyTyped(
@@ -2437,10 +3219,29 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws IOException
     {
-        if (keyCode == 1)
+        if (isDeleteDialogOpen())
+        {
+            if (
+                    keyCode ==
+                            Keyboard.KEY_ESCAPE
+            )
+            {
+                clearPendingDelete();
+            }
+
+            return;
+        }
+
+        if (
+                keyCode ==
+                        Keyboard.KEY_ESCAPE
+        )
         {
             BlockbusterPreviewAnimationState.clear();
+
             EmoticonsPreviewAnimationState.clear();
+
+            clearPendingDelete();
 
             this.mc.displayGuiScreen(
                     null
@@ -2449,253 +3250,597 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
-        this.transformPanel.keyTyped(
-                typedChar,
-                keyCode,
-                this.selectedKeyframe
-        );
-
-
-        if (keyCode == 203)
+        /*
+         * Character Timeline:
+         *
+         * DELETE удаляет выбранный Character Key.
+         *
+         * Это пока прямое удаление без старого
+         * Pose Delete Dialog, потому что CharacterKey
+         * является отдельной системой.
+         */
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.CHARACTER
+                        &&
+                        (
+                                keyCode ==
+                                        Keyboard.KEY_DELETE
+                                        ||
+                                        keyCode ==
+                                                Keyboard.KEY_BACK
+                        )
+        )
         {
-            this.timeline.previousTick();
+            this.characterTimelineEditorController
+                    .deleteSelectedKey();
 
-            this.currentFrame =
-                    this.timeline.getTick();
-
-            this.currentAnimationFrame =
-                    (float) this.currentFrame;
-
-            applyRecordFrame();
-            applyAnimationPose();
-            applyAdapters();
+            return;
         }
 
-
-        if (keyCode == 205)
+        /*
+         * TransformPanel получает клавиатуру
+         * только в Pose Mode.
+         */
+        if (
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+        )
         {
-            this.timeline.nextTick();
-
-            this.currentFrame =
-                    this.timeline.getTick();
-
-            this.currentAnimationFrame =
-                    (float) this.currentFrame;
-
-            applyRecordFrame();
-            applyAnimationPose();
-            applyAdapters();
+            this.actorPreviewController
+                    .getTransformPanel()
+                    .keyTyped(
+                            typedChar,
+                            keyCode,
+                            this.keyframeController
+                                    .getSelectedKeyframe()
+                    );
         }
 
-
-        if (keyCode == 57)
+        if (keyCode == Keyboard.KEY_LEFT)
         {
-            this.timeline.togglePlaying();
+            stepTimeline(-1);
 
-            this.playing =
-                    this.timeline.isPlaying();
-
-            BlockbusterPreviewAnimationState.setPlaying(
-                    this.playing
-            );
+            return;
         }
+
+        if (keyCode == Keyboard.KEY_RIGHT)
+        {
+            stepTimeline(1);
+
+            return;
+        }
+
+        /*
+         * SPACE намеренно ничего не делает.
+         */
     }
 
+
+    /*
+     * =========================================================
+     * UPDATE
+     * =========================================================
+     */
 
     @Override
     public void updateScreen()
     {
         if (this.sceneViewport != null)
         {
-            this.sceneViewport.updateCameraMovement(
-                    this.mc
-            );
+            this.sceneViewport
+                    .updateCameraMovement(
+                            this.mc
+                    );
         }
 
         super.updateScreen();
 
         this.timeline.update();
 
-        this.currentFrame =
-                this.timeline.getTick();
+        this.playbackController.update();
 
-        this.currentAnimationFrame =
-                this.timeline.getCurrentFrameFloat();
-
-        this.playing =
-                this.timeline.isPlaying();
-
-        BlockbusterPreviewAnimationState.setPlaying(
-                this.playing
-        );
-
-        applyRecordFrame();
-        applyAnimationPose();
+        BlockbusterPreviewAnimationState
+                .setPlaying(
+                        this.playbackController
+                                .isPlaying()
+                );
 
         /*
-         * Во время воспроизведения applyAdapters()
-         * здесь НЕ вызывается.
-         *
-         * Это важно: drawPreview() применяет состояние
-         * непосредственно перед рендером с дробным
-         * currentAnimationFrame.
-         *
-         * На паузе же целый кадр применяется здесь,
-         * чтобы изменения Timeline/Record сразу отражались
-         * в Preview.
+         * Record всегда вычисляется
+         * по текущему целому кадру.
          */
-        if (!this.playing)
+        applyRecordFrame();
+
+        /*
+         * На паузе применяем только integer frame.
+         *
+         * Во время воспроизведения
+         * drawPreview() отдельно использует
+         * currentAnimationFrame для плавной
+         * анимации.
+         */
+        if (
+                !this.playbackController
+                        .isPlaying()
+        )
         {
             applyAdapters();
         }
     }
 
 
+    /*
+     * =========================================================
+     * DELETE DIALOG
+     * =========================================================
+     */
+
+    private boolean isDeleteDialogOpen()
+    {
+        return this.keyframeController
+                .isDeletePending();
+    }
+
+
+    private int getDeleteDialogX()
+    {
+        return (
+                this.width -
+                        DELETE_DIALOG_WIDTH
+        ) / 2;
+    }
+
+
+    private int getDeleteDialogY()
+    {
+        return (
+                this.height -
+                        DELETE_DIALOG_HEIGHT
+        ) / 2;
+    }
+
+
+    private int getDeleteCancelX()
+    {
+        int dialogX =
+                getDeleteDialogX();
+
+        return dialogX +
+                DELETE_DIALOG_WIDTH -
+                DELETE_BUTTON_WIDTH * 2 -
+                20;
+    }
+
+
+    private int getDeleteConfirmX()
+    {
+        return getDeleteCancelX() +
+                DELETE_BUTTON_WIDTH +
+                8;
+    }
+
+
+    private void drawDeleteDialog(
+            int mouseX,
+            int mouseY)
+    {
+        this.drawRect(
+                0,
+                0,
+                this.width,
+                this.height,
+                0x99000000
+        );
+
+        int x =
+                getDeleteDialogX();
+
+        int y =
+                getDeleteDialogY();
+
+        this.drawRect(
+                x - 4,
+                y - 4,
+                x +
+                        DELETE_DIALOG_WIDTH +
+                        4,
+                y +
+                        DELETE_DIALOG_HEIGHT +
+                        4,
+                0xDD070808
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + DELETE_DIALOG_WIDTH,
+                y + DELETE_DIALOG_HEIGHT,
+                COLOR_PANEL
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + DELETE_DIALOG_WIDTH,
+                y + 26,
+                COLOR_PANEL_DARK
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + DELETE_DIALOG_WIDTH,
+                y + 1,
+                COLOR_CYAN
+        );
+
+        this.drawRect(
+                x,
+                y + 25,
+                x + DELETE_DIALOG_WIDTH,
+                y + 26,
+                COLOR_BORDER
+        );
+
+        this.drawString(
+                this.fontRenderer,
+                "DELETE KEYFRAME",
+                x + 10,
+                y + 8,
+                COLOR_TEXT
+        );
+
+        String message =
+                "Delete keyframe at frame "
+                        +
+                        this.keyframeController
+                                .getPendingDeleteFrame()
+                        +
+                        "?";
+
+        this.drawString(
+                this.fontRenderer,
+                message,
+                x + 10,
+                y + 39,
+                COLOR_TEXT_SECONDARY
+        );
+
+        int cancelX =
+                getDeleteCancelX();
+
+        int confirmX =
+                getDeleteConfirmX();
+
+        int buttonY =
+                y +
+                        DELETE_DIALOG_HEIGHT -
+                        DELETE_BUTTON_HEIGHT -
+                        10;
+
+        boolean cancelHovered =
+                mouseX >= cancelX &&
+                        mouseX <
+                                cancelX +
+                                        DELETE_BUTTON_WIDTH &&
+                        mouseY >= buttonY &&
+                        mouseY <
+                                buttonY +
+                                        DELETE_BUTTON_HEIGHT;
+
+        boolean confirmHovered =
+                mouseX >= confirmX &&
+                        mouseX <
+                                confirmX +
+                                        DELETE_BUTTON_WIDTH &&
+                        mouseY >= buttonY &&
+                        mouseY <
+                                buttonY +
+                                        DELETE_BUTTON_HEIGHT;
+
+        drawDialogButton(
+                cancelX,
+                buttonY,
+                "Cancel",
+                cancelHovered,
+                false
+        );
+
+        drawDialogButton(
+                confirmX,
+                buttonY,
+                "Delete",
+                confirmHovered,
+                true
+        );
+    }
+
+
+    private void drawDialogButton(
+            int x,
+            int y,
+            String text,
+            boolean hovered,
+            boolean destructive)
+    {
+        int background;
+
+        if (destructive)
+        {
+            background =
+                    hovered
+                            ? 0xFF8A3A3A
+                            : 0xFF5C3030;
+        }
+        else
+        {
+            background =
+                    hovered
+                            ? COLOR_PANEL_HOVER
+                            : COLOR_PANEL_LIGHT;
+        }
+
+        this.drawRect(
+                x,
+                y,
+                x + DELETE_BUTTON_WIDTH,
+                y + DELETE_BUTTON_HEIGHT,
+                background
+        );
+
+        this.drawRect(
+                x,
+                y,
+                x + DELETE_BUTTON_WIDTH,
+                y + 1,
+                destructive
+                        ? 0xFFB75A5A
+                        : hovered
+                        ? COLOR_CYAN
+                        : COLOR_BORDER
+        );
+
+        this.drawRect(
+                x,
+                y +
+                        DELETE_BUTTON_HEIGHT -
+                        1,
+                x + DELETE_BUTTON_WIDTH,
+                y +
+                        DELETE_BUTTON_HEIGHT,
+                COLOR_BORDER_DARK
+        );
+
+        int textWidth =
+                this.fontRenderer
+                        .getStringWidth(
+                                text
+                        );
+
+        this.drawString(
+                this.fontRenderer,
+                text,
+                x +
+                        (
+                                DELETE_BUTTON_WIDTH -
+                                        textWidth
+                        ) / 2,
+                y + 6,
+                destructive && hovered
+                        ? 0xFFFFFFFF
+                        : COLOR_TEXT
+        );
+    }
+
+
+    private void handleDeleteDialogClick(
+            int mouseX,
+            int mouseY,
+            int mouseButton)
+    {
+        int dialogX =
+                getDeleteDialogX();
+
+        int dialogY =
+                getDeleteDialogY();
+
+        int dialogRight =
+                dialogX +
+                        DELETE_DIALOG_WIDTH;
+
+        int dialogBottom =
+                dialogY +
+                        DELETE_DIALOG_HEIGHT;
+
+        int buttonY =
+                dialogY +
+                        DELETE_DIALOG_HEIGHT -
+                        DELETE_BUTTON_HEIGHT -
+                        10;
+
+        int cancelX =
+                getDeleteCancelX();
+
+        int confirmX =
+                getDeleteConfirmX();
+
+        if (mouseButton != 0)
+        {
+            if (
+                    mouseX < dialogX ||
+                            mouseX > dialogRight ||
+                            mouseY < dialogY ||
+                            mouseY > dialogBottom
+            )
+            {
+                clearPendingDelete();
+            }
+
+            return;
+        }
+
+        if (
+                mouseX >= confirmX &&
+                        mouseX <
+                                confirmX +
+                                        DELETE_BUTTON_WIDTH &&
+                        mouseY >= buttonY &&
+                        mouseY <
+                                buttonY +
+                                        DELETE_BUTTON_HEIGHT
+        )
+        {
+            confirmDeleteKeyframe();
+
+            return;
+        }
+
+        if (
+                mouseX >= cancelX &&
+                        mouseX <
+                                cancelX +
+                                        DELETE_BUTTON_WIDTH &&
+                        mouseY >= buttonY &&
+                        mouseY <
+                                buttonY +
+                                        DELETE_BUTTON_HEIGHT
+        )
+        {
+            clearPendingDelete();
+
+            return;
+        }
+
+        if (
+                mouseX < dialogX ||
+                        mouseX > dialogRight ||
+                        mouseY < dialogY ||
+                        mouseY > dialogBottom
+        )
+        {
+            clearPendingDelete();
+        }
+    }
+
+
+    private void confirmDeleteKeyframe()
+    {
+        if (
+                !this.keyframeController
+                        .isDeletePending()
+        )
+        {
+            clearPendingDelete();
+
+            return;
+        }
+
+        if (
+                this.keyframeController
+                        .confirmDelete()
+        )
+        {
+            applyAdapters();
+        }
+    }
+
+
+    private void clearPendingDelete()
+    {
+        this.keyframeController
+                .clearPendingDelete();
+    }
+
+
+    /*
+     * =========================================================
+     * PUBLIC ACCESSORS
+     * =========================================================
+     */
+
     public AnimationKeyframe
     getSelectedKeyframe()
     {
-        return this.selectedKeyframe;
+        return this.keyframeController
+                .getSelectedKeyframe();
     }
 
 
     public AnimationBone
     getSelectedBone()
     {
-        if (
-                this.selectedBone >= 0 &&
-                        this.selectedBone <
-                                this.bones.size()
-        )
-        {
-            return this.bones.get(
-                    this.selectedBone
-            );
-        }
-
-        return null;
+        return this.actorPreviewController
+                .getSelectedBone(
+                        this.keyframeController
+                );
     }
 
 
     public AnimationTransform
     getCurrentTransform()
     {
-        AnimationBone bone =
-                getSelectedBone();
-
-        if (bone == null)
-        {
-            return new AnimationTransform();
-        }
-
-        if (this.selectedKeyframe != null)
-        {
-            boolean belongsToBone =
-                    false;
-
-            for (
-                    AnimationKeyframe keyframe :
-                    bone.getKeyframes()
-            )
-            {
-                if (keyframe == this.selectedKeyframe)
-                {
-                    belongsToBone = true;
-                    break;
-                }
-            }
-
-            if (!belongsToBone)
-            {
-                return new AnimationTransform();
-            }
-        }
-
-        return bone.getTransformAt(
-                this.currentFrame
-        );
+        return this.actorPreviewController
+                .getCurrentTransform(
+                        this.keyframeController,
+                        this.playbackController
+                                .getCurrentFrame()
+                );
     }
 
 
     /*
      * =========================================================
-     * ANIMATION -> BLOCKBUSTER / EMOTICONS PREVIEW
+     * HELPERS
      * =========================================================
      */
 
-    private void applyAdapters()
+    private boolean isMouseInside(
+            int x,
+            int y,
+            int left,
+            int top,
+            int width,
+            int height)
     {
-        applyAdapters(
-                (float) this.currentFrame
-        );
+        return x >= left &&
+                x < left + width &&
+                y >= top &&
+                y < top + height;
     }
 
 
-    private void applyAdapters(
-            float animationFrame)
+    private boolean isMouseInside(
+            int left,
+            int top,
+            int width,
+            int height)
     {
-        List<AnimationBoneSnapshot> snapshots =
-                new ArrayList<AnimationBoneSnapshot>();
+        int mouseX =
+                Mouse.getX()
+                        *
+                        this.width
+                        /
+                        this.mc.displayWidth;
 
-        if (
-                this.bones == null ||
-                        this.bones.isEmpty()
-        )
-        {
-            BlockbusterPreviewAnimationState.clear();
-            EmoticonsPreviewAnimationState.clear();
+        int mouseY =
+                this.height
+                        -
+                        Mouse.getY()
+                                *
+                                this.height
+                                /
+                                this.mc.displayHeight
+                        -
+                        1;
 
-            return;
-        }
-
-        for (
-                AnimationBone bone :
-                this.bones
-        )
-        {
-            if (bone == null)
-            {
-                continue;
-            }
-
-            AnimationTransform transform =
-                    bone.getTransformAt(
-                            animationFrame
-                    );
-
-            if (transform == null)
-            {
-                continue;
-            }
-
-            String parentName = null;
-
-            if (bone.getParent() != null)
-            {
-                parentName =
-                        bone.getParent()
-                                .getName();
-            }
-
-            AnimationBoneSnapshot snapshot =
-                    new AnimationBoneSnapshot(
-                            bone.getName(),
-                            parentName,
-                            transform
-                    );
-
-            snapshots.add(
-                    snapshot
-            );
-        }
-
-        if (this.adapterManager == null)
-        {
-            return;
-        }
-
-        this.adapterManager.applyAll(
-                snapshots,
-                this.currentFrame
+        return isMouseInside(
+                mouseX,
+                mouseY,
+                left,
+                top,
+                width,
+                height
         );
     }
 
@@ -2721,7 +3866,22 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
+        clearPendingDelete();
+
+        this.editorModeController
+                .closeDropdown();
+
+        this.characterTimelineEditorController
+                .mouseReleased();
+
+        this.timelineController
+                .mouseReleased();
+
+        this.playbackController
+                .pause();
+
         BlockbusterPreviewAnimationState.clear();
+
         EmoticonsPreviewAnimationState.clear();
 
         super.onGuiClosed();

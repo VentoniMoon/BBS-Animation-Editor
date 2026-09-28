@@ -4,131 +4,108 @@ public class EditorTimeline
 {
     public static final int TICKS_PER_SECOND = 20;
 
-    private int currentTick = 0;
-    private int lastTick = 0;
+    private static final float BASE_FRAME_WIDTH = 6.0F;
+
+    private static final float MIN_ZOOM = 0.25F;
+    private static final float MAX_ZOOM = 4.0F;
+    private static final float ZOOM_STEP = 0.25F;
+
+    private int tick = 0;
+    private int length = 1;
 
     private boolean playing = false;
 
-    /*
-     * Fractional playback position.
-     *
-     * Например:
-     *
-     * currentTick = 10
-     * playbackAccumulator = 0.5
-     *
-     * => реальная позиция = 10.5
-     */
-    private double playbackAccumulator = 0.0D;
-
-    private long lastUpdateTime = 0L;
+    private float currentFrameFloat = 0.0F;
 
     /*
-     * Скорость воспроизведения.
+     * =========================================================
+     * VIEW
+     * =========================================================
      *
-     * 1.0 = один Minecraft tick/frame за один tick времени.
+     * Эти значения относятся именно к отображению Timeline,
+     * а не к времени воспроизведения.
      */
-    private double playbackSpeed = 1.0D;
 
+    private float zoom = 1.0F;
+    private int offset = 0;
 
-    public EditorTimeline()
-    {
-        this.lastUpdateTime = System.nanoTime();
-    }
-
+    /*
+     * =========================================================
+     * LENGTH
+     * =========================================================
+     */
 
     public void setLength(int length)
     {
-        this.lastTick = Math.max(0, length - 1);
+        this.length = Math.max(1, length);
 
-        if (this.currentTick > this.lastTick)
+        if (this.tick >= this.length)
         {
-            this.currentTick = this.lastTick;
+            this.tick = this.length - 1;
         }
 
-        this.playbackAccumulator = 0.0D;
+        if (this.tick < 0)
+        {
+            this.tick = 0;
+        }
+
+        this.currentFrameFloat = this.tick;
     }
 
+    public int getLength()
+    {
+        return this.length;
+    }
+
+    /*
+     * =========================================================
+     * TICK
+     * =========================================================
+     */
+
+    public void setTick(int tick)
+    {
+        this.tick = clampTick(tick);
+        this.currentFrameFloat = this.tick;
+    }
 
     public int getTick()
     {
-        return this.currentTick;
+        return this.tick;
     }
-
 
     public int getLastTick()
     {
-        return this.lastTick;
+        return Math.max(0, this.length - 1);
     }
 
+    private int clampTick(int value)
+    {
+        return Math.max(
+                0,
+                Math.min(
+                        value,
+                        getLastTick()
+                )
+        );
+    }
 
-    /**
-     * Возвращает текущую дробную позицию Timeline.
-     *
-     * Например:
-     *
-     * 10.0
-     * 10.25
-     * 10.5
-     * 10.75
+    /*
+     * =========================================================
+     * FRAME
+     * =========================================================
      */
+
     public float getCurrentFrameFloat()
     {
-        if (!this.playing)
-        {
-            return (float) this.currentTick;
-        }
-
-        return (float)
-                (
-                        (double) this.currentTick
-                                + this.playbackAccumulator
-                );
+        return this.currentFrameFloat;
     }
 
-
-    public double getPlaybackSpeed()
-    {
-        return this.playbackSpeed;
-    }
-
-
-    public void setPlaybackSpeed(double speed)
-    {
-        this.playbackSpeed =
-                Math.max(
-                        0.0D,
-                        speed
-                );
-    }
-
-
-    public boolean isPlaying()
-    {
-        return this.playing;
-    }
-
-
-    public void play()
-    {
-        if (this.lastTick <= 0)
-        {
-            this.playing = false;
-            return;
-        }
-
-        this.playing = true;
-        this.lastUpdateTime = System.nanoTime();
-    }
-
-
-    public void pause()
-    {
-        this.playing = false;
-        this.playbackAccumulator = 0.0D;
-        this.lastUpdateTime = System.nanoTime();
-    }
-
+    /*
+     * =========================================================
+     * PLAYBACK
+     * =========================================================
+     */
 
     public void togglePlaying()
     {
@@ -142,144 +119,256 @@ public class EditorTimeline
         }
     }
 
+    public void play()
+    {
+        if (getLastTick() <= 0)
+        {
+            this.playing = false;
+            return;
+        }
+
+        this.playing = true;
+    }
+
+    public void pause()
+    {
+        this.playing = false;
+        this.currentFrameFloat = this.tick;
+    }
+
+    public boolean isPlaying()
+    {
+        return this.playing;
+    }
+
+    /*
+     * =========================================================
+     * REWIND
+     * =========================================================
+     */
 
     public void rewind()
     {
-        this.currentTick = 0;
-        this.playbackAccumulator = 0.0D;
-        this.lastUpdateTime = System.nanoTime();
+        this.tick = 0;
+        this.currentFrameFloat = 0.0F;
     }
 
-
-    public void setTick(int tick)
-    {
-        this.currentTick =
-                Math.max(
-                        0,
-                        Math.min(
-                                tick,
-                                this.lastTick
-                        )
-                );
-
-        this.playbackAccumulator = 0.0D;
-        this.lastUpdateTime = System.nanoTime();
-    }
-
+    /*
+     * =========================================================
+     * STEP
+     * =========================================================
+     */
 
     public void previousTick()
     {
-        this.currentTick =
+        this.tick =
                 Math.max(
                         0,
-                        this.currentTick - 1
+                        this.tick - 1
                 );
 
-        this.playbackAccumulator = 0.0D;
-        this.lastUpdateTime = System.nanoTime();
+        this.currentFrameFloat = this.tick;
     }
-
 
     public void nextTick()
     {
-        this.currentTick =
+        this.tick =
                 Math.min(
-                        this.lastTick,
-                        this.currentTick + 1
+                        getLastTick(),
+                        this.tick + 1
                 );
 
-        this.playbackAccumulator = 0.0D;
-        this.lastUpdateTime = System.nanoTime();
+        this.currentFrameFloat = this.tick;
     }
 
+    /*
+     * =========================================================
+     * UPDATE
+     * =========================================================
+     *
+     * 20 ticks = 1 second.
+     *
+     * currentFrameFloat нужен для плавного движения между
+     * целыми кадрами во время воспроизведения.
+     */
 
     public void update()
     {
-        long now = System.nanoTime();
-
-        /*
-         * Первый update после создания / паузы.
-         */
-        if (this.lastUpdateTime == 0L)
-        {
-            this.lastUpdateTime = now;
-            return;
-        }
-
-        long elapsedNanos =
-                now - this.lastUpdateTime;
-
-        this.lastUpdateTime = now;
-
         if (!this.playing)
         {
+            this.currentFrameFloat = this.tick;
             return;
         }
 
-        if (elapsedNanos <= 0L)
+        this.currentFrameFloat += 1.0F;
+
+        if (this.currentFrameFloat >= this.length)
         {
-            return;
+            this.currentFrameFloat = 0.0F;
+            this.tick = 0;
         }
+        else
+        {
+            this.tick =
+                    (int) Math.floor(
+                            this.currentFrameFloat
+                    );
+        }
+    }
 
-        /*
-         * Переводим реальное прошедшее время
-         * в Minecraft ticks.
-         *
-         * 20 ticks = 1 секунда.
-         */
-        double elapsedTicks =
-                (
-                        (double) elapsedNanos
-                                /
-                                1000000000.0D
-                )
-                        *
-                        (double) TICKS_PER_SECOND;
+    /*
+     * =========================================================
+     * ZOOM
+     * =========================================================
+     */
 
-        elapsedTicks *= this.playbackSpeed;
+    public float getZoom()
+    {
+        return this.zoom;
+    }
 
-        this.playbackAccumulator += elapsedTicks;
+    public void setZoom(float zoom)
+    {
+        this.zoom =
+                Math.max(
+                        MIN_ZOOM,
+                        Math.min(
+                                MAX_ZOOM,
+                                zoom
+                        )
+                );
+    }
 
-        /*
-         * Переходим через целые кадры,
-         * сохраняя дробную часть.
-         */
-        while (
-                this.playbackAccumulator >= 1.0D
+    public void changeZoom(float delta)
+    {
+        setZoom(
+                this.zoom + delta
+        );
+    }
+
+    public float getPixelsPerFrame()
+    {
+        return BASE_FRAME_WIDTH *
+                this.zoom;
+    }
+
+    /*
+     * =========================================================
+     * OFFSET
+     * =========================================================
+     */
+
+    public int getOffset()
+    {
+        return this.offset;
+    }
+
+    public void setOffset(int offset)
+    {
+        this.offset = Math.max(0, offset);
+    }
+
+    public void addOffset(int amount)
+    {
+        this.offset += amount;
+
+        if (this.offset < 0)
+        {
+            this.offset = 0;
+        }
+    }
+
+    public void resetOffset()
+    {
+        this.offset = 0;
+    }
+
+    /*
+     * =========================================================
+     * FRAME <-> SCREEN
+     * =========================================================
+     */
+
+    public int getFrameX(
+            int frame,
+            int timelineStartX)
+    {
+        return timelineStartX
+                + Math.round(
+                frame *
+                        getPixelsPerFrame()
         )
-        {
-            this.playbackAccumulator -= 1.0D;
+                - this.offset;
+    }
 
-            if (this.currentTick < this.lastTick)
-            {
-                this.currentTick++;
-            }
-            else
-            {
-                /*
-                 * Дошли до конца.
-                 *
-                 * Зацикливаем воспроизведение
-                 * с начала Timeline.
-                 */
-                this.currentTick = 0;
-                this.playbackAccumulator = 0.0D;
-            }
+    public int getFrameFromMouseX(
+            int mouseX,
+            int timelineStartX)
+    {
+        int relativeX =
+                mouseX -
+                        timelineStartX +
+                        this.offset;
+
+        float pixelsPerFrame =
+                getPixelsPerFrame();
+
+        if (pixelsPerFrame <= 0.0F)
+        {
+            return 0;
         }
 
-        /*
-         * Защита от возможного накопления
-         * слишком большого значения.
-         */
-        if (this.playbackAccumulator < 0.0D)
+        return Math.round(
+                (float) relativeX /
+                        pixelsPerFrame
+        );
+    }
+
+    /*
+     * =========================================================
+     * OFFSET LIMIT
+     * =========================================================
+     */
+
+    public int getMaximumOffset(
+            int maximumFrame,
+            int timelineWidth)
+    {
+        if (timelineWidth <= 0)
         {
-            this.playbackAccumulator = 0.0D;
+            return 0;
         }
 
-        if (this.playbackAccumulator >= 1.0D)
-        {
-            this.playbackAccumulator =
-                    this.playbackAccumulator % 1.0D;
-        }
+        int contentWidth =
+                Math.round(
+                        (maximumFrame + 1) *
+                                getPixelsPerFrame()
+                );
+
+        return Math.max(
+                0,
+                contentWidth -
+                        timelineWidth
+        );
+    }
+
+    public void clampOffset(
+            int maximumFrame,
+            int timelineWidth)
+    {
+        int maximumOffset =
+                getMaximumOffset(
+                        maximumFrame,
+                        timelineWidth
+                );
+
+        this.offset =
+                Math.max(
+                        0,
+                        Math.min(
+                                this.offset,
+                                maximumOffset
+                        )
+                );
     }
 }

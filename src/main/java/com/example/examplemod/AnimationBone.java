@@ -7,25 +7,12 @@ public class AnimationBone
 {
     private final String name;
 
-    /*
-     * Пользовательские ключевые кадры этой кости.
-     *
-     * Здесь находятся только изменения,
-     * созданные пользователем редактора.
-     */
     private final List<AnimationKeyframe> keyframes;
 
-    /*
-     * Иерархия модели.
-     */
     private AnimationBone parent;
 
     private final List<AnimationBone> children;
 
-    /*
-     * Статическая позиция точки привязки кости
-     * внутри исходной Blockbuster-модели.
-     */
     private float localX;
     private float localY;
     private float localZ;
@@ -48,12 +35,6 @@ public class AnimationBone
         this.localZ = 0.0F;
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Basic information
-     * ---------------------------------------------------------
-     */
-
     public String getName()
     {
         return this.name;
@@ -63,12 +44,6 @@ public class AnimationBone
     {
         return this.keyframes;
     }
-
-    /*
-     * ---------------------------------------------------------
-     * Static local attachment
-     * ---------------------------------------------------------
-     */
 
     public void setLocalPosition(
             float x,
@@ -95,12 +70,6 @@ public class AnimationBone
         return this.localZ;
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Parent / children
-     * ---------------------------------------------------------
-     */
-
     public AnimationBone getParent()
     {
         return this.parent;
@@ -109,19 +78,11 @@ public class AnimationBone
     public void setParent(
             AnimationBone parent)
     {
-        /*
-         * Нельзя сделать кость родителем самой себя.
-         */
         if (parent == this)
         {
             return;
         }
 
-        /*
-         * Нельзя создать цикл:
-         *
-         * A -> B -> C -> A
-         */
         if (
                 parent != null
                         && parent.isChildOf(this)
@@ -130,9 +91,6 @@ public class AnimationBone
             return;
         }
 
-        /*
-         * Удаляем кость из старого родителя.
-         */
         if (this.parent != null)
         {
             this.parent.children.remove(this);
@@ -140,9 +98,6 @@ public class AnimationBone
 
         this.parent = parent;
 
-        /*
-         * Добавляем кость новому родителю.
-         */
         if (
                 this.parent != null
                         && !this.parent.children.contains(this)
@@ -275,6 +230,60 @@ public class AnimationBone
         }
     }
 
+    /**
+     * Перемещает существующий keyframe на другой кадр.
+     *
+     * Сам объект keyframe не создаётся заново, поэтому
+     * Transform, interpolation, easing и параметры кривой
+     * полностью сохраняются.
+     *
+     * @return true, если перемещение выполнено
+     */
+    public boolean moveKeyframe(
+            AnimationKeyframe keyframe,
+            int newFrame)
+    {
+        if (keyframe == null)
+        {
+            return false;
+        }
+
+        if (!this.keyframes.contains(keyframe))
+        {
+            return false;
+        }
+
+        if (newFrame < 0)
+        {
+            newFrame = 0;
+        }
+
+        /*
+         * Если на новом кадре уже находится другой ключ,
+         * перемещение запрещаем.
+         */
+        for (
+                AnimationKeyframe existing :
+                this.keyframes
+        )
+        {
+            if (
+                    existing != null
+                            && existing != keyframe
+                            && existing.getFrame() == newFrame
+            )
+            {
+                return false;
+            }
+        }
+
+        keyframe.setFrame(newFrame);
+
+        sortKeyframes();
+
+        return true;
+    }
+
     public AnimationKeyframe
     getPreviousKeyframe(
             int frame)
@@ -349,21 +358,6 @@ public class AnimationBone
         );
     }
 
-    /**
-     * Получает пользовательскую трансформацию
-     * на дробном кадре.
-     *
-     * Например:
-     *
-     * 10.0
-     * 10.25
-     * 10.50
-     * 10.75
-     * 11.0
-     *
-     * Это позволяет рендерить анимацию
-     * плавнее, чем 20 дискретных кадров в секунду.
-     */
     public AnimationTransform
     getTransformAt(
             float frame)
@@ -373,10 +367,6 @@ public class AnimationBone
             return new AnimationTransform();
         }
 
-        /*
-         * Если кадр находится до первого keyframe,
-         * используем первый keyframe.
-         */
         AnimationKeyframe first =
                 this.keyframes.get(0);
 
@@ -388,10 +378,6 @@ public class AnimationBone
             return first.getTransform().copy();
         }
 
-        /*
-         * Если кадр находится после последнего keyframe,
-         * используем последний keyframe.
-         */
         AnimationKeyframe last =
                 this.keyframes.get(
                         this.keyframes.size() - 1
@@ -405,17 +391,6 @@ public class AnimationBone
             return last.getTransform().copy();
         }
 
-        /*
-         * Ищем два keyframe, между которыми
-         * находится текущий дробный кадр.
-         *
-         * Например:
-         *
-         * 10.5
-         *
-         * previous = 10
-         * next     = 20
-         */
         AnimationKeyframe previous =
                 null;
 
@@ -447,15 +422,10 @@ public class AnimationBone
             if (keyframeFrame >= frame)
             {
                 next = keyframe;
-
                 break;
             }
         }
 
-        /*
-         * Если по какой-то причине один из keyframe
-         * не найден, используем найденный.
-         */
         if (previous == null)
         {
             return next != null
@@ -468,22 +438,11 @@ public class AnimationBone
             return previous.getTransform().copy();
         }
 
-        /*
-         * Если это один и тот же keyframe,
-         * интерполяция не нужна.
-         */
         if (previous == next)
         {
             return previous.getTransform().copy();
         }
 
-        /*
-         * Находим keyframe до previous
-         * и после next.
-         *
-         * Они нужны McLib-интерполятору
-         * для некоторых типов кривых.
-         */
         AnimationKeyframe previousPrevious =
                 null;
 
@@ -529,12 +488,6 @@ public class AnimationBone
         );
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Snapshot
-     * ---------------------------------------------------------
-     */
-
     public AnimationBoneSnapshot
     createSnapshot(
             int frame)
@@ -560,12 +513,6 @@ public class AnimationBone
         );
     }
 
-    /*
-     * ---------------------------------------------------------
-     * Root
-     * ---------------------------------------------------------
-     */
-
     public AnimationBone
     getRootBone()
     {
@@ -580,12 +527,6 @@ public class AnimationBone
 
         return root;
     }
-
-    /*
-     * ---------------------------------------------------------
-     * Root transform
-     * ---------------------------------------------------------
-     */
 
     public AnimationTransform
     getWorldTransformAt(
@@ -657,12 +598,6 @@ public class AnimationBone
         );
     }
 
-    /*
-     * ---------------------------------------------------------
-     * World pivot
-     * ---------------------------------------------------------
-     */
-
     public AnimationTransform
     getWorldPivotAt(
             int frame)
@@ -732,12 +667,6 @@ public class AnimationBone
                 pivot
         );
     }
-
-    /*
-     * ---------------------------------------------------------
-     * Sorting
-     * ---------------------------------------------------------
-     */
 
     private void sortKeyframes()
     {
