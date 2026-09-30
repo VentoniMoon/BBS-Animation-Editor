@@ -8,6 +8,10 @@ import net.minecraft.client.gui.Gui;
  *
  * Здесь находятся только цвета и небольшие примитивы интерфейса.
  * Логика редактора здесь отсутствует.
+ *
+ * Основной акцентный цвет берётся из EditorThemeManager.
+ * Нейтральные и семантические цвета остаются общими
+ * для всех визуальных тем.
  */
 public final class EditorVisualStyle
 {
@@ -76,13 +80,46 @@ public final class EditorVisualStyle
      * =========================================================
      * ACCENTS
      * =========================================================
+     *
+     * CYAN / CYAN_BRIGHT оставлены как имена для совместимости
+     * с уже существующим кодом, но фактический цвет теперь
+     * берётся из текущей темы.
      */
 
-    public static final int CYAN =
-            0xFF4CC9F0;
+    public static int getAccent()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccent();
+    }
 
-    public static final int CYAN_BRIGHT =
-            0xFF62D5F5;
+    public static int getAccentBright()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccentBright();
+    }
+
+    /*
+     * Старые имена оставлены как методы,
+     * чтобы постепенно переводить остальные классы
+     * на систему тем без необходимости менять всё сразу.
+     */
+
+    public static int getCyan()
+    {
+        return getAccent();
+    }
+
+    public static int getCyanBright()
+    {
+        return getAccentBright();
+    }
+
+    /*
+     * Семантические цвета.
+     * Они НЕ зависят от выбранной темы.
+     */
 
     public static final int GREEN =
             0xFF73E06C;
@@ -117,14 +154,28 @@ public final class EditorVisualStyle
     public static final int TIMELINE_RULER =
             0xFF4A4D52;
 
+    /**
+     * Красный playhead является семантическим цветом
+     * и поэтому не меняется вместе с темой.
+     */
     public static final int TIMELINE_CURRENT =
             0xFFFF5555;
 
+    /**
+     * Цвет обычного keyframe.
+     * Также остаётся независимым от темы.
+     */
     public static final int KEYFRAME =
             0xFFF0A51A;
 
-    public static final int KEYFRAME_SELECTED =
-            0xFFFFC43A;
+    /**
+     * Выделенный keyframe будет использовать accent темы
+     * через getKeyframeSelected().
+     */
+    public static int getKeyframeSelected()
+    {
+        return getAccentBright();
+    }
 
     /*
      * =========================================================
@@ -237,7 +288,7 @@ public final class EditorVisualStyle
                 y,
                 x + 2,
                 y + height,
-                CYAN
+                getAccent()
         );
     }
 
@@ -260,7 +311,7 @@ public final class EditorVisualStyle
                 text,
                 x,
                 y,
-                CYAN
+                getAccent()
         );
     }
 
@@ -277,7 +328,7 @@ public final class EditorVisualStyle
                 text,
                 x,
                 y,
-                CYAN
+                getAccent()
         );
     }
 

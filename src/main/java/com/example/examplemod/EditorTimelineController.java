@@ -65,9 +65,6 @@ public class EditorTimelineController
     private static final int COLOR_TRACK_SELECTED =
             0xFF2B3438;
 
-    private static final int COLOR_TRACK_SELECTED_EDGE =
-            0xFF66CCFF;
-
     private static final int COLOR_TRACK_BORDER =
             0xFF111315;
 
@@ -89,20 +86,37 @@ public class EditorTimelineController
     private static final int COLOR_TEXT_MUTED =
             0xFF666D72;
 
-    private static final int COLOR_CYAN =
-            0xFF66CCFF;
-
-    private static final int COLOR_CYAN_BRIGHT =
-            0xFF8BE1FF;
-
     private static final int COLOR_KEYFRAME =
             0xFFE5E8EA;
 
     private static final int COLOR_KEYFRAME_INNER =
             0xFF25282B;
 
-    private static final int COLOR_KEYFRAME_SELECTED =
-            0xFF66CCFF;
+    /*
+     * =========================================================
+     * THEME
+     * =========================================================
+     */
+
+    private static int getAccentColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccent();
+    }
+
+    private static int getAccentBrightColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccentBright();
+    }
+
+    /*
+     * Playhead remains a semantic red color.
+     *
+     * It does NOT change with the editor theme.
+     */
 
     private static final int COLOR_PLAYHEAD =
             0xFFFF6B6B;
@@ -276,7 +290,7 @@ public class EditorTimelineController
         );
 
         /*
-         * Strong cyan line separates Timeline
+         * Theme accent line separates Timeline
          * from the rest of the editor.
          */
 
@@ -285,7 +299,7 @@ public class EditorTimelineController
                 timelineTop,
                 width,
                 timelineTop + 1,
-                COLOR_CYAN
+                getAccentColor()
         );
 
         /*
@@ -322,7 +336,7 @@ public class EditorTimelineController
                 timelineTop + 10,
                 10,
                 timelineTop + 22,
-                COLOR_CYAN
+                getAccentColor()
         );
 
         mc.fontRenderer.drawString(
@@ -393,7 +407,7 @@ public class EditorTimelineController
                     actorName,
                     238,
                     timelineTop + 11,
-                    COLOR_CYAN
+                    getAccentColor()
             );
         }
 
@@ -691,7 +705,7 @@ public class EditorTimelineController
                 rulerTop,
                 timelineStartX,
                 rulerBottom,
-                COLOR_CYAN
+                getAccentColor()
         );
 
         /*
@@ -802,7 +816,7 @@ public class EditorTimelineController
                         rulerTop,
                         x + 2,
                         rulerBottom,
-                        COLOR_CYAN
+                        getAccentColor()
                 );
 
                 int seconds =
@@ -932,7 +946,7 @@ public class EditorTimelineController
                     trackY,
                     3,
                     trackY + TRACK_HEIGHT,
-                    COLOR_TRACK_SELECTED_EDGE
+                    getAccentColor()
             );
 
             Gui.drawRect(
@@ -992,7 +1006,7 @@ public class EditorTimelineController
                 timelineStartX,
                 trackY + TRACK_HEIGHT,
                 selected
-                        ? COLOR_TRACK_SELECTED_EDGE
+                        ? getAccentColor()
                         : COLOR_TRACK_BORDER
         );
 
@@ -1191,7 +1205,7 @@ public class EditorTimelineController
     {
         int outerColor =
                 selected
-                        ? COLOR_KEYFRAME_SELECTED
+                        ? getAccentColor()
                         : COLOR_KEYFRAME;
 
         /*

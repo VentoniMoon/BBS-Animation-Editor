@@ -30,9 +30,6 @@ public class InterpolationPanel
     private static final int HEADER_BOTTOM =
             0xFF18191B;
 
-    private static final int HEADER_ACCENT =
-            0xFF66CCFF;
-
     private static final int FIELD_BACKGROUND =
             0xFF303134;
 
@@ -44,9 +41,6 @@ public class InterpolationPanel
 
     private static final int FIELD_BORDER =
             0xFF18191B;
-
-    private static final int FIELD_ACTIVE_BORDER =
-            0xFF66CCFF;
 
     private static final int TEXT =
             0xFFE0E0E0;
@@ -63,11 +57,31 @@ public class InterpolationPanel
     private static final int TEXT_DARK =
             0xFF55585C;
 
-    private static final int ACCENT =
-            0xFF66CCFF;
+    /*
+     * =========================================================
+     * THEME ACCENTS
+     * =========================================================
+     */
 
-    private static final int ACCENT_BRIGHT =
-            0xFF8BE1FF;
+    private static int getAccentColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccent();
+    }
+
+    private static int getAccentBrightColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccentBright();
+    }
+
+    /*
+     * =========================================================
+     * GRAPH
+     * =========================================================
+     */
 
     private static final int GRAPH_BACKGROUND =
             0xFF18191B;
@@ -80,9 +94,6 @@ public class InterpolationPanel
 
     private static final int GRAPH_BORDER =
             0xFF36383B;
-
-    private static final int GRAPH_CURVE =
-            0xFF66CCFF;
 
     private static final int GRAPH_POINT =
             0xFFFFFFFF;
@@ -307,7 +318,7 @@ public class InterpolationPanel
         );
 
         /*
-         * Cyan marker.
+         * Theme accent marker.
          */
 
         Gui.drawRect(
@@ -315,7 +326,7 @@ public class InterpolationPanel
                 this.y + 7,
                 this.x + 10,
                 this.y + 18,
-                HEADER_ACCENT
+                getAccentColor()
         );
 
         /*
@@ -425,7 +436,7 @@ public class InterpolationPanel
                     selectorY + selectorHeight - 2,
                     selectorX + selectorWidth - 1,
                     selectorY + selectorHeight - 1,
-                    FIELD_ACTIVE_BORDER
+                    getAccentColor()
             );
         }
 
@@ -465,11 +476,10 @@ public class InterpolationPanel
                 arrow,
                 selectorX +
                         selectorWidth -
-                        arrowWidth -
-                        7,
+                        arrowWidth - 7,
                 selectorY + 6,
                 this.dropdownOpen
-                        ? ACCENT_BRIGHT
+                        ? getAccentBrightColor()
                         : TEXT_SECONDARY
         );
 
@@ -488,7 +498,7 @@ public class InterpolationPanel
                 this.y + 57,
                 this.x + 10,
                 this.y + 67,
-                0xFF55585C
+                TEXT_DARK
         );
 
         this.mc.fontRenderer.drawString(
@@ -512,8 +522,7 @@ public class InterpolationPanel
                 easingName,
                 this.x +
                         this.width -
-                        easingWidth -
-                        8,
+                        easingWidth - 8,
                 this.y + 58,
                 TEXT_SECONDARY
         );
@@ -667,7 +676,7 @@ public class InterpolationPanel
                 dropdownY,
                 dropdownX + dropdownWidth,
                 dropdownY + 1,
-                ACCENT
+                getAccentColor()
         );
 
         this.hoveredInterpolation =
@@ -772,7 +781,7 @@ public class InterpolationPanel
                         itemY,
                         dropdownX + 4,
                         itemY + itemHeight,
-                        ACCENT
+                        getAccentColor()
                 );
             }
 
@@ -790,7 +799,7 @@ public class InterpolationPanel
                         itemY,
                         dropdownX + 3,
                         itemY + itemHeight,
-                        0xFF55585C
+                        TEXT_DARK
                 );
             }
 
@@ -825,7 +834,7 @@ public class InterpolationPanel
                     dropdownX +
                             dropdownWidth,
                     dropdownY + 1,
-                    ACCENT
+                    getAccentColor()
             );
 
             this.mc.fontRenderer.drawString(
@@ -834,7 +843,7 @@ public class InterpolationPanel
                             dropdownWidth -
                             12,
                     dropdownY + 2,
-                    ACCENT_BRIGHT
+                    getAccentBrightColor()
             );
         }
 
@@ -849,7 +858,7 @@ public class InterpolationPanel
                             dropdownWidth,
                     dropdownY +
                             dropdownHeight,
-                    ACCENT
+                    getAccentColor()
             );
 
             this.mc.fontRenderer.drawString(
@@ -860,7 +869,7 @@ public class InterpolationPanel
                     dropdownY +
                             dropdownHeight -
                             10,
-                    ACCENT_BRIGHT
+                    getAccentBrightColor()
             );
         }
 
@@ -979,7 +988,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + graphWidth,
                 graphY + 1,
-                ACCENT
+                getAccentColor()
         );
 
         /*
@@ -1028,7 +1037,7 @@ public class InterpolationPanel
                 graphY,
                 graphWidth,
                 graphHeight,
-                GRAPH_CURVE
+                getAccentColor()
         );
 
         drawAnimatedPoint(
@@ -1121,7 +1130,7 @@ public class InterpolationPanel
                 graphY,
                 graphWidth,
                 graphHeight,
-                GRAPH_CURVE
+                getAccentColor()
         );
 
         drawAnimatedPoint(
@@ -1411,7 +1420,7 @@ public class InterpolationPanel
         );
 
         /*
-         * Cyan center border.
+         * Theme accent center border.
          */
 
         Gui.drawRect(
@@ -1419,7 +1428,7 @@ public class InterpolationPanel
                 pointY - 3,
                 pointX + 4,
                 pointY + 4,
-                ACCENT
+                getAccentColor()
         );
 
         /*

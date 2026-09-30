@@ -60,7 +60,21 @@ public class BlockbusterRecord
 
 
     /*
-     * Load the in-memory model from NBT.
+     * ---------------------------------------------------------
+     * LOAD FROM NBT
+     * ---------------------------------------------------------
+     */
+
+    /**
+     * Загружает Blockbuster Record из NBT.
+     *
+     * Важно:
+     *
+     * Actions находятся внутри Frame в оригинальном
+     * формате Blockbuster.
+     *
+     * Одновременно мы поддерживаем отдельный список
+     * actions, который используется редактором.
      */
     public static BlockbusterRecord fromNBT(
             String filename,
@@ -70,33 +84,55 @@ public class BlockbusterRecord
         BlockbusterRecord record =
                 new BlockbusterRecord(filename);
 
+        if (nbt == null)
+        {
+            return record;
+        }
+
         /*
+         * -----------------------------------------------------
          * Version
+         * -----------------------------------------------------
          */
+
         if (nbt.hasKey("Version", 2))
         {
             record.version =
                     nbt.getShort("Version");
         }
 
+
         /*
+         * -----------------------------------------------------
          * Delays
+         * -----------------------------------------------------
          */
+
         if (nbt.hasKey("PreDelay"))
         {
             record.preDelay =
-                    nbt.getInteger("PreDelay");
+                    Math.max(
+                            0,
+                            nbt.getInteger("PreDelay")
+                    );
         }
 
         if (nbt.hasKey("PostDelay"))
         {
             record.postDelay =
-                    nbt.getInteger("PostDelay");
+                    Math.max(
+                            0,
+                            nbt.getInteger("PostDelay")
+                    );
         }
 
+
         /*
+         * -----------------------------------------------------
          * Player data
+         * -----------------------------------------------------
          */
+
         if (nbt.hasKey("PlayerData", 10))
         {
             record.playerData =
@@ -104,10 +140,18 @@ public class BlockbusterRecord
                             "PlayerData"
                     ).copy();
         }
+        else
+        {
+            record.playerData = null;
+        }
+
 
         /*
+         * -----------------------------------------------------
          * Action registry
+         * -----------------------------------------------------
          */
+
         if (nbt.hasKey("Actions", 10))
         {
             record.actionRegistry =
@@ -117,10 +161,19 @@ public class BlockbusterRecord
                             )
                     );
         }
+        else
+        {
+            record.actionRegistry =
+                    new BlockbusterActionRegistry();
+        }
+
 
         /*
+         * -----------------------------------------------------
          * Frames
+         * -----------------------------------------------------
          */
+
         if (nbt.hasKey("Frames", 9))
         {
             NBTTagList frameList =
@@ -139,24 +192,17 @@ public class BlockbusterRecord
                         frameList.getCompoundTagAt(i);
 
                 BlockbusterRecordFrame frame =
-                        BlockbusterRecordFrame
-                                .fromNBT(
-                                        frameNBT
-                                );
+                        BlockbusterRecordFrame.fromNBT(
+                                frameNBT
+                        );
 
                 record.frames.add(frame);
 
                 /*
-                 * IMPORTANT:
-                 *
-                 * Actions are copied from the frame
-                 * into their own timeline.
-                 *
-                 * This mirrors the original
-                 * Blockbuster Record structure.
+                 * Actions are mirrored into the separate
+                 * action timeline.
                  */
-                List<BlockbusterRecordAction>
-                        frameActions =
+                List<BlockbusterRecordAction> frameActions =
                         frame.getActions();
 
                 if (frameActions == null)
@@ -174,12 +220,331 @@ public class BlockbusterRecord
             }
         }
 
+
+        /*
+         * -----------------------------------------------------
+         * Separate Actions timeline
+         * -----------------------------------------------------
+         *
+         * Если присутствует отдельный Actions список,
+         * он имеет приоритет над копией из Frames.
+         *
+         * Это позволяет редактору сохранять изменения
+         * Action Timeline без разрушения исходных кадров.
+         */
+
+        if (nbt.hasKey("ActionTimeline", 9))
+        {
+            NBTTagList actionTimeline =
+                    nbt.getTagList(
+                            "ActionTimeline",
+                            10
+                    );
+
+            record.actions.clear();
+
+            for (
+                    int i = 0;
+                    i < actionTimeline.tagCount();
+                    i++
+            )
+            {
+                NBTTagCompound tickNBT =
+                        actionTimeline.getCompoundTagAt(i);
+
+                List<BlockbusterRecordAction> tickActions =
+                        new ArrayList<BlockbusterRecordAction>();
+
+                if (tickNBT.hasKey("Actions", 9))
+                {
+                    NBTTagList actionList =
+                            tickNBT.getTagList(
+                                    "Actions",
+                                    10
+                            );
+
+                    for (
+                            int j = 0;
+                            j < actionList.tagCount();
+                            j++
+                    )
+                    {
+                        tickActions.add(
+                                BlockbusterRecordAction.fromNBT(
+                                        actionList.getCompoundTagAt(j)
+                                )
+                        );
+                    }
+                }
+
+                record.actions.add(tickActions);
+            }
+
+            /*
+             * Frame and action timelines must have matching
+             * capacity.
+             */
+            record.ensureSize(
+                    Math.max(
+                            record.frames.size(),
+                            record.actions.size()
+                    )
+            );
+        }
+
+
+        /*
+         * -----------------------------------------------------
+         * Synchronize actions with frames
+         * -----------------------------------------------------
+         *
+         * После загрузки приводим Frame -> Actions
+         * в соответствие с отдельным Action Timeline.
+         */
+
+        record.synchronizeActionsToFrames();
+
+
         return record;
     }
 
 
     /*
-     * Filename
+     * ---------------------------------------------------------
+     * SAVE TO NBT
+     * ---------------------------------------------------------
+     */
+
+    /**
+     * Сохраняет весь Blockbuster Record обратно в NBT.
+     *
+     * Этот метод является парой к fromNBT().
+     *
+     * В результате:
+     *
+     * BlockbusterRecord
+     *       |
+     *       +-- Version
+     *       +-- PreDelay
+     *       +-- PostDelay
+     *       +-- PlayerData
+     *       +-- Actions
+     *       +-- Frames
+     *       +-- ActionTimeline
+     */
+    public NBTTagCompound toNBT()
+    {
+        NBTTagCompound nbt =
+                new NBTTagCompound();
+
+
+        /*
+         * -----------------------------------------------------
+         * Version
+         * -----------------------------------------------------
+         */
+
+        nbt.setShort(
+                "Version",
+                this.version
+        );
+
+
+        /*
+         * -----------------------------------------------------
+         * Delays
+         * -----------------------------------------------------
+         */
+
+        if (this.preDelay != 0)
+        {
+            nbt.setInteger(
+                    "PreDelay",
+                    this.preDelay
+            );
+        }
+
+        if (this.postDelay != 0)
+        {
+            nbt.setInteger(
+                    "PostDelay",
+                    this.postDelay
+            );
+        }
+
+
+        /*
+         * -----------------------------------------------------
+         * Player data
+         * -----------------------------------------------------
+         */
+
+        if (this.playerData != null)
+        {
+            nbt.setTag(
+                    "PlayerData",
+                    this.playerData.copy()
+            );
+        }
+
+
+        /*
+         * -----------------------------------------------------
+         * Action registry
+         * -----------------------------------------------------
+         */
+
+        if (this.actionRegistry != null)
+        {
+            nbt.setTag(
+                    "Actions",
+                    this.actionRegistry.toNBT()
+            );
+        }
+
+
+        /*
+         * -----------------------------------------------------
+         * Frames
+         * -----------------------------------------------------
+         *
+         * Перед сохранением синхронизируем Actions
+         * с соответствующими Frame.
+         */
+
+        synchronizeActionsToFrames();
+
+        NBTTagList frameList =
+                new NBTTagList();
+
+        for (
+                int i = 0;
+                i < this.frames.size();
+                i++
+        )
+        {
+            BlockbusterRecordFrame frame =
+                    this.frames.get(i);
+
+            /*
+             * Даже null frame должен иметь
+             * соответствующий пустой Compound,
+             * чтобы индекс кадра сохранялся.
+             */
+            if (frame == null)
+            {
+                frame =
+                        new BlockbusterRecordFrame();
+            }
+
+            /*
+             * Actions должны находиться внутри
+             * соответствующего Frame.
+             *
+             * Сам BlockbusterRecordFrame хранит список
+             * действий, поэтому здесь мы просто
+             * сериализуем его.
+             */
+            frameList.appendTag(
+                    frame.toNBT()
+            );
+        }
+
+        nbt.setTag(
+                "Frames",
+                frameList
+        );
+
+
+        /*
+         * -----------------------------------------------------
+         * Separate Action Timeline
+         * -----------------------------------------------------
+         *
+         * Это дополнительное представление для редактора.
+         *
+         * Оно не заменяет оригинальный Action внутри Frame.
+         */
+
+        NBTTagList actionTimeline =
+                new NBTTagList();
+
+        for (
+                int tick = 0;
+                tick < this.actions.size();
+                tick++
+        )
+        {
+            List<BlockbusterRecordAction> tickActions =
+                    this.actions.get(tick);
+
+            /*
+             * Пустые ticks можно не сохранять.
+             */
+            if (
+                    tickActions == null
+                            || tickActions.isEmpty()
+            )
+            {
+                continue;
+            }
+
+            NBTTagCompound tickNBT =
+                    new NBTTagCompound();
+
+            tickNBT.setInteger(
+                    "Frame",
+                    tick
+            );
+
+            NBTTagList actionList =
+                    new NBTTagList();
+
+            for (
+                    BlockbusterRecordAction action :
+                    tickActions
+            )
+            {
+                if (action == null)
+                {
+                    continue;
+                }
+
+                actionList.appendTag(
+                        action.getNBT()
+                );
+            }
+
+            if (actionList.tagCount() > 0)
+            {
+                tickNBT.setTag(
+                        "Actions",
+                        actionList
+                );
+
+                actionTimeline.appendTag(
+                        tickNBT
+                );
+            }
+        }
+
+        if (actionTimeline.tagCount() > 0)
+        {
+            nbt.setTag(
+                    "ActionTimeline",
+                    actionTimeline
+            );
+        }
+
+
+        return nbt;
+    }
+
+
+    /*
+     * ---------------------------------------------------------
+     * FILENAME
+     * ---------------------------------------------------------
      */
 
     public String getFilename()
@@ -196,7 +561,9 @@ public class BlockbusterRecord
 
 
     /*
-     * Version
+     * ---------------------------------------------------------
+     * VERSION
+     * ---------------------------------------------------------
      */
 
     public short getVersion()
@@ -213,7 +580,9 @@ public class BlockbusterRecord
 
 
     /*
-     * Delays
+     * ---------------------------------------------------------
+     * DELAYS
+     * ---------------------------------------------------------
      */
 
     public int getPreDelay()
@@ -251,7 +620,9 @@ public class BlockbusterRecord
 
 
     /*
-     * Frames
+     * ---------------------------------------------------------
+     * FRAMES
+     * ---------------------------------------------------------
      */
 
     public List<BlockbusterRecordFrame> getFrames()
@@ -265,8 +636,8 @@ public class BlockbusterRecord
     )
     {
         if (
-                tick < 0 ||
-                        tick >= this.frames.size()
+                tick < 0
+                        || tick >= this.frames.size()
         )
         {
             return null;
@@ -286,12 +657,47 @@ public class BlockbusterRecord
             return;
         }
 
-        ensureSize(tick + 1);
+        ensureSize(
+                tick + 1
+        );
 
         this.frames.set(
                 tick,
                 frame
         );
+
+        /*
+         * Keep action timeline synchronized.
+         */
+        if (frame != null)
+        {
+            List<BlockbusterRecordAction> frameActions =
+                    frame.getActions();
+
+            if (frameActions == null)
+            {
+                this.actions.set(
+                        tick,
+                        null
+                );
+            }
+            else
+            {
+                this.actions.set(
+                        tick,
+                        new ArrayList<BlockbusterRecordAction>(
+                                frameActions
+                        )
+                );
+            }
+        }
+        else
+        {
+            this.actions.set(
+                    tick,
+                    null
+            );
+        }
     }
 
 
@@ -304,7 +710,9 @@ public class BlockbusterRecord
             return null;
         }
 
-        ensureSize(tick + 1);
+        ensureSize(
+                tick + 1
+        );
 
         BlockbusterRecordFrame frame =
                 this.frames.get(tick);
@@ -320,12 +728,26 @@ public class BlockbusterRecord
             );
         }
 
+        /*
+         * Make sure actions also exist
+         * for this tick.
+         */
+        if (this.actions.get(tick) == null)
+        {
+            this.actions.set(
+                    tick,
+                    new ArrayList<BlockbusterRecordAction>()
+            );
+        }
+
         return frame;
     }
 
 
     /*
-     * Actions
+     * ---------------------------------------------------------
+     * ACTIONS
+     * ---------------------------------------------------------
      */
 
     public List<List<BlockbusterRecordAction>> getActions()
@@ -339,8 +761,8 @@ public class BlockbusterRecord
     )
     {
         if (
-                tick < 0 ||
-                        tick >= this.actions.size()
+                tick < 0
+                        || tick >= this.actions.size()
         )
         {
             return null;
@@ -360,7 +782,9 @@ public class BlockbusterRecord
             return;
         }
 
-        ensureSize(tick + 1);
+        ensureSize(
+                tick + 1
+        );
 
         if (actions == null)
         {
@@ -378,6 +802,24 @@ public class BlockbusterRecord
                     )
             );
         }
+
+        /*
+         * Keep Frame synchronized.
+         */
+        BlockbusterRecordFrame frame =
+                this.frames.get(tick);
+
+        if (frame != null)
+        {
+            frame.getActions().clear();
+
+            if (actions != null)
+            {
+                frame.getActions().addAll(
+                        actions
+                );
+            }
+        }
     }
 
 
@@ -387,17 +829,18 @@ public class BlockbusterRecord
     )
     {
         if (
-                tick < 0 ||
-                        action == null
+                tick < 0
+                        || action == null
         )
         {
             return;
         }
 
-        ensureSize(tick + 1);
+        ensureSize(
+                tick + 1
+        );
 
-        List<BlockbusterRecordAction>
-                tickActions =
+        List<BlockbusterRecordAction> tickActions =
                 this.actions.get(tick);
 
         if (tickActions == null)
@@ -411,12 +854,80 @@ public class BlockbusterRecord
             );
         }
 
-        tickActions.add(action);
+        tickActions.add(
+                action
+        );
+
+        /*
+         * Keep Frame synchronized.
+         */
+        BlockbusterRecordFrame frame =
+                this.frames.get(tick);
+
+        if (frame != null)
+        {
+            frame.getActions().add(
+                    action
+            );
+        }
     }
 
 
     /*
-     * Length
+     * ---------------------------------------------------------
+     * ACTION SYNCHRONIZATION
+     * ---------------------------------------------------------
+     *
+     * Frame is the original Blockbuster representation.
+     *
+     * actions[] is the editor-friendly timeline.
+     *
+     * Both must describe the same actions.
+     */
+
+    private void synchronizeActionsToFrames()
+    {
+        int size =
+                Math.max(
+                        this.frames.size(),
+                        this.actions.size()
+                );
+
+        ensureSize(size);
+
+        for (
+                int tick = 0;
+                tick < size;
+                tick++
+        )
+        {
+            BlockbusterRecordFrame frame =
+                    this.frames.get(tick);
+
+            List<BlockbusterRecordAction> tickActions =
+                    this.actions.get(tick);
+
+            if (frame == null)
+            {
+                continue;
+            }
+
+            frame.getActions().clear();
+
+            if (tickActions != null)
+            {
+                frame.getActions().addAll(
+                        tickActions
+                );
+            }
+        }
+    }
+
+
+    /*
+     * ---------------------------------------------------------
+     * LENGTH
+     * ---------------------------------------------------------
      */
 
     public int getLength()
@@ -437,7 +948,9 @@ public class BlockbusterRecord
 
 
     /*
-     * Player data
+     * ---------------------------------------------------------
+     * PLAYER DATA
+     * ---------------------------------------------------------
      */
 
     public NBTTagCompound getPlayerData()
@@ -466,8 +979,11 @@ public class BlockbusterRecord
         }
     }
 
+
     /*
-     * Action registry
+     * ---------------------------------------------------------
+     * ACTION REGISTRY
+     * ---------------------------------------------------------
      */
 
     public BlockbusterActionRegistry getActionRegistry()
@@ -494,21 +1010,30 @@ public class BlockbusterRecord
 
 
     /*
-     * Internal helper.
+     * ---------------------------------------------------------
+     * INTERNAL SIZE
+     * ---------------------------------------------------------
      *
      * Frames and actions always have matching
      * timeline capacity.
      */
+
     private void ensureSize(
             int size
     )
     {
-        while (this.frames.size() < size)
+        while (
+                this.frames.size()
+                        < size
+        )
         {
             this.frames.add(null);
         }
 
-        while (this.actions.size() < size)
+        while (
+                this.actions.size()
+                        < size
+        )
         {
             this.actions.add(null);
         }

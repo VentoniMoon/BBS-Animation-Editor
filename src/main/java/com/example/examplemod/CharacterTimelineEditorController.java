@@ -9,12 +9,53 @@ import org.lwjgl.input.Keyboard;
  *
  * Character Timeline использует тот же EditorTimeline,
  * что и основной Pose Timeline.
+ *
+ * ВАЖНО:
+ *
+ * - currentFrame является общим кадром редактора;
+ * - Character Timeline не хранит собственного currentFrame;
+ * - двойной ЛКМ по пустому месту трека создаёт CharacterKey;
+ * - ЛКМ по ключу выбирает его и позволяет перетаскивать;
+ * - ПКМ по ключу удаляет его;
+ * - CharacterKey принадлежит Timeline выбранного Actor.
  */
 public class CharacterTimelineEditorController
 {
     private static final int FIRST_FRAME = 0;
+
+    /*
+     * ---------------------------------------------------------
+     * TRACK LAYOUT
+     * ---------------------------------------------------------
+     */
+
     private static final int TRACK_HEIGHT = 20;
+
     private static final int HEADER_HEIGHT = 35;
+
+    /*
+     * Начальное количество Character-дорожек.
+     *
+     * Они намеренно остаются без названий:
+     * смысл дорожки определяется самими ключами.
+     */
+    private static final int DEFAULT_TRACK_COUNT = 6;
+
+    /*
+     * ---------------------------------------------------------
+     * DOUBLE CLICK
+     * ---------------------------------------------------------
+     */
+
+    private static final long DOUBLE_CLICK_TIME = 350L;
+
+    private static final int DOUBLE_CLICK_DISTANCE = 4;
+
+    /*
+     * ---------------------------------------------------------
+     * COLORS
+     * ---------------------------------------------------------
+     */
 
     private static final int COLOR_BACKGROUND = 0xFF17191B;
     private static final int COLOR_HEADER = 0xFF202225;
@@ -24,19 +65,36 @@ public class CharacterTimelineEditorController
     private static final int COLOR_TRACK = 0xFF202225;
     private static final int COLOR_TRACK_ALT = 0xFF1C1F21;
     private static final int COLOR_TRACK_SELECTED = 0xFF2B3438;
-    private static final int COLOR_TRACK_SELECTED_EDGE = 0xFF66CCFF;
     private static final int COLOR_TRACK_BORDER = 0xFF111315;
     private static final int COLOR_GRID = 0xFF292C2F;
     private static final int COLOR_GRID_MAJOR = 0xFF34383C;
     private static final int COLOR_GRID_SECOND = 0xFF2E3235;
     private static final int COLOR_TEXT_SECONDARY = 0xFF9DA4A9;
     private static final int COLOR_TEXT_MUTED = 0xFF666D72;
-    private static final int COLOR_CYAN = 0xFF66CCFF;
     private static final int COLOR_KEYFRAME = 0xFFE5E8EA;
     private static final int COLOR_KEYFRAME_INNER = 0xFF25282B;
-    private static final int COLOR_KEYFRAME_SELECTED = 0xFF66CCFF;
     private static final int COLOR_PLAYHEAD = 0xFFFF6B6B;
     private static final int COLOR_PLAYHEAD_HEAD = 0xFFFF8A8A;
+
+    private static int getAccentColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccent();
+    }
+
+    private static int getAccentBrightColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccentBright();
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * STATE
+     * ---------------------------------------------------------
+     */
 
     private BlockbusterSceneActorData selectedActor;
 
@@ -46,11 +104,25 @@ public class CharacterTimelineEditorController
 
     private final EditorTimeline timeline;
 
+    private final EditorPlaybackController playbackController;
+
     private boolean draggingKey = false;
 
     private int dragTrack = -1;
 
     private CharacterKey dragKey = null;
+
+    /*
+     * Состояние последнего ЛКМ.
+     *
+     * Нужно только для определения двойного клика
+     * по пустому месту.
+     */
+    private long lastLeftClickTime = 0L;
+
+    private int lastLeftClickTrack = -1;
+
+    private int lastLeftClickFrame = -1;
 
 
     /*
@@ -61,11 +133,24 @@ public class CharacterTimelineEditorController
 
     public CharacterTimelineEditorController()
     {
-        this(new EditorTimeline());
+        this(
+                new EditorTimeline(),
+                null
+        );
     }
 
     public CharacterTimelineEditorController(
             EditorTimeline timeline)
+    {
+        this(
+                timeline,
+                null
+        );
+    }
+
+    public CharacterTimelineEditorController(
+            EditorTimeline timeline,
+            EditorPlaybackController playbackController)
     {
         if (timeline == null)
         {
@@ -75,6 +160,8 @@ public class CharacterTimelineEditorController
         {
             this.timeline = timeline;
         }
+
+        this.playbackController = playbackController;
     }
 
 
@@ -89,11 +176,37 @@ public class CharacterTimelineEditorController
         return this.timeline;
     }
 
+    public void setCurrentFrame(int frame)
+    {
+        frame = Math.max(
+                FIRST_FRAME,
+                frame
+        );
+
+        /*
+         * Главный источник currentFrame —
+         * EditorPlaybackController.
+         */
+        if (this.playbackController != null)
+        {
+            this.playbackController.setCurrentFrame(frame);
+        }
+
+        /*
+         * Сохраняем тот же кадр и во внутреннем
+         * EditorTimeline Character Timeline.
+         */
+        this.timeline.setTick(frame);
+    }
+
     public void setTimeline(
             EditorTimeline timeline)
     {
         /*
          * Оставлено для совместимости API.
+         *
+         * EditorTimeline создаётся один раз,
+         * потому что он является состоянием UI Timeline.
          */
     }
 
@@ -115,9 +228,34 @@ public class CharacterTimelineEditorController
             this.draggingKey = false;
             this.dragTrack = -1;
             this.dragKey = null;
+
+            resetDoubleClickState();
         }
 
         this.selectedActor = actor;
+
+        /*
+         * Каждый Actor получает несколько Character-дорожек.
+         *
+         * Если дорожки уже существуют, ничего не удаляем
+         * и не создаём заново.
+         */
+        if (this.selectedActor != null)
+        {
+            CharacterTimelineController characterTimeline =
+                    this.selectedActor.getCharacterTimeline();
+
+            if (characterTimeline != null)
+            {
+                while (
+                        characterTimeline.getTrackCount()
+                                < DEFAULT_TRACK_COUNT
+                )
+                {
+                    characterTimeline.addTrack();
+                }
+            }
+        }
     }
 
     public BlockbusterSceneActorData getSelectedActor()
@@ -144,6 +282,13 @@ public class CharacterTimelineEditorController
 
     public int getTimelineHeight()
     {
+        /*
+         * HEADER 35
+         *
+         * 6 дорожек × 20 = 120
+         *
+         * Оставляем небольшой запас снизу.
+         */
         return 180;
     }
 
@@ -318,7 +463,7 @@ public class CharacterTimelineEditorController
                 timelineTop,
                 width,
                 timelineTop + 1,
-                COLOR_CYAN
+                getAccentColor()
         );
 
         int tracksTop =
@@ -424,7 +569,7 @@ public class CharacterTimelineEditorController
                         y,
                         2,
                         bottom,
-                        COLOR_TRACK_SELECTED_EDGE
+                        getAccentColor()
                 );
             }
 
@@ -752,8 +897,10 @@ public class CharacterTimelineEditorController
     private String getKeyMarker(
             CharacterKey key)
     {
-        if (key == null ||
-                key.getType() == null)
+        if (
+                key == null ||
+                        key.getType() == null
+        )
         {
             return "";
         }
@@ -791,7 +938,7 @@ public class CharacterTimelineEditorController
     {
         int color =
                 selected
-                        ? COLOR_KEYFRAME_SELECTED
+                        ? getAccentColor()
                         : COLOR_KEYFRAME;
 
         screen.drawRect(
@@ -960,6 +1107,96 @@ public class CharacterTimelineEditorController
     {
         this.selectedTrack = -1;
         this.selectedKey = null;
+
+        this.draggingKey = false;
+        this.dragTrack = -1;
+        this.dragKey = null;
+
+        resetDoubleClickState();
+    }
+
+
+    /*
+     * =========================================================
+     * CREATE KEY
+     * =========================================================
+     */
+
+    /**
+     * Создаёт новый CharacterKey на указанном треке и кадре.
+     *
+     * Пока используется CUSTOM.
+     *
+     * Позже Character Mode сможет передавать сюда
+     * конкретный тип:
+     *
+     * SKIN
+     * MORPH
+     * ANIMATION
+     * ACTION
+     * BODY_PART_OVERRIDE
+     */
+    private CharacterKey createKey(
+            CharacterTrack track,
+            int frame)
+    {
+        if (track == null)
+        {
+            return null;
+        }
+
+        CharacterKey existing =
+                track.getKeyAtFrame(frame);
+
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        return track.createKey(
+                frame,
+                CharacterKey.Type.CUSTOM
+        );
+    }
+
+
+    /*
+     * =========================================================
+     * DOUBLE CLICK
+     * =========================================================
+     */
+
+    private boolean isDoubleClick(
+            int track,
+            int frame)
+    {
+        long now =
+                System.currentTimeMillis();
+
+        boolean result =
+                this.lastLeftClickTrack == track
+                        &&
+                        Math.abs(
+                                this.lastLeftClickFrame -
+                                        frame
+                        ) <= DOUBLE_CLICK_DISTANCE
+                        &&
+                        now -
+                                this.lastLeftClickTime
+                                <= DOUBLE_CLICK_TIME;
+
+        this.lastLeftClickTime = now;
+        this.lastLeftClickTrack = track;
+        this.lastLeftClickFrame = frame;
+
+        return result;
+    }
+
+    private void resetDoubleClickState()
+    {
+        this.lastLeftClickTime = 0L;
+        this.lastLeftClickTrack = -1;
+        this.lastLeftClickFrame = -1;
     }
 
 
@@ -1001,7 +1238,9 @@ public class CharacterTimelineEditorController
         }
 
         /*
-         * Ruler.
+         * =====================================================
+         * RULER
+         * =====================================================
          */
 
         if (mouseY < tracksTop)
@@ -1019,8 +1258,16 @@ public class CharacterTimelineEditorController
                     )
             );
 
+            resetDoubleClickState();
+
             return true;
         }
+
+        /*
+         * =====================================================
+         * TRACK
+         * =====================================================
+         */
 
         int relativeY =
                 mouseY -
@@ -1044,6 +1291,11 @@ public class CharacterTimelineEditorController
         CharacterTrack track =
                 getTrack(trackIndex);
 
+        if (track == null)
+        {
+            return false;
+        }
+
         int frame =
                 getFrameFromMouseX(
                         mouseX,
@@ -1054,6 +1306,12 @@ public class CharacterTimelineEditorController
         {
             frame = FIRST_FRAME;
         }
+
+        /*
+         * =====================================================
+         * EXISTING KEY
+         * =====================================================
+         */
 
         CharacterKey clickedKey =
                 findKeyNearFrame(
@@ -1066,50 +1324,94 @@ public class CharacterTimelineEditorController
             this.selectedKey =
                     clickedKey;
 
+            /*
+             * ПКМ по существующему ключу =
+             * удалить ключ.
+             */
+            if (mouseButton == 1)
+            {
+                track.removeKey(
+                        clickedKey
+                );
+
+                this.selectedKey = null;
+                this.draggingKey = false;
+                this.dragTrack = -1;
+                this.dragKey = null;
+
+                resetDoubleClickState();
+
+                return true;
+            }
+
+            /*
+             * ЛКМ по существующему ключу =
+             * выбрать и начать перетаскивание.
+             */
             if (mouseButton == 0)
             {
                 this.draggingKey = true;
                 this.dragTrack = trackIndex;
                 this.dragKey = clickedKey;
+
+                resetDoubleClickState();
+
+                return true;
             }
 
             return true;
         }
 
         /*
-         * Ctrl + ЛКМ создаёт новый keyframe.
+         * =====================================================
+         * EMPTY TRACK
+         * =====================================================
          */
-
-        if (
-                mouseButton == 0 &&
-                        GuiScreen.isCtrlKeyDown()
-        )
-        {
-            CharacterKey key =
-                    track.createKey(
-                            frame,
-                            CharacterKey.Type.CUSTOM
-                    );
-
-            this.selectedKey =
-                    key;
-
-            this.draggingKey = false;
-            this.dragTrack = -1;
-            this.dragKey = null;
-
-            return true;
-        }
 
         if (mouseButton == 0)
         {
+            /*
+             * Первый ЛКМ по пустому месту
+             * только выбирает дорожку/позицию.
+             *
+             * Второй быстрый ЛКМ по той же позиции
+             * создаёт CharacterKey.
+             */
+            if (isDoubleClick(trackIndex, frame))
+            {
+                CharacterKey key =
+                        createKey(
+                                track,
+                                frame
+                        );
+
+                if (key != null)
+                {
+                    this.selectedKey =
+                            key;
+
+                    this.draggingKey = false;
+                    this.dragTrack = -1;
+                    this.dragKey = null;
+
+                    return true;
+                }
+            }
+
             this.selectedKey = null;
-            this.draggingKey = false;
-            this.dragTrack = -1;
-            this.dragKey = null;
+
+            this.timeline.setTick(
+                    frame
+            );
 
             return true;
         }
+
+        /*
+         * Остальные кнопки мыши
+         * не создают ключи.
+         */
+        resetDoubleClickState();
 
         return true;
     }
@@ -1207,8 +1509,10 @@ public class CharacterTimelineEditorController
                                     frame
                     );
 
-            if (distance <= 1 &&
-                    distance < nearestDistance)
+            if (
+                    distance <= 1 &&
+                            distance < nearestDistance
+            )
             {
                 nearest = key;
                 nearestDistance = distance;
@@ -1478,6 +1782,8 @@ public class CharacterTimelineEditorController
         this.draggingKey = false;
         this.dragTrack = -1;
         this.dragKey = null;
+
+        resetDoubleClickState();
     }
 
 

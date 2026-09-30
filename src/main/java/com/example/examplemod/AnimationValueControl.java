@@ -54,9 +54,6 @@ public class AnimationValueControl
     private static final int BORDER_HOVER =
             0xFF55575A;
 
-    private static final int BORDER_EDITING =
-            0xFF66CCFF;
-
     private static final int LABEL_BACKGROUND =
             0xFF292A2D;
 
@@ -68,6 +65,19 @@ public class AnimationValueControl
 
     private static final int ACTIVE_TEXT =
             0xFFFFFFFF;
+
+    /*
+     * =========================================================
+     * THEME ACCENT
+     * =========================================================
+     */
+
+    private static int getAccent()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccent();
+    }
 
     /*
      * =========================================================
@@ -621,7 +631,7 @@ public class AnimationValueControl
         if (this.editing)
         {
             borderColor =
-                    BORDER_EDITING;
+                    getAccent();
         }
         else if (hovered || this.dragging)
         {
@@ -726,8 +736,7 @@ public class AnimationValueControl
                 text,
                 this.x +
                         this.width -
-                        valueWidth -
-                        6,
+                        valueWidth - 6,
                 this.y + 4,
                 this.editing
                         ? ACTIVE_TEXT
@@ -747,7 +756,7 @@ public class AnimationValueControl
                     this.y + this.height - 2,
                     this.x + this.width - 1,
                     this.y + this.height - 1,
-                    BORDER_EDITING
+                    getAccent()
             );
         }
         else if (this.dragging)

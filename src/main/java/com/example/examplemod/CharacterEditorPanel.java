@@ -1,21 +1,25 @@
 package com.example.examplemod;
 
+import mchorse.blockbuster.common.entity.EntityActor;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 
 /**
  * Панель Character Mode.
  *
- * Character Mode работает с самим Actor,
- * его внешним видом и настройками.
+ * Character Mode работает с состоянием Actor
+ * и конкретным CharacterKey, выбранным в Character Timeline.
  *
- * Pose Mode отвечает за:
- *   Bones
- *   Keyframes
- *   Transform
- *   Interpolation
+ * ВАЖНО:
  *
- * Body Parts Mode будет отдельной системой.
+ * currentFrame и selectedKey — разные понятия.
+ *
+ * currentFrame:
+ *     положение playhead.
+ *
+ * selectedKey:
+ *     конкретный CharacterKey, который сейчас редактируется.
  */
 public class CharacterEditorPanel
 {
@@ -80,11 +84,19 @@ public class CharacterEditorPanel
     private static final int COLOR_TEXT_MUTED =
             0xFF666D72;
 
-    private static final int COLOR_CYAN =
-            0xFF66CCFF;
+    private static int getAccentColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccent();
+    }
 
-    private static final int COLOR_CYAN_BRIGHT =
-            0xFF8BE1FF;
+    private static int getAccentBrightColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccentBright();
+    }
 
     /*
      * =========================================================
@@ -94,9 +106,42 @@ public class CharacterEditorPanel
 
     private final CharacterEditorController characterController;
 
+    /**
+     * Actor, отображаемый Character Mode.
+     */
     private BlockbusterSceneActorData selectedActor;
 
+    /**
+     * Конкретный CharacterKey, выбранный
+     * в Character Timeline.
+     *
+     * НЕ связан напрямую с currentFrame.
+     *
+     * selectedKey остаётся выбранным, даже если
+     * playhead переместился на другой кадр.
+     */
+    private CharacterKey selectedKey;
+
+    /**
+     * Текущая позиция playhead.
+     */
     private int currentFrame;
+
+    /*
+     * =========================================================
+     * ORIGINAL BLOCKBUSTER / METAMORPH GUI BRIDGE
+     * =========================================================
+     */
+
+    private BlockbusterCharacterGuiBridge guiBridge;
+
+    /**
+     * Runtime EntityActor, который уже используется
+     * BlockbusterActorPreviewRenderer.
+     *
+     * Новый Actor здесь НЕ создаётся.
+     */
+    private EntityActor runtimeActor;
 
     /*
      * =========================================================
@@ -109,6 +154,34 @@ public class CharacterEditorPanel
     {
         this.characterController =
                 characterController;
+    }
+
+    /*
+     * =========================================================
+     * GUI BRIDGE
+     * =========================================================
+     */
+
+    public void setGuiBridge(
+            BlockbusterCharacterGuiBridge bridge)
+    {
+        this.guiBridge = bridge;
+    }
+
+    public BlockbusterCharacterGuiBridge getGuiBridge()
+    {
+        return this.guiBridge;
+    }
+
+    public void setRuntimeActor(
+            EntityActor actor)
+    {
+        this.runtimeActor = actor;
+    }
+
+    public EntityActor getRuntimeActor()
+    {
+        return this.runtimeActor;
     }
 
     /*
@@ -145,14 +218,33 @@ public class CharacterEditorPanel
 
     /*
      * =========================================================
-     * DATA
+     * ACTOR
      * =========================================================
      */
 
     public void setSelectedActor(
             BlockbusterSceneActorData actor)
     {
+        /*
+         * Если Actor действительно сменился,
+         * CharacterKey старого Actor больше
+         * нельзя использовать.
+         */
+        if (this.selectedActor != actor)
+        {
+            this.selectedKey = null;
+        }
+
         this.selectedActor = actor;
+
+        /*
+         * Если Actor отсутствует,
+         * ключ также обязательно сбрасываем.
+         */
+        if (actor == null)
+        {
+            this.selectedKey = null;
+        }
     }
 
     public BlockbusterSceneActorData getSelectedActor()
@@ -160,18 +252,145 @@ public class CharacterEditorPanel
         return this.selectedActor;
     }
 
+    /*
+     * =========================================================
+     * CURRENT FRAME
+     * =========================================================
+     */
+
     public void setCurrentFrame(
             int frame)
     {
-        this.currentFrame = Math.max(
-                0,
-                frame
-        );
+        this.currentFrame =
+                Math.max(
+                        0,
+                        frame
+                );
     }
 
     public int getCurrentFrame()
     {
         return this.currentFrame;
+    }
+
+    /*
+     * =========================================================
+     * SELECTED CHARACTER KEY
+     * =========================================================
+     */
+
+    /**
+     * Устанавливает конкретный CharacterKey,
+     * выбранный в Character Timeline.
+     *
+     * ВАЖНО:
+     *
+     * Здесь НЕ меняется currentFrame.
+     *
+     * Например:
+     *
+     * selectedKey = MORPH @ 40
+     * currentFrame = 80
+     *
+     * Это допустимое состояние.
+     */
+    public void setSelectedKey(
+            CharacterKey key)
+    {
+        this.selectedKey = key;
+    }
+
+    /**
+     * Получить конкретный выбранный CharacterKey.
+     */
+    public CharacterKey getSelectedKey()
+    {
+        return this.selectedKey;
+    }
+
+    /**
+     * Проверяет, существует ли выбранный ключ.
+     */
+    public boolean hasSelectedKey()
+    {
+        return this.selectedKey != null;
+    }
+
+    /**
+     * Проверяет, относится ли выбранный ключ
+     * к текущему Actor.
+     *
+     * CharacterKey сам по себе не хранит ссылку
+     * на Actor, поэтому проверяем его наличие
+     * внутри Character Timeline текущего Actor.
+     */
+    public boolean isSelectedKeyValid()
+    {
+        if (this.selectedActor == null ||
+                this.selectedKey == null)
+        {
+            return false;
+        }
+
+        CharacterTimelineController timeline =
+                this.selectedActor.getCharacterTimeline();
+
+        if (timeline == null)
+        {
+            return false;
+        }
+
+        for (int i = 0;
+             i < timeline.getTrackCount();
+             i++)
+        {
+            CharacterTrack track =
+                    timeline.getTrack(i);
+
+            if (track == null)
+            {
+                continue;
+            }
+
+            for (CharacterKey key :
+                    track.getKeys())
+            {
+                if (key == this.selectedKey)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Если выбранный ключ больше не существует
+     * в Timeline текущего Actor, он сбрасывается.
+     *
+     * Это защищает Character Mode от ситуации,
+     * когда ключ был удалён или Actor был перезагружен.
+     */
+    public void validateSelectedKey()
+    {
+        if (this.selectedKey == null)
+        {
+            return;
+        }
+
+        if (!isSelectedKeyValid())
+        {
+            this.selectedKey = null;
+        }
+    }
+
+    /**
+     * Полностью снять выделение ключа.
+     */
+    public void clearSelectedKey()
+    {
+        this.selectedKey = null;
     }
 
     /*
@@ -225,8 +444,12 @@ public class CharacterEditorPanel
         }
 
         /*
-         * Background.
+         * Ключ мог быть удалён из Timeline.
+         *
+         * Проверяем это перед отображением панели.
          */
+        validateSelectedKey();
+
         drawRect(
                 this.x,
                 this.y,
@@ -235,9 +458,6 @@ public class CharacterEditorPanel
                 COLOR_PANEL
         );
 
-        /*
-         * Left separator.
-         */
         drawRect(
                 this.x,
                 this.y,
@@ -246,9 +466,6 @@ public class CharacterEditorPanel
                 COLOR_BORDER
         );
 
-        /*
-         * Header.
-         */
         drawHeader(
                 mc,
                 "CHARACTER"
@@ -280,7 +497,9 @@ public class CharacterEditorPanel
 
             drawAppearance(
                     mc,
-                    cursorY
+                    cursorY,
+                    mouseX,
+                    mouseY
             );
 
             cursorY += 108;
@@ -408,7 +627,7 @@ public class CharacterEditorPanel
                 this.y + 7,
                 this.x + 11,
                 this.y + 18,
-                COLOR_CYAN
+                getAccentColor()
         );
 
         mc.fontRenderer.drawString(
@@ -461,7 +680,7 @@ public class CharacterEditorPanel
                     y,
                     this.x + 7,
                     y + 24,
-                    COLOR_CYAN
+                    getAccentColor()
             );
         }
 
@@ -475,7 +694,7 @@ public class CharacterEditorPanel
                 this.x + 10,
                 y + 8,
                 opened
-                        ? COLOR_CYAN_BRIGHT
+                        ? getAccentBrightColor()
                         : COLOR_TEXT_SECONDARY
         );
 
@@ -499,22 +718,15 @@ public class CharacterEditorPanel
 
     private void drawAppearance(
             Minecraft mc,
-            int y)
+            int y,
+            int mouseX,
+            int mouseY)
     {
-        String actorName =
-                "—";
-
-        String actorId =
-                "—";
-
-        String morph =
-                "—";
-
-        String record =
-                "Not loaded";
-
-        String frames =
-                "0";
+        String actorName = "—";
+        String actorId = "—";
+        String morph = "—";
+        String record = "Not loaded";
+        String frames = "0";
 
         if (this.selectedActor != null)
         {
@@ -524,8 +736,7 @@ public class CharacterEditorPanel
             if (actorName == null ||
                     actorName.length() == 0)
             {
-                actorName =
-                        "Unnamed";
+                actorName = "Unnamed";
             }
 
             actorId =
@@ -534,8 +745,7 @@ public class CharacterEditorPanel
             if (actorId == null ||
                     actorId.length() == 0)
             {
-                actorId =
-                        "—";
+                actorId = "—";
             }
 
             morph =
@@ -544,14 +754,34 @@ public class CharacterEditorPanel
             if (morph == null ||
                     morph.length() == 0)
             {
-                morph =
-                        "Default";
+                morph = "Default";
+            }
+
+            /*
+             * Если выбран конкретный Appearance key,
+             * показываем его тип.
+             *
+             * При этом сам selectedKey остаётся
+             * объектом, с которым будут работать
+             * кнопки Morph / Skin.
+             */
+            if (this.selectedKey != null)
+            {
+                if (this.selectedKey.getType() ==
+                        CharacterKey.Type.MORPH)
+                {
+                    morph = "MORPH KEY";
+                }
+                else if (this.selectedKey.getType() ==
+                        CharacterKey.Type.SKIN)
+                {
+                    morph = "SKIN KEY";
+                }
             }
 
             if (this.selectedActor.hasRecord())
             {
-                record =
-                        "Loaded";
+                record = "Loaded";
 
                 frames =
                         String.valueOf(
@@ -563,6 +793,7 @@ public class CharacterEditorPanel
         /*
          * Actor
          */
+
         drawLabel(
                 mc,
                 "Actor",
@@ -580,6 +811,7 @@ public class CharacterEditorPanel
         /*
          * ID
          */
+
         drawLabel(
                 mc,
                 "ID",
@@ -597,6 +829,7 @@ public class CharacterEditorPanel
         /*
          * Morph
          */
+
         drawLabel(
                 mc,
                 "Morph",
@@ -604,16 +837,48 @@ public class CharacterEditorPanel
                 y + 36
         );
 
-        drawValue(
+        boolean morphHovered =
+                isInsideMorphButton(
+                        y,
+                        mouseX,
+                        mouseY
+                );
+
+        drawButton(
                 mc,
                 morph,
-                this.x + 70,
-                y + 36
+                this.x + 68,
+                y + 32,
+                getMorphButtonWidth(),
+                17,
+                morphHovered
+        );
+
+        /*
+         * Skin
+         */
+
+        boolean skinHovered =
+                isInsideSkinButton(
+                        y,
+                        mouseX,
+                        mouseY
+                );
+
+        drawButton(
+                mc,
+                "Skin",
+                this.x + this.width - 47,
+                y + 32,
+                37,
+                17,
+                skinHovered
         );
 
         /*
          * Record
          */
+
         drawLabel(
                 mc,
                 "Record",
@@ -624,7 +889,7 @@ public class CharacterEditorPanel
         int recordColor =
                 this.selectedActor != null &&
                         this.selectedActor.hasRecord()
-                        ? COLOR_CYAN
+                        ? getAccentColor()
                         : COLOR_TEXT_MUTED;
 
         drawColoredValue(
@@ -638,6 +903,7 @@ public class CharacterEditorPanel
         /*
          * Frames
          */
+
         drawLabel(
                 mc,
                 "Frames",
@@ -655,6 +921,7 @@ public class CharacterEditorPanel
         /*
          * Current frame
          */
+
         drawLabel(
                 mc,
                 "Current",
@@ -670,6 +937,102 @@ public class CharacterEditorPanel
                 this.x + 70,
                 y + 90
         );
+
+        /*
+         * Selected key
+         *
+         * Диагностическая строка.
+         *
+         * ВАЖНО:
+         * здесь показывается именно selectedKey,
+         * а не ключ на currentFrame.
+         */
+        if (this.selectedKey != null)
+        {
+            String keyText =
+                    this.selectedKey.getType().name()
+                            + " @ "
+                            + this.selectedKey.getFrame();
+
+            drawColoredValue(
+                    mc,
+                    keyText,
+                    this.x + 12,
+                    y + 105,
+                    getAccentBrightColor()
+            );
+        }
+    }
+
+    /*
+     * =========================================================
+     * BUTTON GEOMETRY
+     * =========================================================
+     */
+
+    private int getMorphButtonWidth()
+    {
+        return Math.max(
+                20,
+                this.width - 122
+        );
+    }
+
+    private void drawButton(
+            Minecraft mc,
+            String text,
+            int x,
+            int y,
+            int width,
+            int height,
+            boolean hovered)
+    {
+        drawRect(
+                x,
+                y,
+                x + width,
+                y + height,
+                hovered
+                        ? COLOR_PANEL_HOVER
+                        : COLOR_PANEL_DARK
+        );
+
+        drawRect(
+                x,
+                y,
+                x + width,
+                y + 1,
+                hovered
+                        ? getAccentColor()
+                        : COLOR_BORDER
+        );
+
+        drawRect(
+                x,
+                y + height - 1,
+                x + width,
+                y + height,
+                COLOR_BORDER
+        );
+
+        mc.fontRenderer.drawString(
+                text,
+                x + 5,
+                y + 5,
+                hovered
+                        ? getAccentBrightColor()
+                        : COLOR_TEXT_SECONDARY
+        );
+
+        if (width >= 70)
+        {
+            mc.fontRenderer.drawString(
+                    "…",
+                    x + width - 10,
+                    y + 4,
+                    COLOR_TEXT_MUTED
+            );
+        }
     }
 
     /*
@@ -750,47 +1113,12 @@ public class CharacterEditorPanel
             Minecraft mc,
             int y)
     {
-        drawPartRow(
-                mc,
-                "Head",
-                true,
-                y
-        );
-
-        drawPartRow(
-                mc,
-                "Body",
-                true,
-                y + 18
-        );
-
-        drawPartRow(
-                mc,
-                "Left Arm",
-                true,
-                y + 36
-        );
-
-        drawPartRow(
-                mc,
-                "Right Arm",
-                true,
-                y + 54
-        );
-
-        drawPartRow(
-                mc,
-                "Left Leg",
-                true,
-                y + 72
-        );
-
-        drawPartRow(
-                mc,
-                "Right Leg",
-                true,
-                y + 90
-        );
+        drawPartRow(mc, "Head", true, y);
+        drawPartRow(mc, "Body", true, y + 18);
+        drawPartRow(mc, "Left Arm", true, y + 36);
+        drawPartRow(mc, "Right Arm", true, y + 54);
+        drawPartRow(mc, "Left Leg", true, y + 72);
+        drawPartRow(mc, "Right Leg", true, y + 90);
     }
 
     private void drawPartRow(
@@ -813,7 +1141,7 @@ public class CharacterEditorPanel
 
         int color =
                 enabled
-                        ? COLOR_CYAN
+                        ? getAccentColor()
                         : COLOR_TEXT_MUTED;
 
         mc.fontRenderer.drawString(
@@ -983,12 +1311,20 @@ public class CharacterEditorPanel
             return false;
         }
 
+        /*
+         * Перед обработкой кнопок убеждаемся,
+         * что selectedKey всё ещё принадлежит
+         * текущему Actor.
+         */
+        validateSelectedKey();
+
         int currentY =
                 this.y + 30;
 
         /*
-         * Appearance
+         * Appearance section.
          */
+
         if (isInsideSection(
                 currentY,
                 mouseX,
@@ -1001,9 +1337,42 @@ public class CharacterEditorPanel
             return true;
         }
 
+        /*
+         * Appearance contents.
+         */
+
         if (this.openedSection ==
                 Section.APPEARANCE)
         {
+            int appearanceY =
+                    currentY + 24 + 4;
+
+            /*
+             * Morph.
+             */
+            if (isInsideMorphButton(
+                    appearanceY,
+                    mouseX,
+                    mouseY))
+            {
+                openMorphEditor();
+
+                return true;
+            }
+
+            /*
+             * Skin.
+             */
+            if (isInsideSkinButton(
+                    appearanceY,
+                    mouseX,
+                    mouseY))
+            {
+                openSkinEditor();
+
+                return true;
+            }
+
             currentY +=
                     24 + 4 + 108;
         }
@@ -1015,8 +1384,9 @@ public class CharacterEditorPanel
         currentY += 4;
 
         /*
-         * Animation Setup
+         * Animation Setup.
          */
+
         if (isInsideSection(
                 currentY,
                 mouseX,
@@ -1043,8 +1413,9 @@ public class CharacterEditorPanel
         currentY += 4;
 
         /*
-         * Body Part Overrides
+         * Body Part Overrides.
          */
+
         if (isInsideSection(
                 currentY,
                 mouseX,
@@ -1071,8 +1442,9 @@ public class CharacterEditorPanel
         currentY += 4;
 
         /*
-         * Actor Settings
+         * Actor Settings.
          */
+
         if (isInsideSection(
                 currentY,
                 mouseX,
@@ -1087,6 +1459,155 @@ public class CharacterEditorPanel
 
         return false;
     }
+
+    /*
+     * =========================================================
+     * MORPH / SKIN BUTTONS
+     * =========================================================
+     */
+
+    private boolean isInsideMorphButton(
+            int appearanceY,
+            int mouseX,
+            int mouseY)
+    {
+        int buttonX =
+                this.x + 68;
+
+        int buttonY =
+                appearanceY + 32;
+
+        int buttonWidth =
+                getMorphButtonWidth();
+
+        return mouseX >= buttonX &&
+                mouseX < buttonX + buttonWidth &&
+                mouseY >= buttonY &&
+                mouseY < buttonY + 17;
+    }
+
+    private boolean isInsideSkinButton(
+            int appearanceY,
+            int mouseX,
+            int mouseY)
+    {
+        int buttonX =
+                this.x +
+                        this.width -
+                        47;
+
+        int buttonY =
+                appearanceY + 32;
+
+        return mouseX >= buttonX &&
+                mouseX < this.x +
+                        this.width -
+                        10 &&
+                mouseY >= buttonY &&
+                mouseY < buttonY + 17;
+    }
+
+    /*
+     * =========================================================
+     * OPEN MORPH EDITOR
+     * =========================================================
+     */
+
+    private void openMorphEditor()
+    {
+        if (this.guiBridge == null)
+        {
+            return;
+        }
+
+        if (this.selectedActor == null)
+        {
+            return;
+        }
+
+        if (this.runtimeActor == null)
+        {
+            return;
+        }
+
+        if (!this.guiBridge.canOpen(
+                this.selectedActor,
+                this.runtimeActor))
+        {
+            return;
+        }
+
+        /*
+         * Передаём:
+         *
+         * 1. Actor
+         * 2. Runtime Actor
+         * 3. конкретный selectedKey
+         * 4. currentFrame
+         *
+         * Bridge сам решит:
+         *
+         * - использовать существующий selectedKey;
+         * - либо создать новый ключ на currentFrame.
+         */
+        this.guiBridge.openMorphEditor(
+                this.selectedActor,
+                this.runtimeActor,
+                this.selectedKey,
+                this.currentFrame
+        );
+    }
+
+    /*
+     * =========================================================
+     * OPEN SKIN EDITOR
+     * =========================================================
+     */
+
+    private void openSkinEditor()
+    {
+        if (this.guiBridge == null)
+        {
+            return;
+        }
+
+        if (this.selectedActor == null)
+        {
+            return;
+        }
+
+        if (this.runtimeActor == null)
+        {
+            return;
+        }
+
+        if (!this.guiBridge.canOpen(
+                this.selectedActor,
+                this.runtimeActor))
+        {
+            return;
+        }
+
+        /*
+         * Здесь используется тот же принцип:
+         *
+         * selectedKey — конкретный ключ,
+         * currentFrame — только fallback для
+         * создания нового ключа.
+         */
+        this.guiBridge.openSkinEditor(
+                this.selectedActor,
+                this.runtimeActor,
+                this.selectedKey,
+                this.currentFrame
+        );
+    }
+
+    /*
+     * =========================================================
+     * SECTION HIT TEST
+     * =========================================================
+     */
 
     private boolean isInsideSection(
             int y,

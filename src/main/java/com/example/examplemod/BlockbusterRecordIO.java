@@ -2,7 +2,6 @@ package com.example.examplemod;
 
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -13,9 +12,10 @@ public class BlockbusterRecordIO
 {
     public static final short SIGNATURE = 148;
 
-
     /*
+     * ---------------------------------------------------------
      * LOAD
+     * ---------------------------------------------------------
      */
 
     public static BlockbusterRecord load(
@@ -45,7 +45,6 @@ public class BlockbusterRecordIO
             );
         }
 
-
         NBTTagCompound root;
 
         FileInputStream input =
@@ -62,9 +61,10 @@ public class BlockbusterRecordIO
             input.close();
         }
 
-
         /*
-         * Check format version.
+         * -----------------------------------------------------
+         * VERSION
+         * -----------------------------------------------------
          */
 
         short version =
@@ -86,7 +86,6 @@ public class BlockbusterRecordIO
             );
         }
 
-
         /*
          * Remove .dat from filename.
          */
@@ -103,9 +102,10 @@ public class BlockbusterRecordIO
                     );
         }
 
-
         /*
-         * Build model.
+         * -----------------------------------------------------
+         * BUILD MODEL
+         * -----------------------------------------------------
          */
 
         BlockbusterRecord record =
@@ -118,7 +118,6 @@ public class BlockbusterRecordIO
                 version
         );
 
-
         System.out.println(
                 "[BBS Animation Editor] "
                         + "Loaded Blockbuster record: "
@@ -128,13 +127,14 @@ public class BlockbusterRecordIO
                         + " frames)"
         );
 
-
         return record;
     }
 
 
     /*
+     * ---------------------------------------------------------
      * SAVE
+     * ---------------------------------------------------------
      */
 
     public static void save(
@@ -156,9 +156,10 @@ public class BlockbusterRecordIO
             );
         }
 
-
         /*
-         * Create parent directory.
+         * -----------------------------------------------------
+         * CREATE DIRECTORY
+         * -----------------------------------------------------
          */
 
         File parent =
@@ -169,137 +170,42 @@ public class BlockbusterRecordIO
                         !parent.exists()
         )
         {
-            if (!parent.mkdirs() &&
-                    !parent.exists())
+            if (
+                    !parent.mkdirs() &&
+                            !parent.exists()
+            )
             {
                 throw new IOException(
                         "Could not create directory: "
-                                + parent
-                                .getAbsolutePath()
+                                + parent.getAbsolutePath()
                 );
             }
         }
 
-
         /*
-         * Root NBT.
+         * -----------------------------------------------------
+         * BUILD ORIGINAL BLOCKBUSTER NBT
+         * -----------------------------------------------------
+         *
+         * Всё содержимое Record теперь сериализуется
+         * самим BlockbusterRecord.
+         *
+         * Это гарантирует:
+         *
+         * BlockbusterRecordIO.load()
+         *        <->
+         * BlockbusterRecordIO.save()
+         *
+         * используют одну и ту же модель.
          */
 
         NBTTagCompound root =
-                new NBTTagCompound();
-
-
-        /*
-         * Version.
-         *
-         * Blockbuster 1.12 uses signature 148.
-         */
-
-        root.setShort(
-                "Version",
-                SIGNATURE
-        );
-
+                record.toNBT();
 
         /*
-         * Delays.
-         */
-
-        root.setInteger(
-                "PreDelay",
-                record.getPreDelay()
-        );
-
-        root.setInteger(
-                "PostDelay",
-                record.getPostDelay()
-        );
-
-
-        /*
-         * PlayerData.
-         */
-
-        if (record.getPlayerData() != null)
-        {
-            root.setTag(
-                    "PlayerData",
-                    record.getPlayerData()
-            );
-        }
-
-        /*
-         * Action registry
-         *
-         * Original Blockbuster stores the mapping
-         * between numeric action IDs and their names
-         * in the root "Actions" compound.
-         */
-        if (record.getActionRegistry() != null)
-        {
-            root.setTag(
-                    "Actions",
-                    record.getActionRegistry().toNBT()
-            );
-        }
-
-
-        /*
-         * Frames.
-         */
-
-        NBTTagList frameList =
-                new NBTTagList();
-
-        for (
-                BlockbusterRecordFrame frame :
-                record.getFrames()
-        )
-        {
-            if (frame == null)
-            {
-                /*
-                 * The original Blockbuster format
-                 * expects compound tags in Frames.
-                 *
-                 * A null frame therefore becomes
-                 * an empty frame compound.
-                 */
-                frameList.appendTag(
-                        new NBTTagCompound()
-                );
-            }
-            else
-            {
-                frameList.appendTag(
-                        frame.toNBT()
-                );
-            }
-        }
-
-        root.setTag(
-                "Frames",
-                frameList
-        );
-
-
-        /*
-         * Root-level Actions
-         *
-         * IMPORTANT:
-         *
-         * We intentionally do not generate the
-         * root "Actions" compound yet.
-         *
-         * We have confirmed that the real file
-         * contains it, but its exact semantics
-         * still need to be reproduced from the
-         * original Blockbuster Record implementation.
-         */
-
-
-        /*
-         * Write compressed NBT.
+         * -----------------------------------------------------
+         * WRITE
+         * -----------------------------------------------------
          */
 
         FileOutputStream output =
@@ -317,7 +223,6 @@ public class BlockbusterRecordIO
         {
             output.close();
         }
-
 
         System.out.println(
                 "[BBS Animation Editor] "

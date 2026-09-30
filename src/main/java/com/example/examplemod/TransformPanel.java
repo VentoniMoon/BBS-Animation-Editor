@@ -31,11 +31,27 @@ public class TransformPanel
 
     /*
      * Section accents
+     *
+     * Эти цвета намеренно не зависят от темы.
+     * Они различают Position / Rotation / Scale.
      */
 
     private static final int POSITION_ACCENT = 0xFF55FFFF;
     private static final int ROTATION_ACCENT = 0xFF55FF55;
     private static final int SCALE_ACCENT = 0xFFFFFF55;
+
+    /*
+     * =========================================================
+     * THEME ACCENT
+     * =========================================================
+     */
+
+    private static int getAccentColor()
+    {
+        return EditorThemeManager
+                .get()
+                .getAccent();
+    }
 
     /*
      * =========================================================
@@ -210,6 +226,8 @@ public class TransformPanel
 
         /*
          * Header accent.
+         *
+         * Теперь использует текущую тему редактора.
          */
 
         drawRect(
@@ -218,7 +236,7 @@ public class TransformPanel
                 y,
                 x + 3,
                 y + 22,
-                0xFF66CCFF
+                getAccentColor()
         );
 
         font.drawString(
