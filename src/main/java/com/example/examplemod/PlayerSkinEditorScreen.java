@@ -25,27 +25,71 @@ import net.minecraft.client.resources.I18n;
  *      |
  *      v
  * CustomMorph
+ *
+ *
+ * Важно:
+ *
+ * Мы НЕ создаём новый CharacterKey.
+ *
+ * Редактируется существующий Skin внутри:
+ *
+ * CharacterKey
+ *      |
+ *      Data
+ *          |
+ *          Skin
+ *
  */
 public class PlayerSkinEditorScreen
         extends GuiBase
 {
-    private static final int BUTTON_DONE = 4101;
 
-    private static final int BUTTON_CANCEL = 4102;
+    private static final int BUTTON_DONE =
+            4101;
+
+
+    private static final int BUTTON_CANCEL =
+            4102;
+
 
 
     private final Minecraft minecraft;
 
+
+    /**
+     * Исходная копия CustomMorph,
+     * переданная из Bridge.
+     */
     private final CustomMorph customMorph;
+
+
+
+    /**
+     * Реальный объект, который изменяет
+     * GuiCustomMorph.
+     *
+     * В некоторых версиях Blockbuster
+     * GuiCustomMorph создаёт внутреннюю
+     * ссылку на Morph.
+     *
+     * Сохраняем именно его.
+     */
+    private CustomMorph editedMorph;
+
+
 
     private final BlockbusterCharacterGuiBridge bridge;
 
 
+
     private GuiCustomMorph editor;
+
 
     private boolean closing;
 
+
     private boolean confirmed;
+
 
 
     /*
@@ -54,21 +98,30 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     private Method editorInitGui;
+
 
     private Method editorDrawScreen;
 
+
     private Method editorUpdateScreen;
+
 
     private Method editorMouseClicked;
 
+
     private Method editorMouseReleased;
+
 
     private Method editorMouseScrolled;
 
+
     private Method editorKeyTyped;
 
+
     private Method editorActionPerformed;
+
 
 
     /*
@@ -77,6 +130,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     public PlayerSkinEditorScreen(
             Minecraft mc,
             CustomMorph morph,
@@ -84,65 +138,88 @@ public class PlayerSkinEditorScreen
     {
         super();
 
-        this.minecraft = mc;
 
-        this.customMorph = morph;
+        this.minecraft =
+                mc;
 
-        this.bridge = bridge;
 
-        this.editor = null;
+        this.customMorph =
+                morph;
 
-        this.closing = false;
 
-        this.confirmed = false;
+        this.bridge =
+                bridge;
+
+
+        this.editor =
+                null;
+
+
+        this.editedMorph =
+                null;
+
+
+        this.closing =
+                false;
+
+
+        this.confirmed =
+                false;
     }
+
 
 
     /*
      * =========================================================
-     * INIT
+     * INIT GUI
      * =========================================================
      */
+
 
     @Override
     public void initGui()
     {
         super.initGui();
 
+
         if (this.customMorph == null)
         {
             return;
         }
 
+
+
         /*
-         * Защита от старого бага:
-         *
-         * GuiCustomMorph.startEdit()
-         * требует model != null.
+         * Обновляем модель перед открытием.
          */
         try
         {
-            this.customMorph.updateModel(true);
+            this.customMorph.updateModel(
+                    true
+            );
         }
-        catch (Throwable error)
+        catch(Throwable error)
         {
             error.printStackTrace();
         }
+
+
 
         if (this.customMorph.model == null)
         {
             System.err.println(
                     "[BBS Animation Editor] "
-                            + "PlayerSkinEditorScreen: "
-                            + "CustomMorph model is null."
+                            +
+                            "CustomMorph model is null"
             );
 
             return;
         }
 
 
+
         /*
-         * Создаём настоящий Blockbuster editor.
+         * Создаем настоящий Blockbuster editor.
          */
         this.editor =
                 new GuiCustomMorph(
@@ -150,14 +227,31 @@ public class PlayerSkinEditorScreen
                 );
 
 
+
         prepareReflection();
 
 
-        /*
-         * GuiCustomMorph является GuiScreen,
-         * поэтому ему нужно передать наше состояние.
-         */
+
         syncEditorScreenState();
+
+
+
+        /*
+         * Передаем Morph в оригинальный редактор.
+         */
+        this.editor.startEdit(
+                this.customMorph
+        );
+
+
+
+        /*
+         * Получаем объект,
+         * который реально редактируется.
+         */
+        this.editedMorph =
+                extractEditorMorph();
+
 
 
         /*
@@ -168,27 +262,13 @@ public class PlayerSkinEditorScreen
         );
 
 
-        /*
-         * Передаём CustomMorph в Blockbuster.
-         *
-         * В этот момент model уже гарантированно существует.
-         */
-        this.editor.startEdit(
-                this.customMorph
-        );
 
-
-        /*
-         * startEdit() мог создать/перестроить панели.
-         */
         syncEditorScreenState();
 
 
+
         /*
-         * Открываем Materials panel.
-         *
-         * Это то место, где пользователь фактически
-         * редактирует Skin / Materials.
+         * Открываем материалы.
          */
         if (this.editor.materials != null)
         {
@@ -198,17 +278,11 @@ public class PlayerSkinEditorScreen
         }
 
 
-        /*
-         * Скрываем оригинальную кнопку Finish,
-         * потому что управление закрытием должно
-         * оставаться у нашего wrapper.
-         */
+
         hideOriginalFinishButton();
 
 
-        /*
-         * Done.
-         */
+
         this.buttonList.add(
                 new GuiButton(
                         BUTTON_DONE,
@@ -221,9 +295,7 @@ public class PlayerSkinEditorScreen
         );
 
 
-        /*
-         * Cancel.
-         */
+
         this.buttonList.add(
                 new GuiButton(
                         BUTTON_CANCEL,
@@ -237,11 +309,74 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+    /*
+     * =========================================================
+     * EXTRACT EDITOR MORPH
+     * =========================================================
+     */
+
+
+    private CustomMorph extractEditorMorph()
+    {
+        if (this.editor == null)
+        {
+            return this.customMorph;
+        }
+
+
+        try
+        {
+            Field field =
+                    findField(
+                            this.editor.getClass(),
+                            "morph"
+                    );
+
+
+            if (field != null)
+            {
+                Object value =
+                        field.get(
+                                this.editor
+                        );
+
+
+                if (value instanceof CustomMorph)
+                {
+                    System.out.println(
+                            "[BBS Animation Editor] "
+                                    +
+                                    "Using GuiCustomMorph internal morph"
+                    );
+
+
+                    return (CustomMorph)value;
+                }
+            }
+        }
+        catch(Throwable error)
+        {
+            error.printStackTrace();
+        }
+
+
+
+        System.out.println(
+                "[BBS Animation Editor] "
+                        +
+                        "Using external CustomMorph copy"
+        );
+
+
+        return this.customMorph;
+    }
     /*
      * =========================================================
      * SCREEN STATE
      * =========================================================
      */
+
 
     private void syncEditorScreenState()
     {
@@ -250,6 +385,7 @@ public class PlayerSkinEditorScreen
             return;
         }
 
+
         try
         {
             Field width =
@@ -257,6 +393,7 @@ public class PlayerSkinEditorScreen
                             this.editor.getClass(),
                             "width"
                     );
+
 
             if (width != null)
             {
@@ -267,11 +404,13 @@ public class PlayerSkinEditorScreen
             }
 
 
+
             Field height =
                     findField(
                             this.editor.getClass(),
                             "height"
                     );
+
 
             if (height != null)
             {
@@ -282,11 +421,13 @@ public class PlayerSkinEditorScreen
             }
 
 
+
             Field mc =
                     findField(
                             this.editor.getClass(),
                             "mc"
                     );
+
 
             if (mc != null)
             {
@@ -296,11 +437,14 @@ public class PlayerSkinEditorScreen
                 );
             }
         }
-        catch (Throwable error)
+        catch(Throwable error)
         {
             error.printStackTrace();
         }
     }
+
+
+
 
 
     /*
@@ -309,6 +453,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     private void prepareReflection()
     {
         if (this.editor == null)
@@ -316,8 +461,10 @@ public class PlayerSkinEditorScreen
             return;
         }
 
+
         Class<?> clazz =
                 this.editor.getClass();
+
 
 
         this.editorInitGui =
@@ -392,11 +539,15 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+
+
     /*
      * =========================================================
      * FIND METHOD
      * =========================================================
      */
+
 
     private Method findMethod(
             Class<?> clazz,
@@ -406,7 +557,8 @@ public class PlayerSkinEditorScreen
         Class<?> current =
                 clazz;
 
-        while (current != null)
+
+        while(current != null)
         {
             try
             {
@@ -416,31 +568,39 @@ public class PlayerSkinEditorScreen
                                 parameterTypes
                         );
 
-                method.setAccessible(true);
+
+                method.setAccessible(
+                        true
+                );
+
 
                 return method;
             }
-            catch (Throwable ignored)
+            catch(Throwable ignored)
             {
+
             }
+
 
             current =
                     current.getSuperclass();
         }
 
 
-        /*
-         * SRG fallback для Minecraft 1.12.2.
-         */
+
         String srg =
-                getSrgName(name);
+                getSrgName(
+                        name
+                );
+
 
         if (!name.equals(srg))
         {
             current =
                     clazz;
 
-            while (current != null)
+
+            while(current != null)
             {
                 try
                 {
@@ -450,21 +610,32 @@ public class PlayerSkinEditorScreen
                                     parameterTypes
                             );
 
-                    method.setAccessible(true);
+
+                    method.setAccessible(
+                            true
+                    );
+
 
                     return method;
                 }
-                catch (Throwable ignored)
+                catch(Throwable ignored)
                 {
+
                 }
+
 
                 current =
                         current.getSuperclass();
             }
         }
 
+
+
         return null;
     }
+
+
+
 
 
     private String getSrgName(
@@ -475,43 +646,54 @@ public class PlayerSkinEditorScreen
             return "func_73866_w_";
         }
 
+
         if ("drawScreen".equals(name))
         {
             return "func_73863_a";
         }
+
 
         if ("updateScreen".equals(name))
         {
             return "func_73876_c";
         }
 
+
         if ("mouseClicked".equals(name))
         {
             return "func_73864_a";
         }
+
 
         if ("mouseReleased".equals(name))
         {
             return "func_146286_b";
         }
 
+
         if ("mouseScrolled".equals(name))
         {
             return "func_73868_f";
         }
+
 
         if ("keyTyped".equals(name))
         {
             return "func_73869_a";
         }
 
+
         if ("actionPerformed".equals(name))
         {
             return "func_146284_a";
         }
 
+
         return name;
     }
+
+
+
 
 
     /*
@@ -520,6 +702,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     private Field findField(
             Class<?> clazz,
             String name)
@@ -527,7 +710,8 @@ public class PlayerSkinEditorScreen
         Class<?> current =
                 clazz;
 
-        while (current != null)
+
+        while(current != null)
         {
             try
             {
@@ -536,20 +720,30 @@ public class PlayerSkinEditorScreen
                                 name
                         );
 
-                field.setAccessible(true);
+
+                field.setAccessible(
+                        true
+                );
+
 
                 return field;
             }
-            catch (Throwable ignored)
+            catch(Throwable ignored)
             {
+
             }
+
 
             current =
                     current.getSuperclass();
         }
 
+
         return null;
     }
+
+
+
 
 
     /*
@@ -557,6 +751,7 @@ public class PlayerSkinEditorScreen
      * INVOKE
      * =========================================================
      */
+
 
     private Object invoke(
             Method method,
@@ -568,6 +763,7 @@ public class PlayerSkinEditorScreen
             return null;
         }
 
+
         try
         {
             return method.invoke(
@@ -575,10 +771,11 @@ public class PlayerSkinEditorScreen
                     arguments
             );
         }
-        catch (Throwable error)
+        catch(Throwable error)
         {
             Throwable cause =
                     error.getCause();
+
 
             if (cause != null)
             {
@@ -589,16 +786,21 @@ public class PlayerSkinEditorScreen
                 error.printStackTrace();
             }
 
+
             return null;
         }
     }
 
 
+
+
+
     /*
      * =========================================================
-     * HIDE FINISH
+     * HIDE ORIGINAL FINISH BUTTON
      * =========================================================
      */
+
 
     private void hideOriginalFinishButton()
     {
@@ -606,6 +808,7 @@ public class PlayerSkinEditorScreen
         {
             return;
         }
+
 
         try
         {
@@ -615,34 +818,36 @@ public class PlayerSkinEditorScreen
                             "finish"
                     );
 
+
             if (finish == null)
             {
                 return;
             }
+
 
             Object value =
                     finish.get(
                             this.editor
                     );
 
+
             if (value instanceof GuiButton)
             {
-                ((GuiButton) value).visible =
+                ((GuiButton)value).visible =
                         false;
             }
         }
-        catch (Throwable error)
+        catch(Throwable error)
         {
             error.printStackTrace();
         }
     }
-
-
     /*
      * =========================================================
      * DRAW
      * =========================================================
      */
+
 
     @Override
     public void drawScreen(
@@ -652,6 +857,7 @@ public class PlayerSkinEditorScreen
     {
         syncEditorScreenState();
 
+
         invoke(
                 this.editorDrawScreen,
                 mouseX,
@@ -659,9 +865,7 @@ public class PlayerSkinEditorScreen
                 partialTicks
         );
 
-        /*
-         * Наши кнопки поверх Blockbuster GUI.
-         */
+
         super.drawScreen(
                 mouseX,
                 mouseY,
@@ -670,11 +874,15 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+
+
     /*
      * =========================================================
      * UPDATE
      * =========================================================
      */
+
 
     @Override
     public void updateScreen()
@@ -683,8 +891,12 @@ public class PlayerSkinEditorScreen
                 this.editorUpdateScreen
         );
 
+
         super.updateScreen();
     }
+
+
+
 
 
     /*
@@ -693,6 +905,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     @Override
     protected void mouseClicked(
             int mouseX,
@@ -700,9 +913,6 @@ public class PlayerSkinEditorScreen
             int mouseButton)
             throws java.io.IOException
     {
-        /*
-         * Сначала Blockbuster.
-         */
         invoke(
                 this.editorMouseClicked,
                 mouseX,
@@ -710,9 +920,7 @@ public class PlayerSkinEditorScreen
                 mouseButton
         );
 
-        /*
-         * Затем наши кнопки.
-         */
+
         super.mouseClicked(
                 mouseX,
                 mouseY,
@@ -721,11 +929,15 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+
+
     /*
      * =========================================================
      * MOUSE RELEASE
      * =========================================================
      */
+
 
     @Override
     protected void mouseReleased(
@@ -740,6 +952,7 @@ public class PlayerSkinEditorScreen
                 state
         );
 
+
         super.mouseReleased(
                 mouseX,
                 mouseY,
@@ -748,11 +961,15 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+
+
     /*
      * =========================================================
      * SCROLL
      * =========================================================
      */
+
 
     @Override
     protected void mouseScrolled(
@@ -767,6 +984,7 @@ public class PlayerSkinEditorScreen
                 amount
         );
 
+
         super.mouseScrolled(
                 mouseX,
                 mouseY,
@@ -775,11 +993,15 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+
+
     /*
      * =========================================================
      * KEYBOARD
      * =========================================================
      */
+
 
     @Override
     protected void keyTyped(
@@ -788,13 +1010,15 @@ public class PlayerSkinEditorScreen
             throws java.io.IOException
     {
         /*
-         * ESC = Cancel.
+         * ESC закрывает без сохранения.
          */
         if (keyCode == 1)
         {
             cancelAndReturn();
+
             return;
         }
+
 
         invoke(
                 this.editorKeyTyped,
@@ -804,11 +1028,15 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+
+
     /*
      * =========================================================
      * BUTTONS
      * =========================================================
      */
+
 
     @Override
     protected void actionPerformed(
@@ -821,28 +1049,33 @@ public class PlayerSkinEditorScreen
         }
 
 
+
         if (button.id == BUTTON_DONE)
         {
             saveAndReturn();
+
             return;
         }
+
 
 
         if (button.id == BUTTON_CANCEL)
         {
             cancelAndReturn();
+
             return;
         }
 
 
-        /*
-         * Остальные кнопки принадлежат Blockbuster.
-         */
+
         invoke(
                 this.editorActionPerformed,
                 button
         );
     }
+
+
+
 
 
     /*
@@ -851,6 +1084,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     private void saveAndReturn()
     {
         if (this.closing)
@@ -858,41 +1092,49 @@ public class PlayerSkinEditorScreen
             return;
         }
 
+
         this.closing = true;
+
 
         this.confirmed = true;
 
 
-        /*
-         * Даём оригинальному GuiCustomMorph завершить
-         * собственное редактирование.
-         */
-        if (this.editor != null)
-        {
-            Method finishEdit =
-                    findMethod(
-                            this.editor.getClass(),
-                            "finishEdit"
-                    );
-
-            invoke(
-                    finishEdit
-            );
-        }
-
 
         /*
-         * Теперь customMorph содержит изменения.
+         * ВАЖНО:
+         *
+         * finishEdit() больше не вызываем.
+         *
+         * GuiCustomMorph может пересоздать
+         * внутренний Morph и потерять ссылку.
+         *
+         * Нам нужен именно тот объект,
+         * который реально редактировался.
          */
+
+
+        CustomMorph result =
+                this.editedMorph != null
+                        ?
+                        this.editedMorph
+                        :
+                        this.customMorph;
+
+
+
         if (this.bridge != null)
         {
             this.bridge.syncCustomMorphToSkin(
-                    this.customMorph
+                    result
             );
+
 
             this.bridge.returnToEditor();
         }
     }
+
+
+
 
 
     /*
@@ -901,6 +1143,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     private void cancelAndReturn()
     {
         if (this.closing)
@@ -908,22 +1151,31 @@ public class PlayerSkinEditorScreen
             return;
         }
 
+
         this.closing = true;
+
 
         this.confirmed = false;
 
 
+
         /*
-         * finishEdit() НЕ вызываем.
+         * Ничего не сохраняем.
          *
-         * customMorph является отдельной копией,
-         * поэтому изменения просто выбрасываются.
+         * В Bridge была передана копия CustomMorph,
+         * поэтому оригинальный CharacterKey
+         * остается без изменений.
          */
+
+
         if (this.bridge != null)
         {
             this.bridge.returnToEditor();
         }
     }
+
+
+
 
 
     /*
@@ -932,11 +1184,15 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     @Override
     protected void closeScreen()
     {
         cancelAndReturn();
     }
+
+
+
 
 
     /*
@@ -945,6 +1201,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
+
     @Override
     public boolean doesGuiPauseGame()
     {
@@ -952,11 +1209,15 @@ public class PlayerSkinEditorScreen
     }
 
 
+
+
+
     /*
      * =========================================================
      * STATE
      * =========================================================
      */
+
 
     public boolean wasConfirmed()
     {

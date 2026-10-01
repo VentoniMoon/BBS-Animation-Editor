@@ -6,29 +6,55 @@ import mchorse.metamorph.api.morphs.AbstractMorph;
 
 import net.minecraft.nbt.NBTTagCompound;
 
+
 /**
- * Вычисляет состояние Character Timeline на текущем кадре.
+ * Вычисляет Character Timeline состояние Actor.
  *
- * Сейчас отвечает за MORPH.
+ * Отдельные состояния:
  *
- * Логика:
+ * MORPH:
+ *      CharacterKey
+ *          Data
+ *              Morph
  *
- *  frame 0  -> исходный Morph Actor
- *  frame 20 -> Morph из последнего MORPH key <= 20
- *  frame 50 -> следующий MORPH key
+ * SKIN:
+ *      CharacterKey
+ *          Data
+ *              Skin
  *
- * Если MORPH key после удаления больше не существует,
- * предыдущий Morph автоматически становится активным.
+ *
+ * Каждый тип имеет свою независимую шкалу времени.
+ *
+ * Пример:
+ *
+ * Frame 0:
+ *      Morph = Steve
+ *
+ * Frame 47:
+ *      Morph = Slim
+ *
+ * Frame 100:
+ *      Morph = Zombie
+ *
+ *
+ * Morph применяется только начиная
+ * с собственного ключа.
  */
 public class CharacterStateResolver
 {
-    /*
-     * =========================================================
-     * MORPH STATE
-     * =========================================================
-     */
+    private String lastAppliedMorphSignature;
 
-    private String lastAppliedMorphSignature = null;
+    private String lastAppliedSkinSignature;
+
+
+
+    public CharacterStateResolver()
+    {
+        this.lastAppliedMorphSignature = null;
+
+        this.lastAppliedSkinSignature = null;
+    }
+
 
 
     /*
@@ -37,186 +63,227 @@ public class CharacterStateResolver
      * =========================================================
      */
 
-    /**
-     * Применить Character Timeline к Runtime Actor.
-     */
     public void apply(
             BlockbusterSceneActorData actorData,
             EntityActor runtimeActor,
             int currentFrame)
     {
-        if (actorData == null || runtimeActor == null)
+        if (actorData == null ||
+                runtimeActor == null)
         {
             return;
         }
 
-        int frame = Math.max(0, currentFrame);
 
+
+        /*
+         * MORPH и SKIN ищутся отдельно.
+         */
         CharacterKey morphKey =
-                findLatestMorphKey(
+                findLatestCharacterKey(
                         actorData,
-                        frame
+                        CharacterKey.Type.MORPH,
+                        currentFrame
                 );
 
-        if (morphKey == null)
-        {
-            System.out.println(
-                    "[BBS Character] frame=" + frame
-                            + " | no MORPH key -> BASE MORPH"
-            );
 
+        CharacterKey skinKey =
+                findLatestCharacterKey(
+                        actorData,
+                        CharacterKey.Type.SKIN,
+                        currentFrame
+                );
+
+
+
+        /*
+         * -------------------------
+         * MORPH
+         * -------------------------
+         */
+
+        if (morphKey != null)
+        {
+            NBTTagCompound morphNBT =
+                    morphKey.getCompound(
+                            "Morph"
+                    );
+
+
+            applyMorphNBT(
+                    runtimeActor,
+                    morphNBT
+            );
+        }
+        else
+        {
             applyBaseMorph(
                     actorData,
                     runtimeActor
             );
-
-            return;
         }
 
-        NBTTagCompound morphNBT =
-                morphKey.getCompound("Morph");
 
-        System.out.println(
-                "[BBS Character] frame=" + frame
-                        + " | MORPH key frame="
-                        + morphKey.getFrame()
-                        + " | NBT="
-                        + morphNBT
-        );
 
-        if (morphNBT == null || morphNBT.hasNoTags())
+        /*
+         * -------------------------
+         * SKIN
+         * -------------------------
+         *
+         * Сейчас Skin хранится
+         * отдельно от Morph.
+         *
+         * Здесь оставляем место
+         * для Skin resolver.
+         */
+        if (skinKey != null)
         {
-            System.out.println(
-                    "[BBS Character] MORPH key has empty NBT"
-            );
+            NBTTagCompound skinNBT =
+                    skinKey.getCompound(
+                            "Skin"
+                    );
 
-            applyBaseMorph(
-                    actorData,
-                    runtimeActor
-            );
 
-            return;
+            applySkinNBT(
+                    runtimeActor,
+                    skinNBT
+            );
         }
-
-        applyMorphNBT(
-                runtimeActor,
-                morphNBT
-        );
     }
+
 
 
     /*
      * =========================================================
-     * FIND MORPH KEY
+     * FIND KEY
      * =========================================================
      */
 
-    /**
-     * Найти последний MORPH key,
-     * который уже наступил на Timeline.
-     *
-     * Дорожка не имеет значения.
-     * Важен только самый поздний MORPH key.
-     */
-    private CharacterKey findLatestMorphKey(
+    private CharacterKey findLatestCharacterKey(
             BlockbusterSceneActorData actorData,
-            int currentFrame)
+            CharacterKey.Type wantedType,
+            int frame)
     {
+        if (actorData == null)
+        {
+            return null;
+        }
+
+
         CharacterTimelineController timeline =
                 actorData.getCharacterTimeline();
+
 
         if (timeline == null)
         {
             return null;
         }
 
-        CharacterKey result = null;
 
-        for (
-                CharacterTrack track :
-                timeline.getTracks()
-        )
+        CharacterKey result =
+                null;
+
+
+
+        for(CharacterTrack track :
+                timeline.getTracks())
         {
             if (track == null)
             {
                 continue;
             }
 
-            for (
-                    CharacterKey key :
-                    track.getKeys()
-            )
+
+            for(CharacterKey key :
+                    track.getKeys())
             {
                 if (key == null)
                 {
                     continue;
                 }
 
-                if (key.getType()
-                        != CharacterKey.Type.MORPH)
+
+
+                /*
+                 * ВАЖНО:
+                 *
+                 * Morph ищет только Morph.
+                 * Skin ищет только Skin.
+                 */
+                if (key.getType() != wantedType)
                 {
                     continue;
                 }
 
-                if (key.getFrame() > currentFrame)
+
+
+                /*
+                 * Будущие ключи
+                 * не учитываются.
+                 */
+                if (key.getFrame() > frame)
                 {
                     continue;
                 }
 
-                if (
-                        result == null
-                                ||
-                                key.getFrame() > result.getFrame()
-                )
+
+
+                if (result == null ||
+                        key.getFrame() >
+                                result.getFrame())
                 {
                     result = key;
                 }
             }
         }
 
+
         return result;
     }
-
-
     /*
      * =========================================================
      * BASE MORPH
      * =========================================================
      */
 
-    /**
-     * Вернуть Actor к Morph, который записан
-     * непосредственно в Blockbuster Scene Actor.
-     */
     private void applyBaseMorph(
             BlockbusterSceneActorData actorData,
             EntityActor runtimeActor)
     {
+        if (actorData == null ||
+                runtimeActor == null)
+        {
+            return;
+        }
+
+
         BlockbusterSceneActor sceneActor =
                 actorData.getActor();
+
 
         if (sceneActor == null)
         {
             return;
         }
 
-        NBTTagCompound baseMorphNBT =
+
+        NBTTagCompound base =
                 sceneActor.getMorph();
 
-        if (
-                baseMorphNBT == null
-                        ||
-                        baseMorphNBT.hasNoTags()
-        )
+
+        if (base == null ||
+                base.hasNoTags())
         {
             return;
         }
 
+
         applyMorphNBT(
                 runtimeActor,
-                baseMorphNBT
+                base
         );
     }
+
 
 
     /*
@@ -225,113 +292,177 @@ public class CharacterStateResolver
      * =========================================================
      */
 
-    /**
-     * Создать Morph из NBT и установить его
-     * через официальный Morph API EntityActor.
-     */
     private void applyMorphNBT(
             EntityActor runtimeActor,
-            NBTTagCompound morphNBT)
+            NBTTagCompound nbt)
     {
-        if (
-                runtimeActor == null
-                        ||
-                        morphNBT == null
-                        ||
-                        morphNBT.hasNoTags()
-        )
+        if (runtimeActor == null ||
+                nbt == null ||
+                nbt.hasNoTags())
         {
-            System.out.println(
-                    "[BBS Character] applyMorphNBT: invalid input"
-            );
-
             return;
         }
 
+
         try
         {
-            System.out.println(
-                    "[BBS Character] Creating Morph from NBT: "
-                            + morphNBT
-            );
+            String signature =
+                    nbt.toString();
+
+
+
+            if (signature.equals(
+                    this.lastAppliedMorphSignature))
+            {
+                return;
+            }
+
+
 
             AbstractMorph morph =
                     MorphManager.INSTANCE
                             .morphFromNBT(
-                                    morphNBT.copy()
+                                    nbt.copy()
                             );
+
+
 
             if (morph == null)
             {
-                System.out.println(
-                        "[BBS Character] morphFromNBT returned NULL"
-                );
-
                 return;
             }
 
-            System.out.println(
-                    "[BBS Character] Created Morph class: "
-                            + morph.getClass().getName()
+
+
+            /*
+             * ВАЖНО:
+             *
+             * Всегда создаём новый Morph.
+             * Старый AnimatedMorph содержит
+             * старый AnimatorController.
+             */
+            runtimeActor.morph.set(
+                    morph
             );
 
-            System.out.println(
-                    "[BBS Character] Runtime EntityActor: "
-                            + runtimeActor
-            );
+
+
+            /*
+             * Восстанавливаем Emoticons animator
+             */
+            if (morph instanceof
+                    mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+            {
+                EmoticonsActorPreviewRenderer.prepareMorph(
+                        (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)morph
+                );
+            }
+
+
+
+            this.lastAppliedMorphSignature =
+                    signature;
+
 
             System.out.println(
-                    "[BBS Character] Setting runtimeActor.morph..."
+                    "[BBS Animation Editor] Applied Morph "
+                            +
+                            morph.getClass().getName()
+                            +
+                            " frame updated"
             );
 
-            runtimeActor.morph.set(morph);
-
-            System.out.println(
-                    "[BBS Character] Morph SET successfully"
-            );
         }
-        catch (Exception exception)
+        catch(Throwable error)
         {
-            System.out.println(
-                    "[BBS Character] FAILED TO APPLY MORPH"
-            );
-
-            exception.printStackTrace();
+            error.printStackTrace();
         }
     }
+
 
 
     /*
      * =========================================================
-     * INTERNAL STATE
+     * APPLY SKIN
+     * =========================================================
+     *
+     * Пока Skin хранится отдельно.
+     *
+     * Метод оставлен специально,
+     * чтобы Skin не попадал в Morph.
+     */
+
+    private void applySkinNBT(
+            EntityActor runtimeActor,
+            NBTTagCompound nbt)
+    {
+        if (runtimeActor == null ||
+                nbt == null ||
+                nbt.hasNoTags())
+        {
+            return;
+        }
+
+
+
+        String signature =
+                nbt.toString();
+
+
+
+        if (signature.equals(
+                this.lastAppliedSkinSignature))
+        {
+            return;
+        }
+
+
+
+        /*
+         * Здесь позже подключим
+         * полноценное применение Skin.
+         *
+         * ВАЖНО:
+         *
+         * Skin НЕ должен вызывать
+         * runtimeActor.morph.set()
+         *
+         * иначе снова будет
+         * глобальная замена.
+         */
+
+
+
+        this.lastAppliedSkinSignature =
+                signature;
+    }
+
+
+
+    /*
+     * =========================================================
+     * RESET
      * =========================================================
      */
 
-    private String createSignature(
-            NBTTagCompound morphNBT)
-    {
-        if (morphNBT == null)
-        {
-            return "";
-        }
-
-        return morphNBT.toString();
-    }
-
-
-    /**
-     * Сбросить внутреннее состояние.
-     *
-     * Вызывается при смене Actor/Scene.
-     */
     public void reset()
     {
         this.lastAppliedMorphSignature = null;
+
+        this.lastAppliedSkinSignature = null;
     }
+
 
 
     public String getLastAppliedMorphSignature()
     {
         return this.lastAppliedMorphSignature;
+    }
+
+
+
+    public String getLastAppliedSkinSignature()
+    {
+        return this.lastAppliedSkinSignature;
     }
 }

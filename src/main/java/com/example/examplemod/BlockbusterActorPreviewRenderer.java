@@ -106,7 +106,10 @@ public class BlockbusterActorPreviewRenderer
         }
 
         NBTTagCompound morphNBT =
-                sceneActor.getMorph();
+                CharacterMorphResolver.getCurrentMorph(
+                        actorData,
+                        BlockbusterPreviewAnimationState.getFrame()
+                );
 
         if (morphNBT == null)
         {
@@ -471,6 +474,11 @@ public class BlockbusterActorPreviewRenderer
             return;
         }
 
+        if (!BlockbusterPreviewAnimationState.isPlaying())
+        {
+            return;
+        }
+
         AbstractMorph currentMorph =
                 entityActor.getMorph();
 
@@ -637,10 +645,13 @@ public class BlockbusterActorPreviewRenderer
          * =====================================================
          */
 
-        updateEntityTickState(
-                entityActor,
-                previewFrame
-        );
+        if (playing)
+        {
+            updateEntityTickState(
+                    entityActor,
+                    previewFrame
+            );
+        }
 
         /*
          * =====================================================

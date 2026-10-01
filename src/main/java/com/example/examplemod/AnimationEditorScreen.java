@@ -445,11 +445,64 @@ public class AnimationEditorScreen extends GuiScreen
 
     private void applyCharacterState()
     {
+        BlockbusterSceneActorData data =
+                getSelectedActor();
+
+        EntityActor actor =
+                findRuntimeActor();
+
+
+        if (data == null || actor == null)
+        {
+            return;
+        }
+
+
         this.characterStateResolver.apply(
-                getSelectedActor(),
-                findRuntimeActor(),
+                data,
+                actor,
                 this.playbackController.getCurrentFrame()
         );
+    }
+
+    public void refreshCharacterState()
+    {
+        /*
+         * Перечитываем выбранный CharacterKey
+         */
+        syncCharacterTimelineActor();
+
+        syncCharacterEditor();
+
+
+        /*
+         * Принудительно применяем новый Morph
+         */
+        this.characterStateResolver.reset();
+
+        applyCharacterState();
+
+
+        /*
+         * Обновляем реального Actor в Preview
+         */
+        EntityActor actor =
+                findRuntimeActor();
+
+        if (actor != null)
+        {
+            BlockbusterSceneActorData data =
+                    getSelectedActor();
+
+            if (data != null)
+            {
+                this.characterStateResolver.apply(
+                        data,
+                        actor,
+                        this.playbackController.getCurrentFrame()
+                );
+            }
+        }
     }
 
     private EntityActor findRuntimeActor()
