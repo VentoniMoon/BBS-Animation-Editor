@@ -117,6 +117,15 @@ public class AnimationEditorScreen extends GuiScreen
     private final InterpolationPanel interpolationPanel =
             new InterpolationPanel();
 
+    private final BodyPartsEditorController bodyPartsController =
+            new BodyPartsEditorController();
+
+    private final BodyPartsEditorPanel bodyPartsEditorPanel =
+            new BodyPartsEditorPanel(bodyPartsController);
+
+    private final BodyPartsTimelineController bodyPartsTimelineController =
+            new BodyPartsTimelineController(bodyPartsController);
+
     /*
      * =========================================================
      * EDITOR STATE
@@ -231,7 +240,10 @@ public class AnimationEditorScreen extends GuiScreen
                             this.timelineController,
                             this.actorPreviewController,
                             this.recordController,
-                            this.interpolationPanel
+                            this.interpolationPanel,
+                            this.bodyPartsController,
+                            this.bodyPartsEditorPanel,
+                            this.bodyPartsTimelineController
                     );
 
             this.editorInput.resetInputState();
@@ -1102,6 +1114,10 @@ public class AnimationEditorScreen extends GuiScreen
         this.characterTimelineEditorController
                 .setSelectedActor(data);
 
+        this.bodyPartsController.setActorBones(
+                this.actorPreviewController.getBones()
+        );
+
         this.characterEditorPanel
                 .setSelectedActor(data);
 
@@ -1893,8 +1909,111 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
+    private void drawBodyPartsBonePanel()
+    {
+        int top = TOP_BAR_HEIGHT;
+        int bottom = top + ACTOR_PANEL_HEIGHT;
+
+        drawRect(
+                0,
+                top,
+                LEFT_PANEL_WIDTH,
+                bottom,
+                COLOR_PANEL
+        );
+
+        drawRect(
+                LEFT_PANEL_WIDTH - 1,
+                top,
+                LEFT_PANEL_WIDTH,
+                bottom,
+                COLOR_BORDER
+        );
+
+        drawPanelHeader(
+                "BODY PART BONES",
+                0,
+                top,
+                LEFT_PANEL_WIDTH
+        );
+
+        List<AnimationBone> bones =
+                this.actorPreviewController.getBones();
+
+        if (bones == null || bones.isEmpty())
+        {
+            drawString(
+                    fontRenderer,
+                    "No bones",
+                    12,
+                    top + 38,
+                    COLOR_TEXT_MUTED
+            );
+            return;
+        }
+
+        int y = top + 31;
+
+        for (int i = 0; i < bones.size(); i++)
+        {
+            AnimationBone bone = bones.get(i);
+
+            if (bone == null)
+            {
+                continue;
+            }
+
+            if (y + 20 > bottom)
+            {
+                break;
+            }
+
+            boolean selected =
+                    i == this.bodyPartsController
+                            .getSelectedActorBone();
+
+            if (selected)
+            {
+                drawRect(
+                        5,
+                        y - 2,
+                        LEFT_PANEL_WIDTH - 5,
+                        y + 17,
+                        COLOR_SELECTED
+                );
+
+                drawRect(
+                        5,
+                        y - 2,
+                        7,
+                        y + 17,
+                        getAccentColor()
+                );
+            }
+
+            drawString(
+                    fontRenderer,
+                    bone.getName(),
+                    selected ? 13 : 10,
+                    y + 3,
+                    selected
+                            ? COLOR_TEXT
+                            : COLOR_TEXT_SECONDARY
+            );
+
+            y += 20;
+        }
+    }
+
     private void drawActorPanel()
     {
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            drawBodyPartsBonePanel();
+            return;
+        }
+
         int top = TOP_BAR_HEIGHT;
         int bottom =
                 top + ACTOR_PANEL_HEIGHT;
@@ -2296,6 +2415,21 @@ public class AnimationEditorScreen extends GuiScreen
                                     .getCurrentFrame()
                     );
         }
+        else if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            this.bodyPartsEditorPanel.setPosition(
+                    panelX,
+                    top
+            );
+
+            this.bodyPartsEditorPanel.draw(
+                    mc,
+                    mouseX,
+                    mouseY,
+                    getSceneLength()
+            );
+        }
     }
 
     private void drawPreviewFrame(
@@ -2468,6 +2602,18 @@ public class AnimationEditorScreen extends GuiScreen
     private void drawTimeline()
     {
         if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            this.bodyPartsTimelineController.draw(
+                    this,
+                    width,
+                    height,
+                    getSceneLength()
+            );
+            return;
+        }
+
+        if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CHARACTER)
         {
             syncCharacterTimelineActor();
@@ -2526,6 +2672,13 @@ public class AnimationEditorScreen extends GuiScreen
 
     public int getTimelineHeight()
     {
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            return this.bodyPartsTimelineController
+                    .getTimelineHeight();
+        }
+
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CHARACTER)
         {
