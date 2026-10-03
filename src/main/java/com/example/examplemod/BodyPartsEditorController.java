@@ -41,9 +41,14 @@ public class BodyPartsEditorController
                 ? new ArrayList<AnimationBone>()
                 : bones;
 
-        if (this.selectedActorBone >= this.actorBones.size())
+        if (this.actorBones.isEmpty())
         {
             this.selectedActorBone = -1;
+        }
+        else if (this.selectedActorBone < 0 ||
+                this.selectedActorBone >= this.actorBones.size())
+        {
+            this.selectedActorBone = 0;
         }
     }
 
