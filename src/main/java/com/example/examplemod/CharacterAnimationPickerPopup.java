@@ -23,10 +23,10 @@ public class CharacterAnimationPickerPopup
     private static final int SEARCH_HEIGHT = 18;
     private static final int SCROLLBAR_WIDTH = 7;
 
-    private static final int COLOR_PANEL = 0xFF17191B;
-    private static final int COLOR_PANEL_DARK = 0xFF111315;
-    private static final int COLOR_PANEL_HOVER = 0xFF25292D;
-    private static final int COLOR_BORDER = 0xFF303438;
+    private static final int COLOR_PANEL = 0xFF181818;
+    private static final int COLOR_PANEL_DARK = 0xFF111111;
+    private static final int COLOR_PANEL_HOVER = 0xFF252525;
+    private static final int COLOR_BORDER = 0xFF303030;
     private static final int COLOR_TEXT = 0xFFE2E5E7;
     private static final int COLOR_TEXT_SECONDARY = 0xFF9AA1A6;
 
