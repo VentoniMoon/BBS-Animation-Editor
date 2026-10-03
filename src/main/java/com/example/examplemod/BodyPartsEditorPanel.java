@@ -534,8 +534,7 @@ public class BodyPartsEditorPanel
 
     public boolean isGlobalTransformActive()
     {
-        return this.activeGlobalControl != null &&
-                this.activeGlobalControl.isDragging();
+        return this.activeGlobalControl != null;
     }
 
     public boolean mouseClickedTransform(
