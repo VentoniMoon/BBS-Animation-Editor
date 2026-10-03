@@ -1620,50 +1620,6 @@ public class BodyPartsTimelineController
         return true;
     }
 
-    public boolean mouseClickMove(
-            int mouseX,
-            int mouseY,
-            int clickedMouseButton,
-            int width,
-            int height,
-            int sceneLength)
-    {
-        if (controller.getSelectedModel() == null)
-        {
-            return false;
-        }
-
-        if (controller.getKeyframeController()
-                .isKeyframeDragging() &&
-                clickedMouseButton == 0)
-        {
-            boolean moved =
-                    controller.getKeyframeController()
-                            .moveDraggingKeyframe(
-                                    mouseX,
-                                    FIRST_FRAME
-                            );
-
-            if (moved)
-            {
-                AnimationKeyframe key =
-                        controller.getKeyframeController()
-                                .getDraggingKeyframe();
-
-                if (key != null)
-                {
-                    timeline.setTick(
-                            key.getFrame()
-                    );
-                }
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
     public void mouseReleased()
     {
         controller.getKeyframeController()
