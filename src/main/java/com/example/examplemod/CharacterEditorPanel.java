@@ -599,21 +599,19 @@ public class CharacterEditorPanel
         validateSelectedKey();
 
         /*
-         * Прокрутка Body Parts обрабатывается только
-         * когда соответствующая секция открыта.
+         * -----------------------------------------------------
+         * WHEEL
+         * -----------------------------------------------------
+         *
+         * В 1.12.2 wheel является отдельным LWJGL событием.
+         * Здесь мы читаем накопленное значение Mouse.getDWheel()
+         * уже после получения координат курсора.
+         *
+         * Это специально оставлено внутри Character panel:
+         * Animation Setup и его popup должны получать колесо
+         * независимо от vanilla GuiScreen dispatch.
          */
-        if (this.openedSection ==
-                Section.BODY_PART_OVERRIDES)
-        {
-            handleBodyPartScroll(
-                    mouseX,
-                    mouseY
-            );
-        }
-        else
-        {
-            this.bodyPartScrollDragging = false;
-        }
+        handleOpenSectionScroll(mouseX, mouseY);
 
         drawRect(
                 this.x,
@@ -1983,6 +1981,61 @@ public class CharacterEditorPanel
         sectionY += SECTION_CONTENT_GAP;
 
         return sectionY + SECTION_HEIGHT + ANIMATION_PARAMETERS_CONTENT_GAP;
+    }
+
+    /*
+     * =========================================================
+     * OPEN SECTION WHEEL
+     * =========================================================
+     */
+
+    private void handleOpenSectionScroll(
+            int mouseX,
+            int mouseY)
+    {
+        if (this.openedSection == Section.ANIMATION_SETUP)
+        {
+            int currentY = this.y + 30 + 24 + 4;
+            int animationY = currentY + 24 + 4;
+
+            this.animationSetupPanel.setBounds(
+                    this.x,
+                    animationY,
+                    this.width
+            );
+
+            this.animationSetupPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.runtimeActor,
+                    this.currentFrame
+            );
+
+            int wheel = Mouse.getDWheel();
+
+            if (wheel != 0)
+            {
+                this.animationSetupPanel.mouseScrolled(
+                        mouseX,
+                        mouseY,
+                        wheel > 0 ? 1 : -1
+                );
+            }
+
+            return;
+        }
+
+        if (this.openedSection == Section.BODY_PART_OVERRIDES)
+        {
+            handleBodyPartScroll(
+                    mouseX,
+                    mouseY
+            );
+        }
+        else
+        {
+            this.bodyPartScrollDragging = false;
+        }
     }
 
     /*
