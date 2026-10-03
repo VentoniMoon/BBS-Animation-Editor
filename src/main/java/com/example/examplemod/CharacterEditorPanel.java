@@ -39,7 +39,7 @@ public class CharacterEditorPanel
         APPEARANCE,
         ANIMATION_SETUP,
         BODY_PART_OVERRIDES,
-        ACTOR_SETTINGS
+        ANIMATION_PARAMETERS
     }
 
     private Section openedSection =
@@ -743,15 +743,15 @@ public class CharacterEditorPanel
 
         drawSection(
                 mc,
-                Section.ACTOR_SETTINGS,
-                "ACTOR SETTINGS",
+                Section.ANIMATION_PARAMETERS,
+                "ANIMATION PARAMETERS",
                 cursorY,
                 mouseX,
                 mouseY
         );
 
         if (this.openedSection ==
-                Section.ACTOR_SETTINGS)
+                Section.ANIMATION_PARAMETERS)
         {
             cursorY += 4;
 
@@ -2112,7 +2112,7 @@ public class CharacterEditorPanel
             );
         }
 
-        if (this.openedSection == Section.ACTOR_SETTINGS)
+        if (this.openedSection == Section.ANIMATION_PARAMETERS)
         {
             int actorSectionY =
                     this.y + 30;
@@ -2492,13 +2492,13 @@ public class CharacterEditorPanel
                 mouseY))
         {
             toggleSection(
-                    Section.ACTOR_SETTINGS
+                    Section.ANIMATION_PARAMETERS
             );
 
             return true;
         }
 
-        if (this.openedSection == Section.ACTOR_SETTINGS)
+        if (this.openedSection == Section.ANIMATION_PARAMETERS)
         {
             int actorSettingsY = currentY + 24 + 4;
 
