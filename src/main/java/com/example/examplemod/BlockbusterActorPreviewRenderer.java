@@ -571,6 +571,11 @@ public class BlockbusterActorPreviewRenderer
                 entityActor
         );
 
+        CharacterBodyPartPreviewState.set(
+                actorData,
+                BlockbusterPreviewAnimationState.getFrame()
+        );
+
         BlockbusterSceneActor sceneActor =
                 actorData.getActor();
 
