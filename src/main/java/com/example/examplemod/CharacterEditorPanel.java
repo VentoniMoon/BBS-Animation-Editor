@@ -2114,31 +2114,20 @@ public class CharacterEditorPanel
 
         if (this.openedSection == Section.ACTOR_SETTINGS)
         {
-            int currentY = this.y + 30 + 24 + 4;
+            int actorSectionY =
+                    this.y + 30;
 
-            if (this.openedSection == Section.ANIMATION_SETUP)
-            {
-                currentY += 24 + 4 + CharacterAnimationSetupPanel.HEIGHT;
-            }
-            else
-            {
-                currentY += 24;
-            }
+            actorSectionY += 24;
+            actorSectionY += 4;
 
-            currentY += 4;
+            actorSectionY += 24;
+            actorSectionY += 4;
 
-            if (this.openedSection == Section.BODY_PART_OVERRIDES)
-            {
-                currentY += 24 + 4 + 108;
-            }
-            else
-            {
-                currentY += 24;
-            }
+            actorSectionY += 24;
+            actorSectionY += 4;
 
-            currentY += 4;
-
-            int actorSettingsY = currentY + 24 + 4;
+            int actorSettingsY =
+                    actorSectionY + 24 + 4;
 
             this.animationParametersPanel.setBounds(
                     this.x,
