@@ -154,6 +154,7 @@ public class BodyPartsPreviewRenderer
                     renderEntity,
                     morph,
                     attachment,
+                    data.getGlobalTransform(),
                     partialTicks
             );
         }
@@ -394,6 +395,31 @@ public class BodyPartsPreviewRenderer
                 1.0F,
                 0.0F,
                 0.0F
+        );
+
+        if (modelTransform != null)
+        {
+            GL11.glTranslatef(
+                    modelTransform.getPositionX() / 16.0F,
+                    modelTransform.getPositionY() / 16.0F,
+                    modelTransform.getPositionZ() / 16.0F
+            );
+
+            GL11.glRotatef(modelTransform.getRotationZ(), 0.0F, 0.0F, 1.0F);
+            GL11.glRotatef(modelTransform.getRotationY(), 0.0F, 1.0F, 0.0F);
+            GL11.glRotatef(modelTransform.getRotationX(), 1.0F, 0.0F, 0.0F);
+
+            GL11.glScalef(
+                    modelTransform.getScaleX(),
+                    modelTransform.getScaleY(),
+                    modelTransform.getScaleZ()
+            );
+        }
+
+        GL11.glScalef(
+                attachment.transform.getScaleX(),
+                attachment.transform.getScaleY(),
+                attachment.transform.getScaleZ()
         );
 
         GlStateManager.enableDepth();
