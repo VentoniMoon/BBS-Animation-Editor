@@ -29,6 +29,17 @@ public class BodyPartsTimelineController
     private int lastClickY = -1;
     private int lastClickBone = -1;
 
+    private BodyPartModelData draggingModel;
+    private int dragMode;
+    private int dragMouseX;
+    private int dragStartFrame;
+    private int dragEndFrame;
+
+    private static final int DRAG_NONE = 0;
+    private static final int DRAG_MOVE = 1;
+    private static final int DRAG_START = 2;
+    private static final int DRAG_END = 3;
+
     public BodyPartsTimelineController(
             BodyPartsEditorController controller)
     {
@@ -140,7 +151,7 @@ public class BodyPartsTimelineController
 
         if (model == null)
         {
-            drawModelTracks(
+            drawActorTimeline(
                     mc,
                     width,
                     height,
@@ -232,7 +243,7 @@ public class BodyPartsTimelineController
         );
     }
 
-    private void drawModelTracks(
+    private void drawActorTimeline(
             Minecraft mc,
             int width,
             int height,
@@ -243,7 +254,7 @@ public class BodyPartsTimelineController
                 mc,
                 width,
                 top,
-                "BODY PART MODELS",
+                "BODY PARTS",
                 false
         );
 
@@ -251,7 +262,7 @@ public class BodyPartsTimelineController
                 mc,
                 width,
                 top,
-                sceneLength
+                getMaximumFrame(sceneLength, null)
         );
 
         int tracksTop = top + HEADER_HEIGHT;
@@ -265,39 +276,120 @@ public class BodyPartsTimelineController
         );
 
         mc.fontRenderer.drawString(
-                "MODEL",
+                "ACTOR BONES",
                 10,
                 tracksTop + 6,
                 0xFF9DA4A9
         );
 
-        int row = 0;
+        int visible =
+                Math.max(
+                        0,
+                        (height - tracksTop) / TRACK_HEIGHT
+                );
 
-        for (BodyPartModelData model : controller.getModels())
+        int maxScroll =
+                Math.max(
+                        0,
+                        controller.getActorBones().size() - visible
+                );
+
+        boneScroll =
+                Math.max(
+                        0,
+                        Math.min(
+                                boneScroll,
+                                maxScroll
+                        )
+                );
+
+        for (int visibleIndex = 0;
+                visibleIndex < visible;
+                visibleIndex++)
         {
-            int y = tracksTop + row * TRACK_HEIGHT;
+            int boneIndex =
+                    boneScroll + visibleIndex;
 
-            if (y + TRACK_HEIGHT > height)
+            if (boneIndex >= controller.getActorBones().size())
             {
                 break;
             }
 
+            AnimationBone bone =
+                    controller.getActorBones().get(boneIndex);
+
+            if (bone == null)
+            {
+                continue;
+            }
+
+            int y =
+                    tracksTop +
+                    visibleIndex * TRACK_HEIGHT;
+
+            boolean selected =
+                    boneIndex ==
+                    controller.getSelectedActorBone();
+
             drawTrackBackground(
                     width,
                     y,
-                    false
+                    selected
             );
+
+            if (selected)
+            {
+                Gui.drawRect(
+                        0,
+                        y,
+                        3,
+                        y + TRACK_HEIGHT,
+                        EditorThemeManager.get().getAccent()
+                );
+            }
 
             mc.fontRenderer.drawString(
                     trim(
                             mc,
-                            model.getAttachmentBoneName(),
+                            bone.getName(),
                             TIMELINE_START_X - 14
                     ),
                     10,
                     y + 6,
-                    0xFF9DA4A9
+                    selected
+                            ? EditorThemeManager.get().getAccentBright()
+                            : 0xFF9DA4A9
             );
+
+            drawModelBarsForBone(
+                    mc,
+                    width,
+                    y,
+                    bone.getName()
+            );
+        }
+    }
+
+    private void drawModelBarsForBone(
+            Minecraft mc,
+            int width,
+            int y,
+            String boneName)
+    {
+        int stack = 0;
+
+        for (BodyPartModelData model :
+                controller.getModels())
+        {
+            if (model == null ||
+                    !boneName.equals(
+                            model.getAttachmentBoneName()))
+            {
+                continue;
+            }
+
+            int barY =
+                    y + 4 + Math.min(stack, 0) * 12;
 
             int left =
                     timeline.getFrameX(
@@ -311,29 +403,61 @@ public class BodyPartsTimelineController
                             TIMELINE_START_X
                     );
 
-            left = Math.max(TIMELINE_START_X, left);
-            right = Math.max(left + 4, Math.min(width, right));
+            if (right < TIMELINE_START_X ||
+                    left > width)
+            {
+                stack++;
+                continue;
+            }
+
+            left =
+                    Math.max(
+                            TIMELINE_START_X,
+                            left
+                    );
+
+            right =
+                    Math.min(
+                            width,
+                            Math.max(left + 8, right)
+                    );
 
             Gui.drawRect(
                     left,
-                    y + 4,
+                    barY,
                     right,
-                    y + TRACK_HEIGHT - 4,
+                    barY + 12,
                     EditorThemeManager.get().getAccent()
+            );
+
+            Gui.drawRect(
+                    left,
+                    barY,
+                    Math.min(right, left + 2),
+                    barY + 12,
+                    EditorThemeManager.get().getAccentBright()
+            );
+
+            Gui.drawRect(
+                    Math.max(left, right - 2),
+                    barY,
+                    right,
+                    barY + 12,
+                    EditorThemeManager.get().getAccentBright()
             );
 
             mc.fontRenderer.drawString(
                     trim(
                             mc,
                             model.getModelName(),
-                            Math.max(20, right - left - 8)
+                            Math.max(16, right - left - 8)
                     ),
                     left + 4,
-                    y + 6,
+                    barY + 2,
                     0xFF101010
             );
 
-            row++;
+            stack++;
         }
     }
 
@@ -822,39 +946,661 @@ public class BodyPartsTimelineController
                         sceneLength - 1
                 );
 
-        if (model == null)
+        for (BodyPartModelData item :
+                controller.getModels())
         {
-            return maximum;
+            if (item != null)
+            {
+                maximum =
+                        Math.max(
+                                maximum,
+                                item.getEndFrame()
+                        );
+            }
         }
 
-        maximum =
-                Math.max(
-                        maximum,
-                        model.getEndFrame()
-                );
-
-        for (AnimationBone bone : model.getBones())
+        if (model != null)
         {
-            if (bone == null)
+            for (AnimationBone bone : model.getBones())
             {
-                continue;
-            }
-
-            for (AnimationKeyframe keyframe :
-                    bone.getKeyframes())
-            {
-                if (keyframe != null)
+                if (bone == null)
                 {
-                    maximum =
-                            Math.max(
-                                    maximum,
-                                    keyframe.getFrame()
-                            );
+                    continue;
+                }
+
+                for (AnimationKeyframe keyframe :
+                        bone.getKeyframes())
+                {
+                    if (keyframe != null)
+                    {
+                        maximum =
+                                Math.max(
+                                        maximum,
+                                        keyframe.getFrame()
+                        );
+                    }
                 }
             }
         }
 
         return maximum;
+    }
+
+    public boolean mouseClicked(
+            int mouseX,
+            int mouseY,
+            int mouseButton,
+            int width,
+            int height,
+            int sceneLength)
+    {
+        int top = height - getTimelineHeight();
+
+        if (mouseY < top || mouseY > height)
+        {
+            return false;
+        }
+
+        BodyPartModelData model =
+                controller.getSelectedModel();
+
+        if (model != null &&
+                mouseY < top + HEADER_HEIGHT &&
+                mouseX > width - 120)
+        {
+            controller.backToModelTracks();
+            boneScroll = 0;
+            resetClickState();
+            return true;
+        }
+
+        int tracksTop = top + HEADER_HEIGHT;
+
+        if (mouseY < tracksTop)
+        {
+            int frame =
+                    timeline.getFrameFromMouseX(
+                            mouseX,
+                            TIMELINE_START_X
+                    );
+
+            timeline.setTick(
+                    Math.max(
+                            FIRST_FRAME,
+                            Math.min(
+                                    getMaximumFrame(sceneLength, model),
+                                    frame
+                            )
+                    )
+            );
+
+            return true;
+        }
+
+        if (model == null)
+        {
+            return mouseClickedActorTimeline(
+                    mouseX,
+                    mouseY,
+                    mouseButton,
+                    tracksTop,
+                    sceneLength
+            );
+        }
+
+        return mouseClickedModelTimeline(
+                mouseX,
+                mouseY,
+                mouseButton,
+                tracksTop,
+                sceneLength,
+                model
+        );
+    }
+
+    private boolean mouseClickedActorTimeline(
+            int mouseX,
+            int mouseY,
+            int mouseButton,
+            int tracksTop,
+            int sceneLength)
+    {
+        int visibleBone =
+                (mouseY - tracksTop) / TRACK_HEIGHT;
+
+        int boneIndex =
+                boneScroll + visibleBone;
+
+        if (boneIndex < 0 ||
+                boneIndex >= controller.getActorBones().size())
+        {
+            return true;
+        }
+
+        AnimationBone bone =
+                controller.getActorBones().get(boneIndex);
+
+        if (bone == null)
+        {
+            return true;
+        }
+
+        if (mouseButton == 0)
+        {
+            for (BodyPartModelData item :
+                    controller.getModels())
+            {
+                if (item == null ||
+                        !bone.getName().equals(
+                                item.getAttachmentBoneName()))
+                {
+                    continue;
+                }
+
+                int left =
+                        timeline.getFrameX(
+                                item.getStartFrame(),
+                                TIMELINE_START_X
+                        );
+
+                int right =
+                        timeline.getFrameX(
+                                item.getEndFrame(),
+                                TIMELINE_START_X
+                        );
+
+                int barTop =
+                        tracksTop +
+                        visibleBone * TRACK_HEIGHT +
+                        4;
+
+                if (mouseX >= left &&
+                        mouseX <= right &&
+                        mouseY >= barTop &&
+                        mouseY <= barTop + 12)
+                {
+                    startAttachmentDrag(
+                            item,
+                            mouseX,
+                            left,
+                            right
+                    );
+                    controller.setSelectedActorBone(boneIndex);
+                    timeline.setTick(
+                            timeline.getFrameFromMouseX(
+                                    mouseX,
+                                    TIMELINE_START_X
+                            )
+                    );
+                    return true;
+                }
+            }
+        }
+
+        if (mouseButton != 0)
+        {
+            return true;
+        }
+
+        controller.setSelectedActorBone(boneIndex);
+
+        timeline.setTick(
+                Math.max(
+                        FIRST_FRAME,
+                        Math.min(
+                                getMaximumFrame(sceneLength, null),
+                                timeline.getFrameFromMouseX(
+                                        mouseX,
+                                        TIMELINE_START_X
+                                )
+                        )
+                )
+        );
+
+        lastClickTime = System.currentTimeMillis();
+        lastClickX = mouseX;
+        lastClickY = mouseY;
+        lastClickBone = boneIndex;
+
+        return true;
+    }
+
+    private boolean mouseClickedModelTimeline(
+            int mouseX,
+            int mouseY,
+            int mouseButton,
+            int tracksTop,
+            int sceneLength,
+            BodyPartModelData model)
+    {
+        int visibleBoneIndex =
+                (mouseY - tracksTop) / TRACK_HEIGHT;
+
+        int boneIndex =
+                boneScroll + visibleBoneIndex;
+
+        if (boneIndex < 0 ||
+                boneIndex >= model.getBones().size())
+        {
+            return true;
+        }
+
+        AnimationBone bone =
+                model.getBones().get(boneIndex);
+
+        if (bone == null)
+        {
+            return true;
+        }
+
+        controller.getKeyframeController()
+                .setSelectedBoneIndex(
+                        boneIndex,
+                        model.getBones()
+                );
+
+        int frame =
+                timeline.getFrameFromMouseX(
+                        mouseX,
+                        TIMELINE_START_X
+                );
+
+        frame =
+                Math.max(
+                        FIRST_FRAME,
+                        Math.min(
+                                getMaximumFrame(sceneLength, model),
+                                frame
+                        )
+                );
+
+        if (mouseButton == 0)
+        {
+            AnimationKeyframe key =
+                    controller.getKeyframeController()
+                            .findKeyframeAt(
+                                    bone,
+                                    mouseX,
+                                    6
+                            );
+
+            if (key != null)
+            {
+                controller.getKeyframeController()
+                        .setSelectedKeyframe(key);
+
+                controller.getKeyframeController()
+                        .startKeyframeDragging(
+                                bone,
+                                key
+                        );
+
+                timeline.setTick(key.getFrame());
+                resetClickState();
+                return true;
+            }
+
+            long now = System.currentTimeMillis();
+
+            boolean doubleClick =
+                    lastClickBone == boneIndex &&
+                    Math.abs(lastClickX - mouseX) <=
+                            DOUBLE_CLICK_DISTANCE &&
+                    Math.abs(lastClickY - mouseY) <=
+                            DOUBLE_CLICK_DISTANCE &&
+                    now - lastClickTime <=
+                            DOUBLE_CLICK_DELAY;
+
+            timeline.setTick(frame);
+
+            if (doubleClick)
+            {
+                AnimationKeyframe createdKey =
+                        controller.getKeyframeController()
+                                .createKeyframe(
+                                        bone,
+                                        frame
+                                );
+
+                controller.getKeyframeController()
+                        .setSelectedKeyframe(createdKey);
+
+                resetClickState();
+                return true;
+            }
+
+            lastClickTime = now;
+            lastClickX = mouseX;
+            lastClickY = mouseY;
+            lastClickBone = boneIndex;
+
+            controller.getKeyframeController()
+                    .setSelectedKeyframe(null);
+
+            return true;
+        }
+
+        if (mouseButton == 1)
+        {
+            AnimationKeyframe key =
+                    controller.getKeyframeController()
+                            .findKeyframeAt(
+                                    bone,
+                                    mouseX,
+                                    6
+                            );
+
+            if (key != null)
+            {
+                controller.getKeyframeController()
+                        .requestDelete(
+                                bone,
+                                key
+                        );
+            }
+
+            return true;
+        }
+
+        return true;
+    }
+
+    public boolean mouseClickMove(
+            int mouseX,
+            int mouseY,
+            int clickedMouseButton,
+            int width,
+            int height,
+            int sceneLength)
+    {
+        if (clickedMouseButton != 0)
+        {
+            return false;
+        }
+
+        if (controller.getSelectedModel() == null)
+        {
+            return dragAttachment(
+                    mouseX,
+                    mouseY,
+                    height
+            );
+        }
+
+        if (controller.getKeyframeController()
+                .isKeyframeDragging())
+        {
+            boolean moved =
+                    controller.getKeyframeController()
+                            .moveDraggingKeyframe(
+                                    mouseX,
+                                    FIRST_FRAME
+                            );
+
+            if (moved)
+            {
+                AnimationKeyframe key =
+                        controller.getKeyframeController()
+                                .getDraggingKeyframe();
+
+                if (key != null)
+                {
+                    timeline.setTick(key.getFrame());
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean dragAttachment(
+            int mouseX,
+            int mouseY,
+            int height)
+    {
+        if (draggingModel == null)
+        {
+            return false;
+        }
+
+        int deltaFrame =
+                timeline.getFrameFromMouseX(
+                        mouseX,
+                        TIMELINE_START_X
+                ) -
+                timeline.getFrameFromMouseX(
+                        dragMouseX,
+                        TIMELINE_START_X
+                );
+
+        if (dragMode == DRAG_START)
+        {
+            int newStart =
+                    Math.max(
+                            0,
+                            Math.min(
+                                    dragEndFrame - 1,
+                                    dragStartFrame + deltaFrame
+                            )
+                    );
+
+            draggingModel.setStartFrame(newStart);
+            timeline.setTick(newStart);
+            return true;
+        }
+
+        if (dragMode == DRAG_END)
+        {
+            int newEnd =
+                    Math.max(
+                            dragStartFrame + 1,
+                            dragEndFrame + deltaFrame
+                    );
+
+            draggingModel.setEndFrame(newEnd);
+            timeline.setTick(newEnd);
+            return true;
+        }
+
+        if (dragMode == DRAG_MOVE)
+        {
+            int start =
+                    Math.max(
+                            0,
+                            dragStartFrame + deltaFrame
+                    );
+
+            int end =
+                    start +
+                    (dragEndFrame - dragStartFrame);
+
+            draggingModel.setStartFrame(start);
+            draggingModel.setEndFrame(end);
+
+            int top =
+                    height -
+                    getTimelineHeight() +
+                    HEADER_HEIGHT;
+
+            int visibleBone =
+                    (mouseY - top) / TRACK_HEIGHT;
+
+            int newBone =
+                    boneScroll + visibleBone;
+
+            if (newBone >= 0 &&
+                    newBone < controller.getActorBones().size())
+            {
+                AnimationBone target =
+                        controller.getActorBones().get(newBone);
+
+                if (target != null)
+                {
+                    draggingModel.setAttachmentBoneName(
+                            target.getName()
+                    );
+
+                    controller.setSelectedActorBone(newBone);
+                }
+            }
+
+            timeline.setTick(start);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void startAttachmentDrag(
+            BodyPartModelData model,
+            int mouseX,
+            int left,
+            int right)
+    {
+        draggingModel = model;
+        dragMouseX = mouseX;
+        dragStartFrame = model.getStartFrame();
+        dragEndFrame = model.getEndFrame();
+
+        if (mouseX <= left + 5)
+        {
+            dragMode = DRAG_START;
+        }
+        else if (mouseX >= right - 5)
+        {
+            dragMode = DRAG_END;
+        }
+        else
+        {
+            dragMode = DRAG_MOVE;
+        }
+    }
+
+    public void mouseReleased()
+    {
+        if (draggingModel != null &&
+                dragMode == DRAG_MOVE)
+        {
+            controller.selectModel(draggingModel);
+            boneScroll = 0;
+        }
+
+        draggingModel = null;
+        dragMode = DRAG_NONE;
+
+        controller.getKeyframeController()
+                .stopKeyframeDragging();
+    }
+
+    public boolean mouseScrolled(
+            int mouseX,
+            int mouseY,
+            int wheel,
+            int width,
+            int height,
+            int sceneLength)
+    {
+        if (wheel == 0)
+        {
+            return false;
+        }
+
+        int top = height - getTimelineHeight();
+
+        if (mouseY < top || mouseY > height)
+        {
+            return false;
+        }
+
+        BodyPartModelData model =
+                controller.getSelectedModel();
+
+        int tracksTop = top + HEADER_HEIGHT;
+
+        if (mouseX < TIMELINE_START_X &&
+                mouseY >= tracksTop)
+        {
+            int visible =
+                    Math.max(
+                            0,
+                            (height - tracksTop) / TRACK_HEIGHT
+                    );
+
+            int count =
+                    model == null
+                            ? controller.getActorBones().size()
+                            : model.getBones().size();
+
+            int maxScroll =
+                    Math.max(
+                            0,
+                            count - visible
+                    );
+
+            if (maxScroll > 0)
+            {
+                boneScroll =
+                        wheel > 0
+                                ? Math.max(0, boneScroll - 1)
+                                : Math.min(
+                                        maxScroll,
+                                        boneScroll + 1
+                                );
+
+                return true;
+            }
+        }
+
+        boolean ctrl =
+                Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) ||
+                Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
+
+        if (ctrl)
+        {
+            int frame =
+                    timeline.getFrameFromMouseX(
+                            mouseX,
+                            TIMELINE_START_X
+                    );
+
+            float oldZoom = timeline.getZoom();
+
+            timeline.changeZoom(
+                    wheel > 0 ? 0.25F : -0.25F
+            );
+
+            if (oldZoom != timeline.getZoom())
+            {
+                timeline.setOffset(
+                        TIMELINE_START_X +
+                        Math.round(
+                                frame *
+                                timeline.getPixelsPerFrame()
+                        ) -
+                        mouseX
+                );
+
+                timeline.clampOffset(
+                        getMaximumFrame(sceneLength, model),
+                        width - TIMELINE_START_X
+                );
+            }
+
+            return true;
+        }
+
+        timeline.addOffset(
+                wheel > 0 ? -60 : 60
+        );
+
+        timeline.clampOffset(
+                getMaximumFrame(sceneLength, model),
+                width - TIMELINE_START_X
+        );
+
+        return true;
     }
 
     public boolean mouseClicked(
