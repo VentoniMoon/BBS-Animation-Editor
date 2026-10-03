@@ -1621,4 +1621,27 @@ public class BodyPartsTimelineController
     }
 
 
+    private String trim(
+            Minecraft mc,
+            String text,
+            int width)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+
+        if (width <= 0 || mc == null || mc.fontRenderer == null)
+        {
+            return "";
+        }
+
+        if (mc.fontRenderer.getStringWidth(text) <= width)
+        {
+            return text;
+        }
+
+        return mc.fontRenderer.trimStringToWidth(text, width);
+    }
+
 }
