@@ -549,6 +549,51 @@ public class CharacterAnimationSetupPanel
         );
     }
 
+    private String trim(
+            Minecraft mc,
+            String text,
+            int maxWidth)
+    {
+        if (text == null)
+        {
+            return "";
+        }
+
+        if (maxWidth <= 0)
+        {
+            return "";
+        }
+
+        if (mc == null || mc.fontRenderer == null)
+        {
+            return text;
+        }
+
+        if (mc.fontRenderer.getStringWidth(text) <= maxWidth)
+        {
+            return text;
+        }
+
+        String ellipsis = "...";
+        int ellipsisWidth =
+                mc.fontRenderer.getStringWidth(ellipsis);
+
+        if (ellipsisWidth >= maxWidth)
+        {
+            return ellipsis;
+        }
+
+        String result = text;
+
+        while (result.length() > 0 &&
+                mc.fontRenderer.getStringWidth(result) + ellipsisWidth > maxWidth)
+        {
+            result = result.substring(0, result.length() - 1);
+        }
+
+        return result + ellipsis;
+    }
+
     private boolean isInside(
             int x,
             int y,
