@@ -757,6 +757,9 @@ public class AnimationEditorInput
                     this.screen.width, this.screen.height,
                     this.screen.getSceneLength()))
             {
+                this.playbackController.setCurrentFrame(
+                        this.bodyPartsController.getTimeline().getTick()
+                );
                 this.markDirty();
                 return;
             }
