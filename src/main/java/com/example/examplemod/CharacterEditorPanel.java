@@ -1,9 +1,14 @@
 package com.example.examplemod;
 
+import java.util.List;
+
 import mchorse.blockbuster.common.entity.EntityActor;
+import mchorse.metamorph.api.morphs.AbstractMorph;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
+
+import org.lwjgl.input.Mouse;
 
 /**
  * Панель Character Mode.
@@ -84,6 +89,71 @@ public class CharacterEditorPanel
     private static final int COLOR_TEXT_MUTED =
             0xFF666D72;
 
+    /*
+     * =========================================================
+     * BODY PART OVERRIDES
+     * =========================================================
+     *
+     * Секция сохраняет старую высоту 108 px.
+     *
+     * Одновременно отображаются 5 строк.
+     *
+     * Остальные кости доступны через:
+     *
+     *     - колесо мыши;
+     *     - вертикальный scrollbar;
+     *     - перетаскивание scrollbar.
+     */
+
+    private static final int BODY_PART_ROW_HEIGHT =
+            16;
+
+    private static final int BODY_PART_VISIBLE_ROWS =
+            5;
+
+    private static final int BODY_PART_LIST_HEIGHT =
+            BODY_PART_VISIBLE_ROWS *
+                    BODY_PART_ROW_HEIGHT;
+
+    /**
+     * Ширина scrollbar.
+     */
+    private static final int BODY_PART_SCROLLBAR_WIDTH =
+            7;
+
+    /**
+     * Отступ между списком и scrollbar.
+     */
+    private static final int BODY_PART_SCROLLBAR_GAP =
+            3;
+
+    /**
+     * Смещение списка костей.
+     *
+     * 0 = кости 0..4
+     * 1 = кости 1..5
+     * 2 = кости 2..6
+     * и т.д.
+     */
+    private int bodyPartBoneOffset;
+
+    /**
+     * Активно ли перетаскивание scrollbar.
+     */
+    private boolean bodyPartScrollDragging;
+
+    /**
+     * Смещение курсора относительно верхушки thumb
+     * во время drag.
+     */
+    private int bodyPartScrollDragOffset;
+
+    /*
+     * =========================================================
+     * THEME
+     * =========================================================
+     */
+
     private static int getAccentColor()
     {
         return EditorThemeManager
@@ -114,11 +184,6 @@ public class CharacterEditorPanel
     /**
      * Конкретный CharacterKey, выбранный
      * в Character Timeline.
-     *
-     * НЕ связан напрямую с currentFrame.
-     *
-     * selectedKey остаётся выбранным, даже если
-     * playhead переместился на другой кадр.
      */
     private CharacterKey selectedKey;
 
@@ -177,6 +242,8 @@ public class CharacterEditorPanel
             EntityActor actor)
     {
         this.runtimeActor = actor;
+
+        resetBodyPartScroll();
     }
 
     public EntityActor getRuntimeActor()
@@ -225,25 +292,20 @@ public class CharacterEditorPanel
     public void setSelectedActor(
             BlockbusterSceneActorData actor)
     {
-        /*
-         * Если Actor действительно сменился,
-         * CharacterKey старого Actor больше
-         * нельзя использовать.
-         */
         if (this.selectedActor != actor)
         {
             this.selectedKey = null;
+
+            resetBodyPartScroll();
         }
 
         this.selectedActor = actor;
 
-        /*
-         * Если Actor отсутствует,
-         * ключ также обязательно сбрасываем.
-         */
         if (actor == null)
         {
             this.selectedKey = null;
+
+            resetBodyPartScroll();
         }
     }
 
@@ -279,51 +341,96 @@ public class CharacterEditorPanel
      * =========================================================
      */
 
-    /**
-     * Устанавливает конкретный CharacterKey,
-     * выбранный в Character Timeline.
-     *
-     * ВАЖНО:
-     *
-     * Здесь НЕ меняется currentFrame.
-     *
-     * Например:
-     *
-     * selectedKey = MORPH @ 40
-     * currentFrame = 80
-     *
-     * Это допустимое состояние.
-     */
     public void setSelectedKey(
             CharacterKey key)
     {
-        this.selectedKey = key;
+        if (key == null)
+        {
+            this.selectedKey = null;
+
+            resetBodyPartScroll();
+
+            return;
+        }
+
+        if (this.selectedActor == null)
+        {
+            this.selectedKey = null;
+
+            resetBodyPartScroll();
+
+            return;
+        }
+
+        CharacterTimelineController timeline =
+                this.selectedActor.getCharacterTimeline();
+
+        if (timeline == null)
+        {
+            this.selectedKey = null;
+
+            resetBodyPartScroll();
+
+            return;
+        }
+
+        boolean found = false;
+
+        for (int i = 0;
+             i < timeline.getTrackCount();
+             i++)
+        {
+            CharacterTrack track =
+                    timeline.getTrack(i);
+
+            if (track == null)
+            {
+                continue;
+            }
+
+            for (CharacterKey timelineKey :
+                    track.getKeys())
+            {
+                if (timelineKey == key)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (found)
+            {
+                break;
+            }
+        }
+
+        if (found)
+        {
+            if (this.selectedKey != key)
+            {
+                resetBodyPartScroll();
+            }
+
+            this.selectedKey = key;
+        }
+        else
+        {
+            this.selectedKey = null;
+
+            resetBodyPartScroll();
+        }
     }
 
-    /**
-     * Получить конкретный выбранный CharacterKey.
-     */
     public CharacterKey getSelectedKey()
     {
         return this.selectedKey;
     }
 
-    /**
-     * Проверяет, существует ли выбранный ключ.
-     */
     public boolean hasSelectedKey()
     {
         return this.selectedKey != null;
     }
 
-    /**
-     * Проверяет, относится ли выбранный ключ
-     * к текущему Actor.
-     *
-     * CharacterKey сам по себе не хранит ссылку
-     * на Actor, поэтому проверяем его наличие
-     * внутри Character Timeline текущего Actor.
-     */
     public boolean isSelectedKeyValid()
     {
         if (this.selectedActor == null ||
@@ -365,13 +472,6 @@ public class CharacterEditorPanel
         return false;
     }
 
-    /**
-     * Если выбранный ключ больше не существует
-     * в Timeline текущего Actor, он сбрасывается.
-     *
-     * Это защищает Character Mode от ситуации,
-     * когда ключ был удалён или Actor был перезагружен.
-     */
     public void validateSelectedKey()
     {
         if (this.selectedKey == null)
@@ -382,15 +482,31 @@ public class CharacterEditorPanel
         if (!isSelectedKeyValid())
         {
             this.selectedKey = null;
+
+            resetBodyPartScroll();
         }
     }
 
-    /**
-     * Полностью снять выделение ключа.
-     */
     public void clearSelectedKey()
     {
         this.selectedKey = null;
+
+        resetBodyPartScroll();
+    }
+
+    /*
+     * =========================================================
+     * BODY PART SCROLL RESET
+     * =========================================================
+     */
+
+    private void resetBodyPartScroll()
+    {
+        this.bodyPartBoneOffset = 0;
+
+        this.bodyPartScrollDragging = false;
+
+        this.bodyPartScrollDragOffset = 0;
     }
 
     /*
@@ -413,6 +529,15 @@ public class CharacterEditorPanel
         }
 
         this.openedSection = section;
+
+        /*
+         * Если Body Parts закрыли,
+         * drag больше не должен оставаться активным.
+         */
+        if (section != Section.BODY_PART_OVERRIDES)
+        {
+            this.bodyPartScrollDragging = false;
+        }
     }
 
     private void toggleSection(
@@ -424,6 +549,11 @@ public class CharacterEditorPanel
         }
 
         this.openedSection = section;
+
+        if (section != Section.BODY_PART_OVERRIDES)
+        {
+            this.bodyPartScrollDragging = false;
+        }
     }
 
     /*
@@ -443,12 +573,24 @@ public class CharacterEditorPanel
             return;
         }
 
-        /*
-         * Ключ мог быть удалён из Timeline.
-         *
-         * Проверяем это перед отображением панели.
-         */
         validateSelectedKey();
+
+        /*
+         * Прокрутка Body Parts обрабатывается только
+         * когда соответствующая секция открыта.
+         */
+        if (this.openedSection ==
+                Section.BODY_PART_OVERRIDES)
+        {
+            handleBodyPartScroll(
+                    mouseX,
+                    mouseY
+            );
+        }
+        else
+        {
+            this.bodyPartScrollDragging = false;
+        }
 
         drawRect(
                 this.x,
@@ -561,7 +703,9 @@ public class CharacterEditorPanel
 
             drawBodyPartOverrides(
                     mc,
-                    cursorY
+                    cursorY,
+                    mouseX,
+                    mouseY
             );
 
             cursorY += 108;
@@ -757,14 +901,6 @@ public class CharacterEditorPanel
                 morph = "Default";
             }
 
-            /*
-             * Если выбран конкретный Appearance key,
-             * показываем его тип.
-             *
-             * При этом сам selectedKey остаётся
-             * объектом, с которым будут работать
-             * кнопки Morph / Skin.
-             */
             if (this.selectedKey != null)
             {
                 if (this.selectedKey.getType() ==
@@ -790,10 +926,6 @@ public class CharacterEditorPanel
             }
         }
 
-        /*
-         * Actor
-         */
-
         drawLabel(
                 mc,
                 "Actor",
@@ -808,10 +940,6 @@ public class CharacterEditorPanel
                 y
         );
 
-        /*
-         * ID
-         */
-
         drawLabel(
                 mc,
                 "ID",
@@ -825,10 +953,6 @@ public class CharacterEditorPanel
                 this.x + 70,
                 y + 18
         );
-
-        /*
-         * Morph
-         */
 
         drawLabel(
                 mc,
@@ -854,10 +978,6 @@ public class CharacterEditorPanel
                 morphHovered
         );
 
-        /*
-         * Skin
-         */
-
         boolean skinHovered =
                 isInsideSkinButton(
                         y,
@@ -874,10 +994,6 @@ public class CharacterEditorPanel
                 17,
                 skinHovered
         );
-
-        /*
-         * Record
-         */
 
         drawLabel(
                 mc,
@@ -900,10 +1016,6 @@ public class CharacterEditorPanel
                 recordColor
         );
 
-        /*
-         * Frames
-         */
-
         drawLabel(
                 mc,
                 "Frames",
@@ -917,10 +1029,6 @@ public class CharacterEditorPanel
                 this.x + 70,
                 y + 72
         );
-
-        /*
-         * Current frame
-         */
 
         drawLabel(
                 mc,
@@ -938,15 +1046,6 @@ public class CharacterEditorPanel
                 y + 90
         );
 
-        /*
-         * Selected key
-         *
-         * Диагностическая строка.
-         *
-         * ВАЖНО:
-         * здесь показывается именно selectedKey,
-         * а не ключ на currentFrame.
-         */
         if (this.selectedKey != null)
         {
             String keyText =
@@ -1109,29 +1208,284 @@ public class CharacterEditorPanel
      * =========================================================
      */
 
-    private void drawBodyPartOverrides(
-            Minecraft mc,
-            int y)
+    private AbstractMorph getCurrentMorph()
     {
-        drawPartRow(mc, "Head", true, y);
-        drawPartRow(mc, "Body", true, y + 18);
-        drawPartRow(mc, "Left Arm", true, y + 36);
-        drawPartRow(mc, "Right Arm", true, y + 54);
-        drawPartRow(mc, "Left Leg", true, y + 72);
-        drawPartRow(mc, "Right Leg", true, y + 90);
+        if (this.runtimeActor == null ||
+                this.runtimeActor.morph == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return this.runtimeActor.morph.get();
+        }
+        catch (Throwable error)
+        {
+            return null;
+        }
     }
 
-    private void drawPartRow(
-            Minecraft mc,
-            String name,
-            boolean enabled,
-            int y)
+    private List<String> getBodyPartBones()
     {
-        drawLabel(
+        AbstractMorph morph =
+                getCurrentMorph();
+
+        if (morph == null)
+        {
+            return null;
+        }
+
+        return CharacterBodyPartOverrideController
+                .getBones(
+                        morph
+                );
+    }
+
+    private boolean canEditBodyPartOverrides()
+    {
+        return this.selectedKey != null &&
+                isSelectedKeyValid();
+    }
+
+    /**
+     * Нарисовать BODY PART OVERRIDES.
+     *
+     * ВАЖНО:
+     *
+     * Здесь намеренно НЕТ подсказки
+     * "Mouse wheel to scroll".
+     *
+     * Список занимает фиксированные 80 px
+     * и имеет отдельный scrollbar.
+     */
+    private void drawBodyPartOverrides(
+            Minecraft mc,
+            int y,
+            int mouseX,
+            int mouseY)
+    {
+        if (!canEditBodyPartOverrides())
+        {
+            drawHint(
+                    mc,
+                    "Select Character key",
+                    this.x + 12,
+                    y + 4
+            );
+
+            drawHint(
+                    mc,
+                    "in Character Timeline",
+                    this.x + 12,
+                    y + 20
+            );
+
+            return;
+        }
+
+        List<String> bones =
+                getBodyPartBones();
+
+        if (bones == null ||
+                bones.isEmpty())
+        {
+            drawHint(
+                    mc,
+                    "No bones found",
+                    this.x + 12,
+                    y + 4
+            );
+
+            return;
+        }
+
+        int maxOffset =
+                getBodyPartMaxOffset(
+                        bones
+                );
+
+        this.bodyPartBoneOffset =
+                Math.max(
+                        0,
+                        Math.min(
+                                maxOffset,
+                                this.bodyPartBoneOffset
+                        )
+                );
+
+        /*
+         * Заголовок.
+         */
+        drawHint(
                 mc,
-                name,
+                "Bones",
                 this.x + 12,
                 y
+        );
+
+        /*
+         * Список начинается строго здесь.
+         */
+        int listY =
+                y + 16;
+
+        /*
+         * Ограничиваем область списка.
+         *
+         * Это визуально отделяет список костей
+         * от остальной панели.
+         */
+        drawRect(
+                this.x + 8,
+                listY,
+                this.x +
+                        this.width -
+                        BODY_PART_SCROLLBAR_WIDTH -
+                        BODY_PART_SCROLLBAR_GAP -
+                        8,
+                listY +
+                        BODY_PART_LIST_HEIGHT,
+                COLOR_PANEL_DARK
+        );
+
+        /*
+         * Строки.
+         */
+        for (int i = 0;
+             i < BODY_PART_VISIBLE_ROWS;
+             i++)
+        {
+            int boneIndex =
+                    this.bodyPartBoneOffset +
+                            i;
+
+            if (boneIndex >= bones.size())
+            {
+                break;
+            }
+
+            String bone =
+                    bones.get(
+                            boneIndex
+                    );
+
+            drawBodyPartRow(
+                    mc,
+                    bone,
+                    listY +
+                            i *
+                                    BODY_PART_ROW_HEIGHT,
+                    mouseX,
+                    mouseY
+            );
+        }
+
+        /*
+         * Scrollbar.
+         */
+        drawBodyPartScrollbar(
+                mc,
+                y,
+                bones,
+                mouseX,
+                mouseY
+        );
+    }
+
+    private int getBodyPartMaxOffset(
+            List<String> bones)
+    {
+        if (bones == null)
+        {
+            return 0;
+        }
+
+        return Math.max(
+                0,
+                bones.size() -
+                        BODY_PART_VISIBLE_ROWS
+        );
+    }
+
+    private void drawBodyPartRow(
+            Minecraft mc,
+            String bone,
+            int y,
+            int mouseX,
+            int mouseY)
+    {
+        int rowX =
+                this.x + 8;
+
+        int rowWidth =
+                this.width -
+                        8 -
+                        BODY_PART_SCROLLBAR_WIDTH -
+                        BODY_PART_SCROLLBAR_GAP -
+                        8;
+
+        boolean hovered =
+                isInsideRect(
+                        rowX,
+                        y,
+                        rowWidth,
+                        BODY_PART_ROW_HEIGHT,
+                        mouseX,
+                        mouseY
+                );
+
+        if (hovered)
+        {
+            drawRect(
+                    rowX,
+                    y,
+                    rowX + rowWidth,
+                    y + BODY_PART_ROW_HEIGHT,
+                    COLOR_PANEL_HOVER
+            );
+        }
+
+        AbstractMorph morph =
+                getCurrentMorph();
+
+        CharacterTimelineController timeline =
+                this.selectedActor != null
+                        ? this.selectedActor.getCharacterTimeline()
+                        : null;
+
+        boolean enabled =
+                CharacterBodyPartOverrideController
+                        .isEnabled(
+                                morph,
+                                this.selectedKey,
+                                bone
+                        );
+
+        int stateColor =
+                enabled
+                        ? getAccentColor()
+                        : COLOR_TEXT_MUTED;
+
+        String displayName =
+                bone;
+
+        if (displayName.length() > 20)
+        {
+            displayName =
+                    displayName.substring(
+                            0,
+                            17
+                    ) + "...";
+        }
+
+        mc.fontRenderer.drawString(
+                displayName,
+                this.x + 12,
+                y + 4,
+                hovered
+                        ? COLOR_TEXT
+                        : COLOR_TEXT_SECONDARY
         );
 
         String state =
@@ -1139,19 +1493,586 @@ public class CharacterEditorPanel
                         ? "ON"
                         : "OFF";
 
-        int color =
-                enabled
-                        ? getAccentColor()
-                        : COLOR_TEXT_MUTED;
-
         mc.fontRenderer.drawString(
                 state,
                 this.x +
                         this.width -
-                        35,
-                y,
-                color
+                        BODY_PART_SCROLLBAR_WIDTH -
+                        BODY_PART_SCROLLBAR_GAP -
+                        30,
+                y + 4,
+                stateColor
         );
+    }
+
+    /*
+     * =========================================================
+     * BODY PART SCROLLBAR
+     * =========================================================
+     */
+
+    private int getBodyPartScrollbarX()
+    {
+        return this.x +
+                this.width -
+                8 -
+                BODY_PART_SCROLLBAR_WIDTH;
+    }
+
+    private int getBodyPartScrollbarY(
+            int sectionY)
+    {
+        return sectionY + 16;
+    }
+
+    private void drawBodyPartScrollbar(
+            Minecraft mc,
+            int sectionY,
+            List<String> bones,
+            int mouseX,
+            int mouseY)
+    {
+        if (bones == null ||
+                bones.size() <= BODY_PART_VISIBLE_ROWS)
+        {
+            return;
+        }
+
+        int scrollbarX =
+                getBodyPartScrollbarX();
+
+        int scrollbarY =
+                getBodyPartScrollbarY(
+                        sectionY
+                );
+
+        int scrollbarHeight =
+                BODY_PART_LIST_HEIGHT;
+
+        drawRect(
+                scrollbarX,
+                scrollbarY,
+                scrollbarX +
+                        BODY_PART_SCROLLBAR_WIDTH,
+                scrollbarY +
+                        scrollbarHeight,
+                COLOR_PANEL_DARK
+        );
+
+        float visibleRatio =
+                (float)
+                        BODY_PART_VISIBLE_ROWS /
+                        (float)
+                                bones.size();
+
+        int thumbHeight =
+                Math.max(
+                        12,
+                        (int)
+                                (
+                                        scrollbarHeight *
+                                                visibleRatio
+                                )
+                );
+
+        int maxOffset =
+                getBodyPartMaxOffset(
+                        bones
+                );
+
+        int maxThumbTravel =
+                scrollbarHeight -
+                        thumbHeight;
+
+        int thumbY =
+                scrollbarY;
+
+        if (maxOffset > 0 &&
+                maxThumbTravel > 0)
+        {
+            float scrollRatio =
+                    (float)
+                            this.bodyPartBoneOffset /
+                            (float)
+                                    maxOffset;
+
+            thumbY =
+                    scrollbarY +
+                            (int)
+                                    (
+                                            maxThumbTravel *
+                                                    scrollRatio
+                                    );
+        }
+
+        boolean hovered =
+                isInsideRect(
+                        scrollbarX,
+                        thumbY,
+                        BODY_PART_SCROLLBAR_WIDTH,
+                        thumbHeight,
+                        mouseX,
+                        mouseY
+                );
+
+        drawRect(
+                scrollbarX,
+                thumbY,
+                scrollbarX +
+                        BODY_PART_SCROLLBAR_WIDTH,
+                thumbY +
+                        thumbHeight,
+                hovered ||
+                        this.bodyPartScrollDragging
+                        ? getAccentColor()
+                        : COLOR_BORDER
+        );
+
+        if (hovered ||
+                this.bodyPartScrollDragging)
+        {
+            drawRect(
+                    scrollbarX + 1,
+                    thumbY + 1,
+                    scrollbarX +
+                            BODY_PART_SCROLLBAR_WIDTH -
+                            1,
+                    thumbY +
+                            thumbHeight -
+                            1,
+                    getAccentBrightColor()
+            );
+        }
+    }
+
+    /*
+     * =========================================================
+     * BODY PART SCROLL INPUT
+     * =========================================================
+     */
+
+    private void handleBodyPartScroll(
+            int mouseX,
+            int mouseY)
+    {
+        if (!canEditBodyPartOverrides())
+        {
+            this.bodyPartScrollDragging = false;
+
+            return;
+        }
+
+        List<String> bones =
+                getBodyPartBones();
+
+        if (bones == null ||
+                bones.size() <= BODY_PART_VISIBLE_ROWS)
+        {
+            this.bodyPartScrollDragging = false;
+
+            this.bodyPartBoneOffset = 0;
+
+            return;
+        }
+
+        int sectionY =
+                getBodyPartSectionContentY();
+
+        int listY =
+                sectionY + 16;
+
+        int listWidth =
+                this.width -
+                        16 -
+                        BODY_PART_SCROLLBAR_WIDTH -
+                        BODY_PART_SCROLLBAR_GAP;
+
+        /*
+         * -----------------------------------------------------
+         * WHEEL
+         * -----------------------------------------------------
+         *
+         * ВАЖНО:
+         *
+         * колесо учитывается ТОЛЬКО внутри списка костей.
+         *
+         * Поэтому прокрутка панели/других элементов
+         * не должна восприниматься как прокрутка
+         * Body Parts.
+         */
+
+        boolean mouseInsideList =
+                isInsideRect(
+                        this.x + 8,
+                        listY,
+                        listWidth,
+                        BODY_PART_LIST_HEIGHT,
+                        mouseX,
+                        mouseY
+                );
+
+        if (mouseInsideList)
+        {
+            int wheel =
+                    Mouse.getDWheel();
+
+            if (wheel != 0)
+            {
+                if (wheel > 0)
+                {
+                    this.bodyPartBoneOffset =
+                            Math.max(
+                                    0,
+                                    this.bodyPartBoneOffset - 1
+                            );
+                }
+                else
+                {
+                    this.bodyPartBoneOffset =
+                            Math.min(
+                                    getBodyPartMaxOffset(
+                                            bones
+                                    ),
+                                    this.bodyPartBoneOffset + 1
+                            );
+                }
+            }
+        }
+
+        /*
+         * -----------------------------------------------------
+         * SCROLLBAR
+         * -----------------------------------------------------
+         */
+
+        int scrollbarX =
+                getBodyPartScrollbarX();
+
+        int scrollbarY =
+                getBodyPartScrollbarY(
+                        sectionY
+                );
+
+        int scrollbarHeight =
+                BODY_PART_LIST_HEIGHT;
+
+        float visibleRatio =
+                (float)
+                        BODY_PART_VISIBLE_ROWS /
+                        (float)
+                                bones.size();
+
+        int thumbHeight =
+                Math.max(
+                        12,
+                        (int)
+                                (
+                                        scrollbarHeight *
+                                                visibleRatio
+                                )
+                );
+
+        int maxOffset =
+                getBodyPartMaxOffset(
+                        bones
+                );
+
+        int maxThumbTravel =
+                scrollbarHeight -
+                        thumbHeight;
+
+        int thumbY =
+                scrollbarY;
+
+        if (maxOffset > 0 &&
+                maxThumbTravel > 0)
+        {
+            float scrollRatio =
+                    (float)
+                            this.bodyPartBoneOffset /
+                            (float)
+                                    maxOffset;
+
+            thumbY =
+                    scrollbarY +
+                            (int)
+                                    (
+                                            maxThumbTravel *
+                                                    scrollRatio
+                                    );
+        }
+
+        /*
+         * Отпустили левую кнопку.
+         */
+        if (!Mouse.isButtonDown(0))
+        {
+            this.bodyPartScrollDragging = false;
+
+            return;
+        }
+
+        /*
+         * Начинаем drag только если курсор
+         * действительно находится на thumb.
+         */
+        if (!this.bodyPartScrollDragging)
+        {
+            if (isInsideRect(
+                    scrollbarX,
+                    thumbY,
+                    BODY_PART_SCROLLBAR_WIDTH,
+                    thumbHeight,
+                    mouseX,
+                    mouseY
+            ))
+            {
+                this.bodyPartScrollDragging = true;
+
+                this.bodyPartScrollDragOffset =
+                        mouseY -
+                                thumbY;
+            }
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * DRAG
+         * -----------------------------------------------------
+         */
+
+        int desiredThumbY =
+                mouseY -
+                        this.bodyPartScrollDragOffset;
+
+        int minThumbY =
+                scrollbarY;
+
+        int maxThumbY =
+                scrollbarY +
+                        maxThumbTravel;
+
+        desiredThumbY =
+                Math.max(
+                        minThumbY,
+                        Math.min(
+                                maxThumbY,
+                                desiredThumbY
+                        )
+                );
+
+        if (maxThumbTravel > 0)
+        {
+            float ratio =
+                    (float)
+                            (
+                                    desiredThumbY -
+                                            minThumbY
+                            ) /
+                            (float)
+                                    maxThumbTravel;
+
+            int newOffset =
+                    Math.round(
+                            ratio *
+                                    maxOffset
+                    );
+
+            this.bodyPartBoneOffset =
+                    Math.max(
+                            0,
+                            Math.min(
+                                    maxOffset,
+                                    newOffset
+                            )
+                    );
+        }
+    }
+
+    /**
+     * Получить Y начала содержимого
+     * BODY PART OVERRIDES.
+     */
+    private int getBodyPartSectionContentY()
+    {
+        int currentY =
+                this.y + 30;
+
+        /*
+         * Appearance.
+         */
+        if (this.openedSection ==
+                Section.APPEARANCE)
+        {
+            currentY +=
+                    24 + 4 + 108;
+        }
+        else
+        {
+            currentY += 24;
+        }
+
+        currentY += 4;
+
+        /*
+         * Animation.
+         */
+        if (this.openedSection ==
+                Section.ANIMATION_SETUP)
+        {
+            currentY +=
+                    24 + 4 + 92;
+        }
+        else
+        {
+            currentY += 24;
+        }
+
+        currentY += 4;
+
+        /*
+         * Body Part header + content gap.
+         */
+        currentY +=
+                24 + 4;
+
+        return currentY;
+    }
+
+    /*
+     * =========================================================
+     * BODY PART INPUT
+     * =========================================================
+     */
+
+    private boolean mouseClickedBodyPartOverrides(
+            int sectionY,
+            int mouseX,
+            int mouseY)
+    {
+        if (!canEditBodyPartOverrides())
+        {
+            return false;
+        }
+
+        List<String> bones =
+                getBodyPartBones();
+
+        if (bones == null ||
+                bones.isEmpty())
+        {
+            return false;
+        }
+
+        int maxOffset =
+                getBodyPartMaxOffset(
+                        bones
+                );
+
+        this.bodyPartBoneOffset =
+                Math.max(
+                        0,
+                        Math.min(
+                                maxOffset,
+                                this.bodyPartBoneOffset
+                        )
+                );
+
+        int listY =
+                sectionY + 16;
+
+        /*
+         * -----------------------------------------------------
+         * SCROLLBAR
+         * -----------------------------------------------------
+         *
+         * Не даём клику по scrollbar
+         * восприниматься как клик по кости.
+         */
+
+        int scrollbarX =
+                getBodyPartScrollbarX();
+
+        if (isInsideRect(
+                scrollbarX,
+                listY,
+                BODY_PART_SCROLLBAR_WIDTH,
+                BODY_PART_LIST_HEIGHT,
+                mouseX,
+                mouseY
+        ))
+        {
+            return true;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * BONES
+         * -----------------------------------------------------
+         */
+
+        int listWidth =
+                this.width -
+                        16 -
+                        BODY_PART_SCROLLBAR_WIDTH -
+                        BODY_PART_SCROLLBAR_GAP;
+
+        for (int i = 0;
+             i < BODY_PART_VISIBLE_ROWS;
+             i++)
+        {
+            int boneIndex =
+                    this.bodyPartBoneOffset +
+                            i;
+
+            if (boneIndex >= bones.size())
+            {
+                break;
+            }
+
+            int rowY =
+                    listY +
+                            i *
+                                    BODY_PART_ROW_HEIGHT;
+
+            if (!isInsideRect(
+                    this.x + 8,
+                    rowY,
+                    listWidth,
+                    BODY_PART_ROW_HEIGHT,
+                    mouseX,
+                    mouseY
+            ))
+            {
+                continue;
+            }
+
+            String bone =
+                    bones.get(
+                            boneIndex
+                    );
+
+            AbstractMorph morph =
+                    getCurrentMorph();
+
+            if (morph == null)
+            {
+                return true;
+            }
+
+            CharacterBodyPartOverrideController
+                    .toggleBone(
+                            this.selectedKey,
+                            morph,
+                            bone
+                    );
+
+            return true;
+        }
+
+        return false;
     }
 
     /*
@@ -1311,11 +2232,6 @@ public class CharacterEditorPanel
             return false;
         }
 
-        /*
-         * Перед обработкой кнопок убеждаемся,
-         * что selectedKey всё ещё принадлежит
-         * текущему Actor.
-         */
         validateSelectedKey();
 
         int currentY =
@@ -1431,6 +2347,17 @@ public class CharacterEditorPanel
         if (this.openedSection ==
                 Section.BODY_PART_OVERRIDES)
         {
+            int bodyPartY =
+                    currentY + 24 + 4;
+
+            if (mouseClickedBodyPartOverrides(
+                    bodyPartY,
+                    mouseX,
+                    mouseY))
+            {
+                return true;
+            }
+
             currentY +=
                     24 + 4 + 108;
         }
@@ -1537,19 +2464,6 @@ public class CharacterEditorPanel
             return;
         }
 
-        /*
-         * Передаём:
-         *
-         * 1. Actor
-         * 2. Runtime Actor
-         * 3. конкретный selectedKey
-         * 4. currentFrame
-         *
-         * Bridge сам решит:
-         *
-         * - использовать существующий selectedKey;
-         * - либо создать новый ключ на currentFrame.
-         */
         this.guiBridge.openMorphEditor(
                 this.selectedActor,
                 this.runtimeActor,
@@ -1588,13 +2502,6 @@ public class CharacterEditorPanel
             return;
         }
 
-        /*
-         * Здесь используется тот же принцип:
-         *
-         * selectedKey — конкретный ключ,
-         * currentFrame — только fallback для
-         * создания нового ключа.
-         */
         this.guiBridge.openSkinEditor(
                 this.selectedActor,
                 this.runtimeActor,
@@ -1605,7 +2512,7 @@ public class CharacterEditorPanel
 
     /*
      * =========================================================
-     * SECTION HIT TEST
+     * RECT / HIT TEST
      * =========================================================
      */
 
@@ -1620,6 +2527,20 @@ public class CharacterEditorPanel
                         5 &&
                 mouseY >= y &&
                 mouseY < y + 24;
+    }
+
+    private boolean isInsideRect(
+            int x,
+            int y,
+            int width,
+            int height,
+            int mouseX,
+            int mouseY)
+    {
+        return mouseX >= x &&
+                mouseX < x + width &&
+                mouseY >= y &&
+                mouseY < y + height;
     }
 
     /*

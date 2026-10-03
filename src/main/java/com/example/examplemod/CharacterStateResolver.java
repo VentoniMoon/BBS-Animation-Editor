@@ -6,55 +6,82 @@ import mchorse.metamorph.api.morphs.AbstractMorph;
 
 import net.minecraft.nbt.NBTTagCompound;
 
-
 /**
- * Вычисляет Character Timeline состояние Actor.
+ * Единственный runtime resolver Character Mode.
  *
- * Отдельные состояния:
+ * Character Timeline
+ *        ↓
+ * CharacterKey
+ *        ↓
+ * состояние Character
+ *        ↓
+ * EntityActor
  *
- * MORPH:
- *      CharacterKey
- *          Data
- *              Morph
+ * CharacterKey является источником истины.
  *
- * SKIN:
- *      CharacterKey
- *          Data
- *              Skin
+ * Runtime EntityActor НЕ является хранилищем
+ * Character Timeline.
  *
+ * ---------------------------------------------------------
  *
- * Каждый тип имеет свою независимую шкалу времени.
+ * ВАЖНО:
  *
- * Пример:
+ * CharacterKey теперь является универсальным контейнером
+ * изменений состояния.
+ *
+ * Например:
  *
  * Frame 0:
- *      Morph = Steve
  *
- * Frame 47:
- *      Morph = Slim
+ *     Morph = Zombie
+ *     Skin  = Default
  *
- * Frame 100:
- *      Morph = Zombie
+ * Frame 40:
  *
+ *     Bones = ...
  *
- * Morph применяется только начиная
- * с собственного ключа.
+ * При разрешении состояния отсутствующие поля НЕ сбрасывают
+ * предыдущие значения.
+ *
+ * Этот resolver пока занимается runtime-состоянием
+ * внешнего вида:
+ *
+ *     Morph
+ *     Skin
+ *
+ * Body/Bones и другие Character-поля обрабатываются
+ * отдельными системами.
+ *
+ * Type CharacterKey намеренно НЕ используется для определения
+ * наличия Morph/Skin.
+ *
+ * Это позволяет одному CharacterKey содержать одновременно:
+ *
+ *     Morph
+ *     Skin
+ *     Animation
+ *     Action
+ *     Bones
+ *
+ * без потери данных.
  */
 public class CharacterStateResolver
 {
-    private String lastAppliedMorphSignature;
+    /*
+     * Последний применённый Morph.
+     *
+     * Morph и Skin хранят полноценный Morph NBT,
+     * поэтому runtime использует единый signature.
+     */
+    private String lastMorphSignature;
 
-    private String lastAppliedSkinSignature;
-
+    private String lastActorId;
 
 
     public CharacterStateResolver()
     {
-        this.lastAppliedMorphSignature = null;
-
-        this.lastAppliedSkinSignature = null;
+        reset();
     }
-
 
 
     /*
@@ -75,94 +102,296 @@ public class CharacterStateResolver
         }
 
 
+        String actorId =
+                actorData.getId();
+
+        if (actorId == null)
+        {
+            actorId = "";
+        }
+
 
         /*
-         * MORPH и SKIN ищутся отдельно.
+         * При переключении Actor старое состояние
+         * больше не считается применённым.
          */
+        if (!actorId.equals(this.lastActorId))
+        {
+            this.lastActorId =
+                    actorId;
+
+            this.lastMorphSignature =
+                    null;
+        }
+
+
+        /*
+         * =====================================================
+         * 1. ПОСЛЕДНИЙ MORPH
+         * =====================================================
+         *
+         * ВАЖНО:
+         *
+         * Больше не ищем:
+         *
+         *     Type.MORPH
+         *
+         * потому что один универсальный CharacterKey
+         * может одновременно содержать Morph + Skin.
+         *
+         * Ищем именно ключ, содержащий поле Morph.
+         */
+
         CharacterKey morphKey =
-                findLatestCharacterKey(
+                findLatestMorphKey(
                         actorData,
-                        CharacterKey.Type.MORPH,
                         currentFrame
                 );
 
+
+        /*
+         * =====================================================
+         * 2. ПОСЛЕДНИЙ SKIN
+         * =====================================================
+         *
+         * Аналогично Morph.
+         *
+         * Ищем фактическое поле Skin внутри ключа,
+         * а не Type.SKIN.
+         */
 
         CharacterKey skinKey =
-                findLatestCharacterKey(
+                findLatestSkinKey(
                         actorData,
-                        CharacterKey.Type.SKIN,
                         currentFrame
                 );
 
 
-
         /*
-         * -------------------------
-         * MORPH
-         * -------------------------
+         * =====================================================
+         * 3. ВЫБОР ПОСЛЕДНЕГО ИЗМЕНЕНИЯ ВНЕШНЕГО ВИДА
+         * =====================================================
+         *
+         * Пример:
+         *
+         * Frame 0:
+         *     Morph = Zombie
+         *
+         * Frame 20:
+         *     Skin = Default
+         *
+         * Frame 30:
+         *
+         *     применяется Skin.
+         *
+         *
+         * Frame 40:
+         *     Morph = Creeper
+         *
+         * Frame 50:
+         *
+         *     применяется Creeper.
+         *
+         *
+         * Если Morph и Skin находятся в одном универсальном
+         * ключе, Skin считается более поздним изменением.
+         *
+         * Это сохраняет старое поведение resolver:
+         * при одинаковом frame Skin имел приоритет над Morph.
          */
 
-        if (morphKey != null)
+        CharacterKey latestKey =
+                getLatestAppearanceKey(
+                        morphKey,
+                        skinKey
+                );
+
+
+        if (latestKey != null)
         {
-            NBTTagCompound morphNBT =
-                    morphKey.getCompound(
-                            "Morph"
+            NBTTagCompound appearanceNBT =
+                    getAppearanceNBT(
+                            latestKey,
+                            morphKey,
+                            skinKey
                     );
 
 
-            applyMorphNBT(
-                    runtimeActor,
-                    morphNBT
-            );
-        }
-        else
-        {
-            applyBaseMorph(
-                    actorData,
-                    runtimeActor
-            );
-        }
+            if (appearanceNBT != null &&
+                    !appearanceNBT.hasNoTags())
+            {
+                applyMorph(
+                        runtimeActor,
+                        appearanceNBT
+                );
 
+                return;
+            }
+        }
 
 
         /*
-         * -------------------------
-         * SKIN
-         * -------------------------
+         * -----------------------------------------------------
+         * BASE MORPH
+         * -----------------------------------------------------
          *
-         * Сейчас Skin хранится
-         * отдельно от Morph.
+         * До первого Morph/Skin изменения используется
+         * исходный Morph Scene Actor.
          *
-         * Здесь оставляем место
-         * для Skin resolver.
+         * Важно:
+         *
+         * Наличие, например, Bones в CharacterKey
+         * само по себе НЕ считается изменением Morph.
+         *
+         * Поэтому базовый Morph продолжает работать.
          */
-        if (skinKey != null)
-        {
-            NBTTagCompound skinNBT =
-                    skinKey.getCompound(
-                            "Skin"
-                    );
 
-
-            applySkinNBT(
-                    runtimeActor,
-                    skinNBT
-            );
-        }
+        applyBaseMorph(
+                actorData,
+                runtimeActor
+        );
     }
-
 
 
     /*
      * =========================================================
-     * FIND KEY
+     * GET LATEST APPEARANCE KEY
      * =========================================================
      */
 
-    private CharacterKey findLatestCharacterKey(
+    private CharacterKey getLatestAppearanceKey(
+            CharacterKey morphKey,
+            CharacterKey skinKey)
+    {
+        if (morphKey == null)
+        {
+            return skinKey;
+        }
+
+
+        if (skinKey == null)
+        {
+            return morphKey;
+        }
+
+
+        /*
+         * Skin был изменён позже Morph.
+         */
+        if (skinKey.getFrame() >
+                morphKey.getFrame())
+        {
+            return skinKey;
+        }
+
+
+        /*
+         * Morph был изменён позже Skin.
+         */
+        if (morphKey.getFrame() >
+                skinKey.getFrame())
+        {
+            return morphKey;
+        }
+
+
+        /*
+         * Оба изменения находятся на одном кадре.
+         *
+         * Если один универсальный CharacterKey содержит
+         * одновременно Morph и Skin, skinKey и morphKey
+         * будут ссылаться на один и тот же объект.
+         *
+         * Skin сохраняет старый приоритет на одном кадре.
+         */
+        return skinKey;
+    }
+
+
+    /*
+     * =========================================================
+     * GET APPEARANCE NBT
+     * =========================================================
+     *
+     * Возвращает фактически хранящееся изменение.
+     *
+     * Type здесь НЕ используется.
+     *
+     * Это принципиально важно для универсального
+     * CharacterKey.
+     */
+
+    private NBTTagCompound getAppearanceNBT(
+            CharacterKey latestKey,
+            CharacterKey morphKey,
+            CharacterKey skinKey)
+    {
+        if (latestKey == null)
+        {
+            return null;
+        }
+
+
+        /*
+         * Если последним изменением является Skin,
+         * используем Skin.
+         */
+        if (skinKey != null &&
+                latestKey == skinKey &&
+                skinKey.hasSkin())
+        {
+            return skinKey.getSkin();
+        }
+
+
+        /*
+         * Если последним изменением является Morph,
+         * используем Morph.
+         */
+        if (morphKey != null &&
+                latestKey == morphKey &&
+                morphKey.hasMorph())
+        {
+            return morphKey.getMorph();
+        }
+
+
+        /*
+         * -----------------------------------------------------
+         * Защитный fallback
+         * -----------------------------------------------------
+         *
+         * Нужен для ситуации, когда данные были загружены
+         * из старого/нестандартного .dat и ссылки на
+         * latestKey не позволяют однозначно определить
+         * источник.
+         */
+
+        if (latestKey.hasSkin())
+        {
+            return latestKey.getSkin();
+        }
+
+
+        if (latestKey.hasMorph())
+        {
+            return latestKey.getMorph();
+        }
+
+
+        return null;
+    }
+
+
+    /*
+     * =========================================================
+     * FIND LATEST MORPH KEY
+     * =========================================================
+     */
+
+    private CharacterKey findLatestMorphKey(
             BlockbusterSceneActorData actorData,
-            CharacterKey.Type wantedType,
-            int frame)
+            int currentFrame)
     {
         if (actorData == null)
         {
@@ -172,7 +401,6 @@ public class CharacterStateResolver
 
         CharacterTimelineController timeline =
                 actorData.getCharacterTimeline();
-
 
         if (timeline == null)
         {
@@ -184,8 +412,7 @@ public class CharacterStateResolver
                 null;
 
 
-
-        for(CharacterTrack track :
+        for (CharacterTrack track :
                 timeline.getTracks())
         {
             if (track == null)
@@ -194,7 +421,7 @@ public class CharacterStateResolver
             }
 
 
-            for(CharacterKey key :
+            for (CharacterKey key :
                     track.getKeys())
             {
                 if (key == null)
@@ -203,36 +430,125 @@ public class CharacterStateResolver
                 }
 
 
-
                 /*
+                 * -------------------------------------------------
                  * ВАЖНО:
                  *
-                 * Morph ищет только Morph.
-                 * Skin ищет только Skin.
+                 * Не проверяем:
+                 *
+                 *     key.getType() == MORPH
+                 *
+                 * потому что Morph теперь может находиться
+                 * внутри универсального CUSTOM key.
+                 * -------------------------------------------------
                  */
-                if (key.getType() != wantedType)
+
+                if (!key.hasMorph())
                 {
                     continue;
                 }
 
 
-
-                /*
-                 * Будущие ключи
-                 * не учитываются.
-                 */
-                if (key.getFrame() > frame)
+                if (key.getFrame() > currentFrame)
                 {
                     continue;
                 }
-
 
 
                 if (result == null ||
                         key.getFrame() >
                                 result.getFrame())
                 {
-                    result = key;
+                    result =
+                            key;
+                }
+
+
+                /*
+                 * Если на одном кадре несколько track'ов
+                 * содержат Morph, сохраняем существующее
+                 * поведение: первый найденный ключ остаётся.
+                 *
+                 * Timeline обычно гарантирует один CharacterKey
+                 * на frame в рамках track.
+                 */
+            }
+        }
+
+
+        return result;
+    }
+
+
+    /*
+     * =========================================================
+     * FIND LATEST SKIN KEY
+     * =========================================================
+     */
+
+    private CharacterKey findLatestSkinKey(
+            BlockbusterSceneActorData actorData,
+            int currentFrame)
+    {
+        if (actorData == null)
+        {
+            return null;
+        }
+
+
+        CharacterTimelineController timeline =
+                actorData.getCharacterTimeline();
+
+        if (timeline == null)
+        {
+            return null;
+        }
+
+
+        CharacterKey result =
+                null;
+
+
+        for (CharacterTrack track :
+                timeline.getTracks())
+        {
+            if (track == null)
+            {
+                continue;
+            }
+
+
+            for (CharacterKey key :
+                    track.getKeys())
+            {
+                if (key == null)
+                {
+                    continue;
+                }
+
+
+                /*
+                 * Ищем фактические Skin-данные,
+                 * а не Type.SKIN.
+                 */
+                if (!key.hasSkin())
+                {
+                    continue;
+                }
+
+
+                if (key.getFrame() > currentFrame)
+                {
+                    continue;
+                }
+
+
+                if (result == null ||
+                        key.getFrame() >
+                                result.getFrame())
+                {
+                    result =
+                            key;
                 }
             }
         }
@@ -240,6 +556,8 @@ public class CharacterStateResolver
 
         return result;
     }
+
+
     /*
      * =========================================================
      * BASE MORPH
@@ -260,45 +578,59 @@ public class CharacterStateResolver
         BlockbusterSceneActor sceneActor =
                 actorData.getActor();
 
-
         if (sceneActor == null)
         {
             return;
         }
 
 
-        NBTTagCompound base =
+        NBTTagCompound morph =
                 sceneActor.getMorph();
 
 
-        if (base == null ||
-                base.hasNoTags())
+        if (morph == null ||
+                morph.hasNoTags())
         {
             return;
         }
 
 
-        applyMorphNBT(
+        applyMorph(
                 runtimeActor,
-                base
+                morph
         );
     }
 
 
-
     /*
      * =========================================================
-     * APPLY MORPH
+     * APPLY MORPH / SKIN
      * =========================================================
      */
 
-    private void applyMorphNBT(
+    private void applyMorph(
             EntityActor runtimeActor,
-            NBTTagCompound nbt)
+            NBTTagCompound morphNBT)
     {
         if (runtimeActor == null ||
-                nbt == null ||
-                nbt.hasNoTags())
+                morphNBT == null ||
+                morphNBT.hasNoTags())
+        {
+            return;
+        }
+
+
+        String signature =
+                morphNBT.toString();
+
+
+        /*
+         * Уже применён.
+         *
+         * НЕ пересоздаём Morph каждый tick.
+         */
+        if (signature.equals(
+                this.lastMorphSignature))
         {
             return;
         }
@@ -306,25 +638,11 @@ public class CharacterStateResolver
 
         try
         {
-            String signature =
-                    nbt.toString();
-
-
-
-            if (signature.equals(
-                    this.lastAppliedMorphSignature))
-            {
-                return;
-            }
-
-
-
             AbstractMorph morph =
                     MorphManager.INSTANCE
                             .morphFromNBT(
-                                    nbt.copy()
+                                    morphNBT.copy()
                             );
-
 
 
             if (morph == null)
@@ -333,110 +651,60 @@ public class CharacterStateResolver
             }
 
 
-
             /*
-             * ВАЖНО:
+             * Применяем новый runtime Morph.
              *
-             * Всегда создаём новый Morph.
-             * Старый AnimatedMorph содержит
-             * старый AnimatorController.
+             * Это одинаково работает для:
+             *
+             * - MORPH
+             * - SKIN
+             * - CustomMorph
+             * - AnimatedMorph
              */
-            runtimeActor.morph.set(
+            runtimeActor.morph.setDirect(
                     morph
             );
 
 
-
             /*
-             * Восстанавливаем Emoticons animator
+             * AnimatedMorph требует повторной
+             * подготовки animator.
              */
             if (morph instanceof
                     mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
             {
                 EmoticonsActorPreviewRenderer.prepareMorph(
-                        (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)morph
+                        (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+                                morph
                 );
             }
 
 
-
-            this.lastAppliedMorphSignature =
+            this.lastMorphSignature =
                     signature;
-
-
-            System.out.println(
-                    "[BBS Animation Editor] Applied Morph "
-                            +
-                            morph.getClass().getName()
-                            +
-                            " frame updated"
-            );
-
         }
-        catch(Throwable error)
+        catch (Throwable error)
         {
             error.printStackTrace();
         }
     }
 
 
-
     /*
      * =========================================================
-     * APPLY SKIN
+     * REFRESH
      * =========================================================
-     *
-     * Пока Skin хранится отдельно.
-     *
-     * Метод оставлен специально,
-     * чтобы Skin не попадал в Morph.
      */
 
-    private void applySkinNBT(
-            EntityActor runtimeActor,
-            NBTTagCompound nbt)
+    /**
+     * Заставляет следующий apply()
+     * повторно применить текущее состояние.
+     */
+    public void invalidate()
     {
-        if (runtimeActor == null ||
-                nbt == null ||
-                nbt.hasNoTags())
-        {
-            return;
-        }
-
-
-
-        String signature =
-                nbt.toString();
-
-
-
-        if (signature.equals(
-                this.lastAppliedSkinSignature))
-        {
-            return;
-        }
-
-
-
-        /*
-         * Здесь позже подключим
-         * полноценное применение Skin.
-         *
-         * ВАЖНО:
-         *
-         * Skin НЕ должен вызывать
-         * runtimeActor.morph.set()
-         *
-         * иначе снова будет
-         * глобальная замена.
-         */
-
-
-
-        this.lastAppliedSkinSignature =
-                signature;
+        this.lastMorphSignature =
+                null;
     }
-
 
 
     /*
@@ -447,22 +715,22 @@ public class CharacterStateResolver
 
     public void reset()
     {
-        this.lastAppliedMorphSignature = null;
+        this.lastMorphSignature =
+                null;
 
-        this.lastAppliedSkinSignature = null;
+        this.lastActorId =
+                "";
     }
 
 
+    /*
+     * =========================================================
+     * DEBUG / STATE
+     * =========================================================
+     */
 
     public String getLastAppliedMorphSignature()
     {
-        return this.lastAppliedMorphSignature;
-    }
-
-
-
-    public String getLastAppliedSkinSignature()
-    {
-        return this.lastAppliedSkinSignature;
+        return this.lastMorphSignature;
     }
 }

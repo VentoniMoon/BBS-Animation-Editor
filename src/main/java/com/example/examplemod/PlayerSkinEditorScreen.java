@@ -1,11 +1,9 @@
 package com.example.examplemod;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
-import mchorse.blockbuster_pack.client.gui.GuiCustomMorph;
-import mchorse.blockbuster_pack.morphs.CustomMorph;
+import mchorse.metamorph.api.morphs.AbstractMorph;
+import mchorse.metamorph.client.gui.editor.GuiAbstractMorph;
 import mchorse.mclib.client.gui.framework.GuiBase;
+import mchorse.mclib.client.gui.framework.elements.GuiDelegateElement;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
@@ -13,168 +11,84 @@ import net.minecraft.client.resources.I18n;
 
 
 /**
- * Wrapper над оригинальным Blockbuster GuiCustomMorph.
+ * Контейнер для оригинального редактора Morph.
  *
- * AnimationEditor
- *      |
- *      v
+ * Здесь НЕ создается собственный редактор.
+ *
+ * Мы берем настоящий GuiAbstractMorph, созданный
+ * Blockbuster / Metamorph / Emoticons, и встраиваем
+ * его непосредственно в дерево GuiBase.
+ *
+ *
+ * Character Editor
+ *       |
+ *       v
  * PlayerSkinEditorScreen
- *      |
- *      v
- * GuiCustomMorph
- *      |
- *      v
- * CustomMorph
+ *       |
+ *       +-- GuiAbstractMorph
+ *               |
+ *               +-- GuiCustomMorph
+ *               |
+ *               +-- GuiAnimatedMorph
+ *               |
+ *               +-- GuiEmoticonsMorph
  *
  *
- * Важно:
- *
- * Мы НЕ создаём новый CharacterKey.
- *
- * Редактируется существующий Skin внутри:
- *
- * CharacterKey
- *      |
- *      Data
- *          |
- *          Skin
- *
+ * Благодаря этому оригинальный MCLib GUI получает
+ * нормальные resize / draw / mouse / keyboard события.
  */
-public class PlayerSkinEditorScreen
-        extends GuiBase
+public class PlayerSkinEditorScreen extends GuiBase
 {
-
-    private static final int BUTTON_DONE =
-            4101;
-
-
-    private static final int BUTTON_CANCEL =
-            4102;
-
+    private static final int BUTTON_DONE = 4101;
+    private static final int BUTTON_CANCEL = 4102;
 
 
     private final Minecraft minecraft;
-
-
-    /**
-     * Исходная копия CustomMorph,
-     * переданная из Bridge.
-     */
-    private final CustomMorph customMorph;
-
-
-
-    /**
-     * Реальный объект, который изменяет
-     * GuiCustomMorph.
-     *
-     * В некоторых версиях Blockbuster
-     * GuiCustomMorph создаёт внутреннюю
-     * ссылку на Morph.
-     *
-     * Сохраняем именно его.
-     */
-    private CustomMorph editedMorph;
-
-
-
+    private final AbstractMorph sourceMorph;
     private final BlockbusterCharacterGuiBridge bridge;
 
 
+    /**
+     * Реальный оригинальный редактор Morph.
+     */
+    private GuiAbstractMorph editor;
 
-    private GuiCustomMorph editor;
+
+    /**
+     * Delegate, через который оригинальный редактор
+     * подключается к дереву GuiBase.
+     */
+    private GuiDelegateElement<GuiAbstractMorph> editorContainer;
 
 
     private boolean closing;
-
-
     private boolean confirmed;
-
-
-
-    /*
-     * =========================================================
-     * REFLECTION
-     * =========================================================
-     */
-
-
-    private Method editorInitGui;
-
-
-    private Method editorDrawScreen;
-
-
-    private Method editorUpdateScreen;
-
-
-    private Method editorMouseClicked;
-
-
-    private Method editorMouseReleased;
-
-
-    private Method editorMouseScrolled;
-
-
-    private Method editorKeyTyped;
-
-
-    private Method editorActionPerformed;
-
-
-
-    /*
-     * =========================================================
-     * CONSTRUCTOR
-     * =========================================================
-     */
 
 
     public PlayerSkinEditorScreen(
             Minecraft mc,
-            CustomMorph morph,
+            AbstractMorph morph,
             BlockbusterCharacterGuiBridge bridge)
     {
         super();
 
+        this.minecraft = mc;
+        this.sourceMorph = morph;
+        this.bridge = bridge;
 
-        this.minecraft =
-                mc;
+        this.editor = null;
+        this.editorContainer = null;
 
-
-        this.customMorph =
-                morph;
-
-
-        this.bridge =
-                bridge;
-
-
-        this.editor =
-                null;
-
-
-        this.editedMorph =
-                null;
-
-
-        this.closing =
-                false;
-
-
-        this.confirmed =
-                false;
+        this.closing = false;
+        this.confirmed = false;
     }
-
 
 
     /*
      * =========================================================
-     * INIT GUI
+     * INIT
      * =========================================================
      */
-
 
     @Override
     public void initGui()
@@ -182,106 +96,104 @@ public class PlayerSkinEditorScreen
         super.initGui();
 
 
-        if (this.customMorph == null)
+        if (this.sourceMorph == null)
         {
             return;
         }
 
 
-
         /*
-         * Обновляем модель перед открытием.
+         * =====================================================
+         * Создаем ОРИГИНАЛЬНЫЙ редактор для данного Morph.
+         *
+         * Важно:
+         *
+         * GuiCustomMorph / GuiAnimatedMorph являются
+         * наследниками GuiAbstractMorph.
+         *
+         * Здесь используется конкретный редактор,
+         * который уже был выбран Bridge.
+         * =====================================================
          */
-        try
-        {
-            this.customMorph.updateModel(
-                    true
-            );
-        }
-        catch(Throwable error)
-        {
-            error.printStackTrace();
-        }
 
-
-
-        if (this.customMorph.model == null)
-        {
-            System.err.println(
-                    "[BBS Animation Editor] "
-                            +
-                            "CustomMorph model is null"
-            );
-
-            return;
-        }
-
-
-
-        /*
-         * Создаем настоящий Blockbuster editor.
-         */
         this.editor =
-                new GuiCustomMorph(
-                        this.minecraft
+                createEditor(
+                        this.sourceMorph
                 );
 
 
-
-        prepareReflection();
-
-
-
-        syncEditorScreenState();
-
-
-
-        /*
-         * Передаем Morph в оригинальный редактор.
-         */
-        this.editor.startEdit(
-                this.customMorph
-        );
-
-
-
-        /*
-         * Получаем объект,
-         * который реально редактируется.
-         */
-        this.editedMorph =
-                extractEditorMorph();
-
-
-
-        /*
-         * Инициализация оригинального GUI.
-         */
-        invoke(
-                this.editorInitGui
-        );
-
-
-
-        syncEditorScreenState();
-
-
-
-        /*
-         * Открываем материалы.
-         */
-        if (this.editor.materials != null)
+        if (this.editor == null)
         {
-            this.editor.setPanel(
-                    this.editor.materials
+            System.err.println(
+                    "[BBS Animation Editor] " +
+                            "Cannot create Morph editor for: " +
+                            this.sourceMorph.getClass().getName()
             );
+
+            return;
         }
 
 
+        /*
+         * =====================================================
+         * Передаем Morph оригинальному редактору.
+         * =====================================================
+         */
 
-        hideOriginalFinishButton();
+        startEditor();
 
 
+        /*
+         * =====================================================
+         * Подключаем GuiAbstractMorph к дереву GuiBase.
+         *
+         * Это КЛЮЧЕВОЙ момент.
+         *
+         * GuiDelegateElement сам передает:
+         *
+         * - resize
+         * - draw
+         * - mouse
+         * - keyboard
+         * - текущую панель
+         * =====================================================
+         */
+
+        this.editorContainer =
+                new GuiDelegateElement<GuiAbstractMorph>(
+                        this.minecraft,
+                        this.editor
+                );
+
+
+        this.editorContainer
+                .flex()
+                .relative(this.viewport)
+                .wh(1F, 1F);
+
+
+        this.root.add(
+                this.editorContainer
+        );
+
+
+        /*
+         * =====================================================
+         * Оригинальный редактор должен занимать весь экран.
+         * =====================================================
+         */
+
+        this.editorContainer.resize();
+
+
+        /*
+         * =====================================================
+         * Добавляем наши кнопки Done / Cancel.
+         *
+         * Они являются обычными Minecraft GuiButton,
+         * поэтому не вмешиваются в оригинальный MCLib GUI.
+         * =====================================================
+         */
 
         this.buttonList.add(
                 new GuiButton(
@@ -295,7 +207,6 @@ public class PlayerSkinEditorScreen
         );
 
 
-
         this.buttonList.add(
                 new GuiButton(
                         BUTTON_CANCEL,
@@ -306,416 +217,307 @@ public class PlayerSkinEditorScreen
                         I18n.format("gui.cancel")
                 )
         );
-    }
 
+
+        /*
+         * =====================================================
+         * Если это GuiCustomMorph — открываем Materials.
+         *
+         * Для AnimatedMorph здесь оставляем панель,
+         * которую выбрал сам оригинальный редактор.
+         *
+         * Это важно: AnimatedMorph НЕ должен превращаться
+         * в CustomMorph.
+         * =====================================================
+         */
+
+        selectInitialPanel();
+    }
 
 
     /*
      * =========================================================
-     * EXTRACT EDITOR MORPH
+     * CREATE EDITOR
      * =========================================================
      */
 
-
-    private CustomMorph extractEditorMorph()
+    private GuiAbstractMorph createEditor(
+            AbstractMorph morph)
     {
-        if (this.editor == null)
+        if (morph == null)
         {
-            return this.customMorph;
+            return null;
         }
 
 
-        try
+        /*
+         * -----------------------------------------------------
+         * CustomMorph
+         * -----------------------------------------------------
+         *
+         * Для Blockbuster-модели нужен настоящий
+         * GuiCustomMorph.
+         */
+
+        if (morph instanceof
+                mchorse.blockbuster_pack.morphs.CustomMorph)
         {
-            Field field =
-                    findField(
-                            this.editor.getClass(),
-                            "morph"
-                    );
-
-
-            if (field != null)
-            {
-                Object value =
-                        field.get(
-                                this.editor
-                        );
-
-
-                if (value instanceof CustomMorph)
-                {
-                    System.out.println(
-                            "[BBS Animation Editor] "
-                                    +
-                                    "Using GuiCustomMorph internal morph"
-                    );
-
-
-                    return (CustomMorph)value;
-                }
-            }
-        }
-        catch(Throwable error)
-        {
-            error.printStackTrace();
+            return new
+                    mchorse.blockbuster_pack.client.gui.GuiCustomMorph(
+                    this.minecraft
+            );
         }
 
 
+        /*
+         * -----------------------------------------------------
+         * AnimatedMorph
+         * -----------------------------------------------------
+         *
+         * Не создаем CustomMorph.
+         *
+         * Здесь нам нужен зарегистрированный
+         * Emoticons editor.
+         *
+         * В нормальной установке Emoticons этот класс
+         * доступен как наследник GuiAbstractMorph.
+         *
+         * Создание через reflection позволяет не привязывать
+         * Character Editor к конкретному имени реализации.
+         */
 
-        System.out.println(
-                "[BBS Animation Editor] "
-                        +
-                        "Using external CustomMorph copy"
+        GuiAbstractMorph animated =
+                createAnimatedEditor(
+                        morph
+                );
+
+
+        if (animated != null)
+        {
+            return animated;
+        }
+
+
+        /*
+         * -----------------------------------------------------
+         * Fallback
+         * -----------------------------------------------------
+         *
+         * Если конкретный Animated editor недоступен,
+         * создаем стандартный GuiAbstractMorph.
+         *
+         * Это не преобразует Morph.
+         */
+
+        return new GuiAbstractMorph(
+                this.minecraft
         );
-
-
-        return this.customMorph;
     }
-    /*
-     * =========================================================
-     * SCREEN STATE
-     * =========================================================
-     */
-
-
-    private void syncEditorScreenState()
-    {
-        if (this.editor == null)
-        {
-            return;
-        }
-
-
-        try
-        {
-            Field width =
-                    findField(
-                            this.editor.getClass(),
-                            "width"
-                    );
-
-
-            if (width != null)
-            {
-                width.setInt(
-                        this.editor,
-                        this.width
-                );
-            }
-
-
-
-            Field height =
-                    findField(
-                            this.editor.getClass(),
-                            "height"
-                    );
-
-
-            if (height != null)
-            {
-                height.setInt(
-                        this.editor,
-                        this.height
-                );
-            }
-
-
-
-            Field mc =
-                    findField(
-                            this.editor.getClass(),
-                            "mc"
-                    );
-
-
-            if (mc != null)
-            {
-                mc.set(
-                        this.editor,
-                        this.minecraft
-                );
-            }
-        }
-        catch(Throwable error)
-        {
-            error.printStackTrace();
-        }
-    }
-
-
-
 
 
     /*
      * =========================================================
-     * PREPARE REFLECTION
+     * ANIMATED EDITOR
      * =========================================================
      */
 
-
-    private void prepareReflection()
+    private GuiAbstractMorph createAnimatedEditor(
+            AbstractMorph morph)
     {
-        if (this.editor == null)
+        if (morph == null)
         {
-            return;
+            return null;
         }
 
 
-        Class<?> clazz =
-                this.editor.getClass();
+        String[] classNames =
+                {
+                        "mchorse.emoticons.skin_n_bones.api.metamorph.editor.GuiEmoticonsMorph",
+                        "mchorse.emoticons.skin_n_bones.api.metamorph.editor.GuiAnimatedMorph"
+                };
 
 
-
-        this.editorInitGui =
-                findMethod(
-                        clazz,
-                        "initGui"
-                );
-
-
-        this.editorDrawScreen =
-                findMethod(
-                        clazz,
-                        "drawScreen",
-                        int.class,
-                        int.class,
-                        float.class
-                );
-
-
-        this.editorUpdateScreen =
-                findMethod(
-                        clazz,
-                        "updateScreen"
-                );
-
-
-        this.editorMouseClicked =
-                findMethod(
-                        clazz,
-                        "mouseClicked",
-                        int.class,
-                        int.class,
-                        int.class
-                );
-
-
-        this.editorMouseReleased =
-                findMethod(
-                        clazz,
-                        "mouseReleased",
-                        int.class,
-                        int.class,
-                        int.class
-                );
-
-
-        this.editorMouseScrolled =
-                findMethod(
-                        clazz,
-                        "mouseScrolled",
-                        int.class,
-                        int.class,
-                        int.class
-                );
-
-
-        this.editorKeyTyped =
-                findMethod(
-                        clazz,
-                        "keyTyped",
-                        char.class,
-                        int.class
-                );
-
-
-        this.editorActionPerformed =
-                findMethod(
-                        clazz,
-                        "actionPerformed",
-                        GuiButton.class
-                );
-    }
-
-
-
-
-
-    /*
-     * =========================================================
-     * FIND METHOD
-     * =========================================================
-     */
-
-
-    private Method findMethod(
-            Class<?> clazz,
-            String name,
-            Class<?>... parameterTypes)
-    {
-        Class<?> current =
-                clazz;
-
-
-        while(current != null)
+        for (String className : classNames)
         {
             try
             {
-                Method method =
-                        current.getDeclaredMethod(
-                                name,
-                                parameterTypes
+                Class<?> clazz =
+                        Class.forName(
+                                className
                         );
 
 
-                method.setAccessible(
-                        true
-                );
+                Object instance =
+                        clazz
+                                .getConstructor(
+                                        Minecraft.class
+                                )
+                                .newInstance(
+                                        this.minecraft
+                                );
 
 
-                return method;
-            }
-            catch(Throwable ignored)
-            {
-
-            }
-
-
-            current =
-                    current.getSuperclass();
-        }
-
-
-
-        String srg =
-                getSrgName(
-                        name
-                );
-
-
-        if (!name.equals(srg))
-        {
-            current =
-                    clazz;
-
-
-            while(current != null)
-            {
-                try
+                if (instance instanceof GuiAbstractMorph)
                 {
-                    Method method =
-                            current.getDeclaredMethod(
-                                    srg,
-                                    parameterTypes
-                            );
+                    GuiAbstractMorph result =
+                            (GuiAbstractMorph)instance;
 
 
-                    method.setAccessible(
-                            true
-                    );
-
-
-                    return method;
+                    if (result.canEdit(morph))
+                    {
+                        return result;
+                    }
                 }
-                catch(Throwable ignored)
-                {
-
-                }
-
-
-                current =
-                        current.getSuperclass();
+            }
+            catch(Throwable error)
+            {
+                /*
+                 * Этот editor может отсутствовать
+                 * в конкретной сборке.
+                 *
+                 * Переходим к следующему.
+                 */
             }
         }
-
 
 
         return null;
     }
 
 
+    /*
+     * =========================================================
+     * START EDIT
+     * =========================================================
+     */
 
-
-
-    private String getSrgName(
-            String name)
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void startEditor()
     {
-        if ("initGui".equals(name))
+        if (this.editor == null ||
+                this.sourceMorph == null)
         {
-            return "func_73866_w_";
+            return;
         }
 
 
-        if ("drawScreen".equals(name))
+        try
         {
-            return "func_73863_a";
+            /*
+             * Передаем ТОТ ЖЕ Morph в оригинальный editor.
+             *
+             * Никакого копирования здесь нет.
+             */
+
+            this.editor.startEdit(
+                    this.sourceMorph
+            );
         }
-
-
-        if ("updateScreen".equals(name))
+        catch(Throwable error)
         {
-            return "func_73876_c";
+            error.printStackTrace();
         }
-
-
-        if ("mouseClicked".equals(name))
-        {
-            return "func_73864_a";
-        }
-
-
-        if ("mouseReleased".equals(name))
-        {
-            return "func_146286_b";
-        }
-
-
-        if ("mouseScrolled".equals(name))
-        {
-            return "func_73868_f";
-        }
-
-
-        if ("keyTyped".equals(name))
-        {
-            return "func_73869_a";
-        }
-
-
-        if ("actionPerformed".equals(name))
-        {
-            return "func_146284_a";
-        }
-
-
-        return name;
     }
-
-
-
 
 
     /*
      * =========================================================
-     * FIND FIELD
+     * INITIAL PANEL
      * =========================================================
      */
 
+    private void selectInitialPanel()
+    {
+        if (this.editor == null)
+        {
+            return;
+        }
 
-    private Field findField(
+
+        /*
+         * CustomMorph:
+         *
+         * Edit -> Materials
+         */
+
+        if (this.editor instanceof
+                mchorse.blockbuster_pack.client.gui.GuiCustomMorph)
+        {
+            mchorse.blockbuster_pack.client.gui.GuiCustomMorph custom =
+                    (mchorse.blockbuster_pack.client.gui.GuiCustomMorph)
+                            this.editor;
+
+
+            if (custom.materials != null)
+            {
+                custom.setPanel(
+                        custom.materials
+                );
+            }
+
+
+            return;
+        }
+
+
+        /*
+         * AnimatedMorph:
+         *
+         * Edit -> Meshes
+         */
+
+        try
+        {
+            java.lang.reflect.Field meshes =
+                    findField(
+                            this.editor.getClass(),
+                            "meshes"
+                    );
+
+
+            if (meshes != null)
+            {
+                Object value =
+                        meshes.get(
+                                this.editor
+                        );
+
+
+                if (value instanceof
+                        mchorse.metamorph.client.gui.editor.GuiMorphPanel)
+                {
+                    this.editor.setPanel(
+                            (mchorse.metamorph.client.gui.editor.GuiMorphPanel)
+                                    value
+                    );
+                }
+            }
+        }
+        catch(Throwable error)
+        {
+            error.printStackTrace();
+        }
+    }
+
+
+    /*
+     * =========================================================
+     * FIELD SEARCH
+     * =========================================================
+     */
+
+    private java.lang.reflect.Field findField(
             Class<?> clazz,
             String name)
     {
-        Class<?> current =
-                clazz;
+        Class<?> current = clazz;
 
 
         while(current != null)
         {
             try
             {
-                Field field =
+                java.lang.reflect.Field field =
                         current.getDeclaredField(
                                 name
                         );
@@ -730,7 +532,6 @@ public class PlayerSkinEditorScreen
             }
             catch(Throwable ignored)
             {
-
             }
 
 
@@ -743,111 +544,11 @@ public class PlayerSkinEditorScreen
     }
 
 
-
-
-
-    /*
-     * =========================================================
-     * INVOKE
-     * =========================================================
-     */
-
-
-    private Object invoke(
-            Method method,
-            Object... arguments)
-    {
-        if (method == null ||
-                this.editor == null)
-        {
-            return null;
-        }
-
-
-        try
-        {
-            return method.invoke(
-                    this.editor,
-                    arguments
-            );
-        }
-        catch(Throwable error)
-        {
-            Throwable cause =
-                    error.getCause();
-
-
-            if (cause != null)
-            {
-                cause.printStackTrace();
-            }
-            else
-            {
-                error.printStackTrace();
-            }
-
-
-            return null;
-        }
-    }
-
-
-
-
-
-    /*
-     * =========================================================
-     * HIDE ORIGINAL FINISH BUTTON
-     * =========================================================
-     */
-
-
-    private void hideOriginalFinishButton()
-    {
-        if (this.editor == null)
-        {
-            return;
-        }
-
-
-        try
-        {
-            Field finish =
-                    findField(
-                            this.editor.getClass(),
-                            "finish"
-                    );
-
-
-            if (finish == null)
-            {
-                return;
-            }
-
-
-            Object value =
-                    finish.get(
-                            this.editor
-                    );
-
-
-            if (value instanceof GuiButton)
-            {
-                ((GuiButton)value).visible =
-                        false;
-            }
-        }
-        catch(Throwable error)
-        {
-            error.printStackTrace();
-        }
-    }
     /*
      * =========================================================
      * DRAW
      * =========================================================
      */
-
 
     @Override
     public void drawScreen(
@@ -855,16 +556,12 @@ public class PlayerSkinEditorScreen
             int mouseY,
             float partialTicks)
     {
-        syncEditorScreenState();
-
-
-        invoke(
-                this.editorDrawScreen,
-                mouseX,
-                mouseY,
-                partialTicks
-        );
-
+        /*
+         * GuiBase сам рисует root.
+         *
+         * Нам НЕ нужно вручную вызывать
+         * editor.drawScreen().
+         */
 
         super.drawScreen(
                 mouseX,
@@ -874,161 +571,17 @@ public class PlayerSkinEditorScreen
     }
 
 
-
-
-
     /*
      * =========================================================
      * UPDATE
      * =========================================================
      */
 
-
     @Override
     public void updateScreen()
     {
-        invoke(
-                this.editorUpdateScreen
-        );
-
-
         super.updateScreen();
     }
-
-
-
-
-
-    /*
-     * =========================================================
-     * MOUSE CLICK
-     * =========================================================
-     */
-
-
-    @Override
-    protected void mouseClicked(
-            int mouseX,
-            int mouseY,
-            int mouseButton)
-            throws java.io.IOException
-    {
-        invoke(
-                this.editorMouseClicked,
-                mouseX,
-                mouseY,
-                mouseButton
-        );
-
-
-        super.mouseClicked(
-                mouseX,
-                mouseY,
-                mouseButton
-        );
-    }
-
-
-
-
-
-    /*
-     * =========================================================
-     * MOUSE RELEASE
-     * =========================================================
-     */
-
-
-    @Override
-    protected void mouseReleased(
-            int mouseX,
-            int mouseY,
-            int state)
-    {
-        invoke(
-                this.editorMouseReleased,
-                mouseX,
-                mouseY,
-                state
-        );
-
-
-        super.mouseReleased(
-                mouseX,
-                mouseY,
-                state
-        );
-    }
-
-
-
-
-
-    /*
-     * =========================================================
-     * SCROLL
-     * =========================================================
-     */
-
-
-    @Override
-    protected void mouseScrolled(
-            int mouseX,
-            int mouseY,
-            int amount)
-    {
-        invoke(
-                this.editorMouseScrolled,
-                mouseX,
-                mouseY,
-                amount
-        );
-
-
-        super.mouseScrolled(
-                mouseX,
-                mouseY,
-                amount
-        );
-    }
-
-
-
-
-
-    /*
-     * =========================================================
-     * KEYBOARD
-     * =========================================================
-     */
-
-
-    @Override
-    protected void keyTyped(
-            char typedChar,
-            int keyCode)
-            throws java.io.IOException
-    {
-        /*
-         * ESC закрывает без сохранения.
-         */
-        if (keyCode == 1)
-        {
-            cancelAndReturn();
-
-            return;
-        }
-
-
-        invoke(
-                this.editorKeyTyped,
-                typedChar,
-                keyCode
-        );
-    }
-
-
-
 
 
     /*
@@ -1036,7 +589,6 @@ public class PlayerSkinEditorScreen
      * BUTTONS
      * =========================================================
      */
-
 
     @Override
     protected void actionPerformed(
@@ -1049,14 +601,12 @@ public class PlayerSkinEditorScreen
         }
 
 
-
         if (button.id == BUTTON_DONE)
         {
             saveAndReturn();
 
             return;
         }
-
 
 
         if (button.id == BUTTON_CANCEL)
@@ -1067,15 +617,10 @@ public class PlayerSkinEditorScreen
         }
 
 
-
-        invoke(
-                this.editorActionPerformed,
+        super.actionPerformed(
                 button
         );
     }
-
-
-
 
 
     /*
@@ -1084,7 +629,7 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
-
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private void saveAndReturn()
     {
         if (this.closing)
@@ -1094,47 +639,54 @@ public class PlayerSkinEditorScreen
 
 
         this.closing = true;
-
-
         this.confirmed = true;
 
 
+        try
+        {
+            if (this.editor != null)
+            {
+                /*
+                 * Даем оригинальному editor завершить
+                 * редактирование текущей панели.
+                 *
+                 * Для AnimatedMorph это особенно важно:
+                 * GuiAnimatedMorph.finishEdit() обновляет
+                 * userConfigData.
+                 */
 
-        /*
-         * ВАЖНО:
-         *
-         * finishEdit() больше не вызываем.
-         *
-         * GuiCustomMorph может пересоздать
-         * внутренний Morph и потерять ссылку.
-         *
-         * Нам нужен именно тот объект,
-         * который реально редактировался.
-         */
+                this.editor.finishEdit();
+            }
 
 
-        CustomMorph result =
-                this.editedMorph != null
-                        ?
-                        this.editedMorph
-                        :
-                        this.customMorph;
+            AbstractMorph result =
+                    this.editor != null &&
+                            this.editor.morph != null
+                            ?
+                            this.editor.morph
+                            :
+                            this.sourceMorph;
 
+
+            if (result != null &&
+                    this.bridge != null)
+            {
+                this.bridge.syncMorphEditorResult(
+                        result
+                );
+            }
+        }
+        catch(Throwable error)
+        {
+            error.printStackTrace();
+        }
 
 
         if (this.bridge != null)
         {
-            this.bridge.syncCustomMorphToSkin(
-                    result
-            );
-
-
             this.bridge.returnToEditor();
         }
     }
-
-
-
 
 
     /*
@@ -1142,7 +694,6 @@ public class PlayerSkinEditorScreen
      * CANCEL
      * =========================================================
      */
-
 
     private void cancelAndReturn()
     {
@@ -1153,20 +704,18 @@ public class PlayerSkinEditorScreen
 
 
         this.closing = true;
-
-
         this.confirmed = false;
 
 
-
         /*
-         * Ничего не сохраняем.
+         * Ничего не записываем в CharacterKey.
          *
-         * В Bridge была передана копия CustomMorph,
-         * поэтому оригинальный CharacterKey
-         * остается без изменений.
+         * В дальнейшем при необходимости можно добавить
+         * полноценный copy/rollback, но сейчас Bridge
+         * передает отдельный Morph из NBT CharacterKey,
+         * поэтому исходный CharacterKey не изменяется
+         * напрямую.
          */
-
 
         if (this.bridge != null)
         {
@@ -1175,24 +724,27 @@ public class PlayerSkinEditorScreen
     }
 
 
-
-
-
     /*
      * =========================================================
-     * CLOSE
+     * ESC / CLOSE
      * =========================================================
      */
-
 
     @Override
     protected void closeScreen()
     {
-        cancelAndReturn();
+        /*
+         * В оригинальном Morph Editor изменения должны
+         * сохраняться при выходе из редактора через ESC.
+         *
+         * GuiAbstractMorph / конкретный Emoticons editor
+         * уже содержит изменяемый Morph.
+         *
+         * Поэтому ESC рассматриваем как подтверждение
+         * редактирования.
+         */
+        saveAndReturn();
     }
-
-
-
 
 
     /*
@@ -1201,7 +753,6 @@ public class PlayerSkinEditorScreen
      * =========================================================
      */
 
-
     @Override
     public boolean doesGuiPauseGame()
     {
@@ -1209,15 +760,11 @@ public class PlayerSkinEditorScreen
     }
 
 
-
-
-
     /*
      * =========================================================
      * STATE
      * =========================================================
      */
-
 
     public boolean wasConfirmed()
     {
