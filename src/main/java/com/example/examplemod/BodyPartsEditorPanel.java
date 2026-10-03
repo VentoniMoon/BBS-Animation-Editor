@@ -6,7 +6,7 @@ import net.minecraft.client.gui.Gui;
 public class BodyPartsEditorPanel
 {
     public static final int WIDTH = 185;
-    public static final int HEIGHT = 430;
+    public static final int HEIGHT = 330;
 
     private int x;
     private int y;
