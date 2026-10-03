@@ -36,12 +36,12 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
-    private static final int COLOR_PANEL = 0xFF17191B;
-    private static final int COLOR_PANEL_DARK = 0xFF111315;
-    private static final int COLOR_PANEL_LIGHT = 0xFF1D2023;
-    private static final int COLOR_PANEL_HOVER = 0xFF25292D;
-    private static final int COLOR_SELECTED = 0xFF28343A;
-    private static final int COLOR_BORDER = 0xFF303438;
+    private static final int COLOR_PANEL = 0xFF181818;
+    private static final int COLOR_PANEL_DARK = 0xFF111111;
+    private static final int COLOR_PANEL_LIGHT = 0xFF1D1D1D;
+    private static final int COLOR_PANEL_HOVER = 0xFF252525;
+    private static final int COLOR_SELECTED = 0xFF282828;
+    private static final int COLOR_BORDER = 0xFF303030;
     private static final int COLOR_BORDER_DARK = 0xFF0D0F10;
     private static final int COLOR_TEXT = 0xFFE2E5E7;
     private static final int COLOR_TEXT_SECONDARY = 0xFF9AA1A6;
