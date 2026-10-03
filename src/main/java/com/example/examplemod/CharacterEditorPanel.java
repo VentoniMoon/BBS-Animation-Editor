@@ -102,6 +102,7 @@ public class CharacterEditorPanel
     private static final int SECTION_CONTENT_GAP = 4;
     private static final int APPEARANCE_CONTENT_HEIGHT = 108;
     private static final int BODY_PART_CONTENT_HEIGHT = 108;
+    private static final int ANIMATION_PARAMETERS_CONTENT_GAP = 8;
 
     /*
      * =========================================================
@@ -767,7 +768,7 @@ public class CharacterEditorPanel
         if (this.openedSection ==
                 Section.ANIMATION_PARAMETERS)
         {
-            cursorY += 4;
+            cursorY += ANIMATION_PARAMETERS_CONTENT_GAP;
 
             drawAnimationParameters(
                     mc,
@@ -1971,7 +1972,7 @@ public class CharacterEditorPanel
 
         sectionY += SECTION_CONTENT_GAP;
 
-        return sectionY + SECTION_HEIGHT + SECTION_CONTENT_GAP;
+        return sectionY + SECTION_HEIGHT + ANIMATION_PARAMETERS_CONTENT_GAP;
     }
 
     /*
@@ -2548,7 +2549,7 @@ public class CharacterEditorPanel
 
         if (this.openedSection == Section.ANIMATION_PARAMETERS)
         {
-            int animationParametersY = currentY + SECTION_HEIGHT + SECTION_CONTENT_GAP;
+            int animationParametersY = currentY + SECTION_HEIGHT + ANIMATION_PARAMETERS_CONTENT_GAP;
 
             this.animationParametersPanel.setBounds(
                     this.x,
