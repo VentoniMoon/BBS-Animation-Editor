@@ -923,13 +923,11 @@ public class AnimationEditorInput
                     return;
                 }
 
-                if (this.characterEditorPanel.mouseScrolled(
-                        mouseX,
-                        mouseY,
-                        direction))
-                {
-                    return;
-                }
+                /*
+                 * Character inspector wheel is handled from
+                 * CharacterEditorPanel.draw(), where Mouse.getDWheel()
+                 * is still available for the current frame.
+                 */
             }
 
             /*
