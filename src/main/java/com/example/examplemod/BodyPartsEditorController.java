@@ -154,7 +154,13 @@ public class BodyPartsEditorController
                 );
 
         this.models.add(model);
-        selectModel(model);
+
+        /*
+         * The new model is represented by a Level 1 attachment bar.
+         * The local model timeline opens only when that bar is clicked.
+         */
+        this.selectedModel = null;
+        this.keyframeController.clearSelection();
 
         return model;
     }
