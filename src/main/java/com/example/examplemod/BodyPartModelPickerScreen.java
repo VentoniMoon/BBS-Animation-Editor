@@ -13,14 +13,26 @@ import net.minecraft.client.gui.Gui;
  * Uses the original Metamorph creative morph browser as the
  * model picker for Body Parts.
  *
- * Only Blockbuster CustomMorph entries are accepted. The selected
- * CustomMorph's Blockbuster model key is returned to the editor.
+ * Metamorph does not use a Done button here. The selection is
+ * committed when the GUI is closed with Escape.
  */
 public class BodyPartModelPickerScreen extends GuiBase
 {
     private final AnimationEditorScreen returnScreen;
     private final Consumer<String> callback;
+
     private GuiCreativeMorphsList picker;
+
+    /**
+     * Last Blockbuster CustomMorph selected in the Metamorph browser.
+     *
+     * It is intentionally NOT committed immediately. The original
+     * Metamorph workflow confirms the current state when the GUI
+     * is closed with Escape.
+     */
+    private CustomMorph selectedMorph;
+
+    private boolean committed;
 
     public BodyPartModelPickerScreen(
             Minecraft mc,
@@ -44,21 +56,41 @@ public class BodyPartModelPickerScreen extends GuiBase
         this.root.add(this.picker);
     }
 
+    /**
+     * Selecting a morph only changes the pending selection.
+     * The editor is not closed here.
+     */
     private void selectMorph(AbstractMorph morph)
     {
         if (morph instanceof CustomMorph)
         {
-            CustomMorph custom = (CustomMorph) morph;
-            String key = custom.getKey();
+            this.selectedMorph =
+                    (CustomMorph) morph;
+        }
+    }
+
+    /**
+     * Commit the currently selected model when the user closes
+     * the Metamorph GUI with Escape.
+     */
+    private void commitSelection()
+    {
+        if (this.committed)
+        {
+            return;
+        }
+
+        this.committed = true;
+
+        if (this.selectedMorph != null &&
+                this.callback != null)
+        {
+            String key =
+                    this.selectedMorph.getKey();
 
             if (key != null && !key.isEmpty())
             {
-                if (this.callback != null)
-                {
-                    this.callback.accept(key);
-                }
-
-                this.mc.displayGuiScreen(this.returnScreen);
+                this.callback.accept(key);
             }
         }
     }
@@ -66,7 +98,15 @@ public class BodyPartModelPickerScreen extends GuiBase
     @Override
     protected void closeScreen()
     {
-        this.mc.displayGuiScreen(this.returnScreen);
+        /*
+         * Metamorph's creative GUI has no Done button.
+         * Escape is the confirmation/close action.
+         */
+        commitSelection();
+
+        this.mc.displayGuiScreen(
+                this.returnScreen
+        );
     }
 
     @Override
