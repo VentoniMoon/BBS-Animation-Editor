@@ -437,6 +437,10 @@ public class AnimationEditorScreen extends GuiScreen
          *
          * Ключ всё равно остаётся на frame 40.
          */
+        this.characterEditorPanel.setCurrentFrame(
+                this.playbackController.getCurrentFrame()
+        );
+
         this.characterEditorPanel.setSelectedKey(
                 this.characterTimelineEditorController
                         .getSelectedKey()

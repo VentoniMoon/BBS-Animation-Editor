@@ -923,6 +923,8 @@ public class CharacterBodyPartOverrideController
     public static boolean toggleBone(
             CharacterKey key,
             AbstractMorph morph,
+            BlockbusterSceneActorData actorData,
+            int frame,
             String bone)
     {
         if (!isOverrideKey(key) ||
@@ -932,51 +934,88 @@ public class CharacterBodyPartOverrideController
             return false;
         }
 
-
-        boolean current =
-                isEnabled(
-                        morph,
-                        key,
+        /*
+         * ВАЖНО:
+         *
+         * Берём НЕ состояние самого selectedKey,
+         * а эффективное состояние на текущем кадре.
+         *
+         * Например:
+         *
+         * Frame 25 -> ENABLE
+         * Frame 56 -> новый пустой key
+         *
+         * На frame 56 effective state всё ещё ENABLE.
+         */
+        int effectiveState =
+                getEffectiveKeyState(
+                        actorData,
+                        frame,
                         bone
                 );
 
+        boolean current;
 
+        if (effectiveState == STATE_ENABLE)
+        {
+            current = true;
+        }
+        else if (effectiveState == STATE_DISABLE)
+        {
+            current = false;
+        }
+        else
+        {
+            current =
+                    getMorphDefaultEnabled(
+                            morph,
+                            bone
+                    );
+        }
+
+        /*
+         * Переключаем именно эффективное состояние.
+         */
         boolean desired =
                 !current;
 
-
+        /*
+         * Состояние Morph является базовым.
+         *
+         * Если желаемое состояние совпадает
+         * с базовым состоянием Morph,
+         * достаточно DEFAULT.
+         */
         boolean morphDefault =
                 getMorphDefaultEnabled(
                         morph,
                         bone
                 );
 
-
         int state;
-
 
         if (desired == morphDefault)
         {
-            state =
-                    STATE_DEFAULT;
+            state = STATE_DEFAULT;
         }
         else if (desired)
         {
-            state =
-                    STATE_ENABLE;
+            state = STATE_ENABLE;
         }
         else
         {
-            state =
-                    STATE_DISABLE;
+            state = STATE_DISABLE;
         }
-
 
         debug(
                 "toggleBone(): keyFrame="
                         + key.getFrame()
+                        + " currentFrame="
+                        + frame
                         + " bone="
                         + bone
+                        + " effectiveState="
+                        + effectiveState
                         + " current="
                         + current
                         + " desired="
@@ -984,7 +1023,6 @@ public class CharacterBodyPartOverrideController
                         + " state="
                         + state
         );
-
 
         return setBoneState(
                 key,

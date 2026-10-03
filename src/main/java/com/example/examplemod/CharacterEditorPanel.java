@@ -1460,7 +1460,8 @@ public class CharacterEditorPanel
                 CharacterBodyPartOverrideController
                         .isEnabled(
                                 morph,
-                                this.selectedKey,
+                                this.selectedActor,
+                                this.currentFrame,
                                 bone
                         );
 
@@ -2068,6 +2069,8 @@ public class CharacterEditorPanel
                     .toggleBone(
                             this.selectedKey,
                             morph,
+                            this.selectedActor,
+                            this.currentFrame,
                             bone
                     );
 
