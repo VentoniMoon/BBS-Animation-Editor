@@ -7,6 +7,8 @@ import java.util.Map;
 import mchorse.blockbuster.api.ModelTransform;
 import mchorse.blockbuster.common.entity.EntityActor;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
+import mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
@@ -108,6 +110,7 @@ public class BodyPartsPreviewRenderer
 
             BoneAttachment attachment =
                     findAttachment(
+                            actor,
                             controller,
                             data.getAttachmentBoneName(),
                             frame
@@ -301,6 +304,7 @@ public class BodyPartsPreviewRenderer
     }
 
     private BoneAttachment findAttachment(
+            EntityActor actor,
             BodyPartsEditorController controller,
             String boneName,
             int frame)
@@ -313,13 +317,67 @@ public class BodyPartsPreviewRenderer
         }
 
         /*
-         * Use the same actor skeleton which the Body Parts editor
-         * already uses for its Level 1 rows.  This is important for
-         * AnimatedMorph actors: they are not CustomMorphs, so asking
-         * the actor morph for a ModelPose would return nothing.
+         * AnimatedMorph is the important case for the current actor
+         * preview.  Its BOBJ bones contain the already evaluated
+         * Emoticons animation, so this is the transform the attachment
+         * must follow.
+         */
+        if (actor != null &&
+                actor.getMorph() instanceof AnimatedMorph)
+        {
+            BOBJBone runtimeBone =
+                    EmoticonsModelAccess.findBone(
+                            (AnimatedMorph) actor.getMorph(),
+                            boneName
+                    );
+
+            if (runtimeBone != null)
+            {
+                AnimationTransform runtimeTransform =
+                        getRuntimeBoneWorldTransform(
+                                runtimeBone,
+                                0
+                        );
+
+                if (runtimeTransform != null)
+                {
+                    return new BoneAttachment(
+                            runtimeTransform
+                    );
+                }
+            }
+        }
+
+        /*
+         * First use the REAL runtime skeleton.
          *
-         * AnimationBone#getWorldTransformAt() also includes the
-         * current editor animation and the complete parent chain.
+         * The actor preview is rendered immediately before Body Parts.
+         * At that moment AnimatedMorph/Emoticons has already evaluated
+         * its current pose.  Using that live BOBJ bone is important:
+         * AnimationBone only contains the editor keyframes and does not
+         * contain the animation which Emoticons is currently playing.
+         */
+        if (controller != null)
+        {
+            /* Runtime AnimatedMorph skeleton. */
+            if (thisRuntimeAnimatedMorph(controller) != null)
+            {
+                BoneAttachment runtime =
+                        findRuntimeAnimatedMorphAttachment(
+                                controller,
+                                boneName
+                        );
+
+                if (runtime != null)
+                {
+                    return runtime;
+                }
+            }
+        }
+
+        /*
+         * Fallback to the editor skeleton for Blockbuster/other actors.
+         * This still includes the BBS parent chain and keyframes.
          */
         List<AnimationBone> bones =
                 controller.getActorBones();
@@ -351,6 +409,61 @@ public class BodyPartsPreviewRenderer
          * contains a bone without a transform.
          */
         return null;
+    }
+
+    private AnimationTransform getRuntimeBoneWorldTransform(
+            BOBJBone bone,
+            int depth)
+    {
+        if (bone == null || depth > 64)
+        {
+            return null;
+        }
+
+        /*
+         * BOBJ rotation fields are radians (the Emoticons controller
+         * receives our editor degrees and converts them with toRadians).
+         */
+        AnimationTransform local =
+                new AnimationTransform();
+
+        local.setPosition(
+                bone.x,
+                bone.y,
+                bone.z
+        );
+
+        local.setRotation(
+                (float) Math.toDegrees(bone.rotateX),
+                (float) Math.toDegrees(bone.rotateY),
+                (float) Math.toDegrees(bone.rotateZ)
+        );
+
+        local.setScale(
+                bone.scaleX,
+                bone.scaleY,
+                bone.scaleZ
+        );
+
+        BOBJBone parent = bone.parentBone;
+
+        if (parent == null)
+        {
+            return local;
+        }
+
+        AnimationTransform parentWorld =
+                getRuntimeBoneWorldTransform(
+                        parent,
+                        depth + 1
+                );
+
+        if (parentWorld == null)
+        {
+            return local;
+        }
+
+        return parentWorld.combine(local);
     }
 
     private void renderAttached(
