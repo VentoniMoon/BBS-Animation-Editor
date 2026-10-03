@@ -36,6 +36,11 @@ public class BlockbusterActorPreviewRenderer
 
     private int lastEmoticonsUpdateFrame = -1;
 
+    private final BodyPartsPreviewRenderer bodyPartsPreviewRenderer =
+            new BodyPartsPreviewRenderer();
+
+    private BodyPartsEditorController bodyPartsController;
+
 
     /*
      * =========================================================
@@ -529,6 +534,12 @@ public class BlockbusterActorPreviewRenderer
                 );
     }
 
+
+    public void setBodyPartsController(
+            BodyPartsEditorController controller)
+    {
+        this.bodyPartsController = controller;
+    }
 
     /*
      * =========================================================
@@ -1095,6 +1106,17 @@ public class BlockbusterActorPreviewRenderer
                 true
         );
 
+        if (this.bodyPartsController != null)
+        {
+            this.bodyPartsPreviewRenderer.render(
+                    mc,
+                    entityActor,
+                    this.bodyPartsController,
+                    previewFrame,
+                    actorPartialTicks
+            );
+        }
+
         /*
          * =====================================================
          * LIGHTING
@@ -1197,6 +1219,8 @@ public class BlockbusterActorPreviewRenderer
         this.lastPreviewFrame = -1;
 
         this.lastEmoticonsUpdateFrame = -1;
+
+        this.bodyPartsPreviewRenderer.clear();
 
         EmoticonsPreviewAnimationState.clear();
     }
