@@ -54,26 +54,55 @@ public class BodyPartModelPickerScreen extends GuiBase
      */
     private void onMorphSelected(AbstractMorph morph)
     {
-        /*
-         * Keep this callback passive.
-         *
-         * GuiCreativeMorphsList invokes it from inside its element
-         * dispatch. Closing the GuiScreen from inside that callback
-         * can interrupt the original click dispatch before the
-         * selection state has finished propagating.
-         *
-         * The actual commit is performed after GuiBase has finished
-         * dispatching the mouse click (see mouseClicked below).
-         */
-        if (morph != null)
+        if (morph == null)
         {
+            return;
+        }
+
+        System.out.println(
+                "[BBS Animation Editor] " +
+                        "Body Parts picker callback: " +
+                        morph.getClass().getName() +
+                        " name=" +
+                        morph.name
+        );
+
+        /*
+         * The callback argument is the morph which the original
+         * Metamorph browser has just selected. Use that object
+         * directly instead of reading picker.getSelected(), because
+         * the browser's internal selected entry may still be one
+         * dispatch behind at this point.
+         */
+        if (morph instanceof CustomMorph)
+        {
+            CustomMorph custom =
+                    (CustomMorph) morph;
+
+            String key =
+                    custom.getKey();
+
             System.out.println(
                     "[BBS Animation Editor] " +
-                            "Body Parts picker callback: " +
-                            morph.getClass().getName() +
-                            " name=" +
-                            morph.name
+                            "Body Parts picker CustomMorph key=" +
+                            key
             );
+
+            if (key != null &&
+                    !key.isEmpty() &&
+                    !this.committed)
+            {
+                this.committed = true;
+
+                if (this.callback != null)
+                {
+                    this.callback.accept(key);
+                }
+
+                this.mc.displayGuiScreen(
+                        this.returnScreen
+                );
+            }
         }
     }
 
