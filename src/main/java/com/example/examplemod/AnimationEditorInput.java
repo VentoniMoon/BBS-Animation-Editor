@@ -746,27 +746,6 @@ public class AnimationEditorInput
 
         /*
          * =========================================================
-         * BODY PARTS TIMELINE DRAG
-         * =========================================================
-         */
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.BODY_PARTS)
-        {
-            if (this.bodyPartsTimelineController.mouseClickMove(
-                    mouseX, mouseY, clickedMouseButton,
-                    this.screen.width, this.screen.height,
-                    this.screen.getSceneLength()))
-            {
-                this.playbackController.setCurrentFrame(
-                        this.bodyPartsController.getTimeline().getTick()
-                );
-                this.markDirty();
-                return;
-            }
-        }
-
-        /*
-         * =========================================================
          * POSE TIMELINE
          * =========================================================
          */
@@ -866,6 +845,27 @@ public class AnimationEditorInput
             this.bodyPartsEditorPanel.mouseDraggedTransform(mouseX, mouseY);
             this.markDirty();
             return;
+        }
+
+        /*
+         * =========================================================
+         * BODY PARTS TIMELINE DRAG
+         * =========================================================
+         */
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            if (this.bodyPartsTimelineController.mouseClickMove(
+                    mouseX, mouseY, clickedMouseButton,
+                    this.screen.width, this.screen.height,
+                    this.screen.getSceneLength()))
+            {
+                this.playbackController.setCurrentFrame(
+                        this.bodyPartsController.getTimeline().getTick()
+                );
+                this.markDirty();
+                return;
+            }
         }
 
         /*
