@@ -916,6 +916,25 @@ public class AnimationEditorInput
 
         /*
          * =========================================================
+         * CHARACTER PANEL / ANIMATION SETUP
+         * =========================================================
+         */
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CHARACTER)
+        {
+            if (this.characterEditorPanel.mouseScrolled(
+                    mouseX,
+                    mouseY,
+                    direction
+            ))
+            {
+                return;
+            }
+        }
+
+                /*
+         * =========================================================
          * INTERPOLATION
          * =========================================================
          */
@@ -995,6 +1014,24 @@ public class AnimationEditorInput
         }
 
         /*
+         * =========================================================
+         * CHARACTER ANIMATION SETUP INPUT
+         * =========================================================
+         *
+         * Handle the picker/search before global Escape.
+         */
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CHARACTER
+                && this.characterEditorPanel.keyTyped(
+                typedChar,
+                keyCode))
+        {
+            this.markDirty();
+            return;
+        }
+
+                /*
          * =========================================================
          * DELETE DIALOG
          * =========================================================
