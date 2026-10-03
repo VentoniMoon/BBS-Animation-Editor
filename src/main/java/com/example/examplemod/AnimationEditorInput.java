@@ -619,19 +619,6 @@ public class AnimationEditorInput
             return;
         }
 
-        /*
-         * =========================================================
-         * TRANSFORM PANEL
-         * =========================================================
-         */
-
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.BODY_PARTS)
-        {
-            this.bodyPartsTimelineController.mouseReleased();
-            this.bodyPartsEditorPanel.mouseReleased(state);
-        }
-
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
@@ -959,6 +946,13 @@ public class AnimationEditorInput
             this.actorPreviewController
                     .getTransformPanel()
                     .mouseReleased(state);
+        }
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            this.bodyPartsTimelineController.mouseReleased();
+            this.bodyPartsEditorPanel.mouseReleased(state);
         }
 
         if (this.sceneViewport != null)
