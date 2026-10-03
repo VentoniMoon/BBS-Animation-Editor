@@ -244,7 +244,6 @@ public class CharacterAnimationSetupPanel
             if (index >= 0 && index < actions.size())
             {
                 this.selectedAction = actions.get(index);
-                syncFields();
 
                 positionPopup();
 
@@ -334,9 +333,6 @@ public class CharacterAnimationSetupPanel
             this.pickerPopup.updateCursorCounter();
         }
 
-        if (this.speedField != null) this.speedField.updateCursorCounter();
-        if (this.fadeField != null) this.fadeField.updateCursorCounter();
-        if (this.tickField != null) this.tickField.updateCursorCounter();
     }
 
     private void positionPopup()
