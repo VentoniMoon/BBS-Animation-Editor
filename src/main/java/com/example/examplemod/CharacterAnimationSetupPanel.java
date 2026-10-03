@@ -187,13 +187,6 @@ public class CharacterAnimationSetupPanel
                 mouseY
         );
 
-        drawParameters(
-                mc,
-                this.y + 99,
-                mouseX,
-                mouseY
-        );
-
         if (this.pickerPopup.isOpen())
         {
             this.pickerPopup.draw(
@@ -342,111 +335,6 @@ public class CharacterAnimationSetupPanel
                 this.y + 14,
                 this.width - 16
         );
-    }
-
-    private void syncFields()
-    {
-        if (this.speedField == null || this.selectedKey == null)
-        {
-            return;
-        }
-
-        ActionConfig config = getSelectedConfig();
-
-        String signature =
-                config.name + "|" +
-                config.speed + "|" +
-                config.fade + "|" +
-                config.tick + "|" +
-                config.clamp + "|" +
-                config.reset + "|" +
-                this.selectedAction;
-
-        if (signature.equals(this.fieldSignature))
-        {
-            return;
-        }
-
-        this.fieldSignature = signature;
-        this.suppressFieldSync = true;
-
-        this.speedField.setText(formatFloat(config.speed));
-        this.fadeField.setText(String.valueOf((int) config.fade));
-        this.tickField.setText(String.valueOf(config.tick));
-
-        this.suppressFieldSync = false;
-    }
-
-    private void applyNumericField(
-            String parameter,
-            GuiTextField field,
-            boolean integer)
-    {
-        if (this.suppressFieldSync || this.selectedKey == null)
-        {
-            return;
-        }
-
-        String text = field.getText();
-
-        try
-        {
-            if (integer)
-            {
-                int value = Integer.parseInt(text);
-
-                if (value < 0)
-                {
-                    value = 0;
-                    field.setText("0");
-                }
-
-                if (CharacterAnimationSetupController.setParameter(
-                        this.selectedKey,
-                        this.selectedAction,
-                        parameter,
-                        Integer.valueOf(value)
-                ))
-                {
-                    this.fieldSignature = "";
-                }
-            }
-            else
-            {
-                float value = Float.parseFloat(text);
-
-                if (value < -100F) value = -100F;
-                if (value > 100F) value = 100F;
-
-                if (CharacterAnimationSetupController.setParameter(
-                        this.selectedKey,
-                        this.selectedAction,
-                        parameter,
-                        Float.valueOf(value)
-                ))
-                {
-                    this.fieldSignature = "";
-                }
-            }
-        }
-        catch (NumberFormatException ignored)
-        {
-        }
-    }
-
-    private void assignAnimation(String animation)
-    {
-        if (this.selectedKey == null) return;
-
-        if (CharacterAnimationSetupController.assignAnimation(
-                this.selectedKey,
-                this.selectedAction,
-                animation
-        ))
-        {
-            this.fieldSignature = "";
-            syncFields();
-        }
     }
 
     public String getSelectedAction()
