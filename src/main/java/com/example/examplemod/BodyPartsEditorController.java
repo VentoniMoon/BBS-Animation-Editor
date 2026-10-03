@@ -15,6 +15,11 @@ public class BodyPartsEditorController
     private List<AnimationBone> actorBones =
             new ArrayList<AnimationBone>();
 
+    /*
+     * selectedAttachment is the rectangle currently selected on Level 1.
+     * selectedModel is the same attachment only while Level 2 is open.
+     */
+    private BodyPartModelData selectedAttachment;
     private BodyPartModelData selectedModel;
     private int selectedActorBone = -1;
 
@@ -67,22 +72,150 @@ public class BodyPartsEditorController
         this.selectedActorBone = index;
     }
 
-    public BodyPartModelData getSelectedModel() { return this.selectedModel; }
-
-    public void selectModel(BodyPartModelData model)
+    public BodyPartModelData getSelectedAttachment()
     {
-        this.selectedModel = model;
-        this.keyframeController.clearSelection();
+        return this.selectedAttachment;
+    }
 
-        if (model == null)
+    public BodyPartModelData getSelectedModel()
+    {
+        return this.selectedModel;
+    }
+
+    /**
+     * Creates the Level 1 rectangle only.
+     *
+     * No model is loaded here. The rectangle always starts at the
+     * current timeline tick and has a fixed initial duration of 20 ticks.
+     */
+    public BodyPartModelData createAttachment(
+            int startFrame,
+            int sceneLength)
+    {
+        String attachment = getSelectedActorBoneName();
+
+        if (attachment.length() == 0)
         {
-            return;
+            return null;
         }
+
+        int start =
+                Math.max(
+                        0,
+                        startFrame
+                );
+
+        BodyPartModelData model =
+                new BodyPartModelData(
+                        "",
+                        attachment,
+                        null,
+                        new ArrayList<AnimationBone>(),
+                        start,
+                        start + 20
+                );
+
+        this.models.add(model);
+        this.selectedAttachment = model;
+        this.selectedModel = null;
+        this.keyframeController.clearSelection();
 
         this.localTimeline.setLength(
                 Math.max(
                         1,
-                        model.getEndFrame()
+                        Math.max(
+                                sceneLength,
+                                model.getEndFrame()
+                        ) + 1
+                )
+        );
+
+        this.localTimeline.setTick(start);
+
+        return model;
+    }
+
+    /**
+     * Assigns a Blockbuster model to the currently selected rectangle.
+     */
+    public boolean assignModelToSelected(String modelName)
+    {
+        BodyPartModelData selected =
+                this.selectedAttachment;
+
+        if (selected == null ||
+                modelName == null ||
+                modelName.length() == 0)
+        {
+            return false;
+        }
+
+        BlockbusterModelAccess access =
+                new BlockbusterModelAccess(null);
+
+        if (!access.loadModelByName(modelName))
+        {
+            return false;
+        }
+
+        List<AnimationBone> bones =
+                createAnimationBones(
+                        access.getLimbData()
+                );
+
+        if (bones.isEmpty())
+        {
+            return false;
+        }
+
+        selected.setModel(
+                modelName,
+                access,
+                bones
+        );
+
+        return true;
+    }
+
+    public void selectAttachment(BodyPartModelData attachment)
+    {
+        if (attachment == null ||
+                !this.models.contains(attachment))
+        {
+            this.selectedAttachment = null;
+            this.selectedModel = null;
+            this.keyframeController.clearSelection();
+            return;
+        }
+
+        this.selectedAttachment = attachment;
+        this.selectedModel = null;
+        this.keyframeController.clearSelection();
+
+        this.setSelectedActorBone(
+                findActorBoneIndex(
+                        attachment.getAttachmentBoneName()
+                )
+        );
+    }
+
+    public void selectModel(BodyPartModelData model)
+    {
+        if (model == null ||
+                !this.models.contains(model) ||
+                !model.hasModel())
+        {
+            return;
+        }
+
+        this.selectedAttachment = model;
+        this.selectedModel = model;
+        this.keyframeController.clearSelection();
+
+        this.localTimeline.setLength(
+                Math.max(
+                        1,
+                        model.getEndFrame() + 1
                 )
         );
 
@@ -110,71 +243,27 @@ public class BodyPartsEditorController
         return bone == null ? "" : bone.getName();
     }
 
-    public BodyPartModelData addModel(
-            String modelName,
-            int sceneLength)
+    public boolean removeSelectedAttachment()
     {
-        String attachment = getSelectedActorBoneName();
+        BodyPartModelData target =
+                this.selectedAttachment != null
+                        ? this.selectedAttachment
+                        : this.selectedModel;
 
-        if (attachment.length() == 0 ||
-                modelName == null ||
-                modelName.length() == 0)
-        {
-            return null;
-        }
-
-        BlockbusterModelAccess access =
-                new BlockbusterModelAccess(null);
-
-        if (!access.loadModelByName(modelName))
-        {
-            return null;
-        }
-
-        List<AnimationBone> bones =
-                createAnimationBones(
-                        access.getLimbData()
-                );
-
-        if (bones.isEmpty())
-        {
-            return null;
-        }
-
-        int end = Math.max(1, sceneLength);
-
-        BodyPartModelData model =
-                new BodyPartModelData(
-                        modelName,
-                        attachment,
-                        access,
-                        bones,
-                        0,
-                        end
-                );
-
-        this.models.add(model);
-
-        /*
-         * The new model is represented by a Level 1 attachment bar.
-         * The local model timeline opens only when that bar is clicked.
-         */
-        this.selectedModel = null;
-        this.keyframeController.clearSelection();
-
-        return model;
-    }
-
-    public boolean removeSelectedModel()
-    {
-        if (this.selectedModel == null)
+        if (target == null)
         {
             return false;
         }
 
-        boolean removed = this.models.remove(this.selectedModel);
-        this.selectedModel = null;
-        this.keyframeController.clearSelection();
+        boolean removed =
+                this.models.remove(target);
+
+        if (removed)
+        {
+            this.selectedAttachment = null;
+            this.selectedModel = null;
+            this.keyframeController.clearSelection();
+        }
 
         return removed;
     }
@@ -182,6 +271,27 @@ public class BodyPartsEditorController
     public List<String> getAvailableModelNames()
     {
         return BlockbusterModelAccess.getAvailableModelNames();
+    }
+
+    private int findActorBoneIndex(String name)
+    {
+        if (name == null)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < this.actorBones.size(); i++)
+        {
+            AnimationBone bone = this.actorBones.get(i);
+
+            if (bone != null &&
+                    name.equals(bone.getName()))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private List<AnimationBone> createAnimationBones(
