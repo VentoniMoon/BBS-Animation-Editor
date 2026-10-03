@@ -251,7 +251,7 @@ public class BodyPartsEditorPanel
                 mouseY >= y + 148 &&
                 mouseY < y + 166)
         {
-            controller.removeSelectedModel();
+            controller.removeSelectedAttachment();
             return true;
         }
 
