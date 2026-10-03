@@ -191,6 +191,25 @@ public class BodyPartsEditorPanel
                     cy + 12,
                     0xFF666D72
             );
+
+            AnimationKeyframe keyframe =
+                    controller.getKeyframeController()
+                            .getSelectedKeyframe();
+
+            if (keyframe != null)
+            {
+                controller.getTransformPanel().setPosition(
+                        x + 5,
+                        y + 174
+                );
+
+                controller.getTransformPanel().draw(
+                        mc,
+                        keyframe,
+                        keyframe.getTransform(),
+                        controller.getTimeline().getTick()
+                );
+            }
         }
     }
 
@@ -425,6 +444,55 @@ public class BodyPartsEditorPanel
         }
 
         return value + "...";
+    }
+
+    public boolean mouseClickedTransform(
+            int mouseX,
+            int mouseY,
+            int mouseButton)
+    {
+        AnimationKeyframe keyframe =
+                controller.getKeyframeController()
+                        .getSelectedKeyframe();
+
+        if (keyframe == null)
+        {
+            return false;
+        }
+
+        return controller.getTransformPanel().mouseClicked(
+                mouseX,
+                mouseY,
+                mouseButton,
+                keyframe
+        );
+    }
+
+    public void mouseDraggedTransform(
+            int mouseX,
+            int mouseY)
+    {
+        AnimationKeyframe keyframe =
+                controller.getKeyframeController()
+                        .getSelectedKeyframe();
+
+        if (keyframe == null)
+        {
+            return;
+        }
+
+        controller.getTransformPanel().mouseDragged(
+                mouseX,
+                mouseY,
+                keyframe
+        );
+    }
+
+    public void mouseReleased(int mouseButton)
+    {
+        controller.getTransformPanel().mouseReleased(
+                mouseButton
+        );
     }
 
     private void drawRect(
