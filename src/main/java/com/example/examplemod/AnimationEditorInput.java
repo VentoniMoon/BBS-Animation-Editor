@@ -735,7 +735,8 @@ public class AnimationEditorInput
                 == EditorModeController.EditorMode.BODY_PARTS)
         {
             if (this.bodyPartsTimelineController.mouseClicked(
-                    mouseX, mouseY, this.screen.width, this.screen.height,
+                    mouseX, mouseY, mouseButton,
+                    this.screen.width, this.screen.height,
                     this.screen.getSceneLength()))
             {
                 this.playbackController.setCurrentFrame(
