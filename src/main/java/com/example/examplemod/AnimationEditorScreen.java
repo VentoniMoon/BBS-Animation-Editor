@@ -1114,10 +1114,6 @@ public class AnimationEditorScreen extends GuiScreen
         this.characterTimelineEditorController
                 .setSelectedActor(data);
 
-        this.bodyPartsController.setActorBones(
-                this.actorPreviewController.getBones()
-        );
-
         this.characterEditorPanel
                 .setSelectedActor(data);
 
@@ -1127,6 +1123,10 @@ public class AnimationEditorScreen extends GuiScreen
                         this.sceneState,
                         this.keyframeController
                 );
+
+        this.bodyPartsController.setActorBones(
+                this.actorPreviewController.getBones()
+        );
 
         this.playbackController.setCurrentFrame(0);
         this.playbackController.pause();
