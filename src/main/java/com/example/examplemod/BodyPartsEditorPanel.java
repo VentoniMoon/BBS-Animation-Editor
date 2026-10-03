@@ -614,10 +614,23 @@ public class BodyPartsEditorPanel
         if (controller.getSelectedModel() == null &&
                 activeGlobalControl != null)
         {
-            return activeGlobalControl.keyTyped(
-                    typedChar,
-                    keyCode
-            );
+            boolean handled =
+                    activeGlobalControl.keyTyped(
+                            typedChar,
+                            keyCode
+                    );
+
+            if (handled &&
+                    !activeGlobalControl.isEditing() &&
+                    controller.getSelectedAttachment() != null)
+            {
+                writeGlobalTransform(
+                        controller.getSelectedAttachment()
+                                .getGlobalTransform()
+                );
+            }
+
+            return handled;
         }
 
         AnimationKeyframe keyframe =
