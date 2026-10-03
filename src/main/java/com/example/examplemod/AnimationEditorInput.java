@@ -860,140 +860,124 @@ public class AnimationEditorInput
             throws IOException
     {
         /*
-         * GuiScreen.handleInput() calls this method once for each
-         * LWJGL mouse event. getEventDWheel() is tied to the current
-         * low-level event and proved unreliable here because vanilla
-         * GUI processing can leave the wheel value at zero.
+         * In Forge/Minecraft 1.12.2 GuiScreen.handleMouseInput()
+         * consumes the current LWJGL event. For the editor we handle
+         * wheel events explicitly BEFORE calling vanilla.
          *
-         * getDWheel() reads the accumulated wheel delta directly.
-         * Read it before forwarding the event to vanilla so our
-         * character editor receives the wheel even though GuiScreen
-         * itself has no dedicated mouseScrolled callback in 1.12.2.
+         * IMPORTANT:
+         * Mouse.getDWheel() consumes the accumulated wheel value.
+         * Using it here made the result depend on the order in which
+         * vanilla processed the event. Mouse.getEventDWheel() is the
+         * value belonging to the event currently being dispatched.
          */
         int wheel =
-                Mouse.getDWheel();
+                Mouse.getEventDWheel();
 
+        if (wheel != 0)
+        {
+            if (isDeleteDialogOpen())
+            {
+                return;
+            }
+
+            int mouseX =
+                    Mouse.getEventX()
+                            * this.screen.width
+                            / this.screen.mc.displayWidth;
+
+            int mouseY =
+                    this.screen.height
+                            - Mouse.getEventY()
+                            * this.screen.height
+                            / this.screen.mc.displayHeight
+                            - 1;
+
+            int direction =
+                    wheel > 0
+                            ? 1
+                            : -1;
+
+            /*
+             * =====================================================
+             * CHARACTER MODE
+             * =====================================================
+             *
+             * Handle the Character timeline first, then the
+             * Character inspector. Do NOT call vanilla for a wheel
+             * event: there is nothing in the vanilla GUI that the
+             * editor needs from this wheel event.
+             */
+            if (this.editorModeController.getMode()
+                    == EditorModeController.EditorMode.CHARACTER)
+            {
+                if (this.characterTimelineEditorController
+                        .mouseScrolled(
+                                mouseX,
+                                mouseY,
+                                direction,
+                                this.screen.width,
+                                this.screen.height -
+                                        this.screen.getTimelineHeight(),
+                                0))
+                {
+                    return;
+                }
+
+                if (this.characterEditorPanel.mouseScrolled(
+                        mouseX,
+                        mouseY,
+                        direction))
+                {
+                    return;
+                }
+            }
+
+            /*
+             * =====================================================
+             * INTERPOLATION / VIEWPORT / POSE TIMELINE
+             * =====================================================
+             */
+            if (this.editorModeController.getMode()
+                    == EditorModeController.EditorMode.POSE
+                    && this.interpolationPanel.mouseScrolled(
+                    mouseX,
+                    mouseY,
+                    direction))
+            {
+                return;
+            }
+
+            if (this.sceneViewport != null
+                    && this.sceneViewport.mouseScrolled(
+                    mouseX,
+                    mouseY,
+                    direction))
+            {
+                return;
+            }
+
+            if (this.editorModeController.getMode()
+                    == EditorModeController.EditorMode.POSE)
+            {
+                this.timelineController.mouseScrolled(
+                        mouseX,
+                        mouseY,
+                        direction,
+                        this.screen.width,
+                        this.screen.height,
+                        AnimationEditorScreen.LEFT_PANEL_WIDTH,
+                        this.screen.getSceneLength()
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * Non-wheel mouse events still go through vanilla so that
+         * GuiScreen can dispatch the normal mouse button events.
+         */
         this.screen.callSuperHandleMouseInput();
-
-        if (isDeleteDialogOpen())
-        {
-            return;
-        }
-
-        if (wheel == 0)
-        {
-            return;
-        }
-
-        int mouseX =
-                Mouse.getEventX()
-                        * this.screen.width
-                        / this.screen.mc.displayWidth;
-
-        int mouseY =
-                this.screen.height
-                        - Mouse.getEventY()
-                        * this.screen.height
-                        / this.screen.mc.displayHeight
-                        - 1;
-
-        int direction =
-                wheel > 0
-                        ? 1
-                        : -1;
-
-        /*
-         * =========================================================
-         * CHARACTER TIMELINE
-         * =========================================================
-         */
-
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.CHARACTER)
-        {
-            if (this.characterTimelineEditorController
-                    .mouseScrolled(
-                            mouseX,
-                            mouseY,
-                            direction,
-                            this.screen.width,
-                            this.screen.height -
-                                    this.screen.getTimelineHeight(),
-                            0))
-            {
-                return;
-            }
-        }
-
-        /*
-         * =========================================================
-         * CHARACTER PANEL / ANIMATION SETUP
-         * =========================================================
-         */
-
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.CHARACTER)
-        {
-            if (this.characterEditorPanel.mouseScrolled(
-                    mouseX,
-                    mouseY,
-                    direction
-            ))
-            {
-                return;
-            }
-        }
-
-                /*
-         * =========================================================
-         * INTERPOLATION
-         * =========================================================
-         */
-
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.POSE
-                && this.interpolationPanel.mouseScrolled(
-                mouseX,
-                mouseY,
-                direction))
-        {
-            return;
-        }
-
-        /*
-         * =========================================================
-         * VIEWPORT
-         * =========================================================
-         */
-
-        if (this.sceneViewport != null
-                && this.sceneViewport.mouseScrolled(
-                mouseX,
-                mouseY,
-                direction))
-        {
-            return;
-        }
-
-        /*
-         * =========================================================
-         * POSE TIMELINE
-         * =========================================================
-         */
-
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.POSE)
-        {
-            this.timelineController.mouseScrolled(
-                    mouseX,
-                    mouseY,
-                    direction,
-                    this.screen.width,
-                    this.screen.height,
-                    AnimationEditorScreen.LEFT_PANEL_WIDTH,
-                    this.screen.getSceneLength()
-            );
-        }
     }
 
     /*
