@@ -55,9 +55,51 @@ public class BodyPartModelPickerScreen extends GuiBase
     private void onMorphSelected(AbstractMorph morph)
     {
         /*
-         * Selection is intentionally owned by GuiCreativeMorphsList.
-         * We read picker.getSelected() when Escape closes the screen.
+         * This is the same callback path used by Blockbuster/Metamorph:
+         * GuiCreativeMorphsList.pickMorph(AbstractMorph) is called as
+         * soon as the user selects an entry.
+         *
+         * The old implementation ignored this callback and waited for
+         * Escape. That made the picker look functional, but the selected
+         * Blockbuster model never reached BodyPartsEditorController.
          */
+        if (this.committed)
+        {
+            return;
+        }
+
+        if (morph instanceof CustomMorph)
+        {
+            CustomMorph custom =
+                    (CustomMorph) morph;
+
+            String key =
+                    custom.getKey();
+
+            if (key != null &&
+                    !key.isEmpty() &&
+                    this.callback != null)
+            {
+                System.out.println(
+                        "[BBS Animation Editor] " +
+                                "Body Parts selected model: " +
+                                key
+                );
+
+                this.committed = true;
+                this.callback.accept(key);
+
+                /*
+                 * Model selection is the confirmation action.
+                 * Return directly to the BBS editor, just like the
+                 * original Blockbuster picker returns its selected
+                 * morph through the callback.
+                 */
+                this.mc.displayGuiScreen(
+                        this.returnScreen
+                );
+            }
+        }
     }
 
     /**
@@ -77,8 +119,11 @@ public class BodyPartModelPickerScreen extends GuiBase
 
         if (morph instanceof CustomMorph)
         {
+            CustomMorph custom =
+                    (CustomMorph) morph;
+
             String key =
-                    ((CustomMorph) morph).getKey();
+                    custom.getKey();
 
             if (key != null &&
                     !key.isEmpty() &&
@@ -86,26 +131,12 @@ public class BodyPartModelPickerScreen extends GuiBase
             {
                 System.out.println(
                         "[BBS Animation Editor] " +
-                                "Body Parts selected model: " +
+                                "Body Parts selected model on close: " +
                                 key
                 );
 
                 this.callback.accept(key);
             }
-            else
-            {
-                System.out.println(
-                        "[BBS Animation Editor] " +
-                                "Body Parts picker closed without a valid CustomMorph key"
-                );
-            }
-        }
-        else
-        {
-            System.out.println(
-                    "[BBS Animation Editor] " +
-                            "Body Parts picker closed without a CustomMorph selection"
-            );
         }
     }
 
