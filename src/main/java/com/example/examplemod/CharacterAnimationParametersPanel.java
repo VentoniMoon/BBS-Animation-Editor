@@ -104,27 +104,27 @@ public class CharacterAnimationParametersPanel
                 this.y + 4
         );
 
-        drawLabel(mc, "Speed", this.x + 12, this.y + 23);
-        drawLabel(mc, "Fade", this.x + 88, this.y + 23);
-        drawLabel(mc, "Tick", this.x + 12, this.y + 41);
+        drawLabel(mc, "Speed", this.x + 12, this.y + 41);
+        drawLabel(mc, "Fade", this.x + 88, this.y + 41);
+        drawLabel(mc, "Tick", this.x + 12, this.y + 59);
 
         drawTextFieldFrame(this.speedField);
         drawTextFieldFrame(this.fadeField);
         drawTextFieldFrame(this.tickField);
 
-        drawLabel(mc, "Clamp", this.x + 88, this.y + 41);
+        drawLabel(mc, "Clamp", this.x + 88, this.y + 59);
         drawToggle(
                 mc,
                 this.x + 123,
-                this.y + 36,
+                this.y + 54,
                 config.clamp
         );
 
-        drawLabel(mc, "Reset", this.x + 12, this.y + 59);
+        drawLabel(mc, "Reset", this.x + 12, this.y + 77);
         drawToggle(
                 mc,
                 this.x + 48,
-                this.y + 54,
+                this.y + 72,
                 config.reset
         );
     }
@@ -329,17 +329,17 @@ public class CharacterAnimationParametersPanel
         }
 
         this.speedField.x = this.x + 48;
-        this.speedField.y = this.y + 19;
+        this.speedField.y = this.y + 37;
         this.speedField.width = 38;
         this.speedField.height = 16;
 
         this.fadeField.x = this.x + 123;
-        this.fadeField.y = this.y + 19;
+        this.fadeField.y = this.y + 37;
         this.fadeField.width = 34;
         this.fadeField.height = 16;
 
         this.tickField.x = this.x + 48;
-        this.tickField.y = this.y + 37;
+        this.tickField.y = this.y + 55;
         this.tickField.width = 38;
         this.tickField.height = 16;
     }
