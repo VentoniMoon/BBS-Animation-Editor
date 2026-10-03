@@ -1124,6 +1124,7 @@ public class BodyPartsTimelineController
                     startAttachmentDrag(
                             item,
                             mouseX,
+                            mouseY,
                             left,
                             right
                     );
@@ -1468,12 +1469,13 @@ public class BodyPartsTimelineController
     private void startAttachmentDrag(
             BodyPartModelData model,
             int mouseX,
+            int mouseY,
             int left,
             int right)
     {
         draggingModel = model;
         dragMouseX = mouseX;
-        dragMouseY = 0;
+        dragMouseY = mouseY;
         dragMoved = false;
         dragStartFrame = model.getStartFrame();
         dragEndFrame = model.getEndFrame();
