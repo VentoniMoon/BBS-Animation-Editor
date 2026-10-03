@@ -1,31 +1,33 @@
 package com.example.examplemod;
 
+import org.lwjgl.input.Keyboard;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 
 /**
- * Local Timeline used by the Body Parts editor.
- *
- * Level 1: attached models are displayed as long duration bars.
- * Level 2: the selected model exposes its bones and ordinary keyframes.
- *
- * The visual language intentionally follows the existing Character/Pose
- * timelines: same header height, track height, ruler, grid, text colors,
- * theme-derived backgrounds and accent/playhead colors.
+ * Body Parts uses the same visual and interaction language as the Pose
+ * Timeline.  The only additional level is the model-duration view.
  */
 public class BodyPartsTimelineController
 {
-    private static final int HEADER_HEIGHT = 35;
     private static final int TRACK_HEIGHT = 20;
+    private static final int HEADER_HEIGHT = 35;
+    private static final int FIRST_FRAME = 0;
     private static final int TIMELINE_START_X =
             AnimationEditorScreen.LEFT_PANEL_WIDTH;
+
+    private static final long DOUBLE_CLICK_DELAY = 300L;
+    private static final int DOUBLE_CLICK_DISTANCE = 5;
 
     private final BodyPartsEditorController controller;
     private final EditorTimeline timeline;
 
+    private int boneScroll;
     private long lastClickTime;
-    private int lastClickX;
-    private int lastClickY;
+    private int lastClickX = -1;
+    private int lastClickY = -1;
+    private int lastClickBone = -1;
 
     public BodyPartsTimelineController(
             BodyPartsEditorController controller)
@@ -37,6 +39,11 @@ public class BodyPartsTimelineController
     public int getTimelineHeight()
     {
         return 180;
+    }
+
+    public EditorTimeline getTimeline()
+    {
+        return this.timeline;
     }
 
     private int themeColor(float strength)
@@ -51,50 +58,57 @@ public class BodyPartsTimelineController
         g = Math.max(0, Math.min(255, Math.round(g * strength)));
         b = Math.max(0, Math.min(255, Math.round(b * strength)));
 
-        return 0xFF000000 |
-                (r << 16) |
-                (g << 8) |
-                b;
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
-    private int getBackground()
+    private int background()
     {
         return themeColor(0.07F);
     }
 
-    private int getHeader()
+    private int header()
     {
         return themeColor(0.12F);
     }
 
-    private int getTrack()
+    private int headerLight()
     {
-        return themeColor(0.12F);
+        return themeColor(0.17F);
     }
 
-    private int getTrackAlt()
+    private int ruler()
     {
         return themeColor(0.09F);
     }
 
-    private int getTrackSelected()
+    private int track()
+    {
+        return themeColor(0.12F);
+    }
+
+    private int trackSelected()
     {
         return themeColor(0.22F);
     }
 
-    private int getGrid()
+    private int border()
+    {
+        return themeColor(0.05F);
+    }
+
+    private int grid()
     {
         return themeColor(0.10F);
     }
 
-    private int getGridMajor()
-    {
-        return themeColor(0.20F);
-    }
-
-    private int getGridSecond()
+    private int gridSecond()
     {
         return themeColor(0.15F);
+    }
+
+    private int gridMajor()
+    {
+        return themeColor(0.20F);
     }
 
     public void draw(
@@ -110,7 +124,7 @@ public class BodyPartsTimelineController
                 top,
                 width,
                 height,
-                getBackground()
+                background()
         );
 
         Gui.drawRect(
@@ -121,49 +135,52 @@ public class BodyPartsTimelineController
                 EditorThemeManager.get().getAccent()
         );
 
-        BodyPartModelData selected =
+        BodyPartModelData model =
                 controller.getSelectedModel();
 
-        if (selected == null)
+        if (model == null)
         {
             drawModelTracks(
                     mc,
-                    top,
                     width,
+                    height,
+                    top,
                     sceneLength
             );
         }
         else
         {
-            drawBoneTracks(
+            drawModelBoneTimeline(
                     mc,
-                    top,
                     width,
+                    height,
+                    top,
                     sceneLength,
-                    selected
+                    model
             );
         }
 
-        drawCurrentFrameLine(
-                top,
+        drawPlayhead(
+                mc,
                 width,
-                height
+                height,
+                top
         );
     }
 
     private void drawHeader(
             Minecraft mc,
-            int top,
             int width,
+            int top,
             String title,
             boolean modelView)
     {
         Gui.drawRect(
                 0,
-                top,
+                top + 1,
                 width,
                 top + HEADER_HEIGHT,
-                getHeader()
+                header()
         );
 
         Gui.drawRect(
@@ -171,14 +188,22 @@ public class BodyPartsTimelineController
                 top + HEADER_HEIGHT - 1,
                 width,
                 top + HEADER_HEIGHT,
-                themeColor(0.05F)
+                border()
+        );
+
+        Gui.drawRect(
+                8,
+                top + 10,
+                10,
+                top + 22,
+                EditorThemeManager.get().getAccent()
         );
 
         mc.fontRenderer.drawString(
                 title,
-                10,
-                top + 7,
-                0xFFE2E5E7
+                16,
+                top + 11,
+                0xFFE0E3E5
         );
 
         if (modelView)
@@ -186,73 +211,81 @@ public class BodyPartsTimelineController
             mc.fontRenderer.drawString(
                     "← MODELS",
                     width - 76,
-                    top + 7,
+                    top + 11,
                     EditorThemeManager.get().getAccentBright()
             );
         }
+
+        String zoom =
+                "ZOOM " +
+                Math.round(timeline.getZoom() * 100.0F) +
+                "%";
+
+        int zoomWidth =
+                mc.fontRenderer.getStringWidth(zoom);
+
+        mc.fontRenderer.drawString(
+                zoom,
+                width - zoomWidth - 12,
+                top + 11,
+                0xFF9DA4A9
+        );
     }
 
     private void drawModelTracks(
             Minecraft mc,
-            int top,
             int width,
+            int height,
+            int top,
             int sceneLength)
     {
         drawHeader(
                 mc,
-                top,
                 width,
+                top,
                 "BODY PART MODELS",
                 false
         );
 
-        drawRulerAndGrid(
+        drawRuler(
                 mc,
-                top,
                 width,
+                top,
                 sceneLength
         );
 
-        int y = top + HEADER_HEIGHT;
+        int tracksTop = top + HEADER_HEIGHT;
 
         Gui.drawRect(
                 0,
-                y,
+                tracksTop,
                 TIMELINE_START_X,
-                y + TRACK_HEIGHT,
-                getTrack()
+                tracksTop + TRACK_HEIGHT,
+                headerLight()
         );
 
         mc.fontRenderer.drawString(
-                "MODELS",
+                "MODEL",
                 10,
-                y + 6,
+                tracksTop + 6,
                 0xFF9DA4A9
         );
 
-        int row = 1;
+        int row = 0;
 
         for (BodyPartModelData model : controller.getModels())
         {
-            int rowY =
-                    y + row * TRACK_HEIGHT;
+            int y = tracksTop + row * TRACK_HEIGHT;
 
-            if (rowY + TRACK_HEIGHT > top + getTimelineHeight())
+            if (y + TRACK_HEIGHT > height)
             {
                 break;
             }
 
-            int trackColor =
-                    row % 2 == 0
-                            ? getTrackAlt()
-                            : getTrack();
-
-            Gui.drawRect(
-                    0,
-                    rowY,
+            drawTrackBackground(
                     width,
-                    rowY + TRACK_HEIGHT,
-                    trackColor
+                    y,
+                    false
             );
 
             mc.fontRenderer.drawString(
@@ -262,45 +295,31 @@ public class BodyPartsTimelineController
                             TIMELINE_START_X - 14
                     ),
                     10,
-                    rowY + 6,
+                    y + 6,
                     0xFF9DA4A9
             );
 
-            int startX =
+            int left =
                     timeline.getFrameX(
                             model.getStartFrame(),
                             TIMELINE_START_X
                     );
 
-            int endX =
+            int right =
                     timeline.getFrameX(
                             model.getEndFrame(),
                             TIMELINE_START_X
                     );
 
-            int left =
-                    Math.max(
-                            TIMELINE_START_X,
-                            Math.min(width - 2, startX)
-                    );
-
-            int right =
-                    Math.max(
-                            left + 2,
-                            Math.min(width - 2, endX)
-                    );
-
-            boolean selected =
-                    model == controller.getSelectedModel();
+            left = Math.max(TIMELINE_START_X, left);
+            right = Math.max(left + 4, Math.min(width, right));
 
             Gui.drawRect(
                     left,
-                    rowY + 4,
+                    y + 4,
                     right,
-                    rowY + TRACK_HEIGHT - 4,
-                    selected
-                            ? EditorThemeManager.get().getAccentBright()
-                            : EditorThemeManager.get().getAccent()
+                    y + TRACK_HEIGHT - 4,
+                    EditorThemeManager.get().getAccent()
             );
 
             mc.fontRenderer.drawString(
@@ -310,7 +329,7 @@ public class BodyPartsTimelineController
                             Math.max(20, right - left - 8)
                     ),
                     left + 4,
-                    rowY + 6,
+                    y + 6,
                     0xFF101010
             );
 
@@ -318,69 +337,104 @@ public class BodyPartsTimelineController
         }
     }
 
-    private void drawBoneTracks(
+    private void drawModelBoneTimeline(
             Minecraft mc,
-            int top,
             int width,
+            int height,
+            int top,
             int sceneLength,
             BodyPartModelData model)
     {
         drawHeader(
                 mc,
-                top,
                 width,
+                top,
                 "MODEL: " + model.getModelName(),
                 true
         );
 
-        drawRulerAndGrid(
+        drawRuler(
                 mc,
-                top,
                 width,
-                sceneLength
+                top,
+                getMaximumFrame(sceneLength, model)
         );
 
-        int y = top + HEADER_HEIGHT;
-        int row = 0;
+        int tracksTop = top + HEADER_HEIGHT;
 
-        for (AnimationBone bone : model.getBones())
+        int visible =
+                Math.max(
+                        0,
+                        (height - tracksTop) / TRACK_HEIGHT
+                );
+
+        int maxScroll =
+                Math.max(
+                        0,
+                        model.getBones().size() - visible
+                );
+
+        boneScroll =
+                Math.max(
+                        0,
+                        Math.min(
+                                boneScroll,
+                                maxScroll
+                        )
+                );
+
+        for (int visibleIndex = 0;
+                visibleIndex < visible;
+                visibleIndex++)
         {
+            int boneIndex =
+                    boneScroll + visibleIndex;
+
+            if (boneIndex >= model.getBones().size())
+            {
+                break;
+            }
+
+            AnimationBone bone =
+                    model.getBones().get(boneIndex);
+
             if (bone == null)
             {
                 continue;
             }
 
-            int rowY =
-                    y + row * TRACK_HEIGHT;
-
-            if (rowY + TRACK_HEIGHT > top + getTimelineHeight())
-            {
-                break;
-            }
-
-            int trackColor =
-                    row % 2 == 0
-                            ? getTrack()
-                            : getTrackAlt();
+            int y =
+                    tracksTop +
+                    visibleIndex * TRACK_HEIGHT;
 
             AnimationBone selectedBone =
                     controller.getKeyframeController()
-                            .getSelectedBone(
-                                    model.getBones()
-                            );
+                            .getSelectedBone(model.getBones());
+
+            drawTrackBackground(
+                    width,
+                    y,
+                    bone == selectedBone
+            );
 
             if (bone == selectedBone)
             {
-                trackColor = getTrackSelected();
-            }
+                Gui.drawRect(
+                        0,
+                        y,
+                        3,
+                        y + TRACK_HEIGHT,
+                        EditorThemeManager.get().getAccent()
+                );
 
-            Gui.drawRect(
-                    0,
-                    rowY,
-                    width,
-                    rowY + TRACK_HEIGHT,
-                    trackColor
-            );
+                Gui.drawRect(
+                        3,
+                        y,
+                        TIMELINE_START_X - 1,
+                        y + TRACK_HEIGHT,
+                        0xFF242D31
+                );
+            }
 
             mc.fontRenderer.drawString(
                     trim(
@@ -389,61 +443,157 @@ public class BodyPartsTimelineController
                             TIMELINE_START_X - 14
                     ),
                     10,
-                    rowY + 6,
+                    y + 6,
                     bone == selectedBone
                             ? EditorThemeManager.get().getAccentBright()
                             : 0xFF9DA4A9
             );
 
-            for (AnimationKeyframe keyframe : bone.getKeyframes())
+            for (AnimationKeyframe keyframe :
+                    bone.getKeyframes())
             {
                 if (keyframe == null)
                 {
                     continue;
                 }
 
-                int keyX =
+                int x =
                         timeline.getFrameX(
                                 keyframe.getFrame(),
                                 TIMELINE_START_X
                         );
 
-                if (keyX < TIMELINE_START_X - 5 ||
-                        keyX > width + 5)
+                if (x < TIMELINE_START_X - 8 ||
+                        x > width + 8)
                 {
                     continue;
                 }
 
-                drawKey(
-                        keyX,
-                        rowY + TRACK_HEIGHT / 2,
+                drawKeyframe(
+                        x,
+                        y + TRACK_HEIGHT / 2,
                         keyframe ==
                                 controller.getKeyframeController()
                                         .getSelectedKeyframe()
                 );
             }
-
-            row++;
         }
     }
 
-    private void drawRulerAndGrid(
-            Minecraft mc,
-            int top,
+    private void drawTrackBackground(
             int width,
-            int sceneLength)
+            int y,
+            boolean selected)
     {
-        int rulerY = top + 24;
+        Gui.drawRect(
+                0,
+                y,
+                width,
+                y + TRACK_HEIGHT,
+                selected
+                        ? trackSelected()
+                        : track()
+        );
+
+        Gui.drawRect(
+                0,
+                y + TRACK_HEIGHT - 1,
+                width,
+                y + TRACK_HEIGHT,
+                border()
+        );
+    }
+
+    private void drawRuler(
+            Minecraft mc,
+            int width,
+            int top,
+            int maximumFrame)
+    {
+        int rulerTop = top + 20;
+        int rulerBottom = top + HEADER_HEIGHT;
 
         Gui.drawRect(
                 TIMELINE_START_X,
-                rulerY,
+                rulerTop,
                 width,
-                top + HEADER_HEIGHT,
-                getGrid()
+                rulerBottom,
+                ruler()
         );
 
-        for (int frame = 0; frame <= sceneLength; frame++)
+        Gui.drawRect(
+                0,
+                rulerTop,
+                TIMELINE_START_X,
+                rulerBottom,
+                headerLight()
+        );
+
+        Gui.drawRect(
+                TIMELINE_START_X - 1,
+                rulerTop,
+                TIMELINE_START_X,
+                rulerBottom,
+                EditorThemeManager.get().getAccent()
+        );
+
+        if (maximumFrame < EditorTimeline.TICKS_PER_SECOND)
+        {
+            maximumFrame = EditorTimeline.TICKS_PER_SECOND;
+        }
+
+        float pixelsPerFrame =
+                timeline.getPixelsPerFrame();
+
+        if (pixelsPerFrame <= 0.0F)
+        {
+            return;
+        }
+
+        int first =
+                Math.max(
+                        FIRST_FRAME,
+                        (int)Math.floor(
+                                timeline.getOffset() /
+                                pixelsPerFrame
+                        )
+                );
+
+        int last =
+                Math.min(
+                        maximumFrame,
+                        (int)Math.ceil(
+                                (
+                                        timeline.getOffset() +
+                                        width -
+                                        TIMELINE_START_X
+                                ) /
+                                pixelsPerFrame
+                        )
+                );
+
+        int minorStep;
+
+        if (timeline.getZoom() >= 2.0F)
+        {
+            minorStep = 1;
+        }
+        else if (timeline.getZoom() >= 1.0F)
+        {
+            minorStep = 5;
+        }
+        else if (timeline.getZoom() >= 0.5F)
+        {
+            minorStep = 10;
+        }
+        else
+        {
+            minorStep = 20;
+        }
+
+        for (int frame = first;
+                frame <= last;
+                frame += minorStep)
         {
             int x =
                     timeline.getFrameX(
@@ -451,68 +601,172 @@ public class BodyPartsTimelineController
                             TIMELINE_START_X
                     );
 
-            if (x < TIMELINE_START_X - 10 ||
-                    x > width + 10)
+            if (x < TIMELINE_START_X || x > width)
             {
                 continue;
             }
 
-            boolean major = frame % 5 == 0;
-            boolean second = frame % 2 == 0;
+            boolean second =
+                    frame % EditorTimeline.TICKS_PER_SECOND == 0;
 
-            int gridColor =
-                    major
-                            ? getGridMajor()
-                            : second
-                                    ? getGridSecond()
-                                    : getGrid();
+            boolean halfSecond =
+                    frame % 10 == 0;
+
+            int color =
+                    second
+                            ? gridMajor()
+                            : halfSecond
+                                    ? gridSecond()
+                                    : grid();
 
             Gui.drawRect(
                     x,
-                    top + HEADER_HEIGHT,
+                    rulerBottom,
                     x + 1,
                     top + getTimelineHeight(),
-                    gridColor
+                    color
             );
 
-            int tickHeight =
-                    major ? 7 : 4;
-
-            Gui.drawRect(
-                    x,
-                    rulerY,
-                    x + 1,
-                    rulerY + tickHeight,
-                    major
-                            ? getGridMajor()
-                            : getGridSecond()
-            );
-
-            if (major)
+            if (second)
             {
+                Gui.drawRect(
+                        x,
+                        rulerTop,
+                        x + 2,
+                        rulerBottom,
+                        EditorThemeManager.get().getAccent()
+                );
+
+                mc.fontRenderer.drawString(
+                        (frame / EditorTimeline.TICKS_PER_SECOND) + "s",
+                        x + 4,
+                        rulerTop + 5,
+                        0xFFE0E3E5
+                );
+            }
+            else if (halfSecond)
+            {
+                Gui.drawRect(
+                        x,
+                        rulerTop + 5,
+                        x + 1,
+                        rulerBottom,
+                        gridMajor()
+                );
+
                 mc.fontRenderer.drawString(
                         String.valueOf(frame),
                         x + 3,
-                        rulerY + 7,
+                        rulerTop + 5,
                         0xFF666D72
                 );
             }
+            else
+            {
+                Gui.drawRect(
+                        x,
+                        rulerTop + 8,
+                        x + 1,
+                        rulerBottom,
+                        grid()
+                );
+            }
+        }
+
+        Gui.drawRect(
+                TIMELINE_START_X,
+                rulerBottom - 1,
+                width,
+                rulerBottom,
+                border()
+        );
+    }
+
+    private void drawKeyframe(
+            int x,
+            int y,
+            boolean selected)
+    {
+        int color =
+                selected
+                        ? EditorThemeManager.get().getAccent()
+                        : EditorThemeManager.get().getAccent();
+
+        Gui.drawRect(
+                x,
+                y - 6,
+                x + 1,
+                y + 7,
+                color
+        );
+
+        Gui.drawRect(
+                x - 1,
+                y - 5,
+                x + 2,
+                y + 6,
+                color
+        );
+
+        Gui.drawRect(
+                x - 2,
+                y - 4,
+                x + 3,
+                y + 5,
+                color
+        );
+
+        Gui.drawRect(
+                x - 3,
+                y - 3,
+                x + 4,
+                y + 4,
+                color
+        );
+
+        Gui.drawRect(
+                x - 4,
+                y - 2,
+                x + 5,
+                y + 3,
+                color
+        );
+
+        if (!selected)
+        {
+            int inner = themeColor(0.10F);
+
+            Gui.drawRect(x, y - 4, x + 1, y + 5, inner);
+            Gui.drawRect(x - 1, y - 3, x + 2, y + 4, inner);
+            Gui.drawRect(x - 2, y - 2, x + 3, y + 3, inner);
+        }
+        else
+        {
+            Gui.drawRect(
+                    x - 1,
+                    y - 2,
+                    x + 2,
+                    y + 3,
+                    EditorThemeManager.get().getAccentBright()
+            );
         }
     }
 
-    private void drawCurrentFrameLine(
-            int top,
+    private void drawPlayhead(
+            Minecraft mc,
             int width,
-            int height)
+            int height,
+            int top)
     {
+        int frame = timeline.getTick();
+
         int x =
                 timeline.getFrameX(
-                        timeline.getTick(),
+                        frame,
                         TIMELINE_START_X
                 );
 
-        if (x < TIMELINE_START_X ||
-                x > width)
+        if (x < TIMELINE_START_X || x > width)
         {
             return;
         }
@@ -526,44 +780,82 @@ public class BodyPartsTimelineController
         );
 
         Gui.drawRect(
-                x,
-                top,
-                x + 2,
-                top + 5,
+                x - 2,
+                top + 18,
+                x + 4,
+                top + 23,
+                EditorThemeManager.get().getAccentBright()
+        );
+
+        String text = String.valueOf(frame);
+
+        int labelWidth =
+                mc.fontRenderer.getStringWidth(text);
+
+        int labelX =
+                x - labelWidth / 2;
+
+        labelX =
+                Math.max(
+                        TIMELINE_START_X + 2,
+                        Math.min(
+                                width - labelWidth - 2,
+                                labelX
+                        )
+                );
+
+        mc.fontRenderer.drawString(
+                text,
+                labelX,
+                top + 24,
                 EditorThemeManager.get().getAccentBright()
         );
     }
 
-    private void drawKey(
-            int x,
-            int y,
-            boolean selected)
+    private int getMaximumFrame(
+            int sceneLength,
+            BodyPartModelData model)
     {
-        int color =
-                selected
-                        ? EditorThemeManager.get().getAccentBright()
-                        : EditorThemeManager.get().getAccent();
+        int maximum =
+                Math.max(
+                        FIRST_FRAME,
+                        sceneLength - 1
+                );
 
-        Gui.drawRect(
-                x - 3,
-                y - 3,
-                x + 4,
-                y + 4,
-                color
-        );
+        maximum =
+                Math.max(
+                        maximum,
+                        model.getEndFrame()
+                );
 
-        Gui.drawRect(
-                x - 1,
-                y - 1,
-                x + 2,
-                y + 2,
-                0xFF101010
-        );
+        for (AnimationBone bone : model.getBones())
+        {
+            if (bone == null)
+            {
+                continue;
+            }
+
+            for (AnimationKeyframe keyframe :
+                    bone.getKeyframes())
+            {
+                if (keyframe != null)
+                {
+                    maximum =
+                            Math.max(
+                                    maximum,
+                                    keyframe.getFrame()
+                            );
+                }
+            }
+        }
+
+        return maximum;
     }
 
     public boolean mouseClicked(
             int mouseX,
             int mouseY,
+            int mouseButton,
             int width,
             int height,
             int sceneLength)
@@ -575,105 +867,79 @@ public class BodyPartsTimelineController
             return false;
         }
 
-        if (controller.getSelectedModel() != null &&
-                mouseY < top + HEADER_HEIGHT)
-        {
-            if (mouseX > width - 95)
-            {
-                controller.backToModelTracks();
-                return true;
-            }
-        }
-
-        int relativeY =
-                mouseY - top - HEADER_HEIGHT;
-
-        if (relativeY < 0)
-        {
-            return false;
-        }
-
-        BodyPartModelData selected =
+        BodyPartModelData model =
                 controller.getSelectedModel();
 
-        if (selected == null)
+        if (model != null &&
+                mouseY < top + HEADER_HEIGHT &&
+                mouseX > width - 95)
         {
-            int row =
-                    relativeY / TRACK_HEIGHT;
-
-            if (row <= 0)
-            {
-                return true;
-            }
-
-            int index = row - 1;
-
-            if (index >= 0 &&
-                    index < controller.getModels().size())
-            {
-                BodyPartModelData model =
-                        controller.getModels().get(index);
-
-                int startX =
-                        timeline.getFrameX(
-                                model.getStartFrame(),
-                                TIMELINE_START_X
-                        );
-
-                int endX =
-                        timeline.getFrameX(
-                                model.getEndFrame(),
-                                TIMELINE_START_X
-                        );
-
-                if (mouseX >= startX &&
-                        mouseX <= endX)
-                {
-                    controller.selectModel(model);
-                    return true;
-                }
-            }
-
+            controller.backToModelTracks();
+            boneScroll = 0;
             return true;
         }
 
-        int boneIndex =
-                relativeY / TRACK_HEIGHT;
+        int tracksTop = top + HEADER_HEIGHT;
 
-        if (boneIndex < 0 ||
-                boneIndex >= selected.getBones().size())
+        if (mouseY < tracksTop)
         {
-            return true;
-        }
-
-        controller.getKeyframeController()
-                .setSelectedBoneIndex(
-                        boneIndex,
-                        selected.getBones()
-                );
-
-        AnimationBone bone =
-                selected.getBone(boneIndex);
-
-        AnimationKeyframe key =
-                controller.getKeyframeController()
-                        .findKeyframeAt(
-                                bone,
-                                mouseX,
-                                6
-                        );
-
-        if (key != null)
-        {
-            controller.getKeyframeController()
-                    .setSelectedKeyframe(key);
+            int frame =
+                    timeline.getFrameFromMouseX(
+                            mouseX,
+                            TIMELINE_START_X
+                    );
 
             timeline.setTick(
-                    key.getFrame()
+                    Math.max(
+                            FIRST_FRAME,
+                            Math.min(
+                                    sceneLength,
+                                    frame
+                            )
+                    )
             );
 
             return true;
         }
+
+        if (model == null)
+        {
+            int row =
+                    (mouseY - tracksTop) / TRACK_HEIGHT;
+
+            if (row >= 0 &&
+                    row < controller.getModels().size())
+            {
+                controller.selectModel(
+                        controller.getModels().get(row)
+                );
+                boneScroll = 0;
+                return true;
+            }
+
+            return true;
+        }
+
+        int visibleBoneIndex =
+                (mouseY - tracksTop) / TRACK_HEIGHT;
+
+        int boneIndex =
+                boneScroll + visibleBoneIndex;
+
+        if (boneIndex < 0 ||
+                boneIndex >= model.getBones().size())
+        {
+            return true;
+        }
+
+        AnimationBone bone =
+                model.getBones().get(boneIndex);
+
+        controller.getKeyframeController()
+                .setSelectedBoneIndex(
+                        boneIndex,
+                        model.getBones()
+                );
 
         int frame =
                 timeline.getFrameFromMouseX(
@@ -681,54 +947,110 @@ public class BodyPartsTimelineController
                         TIMELINE_START_X
                 );
 
-        frame = Math.max(
-                0,
-                Math.min(
+        int maximum =
+                getMaximumFrame(
                         sceneLength,
-                        frame
-                )
-        );
+                        model
+                );
 
-        timeline.setTick(frame);
+        frame =
+                Math.max(
+                        FIRST_FRAME,
+                        Math.min(
+                                frame,
+                                maximum
+                        )
+                );
 
-        if (mouseButtonDoubleClick(mouseX, mouseY))
+        if (mouseButton == 0)
         {
-            controller.getKeyframeController()
-                    .createKeyframe(
-                            bone,
-                            frame
-                    );
+            AnimationKeyframe key =
+                    controller.getKeyframeController()
+                            .findKeyframeAt(
+                                    bone,
+                                    mouseX,
+                                    6
+                            );
+
+            if (key != null)
+            {
+                controller.getKeyframeController()
+                        .setSelectedKeyframe(key);
+
+                controller.getKeyframeController()
+                        .startKeyframeDragging(
+                                bone,
+                                key
+                        );
+
+                timeline.setTick(key.getFrame());
+                resetClickState();
+                return true;
+            }
+
+            long now = System.currentTimeMillis();
+
+            boolean doubleClick =
+                    lastClickBone == boneIndex &&
+                    Math.abs(lastClickX - mouseX) <=
+                            DOUBLE_CLICK_DISTANCE &&
+                    Math.abs(lastClickY - mouseY) <=
+                            DOUBLE_CLICK_DISTANCE &&
+                    now - lastClickTime <=
+                            DOUBLE_CLICK_DELAY;
+
+            timeline.setTick(frame);
+
+            if (doubleClick)
+            {
+                AnimationKeyframe key =
+                        controller.getKeyframeController()
+                                .createKeyframe(
+                                        bone,
+                                        frame
+                                );
+
+                controller.getKeyframeController()
+                        .setSelectedKeyframe(key);
+
+                resetClickState();
+                return true;
+            }
+
+            lastClickTime = now;
+            lastClickX = mouseX;
+            lastClickY = mouseY;
+            lastClickBone = boneIndex;
 
             controller.getKeyframeController()
-                    .setSelectedKeyframe(
-                            controller.getKeyframeController()
-                                    .findKeyframe(
-                                            bone,
-                                            frame
-                                    )
-                    );
+                    .setSelectedKeyframe(null);
+
+            return true;
+        }
+
+        if (mouseButton == 1)
+        {
+            AnimationKeyframe key =
+                    controller.getKeyframeController()
+                            .findKeyframeAt(
+                                    bone,
+                                    mouseX,
+                                    6
+                            );
+
+            if (key != null)
+            {
+                controller.getKeyframeController()
+                        .requestDelete(
+                                bone,
+                                key
+                        );
+            }
+
+            return true;
         }
 
         return true;
-    }
-
-    private boolean mouseButtonDoubleClick(
-            int x,
-            int y)
-    {
-        long now =
-                System.currentTimeMillis();
-
-        boolean same =
-                Math.abs(this.lastClickX - x) <= 3 &&
-                Math.abs(this.lastClickY - y) <= 3 &&
-                now - this.lastClickTime <= 250;
-
-        this.lastClickX = x;
-        this.lastClickY = y;
-        this.lastClickTime = now;
-
-        return same;
     }
 
     public boolean mouseClickMove(
@@ -739,13 +1061,162 @@ public class BodyPartsTimelineController
             int height,
             int sceneLength)
     {
+        if (controller.getSelectedModel() == null)
+        {
+            return false;
+        }
+
+        if (controller.getKeyframeController()
+                .isKeyframeDragging() &&
+                clickedMouseButton == 0)
+        {
+            boolean moved =
+                    controller.getKeyframeController()
+                            .moveDraggingKeyframe(
+                                    mouseX,
+                                    FIRST_FRAME
+                            );
+
+            if (moved)
+            {
+                AnimationKeyframe key =
+                        controller.getKeyframeController()
+                                .getDraggingKeyframe();
+
+                if (key != null)
+                {
+                    timeline.setTick(
+                            key.getFrame()
+                    );
+                }
+            }
+
+            return true;
+        }
+
         return false;
     }
 
     public void mouseReleased()
     {
-        this.controller.getKeyframeController()
+        controller.getKeyframeController()
                 .stopKeyframeDragging();
+    }
+
+    public boolean mouseScrolled(
+            int mouseX,
+            int mouseY,
+            int wheel,
+            int width,
+            int height,
+            int sceneLength)
+    {
+        if (wheel == 0)
+        {
+            return false;
+        }
+
+        int top = height - getTimelineHeight();
+
+        if (mouseY < top || mouseY > height)
+        {
+            return false;
+        }
+
+        BodyPartModelData model =
+                controller.getSelectedModel();
+
+        int tracksTop = top + HEADER_HEIGHT;
+
+        if (model != null &&
+                mouseX < TIMELINE_START_X &&
+                mouseY >= tracksTop)
+        {
+            int visible =
+                    Math.max(
+                            0,
+                            (height - tracksTop) / TRACK_HEIGHT
+                    );
+
+            int maxScroll =
+                    Math.max(
+                            0,
+                            model.getBones().size() - visible
+                    );
+
+            if (maxScroll > 0)
+            {
+                boneScroll =
+                        wheel > 0
+                                ? Math.max(0, boneScroll - 1)
+                                : Math.min(maxScroll, boneScroll + 1);
+
+                return true;
+            }
+        }
+
+        boolean ctrl =
+                Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) ||
+                Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
+
+        if (ctrl)
+        {
+            int frame =
+                    timeline.getFrameFromMouseX(
+                            mouseX,
+                            TIMELINE_START_X
+                    );
+
+            float oldZoom = timeline.getZoom();
+
+            timeline.changeZoom(
+                    wheel > 0 ? 0.25F : -0.25F
+            );
+
+            if (oldZoom != timeline.getZoom())
+            {
+                timeline.setOffset(
+                        TIMELINE_START_X +
+                        Math.round(
+                                frame *
+                                timeline.getPixelsPerFrame()
+                        ) -
+                        mouseX
+                );
+
+                timeline.clampOffset(
+                        getMaximumFrame(
+                                sceneLength,
+                                model
+                        ),
+                        width - TIMELINE_START_X
+                );
+            }
+
+            return true;
+        }
+
+        timeline.addOffset(
+                wheel > 0 ? -60 : 60
+        );
+
+        timeline.clampOffset(
+                getMaximumFrame(
+                        sceneLength,
+                        model
+                ),
+                width - TIMELINE_START_X
+        );
+
+        return true;
+    }
+
+    private void resetClickState()
+    {
+        lastClickTime = 0L;
+        lastClickX = -1;
+        lastClickY = -1;
+        lastClickBone = -1;
     }
 
     private String trim(
@@ -766,15 +1237,9 @@ public class BodyPartsTimelineController
         String value = text;
 
         while (value.length() > 3 &&
-                mc.fontRenderer.getStringWidth(
-                        value + "..."
-                ) > maxWidth)
+                mc.fontRenderer.getStringWidth(value + "...") > maxWidth)
         {
-            value =
-                    value.substring(
-                            0,
-                            value.length() - 1
-                    );
+            value = value.substring(0, value.length() - 1);
         }
 
         return value + "...";
