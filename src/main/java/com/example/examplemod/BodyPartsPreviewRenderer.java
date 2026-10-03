@@ -3,6 +3,9 @@ package com.example.examplemod;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.FloatBuffer;
+
+import javax.vecmath.Matrix4f;
 
 import mchorse.blockbuster.api.ModelTransform;
 import mchorse.blockbuster.common.entity.EntityActor;
@@ -333,16 +336,10 @@ public class BodyPartsPreviewRenderer
 
             if (runtimeBone != null)
             {
-                AnimationTransform runtimeTransform =
-                        getRuntimeBoneWorldTransform(
-                                runtimeBone,
-                                0
-                        );
-
-                if (runtimeTransform != null)
+                if (runtimeBone.mat != null)
                 {
                     return new BoneAttachment(
-                            runtimeTransform
+                            new Matrix4f(runtimeBone.mat)
                     );
                 }
             }
@@ -384,61 +381,6 @@ public class BodyPartsPreviewRenderer
         return null;
     }
 
-    private AnimationTransform getRuntimeBoneWorldTransform(
-            BOBJBone bone,
-            int depth)
-    {
-        if (bone == null || depth > 64)
-        {
-            return null;
-        }
-
-        /*
-         * BOBJ rotation fields are radians (the Emoticons controller
-         * receives our editor degrees and converts them with toRadians).
-         */
-        AnimationTransform local =
-                new AnimationTransform();
-
-        local.setPosition(
-                bone.x,
-                bone.y,
-                bone.z
-        );
-
-        local.setRotation(
-                (float) Math.toDegrees(bone.rotateX),
-                (float) Math.toDegrees(bone.rotateY),
-                (float) Math.toDegrees(bone.rotateZ)
-        );
-
-        local.setScale(
-                bone.scaleX,
-                bone.scaleY,
-                bone.scaleZ
-        );
-
-        BOBJBone parent = bone.parentBone;
-
-        if (parent == null)
-        {
-            return local;
-        }
-
-        AnimationTransform parentWorld =
-                getRuntimeBoneWorldTransform(
-                        parent,
-                        depth + 1
-                );
-
-        if (parentWorld == null)
-        {
-            return local;
-        }
-
-        return parentWorld.combine(local);
-    }
-
     private void renderAttached(
             Minecraft mc,
             EntityActor actor,
@@ -452,53 +394,48 @@ public class BodyPartsPreviewRenderer
 
         attachment = attachment.withModelTransform(modelTransform);
 
-        /*
-         * ModelTransform coordinates are Blockbuster model pixels.
-         * The render engine uses 1/16 block units.
-         */
-        GL11.glTranslatef(
-                attachment.transform.getPositionX() / 16.0F,
-                attachment.transform.getPositionY() / 16.0F,
-                attachment.transform.getPositionZ() / 16.0F
-        );
-
-        GL11.glRotatef(
-                attachment.transform.getRotationZ(),
-                0.0F,
-                0.0F,
-                1.0F
-        );
-
-        GL11.glRotatef(
-                attachment.transform.getRotationY(),
-                0.0F,
-                1.0F,
-                0.0F
-        );
-
-        GL11.glRotatef(
-                attachment.transform.getRotationX(),
-                1.0F,
-                0.0F,
-                0.0F
-        );
-
-        if (modelTransform != null)
+        if (attachment.runtimeMatrix != null)
         {
+            FloatBuffer matrixBuffer =
+                    java.nio.ByteBuffer
+                            .allocateDirect(16 * 4)
+                            .order(java.nio.ByteOrder.nativeOrder())
+                            .asFloatBuffer();
+
+            Matrix4f matrix =
+                    attachment.runtimeMatrix;
+
+            matrixBuffer.put(matrix.m00).put(matrix.m10).put(matrix.m20).put(matrix.m30);
+            matrixBuffer.put(matrix.m01).put(matrix.m11).put(matrix.m21).put(matrix.m31);
+            matrixBuffer.put(matrix.m02).put(matrix.m12).put(matrix.m22).put(matrix.m32);
+            matrixBuffer.put(matrix.m03).put(matrix.m13).put(matrix.m23).put(matrix.m33);
+            matrixBuffer.flip();
+
+            GL11.glMultMatrix(matrixBuffer);
+        }
+        else
+        {
+            /*
+             * ModelTransform coordinates are Blockbuster model pixels.
+             * The render engine uses 1/16 block units.
+             */
             GL11.glTranslatef(
-                    modelTransform.getPositionX() / 16.0F,
-                    modelTransform.getPositionY() / 16.0F,
-                    modelTransform.getPositionZ() / 16.0F
+                    attachment.transform.getPositionX() / 16.0F,
+                    attachment.transform.getPositionY() / 16.0F,
+                    attachment.transform.getPositionZ() / 16.0F
             );
 
-            GL11.glRotatef(modelTransform.getRotationZ(), 0.0F, 0.0F, 1.0F);
-            GL11.glRotatef(modelTransform.getRotationY(), 0.0F, 1.0F, 0.0F);
-            GL11.glRotatef(modelTransform.getRotationX(), 1.0F, 0.0F, 0.0F);
-
-            GL11.glScalef(
-                    modelTransform.getScaleX(),
-                    modelTransform.getScaleY(),
-                    modelTransform.getScaleZ()
+            GL11.glRotatef(
+                    attachment.transform.getRotationZ(),
+                    0.0F, 0.0F, 1.0F
+            );
+            GL11.glRotatef(
+                    attachment.transform.getRotationY(),
+                    0.0F, 1.0F, 0.0F
+            );
+            GL11.glRotatef(
+                    attachment.transform.getRotationX(),
+                    1.0F, 0.0F, 0.0F
             );
         }
 
@@ -544,19 +481,26 @@ public class BodyPartsPreviewRenderer
     private static class BoneAttachment
     {
         private final AnimationTransform transform;
+        private final Matrix4f runtimeMatrix;
         private final AnimationTransform modelTransform;
 
-        private BoneAttachment(
-                AnimationTransform transform)
+        private BoneAttachment(AnimationTransform transform)
         {
-            this(transform, null);
+            this(transform, null, null);
+        }
+
+        private BoneAttachment(Matrix4f runtimeMatrix)
+        {
+            this(null, runtimeMatrix, null);
         }
 
         private BoneAttachment(
                 AnimationTransform transform,
+                Matrix4f runtimeMatrix,
                 AnimationTransform modelTransform)
         {
             this.transform = transform;
+            this.runtimeMatrix = runtimeMatrix;
             this.modelTransform = modelTransform;
         }
 
@@ -565,6 +509,7 @@ public class BodyPartsPreviewRenderer
         {
             return new BoneAttachment(
                     this.transform,
+                    this.runtimeMatrix,
                     modelTransform
             );
         }
