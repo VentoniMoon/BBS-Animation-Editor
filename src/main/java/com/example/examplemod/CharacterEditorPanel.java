@@ -63,22 +63,22 @@ public class CharacterEditorPanel
      */
 
     private static final int COLOR_PANEL =
-            0xFF17191B;
+            0xFF181818;
 
     private static final int COLOR_PANEL_DARK =
-            0xFF111315;
+            0xFF111111;
 
     private static final int COLOR_PANEL_LIGHT =
-            0xFF1D2023;
+            0xFF1D1D1D;
 
     private static final int COLOR_PANEL_HOVER =
-            0xFF25292D;
+            0xFF252525;
 
     private static final int COLOR_SELECTED =
-            0xFF28343A;
+            0xFF282828;
 
     private static final int COLOR_BORDER =
-            0xFF303438;
+            0xFF303030;
 
     private static final int COLOR_TEXT =
             0xFFE2E5E7;
