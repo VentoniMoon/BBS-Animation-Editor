@@ -450,6 +450,24 @@ public class CharacterAnimationSetupController
 
             NBTTagCompound actions = new NBTTagCompound();
 
+            /*
+             * Preserve the Emoticons configuration that came from
+             * the morph editor/model itself. Character Timeline
+             * only overrides the action entries that are explicitly
+             * present in its keys.
+             */
+            NBTTagCompound baseUserConfig =
+                    animated.animator.userConfig.toNBT(null);
+
+            if (baseUserConfig != null &&
+                    baseUserConfig.hasKey(ACTIONS_TAG, 10))
+            {
+                actions =
+                        baseUserConfig
+                                .getCompoundTag(ACTIONS_TAG)
+                                .copy();
+            }
+
             for (String action : ACTIONS)
             {
                 if (!hasEffectiveActionData(actorData, frame, action))
