@@ -2604,6 +2604,10 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
         {
+            this.bodyPartsController.getTimeline().setTick(
+                    this.playbackController.getCurrentFrame()
+            );
+
             this.bodyPartsTimelineController.draw(
                     this,
                     width,
