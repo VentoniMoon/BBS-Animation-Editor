@@ -41,6 +41,12 @@ public class BodyPartsEditorPanel
 
     private AnimationValueControl activeGlobalControl;
 
+    private boolean modelSectionOpen = true;
+    private boolean globalSectionOpen = false;
+    private int globalScroll = 0;
+    private static final int SECTION_HEIGHT = 22;
+    private static final int GLOBAL_CONTENT_HEIGHT = 240;
+
     public BodyPartsEditorPanel(
             BodyPartsEditorController controller)
     {
@@ -64,255 +70,132 @@ public class BodyPartsEditorPanel
             int mouseY,
             int sceneLength)
     {
-        if (mc == null)
-        {
-            return;
-        }
+        if (mc == null) return;
 
         drawRect(mc, x, y, x + WIDTH, y + HEIGHT, 0xFF181818);
         drawRect(mc, x, y, x + WIDTH, y + 25, 0xFF111111);
         drawRect(mc, x, y + 24, x + WIDTH, y + 25, 0xFF303030);
+        drawRect(mc, x + 9, y + 7, x + 11, y + 18,
+                EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString("BODY PARTS", x + 16, y + 8, 0xFFE2E5E7);
 
-        drawRect(
-                mc,
-                x + 9,
-                y + 7,
-                x + 11,
-                y + 18,
-                EditorThemeManager.get().getAccent()
-        );
-
-        mc.fontRenderer.drawString(
-                "BODY PARTS",
-                x + 16,
-                y + 8,
-                0xFFE2E5E7
-        );
-
-        BodyPartModelData selectedModel =
-                controller.getSelectedModel();
-
-        /*
-         * Level 2 remains the local bone/keyframe editor.
-         * The global model transform belongs to Level 1.
-         */
+        BodyPartModelData selectedModel = controller.getSelectedModel();
         if (selectedModel != null)
         {
-            controller.getTransformPanel().setPosition(
-                    x + 5,
-                    y + 34
-            );
-
+            controller.getTransformPanel().setPosition(x + 5, y + 34);
             controller.getTransformPanel().draw(
                     mc,
-                    controller.getKeyframeController()
-                            .getSelectedKeyframe(),
-                    controller.getKeyframeController()
-                            .getSelectedKeyframe() == null
+                    controller.getKeyframeController().getSelectedKeyframe(),
+                    controller.getKeyframeController().getSelectedKeyframe() == null
                             ? null
-                            : controller.getKeyframeController()
-                                    .getSelectedKeyframe()
-                                    .getTransform(),
+                            : controller.getKeyframeController().getSelectedKeyframe().getTransform(),
                     controller.getTimeline().getTick()
             );
-
             return;
         }
 
-        String target =
-                controller.getSelectedActorBoneName();
-
+        String target = controller.getSelectedActorBoneName();
+        mc.fontRenderer.drawString("ATTACH TO", x + 9, y + 34, 0xFF9AA1A6);
         mc.fontRenderer.drawString(
-                "ATTACH TO",
-                x + 9,
-                y + 34,
-                0xFF9AA1A6
+                target.length() == 0 ? "Select a bone" : target,
+                x + 9, y + 48,
+                target.length() == 0 ? 0xFF666D72 : EditorThemeManager.get().getAccentBright()
         );
 
-        mc.fontRenderer.drawString(
-                target.length() == 0
-                        ? "Select a bone"
-                        : target,
-                x + 9,
-                y + 48,
-                target.length() == 0
-                        ? 0xFF666D72
-                        : EditorThemeManager.get().getAccentBright()
-        );
-
-        BodyPartModelData selected =
-                controller.getSelectedAttachment();
-
+        BodyPartModelData selected = controller.getSelectedAttachment();
         if (selected == null)
         {
             mc.fontRenderer.drawString(
                     "Double-click an actor-bone row to create.",
-                    x + 9,
-                    y + 75,
-                    0xFF666D72
+                    x + 9, y + 75, 0xFF666D72
             );
-
             return;
         }
 
-        /*
-         * ---------------------------------------------------------
-         * MODEL
-         * ---------------------------------------------------------
-         */
-        drawSection(
-                mc,
-                "MODEL",
-                y + 67
-        );
+        int modelY = y + 67;
+        int globalY = modelY + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
 
-        drawButton(
-                mc,
-                selected.hasModel()
-                        ? selected.getModelName()
-                        : "SELECT MODEL",
-                x + 9,
-                y + 80,
-                WIDTH - 18,
-                20,
-                mouseX,
-                mouseY
-        );
+        drawAccordionHeader(mc, "MODEL", modelY, modelSectionOpen, mouseX, mouseY);
+        if (modelSectionOpen)
+        {
+            drawButton(mc,
+                    selected.hasModel() ? selected.getModelName() : "SELECT MODEL",
+                    x + 9, modelY + SECTION_HEIGHT, WIDTH - 18, 20, mouseX, mouseY);
+            drawButton(mc, "REMOVE ATTACHMENT",
+                    x + 9, modelY + SECTION_HEIGHT + 24, WIDTH - 18, 17, mouseX, mouseY);
+        }
 
-        drawButton(
-                mc,
-                "REMOVE ATTACHMENT",
-                x + 9,
-                y + 104,
-                WIDTH - 18,
-                17,
-                mouseX,
-                mouseY
-        );
-
-        /*
-         * ---------------------------------------------------------
-         * GLOBAL TRANSFORM
-         * ---------------------------------------------------------
-         */
-        drawSection(
-                mc,
-                "GLOBAL TRANSFORM",
-                y + 128
-        );
-
-        AnimationTransform transform =
-                selected.getGlobalTransform();
-
-        syncGlobalControls(transform);
-
-        drawGlobalControls(
-                mc,
-                mouseX,
-                mouseY
-        );
-
-        writeGlobalTransform(transform);
+        drawAccordionHeader(mc, "GLOBAL TRANSFORM", globalY, globalSectionOpen, mouseX, mouseY);
+        if (globalSectionOpen)
+        {
+            AnimationTransform transform = selected.getGlobalTransform();
+            int viewportTop = globalY + SECTION_HEIGHT;
+            int viewportBottom = y + HEIGHT - 5;
+            drawRect(mc, x + 6, viewportTop, x + WIDTH - 6, viewportBottom, 0xFF151515);
+            syncGlobalControls(transform, viewportTop);
+            drawGlobalControls(mc, viewportTop, viewportBottom);
+            writeGlobalTransform(transform);
+        }
     }
 
-    private void drawSection(
-            Minecraft mc,
-            String title,
-            int drawY)
+    private void drawAccordionHeader(
+            Minecraft mc, String title, int drawY, boolean open,
+            int mouseX, int mouseY)
     {
-        drawRect(
-                mc,
-                x + 8,
-                drawY,
-                x + WIDTH - 8,
-                drawY + 1,
-                0xFF303030
-        );
-
-        drawRect(
-                mc,
-                x + 8,
-                drawY + 6,
-                x + 11,
-                drawY + 15,
-                EditorThemeManager.get().getAccent()
-        );
-
-        mc.fontRenderer.drawString(
-                title,
-                x + 16,
-                drawY + 5,
-                EditorThemeManager.get().getAccentBright()
-        );
+        boolean hovered = mouseX >= x + 7 && mouseX < x + WIDTH - 7
+                && mouseY >= drawY && mouseY < drawY + SECTION_HEIGHT;
+        drawRect(mc, x + 7, drawY, x + WIDTH - 7, drawY + SECTION_HEIGHT,
+                hovered ? 0xFF252525 : 0xFF1D1D1D);
+        drawRect(mc, x + 7, drawY, x + 9, drawY + SECTION_HEIGHT,
+                EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString(title, x + 15, drawY + 6,
+                hovered ? EditorThemeManager.get().getAccentBright() : 0xFFE2E5E7);
+        mc.fontRenderer.drawString(open ? "-" : "+", x + WIDTH - 18, drawY + 6,
+                EditorThemeManager.get().getAccentBright());
     }
 
-    private void syncGlobalControls(
-            AnimationTransform transform)
+    private void syncGlobalControls(AnimationTransform transform, int viewportTop)
     {
         globalPositionX.setValue(transform.getPositionX());
         globalPositionY.setValue(transform.getPositionY());
         globalPositionZ.setValue(transform.getPositionZ());
-
         globalRotationX.setValue(transform.getRotationX());
         globalRotationY.setValue(transform.getRotationY());
         globalRotationZ.setValue(transform.getRotationZ());
-
         globalScaleX.setValue(transform.getScaleX());
         globalScaleY.setValue(transform.getScaleY());
         globalScaleZ.setValue(transform.getScaleZ());
 
         int cx = x + 9;
-
-        globalPositionX.setPosition(cx, y + 148);
-        globalPositionY.setPosition(cx, y + 166);
-        globalPositionZ.setPosition(cx, y + 184);
-
-        globalRotationX.setPosition(cx, y + 207);
-        globalRotationY.setPosition(cx, y + 225);
-        globalRotationZ.setPosition(cx, y + 243);
-
-        globalScaleX.setPosition(cx, y + 266);
-        globalScaleY.setPosition(cx, y + 284);
-        globalScaleZ.setPosition(cx, y + 302);
+        int contentY = viewportTop + 4 - globalScroll;
+        globalPositionX.setPosition(cx, contentY + 15);
+        globalPositionY.setPosition(cx, contentY + 37);
+        globalPositionZ.setPosition(cx, contentY + 59);
+        globalRotationX.setPosition(cx, contentY + 92);
+        globalRotationY.setPosition(cx, contentY + 114);
+        globalRotationZ.setPosition(cx, contentY + 136);
+        globalScaleX.setPosition(cx, contentY + 169);
+        globalScaleY.setPosition(cx, contentY + 191);
+        globalScaleZ.setPosition(cx, contentY + 213);
     }
 
-    private void drawGlobalControls(
-            Minecraft mc,
-            int mouseX,
-            int mouseY)
+    private void drawGlobalControls(Minecraft mc, int viewportTop, int viewportBottom)
     {
-        mc.fontRenderer.drawString(
-                "Position",
-                x + 9,
-                y + 137,
-                0xFF55FFFF
-        );
+        int contentY = viewportTop + 4 - globalScroll;
+        drawGlobalLabel(mc, "Position", contentY + 1, viewportTop, viewportBottom);
+        globalPositionX.draw(mc); globalPositionY.draw(mc); globalPositionZ.draw(mc);
+        drawGlobalLabel(mc, "Rotation", contentY + 78, viewportTop, viewportBottom);
+        globalRotationX.draw(mc); globalRotationY.draw(mc); globalRotationZ.draw(mc);
+        drawGlobalLabel(mc, "Scale", contentY + 155, viewportTop, viewportBottom);
+        globalScaleX.draw(mc); globalScaleY.draw(mc); globalScaleZ.draw(mc);
+    }
 
-        globalPositionX.draw(mc);
-        globalPositionY.draw(mc);
-        globalPositionZ.draw(mc);
-
-        mc.fontRenderer.drawString(
-                "Rotation",
-                x + 9,
-                y + 196,
-                0xFF55FF55
-        );
-
-        globalRotationX.draw(mc);
-        globalRotationY.draw(mc);
-        globalRotationZ.draw(mc);
-
-        mc.fontRenderer.drawString(
-                "Scale",
-                x + 9,
-                y + 255,
-                0xFFFFFF55
-        );
-
-        globalScaleX.draw(mc);
-        globalScaleY.draw(mc);
-        globalScaleZ.draw(mc);
+    private void drawGlobalLabel(Minecraft mc, String text, int drawY,
+            int viewportTop, int viewportBottom)
+    {
+        if (drawY + 10 < viewportTop || drawY > viewportBottom) return;
+        mc.fontRenderer.drawString(text, x + 9, drawY,
+                EditorThemeManager.get().getAccentBright());
     }
 
     private void writeGlobalTransform(
@@ -344,115 +227,113 @@ public class BodyPartsEditorPanel
     }
 
     public boolean mouseClicked(
-            int mouseX,
-            int mouseY,
-            int mouseButton,
-            int sceneLength)
+            int mouseX, int mouseY, int mouseButton, int sceneLength)
     {
-        if (mouseButton != 0)
-        {
-            return false;
-        }
+        if (mouseButton != 0 || controller.getSelectedModel() != null) return false;
 
-        if (controller.getSelectedModel() != null)
-        {
-            return false;
-        }
-
-        int addY = y + 68;
-
-        if (controller.getSelectedAttachment() == null &&
-                mouseX >= x + 9 &&
-                mouseX < x + WIDTH - 9 &&
-                mouseY >= addY &&
-                mouseY < addY + 20)
-        {
-            controller.createAttachment(
-                    controller.getTimeline().getTick(),
-                    sceneLength
-            );
-
-            return true;
-        }
-
-        BodyPartModelData selected =
-                controller.getSelectedAttachment();
-
+        BodyPartModelData selected = controller.getSelectedAttachment();
         if (selected == null)
         {
+            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9
+                    && mouseY >= y + 68 && mouseY < y + 88)
+            {
+                controller.createAttachment(controller.getTimeline().getTick(), sceneLength);
+                return true;
+            }
             return false;
         }
 
-        if (mouseX >= x + 9 &&
-                mouseX < x + WIDTH - 9 &&
-                mouseY >= y + 104 &&
-                mouseY < y + 121)
+        int modelY = y + 67;
+        int globalY = modelY + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
+
+        if (insideSectionHeader(mouseX, mouseY, modelY))
         {
-            controller.removeSelectedAttachment();
+            modelSectionOpen = !modelSectionOpen;
+            if (modelSectionOpen) globalSectionOpen = false;
+            activeGlobalControl = null;
             return true;
         }
 
-        if (mouseX >= x + 9 &&
-                mouseX < x + WIDTH - 9 &&
-                mouseY >= y + 80 &&
-                mouseY < y + 100)
+        if (insideSectionHeader(mouseX, mouseY, globalY))
         {
-            if (this.screen != null)
+            globalSectionOpen = !globalSectionOpen;
+            if (globalSectionOpen) modelSectionOpen = false;
+            globalScroll = 0;
+            activeGlobalControl = null;
+            return true;
+        }
+
+        if (modelSectionOpen)
+        {
+            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9
+                    && mouseY >= modelY + SECTION_HEIGHT
+                    && mouseY < modelY + SECTION_HEIGHT + 20)
             {
-                Minecraft.getMinecraft().displayGuiScreen(
-                        new BodyPartModelPickerScreen(
-                                Minecraft.getMinecraft(),
-                                this.screen,
-                                (modelName) -> controller.assignModelToSelected(
-                                        modelName
-                                )
-                        )
-                );
+                if (this.screen != null)
+                {
+                    Minecraft.getMinecraft().displayGuiScreen(
+                            new BodyPartModelPickerScreen(
+                                    Minecraft.getMinecraft(), this.screen,
+                                    (modelName) -> controller.assignModelToSelected(modelName)
+                            )
+                    );
+                }
+                return true;
             }
 
-            return true;
+            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9
+                    && mouseY >= modelY + SECTION_HEIGHT + 24
+                    && mouseY < modelY + SECTION_HEIGHT + 41)
+            {
+                controller.removeSelectedAttachment();
+                return true;
+            }
         }
 
         return false;
     }
 
-    private boolean globalContains(
-            int mouseX,
-            int mouseY)
+    private boolean insideSectionHeader(int mouseX, int mouseY, int sectionY)
     {
-        return mouseX >= x + 8 &&
-                mouseX < x + WIDTH - 8 &&
-                mouseY >= y + 145 &&
-                mouseY < y + HEIGHT - 4;
+        return mouseX >= x + 7 && mouseX < x + WIDTH - 7
+                && mouseY >= sectionY && mouseY < sectionY + SECTION_HEIGHT;
     }
 
-    private AnimationValueControl findGlobalControl(
-            int mouseX,
-            int mouseY)
+    private boolean globalContains(int mouseX, int mouseY)
     {
-        AnimationValueControl[] controls =
-                new AnimationValueControl[]
-                {
-                        globalPositionX,
-                        globalPositionY,
-                        globalPositionZ,
-                        globalRotationX,
-                        globalRotationY,
-                        globalRotationZ,
-                        globalScaleX,
-                        globalScaleY,
-                        globalScaleZ
-                };
+        if (!globalSectionOpen) return false;
+        int globalY = y + 67 + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
+        int viewportTop = globalY + SECTION_HEIGHT;
+        int viewportBottom = y + HEIGHT - 5;
+        return mouseX >= x + 6 && mouseX < x + WIDTH - 6
+                && mouseY >= viewportTop && mouseY < viewportBottom;
+    }
 
+    private AnimationValueControl findGlobalControl(int mouseX, int mouseY)
+    {
+        if (!globalContains(mouseX, mouseY)) return null;
+        AnimationValueControl[] controls = new AnimationValueControl[] {
+                globalPositionX, globalPositionY, globalPositionZ,
+                globalRotationX, globalRotationY, globalRotationZ,
+                globalScaleX, globalScaleY, globalScaleZ
+        };
         for (AnimationValueControl control : controls)
         {
-            if (control.contains(mouseX, mouseY))
-            {
-                return control;
-            }
+            if (control.contains(mouseX, mouseY)) return control;
         }
-
         return null;
+    }
+
+    public boolean mouseScrolled(int mouseX, int mouseY, int wheel)
+    {
+        if (!globalContains(mouseX, mouseY) || wheel == 0) return false;
+        int globalY = y + 67 + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
+        int viewportTop = globalY + SECTION_HEIGHT;
+        int viewportBottom = y + HEIGHT - 5;
+        int maxScroll = Math.max(0,
+                GLOBAL_CONTENT_HEIGHT - (viewportBottom - viewportTop));
+        globalScroll = Math.max(0, Math.min(maxScroll, globalScroll - wheel * 18));
+        return true;
     }
 
     private boolean mouseClickedGlobalTransform(
