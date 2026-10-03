@@ -91,6 +91,20 @@ public class CharacterEditorPanel
 
     /*
      * =========================================================
+     * SECTION LAYOUT
+     * =========================================================
+     *
+     * Все секции используют одинаковую геометрию:
+     * заголовок 24 px + отступ содержимого 4 px.
+     * Это же положение используется для input.
+     */
+    private static final int SECTION_HEIGHT = 24;
+    private static final int SECTION_CONTENT_GAP = 4;
+    private static final int APPEARANCE_CONTENT_HEIGHT = 108;
+    private static final int BODY_PART_CONTENT_HEIGHT = 108;
+
+    /*
+     * =========================================================
      * BODY PART OVERRIDES
      * =========================================================
      *
@@ -755,7 +769,7 @@ public class CharacterEditorPanel
         {
             cursorY += 4;
 
-            drawActorSettings(
+            drawAnimationParameters(
                     mc,
                     cursorY,
                     mouseX,
@@ -1914,6 +1928,52 @@ public class CharacterEditorPanel
         return currentY;
     }
 
+    private int getAnimationParametersContentY()
+    {
+        int sectionY = this.y + 30;
+
+        if (this.openedSection == Section.APPEARANCE)
+        {
+            sectionY += SECTION_HEIGHT
+                    + SECTION_CONTENT_GAP
+                    + APPEARANCE_CONTENT_HEIGHT;
+        }
+        else
+        {
+            sectionY += SECTION_HEIGHT;
+        }
+
+        sectionY += SECTION_CONTENT_GAP;
+
+        if (this.openedSection == Section.ANIMATION_SETUP)
+        {
+            sectionY += SECTION_HEIGHT
+                    + SECTION_CONTENT_GAP
+                    + CharacterAnimationSetupPanel.HEIGHT;
+        }
+        else
+        {
+            sectionY += SECTION_HEIGHT;
+        }
+
+        sectionY += SECTION_CONTENT_GAP;
+
+        if (this.openedSection == Section.BODY_PART_OVERRIDES)
+        {
+            sectionY += SECTION_HEIGHT
+                    + SECTION_CONTENT_GAP
+                    + BODY_PART_CONTENT_HEIGHT;
+        }
+        else
+        {
+            sectionY += SECTION_HEIGHT;
+        }
+
+        sectionY += SECTION_CONTENT_GAP;
+
+        return sectionY + SECTION_HEIGHT + SECTION_CONTENT_GAP;
+    }
+
     /*
      * =========================================================
      * BODY PART INPUT
@@ -2114,24 +2174,12 @@ public class CharacterEditorPanel
 
         if (this.openedSection == Section.ANIMATION_PARAMETERS)
         {
-            int actorSectionY =
-                    this.y + 30;
-
-            actorSectionY += 24;
-            actorSectionY += 4;
-
-            actorSectionY += 24;
-            actorSectionY += 4;
-
-            actorSectionY += 24;
-            actorSectionY += 4;
-
-            int actorSettingsY =
-                    actorSectionY + 24 + 4;
+            int animationParametersY =
+                    getAnimationParametersContentY();
 
             this.animationParametersPanel.setBounds(
                     this.x,
-                    actorSettingsY,
+                    animationParametersY,
                     this.width
             );
 
@@ -2159,11 +2207,11 @@ public class CharacterEditorPanel
 
     /*
      * =========================================================
-     * ACTOR SETTINGS
+     * ANIMATION PARAMETERS
      * =========================================================
      */
 
-    private void drawActorSettings(
+    private void drawAnimationParameters(
             Minecraft mc,
             int y,
             int mouseX,
@@ -2500,11 +2548,11 @@ public class CharacterEditorPanel
 
         if (this.openedSection == Section.ANIMATION_PARAMETERS)
         {
-            int actorSettingsY = currentY + 24 + 4;
+            int animationParametersY = currentY + SECTION_HEIGHT + SECTION_CONTENT_GAP;
 
             this.animationParametersPanel.setBounds(
                     this.x,
-                    actorSettingsY,
+                    animationParametersY,
                     this.width
             );
 
