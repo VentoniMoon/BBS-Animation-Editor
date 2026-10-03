@@ -2609,7 +2609,7 @@ public class AnimationEditorScreen extends GuiScreen
             );
 
             this.bodyPartsTimelineController.draw(
-                    this,
+                    this.mc,
                     width,
                     height,
                     getSceneLength()
