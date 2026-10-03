@@ -532,6 +532,12 @@ public class BodyPartsEditorPanel
         );
     }
 
+    public boolean isGlobalTransformActive()
+    {
+        return this.activeGlobalControl != null &&
+                this.activeGlobalControl.isDragging();
+    }
+
     public boolean mouseClickedTransform(
             int mouseX,
             int mouseY,
