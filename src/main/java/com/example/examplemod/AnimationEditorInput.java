@@ -1100,6 +1100,15 @@ public class AnimationEditorInput
             if (this.editorModeController.getMode()
                     == EditorModeController.EditorMode.BODY_PARTS)
             {
+                if (this.bodyPartsEditorPanel.mouseScrolled(
+                        mouseX,
+                        mouseY,
+                        direction
+                ))
+                {
+                    return;
+                }
+
                 this.bodyPartsTimelineController.mouseScrolled(
                         mouseX,
                         mouseY,
