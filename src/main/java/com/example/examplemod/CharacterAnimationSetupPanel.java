@@ -99,8 +99,6 @@ public class CharacterAnimationSetupPanel
             int mouseX,
             int mouseY)
     {
-        ensureTextFields(mc);
-
         if (this.selectedActor == null ||
                 this.selectedKey == null)
         {
