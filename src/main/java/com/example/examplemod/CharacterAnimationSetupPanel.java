@@ -185,14 +185,6 @@ public class CharacterAnimationSetupPanel
                 mouseY
         );
 
-        if (this.pickerPopup.isOpen())
-        {
-            this.pickerPopup.draw(
-                    mc,
-                    mouseX,
-                    mouseY
-            );
-        }
     }
 
     public boolean mouseClicked(
@@ -335,6 +327,26 @@ public class CharacterAnimationSetupPanel
                 this.y + 14,
                 this.width - 16
         );
+    }
+
+    /**
+     * Рисует popup выбора анимации поверх остальных секций Character.
+     * Вызывается владельцем панели в самом конце draw(), чтобы
+     * BODY PART OVERRIDES и ANIMATION PARAMETERS не перекрывали popup.
+     */
+    public void drawPopup(
+            Minecraft mc,
+            int mouseX,
+            int mouseY)
+    {
+        if (this.pickerPopup.isOpen())
+        {
+            this.pickerPopup.draw(
+                    mc,
+                    mouseX,
+                    mouseY
+            );
+        }
     }
 
     public String getSelectedAction()
