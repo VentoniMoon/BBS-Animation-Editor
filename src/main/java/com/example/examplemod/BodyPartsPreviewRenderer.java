@@ -403,7 +403,17 @@ public class BodyPartsPreviewRenderer
                             .asFloatBuffer();
 
             Matrix4f matrix =
-                    attachment.runtimeMatrix;
+                    new Matrix4f(attachment.runtimeMatrix);
+
+            /*
+             * BOBJ stores bone translations in model pixels, while the
+             * Minecraft render matrix uses block units.  The previous
+             * implementation fed the raw matrix to OpenGL, which could
+             * place the attachment many blocks away from the actor.
+             */
+            matrix.m03 /= 16.0F;
+            matrix.m13 /= 16.0F;
+            matrix.m23 /= 16.0F;
 
             matrixBuffer.put(matrix.m00).put(matrix.m10).put(matrix.m20).put(matrix.m30);
             matrixBuffer.put(matrix.m01).put(matrix.m11).put(matrix.m21).put(matrix.m31);
