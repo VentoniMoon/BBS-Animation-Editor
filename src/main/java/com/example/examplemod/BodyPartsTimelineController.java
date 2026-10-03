@@ -234,7 +234,7 @@ public class BodyPartsTimelineController
         if (modelView)
         {
             mc.fontRenderer.drawString(
-                    "← MODELS",
+                    "← BODY PARTS",
                     width - 76,
                     top + 11,
                     EditorThemeManager.get().getAccentBright()
@@ -436,12 +436,17 @@ public class BodyPartsTimelineController
                             Math.max(left + 8, right)
                     );
 
+            boolean selected =
+                    model == controller.getSelectedAttachment();
+
             Gui.drawRect(
                     left,
                     barY,
                     right,
                     barY + 12,
-                    EditorThemeManager.get().getAccent()
+                    selected
+                            ? EditorThemeManager.get().getAccentBright()
+                            : EditorThemeManager.get().getAccent()
             );
 
             Gui.drawRect(
@@ -1808,6 +1813,8 @@ public class BodyPartsTimelineController
         lastClickTime = 0L;
         lastClickX = -100000;
         lastClickY = -100000;
+        lastClickBone = -1;
+        lastClickedAttachment = null;
     }
 
 }
