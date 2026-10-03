@@ -1224,6 +1224,21 @@ public class AnimationEditorInput
 
         /*
          * =========================================================
+         * BODY PARTS TRANSFORM INPUT
+         * =========================================================
+         */
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS
+                && this.bodyPartsEditorPanel.keyTyped(
+                        typedChar,
+                        keyCode))
+        {
+            this.markDirty();
+            return;
+        }
+
+        /*
+         * =========================================================
          * POSE TRANSFORM INPUT
          * =========================================================
          */
