@@ -177,9 +177,15 @@ public class EditorTimelineController
      * It does NOT change with the editor theme.
      */
 
-    private static int getPlayheadColor()\n    {\n        return EditorThemeManager.get().getAccent();\n    }
+    private static int getPlayheadColor()
+    {
+        return EditorThemeManager.get().getAccent();
+    }
 
-    private static int getPlayheadHeadColor()\n    {\n        return EditorThemeManager.get().getAccentBright();\n    }
+    private static int getPlayheadHeadColor()
+    {
+        return EditorThemeManager.get().getAccentBright();
+    }
 
     private final EditorTimeline timeline;
 
