@@ -208,6 +208,9 @@ public class CharacterEditorPanel
      */
     private EntityActor runtimeActor;
 
+    private final CharacterAnimationSetupPanel animationSetupPanel =
+            new CharacterAnimationSetupPanel();
+
     /*
      * =========================================================
      * CONSTRUCTOR
@@ -672,12 +675,26 @@ public class CharacterEditorPanel
         {
             cursorY += 4;
 
-            drawAnimationSetup(
-                    mc,
-                    cursorY
+            this.animationSetupPanel.setBounds(
+                    this.x,
+                    cursorY,
+                    this.width
             );
 
-            cursorY += 92;
+            this.animationSetupPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.runtimeActor,
+                    this.currentFrame
+            );
+
+            this.animationSetupPanel.draw(
+                    mc,
+                    mouseX,
+                    mouseY
+            );
+
+            cursorY += CharacterAnimationSetupPanel.HEIGHT;
         }
 
         cursorY += 4;
@@ -1134,74 +1151,6 @@ public class CharacterEditorPanel
                     COLOR_TEXT_MUTED
             );
         }
-    }
-
-    /*
-     * =========================================================
-     * ANIMATION SETUP
-     * =========================================================
-     */
-
-    private void drawAnimationSetup(
-            Minecraft mc,
-            int y)
-    {
-        drawAnimationRow(
-                mc,
-                "Idle",
-                "Not assigned",
-                y
-        );
-
-        drawAnimationRow(
-                mc,
-                "Walk",
-                "Not assigned",
-                y + 18
-        );
-
-        drawAnimationRow(
-                mc,
-                "Run",
-                "Not assigned",
-                y + 36
-        );
-
-        drawAnimationRow(
-                mc,
-                "Jump",
-                "Not assigned",
-                y + 54
-        );
-
-        drawAnimationRow(
-                mc,
-                "Actions",
-                "Configure...",
-                y + 72
-        );
-    }
-
-    private void drawAnimationRow(
-            Minecraft mc,
-            String name,
-            String value,
-            int y)
-    {
-        drawLabel(
-                mc,
-                name,
-                this.x + 12,
-                y
-        );
-
-        drawValueBox(
-                mc,
-                value,
-                this.x + 68,
-                y - 3,
-                this.width - 80
-        );
     }
 
     /*
@@ -1925,8 +1874,33 @@ public class CharacterEditorPanel
         if (this.openedSection ==
                 Section.ANIMATION_SETUP)
         {
+            int animationY =
+                    currentY + 24 + 4;
+
+            this.animationSetupPanel.setBounds(
+                    this.x,
+                    animationY,
+                    this.width
+            );
+
+            this.animationSetupPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.runtimeActor,
+                    this.currentFrame
+            );
+
+            if (this.animationSetupPanel.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            ))
+            {
+                return true;
+            }
+
             currentY +=
-                    24 + 4 + 92;
+                    24 + 4 + CharacterAnimationSetupPanel.HEIGHT;
         }
         else
         {
@@ -2078,6 +2052,76 @@ public class CharacterEditorPanel
         }
 
         return false;
+    }
+
+    public boolean mouseScrolled(
+            int mouseX,
+            int mouseY,
+            int direction)
+    {
+        if (this.openedSection != Section.ANIMATION_SETUP)
+        {
+            return false;
+        }
+
+        int currentY = this.y + 30 + 24 + 4;
+        int animationY = currentY + 24 + 4;
+
+        this.animationSetupPanel.setBounds(
+                this.x,
+                animationY,
+                this.width
+        );
+
+        this.animationSetupPanel.setState(
+                this.selectedActor,
+                this.selectedKey,
+                this.runtimeActor,
+                this.currentFrame
+        );
+
+        return this.animationSetupPanel.mouseScrolled(
+                mouseX,
+                mouseY,
+                direction
+        );
+    }
+
+    public boolean keyTyped(
+            char typedChar,
+            int keyCode)
+            throws java.io.IOException
+    {
+        if (this.openedSection != Section.ANIMATION_SETUP)
+        {
+            return false;
+        }
+
+        int currentY = this.y + 30 + 24 + 4;
+        int animationY = currentY + 24 + 4;
+
+        this.animationSetupPanel.setBounds(
+                this.x,
+                animationY,
+                this.width
+        );
+
+        this.animationSetupPanel.setState(
+                this.selectedActor,
+                this.selectedKey,
+                this.runtimeActor,
+                this.currentFrame
+        );
+
+        return this.animationSetupPanel.keyTyped(
+                typedChar,
+                keyCode
+        );
+    }
+
+    public void updateCursorCounter()
+    {
+        this.animationSetupPanel.updateCursorCounter();
     }
 
     /*
