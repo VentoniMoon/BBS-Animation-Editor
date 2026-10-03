@@ -46,6 +46,10 @@ public class AnimationEditorInput
     private final EditorRecordController recordController;
     private final InterpolationPanel interpolationPanel;
 
+    private final BodyPartsEditorController bodyPartsController;
+    private final BodyPartsEditorPanel bodyPartsEditorPanel;
+    private final BodyPartsTimelineController bodyPartsTimelineController;
+
     /*
      * =========================================================
      * SAVE
@@ -79,7 +83,10 @@ public class AnimationEditorInput
             EditorTimelineController timelineController,
             EditorActorPreviewController actorPreviewController,
             EditorRecordController recordController,
-            InterpolationPanel interpolationPanel)
+            InterpolationPanel interpolationPanel,
+            BodyPartsEditorController bodyPartsController,
+            BodyPartsEditorPanel bodyPartsEditorPanel,
+            BodyPartsTimelineController bodyPartsTimelineController)
     {
         this.screen = screen;
         this.editorModeController = editorModeController;
@@ -98,6 +105,9 @@ public class AnimationEditorInput
         this.actorPreviewController = actorPreviewController;
         this.recordController = recordController;
         this.interpolationPanel = interpolationPanel;
+        this.bodyPartsController = bodyPartsController;
+        this.bodyPartsEditorPanel = bodyPartsEditorPanel;
+        this.bodyPartsTimelineController = bodyPartsTimelineController;
 
         /*
          * Save input deliberately remains outside
@@ -450,6 +460,49 @@ public class AnimationEditorInput
 
         /*
          * =========================================================
+         * BODY PART BONE LIST
+         * =========================================================
+         */
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            int actorTop = AnimationEditorScreen.TOP_BAR_HEIGHT;
+            int actorBottom = actorTop + AnimationEditorScreen.ACTOR_PANEL_HEIGHT;
+
+            if (mouseX >= 0 &&
+                    mouseX <= AnimationEditorScreen.LEFT_PANEL_WIDTH &&
+                    mouseY >= actorTop + 30 &&
+                    mouseY < actorBottom)
+            {
+                int relativeY = mouseY - actorTop - 30;
+                int boneIndex = relativeY / 20;
+
+                if (boneIndex >= 0 &&
+                        boneIndex < this.bodyPartsController.getActorBones().size())
+                {
+                    this.bodyPartsController.setSelectedActorBone(boneIndex);
+                    return;
+                }
+            }
+
+            int panelX = this.screen.width - BodyPartsEditorPanel.WIDTH;
+            int panelY = AnimationEditorScreen.TOP_BAR_HEIGHT;
+            int panelBottom = this.screen.height - this.bodyPartsTimelineController.getTimelineHeight();
+
+            if (mouseX >= panelX && mouseX < this.screen.width &&
+                    mouseY >= panelY && mouseY < panelBottom)
+            {
+                if (this.bodyPartsEditorPanel.mouseClicked(
+                        mouseX, mouseY, mouseButton, this.screen.getSceneLength()))
+                {
+                    this.markDirty();
+                    return;
+                }
+            }
+        }
+
+        /*
+         * =========================================================
          * ACTOR LIST
          * =========================================================
          */
@@ -573,6 +626,13 @@ public class AnimationEditorInput
          */
 
         if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            this.bodyPartsTimelineController.mouseReleased();
+            this.bodyPartsEditorPanel.mouseReleased(state);
+        }
+
+        if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
             AnimationKeyframe selectedKeyframe =
@@ -617,6 +677,27 @@ public class AnimationEditorInput
 
         /*
          * =========================================================
+         * BODY PART TRANSFORM PANEL
+         * =========================================================
+         */
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            AnimationKeyframe selectedKeyframe =
+                    this.bodyPartsController.getKeyframeController().getSelectedKeyframe();
+
+            if (selectedKeyframe != null &&
+                    this.bodyPartsEditorPanel.mouseClickedTransform(
+                            mouseX, mouseY, mouseButton))
+            {
+                this.transformDragging = true;
+                this.markDirty();
+                return;
+            }
+        }
+
+        /*
+         * =========================================================
          * VIEWPORT
          * =========================================================
          */
@@ -649,6 +730,41 @@ public class AnimationEditorInput
                     this.screen.height -
                             this.screen.getTimelineHeight(),
                     0))
+            {
+                this.markDirty();
+                return;
+            }
+        }
+
+        /*
+         * =========================================================
+         * BODY PARTS TIMELINE
+         * =========================================================
+         */
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            if (this.bodyPartsTimelineController.mouseClicked(
+                    mouseX, mouseY, this.screen.width, this.screen.height,
+                    this.screen.getSceneLength()))
+            {
+                this.markDirty();
+                return;
+            }
+        }
+
+        /*
+         * =========================================================
+         * BODY PARTS TIMELINE DRAG
+         * =========================================================
+         */
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            if (this.bodyPartsTimelineController.mouseClickMove(
+                    mouseX, mouseY, clickedMouseButton,
+                    this.screen.width, this.screen.height,
+                    this.screen.getSceneLength()))
             {
                 this.markDirty();
                 return;
@@ -745,6 +861,17 @@ public class AnimationEditorInput
 
                 return;
             }
+        }
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS
+                && this.transformDragging
+                && this.bodyPartsController.getKeyframeController().getSelectedKeyframe() != null
+                && clickedMouseButton == 0)
+        {
+            this.bodyPartsEditorPanel.mouseDraggedTransform(mouseX, mouseY);
+            this.markDirty();
+            return;
         }
 
         /*
