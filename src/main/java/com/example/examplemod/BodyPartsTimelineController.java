@@ -1644,4 +1644,11 @@ public class BodyPartsTimelineController
         return mc.fontRenderer.trimStringToWidth(text, width);
     }
 
+    private void resetClickState()
+    {
+        lastClickTime = 0L;
+        lastClickX = -100000;
+        lastClickY = -100000;
+    }
+
 }
