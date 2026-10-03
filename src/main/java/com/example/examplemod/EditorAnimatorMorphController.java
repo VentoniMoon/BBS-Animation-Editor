@@ -69,6 +69,17 @@ public class EditorAnimatorMorphController
         BlockbusterSceneActorData actorData =
                 CharacterBodyPartPreviewState.getActorData();
 
+        if (temporaryPose == null &&
+                hasExplicitBodyPartOverrides(
+                        actorData,
+                        frame,
+                        armature
+                ))
+        {
+            temporaryPose =
+                    new AnimatedPose();
+        }
+
         boolean changed =
                 applyBodyPartOverrides(
                         temporaryPose,
@@ -76,16 +87,6 @@ public class EditorAnimatorMorphController
                         frame,
                         armature
                 );
-
-        /*
-         * Если исходного pose не было, но нужен explicit
-         * override, создаём временный pose.
-         */
-        if (!changed &&
-                originalPose == null)
-        {
-            temporaryPose = null;
-        }
 
         if (changed)
         {
@@ -270,57 +271,18 @@ public class EditorAnimatorMorphController
             return false;
         }
 
-        /*
-         * Если pose отсутствует, но есть override,
-         * создаём его здесь.
-         */
-        boolean hasOverride = false;
-
-        for (String boneName :
-                armature.bones.keySet())
-        {
-            int state =
-                    CharacterBodyPartOverrideController
-                            .getEffectiveKeyState(
-                                    actorData,
-                                    frame,
-                                    boneName
-                            );
-
-            if (state !=
-                    CharacterBodyPartOverrideController.STATE_ENABLE
-                    &&
-                    state !=
-                            CharacterBodyPartOverrideController.STATE_DISABLE)
-            {
-                continue;
-            }
-
-            hasOverride = true;
-
-            if (pose == null)
-            {
-                /*
-                 * Создать pose можно только в вызывающем
-                 * методе, поэтому этот случай обрабатывается
-                 * ниже через local pose creation.
-                 */
-            }
-        }
-
-        if (!hasOverride)
+        if (!hasExplicitBodyPartOverrides(
+                actorData,
+                frame,
+                armature
+        ))
         {
             return false;
         }
 
-        /*
-         * Для AnimatedMorph без исходного pose создаём
-         * новый identity pose.
-         */
         if (pose == null)
         {
-            pose = new AnimatedPose();
-            this.morph.pose = pose;
+            return false;
         }
 
         for (String boneName :
@@ -369,6 +331,42 @@ public class EditorAnimatorMorphController
         }
 
         return true;
+    }
+
+
+    private boolean hasExplicitBodyPartOverrides(
+            BlockbusterSceneActorData actorData,
+            int frame,
+            BOBJArmature armature)
+    {
+        if (actorData == null ||
+                armature == null)
+        {
+            return false;
+        }
+
+        for (String boneName :
+                armature.bones.keySet())
+        {
+            int state =
+                    CharacterBodyPartOverrideController
+                            .getEffectiveKeyState(
+                                    actorData,
+                                    frame,
+                                    boneName
+                            );
+
+            if (state ==
+                    CharacterBodyPartOverrideController.STATE_ENABLE
+                    ||
+                    state ==
+                    CharacterBodyPartOverrideController.STATE_DISABLE)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 
