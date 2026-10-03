@@ -35,6 +35,10 @@ public class EditorTimelineController
     private static final long DOUBLE_CLICK_DELAY = 300L;
     private static final int DOUBLE_CLICK_DISTANCE = 5;
 
+    private static final int COLOR_TEXT = 0xFFE0E3E5;
+    private static final int COLOR_TEXT_SECONDARY = 0xFF9DA4A9;
+    private static final int COLOR_TEXT_MUTED = 0xFF666D72;
+
     /*
      * =========================================================
      * VISUAL STYLE
