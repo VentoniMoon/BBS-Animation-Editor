@@ -66,6 +66,7 @@ public class BodyPartsTimelineController
                     mc,
                     top + HEADER_HEIGHT,
                     width,
+                    height,
                     sceneLength
             );
         }
@@ -75,6 +76,7 @@ public class BodyPartsTimelineController
                     mc,
                     top + HEADER_HEIGHT,
                     width,
+                    height,
                     sceneLength,
                     selected
             );
@@ -122,6 +124,7 @@ public class BodyPartsTimelineController
             Minecraft mc,
             int top,
             int width,
+            int height,
             int sceneLength)
     {
         int y = top;
@@ -223,6 +226,7 @@ public class BodyPartsTimelineController
             Minecraft mc,
             int top,
             int width,
+            int height,
             int sceneLength,
             BodyPartModelData model)
     {
