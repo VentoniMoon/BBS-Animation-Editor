@@ -217,6 +217,10 @@ public class AnimationEditorScreen extends GuiScreen
             this.sceneViewport =
                     new EditorSceneViewport();
 
+            this.sceneViewport.setBodyPartsController(
+                    this.bodyPartsController
+            );
+
             this.actorPreviewController.initializeAdapters();
 
             /*
