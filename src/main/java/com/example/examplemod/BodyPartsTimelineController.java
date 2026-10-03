@@ -196,7 +196,7 @@ public class BodyPartsTimelineController
                     rowY + 4,
                     Math.min(width - 4, endX),
                     rowY + TRACK_HEIGHT - 4,
-                    model == selected
+                    selectedModel
                             ? EditorThemeManager.get().getAccentBright()
                             : EditorThemeManager.get().getAccent()
             );
