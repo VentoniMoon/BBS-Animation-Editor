@@ -42,40 +42,40 @@ public class EditorTimelineController
      */
 
     private static final int COLOR_BACKGROUND =
-            0xFF17191B;
+            0xFF181818;
 
     private static final int COLOR_HEADER =
-            0xFF202225;
+            0xFF202020;
 
     private static final int COLOR_HEADER_LIGHT =
-            0xFF292C2F;
+            0xFF292929;
 
     private static final int COLOR_RULER =
-            0xFF1D2023;
+            0xFF1D1D1D;
 
     private static final int COLOR_RULER_TOP =
-            0xFF303438;
+            0xFF303030;
 
     private static final int COLOR_TRACK =
-            0xFF202225;
+            0xFF202020;
 
     private static final int COLOR_TRACK_ALT =
-            0xFF1C1F21;
+            0xFF1C1C1C;
 
     private static final int COLOR_TRACK_SELECTED =
-            0xFF2B3438;
+            0xFF2B2B2B;
 
     private static final int COLOR_TRACK_BORDER =
-            0xFF111315;
+            0xFF111111;
 
     private static final int COLOR_GRID =
-            0xFF292C2F;
+            0xFF292929;
 
     private static final int COLOR_GRID_MAJOR =
-            0xFF34383C;
+            0xFF343434;
 
     private static final int COLOR_GRID_SECOND =
-            0xFF2E3235;
+            0xFF2E2E2E;
 
     private static final int COLOR_TEXT =
             0xFFE0E3E5;
@@ -90,7 +90,7 @@ public class EditorTimelineController
             0xFFE5E8EA;
 
     private static final int COLOR_KEYFRAME_INNER =
-            0xFF25282B;
+            0xFF252525;
 
     /*
      * =========================================================
@@ -1019,7 +1019,7 @@ public class EditorTimelineController
                 trackY + 10,
                 width,
                 trackY + 11,
-                0xFF292C2F
+                0xFF292929
         );
 
         /*
