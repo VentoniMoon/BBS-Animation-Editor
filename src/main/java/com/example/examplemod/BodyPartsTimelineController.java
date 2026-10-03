@@ -1003,7 +1003,7 @@ public class BodyPartsTimelineController
 
             if (doubleClick)
             {
-                AnimationKeyframe key =
+                AnimationKeyframe createdKey =
                         controller.getKeyframeController()
                                 .createKeyframe(
                                         bone,
@@ -1011,7 +1011,7 @@ public class BodyPartsTimelineController
                                 );
 
                 controller.getKeyframeController()
-                        .setSelectedKeyframe(key);
+                        .setSelectedKeyframe(createdKey);
 
                 resetClickState();
                 return true;
