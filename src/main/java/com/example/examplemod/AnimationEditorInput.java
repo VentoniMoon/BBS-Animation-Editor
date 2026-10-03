@@ -859,15 +859,24 @@ public class AnimationEditorInput
     public void handleMouseInput()
             throws IOException
     {
+        /*
+         * IMPORTANT:
+         * GuiScreen.handleMouseInput() consumes the current LWJGL
+         * mouse-wheel event. Therefore the wheel value MUST be read
+         * before forwarding the event to the vanilla screen.
+         *
+         * Reading it afterwards always returns 0, which made both
+         * Animation Setup lists appear to have a broken scrollbar.
+         */
+        int wheel =
+                Mouse.getEventDWheel();
+
         this.screen.callSuperHandleMouseInput();
 
         if (isDeleteDialogOpen())
         {
             return;
         }
-
-        int wheel =
-                Mouse.getEventDWheel();
 
         if (wheel == 0)
         {
