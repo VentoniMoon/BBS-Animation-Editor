@@ -822,6 +822,11 @@ public class BodyPartsTimelineController
                         sceneLength - 1
                 );
 
+        if (model == null)
+        {
+            return maximum;
+        }
+
         maximum =
                 Math.max(
                         maximum,
