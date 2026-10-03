@@ -336,10 +336,12 @@ public class BodyPartsPreviewRenderer
 
             if (runtimeBone != null)
             {
-                if (runtimeBone.mat != null)
+                Matrix4f runtimeMatrix = runtimeBone.compute();
+
+                if (runtimeMatrix != null)
                 {
                     return new BoneAttachment(
-                            new Matrix4f(runtimeBone.mat)
+                            new Matrix4f(runtimeMatrix)
                     );
                 }
             }
@@ -422,6 +424,8 @@ public class BodyPartsPreviewRenderer
             matrixBuffer.flip();
 
             GL11.glMultMatrix(matrixBuffer);
+
+            applyGlobalTransform(attachment.modelTransform);
         }
         else
         {
@@ -447,6 +451,8 @@ public class BodyPartsPreviewRenderer
                     attachment.transform.getRotationX(),
                     1.0F, 0.0F, 0.0F
             );
+
+            applyGlobalTransform(attachment.modelTransform);
         }
 
         if (attachment.runtimeMatrix == null &&
@@ -490,6 +496,40 @@ public class BodyPartsPreviewRenderer
         RenderHelper.disableStandardItemLighting();
 
         GL11.glPopMatrix();
+    }
+
+    private void applyGlobalTransform(
+            AnimationTransform transform)
+    {
+        if (transform == null)
+        {
+            return;
+        }
+
+        GL11.glTranslatef(
+                transform.getPositionX() / 16.0F,
+                transform.getPositionY() / 16.0F,
+                transform.getPositionZ() / 16.0F
+        );
+
+        GL11.glRotatef(
+                transform.getRotationZ(),
+                0.0F, 0.0F, 1.0F
+        );
+        GL11.glRotatef(
+                transform.getRotationY(),
+                0.0F, 1.0F, 0.0F
+        );
+        GL11.glRotatef(
+                transform.getRotationX(),
+                1.0F, 0.0F, 0.0F
+        );
+
+        GL11.glScalef(
+                transform.getScaleX(),
+                transform.getScaleY(),
+                transform.getScaleZ()
+        );
     }
 
     private static class BoneAttachment
