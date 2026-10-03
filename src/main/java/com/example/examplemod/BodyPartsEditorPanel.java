@@ -98,45 +98,9 @@ public class BodyPartsEditorPanel
          */
         if (selectedModel != null)
         {
-            cy = y + 34;
-
-            mc.fontRenderer.drawString(
-                    "MODEL",
-                    x + 9,
-                    cy,
-                    0xFF9AA1A6
-            );
-
-            mc.fontRenderer.drawString(
-                    trim(
-                            mc,
-                            selectedModel.getModelName(),
-                            WIDTH - 18
-                    ),
-                    x + 9,
-                    cy + 14,
-                    EditorThemeManager.get().getAccentBright()
-            );
-
-            cy += 34;
-
-            mc.fontRenderer.drawString(
-                    "EDIT MODEL BONES",
-                    x + 9,
-                    cy,
-                    0xFFE2E5E7
-            );
-
-            mc.fontRenderer.drawString(
-                    "Select or create keys on the timeline.",
-                    x + 9,
-                    cy + 14,
-                    0xFF666D72
-            );
-
             this.controller.getTransformPanel().setPosition(
                     x + 5,
-                    y + 68
+                    y + 34
             );
 
             this.controller.getTransformPanel().draw(
