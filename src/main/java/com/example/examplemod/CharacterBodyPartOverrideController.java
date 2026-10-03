@@ -719,13 +719,198 @@ public class CharacterBodyPartOverrideController
         /*
          * AnimatedMorph / EmoticonsMorph
          *
-         * В данный момент BOBJ bones считаются
-         * включёнными по умолчанию.
+         * Emoticons хранит базовое состояние кости
+         * в AnimatedMorph.pose -> AnimatorPoseTransform.fixed.
          *
-         * Их фактическое отключение будет выполняться
-         * отдельным runtime-механизмом.
+         * FIXED (0)    = стандартная Emoticons-анимация OFF
+         * ANIMATED (1) = стандартная Emoticons-анимация ON
+         *
+         * Если записи в pose нет, Emoticons использует
+         * обычное состояние ON.
          */
+        if (morph instanceof AnimatedMorph)
+        {
+            AnimatedMorph animated =
+                    (AnimatedMorph) morph;
+
+            if (bone == null ||
+                    bone.isEmpty() ||
+                    animated.pose == null)
+            {
+                return true;
+            }
+
+            mchorse.emoticons.skin_n_bones.api.animation.model.AnimatorPoseTransform transform =
+                    animated.pose.bones.get(bone);
+
+            if (transform == null)
+            {
+                return true;
+            }
+
+            return transform.fixed >= 0.5F;
+        }
+
         return true;
+    }
+
+
+    /*
+     * =========================================================
+     * TIMELINE EFFECTIVE STATE
+     * =========================================================
+     */
+
+    /**
+     * Возвращает последний явный Body Part state для кости,
+     * учитывая наследование CharacterKey.
+     *
+     * Последний Morph key является границей состояния:
+     * новый Morph начинает с собственного состояния костей.
+     *
+     * Skin key состояние Body Parts НЕ сбрасывает.
+     */
+    public static int getEffectiveKeyState(
+            BlockbusterSceneActorData actorData,
+            int frame,
+            String bone)
+    {
+        if (actorData == null ||
+                bone == null ||
+                bone.isEmpty())
+        {
+            return -1;
+        }
+
+        CharacterTimelineController timeline =
+                actorData.getCharacterTimeline();
+
+        if (timeline == null)
+        {
+            return -1;
+        }
+
+        int morphBoundary = -1;
+
+        /*
+         * Сначала находим последний Morph key.
+         * CharacterKey универсальный, поэтому смотрим
+         * на фактическое наличие Morph, а не на Type.
+         */
+        for (CharacterTrack track :
+                timeline.getTracks())
+        {
+            if (track == null)
+            {
+                continue;
+            }
+
+            for (CharacterKey key :
+                    track.getKeys())
+            {
+                if (key == null ||
+                        key.getFrame() > frame ||
+                        !key.hasMorph())
+                {
+                    continue;
+                }
+
+                morphBoundary =
+                        Math.max(
+                                morphBoundary,
+                                key.getFrame()
+                        );
+            }
+        }
+
+        int result = -1;
+        int latestFrame = Integer.MIN_VALUE;
+
+        /*
+         * После последнего Morph key старые Body Part
+         * overrides уже не относятся к новому Morph.
+         */
+        for (CharacterTrack track :
+                timeline.getTracks())
+        {
+            if (track == null)
+            {
+                continue;
+            }
+
+            for (CharacterKey key :
+                    track.getKeys())
+            {
+                if (key == null)
+                {
+                    continue;
+                }
+
+                int keyFrame = key.getFrame();
+
+                if (keyFrame > frame ||
+                        keyFrame < morphBoundary)
+                {
+                    continue;
+                }
+
+                int state =
+                        getKeyState(
+                                key,
+                                bone
+                        );
+
+                if (state < 0)
+                {
+                    continue;
+                }
+
+                if (keyFrame >= latestFrame)
+                {
+                    latestFrame = keyFrame;
+                    result = state;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Возвращает фактическое состояние кости:
+     * true = стандартная Emoticons-анимация включена,
+     * false = выключена.
+     *
+     * При отсутствии explicit override используется
+     * состояние самого AnimatedMorph.
+     */
+    public static boolean isEnabled(
+            AbstractMorph morph,
+            BlockbusterSceneActorData actorData,
+            int frame,
+            String bone)
+    {
+        int state =
+                getEffectiveKeyState(
+                        actorData,
+                        frame,
+                        bone
+                );
+
+        if (state == STATE_ENABLE)
+        {
+            return true;
+        }
+
+        if (state == STATE_DISABLE)
+        {
+            return false;
+        }
+
+        return getMorphDefaultEnabled(
+                morph,
+                bone
+        );
     }
 
 
