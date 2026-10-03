@@ -1296,7 +1296,7 @@ public class EditorTimelineController
                     y - 2,
                     x + 2,
                     y + 3,
-                    0xFFEAF9FF
+                    getAccentBrightColor()
             );
         }
     }
