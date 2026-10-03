@@ -468,13 +468,16 @@ public class AnimationEditorInput
         {
             int actorTop = AnimationEditorScreen.TOP_BAR_HEIGHT;
             int actorBottom = actorTop + AnimationEditorScreen.ACTOR_PANEL_HEIGHT;
+            int timelineTop = this.screen.height - this.screen.getTimelineHeight();
+
+            int bonePanelTop = actorBottom;
 
             if (mouseX >= 0 &&
                     mouseX <= AnimationEditorScreen.LEFT_PANEL_WIDTH &&
-                    mouseY >= actorTop + 30 &&
-                    mouseY < actorBottom)
+                    mouseY >= bonePanelTop + 25 &&
+                    mouseY < timelineTop)
             {
-                int relativeY = mouseY - actorTop - 30;
+                int relativeY = mouseY - bonePanelTop - 25;
                 int boneIndex = relativeY / 20;
 
                 if (boneIndex >= 0 &&
