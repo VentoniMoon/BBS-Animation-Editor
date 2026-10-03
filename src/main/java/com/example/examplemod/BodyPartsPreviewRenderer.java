@@ -1,0 +1,472 @@
+package com.example.examplemod;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import mchorse.blockbuster.api.ModelLimb;
+import mchorse.blockbuster.api.ModelPose;
+import mchorse.blockbuster.api.ModelTransform;
+import mchorse.blockbuster.common.entity.EntityActor;
+import mchorse.blockbuster_pack.morphs.CustomMorph;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.entity.EntityLivingBase;
+
+import org.lwjgl.opengl.GL11;
+
+/**
+ * Renders the temporary Body Parts attachments on top of the
+ * selected Blockbuster actor.
+ *
+ * Body Parts are editor-only data, so they are rendered here rather
+ * than being inserted into the real Character morph.
+ */
+public class BodyPartsPreviewRenderer
+{
+    private final Map<String, CustomMorph> morphs =
+            new HashMap<String, CustomMorph>();
+
+    private final Map<String, EntityActor> entities =
+            new HashMap<String, EntityActor>();
+
+    public void clear()
+    {
+        this.morphs.clear();
+
+        for (EntityActor entity : this.entities.values())
+        {
+            if (entity != null)
+            {
+                entity.setDead();
+            }
+        }
+
+        this.entities.clear();
+    }
+
+    public void render(
+            Minecraft mc,
+            EntityActor actor,
+            BodyPartsEditorController controller,
+            int frame,
+            float partialTicks)
+    {
+        if (mc == null ||
+                mc.world == null ||
+                actor == null ||
+                controller == null)
+        {
+            return;
+        }
+
+        List<BodyPartModelData> models =
+                controller.getModels();
+
+        if (models == null ||
+                models.isEmpty())
+        {
+            return;
+        }
+
+        AbstractActorPose actorPose =
+                getActorPose(actor, partialTicks);
+
+        for (BodyPartModelData data : models)
+        {
+            if (data == null ||
+                    !data.hasModel())
+            {
+                continue;
+            }
+
+            if (frame < data.getStartFrame() ||
+                    frame > data.getEndFrame())
+            {
+                continue;
+            }
+
+            if (data.getAttachmentBoneName() == null ||
+                    data.getAttachmentBoneName().isEmpty())
+            {
+                continue;
+            }
+
+            CustomMorph morph =
+                    getMorph(
+                            mc,
+                            data.getModelName()
+                    );
+
+            if (morph == null ||
+                    morph.model == null)
+            {
+                continue;
+            }
+
+            applyLocalAnimation(
+                    morph,
+                    data,
+                    frame
+            );
+
+            BoneAttachment attachment =
+                    findAttachment(
+                            actorPose,
+                            data.getAttachmentBoneName()
+                    );
+
+            if (attachment == null)
+            {
+                continue;
+            }
+
+            EntityActor renderEntity =
+                    getRenderEntity(
+                            mc,
+                            data.getModelName()
+                    );
+
+            renderEntity.posX = actor.posX;
+            renderEntity.posY = actor.posY;
+            renderEntity.posZ = actor.posZ;
+            renderEntity.prevPosX = actor.posX;
+            renderEntity.prevPosY = actor.posY;
+            renderEntity.prevPosZ = actor.posZ;
+
+            renderEntity.rotationYaw =
+                    actor.rotationYaw;
+            renderEntity.prevRotationYaw =
+                    actor.rotationYaw;
+
+            renderEntity.rotationPitch =
+                    actor.rotationPitch;
+            renderEntity.prevRotationPitch =
+                    actor.rotationPitch;
+
+            renderEntity.setSneaking(
+                    actor.isSneaking()
+            );
+
+            renderEntity.isDead = false;
+            renderEntity.noClip = true;
+
+            renderAttached(
+                    mc,
+                    actor,
+                    renderEntity,
+                    morph,
+                    attachment,
+                    partialTicks
+            );
+        }
+    }
+
+    private CustomMorph getMorph(
+            Minecraft mc,
+            String name)
+    {
+        CustomMorph morph =
+                this.morphs.get(name);
+
+        if (morph == null)
+        {
+            morph =
+                    new CustomMorph();
+
+            morph.name =
+                    "blockbuster." + name;
+
+            morph.updateModel(true);
+
+            this.morphs.put(
+                    name,
+                    morph
+            );
+        }
+        else
+        {
+            morph.updateModel();
+        }
+
+        if (morph.model == null)
+        {
+            return null;
+        }
+
+        return morph;
+    }
+
+    private EntityActor getRenderEntity(
+            Minecraft mc,
+            String name)
+    {
+        EntityActor entity =
+                this.entities.get(name);
+
+        if (entity == null ||
+                entity.world != mc.world ||
+                entity.isDead)
+        {
+            entity =
+                    new EntityActor(
+                            mc.world
+                    );
+
+            entity.noClip = true;
+            entity.isDead = false;
+
+            this.entities.put(
+                    name,
+                    entity
+            );
+        }
+
+        return entity;
+    }
+
+    private void applyLocalAnimation(
+            CustomMorph morph,
+            BodyPartModelData data,
+            int frame)
+    {
+        if (morph == null ||
+                morph.model == null)
+        {
+            return;
+        }
+
+        CustomMorph.ModelProperties pose =
+                new CustomMorph.ModelProperties();
+
+        pose.updateLimbs(
+                morph.model,
+                true
+        );
+
+        for (AnimationBone bone : data.getBones())
+        {
+            if (bone == null ||
+                    bone.getName() == null)
+            {
+                continue;
+            }
+
+            ModelTransform target =
+                    pose.limbs.get(
+                            bone.getName()
+                    );
+
+            if (target == null)
+            {
+                continue;
+            }
+
+            AnimationTransform transform =
+                    bone.getTransformAt(
+                            frame
+                    );
+
+            target.translate[0] =
+                    bone.getLocalX()
+                            + transform.getPositionX();
+
+            target.translate[1] =
+                    bone.getLocalY()
+                            + transform.getPositionY();
+
+            target.translate[2] =
+                    bone.getLocalZ()
+                            + transform.getPositionZ();
+
+            target.rotate[0] =
+                    transform.getRotationX();
+
+            target.rotate[1] =
+                    transform.getRotationY();
+
+            target.rotate[2] =
+                    transform.getRotationZ();
+
+            target.scale[0] =
+                    transform.getScaleX();
+
+            target.scale[1] =
+                    transform.getScaleY();
+
+            target.scale[2] =
+                    transform.getScaleZ();
+        }
+
+        morph.customPose =
+                pose;
+    }
+
+    private AbstractActorPose getActorPose(
+            EntityActor actor,
+            float partialTicks)
+    {
+        AbstractMorphAccessor accessor =
+                new AbstractMorphAccessor(
+                        actor
+                );
+
+        return accessor.get();
+    }
+
+    private BoneAttachment findAttachment(
+            AbstractActorPose actorPose,
+            String boneName)
+    {
+        if (actorPose == null ||
+                actorPose.pose == null ||
+                boneName == null)
+        {
+            return null;
+        }
+
+        ModelTransform transform =
+                actorPose.pose.limbs.get(
+                        boneName
+                );
+
+        if (transform == null)
+        {
+            return null;
+        }
+
+        return new BoneAttachment(
+                transform
+        );
+    }
+
+    private void renderAttached(
+            Minecraft mc,
+            EntityActor actor,
+            EntityActor renderEntity,
+            CustomMorph morph,
+            BoneAttachment attachment,
+            float partialTicks)
+    {
+        GL11.glPushMatrix();
+
+        /*
+         * ModelTransform coordinates are Blockbuster model pixels.
+         * The render engine uses 1/16 block units.
+         */
+        GL11.glTranslatef(
+                attachment.transform.translate[0] / 16.0F,
+                attachment.transform.translate[1] / 16.0F,
+                attachment.transform.translate[2] / 16.0F
+        );
+
+        GL11.glRotatef(
+                attachment.transform.rotate[2],
+                0.0F,
+                0.0F,
+                1.0F
+        );
+
+        GL11.glRotatef(
+                attachment.transform.rotate[1],
+                0.0F,
+                1.0F,
+                0.0F
+        );
+
+        GL11.glRotatef(
+                attachment.transform.rotate[0],
+                1.0F,
+                0.0F,
+                0.0F
+        );
+
+        GlStateManager.enableDepth();
+        GlStateManager.depthMask(true);
+        GlStateManager.enableAlpha();
+        GlStateManager.enableBlend();
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(
+                1.0F,
+                1.0F,
+                1.0F,
+                1.0F
+        );
+
+        RenderHelper.enableStandardItemLighting();
+
+        /*
+         * The temporary entity is rendered at the actor origin.
+         * The attachment translation above moves it onto the
+         * selected actor limb.
+         */
+        morph.render(
+                renderEntity,
+                actor.posX,
+                actor.posY,
+                actor.posZ,
+                actor.rotationYaw,
+                partialTicks
+        );
+
+        RenderHelper.disableStandardItemLighting();
+
+        GL11.glPopMatrix();
+    }
+
+    private static class BoneAttachment
+    {
+        private final ModelTransform transform;
+
+        private BoneAttachment(
+                ModelTransform transform)
+        {
+            this.transform =
+                    transform;
+        }
+    }
+
+    private static class AbstractActorPose
+    {
+        private final ModelPose pose;
+
+        private AbstractActorPose(
+                ModelPose pose)
+        {
+            this.pose = pose;
+        }
+    }
+
+    private static class AbstractMorphAccessor
+    {
+        private final EntityActor actor;
+
+        private AbstractMorphAccessor(
+                EntityActor actor)
+        {
+            this.actor = actor;
+        }
+
+        private AbstractActorPose get()
+        {
+            if (!(this.actor.getMorph() instanceof CustomMorph))
+            {
+                return new AbstractActorPose(null);
+            }
+
+            CustomMorph morph =
+                    (CustomMorph) this.actor.getMorph();
+
+            return new AbstractActorPose(
+                    morph.getPose(
+                            this.actor,
+                            true,
+                            Minecraft.getMinecraft()
+                                    .getRenderPartialTicks()
+                    )
+            );
+        }
+    }
+}
