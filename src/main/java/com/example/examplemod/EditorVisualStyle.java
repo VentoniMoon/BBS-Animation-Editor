@@ -26,37 +26,37 @@ public final class EditorVisualStyle
      */
 
     public static final int BACKGROUND =
-            0xFF191B1E;
+            0xFF191919;
 
     public static final int TOP_BAR =
-            0xFF24262A;
+            0xFF242424;
 
     public static final int PANEL =
-            0xFF202226;
+            0xFF202020;
 
     public static final int PANEL_LIGHT =
-            0xFF292B2F;
+            0xFF292929;
 
     public static final int PANEL_DARK =
-            0xFF1B1D20;
+            0xFF1B1B1B;
 
     public static final int INPUT =
-            0xFF303237;
+            0xFF303030;
 
     public static final int INPUT_HOVER =
-            0xFF393C42;
+            0xFF393939;
 
     public static final int SELECTED =
             0xFF3B3E43;
 
     public static final int SELECTED_DARK =
-            0xFF34373C;
+            0xFF343434;
 
     public static final int BORDER =
-            0xFF34373A;
+            0xFF343434;
 
     public static final int BORDER_LIGHT =
-            0xFF46494E;
+            0xFF464646;
 
     /*
      * =========================================================
@@ -74,7 +74,7 @@ public final class EditorVisualStyle
             0xFF777B81;
 
     public static final int TEXT_DISABLED =
-            0xFF55585D;
+            0xFF555555;
 
     /*
      * =========================================================
@@ -137,22 +137,22 @@ public final class EditorVisualStyle
      */
 
     public static final int TIMELINE_BACKGROUND =
-            0xFF1B1D20;
+            0xFF1B1B1B;
 
     public static final int TIMELINE_HEADER =
-            0xFF24262A;
+            0xFF242424;
 
     public static final int TIMELINE_TRACK =
-            0xFF202226;
+            0xFF202020;
 
     public static final int TIMELINE_TRACK_ALT =
             0xFF232529;
 
     public static final int TIMELINE_LINE =
-            0xFF393C40;
+            0xFF393939;
 
     public static final int TIMELINE_RULER =
-            0xFF4A4D52;
+            0xFF4A4A4A;
 
     /**
      * Красный playhead является семантическим цветом
@@ -184,7 +184,7 @@ public final class EditorVisualStyle
      */
 
     public static final int PREVIEW_BORDER =
-            0xFF3A3D42;
+            0xFF3A3A3A;
 
     public static final int PREVIEW_BACKGROUND =
             0xFF17191C;
