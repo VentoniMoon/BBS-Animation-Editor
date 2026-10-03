@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import mchorse.blockbuster.api.ModelPose;
 import mchorse.blockbuster.api.ModelTransform;
 import mchorse.blockbuster.common.entity.EntityActor;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
@@ -68,9 +67,6 @@ public class BodyPartsPreviewRenderer
         {
             return;
         }
-
-        AbstractActorPose actorPose =
-                getActorPose(actor, partialTicks);
 
         for (BodyPartModelData data : models)
         {
