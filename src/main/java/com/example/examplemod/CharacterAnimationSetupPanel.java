@@ -340,6 +340,22 @@ public class CharacterAnimationSetupPanel
         return this.selectedAction;
     }
 
+    private void assignAnimation(String animation)
+    {
+        if (this.selectedKey == null ||
+                animation == null ||
+                animation.isEmpty())
+        {
+            return;
+        }
+
+        CharacterAnimationSetupController.assignAnimation(
+                this.selectedKey,
+                this.selectedAction,
+                animation
+        );
+    }
+
     private List<String> getActions()
     {
         List<String> actions =
