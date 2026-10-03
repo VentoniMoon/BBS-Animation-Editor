@@ -215,12 +215,12 @@ public class CharacterAnimationSetupPanel
         }
 
         int listY = this.y + 14;
-        int listWidth = this.width - 28;
+        int scrollAreaWidth = this.width - 20;
 
         if (isInside(
                 this.x + 8,
                 listY,
-                listWidth,
+                scrollAreaWidth,
                 LIST_HEIGHT,
                 mouseX,
                 mouseY
@@ -278,6 +278,8 @@ public class CharacterAnimationSetupPanel
         {
             List<String> actions = getActions();
 
+            int maxOffset = getMaxActionOffset(actions);
+
             if (direction > 0)
             {
                 this.actionOffset =
@@ -290,7 +292,7 @@ public class CharacterAnimationSetupPanel
             {
                 this.actionOffset =
                         Math.min(
-                                getMaxActionOffset(actions),
+                                maxOffset,
                                 this.actionOffset + 1
                         );
             }
