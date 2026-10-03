@@ -860,16 +860,18 @@ public class AnimationEditorInput
             throws IOException
     {
         /*
-         * IMPORTANT:
-         * GuiScreen.handleMouseInput() consumes the current LWJGL
-         * mouse-wheel event. Therefore the wheel value MUST be read
-         * before forwarding the event to the vanilla screen.
+         * GuiScreen.handleInput() calls this method once for each
+         * LWJGL mouse event. getEventDWheel() is tied to the current
+         * low-level event and proved unreliable here because vanilla
+         * GUI processing can leave the wheel value at zero.
          *
-         * Reading it afterwards always returns 0, which made both
-         * Animation Setup lists appear to have a broken scrollbar.
+         * getDWheel() reads the accumulated wheel delta directly.
+         * Read it before forwarding the event to vanilla so our
+         * character editor receives the wheel even though GuiScreen
+         * itself has no dedicated mouseScrolled callback in 1.12.2.
          */
         int wheel =
-                Mouse.getEventDWheel();
+                Mouse.getDWheel();
 
         this.screen.callSuperHandleMouseInput();
 
