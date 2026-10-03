@@ -463,12 +463,16 @@ public class BodyPartsTimelineController
             mc.fontRenderer.drawString(
                     trim(
                             mc,
-                            model.getModelName(),
+                            model.hasModel()
+                                    ? model.getModelName()
+                                    : "SELECT MODEL",
                             Math.max(16, right - left - 8)
                     ),
                     left + 4,
                     barY + 2,
-                    0xFF101010
+                    model.hasModel()
+                            ? 0xFF101010
+                            : 0xFFE0E3E5
             );
 
             stack++;
@@ -1141,6 +1145,7 @@ public class BodyPartsTimelineController
                             right
                     );
                     controller.setSelectedActorBone(boneIndex);
+                    controller.selectAttachment(item);
                     timeline.setTick(
                             timeline.getFrameFromMouseX(
                                     mouseX,
@@ -1512,8 +1517,13 @@ public class BodyPartsTimelineController
                 dragMode == DRAG_MOVE &&
                 !dragMoved)
         {
-            controller.selectModel(draggingModel);
-            boneScroll = 0;
+            controller.selectAttachment(draggingModel);
+
+            if (draggingModel.hasModel())
+            {
+                controller.selectModel(draggingModel);
+                boneScroll = 0;
+            }
         }
 
         draggingModel = null;
