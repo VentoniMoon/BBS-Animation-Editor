@@ -754,7 +754,7 @@ public class CharacterEditorPanel
          * -----------------------------------------------------
          */
 
-        drawSection(
+        cursorY = drawSection(
                 mc,
                 Section.ANIMATION_PARAMETERS,
                 "ANIMATION PARAMETERS",
