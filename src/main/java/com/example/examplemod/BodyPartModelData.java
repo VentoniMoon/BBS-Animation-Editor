@@ -5,10 +5,10 @@ import java.util.List;
 
 public class BodyPartModelData
 {
-    private final String modelName;
+    private String modelName;
     private String attachmentBoneName;
-    private final BlockbusterModelAccess modelAccess;
-    private final List<AnimationBone> bones;
+    private BlockbusterModelAccess modelAccess;
+    private List<AnimationBone> bones;
 
     private int startFrame;
     private int endFrame;
@@ -21,7 +21,7 @@ public class BodyPartModelData
             int startFrame,
             int endFrame)
     {
-        this.modelName = modelName;
+        this.modelName = modelName == null ? "" : modelName;
         this.attachmentBoneName = attachmentBoneName == null
                 ? ""
                 : attachmentBoneName;
@@ -38,6 +38,15 @@ public class BodyPartModelData
     public BlockbusterModelAccess getModelAccess() { return this.modelAccess; }
     public List<AnimationBone> getBones() { return this.bones; }
 
+    public boolean hasModel()
+    {
+        return this.modelAccess != null &&
+                this.modelName != null &&
+                this.modelName.length() > 0 &&
+                this.bones != null &&
+                !this.bones.isEmpty();
+    }
+
     public int getStartFrame() { return this.startFrame; }
     public int getEndFrame() { return this.endFrame; }
 
@@ -47,6 +56,20 @@ public class BodyPartModelData
         {
             this.attachmentBoneName = name;
         }
+    }
+
+    public void setModel(
+            String modelName,
+            BlockbusterModelAccess modelAccess,
+            List<AnimationBone> bones)
+    {
+        this.modelName =
+                modelName == null ? "" : modelName;
+        this.modelAccess = modelAccess;
+        this.bones =
+                bones == null
+                        ? new ArrayList<AnimationBone>()
+                        : bones;
     }
 
     public void setStartFrame(int frame)
