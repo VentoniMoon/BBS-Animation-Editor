@@ -88,6 +88,8 @@ public class BodyPartsEditorPanel
         BodyPartModelData selectedModel =
                 controller.getSelectedModel();
 
+        int cy = y + 34;
+
         /*
          * Level 2 is a dedicated model-bone editor.  Do not keep the
          * Level 1 attachment controls visible underneath TransformPanel:
@@ -152,8 +154,6 @@ public class BodyPartsEditorPanel
 
             return;
         }
-
-        int cy = y + 34;
 
         String target =
                 controller.getSelectedActorBoneName();
@@ -269,6 +269,7 @@ public class BodyPartsEditorPanel
     }
 
 
+    public boolean mouseClicked(
             int mouseX,
             int mouseY,
             int mouseButton,
