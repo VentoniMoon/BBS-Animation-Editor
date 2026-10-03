@@ -151,6 +151,22 @@ public class BlockbusterModelAccess
             {
                 captureOriginalLimbData();
 
+                /*
+                 * ModelCustom.MODELS contains the render-side model,
+                 * while Blockbuster's CustomMorph is backed by
+                 * Blockbuster.proxy.models.models. In some 1.12.2
+                 * states the render model is present but its renderer
+                 * limbs have not been initialized yet.
+                 *
+                 * The original Blockbuster source uses the
+                 * ModelHandler model map as the authoritative model
+                 * repository, so use that as a skeleton fallback.
+                 */
+                if (this.originalLimbData.isEmpty())
+                {
+                    captureModelHandlerLimbData(name);
+                }
+
                 SKELETON_CACHE.put(
                         this.model,
                         new ArrayList<BlockbusterLimbData>(
@@ -163,9 +179,12 @@ public class BlockbusterModelAccess
                     "[BBS Animation Editor] "
                             + "Loaded Blockbuster model: "
                             + name
+                            + " (limbs="
+                            + this.originalLimbData.size()
+                            + ")"
             );
 
-            return true;
+            return !this.originalLimbData.isEmpty();
         }
         catch (Exception e)
         {
@@ -281,6 +300,142 @@ public class BlockbusterModelAccess
             System.out.println(
                     "[BBS Animation Editor] "
                             + "Failed to capture original Blockbuster skeleton"
+            );
+
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Fallback skeleton source used by Blockbuster itself.
+     *
+     * CustomMorph.changeModel()/updateModel() resolve models through
+     * Blockbuster.proxy.models.models, not through ModelCustom.MODELS.
+     */
+    private void captureModelHandlerLimbData(String name)
+    {
+        try
+        {
+            Class<?> blockbusterClass =
+                    Class.forName(
+                            "mchorse.blockbuster.Blockbuster"
+                    );
+
+            Field proxyField =
+                    blockbusterClass.getField("proxy");
+
+            Object proxy =
+                    proxyField.get(null);
+
+            if (proxy == null)
+            {
+                return;
+            }
+
+            Field modelsField =
+                    proxy.getClass().getField("models");
+
+            Object modelHandler =
+                    modelsField.get(proxy);
+
+            if (modelHandler == null)
+            {
+                return;
+            }
+
+            Field modelMapField =
+                    modelHandler.getClass().getField("models");
+
+            Object modelMap =
+                    modelMapField.get(modelHandler);
+
+            if (!(modelMap instanceof Map))
+            {
+                return;
+            }
+
+            Object apiModel =
+                    ((Map<?, ?>) modelMap).get(name);
+
+            if (apiModel == null)
+            {
+                System.out.println(
+                        "[BBS Animation Editor] "
+                                + "ModelHandler model not found: "
+                                + name
+                );
+
+                return;
+            }
+
+            Field limbsField =
+                    apiModel.getClass().getField("limbs");
+
+            Object limbs =
+                    limbsField.get(apiModel);
+
+            if (!(limbs instanceof Map))
+            {
+                return;
+            }
+
+            for (Object value :
+                    ((Map<?, ?>) limbs).values())
+            {
+                if (value == null)
+                {
+                    continue;
+                }
+
+                Field nameField =
+                        value.getClass().getField("name");
+
+                Field parentField =
+                        value.getClass().getField("parent");
+
+                Object nameValue =
+                        nameField.get(value);
+
+                Object parentValue =
+                        parentField.get(value);
+
+                if (nameValue == null)
+                {
+                    continue;
+                }
+
+                String limbName =
+                        String.valueOf(nameValue);
+
+                String parentName =
+                        parentValue == null ||
+                        String.valueOf(parentValue).isEmpty()
+                                ? null
+                                : String.valueOf(parentValue);
+
+                this.originalLimbData.add(
+                        new BlockbusterLimbData(
+                                limbName,
+                                parentName,
+                                0.0F,
+                                0.0F,
+                                0.0F
+                        )
+                );
+            }
+
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "Captured ModelHandler skeleton: "
+                            + this.originalLimbData.size()
+                            + " limbs"
+            );
+        }
+        catch (Exception e)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] "
+                            + "Failed to capture ModelHandler skeleton"
             );
 
             e.printStackTrace();
