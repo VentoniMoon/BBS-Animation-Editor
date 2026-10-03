@@ -81,6 +81,15 @@ public class EditorSceneViewport
     }
 
 
+    public void setBodyPartsController(
+            BodyPartsEditorController controller)
+    {
+        this.actorPreviewRenderer.setBodyPartsController(
+                controller
+        );
+    }
+
+
     public void setBounds(
             int x,
             int y,
