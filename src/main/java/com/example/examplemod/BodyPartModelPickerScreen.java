@@ -55,50 +55,25 @@ public class BodyPartModelPickerScreen extends GuiBase
     private void onMorphSelected(AbstractMorph morph)
     {
         /*
-         * This is the same callback path used by Blockbuster/Metamorph:
-         * GuiCreativeMorphsList.pickMorph(AbstractMorph) is called as
-         * soon as the user selects an entry.
+         * Keep this callback passive.
          *
-         * The old implementation ignored this callback and waited for
-         * Escape. That made the picker look functional, but the selected
-         * Blockbuster model never reached BodyPartsEditorController.
+         * GuiCreativeMorphsList invokes it from inside its element
+         * dispatch. Closing the GuiScreen from inside that callback
+         * can interrupt the original click dispatch before the
+         * selection state has finished propagating.
+         *
+         * The actual commit is performed after GuiBase has finished
+         * dispatching the mouse click (see mouseClicked below).
          */
-        if (this.committed)
+        if (morph != null)
         {
-            return;
-        }
-
-        if (morph instanceof CustomMorph)
-        {
-            CustomMorph custom =
-                    (CustomMorph) morph;
-
-            String key =
-                    custom.getKey();
-
-            if (key != null &&
-                    !key.isEmpty() &&
-                    this.callback != null)
-            {
-                System.out.println(
-                        "[BBS Animation Editor] " +
-                                "Body Parts selected model: " +
-                                key
-                );
-
-                this.committed = true;
-                this.callback.accept(key);
-
-                /*
-                 * Model selection is the confirmation action.
-                 * Return directly to the BBS editor, just like the
-                 * original Blockbuster picker returns its selected
-                 * morph through the callback.
-                 */
-                this.mc.displayGuiScreen(
-                        this.returnScreen
-                );
-            }
+            System.out.println(
+                    "[BBS Animation Editor] " +
+                            "Body Parts picker callback: " +
+                            morph.getClass().getName() +
+                            " name=" +
+                            morph.name
+            );
         }
     }
 
@@ -136,6 +111,64 @@ public class BodyPartModelPickerScreen extends GuiBase
                 );
 
                 this.callback.accept(key);
+            }
+        }
+    }
+
+    @Override
+    protected void mouseClicked(
+            int mouseX,
+            int mouseY,
+            int mouseButton)
+            throws java.io.IOException
+    {
+        /*
+         * Let the original Metamorph GUI process the click first.
+         * Its GuiMorphSection updates picker.getSelected() during
+         * this dispatch. Only after that do we read the selected
+         * morph and pass its Blockbuster key to our controller.
+         */
+        super.mouseClicked(
+                mouseX,
+                mouseY,
+                mouseButton
+        );
+
+        if (mouseButton == 0)
+        {
+            AbstractMorph selected =
+                    this.picker.getSelected();
+
+            if (selected instanceof CustomMorph)
+            {
+                CustomMorph custom =
+                        (CustomMorph) selected;
+
+                String key =
+                        custom.getKey();
+
+                System.out.println(
+                        "[BBS Animation Editor] " +
+                                "Body Parts picker selected: " +
+                                selected.getClass().getName() +
+                                " key=" +
+                                key
+                );
+
+                if (key != null &&
+                        !key.isEmpty())
+                {
+                    if (!this.committed &&
+                            this.callback != null)
+                    {
+                        this.committed = true;
+                        this.callback.accept(key);
+                    }
+
+                    this.mc.displayGuiScreen(
+                            this.returnScreen
+                    );
+                }
             }
         }
     }
