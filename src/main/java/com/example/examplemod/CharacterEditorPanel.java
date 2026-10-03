@@ -2367,8 +2367,33 @@ public class CharacterEditorPanel
         if (this.openedSection ==
                 Section.ANIMATION_SETUP)
         {
+            int animationY =
+                    currentY + 24 + 4;
+
+            this.animationSetupPanel.setBounds(
+                    this.x,
+                    animationY,
+                    this.width
+            );
+
+            this.animationSetupPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.runtimeActor,
+                    this.currentFrame
+            );
+
+            if (this.animationSetupPanel.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            ))
+            {
+                return true;
+            }
+
             currentY +=
-                    24 + 4 + 92;
+                    24 + 4 + CharacterAnimationSetupPanel.HEIGHT;
         }
         else
         {
