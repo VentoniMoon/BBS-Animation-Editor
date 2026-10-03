@@ -39,58 +39,117 @@ public class EditorTimelineController
      * =========================================================
      * VISUAL STYLE
      * =========================================================
+     *
+     * Dark colors are derived from the active editor theme.
+     * This keeps the Timeline visually tied to Ocean,
+     * Emerald, Ruby and Amethyst without changing geometry.
      */
 
-    private static final int COLOR_BACKGROUND =
-            0xFF181818;
+    private static int themeColor(float strength)
+    {
+        int accent = EditorThemeManager.get().getAccent();
 
-    private static final int COLOR_HEADER =
-            0xFF202020;
+        int r = (accent >> 16) & 0xFF;
+        int g = (accent >> 8) & 0xFF;
+        int b = accent & 0xFF;
 
-    private static final int COLOR_HEADER_LIGHT =
-            0xFF292929;
+        r = Math.max(0, Math.min(255, Math.round(r * strength)));
+        g = Math.max(0, Math.min(255, Math.round(g * strength)));
+        b = Math.max(0, Math.min(255, Math.round(b * strength)));
 
-    private static final int COLOR_RULER =
-            0xFF1D1D1D;
+        return 0xFF000000 |
+                (r << 16) |
+                (g << 8) |
+                b;
+    }
 
-    private static final int COLOR_RULER_TOP =
-            0xFF303030;
+    private static int themeBrightColor(float strength)
+    {
+        int accent = EditorThemeManager.get().getAccentBright();
 
-    private static final int COLOR_TRACK =
-            0xFF202020;
+        int r = (accent >> 16) & 0xFF;
+        int g = (accent >> 8) & 0xFF;
+        int b = accent & 0xFF;
 
-    private static final int COLOR_TRACK_ALT =
-            0xFF1C1C1C;
+        r = Math.max(0, Math.min(255, Math.round(r * strength)));
+        g = Math.max(0, Math.min(255, Math.round(g * strength)));
+        b = Math.max(0, Math.min(255, Math.round(b * strength)));
 
-    private static final int COLOR_TRACK_SELECTED =
-            0xFF2B2B2B;
+        return 0xFF000000 |
+                (r << 16) |
+                (g << 8) |
+                b;
+    }
 
-    private static final int COLOR_TRACK_BORDER =
-            0xFF111111;
+    private static int getTimelineBackgroundColor()
+    {
+        return themeColor(0.07F);
+    }
 
-    private static final int COLOR_GRID =
-            0xFF292929;
+    private static int getTimelineHeaderColor()
+    {
+        return themeColor(0.12F);
+    }
 
-    private static final int COLOR_GRID_MAJOR =
-            0xFF343434;
+    private static int getTimelineHeaderLightColor()
+    {
+        return themeColor(0.17F);
+    }
 
-    private static final int COLOR_GRID_SECOND =
-            0xFF2E2E2E;
+    private static int getTimelineRulerColor()
+    {
+        return themeColor(0.09F);
+    }
 
-    private static final int COLOR_TEXT =
-            0xFFE0E3E5;
+    private static int getTimelineRulerTopColor()
+    {
+        return themeColor(0.20F);
+    }
 
-    private static final int COLOR_TEXT_SECONDARY =
-            0xFF9DA4A9;
+    private static int getTimelineTrackColor()
+    {
+        return themeColor(0.12F);
+    }
 
-    private static final int COLOR_TEXT_MUTED =
-            0xFF666D72;
+    private static int getTimelineTrackAltColor()
+    {
+        return themeColor(0.09F);
+    }
 
-    private static final int COLOR_KEYFRAME =
-            0xFFE5E8EA;
+    private static int getTimelineTrackSelectedColor()
+    {
+        return themeColor(0.22F);
+    }
 
-    private static final int COLOR_KEYFRAME_INNER =
-            0xFF252525;
+    private static int getTimelineTrackBorderColor()
+    {
+        return themeColor(0.05F);
+    }
+
+    private static int getTimelineGridColor()
+    {
+        return themeColor(0.10F);
+    }
+
+    private static int getTimelineGridMajorColor()
+    {
+        return themeColor(0.20F);
+    }
+
+    private static int getTimelineGridSecondColor()
+    {
+        return themeColor(0.15F);
+    }
+
+    private static int getTimelineKeyframeColor()
+    {
+        return EditorThemeManager.get().getAccent();
+    }
+
+    private static int getTimelineKeyframeInnerColor()
+    {
+        return themeColor(0.10F);
+    }
 
     /*
      * =========================================================
@@ -118,11 +177,9 @@ public class EditorTimelineController
      * It does NOT change with the editor theme.
      */
 
-    private static final int COLOR_PLAYHEAD =
-            0xFFFF6B6B;
+    private static int getPlayheadColor()\n    {\n        return EditorThemeManager.get().getAccent();\n    }
 
-    private static final int COLOR_PLAYHEAD_HEAD =
-            0xFFFF8A8A;
+    private static int getPlayheadHeadColor()\n    {\n        return EditorThemeManager.get().getAccentBright();\n    }
 
     private final EditorTimeline timeline;
 
@@ -286,7 +343,7 @@ public class EditorTimelineController
                 timelineTop,
                 width,
                 height,
-                COLOR_BACKGROUND
+                getTimelineBackgroundColor()
         );
 
         /*
@@ -316,7 +373,7 @@ public class EditorTimelineController
                 timelineTop + 1,
                 width,
                 timelineTop + headerHeight,
-                COLOR_HEADER
+                getTimelineHeaderColor()
         );
 
         Gui.drawRect(
@@ -324,7 +381,7 @@ public class EditorTimelineController
                 timelineTop + headerHeight - 1,
                 width,
                 timelineTop + headerHeight,
-                COLOR_TRACK_BORDER
+                getTimelineTrackBorderColor()
         );
 
         /*
@@ -534,7 +591,7 @@ public class EditorTimelineController
                 tracksTop,
                 width,
                 height,
-                COLOR_BACKGROUND
+                getTimelineBackgroundColor()
         );
 
         for (
@@ -685,7 +742,7 @@ public class EditorTimelineController
                 rulerTop,
                 width,
                 rulerBottom,
-                COLOR_RULER
+                getTimelineRulerColor()
         );
 
         /*
@@ -697,7 +754,7 @@ public class EditorTimelineController
                 rulerTop,
                 timelineStartX,
                 rulerBottom,
-                COLOR_HEADER_LIGHT
+                getTimelineHeaderLightColor()
         );
 
         Gui.drawRect(
@@ -777,7 +834,7 @@ public class EditorTimelineController
                         x + 1,
                         timelineTop +
                                 getTimelineHeight(),
-                        COLOR_GRID_MAJOR
+                        getTimelineGridMajorColor()
                 );
             }
             else if (halfSecond)
@@ -788,7 +845,7 @@ public class EditorTimelineController
                         x + 1,
                         timelineTop +
                                 getTimelineHeight(),
-                        COLOR_GRID_SECOND
+                        getTimelineGridSecondColor()
                 );
             }
             else
@@ -799,7 +856,7 @@ public class EditorTimelineController
                         x + 1,
                         timelineTop +
                                 getTimelineHeight(),
-                        COLOR_GRID
+                        getTimelineGridColor()
                 );
             }
 
@@ -840,7 +897,7 @@ public class EditorTimelineController
                         rulerTop + 5,
                         x + 1,
                         rulerBottom,
-                        COLOR_GRID_MAJOR
+                        getTimelineGridMajorColor()
                 );
 
                 mc.fontRenderer.drawString(
@@ -857,7 +914,7 @@ public class EditorTimelineController
                         rulerTop + 8,
                         x + 1,
                         rulerBottom,
-                        COLOR_GRID
+                        getTimelineGridColor()
                 );
             }
         }
@@ -871,7 +928,7 @@ public class EditorTimelineController
                 rulerBottom - 1,
                 width,
                 rulerBottom,
-                COLOR_TRACK_BORDER
+                getTimelineTrackBorderColor()
         );
     }
 
@@ -908,8 +965,8 @@ public class EditorTimelineController
 
         int trackColor =
                 selected
-                        ? COLOR_TRACK_SELECTED
-                        : COLOR_TRACK;
+                        ? getTimelineTrackSelectedColor()
+                        : getTimelineTrackColor();
 
         /*
          * Full track.
@@ -932,7 +989,7 @@ public class EditorTimelineController
                 trackY + TRACK_HEIGHT - 1,
                 width,
                 trackY + TRACK_HEIGHT,
-                COLOR_TRACK_BORDER
+                getTimelineTrackBorderColor()
         );
 
         /*
@@ -1007,7 +1064,7 @@ public class EditorTimelineController
                 trackY + TRACK_HEIGHT,
                 selected
                         ? getAccentColor()
-                        : COLOR_TRACK_BORDER
+                        : getTimelineTrackBorderColor()
         );
 
         /*
@@ -1120,7 +1177,7 @@ public class EditorTimelineController
                 timelineTop + 20,
                 currentX + 2,
                 height,
-                COLOR_PLAYHEAD
+                getPlayheadColor()
         );
 
         /*
@@ -1132,7 +1189,7 @@ public class EditorTimelineController
                 timelineTop + 18,
                 currentX + 5,
                 timelineTop + 21,
-                COLOR_PLAYHEAD_HEAD
+                getPlayheadHeadColor()
         );
 
         Gui.drawRect(
@@ -1140,7 +1197,7 @@ public class EditorTimelineController
                 timelineTop + 21,
                 currentX + 4,
                 timelineTop + 23,
-                COLOR_PLAYHEAD
+                getPlayheadColor()
         );
 
         /*
@@ -1187,7 +1244,7 @@ public class EditorTimelineController
                 frameText,
                 labelX,
                 timelineTop + 24,
-                COLOR_PLAYHEAD_HEAD
+                getPlayheadHeadColor()
         );
     }
 
@@ -1206,7 +1263,7 @@ public class EditorTimelineController
         int outerColor =
                 selected
                         ? getAccentColor()
-                        : COLOR_KEYFRAME;
+                        : getTimelineKeyframeColor();
 
         /*
          * Diamond.
@@ -1266,7 +1323,7 @@ public class EditorTimelineController
                     y - 4,
                     x + 1,
                     y + 5,
-                    COLOR_KEYFRAME_INNER
+                    getTimelineKeyframeInnerColor()
             );
 
             Gui.drawRect(
@@ -1274,7 +1331,7 @@ public class EditorTimelineController
                     y - 3,
                     x + 2,
                     y + 4,
-                    COLOR_KEYFRAME_INNER
+                    getTimelineKeyframeInnerColor()
             );
 
             Gui.drawRect(
@@ -1282,7 +1339,7 @@ public class EditorTimelineController
                     y - 2,
                     x + 3,
                     y + 3,
-                    COLOR_KEYFRAME_INNER
+                    getTimelineKeyframeInnerColor()
             );
         }
         else
