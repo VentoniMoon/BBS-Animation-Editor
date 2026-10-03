@@ -215,12 +215,12 @@ public class CharacterAnimationSetupPanel
         }
 
         int listY = this.y + 14;
-        int scrollAreaWidth = this.width - 20;
+        int listWidth = this.width - 28;
 
         if (isInside(
                 this.x + 8,
                 listY,
-                scrollAreaWidth,
+                listWidth,
                 LIST_HEIGHT,
                 mouseX,
                 mouseY
@@ -265,12 +265,12 @@ public class CharacterAnimationSetupPanel
         }
 
         int listY = this.y + 14;
-        int listWidth = this.width - 28;
+        int scrollAreaWidth = this.width - 20;
 
         if (isInside(
                 this.x + 8,
                 listY,
-                listWidth,
+                scrollAreaWidth,
                 LIST_HEIGHT,
                 mouseX,
                 mouseY
