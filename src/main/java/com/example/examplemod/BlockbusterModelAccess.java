@@ -21,6 +21,42 @@ public class BlockbusterModelAccess
         this.model = model;
     }
 
+    public static List<String> getAvailableModelNames()
+    {
+        List<String> names = new ArrayList<String>();
+
+        try
+        {
+            Class<?> modelCustomClass =
+                    Class.forName(
+                            "mchorse.blockbuster.client.model.ModelCustom"
+                    );
+
+            Field modelsField =
+                    modelCustomClass.getField("MODELS");
+
+            Object models = modelsField.get(null);
+
+            if (models instanceof Map)
+            {
+                for (Object key : ((Map<?, ?>) models).keySet())
+                {
+                    if (key != null)
+                    {
+                        names.add(String.valueOf(key));
+                    }
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            exception.printStackTrace();
+        }
+
+        java.util.Collections.sort(names);
+        return names;
+    }
+
     public Object getModel()
     {
         return this.model;
