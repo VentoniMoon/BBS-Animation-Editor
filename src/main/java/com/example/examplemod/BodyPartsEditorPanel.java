@@ -6,7 +6,7 @@ import net.minecraft.client.gui.Gui;
 public class BodyPartsEditorPanel
 {
     public static final int WIDTH = 185;
-    public static final int HEIGHT = 245;
+    public static final int HEIGHT = 430;
 
     private int x;
     private int y;
@@ -84,6 +84,74 @@ public class BodyPartsEditorPanel
                 y + 8,
                 0xFFE2E5E7
         );
+
+        BodyPartModelData selectedModel =
+                controller.getSelectedModel();
+
+        /*
+         * Level 2 is a dedicated model-bone editor.  Do not keep the
+         * Level 1 attachment controls visible underneath TransformPanel:
+         * they belong to a different editing context and visually collide
+         * with the keyframe editor.
+         */
+        if (selectedModel != null)
+        {
+            cy = y + 34;
+
+            mc.fontRenderer.drawString(
+                    "MODEL",
+                    x + 9,
+                    cy,
+                    0xFF9AA1A6
+            );
+
+            mc.fontRenderer.drawString(
+                    trim(
+                            mc,
+                            selectedModel.getModelName(),
+                            WIDTH - 18
+                    ),
+                    x + 9,
+                    cy + 14,
+                    EditorThemeManager.get().getAccentBright()
+            );
+
+            cy += 34;
+
+            mc.fontRenderer.drawString(
+                    "EDIT MODEL BONES",
+                    x + 9,
+                    cy,
+                    0xFFE2E5E7
+            );
+
+            mc.fontRenderer.drawString(
+                    "Select or create keys on the timeline.",
+                    x + 9,
+                    cy + 14,
+                    0xFF666D72
+            );
+
+            this.controller.getTransformPanel().setPosition(
+                    x + 5,
+                    y + 68
+            );
+
+            this.controller.getTransformPanel().draw(
+                    mc,
+                    controller.getKeyframeController()
+                            .getSelectedKeyframe(),
+                    controller.getKeyframeController()
+                            .getSelectedKeyframe() == null
+                            ? null
+                            : controller.getKeyframeController()
+                                    .getSelectedKeyframe()
+                                    .getTransform(),
+                    controller.getTimeline().getTick()
+            );
+
+            return;
+        }
 
         int cy = y + 34;
 
@@ -181,42 +249,26 @@ public class BodyPartsEditorPanel
 
             mc.fontRenderer.drawString(
                     selected.hasModel()
-                            ? "Click a model bar to edit its bones."
+                            ? "Double-click the model bar to edit."
                             : "Choose a model for this attachment.",
                     x + 9,
                     cy,
                     0xFF666D72
             );
 
-            mc.fontRenderer.drawString(
-                    "Timeline keys are local to the model.",
-                    x + 9,
-                    cy + 12,
-                    0xFF666D72
-            );
-
-            AnimationKeyframe keyframe =
-                    controller.getKeyframeController()
-                            .getSelectedKeyframe();
-
-            if (keyframe != null)
+            if (selected.hasModel())
             {
-                controller.getTransformPanel().setPosition(
-                        x + 5,
-                        y + 174
-                );
-
-                controller.getTransformPanel().draw(
-                        mc,
-                        keyframe,
-                        keyframe.getTransform(),
-                        controller.getTimeline().getTick()
+                mc.fontRenderer.drawString(
+                        "Keys are local to the model.",
+                        x + 9,
+                        cy + 12,
+                        0xFF666D72
                 );
             }
         }
     }
 
-    public boolean mouseClicked(
+
             int mouseX,
             int mouseY,
             int mouseButton,
