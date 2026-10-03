@@ -411,24 +411,44 @@ public class CharacterAnimationSetupController
             EntityActor runtimeActor,
             int frame)
     {
-        if (actorData == null ||
-                runtimeActor == null ||
-                runtimeActor.morph == null ||
-                !hasEffectiveSetup(actorData, frame))
+        applyToRuntime(
+                actorData,
+                runtimeActor,
+                frame,
+                null
+        );
+    }
+
+    /**
+     * Applies timeline overrides on top of a clean baseline
+     * UserData snapshot. The baseline is supplied by the runtime
+     * controller before the editor modifies the morph.
+     */
+    public static void applyToRuntime(
+            BlockbusterSceneActorData actorData,
+            EntityActor runtimeActor,
+            int frame,
+            NBTTagCompound baselineUserData)
+    {
+        if (runtimeActor == null ||
+                runtimeActor.morph == null)
         {
             return;
         }
 
         try
         {
-            AbstractMorph morph = runtimeActor.morph.get();
+            AbstractMorph morph =
+                    runtimeActor.morph.get();
 
             if (!(morph instanceof AnimatedMorph))
             {
                 return;
             }
 
-            AnimatedMorph animated = (AnimatedMorph) morph;
+            AnimatedMorph animated =
+                    (AnimatedMorph) morph;
+
             animated.initiateAnimator();
 
             if (animated.animator == null)
@@ -443,60 +463,153 @@ public class CharacterAnimationSetupController
                 return;
             }
 
-            NBTTagCompound userData =
-                    animated.userConfigData == null
-                            ? new NBTTagCompound()
-                            : animated.userConfigData.copy();
-
-            NBTTagCompound actions = new NBTTagCompound();
-
             /*
-             * Preserve the Emoticons configuration that came from
-             * the morph editor/model itself. Character Timeline
-             * only overrides the action entries that are explicitly
-             * present in its keys.
+             * Rebuild the Emoticons user config from the clean
+             * morph baseline before applying the current frame.
+             *
+             * This is important when the playhead moves backwards:
+             * a configuration from a later CharacterKey must not
+             * remain stuck in the runtime morph.
              */
-            NBTTagCompound baseUserConfig =
-                    animated.animator.userConfig.toNBT(null);
+            NBTTagCompound baseUserData =
+                    baselineUserData == null
+                            ? (
+                                    animated.userConfigData == null
+                                            ? new NBTTagCompound()
+                                            : animated.userConfigData.copy()
+                              )
+                            : baselineUserData.copy();
 
-            if (baseUserConfig != null &&
-                    baseUserConfig.hasKey(ACTIONS_TAG, 10))
+            animated.animator.userConfig.copy(
+                    animated.animator.config.config
+            );
+
+            animated.animator.userConfig.fromNBT(
+                    baseUserData
+            );
+
+            NBTTagCompound userData =
+                    baseUserData.copy();
+
+            NBTTagCompound actions =
+                    animated.animator.userConfig.actions
+                            .toNBT(null);
+
+            if (actions == null)
             {
-                actions =
-                        baseUserConfig
-                                .getCompoundTag(ACTIONS_TAG)
-                                .copy();
+                actions = new NBTTagCompound();
             }
 
             for (String action : ACTIONS)
             {
-                if (!hasEffectiveActionData(actorData, frame, action))
+                if (!hasEffectiveActionData(
+                        actorData,
+                        frame,
+                        action))
                 {
                     continue;
                 }
 
-                ActionConfig config =
-                        getEffectiveConfig(actorData, frame, action);
+                String actionKey =
+                        getActionKey(action);
 
-                NBTBase configNBT = config.toNBT();
+                ActionConfig config =
+                        animated.animator.userConfig.actions
+                                .getConfig(actionKey)
+                                .clone();
+
+                /*
+                 * Character Timeline fields inherit independently.
+                 * Only fields explicitly present in timeline keys
+                 * overwrite the Emoticons baseline.
+                 */
+                String name =
+                        findLatestString(
+                                actorData,
+                                frame,
+                                actionKey,
+                                NAME_TAG
+                        );
+
+                Boolean clamp =
+                        findLatestBoolean(
+                                actorData,
+                                frame,
+                                actionKey,
+                                CLAMP_TAG
+                        );
+
+                Boolean reset =
+                        findLatestBoolean(
+                                actorData,
+                                frame,
+                                actionKey,
+                                RESET_TAG
+                        );
+
+                Float speed =
+                        findLatestFloat(
+                                actorData,
+                                frame,
+                                actionKey,
+                                SPEED_TAG
+                        );
+
+                Float fade =
+                        findLatestFloat(
+                                actorData,
+                                frame,
+                                actionKey,
+                                FADE_TAG
+                        );
+
+                Integer tick =
+                        findLatestInteger(
+                                actorData,
+                                frame,
+                                actionKey,
+                                TICK_TAG
+                        );
+
+                if (name != null) config.name = name;
+                if (clamp != null) config.clamp = clamp.booleanValue();
+                if (reset != null) config.reset = reset.booleanValue();
+                if (speed != null) config.speed = speed.floatValue();
+                if (fade != null) config.fade = fade.floatValue();
+                if (tick != null) config.tick = tick.intValue();
 
                 actions.setTag(
-                        getActionKey(action),
-                        configNBT
+                        actionKey,
+                        config.toNBT()
                 );
             }
 
             if (actions.hasNoTags())
             {
-                userData.removeTag(ACTIONS_TAG);
+                userData.removeTag(
+                        ACTIONS_TAG
+                );
             }
             else
             {
-                userData.setTag(ACTIONS_TAG, actions);
+                userData.setTag(
+                        ACTIONS_TAG,
+                        actions
+                );
             }
 
-            animated.userConfigData = userData;
-            animated.userConfigChanged = true;
+            animated.userConfigData =
+                    userData;
+
+            animated.userConfigChanged =
+                    false;
+
+            /*
+             * updateAnimator() recreates ActionPlayback objects
+             * from the selected BOBJAction + ActionConfig.
+             * This is what actually makes a changed animation name
+             * appear in the preview.
+             */
             animated.updateAnimator();
         }
         catch (Throwable error)
