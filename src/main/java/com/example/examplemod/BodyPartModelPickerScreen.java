@@ -13,24 +13,16 @@ import net.minecraft.client.gui.Gui;
  * Uses the original Metamorph creative morph browser as the
  * model picker for Body Parts.
  *
- * Metamorph does not use a Done button here. The selection is
- * committed when the GUI is closed with Escape.
+ * The Metamorph browser owns the actual selection state.
+ * Escape closes this wrapper and commits the currently selected
+ * CustomMorph back to the Body Parts controller.
  */
 public class BodyPartModelPickerScreen extends GuiBase
 {
     private final AnimationEditorScreen returnScreen;
     private final Consumer<String> callback;
 
-    private GuiCreativeMorphsList picker;
-
-    /**
-     * Last Blockbuster CustomMorph selected in the Metamorph browser.
-     *
-     * It is intentionally NOT committed immediately. The original
-     * Metamorph workflow confirms the current state when the GUI
-     * is closed with Escape.
-     */
-    private CustomMorph selectedMorph;
+    private final GuiCreativeMorphsList picker;
 
     private boolean committed;
 
@@ -46,7 +38,7 @@ public class BodyPartModelPickerScreen extends GuiBase
 
         this.picker = new GuiCreativeMorphsList(
                 mc,
-                this::selectMorph
+                this::onMorphSelected
         );
 
         this.picker.flex()
@@ -57,21 +49,19 @@ public class BodyPartModelPickerScreen extends GuiBase
     }
 
     /**
-     * Selecting a morph only changes the pending selection.
-     * The editor is not closed here.
+     * The original picker already keeps the selected morph.
+     * Do not close the screen here.
      */
-    private void selectMorph(AbstractMorph morph)
+    private void onMorphSelected(AbstractMorph morph)
     {
-        if (morph instanceof CustomMorph)
-        {
-            this.selectedMorph =
-                    (CustomMorph) morph;
-        }
+        /*
+         * Selection is intentionally owned by GuiCreativeMorphsList.
+         * We read picker.getSelected() when Escape closes the screen.
+         */
     }
 
     /**
-     * Commit the currently selected model when the user closes
-     * the Metamorph GUI with Escape.
+     * Commit the actual current selection from Metamorph.
      */
     private void commitSelection()
     {
@@ -82,16 +72,40 @@ public class BodyPartModelPickerScreen extends GuiBase
 
         this.committed = true;
 
-        if (this.selectedMorph != null &&
-                this.callback != null)
+        AbstractMorph morph =
+                this.picker.getSelected();
+
+        if (morph instanceof CustomMorph)
         {
             String key =
-                    this.selectedMorph.getKey();
+                    ((CustomMorph) morph).getKey();
 
-            if (key != null && !key.isEmpty())
+            if (key != null &&
+                    !key.isEmpty() &&
+                    this.callback != null)
             {
+                System.out.println(
+                        "[BBS Animation Editor] " +
+                                "Body Parts selected model: " +
+                                key
+                );
+
                 this.callback.accept(key);
             }
+            else
+            {
+                System.out.println(
+                        "[BBS Animation Editor] " +
+                                "Body Parts picker closed without a valid CustomMorph key"
+                );
+            }
+        }
+        else
+        {
+            System.out.println(
+                    "[BBS Animation Editor] " +
+                            "Body Parts picker closed without a CustomMorph selection"
+            );
         }
     }
 
@@ -99,7 +113,7 @@ public class BodyPartModelPickerScreen extends GuiBase
     protected void closeScreen()
     {
         /*
-         * Metamorph's creative GUI has no Done button.
+         * Metamorph's creative browser has no Done button.
          * Escape is the confirmation/close action.
          */
         commitSelection();
