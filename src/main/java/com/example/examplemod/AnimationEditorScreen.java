@@ -212,6 +212,8 @@ public class AnimationEditorScreen extends GuiScreen
                     this.characterGuiBridge
             );
 
+            this.bodyPartsEditorPanel.setScreen(this);
+
             this.sceneViewport =
                     new EditorSceneViewport();
 
@@ -1179,6 +1181,13 @@ public class AnimationEditorScreen extends GuiScreen
 
         drawTopBar();
         drawActorPanel();
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            drawBodyPartsBonePanel();
+        }
+
         drawPreview(mouseX, mouseY);
         drawTimeline();
         drawInterpolationPanel(mouseX, mouseY);
@@ -1911,8 +1920,8 @@ public class AnimationEditorScreen extends GuiScreen
 
     private void drawBodyPartsBonePanel()
     {
-        int top = TOP_BAR_HEIGHT;
-        int bottom = top + ACTOR_PANEL_HEIGHT;
+        int top = TOP_BAR_HEIGHT + ACTOR_PANEL_HEIGHT;
+        int bottom = height - getTimelineHeight();
 
         drawRect(
                 0,
@@ -2007,13 +2016,6 @@ public class AnimationEditorScreen extends GuiScreen
 
     private void drawActorPanel()
     {
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.BODY_PARTS)
-        {
-            drawBodyPartsBonePanel();
-            return;
-        }
-
         int top = TOP_BAR_HEIGHT;
         int bottom =
                 top + ACTOR_PANEL_HEIGHT;
