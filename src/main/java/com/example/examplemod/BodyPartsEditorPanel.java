@@ -108,15 +108,18 @@ public class BodyPartsEditorPanel
 
         cy += 34;
 
-        drawButton(
-                mc,
-                "ADD ATTACHMENT",
+        mc.fontRenderer.drawString(
+                "Double-click a frame to create",
                 x + 9,
-                cy,
-                WIDTH - 18,
-                20,
-                mouseX,
-                mouseY
+                cy + 1,
+                0xFF666D72
+        );
+
+        mc.fontRenderer.drawString(
+                "a 20-tick attachment.",
+                x + 9,
+                cy + 13,
+                0xFF666D72
         );
 
         cy += 27;
@@ -124,7 +127,7 @@ public class BodyPartsEditorPanel
         drawButton(
                 mc,
                 controller.getSelectedAttachment() == null
-                        ? "SELECT MODEL"
+                        ? "SELECT ATTACHMENT"
                         : (controller.getSelectedAttachment().hasModel()
                                 ? controller.getSelectedAttachment().getModelName()
                                 : "SELECT MODEL"),
