@@ -1620,12 +1620,6 @@ public class BodyPartsTimelineController
         return true;
     }
 
-    public void mouseReleased()
-    {
-        controller.getKeyframeController()
-                .stopKeyframeDragging();
-    }
-
     public boolean mouseScrolled(
             int mouseX,
             int mouseY,
