@@ -110,7 +110,7 @@ public class BodyPartsEditorPanel
 
         drawButton(
                 mc,
-                "ADD MODEL",
+                "ADD ATTACHMENT",
                 x + 9,
                 cy,
                 WIDTH - 18,
@@ -123,9 +123,11 @@ public class BodyPartsEditorPanel
 
         drawButton(
                 mc,
-                controller.getSelectedModel() == null
+                controller.getSelectedAttachment() == null
                         ? "SELECT MODEL"
-                        : controller.getSelectedModel().getModelName(),
+                        : (controller.getSelectedAttachment().hasModel()
+                                ? controller.getSelectedAttachment().getModelName()
+                                : "SELECT MODEL"),
                 x + 9,
                 cy,
                 WIDTH - 18,
@@ -135,7 +137,7 @@ public class BodyPartsEditorPanel
         );
 
         BodyPartModelData selected =
-                controller.getSelectedModel();
+                controller.getSelectedAttachment();
 
         if (selected != null)
         {
@@ -149,17 +151,21 @@ public class BodyPartsEditorPanel
             );
 
             mc.fontRenderer.drawString(
-                    selected.getModelName(),
+                    selected.hasModel()
+                        ? selected.getModelName()
+                        : "No model assigned",
                     x + 9,
                     cy + 14,
-                    EditorThemeManager.get().getAccentBright()
+                    selected.hasModel()
+                        ? EditorThemeManager.get().getAccentBright()
+                        : 0xFF666D72
             );
 
             cy += 34;
 
             drawButton(
                     mc,
-                    "REMOVE MODEL",
+                    "REMOVE ATTACHMENT",
                     x + 9,
                     cy,
                     WIDTH - 18,
@@ -171,7 +177,9 @@ public class BodyPartsEditorPanel
             cy += 26;
 
             mc.fontRenderer.drawString(
-                    "Click a model bar to edit its bones.",
+                    selected.hasModel()
+                            ? "Click a model bar to edit its bones."
+                            : "Choose a model for this attachment.",
                     x + 9,
                     cy,
                     0xFF666D72
@@ -223,25 +231,16 @@ public class BodyPartsEditorPanel
                 mouseY >= addY &&
                 mouseY < addY + 20)
         {
-            if (this.screen != null)
-            {
-                Minecraft.getMinecraft().displayGuiScreen(
-                        new BodyPartModelPickerScreen(
-                                Minecraft.getMinecraft(),
-                                this.screen,
-                                (modelName) -> controller.addModel(
-                                        modelName,
-                                        sceneLength
-                                )
-                        )
-                );
-            }
+            controller.createAttachment(
+                    controller.getTimeline().getTick(),
+                    sceneLength
+            );
 
             return true;
         }
 
         BodyPartModelData selected =
-                controller.getSelectedModel();
+                controller.getSelectedAttachment();
 
         int modelButtonY = y + 95;
 
@@ -260,15 +259,15 @@ public class BodyPartsEditorPanel
                 mouseY >= modelButtonY &&
                 mouseY < modelButtonY + 20)
         {
-            if (this.screen != null)
+            if (this.screen != null &&
+                    controller.getSelectedAttachment() != null)
             {
                 Minecraft.getMinecraft().displayGuiScreen(
                         new BodyPartModelPickerScreen(
                                 Minecraft.getMinecraft(),
                                 this.screen,
-                                (modelName) -> controller.addModel(
-                                        modelName,
-                                        sceneLength
+                                (modelName) -> controller.assignModelToSelected(
+                                        modelName
                                 )
                         )
                 );
