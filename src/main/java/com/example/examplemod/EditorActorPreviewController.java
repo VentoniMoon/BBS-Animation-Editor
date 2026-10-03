@@ -240,6 +240,22 @@ public class EditorActorPreviewController
             }
         }
 
+        /*
+         * Blockbuster actors store their custom model as a Metamorph
+         * morph. Resolve that model first so the skeleton belongs to
+         * the selected actor rather than the editor's default model.
+         */
+        String modelName = getBlockbusterModelName(morphNBT);
+
+        if (modelName != null && !modelName.isEmpty())
+        {
+            this.blockbusterModelAccess.loadModelByName(modelName);
+        }
+        else if (!this.blockbusterModelAccess.isValid())
+        {
+            this.blockbusterModelAccess.loadModelByName("steve");
+        }
+
         List<BlockbusterLimbData> limbs =
                 this.blockbusterModelAccess
                         .getLimbData();
@@ -248,6 +264,30 @@ public class EditorActorPreviewController
                 actorId,
                 limbs
         );
+    }
+
+
+    private String getBlockbusterModelName(
+            NBTTagCompound morphNBT)
+    {
+        if (morphNBT == null || !morphNBT.hasKey("Name"))
+        {
+            return null;
+        }
+
+        String name = morphNBT.getString("Name");
+
+        if (name == null || name.isEmpty())
+        {
+            return null;
+        }
+
+        if (name.startsWith("blockbuster."))
+        {
+            return name.substring("blockbuster.".length());
+        }
+
+        return null;
     }
 
 
