@@ -65,6 +65,10 @@ public class AnimationEditorScreen extends GuiScreen
     private final CharacterStateResolver characterStateResolver =
             new CharacterStateResolver();
 
+    private final CharacterAnimationSetupRuntimeController
+            characterAnimationSetupRuntimeController =
+            new CharacterAnimationSetupRuntimeController();
+
     private final BlockbusterCharacterGuiBridge characterGuiBridge =
             new BlockbusterCharacterGuiBridge(
                     Minecraft.getMinecraft(),
@@ -463,6 +467,12 @@ public class AnimationEditorScreen extends GuiScreen
 
 
         this.characterStateResolver.apply(
+                data,
+                actor,
+                this.playbackController.getCurrentFrame()
+        );
+
+        this.characterAnimationSetupRuntimeController.apply(
                 data,
                 actor,
                 this.playbackController.getCurrentFrame()
@@ -2796,6 +2806,8 @@ public class AnimationEditorScreen extends GuiScreen
         {
             applyAdapters();
         }
+
+        this.characterEditorPanel.updateCursorCounter();
 
         applyCharacterState();
 
