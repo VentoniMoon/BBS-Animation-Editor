@@ -673,12 +673,8 @@ public class AnimationEditorInput
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
         {
-            AnimationKeyframe selectedKeyframe =
-                    this.bodyPartsController.getKeyframeController().getSelectedKeyframe();
-
-            if (selectedKeyframe != null &&
-                    this.bodyPartsEditorPanel.mouseClickedTransform(
-                            mouseX, mouseY, mouseButton))
+            if (this.bodyPartsEditorPanel.mouseClickedTransform(
+                    mouseX, mouseY, mouseButton))
             {
                 this.transformDragging = true;
                 this.markDirty();
@@ -843,7 +839,8 @@ public class AnimationEditorInput
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS
                 && this.transformDragging
-                && this.bodyPartsController.getKeyframeController().getSelectedKeyframe() != null
+                && (this.bodyPartsController.getKeyframeController().getSelectedKeyframe() != null
+                    || this.bodyPartsEditorPanel.isGlobalTransformActive())
                 && clickedMouseButton == 0)
         {
             this.bodyPartsEditorPanel.mouseDraggedTransform(mouseX, mouseY);
