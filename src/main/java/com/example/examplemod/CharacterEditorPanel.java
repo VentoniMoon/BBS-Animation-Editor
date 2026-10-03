@@ -777,6 +777,16 @@ public class CharacterEditorPanel
                     mouseY
             );
         }
+
+        /*
+         * The animation picker is a floating overlay. Draw it last
+         * so lower Character sections can never cover it.
+         */
+        this.animationSetupPanel.drawPopup(
+                mc,
+                mouseX,
+                mouseY
+        );
     }
 
     /*
@@ -2116,23 +2126,29 @@ public class CharacterEditorPanel
             int mouseY,
             int direction)
     {
+        /*
+         * A floating animation picker must receive the wheel before
+         * section-specific scrolling is considered. This keeps the
+         * popup scrollable even when its lower part visually overlaps
+         * another Character section.
+         */
         if (this.openedSection == Section.ANIMATION_SETUP)
         {
             int currentY = this.y + 30 + 24 + 4;
             int animationY = currentY + 24 + 4;
 
-        this.animationSetupPanel.setBounds(
-                this.x,
-                animationY,
-                this.width
-        );
+            this.animationSetupPanel.setBounds(
+                    this.x,
+                    animationY,
+                    this.width
+            );
 
-        this.animationSetupPanel.setState(
-                this.selectedActor,
-                this.selectedKey,
-                this.runtimeActor,
-                this.currentFrame
-        );
+            this.animationSetupPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.runtimeActor,
+                    this.currentFrame
+            );
 
             return this.animationSetupPanel.mouseScrolled(
                     mouseX,
