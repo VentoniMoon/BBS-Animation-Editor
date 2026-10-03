@@ -241,20 +241,6 @@ public class BodyPartsTimelineController
             );
         }
 
-        String zoom =
-                "ZOOM " +
-                Math.round(timeline.getZoom() * 100.0F) +
-                "%";
-
-        int zoomWidth =
-                mc.fontRenderer.getStringWidth(zoom);
-
-        mc.fontRenderer.drawString(
-                zoom,
-                width - zoomWidth - 12,
-                top + 11,
-                0xFF9DA4A9
-        );
     }
 
     private void drawActorTimeline(
