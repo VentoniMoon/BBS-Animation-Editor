@@ -358,9 +358,12 @@ public class BodyPartsPreviewRenderer
             EntityActor renderEntity,
             CustomMorph morph,
             BoneAttachment attachment,
+            AnimationTransform modelTransform,
             float partialTicks)
     {
         GL11.glPushMatrix();
+
+        attachment = attachment.withModelTransform(modelTransform);
 
         /*
          * ModelTransform coordinates are Blockbuster model pixels.
@@ -429,12 +432,29 @@ public class BodyPartsPreviewRenderer
     private static class BoneAttachment
     {
         private final AnimationTransform transform;
+        private final AnimationTransform modelTransform;
 
         private BoneAttachment(
                 AnimationTransform transform)
         {
-            this.transform =
-                    transform;
+            this(transform, null);
+        }
+
+        private BoneAttachment(
+                AnimationTransform transform,
+                AnimationTransform modelTransform)
+        {
+            this.transform = transform;
+            this.modelTransform = modelTransform;
+        }
+
+        private BoneAttachment withModelTransform(
+                AnimationTransform modelTransform)
+        {
+            return new BoneAttachment(
+                    this.transform,
+                    modelTransform
+            );
         }
     }
 }
