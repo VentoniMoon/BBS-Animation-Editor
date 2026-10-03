@@ -110,6 +110,35 @@ public class BodyPartModelPickerScreen extends GuiBase
     }
 
     @Override
+    protected void keyTyped(
+            char typedChar,
+            int keyCode)
+            throws java.io.IOException
+    {
+        /*
+         * Handle Escape before GuiBase dispatches the key to the
+         * embedded Metamorph element. This guarantees that the
+         * Body Parts wrapper gets a chance to commit the current
+         * Metamorph selection.
+         */
+        if (keyCode == 1)
+        {
+            commitSelection();
+
+            this.mc.displayGuiScreen(
+                    this.returnScreen
+            );
+
+            return;
+        }
+
+        super.keyTyped(
+                typedChar,
+                keyCode
+        );
+    }
+
+    @Override
     protected void closeScreen()
     {
         /*
