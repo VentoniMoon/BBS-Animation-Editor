@@ -1094,6 +1094,44 @@ public class BodyPartsTimelineController
             return true;
         }
 
+        if (mouseButton == 1)
+        {
+            BodyPartModelData hit =
+                    findAttachmentAt(
+                            bone,
+                            boneIndex,
+                            mouseX,
+                            mouseY,
+                            tracksTop
+                    );
+
+            long now = System.currentTimeMillis();
+            boolean doubleRightClick =
+                    lastRightClickBone == boneIndex &&
+                    Math.abs(lastRightClickX - mouseX) <= DOUBLE_CLICK_DISTANCE &&
+                    Math.abs(lastRightClickY - mouseY) <= DOUBLE_CLICK_DISTANCE &&
+                    now - lastRightClickTime <= DOUBLE_CLICK_DELAY &&
+                    lastRightClickedAttachment == hit &&
+                    hit != null;
+
+            if (doubleRightClick)
+            {
+                controller.selectAttachment(hit);
+                controller.removeSelectedAttachment();
+                resetClickState();
+                lastRightClickTime = 0L;
+                lastRightClickedAttachment = null;
+                return true;
+            }
+
+            lastRightClickTime = now;
+            lastRightClickX = mouseX;
+            lastRightClickY = mouseY;
+            lastRightClickBone = boneIndex;
+            lastRightClickedAttachment = hit;
+            return true;
+        }
+
         if (mouseButton != 0)
         {
             return true;
@@ -1232,6 +1270,13 @@ public class BodyPartsTimelineController
     }
 
     private BodyPartModelData lastClickedAttachment;
+
+    private long lastRightClickTime;
+    private int lastRightClickX = -1;
+    private int lastRightClickY = -1;
+    private int lastRightClickBone = -1;
+    private BodyPartModelData lastRightClickedAttachment;
+    private AnimationKeyframe lastRightClickedKeyframe;
 
     private BodyPartModelData findAttachmentAt(
             AnimationBone bone,
@@ -1420,15 +1465,36 @@ public class BodyPartsTimelineController
                                     6
                             );
 
-            if (key != null)
+            if (key == null)
             {
-                controller.getKeyframeController()
-                        .requestDelete(
-                                bone,
-                                key
-                        );
+                return true;
             }
 
+            long now = System.currentTimeMillis();
+            boolean doubleRightClick =
+                    lastRightClickBone == boneIndex &&
+                    Math.abs(lastRightClickX - mouseX) <= DOUBLE_CLICK_DISTANCE &&
+                    Math.abs(lastRightClickY - mouseY) <= DOUBLE_CLICK_DISTANCE &&
+                    now - lastRightClickTime <= DOUBLE_CLICK_DELAY &&
+                    lastRightClickedKeyframe == key;
+
+            if (doubleRightClick)
+            {
+                controller.getKeyframeController()
+                        .requestDelete(bone, key);
+                controller.getKeyframeController()
+                        .confirmDelete();
+                resetClickState();
+                lastRightClickTime = 0L;
+                lastRightClickedKeyframe = null;
+                return true;
+            }
+
+            lastRightClickTime = now;
+            lastRightClickX = mouseX;
+            lastRightClickY = mouseY;
+            lastRightClickBone = boneIndex;
+            lastRightClickedKeyframe = key;
             return true;
         }
 
