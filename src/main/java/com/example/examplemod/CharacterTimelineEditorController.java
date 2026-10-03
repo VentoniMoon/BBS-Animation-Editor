@@ -157,6 +157,9 @@ public class CharacterTimelineEditorController
         return EditorThemeManager.get().getAccentBright();
     }
 
+    private static final int COLOR_TEXT_SECONDARY = 0xFF9DA4A9;
+    private static final int COLOR_TEXT_MUTED = 0xFF666D72;
+
     private static int getAccentColor()
     {
         return EditorThemeManager
