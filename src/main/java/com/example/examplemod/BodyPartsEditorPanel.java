@@ -1,7 +1,5 @@
 package com.example.examplemod;
 
-import java.util.List;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 
@@ -14,13 +12,17 @@ public class BodyPartsEditorPanel
     private int y;
 
     private final BodyPartsEditorController controller;
-    private int modelPickerScroll;
-    private boolean pickerOpen;
+    private AnimationEditorScreen screen;
 
     public BodyPartsEditorPanel(
             BodyPartsEditorController controller)
     {
         this.controller = controller;
+    }
+
+    public void setScreen(AnimationEditorScreen screen)
+    {
+        this.screen = screen;
     }
 
     public void setPosition(int x, int y)
@@ -132,16 +134,6 @@ public class BodyPartsEditorPanel
                 mouseY
         );
 
-        if (pickerOpen)
-        {
-            drawPicker(
-                    mc,
-                    mouseX,
-                    mouseY,
-                    cy + 22
-            );
-        }
-
         BodyPartModelData selected =
                 controller.getSelectedModel();
 
@@ -213,81 +205,6 @@ public class BodyPartsEditorPanel
         }
     }
 
-    private void drawPicker(
-            Minecraft mc,
-            int mouseX,
-            int mouseY,
-            int top)
-    {
-        List<String> names =
-                controller.getAvailableModelNames();
-
-        int width = WIDTH - 18;
-        int rowHeight = 16;
-        int maxRows = 8;
-
-        int visible = Math.min(
-                maxRows,
-                Math.max(1, names.size())
-        );
-
-        drawRect(
-                mc,
-                x + 9,
-                top,
-                x + 9 + width,
-                top + visible * rowHeight,
-                0xFF101010
-        );
-
-        if (names.isEmpty())
-        {
-            mc.fontRenderer.drawString(
-                    "No models",
-                    x + 16,
-                    top + 4,
-                    0xFF666D72
-            );
-            return;
-        }
-
-        for (int i = 0; i < visible; i++)
-        {
-            String name = names.get(
-                    i + modelPickerScroll
-            );
-
-            boolean hovered =
-                    mouseX >= x + 9 &&
-                    mouseX < x + 9 + width &&
-                    mouseY >= top + i * rowHeight &&
-                    mouseY < top + (i + 1) * rowHeight;
-
-            if (hovered)
-            {
-                drawRect(
-                        mc,
-                        x + 9,
-                        top + i * rowHeight,
-                        x + 9 + width,
-                        top + (i + 1) * rowHeight,
-                        0xFF252525
-                );
-            }
-
-            mc.fontRenderer.drawString(
-                    trim(
-                            mc,
-                            name,
-                            width - 10
-                    ),
-                    x + 14,
-                    top + i * rowHeight + 4,
-                    0xFFE2E5E7
-            );
-        }
-    }
-
     public boolean mouseClicked(
             int mouseX,
             int mouseY,
@@ -306,42 +223,20 @@ public class BodyPartsEditorPanel
                 mouseY >= addY &&
                 mouseY < addY + 20)
         {
-            pickerOpen = true;
-            return true;
-        }
-
-        int pickerY = y + 115;
-
-        if (pickerOpen)
-        {
-            List<String> names =
-                    controller.getAvailableModelNames();
-
-            int width = WIDTH - 18;
-            int rowHeight = 16;
-            int visible = Math.min(8, names.size());
-
-            for (int i = 0; i < visible; i++)
+            if (this.screen != null)
             {
-                int rowY = pickerY + i * rowHeight;
-
-                if (mouseX >= x + 9 &&
-                        mouseX < x + 9 + width &&
-                        mouseY >= rowY &&
-                        mouseY < rowY + rowHeight)
-                {
-                    if (controller.addModel(
-                            names.get(i),
-                            sceneLength) != null)
-                    {
-                        pickerOpen = false;
-                    }
-
-                    return true;
-                }
+                Minecraft.getMinecraft().displayGuiScreen(
+                        new BodyPartModelPickerScreen(
+                                Minecraft.getMinecraft(),
+                                this.screen,
+                                (modelName) -> controller.addModel(
+                                        modelName,
+                                        sceneLength
+                                )
+                        )
+                );
             }
 
-            pickerOpen = false;
             return true;
         }
 
@@ -365,7 +260,20 @@ public class BodyPartsEditorPanel
                 mouseY >= modelButtonY &&
                 mouseY < modelButtonY + 20)
         {
-            pickerOpen = !pickerOpen;
+            if (this.screen != null)
+            {
+                Minecraft.getMinecraft().displayGuiScreen(
+                        new BodyPartModelPickerScreen(
+                                Minecraft.getMinecraft(),
+                                this.screen,
+                                (modelName) -> controller.addModel(
+                                        modelName,
+                                        sceneLength
+                                )
+                        )
+                );
+            }
+
             return true;
         }
 
