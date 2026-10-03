@@ -5,14 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import mchorse.blockbuster.common.entity.EntityActor;
-import mchorse.emoticons.skin_n_bones.api.animation.model.ActionConfig;
 import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiTextField;
 
-import org.lwjgl.input.Keyboard;
 
 public class CharacterAnimationSetupPanel
 {
@@ -21,7 +18,7 @@ public class CharacterAnimationSetupPanel
     private static final int LIST_HEIGHT =
             ROW_HEIGHT * VISIBLE_ROWS;
 
-    public static final int HEIGHT = 178;
+    public static final int HEIGHT = 94;
 
     private static final int COLOR_PANEL_DARK = 0xFF111315;
     private static final int COLOR_PANEL_HOVER = 0xFF25292D;
@@ -43,13 +40,6 @@ public class CharacterAnimationSetupPanel
     private String selectedAction = "Idle";
 
     private final CharacterAnimationPickerPopup pickerPopup;
-
-    private GuiTextField speedField;
-    private GuiTextField fadeField;
-    private GuiTextField tickField;
-
-    private String fieldSignature = "";
-    private boolean suppressFieldSync;
 
     public CharacterAnimationSetupPanel()
     {
@@ -77,7 +67,6 @@ public class CharacterAnimationSetupPanel
         this.y = y;
         this.width = width;
 
-        positionTextFields();
         positionPopup();
     }
 
@@ -100,10 +89,8 @@ public class CharacterAnimationSetupPanel
         if (changed)
         {
             this.actionOffset = 0;
-            this.fieldSignature = "";
         }
 
-        syncFields();
         positionPopup();
     }
 
@@ -236,15 +223,6 @@ public class CharacterAnimationSetupPanel
             return false;
         }
 
-        ensureTextFields(Minecraft.getMinecraft());
-
-        if (this.speedField.mouseClicked(mouseX, mouseY, mouseButton) ||
-            this.fadeField.mouseClicked(mouseX, mouseY, mouseButton) ||
-            this.tickField.mouseClicked(mouseX, mouseY, mouseButton))
-        {
-            return true;
-        }
-
         int listY = this.y + 14;
         int listWidth = this.width - 28;
 
@@ -275,56 +253,6 @@ public class CharacterAnimationSetupPanel
                         this.selectedAction
                 );
 
-                return true;
-            }
-        }
-
-        int parametersY = this.y + 99;
-
-        if (isInside(
-                this.x + 88,
-                parametersY + 18,
-                this.width - 100,
-                17,
-                mouseX,
-                mouseY
-        ))
-        {
-            ActionConfig config = getSelectedConfig();
-            boolean next = !config.clamp;
-
-            if (CharacterAnimationSetupController.setParameter(
-                    this.selectedKey,
-                    this.selectedAction,
-                    CharacterAnimationSetupController.PARAM_CLAMP,
-                    Boolean.valueOf(next)
-            ))
-            {
-                this.fieldSignature = "";
-                return true;
-            }
-        }
-
-        if (isInside(
-                this.x + 88,
-                parametersY + 36,
-                this.width - 100,
-                17,
-                mouseX,
-                mouseY
-        ))
-        {
-            ActionConfig config = getSelectedConfig();
-            boolean next = !config.reset;
-
-            if (CharacterAnimationSetupController.setParameter(
-                    this.selectedKey,
-                    this.selectedAction,
-                    CharacterAnimationSetupController.PARAM_RESET,
-                    Boolean.valueOf(next)
-            ))
-            {
-                this.fieldSignature = "";
                 return true;
             }
         }
@@ -388,65 +316,12 @@ public class CharacterAnimationSetupPanel
             int keyCode)
             throws IOException
     {
-        if (this.pickerPopup.isOpen() &&
-                this.pickerPopup.keyTyped(
-                        typedChar,
-                        keyCode
-                ))
+        if (this.pickerPopup.isOpen())
         {
-            return true;
-        }
-
-        if (this.selectedKey == null)
-        {
-            return false;
-        }
-
-        if (this.speedField != null && this.speedField.isFocused())
-        {
-            if (this.speedField.textboxKeyTyped(typedChar, keyCode))
-            {
-                applyNumericField(
-                        CharacterAnimationSetupController.PARAM_SPEED,
-                        this.speedField,
-                        false
-                );
-                return true;
-            }
-        }
-
-        if (this.fadeField != null && this.fadeField.isFocused())
-        {
-            if (this.fadeField.textboxKeyTyped(typedChar, keyCode))
-            {
-                applyNumericField(
-                        CharacterAnimationSetupController.PARAM_FADE,
-                        this.fadeField,
-                        true
-                );
-                return true;
-            }
-        }
-
-        if (this.tickField != null && this.tickField.isFocused())
-        {
-            if (this.tickField.textboxKeyTyped(typedChar, keyCode))
-            {
-                applyNumericField(
-                        CharacterAnimationSetupController.PARAM_TICK,
-                        this.tickField,
-                        true
-                );
-                return true;
-            }
-        }
-
-        if (keyCode == Keyboard.KEY_ESCAPE)
-        {
-            this.speedField.setFocused(false);
-            this.fadeField.setFocused(false);
-            this.tickField.setFocused(false);
-            return true;
+            return this.pickerPopup.keyTyped(
+                    typedChar,
+                    keyCode
+            );
         }
 
         return false;
@@ -462,64 +337,6 @@ public class CharacterAnimationSetupPanel
         if (this.speedField != null) this.speedField.updateCursorCounter();
         if (this.fadeField != null) this.fadeField.updateCursorCounter();
         if (this.tickField != null) this.tickField.updateCursorCounter();
-    }
-
-    private void ensureTextFields(Minecraft mc)
-    {
-        if (this.speedField != null)
-        {
-            positionTextFields();
-            return;
-        }
-
-        this.speedField = createField(mc, 7311);
-        this.fadeField = createField(mc, 7312);
-        this.tickField = createField(mc, 7313);
-
-        positionTextFields();
-    }
-
-    private GuiTextField createField(Minecraft mc, int id)
-    {
-        GuiTextField field =
-                new GuiTextField(
-                        id,
-                        mc.fontRenderer,
-                        0,
-                        0,
-                        40,
-                        16
-                );
-
-        field.setMaxStringLength(16);
-        field.setCanLoseFocus(true);
-        field.setEnableBackgroundDrawing(false);
-        field.setTextColor(COLOR_TEXT);
-        field.setVisible(true);
-
-        return field;
-    }
-
-    private void positionTextFields()
-    {
-        if (this.speedField == null) return;
-
-        int parametersY = this.y + 99;
-
-        this.speedField.x = this.x + 48;
-        this.speedField.y = parametersY + 1;
-        this.speedField.width = 38;
-        this.speedField.height = 16;
-
-        this.fadeField.x = this.x + 123;
-        this.fadeField.y = parametersY + 1;
-        this.fadeField.width = 34;
-        this.fadeField.height = 16;
-
-        this.tickField.x = this.x + 48;
-        this.tickField.y = parametersY + 19;
-        this.tickField.width = 38;
-        this.tickField.height = 16;
     }
 
     private void positionPopup()
@@ -636,13 +453,9 @@ public class CharacterAnimationSetupPanel
         }
     }
 
-    private ActionConfig getSelectedConfig()
+    public String getSelectedAction()
     {
-        return CharacterAnimationSetupController.getEffectiveConfig(
-                this.selectedActor,
-                this.currentFrame,
-                this.selectedAction
-        );
+        return this.selectedAction;
     }
 
     private List<String> getActions()
@@ -821,163 +634,6 @@ public class CharacterAnimationSetupPanel
                 hovered
                         ? EditorThemeManager.get().getAccent()
                         : COLOR_BORDER
-        );
-    }
-
-    private void drawParameters(
-            Minecraft mc,
-            int y,
-            int mouseX,
-            int mouseY)
-    {
-        ActionConfig config = getSelectedConfig();
-
-        drawHint(
-                mc,
-                "Parameters: " + this.selectedAction,
-                this.x + 12,
-                y
-        );
-
-        drawLabel(mc, "Speed", this.x + 12, y + 23);
-        drawLabel(mc, "Fade", this.x + 88, y + 23);
-        drawLabel(mc, "Tick", this.x + 12, y + 41);
-
-        drawTextFieldFrame(this.speedField);
-        drawTextFieldFrame(this.fadeField);
-        drawTextFieldFrame(this.tickField);
-
-        boolean clampHovered = isInside(
-                this.x + 88,
-                y + 18,
-                this.width - 100,
-                17,
-                mouseX,
-                mouseY
-        );
-
-        boolean resetHovered = isInside(
-                this.x + 88,
-                y + 36,
-                this.width - 100,
-                17,
-                mouseX,
-                mouseY
-        );
-
-        drawToggle(
-                mc,
-                "Clamp",
-                config.clamp,
-                this.x + 88,
-                y + 18,
-                this.width - 100,
-                clampHovered
-        );
-
-        drawToggle(
-                mc,
-                "Reset",
-                config.reset,
-                this.x + 88,
-                y + 36,
-                this.width - 100,
-                resetHovered
-        );
-    }
-
-    private void drawTextFieldFrame(GuiTextField field)
-    {
-        if (field == null) return;
-
-        int color =
-                field.isFocused()
-                        ? EditorThemeManager.get().getAccent()
-                        : COLOR_BORDER;
-
-        GuiScreen.drawRect(
-                field.x - 1,
-                field.y - 1,
-                field.x + field.width + 1,
-                field.y + field.height + 1,
-                color
-        );
-
-        field.drawTextBox();
-    }
-
-    private void drawToggle(
-            Minecraft mc,
-            String label,
-            boolean value,
-            int x,
-            int y,
-            int width,
-            boolean hovered)
-    {
-        GuiScreen.drawRect(
-                x,
-                y,
-                x + width,
-                y + 17,
-                hovered
-                        ? COLOR_PANEL_HOVER
-                        : COLOR_PANEL_DARK
-        );
-
-        mc.fontRenderer.drawString(
-                value ? "✓ " + label : "□ " + label,
-                x + 5,
-                y + 5,
-                value
-                        ? EditorThemeManager.get().getAccentBright()
-                        : COLOR_TEXT_SECONDARY
-        );
-    }
-
-    private String formatFloat(float value)
-    {
-        if (Math.abs(value - Math.round(value)) < 0.0001F)
-        {
-            return String.valueOf((int) value);
-        }
-
-        return String.format(
-                java.util.Locale.US,
-                "%.3f",
-                value
-        );
-    }
-
-    private String trim(
-            Minecraft mc,
-            String text,
-            int width)
-    {
-        if (text == null) return "";
-
-        if (mc.fontRenderer.getStringWidth(text) <= width)
-        {
-            return text;
-        }
-
-        return mc.fontRenderer.trimStringToWidth(
-                text,
-                Math.max(1, width - 10)
-        ) + "...";
-    }
-
-    private void drawLabel(
-            Minecraft mc,
-            String text,
-            int x,
-            int y)
-    {
-        mc.fontRenderer.drawString(
-                text,
-                x,
-                y,
-                COLOR_TEXT_SECONDARY
         );
     }
 
