@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import mchorse.blockbuster.api.ModelLimb;
 import mchorse.blockbuster.api.ModelPose;
 import mchorse.blockbuster.api.ModelTransform;
 import mchorse.blockbuster.common.entity.EntityActor;
@@ -13,7 +12,6 @@ import mchorse.blockbuster_pack.morphs.CustomMorph;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderHelper;
-import net.minecraft.entity.EntityLivingBase;
 
 import org.lwjgl.opengl.GL11;
 
@@ -114,8 +112,9 @@ public class BodyPartsPreviewRenderer
 
             BoneAttachment attachment =
                     findAttachment(
-                            actorPose,
-                            data.getAttachmentBoneName()
+                            controller,
+                            data.getAttachmentBoneName(),
+                            frame
                     );
 
             if (attachment == null)
@@ -304,42 +303,57 @@ public class BodyPartsPreviewRenderer
                 pose;
     }
 
-    private AbstractActorPose getActorPose(
-            EntityActor actor,
-            float partialTicks)
-    {
-        AbstractMorphAccessor accessor =
-                new AbstractMorphAccessor(
-                        actor
-                );
-
-        return accessor.get();
-    }
-
     private BoneAttachment findAttachment(
-            AbstractActorPose actorPose,
-            String boneName)
+            BodyPartsEditorController controller,
+            String boneName,
+            int frame)
     {
-        if (actorPose == null ||
-                actorPose.pose == null ||
-                boneName == null)
+        if (controller == null ||
+                boneName == null ||
+                boneName.isEmpty())
         {
             return null;
         }
 
-        ModelTransform transform =
-                actorPose.pose.limbs.get(
-                        boneName
-                );
+        /*
+         * Use the same actor skeleton which the Body Parts editor
+         * already uses for its Level 1 rows.  This is important for
+         * AnimatedMorph actors: they are not CustomMorphs, so asking
+         * the actor morph for a ModelPose would return nothing.
+         *
+         * AnimationBone#getWorldTransformAt() also includes the
+         * current editor animation and the complete parent chain.
+         */
+        List<AnimationBone> bones =
+                controller.getActorBones();
 
-        if (transform == null)
+        if (bones == null)
         {
             return null;
         }
 
-        return new BoneAttachment(
-                transform
-        );
+        for (AnimationBone bone : bones)
+        {
+            if (bone != null &&
+                    boneName.equals(bone.getName()))
+            {
+                AnimationTransform transform =
+                        bone.getWorldTransformAt(frame);
+
+                if (transform != null)
+                {
+                    return new BoneAttachment(transform);
+                }
+
+                return null;
+            }
+        }
+
+        /*
+         * Keep the attachment visible even if the actor skeleton
+         * contains a bone without a transform.
+         */
+        return null;
     }
 
     private void renderAttached(
