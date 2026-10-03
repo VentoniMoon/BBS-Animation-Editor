@@ -1890,15 +1890,6 @@ public class CharacterEditorPanel
                     this.currentFrame
             );
 
-            if (this.animationSetupPanel.mouseClicked(
-                    mouseX,
-                    mouseY,
-                    mouseButton
-            ))
-            {
-                return true;
-            }
-
             currentY +=
                     24 + 4 + CharacterAnimationSetupPanel.HEIGHT;
         }
