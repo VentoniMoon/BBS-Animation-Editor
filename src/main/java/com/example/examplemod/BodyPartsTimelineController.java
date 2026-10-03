@@ -553,6 +553,23 @@ public class BodyPartsTimelineController
         return same;
     }
 
+    public boolean mouseClickMove(
+            int mouseX,
+            int mouseY,
+            int clickedMouseButton,
+            int width,
+            int height,
+            int sceneLength)
+    {
+        return false;
+    }
+
+    public void mouseReleased()
+    {
+        this.controller.getKeyframeController()
+                .stopKeyframeDragging();
+    }
+
     private String trim(Minecraft mc, String text, int maxWidth)
     {
         if (text == null)
