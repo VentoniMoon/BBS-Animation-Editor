@@ -437,46 +437,4 @@ public class BodyPartsPreviewRenderer
                     transform;
         }
     }
-
-    private static class AbstractActorPose
-    {
-        private final ModelPose pose;
-
-        private AbstractActorPose(
-                ModelPose pose)
-        {
-            this.pose = pose;
-        }
-    }
-
-    private static class AbstractMorphAccessor
-    {
-        private final EntityActor actor;
-
-        private AbstractMorphAccessor(
-                EntityActor actor)
-        {
-            this.actor = actor;
-        }
-
-        private AbstractActorPose get()
-        {
-            if (!(this.actor.getMorph() instanceof CustomMorph))
-            {
-                return new AbstractActorPose(null);
-            }
-
-            CustomMorph morph =
-                    (CustomMorph) this.actor.getMorph();
-
-            return new AbstractActorPose(
-                    morph.getPose(
-                            this.actor,
-                            true,
-                            Minecraft.getMinecraft()
-                                    .getRenderPartialTicks()
-                    )
-            );
-        }
-    }
 }
