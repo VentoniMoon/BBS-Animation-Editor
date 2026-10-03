@@ -280,6 +280,11 @@ public class BodyPartsEditorPanel
             return false;
         }
 
+        if (controller.getSelectedModel() != null)
+        {
+            return false;
+        }
+
         int addY = y + 68;
 
         if (mouseX >= x + 9 &&
