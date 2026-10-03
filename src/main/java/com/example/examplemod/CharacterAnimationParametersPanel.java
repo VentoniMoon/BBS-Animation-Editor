@@ -476,7 +476,10 @@ public class CharacterAnimationParametersPanel
                 COLOR_BORDER
         );
 
+        int originalY = field.y;
+        field.y = originalY + 2;
         field.drawTextBox();
+        field.y = originalY;
     }
 
     private void drawToggle(
