@@ -151,6 +151,18 @@ public class BodyPartsTimelineController
         BodyPartModelData model =
                 controller.getSelectedModel();
 
+        /*
+         * Body Parts has its own view timeline. Keep its length in
+         * sync with the actual scene/model range, otherwise the
+         * EditorTimeline clamps every playback frame back to 0.
+         */
+        this.timeline.setLength(
+                Math.max(
+                        1,
+                        getMaximumFrame(sceneLength, model) + 1
+                )
+        );
+
         if (model == null)
         {
             drawActorTimeline(
@@ -391,7 +403,7 @@ public class BodyPartsTimelineController
             }
 
             int barY =
-                    y + 4 + Math.min(stack, 0) * 12;
+                    y + 4 + stack * 12;
 
             int left =
                     timeline.getFrameX(
@@ -1608,13 +1620,27 @@ public class BodyPartsTimelineController
             return true;
         }
 
+        /*
+         * Plain wheel scrolling is deliberately kept conservative.
+         * It must never move the timeline past its visible content.
+         * Ctrl+wheel remains the zoom control above.
+         */
+        int maximumFrame =
+                getMaximumFrame(
+                        sceneLength,
+                        model
+                );
+
         timeline.addOffset(
-                wheel > 0 ? -60 : 60
+                wheel > 0 ? -40 : 40
         );
 
         timeline.clampOffset(
-                getMaximumFrame(sceneLength, model),
-                width - TIMELINE_START_X
+                maximumFrame,
+                Math.max(
+                        1,
+                        width - TIMELINE_START_X
+                )
         );
 
         return true;
