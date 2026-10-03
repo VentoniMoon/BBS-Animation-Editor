@@ -1099,6 +1099,19 @@ public class AnimationEditorInput
                 );
             }
 
+            if (this.editorModeController.getMode()
+                    == EditorModeController.EditorMode.BODY_PARTS)
+            {
+                this.bodyPartsTimelineController.mouseScrolled(
+                        mouseX,
+                        mouseY,
+                        direction,
+                        this.screen.width,
+                        this.screen.height,
+                        this.screen.getSceneLength()
+                );
+            }
+
             return;
         }
 
