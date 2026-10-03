@@ -211,6 +211,9 @@ public class CharacterEditorPanel
     private final CharacterAnimationSetupPanel animationSetupPanel =
             new CharacterAnimationSetupPanel();
 
+    private final CharacterAnimationParametersPanel animationParametersPanel =
+            new CharacterAnimationParametersPanel();
+
     /*
      * =========================================================
      * CONSTRUCTOR
@@ -754,7 +757,9 @@ public class CharacterEditorPanel
 
             drawActorSettings(
                     mc,
-                    cursorY
+                    cursorY,
+                    mouseX,
+                    mouseY
             );
         }
     }
@@ -2050,13 +2055,10 @@ public class CharacterEditorPanel
             int mouseY,
             int direction)
     {
-        if (this.openedSection != Section.ANIMATION_SETUP)
+        if (this.openedSection == Section.ANIMATION_SETUP)
         {
-            return false;
-        }
-
-        int currentY = this.y + 30 + 24 + 4;
-        int animationY = currentY + 24 + 4;
+            int currentY = this.y + 30 + 24 + 4;
+            int animationY = currentY + 24 + 4;
 
         this.animationSetupPanel.setBounds(
                 this.x,
@@ -2071,11 +2073,14 @@ public class CharacterEditorPanel
                 this.currentFrame
         );
 
-        return this.animationSetupPanel.mouseScrolled(
-                mouseX,
-                mouseY,
-                direction
-        );
+            return this.animationSetupPanel.mouseScrolled(
+                    mouseX,
+                    mouseY,
+                    direction
+            );
+        }
+
+        return false;
     }
 
     public boolean keyTyped(
@@ -2083,36 +2088,84 @@ public class CharacterEditorPanel
             int keyCode)
             throws java.io.IOException
     {
-        if (this.openedSection != Section.ANIMATION_SETUP)
+        if (this.openedSection == Section.ANIMATION_SETUP)
         {
-            return false;
+            int currentY = this.y + 30 + 24 + 4;
+            int animationY = currentY + 24 + 4;
+
+            this.animationSetupPanel.setBounds(
+                    this.x,
+                    animationY,
+                    this.width
+            );
+
+            this.animationSetupPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.runtimeActor,
+                    this.currentFrame
+            );
+
+            return this.animationSetupPanel.keyTyped(
+                    typedChar,
+                    keyCode
+            );
         }
 
-        int currentY = this.y + 30 + 24 + 4;
-        int animationY = currentY + 24 + 4;
+        if (this.openedSection == Section.ACTOR_SETTINGS)
+        {
+            int currentY = this.y + 30 + 24 + 4;
 
-        this.animationSetupPanel.setBounds(
-                this.x,
-                animationY,
-                this.width
-        );
+            if (this.openedSection == Section.ANIMATION_SETUP)
+            {
+                currentY += 24 + 4 + CharacterAnimationSetupPanel.HEIGHT;
+            }
+            else
+            {
+                currentY += 24;
+            }
 
-        this.animationSetupPanel.setState(
-                this.selectedActor,
-                this.selectedKey,
-                this.runtimeActor,
-                this.currentFrame
-        );
+            currentY += 4;
 
-        return this.animationSetupPanel.keyTyped(
-                typedChar,
-                keyCode
-        );
+            if (this.openedSection == Section.BODY_PART_OVERRIDES)
+            {
+                currentY += 24 + 4 + 108;
+            }
+            else
+            {
+                currentY += 24;
+            }
+
+            currentY += 4;
+
+            int actorSettingsY = currentY + 24 + 4;
+
+            this.animationParametersPanel.setBounds(
+                    this.x,
+                    actorSettingsY,
+                    this.width
+            );
+
+            this.animationParametersPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.currentFrame,
+                    this.animationSetupPanel.getSelectedAction()
+            );
+
+            return this.animationParametersPanel.keyTyped(
+                    typedChar,
+                    keyCode
+            );
+        }
+
+        return false;
     }
 
     public void updateCursorCounter()
     {
         this.animationSetupPanel.updateCursorCounter();
+        this.animationParametersPanel.updateCursorCounter();
     }
 
     /*
@@ -2123,20 +2176,27 @@ public class CharacterEditorPanel
 
     private void drawActorSettings(
             Minecraft mc,
-            int y)
+            int y,
+            int mouseX,
+            int mouseY)
     {
-        drawHint(
-                mc,
-                "Actor-level settings",
-                this.x + 12,
-                y
+        this.animationParametersPanel.setBounds(
+                this.x,
+                y,
+                this.width
         );
 
-        drawHint(
+        this.animationParametersPanel.setState(
+                this.selectedActor,
+                this.selectedKey,
+                this.currentFrame,
+                this.animationSetupPanel.getSelectedAction()
+        );
+
+        this.animationParametersPanel.draw(
                 mc,
-                "will be configured here",
-                this.x + 12,
-                y + 14
+                mouseX,
+                mouseY
         );
     }
 
@@ -2447,6 +2507,33 @@ public class CharacterEditorPanel
             );
 
             return true;
+        }
+
+        if (this.openedSection == Section.ACTOR_SETTINGS)
+        {
+            int actorSettingsY = currentY + 24 + 4;
+
+            this.animationParametersPanel.setBounds(
+                    this.x,
+                    actorSettingsY,
+                    this.width
+            );
+
+            this.animationParametersPanel.setState(
+                    this.selectedActor,
+                    this.selectedKey,
+                    this.currentFrame,
+                    this.animationSetupPanel.getSelectedAction()
+            );
+
+            if (this.animationParametersPanel.mouseClicked(
+                    mouseX,
+                    mouseY,
+                    mouseButton
+            ))
+            {
+                return true;
+            }
         }
 
         return false;
