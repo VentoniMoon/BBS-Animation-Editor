@@ -155,7 +155,7 @@ public class BodyPartsTimelineController
                 break;
             }
 
-            boolean selected =
+            boolean selectedModel =
                     model == controller.getSelectedModel();
 
             Gui.drawRect(
