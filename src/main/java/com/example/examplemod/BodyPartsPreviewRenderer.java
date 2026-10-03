@@ -367,27 +367,27 @@ public class BodyPartsPreviewRenderer
          * The render engine uses 1/16 block units.
          */
         GL11.glTranslatef(
-                attachment.transform.translate[0] / 16.0F,
-                attachment.transform.translate[1] / 16.0F,
-                attachment.transform.translate[2] / 16.0F
+                attachment.transform.getPositionX() / 16.0F,
+                attachment.transform.getPositionY() / 16.0F,
+                attachment.transform.getPositionZ() / 16.0F
         );
 
         GL11.glRotatef(
-                attachment.transform.rotate[2],
+                attachment.transform.getRotationZ(),
                 0.0F,
                 0.0F,
                 1.0F
         );
 
         GL11.glRotatef(
-                attachment.transform.rotate[1],
+                attachment.transform.getRotationY(),
                 0.0F,
                 1.0F,
                 0.0F
         );
 
         GL11.glRotatef(
-                attachment.transform.rotate[0],
+                attachment.transform.getRotationX(),
                 1.0F,
                 0.0F,
                 0.0F
@@ -428,10 +428,10 @@ public class BodyPartsPreviewRenderer
 
     private static class BoneAttachment
     {
-        private final ModelTransform transform;
+        private final AnimationTransform transform;
 
         private BoneAttachment(
-                ModelTransform transform)
+                AnimationTransform transform)
         {
             this.transform =
                     transform;
