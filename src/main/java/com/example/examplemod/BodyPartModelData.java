@@ -6,7 +6,7 @@ import java.util.List;
 public class BodyPartModelData
 {
     private final String modelName;
-    private final String attachmentBoneName;
+    private String attachmentBoneName;
     private final BlockbusterModelAccess modelAccess;
     private final List<AnimationBone> bones;
 
@@ -22,7 +22,9 @@ public class BodyPartModelData
             int endFrame)
     {
         this.modelName = modelName;
-        this.attachmentBoneName = attachmentBoneName;
+        this.attachmentBoneName = attachmentBoneName == null
+                ? ""
+                : attachmentBoneName;
         this.modelAccess = modelAccess;
         this.bones = bones == null
                 ? new ArrayList<AnimationBone>()
@@ -39,14 +41,33 @@ public class BodyPartModelData
     public int getStartFrame() { return this.startFrame; }
     public int getEndFrame() { return this.endFrame; }
 
+    public void setAttachmentBoneName(String name)
+    {
+        if (name != null && name.length() > 0)
+        {
+            this.attachmentBoneName = name;
+        }
+    }
+
     public void setStartFrame(int frame)
     {
-        this.startFrame = Math.max(0, Math.min(frame, this.endFrame - 1));
+        this.startFrame =
+                Math.max(
+                        0,
+                        Math.min(
+                                frame,
+                                this.endFrame - 1
+                        )
+                );
     }
 
     public void setEndFrame(int frame)
     {
-        this.endFrame = Math.max(this.startFrame + 1, frame);
+        this.endFrame =
+                Math.max(
+                        this.startFrame + 1,
+                        frame
+                );
     }
 
     public AnimationBone getBone(int index)
