@@ -241,9 +241,11 @@ public class CharacterEditorPanel
     public void setRuntimeActor(
             EntityActor actor)
     {
-        this.runtimeActor = actor;
-
-        resetBodyPartScroll();
+        if (this.runtimeActor != actor)
+        {
+            this.runtimeActor = actor;
+            resetBodyPartScroll();
+        }
     }
 
     public EntityActor getRuntimeActor()
