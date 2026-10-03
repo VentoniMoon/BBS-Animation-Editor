@@ -439,11 +439,15 @@ public class BodyPartsPreviewRenderer
             );
         }
 
-        GL11.glScalef(
-                attachment.transform.getScaleX(),
-                attachment.transform.getScaleY(),
-                attachment.transform.getScaleZ()
-        );
+        if (attachment.runtimeMatrix == null &&
+                attachment.transform != null)
+        {
+            GL11.glScalef(
+                    attachment.transform.getScaleX(),
+                    attachment.transform.getScaleY(),
+                    attachment.transform.getScaleZ()
+            );
+        }
 
         GlStateManager.enableDepth();
         GlStateManager.depthMask(true);
