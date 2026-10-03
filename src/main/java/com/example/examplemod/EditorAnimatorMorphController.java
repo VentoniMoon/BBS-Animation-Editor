@@ -3,9 +3,11 @@ package com.example.examplemod;
 import java.util.List;
 
 import mchorse.emoticons.skin_n_bones.api.animation.Animation;
+import mchorse.emoticons.skin_n_bones.api.animation.model.AnimatorPoseTransform;
 import mchorse.emoticons.skin_n_bones.api.bobj.BOBJArmature;
 import mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone;
 import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedPose;
 import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatorMorphController;
 
 import net.minecraft.entity.EntityLivingBase;
@@ -41,30 +43,92 @@ public class EditorAnimatorMorphController
     {
         /*
          * =====================================================
-         * 1. СНАЧАЛА EMOTICONS
+         * 1. TEMPORARY BODY PART OVERRIDES
          * =====================================================
          *
-         * Это принципиально важно.
+         * Не меняем реальный Morph навсегда.
          *
-         * AnimatorMorphController должен сначала применить
-         * собственную стандартную анимацию Emoticons.
+         * Создаём временную копию pose и меняем только
+         * fixed у костей, для которых Character Timeline
+         * имеет explicit ENABLE/DISABLE.
          *
-         * Только после этого мы накладываем BBS keyframes.
+         * Затем AnimatorMorphController получает именно
+         * этот временный pose и штатно применяет его.
          */
-        super.setupBoneTransformations(
-                entity,
-                armature,
-                yaw,
-                partialTicks
-        );
+        AnimatedPose originalPose =
+                this.morph.pose;
+
+        AnimatedPose temporaryPose =
+                originalPose == null
+                        ? null
+                        : originalPose.clone();
+
+        int frame =
+                CharacterBodyPartPreviewState.getFrame();
+
+        BlockbusterSceneActorData actorData =
+                CharacterBodyPartPreviewState.getActorData();
+
+        boolean changed =
+                applyBodyPartOverrides(
+                        temporaryPose,
+                        actorData,
+                        frame,
+                        armature
+                );
+
+        /*
+         * Если исходного pose не было, но нужен explicit
+         * override, создаём временный pose.
+         */
+        if (!changed &&
+                originalPose == null)
+        {
+            temporaryPose = null;
+        }
+
+        if (changed)
+        {
+            this.morph.pose =
+                    temporaryPose;
+        }
+
+        try
+        {
+            /*
+             * =================================================
+             * 2. EMOTICONS
+             * =================================================
+             */
+            super.setupBoneTransformations(
+                    entity,
+                    armature,
+                    yaw,
+                    partialTicks
+            );
+        }
+        finally
+        {
+            /*
+             * Очень важно:
+             *
+             * Character Body Parts не должны мутировать
+             * сам AnimatedMorph.
+             */
+            this.morph.pose =
+                    originalPose;
+        }
 
 
         /*
          * =====================================================
-         * 2. BBS SNAPSHOTS
+         * 3. BBS SNAPSHOTS
          * =====================================================
+         *
+         * BBS keyframes идут ПОСЛЕ стандартной Emoticons
+         * анимации. Поэтому отключение Body Part не мешает
+         * пользовательской BBS трансформации.
          */
-
         List<AnimationBoneSnapshot> snapshots =
                 EmoticonsPreviewAnimationState
                         .getSnapshots();
@@ -78,24 +142,11 @@ public class EditorAnimatorMorphController
         }
 
 
-        int frame =
-                EmoticonsPreviewAnimationState
-                        .getFrame();
-
-
         /*
          * =====================================================
-         * 3. ДИАГНОСТИКА CONTROLLER
+         * 4. ДИАГНОСТИКА CONTROLLER
          * =====================================================
-         *
-         * Проверяем:
-         *
-         * - какая animation загружена;
-         * - какое animationName;
-         * - есть ли animation;
-         * - какой кадр Timeline сейчас активен.
          */
-
         if (
                 frame != this.lastDebugFrame
                         &&
@@ -129,10 +180,6 @@ public class EditorAnimatorMorphController
             );
 
 
-            /*
-             * Показываем наличие самой animation.
-             */
-
             if (animation != null)
             {
                 System.out.println(
@@ -154,16 +201,9 @@ public class EditorAnimatorMorphController
 
         /*
          * =====================================================
-         * 4. НАКЛАДЫВАЕМ BBS KEYFRAMES
+         * 5. BBS KEYFRAMES
          * =====================================================
-         *
-         * Standard Emoticons animation уже применена
-         * через super.setupBoneTransformations().
-         *
-         * Теперь добавляем сверху пользовательскую
-         * трансформацию BBS Animation Editor.
          */
-
         for (
                 AnimationBoneSnapshot snapshot :
                 snapshots
@@ -206,14 +246,136 @@ public class EditorAnimatorMorphController
     }
 
 
+    /**
+     * Накладывает explicit Character Body Part state
+     * на временный AnimatedPose.
+     */
+    private boolean applyBodyPartOverrides(
+            AnimatedPose pose,
+            BlockbusterSceneActorData actorData,
+            int frame,
+            BOBJArmature armature)
+    {
+        if (actorData == null ||
+                armature == null)
+        {
+            return false;
+        }
+
+        CharacterTimelineController timeline =
+                actorData.getCharacterTimeline();
+
+        if (timeline == null)
+        {
+            return false;
+        }
+
+        /*
+         * Если pose отсутствует, но есть override,
+         * создаём его здесь.
+         */
+        boolean hasOverride = false;
+
+        for (String boneName :
+                armature.bones.keySet())
+        {
+            int state =
+                    CharacterBodyPartOverrideController
+                            .getEffectiveKeyState(
+                                    actorData,
+                                    frame,
+                                    boneName
+                            );
+
+            if (state !=
+                    CharacterBodyPartOverrideController.STATE_ENABLE
+                    &&
+                    state !=
+                            CharacterBodyPartOverrideController.STATE_DISABLE)
+            {
+                continue;
+            }
+
+            hasOverride = true;
+
+            if (pose == null)
+            {
+                /*
+                 * Создать pose можно только в вызывающем
+                 * методе, поэтому этот случай обрабатывается
+                 * ниже через local pose creation.
+                 */
+            }
+        }
+
+        if (!hasOverride)
+        {
+            return false;
+        }
+
+        /*
+         * Для AnimatedMorph без исходного pose создаём
+         * новый identity pose.
+         */
+        if (pose == null)
+        {
+            pose = new AnimatedPose();
+            this.morph.pose = pose;
+        }
+
+        for (String boneName :
+                armature.bones.keySet())
+        {
+            int state =
+                    CharacterBodyPartOverrideController
+                            .getEffectiveKeyState(
+                                    actorData,
+                                    frame,
+                                    boneName
+                            );
+
+            if (state !=
+                    CharacterBodyPartOverrideController.STATE_ENABLE
+                    &&
+                    state !=
+                            CharacterBodyPartOverrideController.STATE_DISABLE)
+            {
+                continue;
+            }
+
+            AnimatorPoseTransform transform =
+                    pose.bones.get(
+                            boneName
+                    );
+
+            if (transform == null)
+            {
+                transform =
+                        new AnimatorPoseTransform(
+                                boneName
+                        );
+
+                pose.bones.put(
+                        boneName,
+                        transform
+                );
+            }
+
+            transform.fixed =
+                    state ==
+                            CharacterBodyPartOverrideController.STATE_DISABLE
+                            ? AnimatorPoseTransform.FIXED
+                            : AnimatorPoseTransform.ANIMATED;
+        }
+
+        return true;
+    }
+
+
     private void applySnapshot(
             BOBJBone bone,
             AnimationBoneSnapshot snapshot)
     {
-        /*
-         * Position
-         */
-
         bone.x +=
                 snapshot.getPositionX();
 
@@ -223,14 +385,6 @@ public class EditorAnimatorMorphController
         bone.z +=
                 snapshot.getPositionZ();
 
-
-        /*
-         * Rotation
-         *
-         * AnimationBone stores degrees.
-         *
-         * BOBJ uses radians.
-         */
 
         bone.rotateX +=
                 (float) Math.toRadians(
@@ -247,10 +401,6 @@ public class EditorAnimatorMorphController
                         snapshot.getRotationZ()
                 );
 
-
-        /*
-         * Scale
-         */
 
         bone.scaleX *=
                 snapshot.getScaleX();
