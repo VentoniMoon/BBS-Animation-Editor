@@ -349,33 +349,6 @@ public class BodyPartsPreviewRenderer
         }
 
         /*
-         * First use the REAL runtime skeleton.
-         *
-         * The actor preview is rendered immediately before Body Parts.
-         * At that moment AnimatedMorph/Emoticons has already evaluated
-         * its current pose.  Using that live BOBJ bone is important:
-         * AnimationBone only contains the editor keyframes and does not
-         * contain the animation which Emoticons is currently playing.
-         */
-        if (controller != null)
-        {
-            /* Runtime AnimatedMorph skeleton. */
-            if (thisRuntimeAnimatedMorph(controller) != null)
-            {
-                BoneAttachment runtime =
-                        findRuntimeAnimatedMorphAttachment(
-                                controller,
-                                boneName
-                        );
-
-                if (runtime != null)
-                {
-                    return runtime;
-                }
-            }
-        }
-
-        /*
          * Fallback to the editor skeleton for Blockbuster/other actors.
          * This still includes the BBS parent chain and keyframes.
          */
