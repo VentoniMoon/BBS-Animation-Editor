@@ -32,6 +32,8 @@ public class BodyPartsTimelineController
     private BodyPartModelData draggingModel;
     private int dragMode;
     private int dragMouseX;
+    private int dragMouseY;
+    private boolean dragMoved;
     private int dragStartFrame;
     private int dragEndFrame;
 
@@ -1375,6 +1377,11 @@ public class BodyPartsTimelineController
                         TIMELINE_START_X
                 );
 
+        if (deltaFrame != 0)
+        {
+            dragMoved = true;
+        }
+
         if (dragMode == DRAG_START)
         {
             int newStart =
@@ -1427,6 +1434,11 @@ public class BodyPartsTimelineController
             int visibleBone =
                     (mouseY - top) / TRACK_HEIGHT;
 
+            if (mouseY != dragMouseY)
+            {
+                dragMoved = true;
+            }
+
             int newBone =
                     boneScroll + visibleBone;
 
@@ -1461,6 +1473,8 @@ public class BodyPartsTimelineController
     {
         draggingModel = model;
         dragMouseX = mouseX;
+        dragMouseY = 0;
+        dragMoved = false;
         dragStartFrame = model.getStartFrame();
         dragEndFrame = model.getEndFrame();
 
@@ -1481,7 +1495,8 @@ public class BodyPartsTimelineController
     public void mouseReleased()
     {
         if (draggingModel != null &&
-                dragMode == DRAG_MOVE)
+                dragMode == DRAG_MOVE &&
+                !dragMoved)
         {
             controller.selectModel(draggingModel);
             boneScroll = 0;
