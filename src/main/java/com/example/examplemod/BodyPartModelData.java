@@ -13,6 +13,10 @@ public class BodyPartModelData
     private int startFrame;
     private int endFrame;
 
+    /* Global transform of the whole attached model. */
+    private final AnimationTransform globalTransform =
+            new AnimationTransform();
+
     public BodyPartModelData(
             String modelName,
             String attachmentBoneName,
@@ -49,6 +53,11 @@ public class BodyPartModelData
 
     public int getStartFrame() { return this.startFrame; }
     public int getEndFrame() { return this.endFrame; }
+
+    public AnimationTransform getGlobalTransform()
+    {
+        return this.globalTransform;
+    }
 
     public void setAttachmentBoneName(String name)
     {
