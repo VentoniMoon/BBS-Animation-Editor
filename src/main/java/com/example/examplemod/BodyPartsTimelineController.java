@@ -1103,86 +1103,205 @@ public class BodyPartsTimelineController
             return true;
         }
 
-        if (mouseButton == 0)
-        {
-            for (BodyPartModelData item :
-                    controller.getModels())
-            {
-                if (item == null ||
-                        !bone.getName().equals(
-                                item.getAttachmentBoneName()))
-                {
-                    continue;
-                }
-
-                int left =
-                        timeline.getFrameX(
-                                item.getStartFrame(),
-                                TIMELINE_START_X
-                        );
-
-                int right =
-                        timeline.getFrameX(
-                                item.getEndFrame(),
-                                TIMELINE_START_X
-                        );
-
-                int barTop =
-                        tracksTop +
-                        visibleBone * TRACK_HEIGHT +
-                        4;
-
-                if (mouseX >= left &&
-                        mouseX <= right &&
-                        mouseY >= barTop &&
-                        mouseY <= barTop + 12)
-                {
-                    startAttachmentDrag(
-                            item,
-                            mouseX,
-                            mouseY,
-                            left,
-                            right
-                    );
-                    controller.setSelectedActorBone(boneIndex);
-                    controller.selectAttachment(item);
-                    timeline.setTick(
-                            timeline.getFrameFromMouseX(
-                                    mouseX,
-                                    TIMELINE_START_X
-                            )
-                    );
-                    return true;
-                }
-            }
-        }
-
         if (mouseButton != 0)
         {
             return true;
         }
 
-        controller.setSelectedActorBone(boneIndex);
-
-        timeline.setTick(
+        int frame =
                 Math.max(
                         FIRST_FRAME,
                         Math.min(
-                                getMaximumFrame(sceneLength, null),
+                                getMaximumFrame(
+                                        sceneLength,
+                                        null
+                                ),
                                 timeline.getFrameFromMouseX(
                                         mouseX,
                                         TIMELINE_START_X
                                 )
                         )
-                )
-        );
+                );
 
-        lastClickTime = System.currentTimeMillis();
+        /*
+         * BODY PARTS Level 1 interaction:
+         *
+         *   double-click empty space -> create attachment block
+         *   single-click block        -> select block
+         *   double-click block        -> open block's Level 2 timeline
+         *
+         * Dragging a selected block remains available for moving/resizing.
+         */
+        BodyPartModelData hit =
+                findAttachmentAt(
+                        bone,
+                        boneIndex,
+                        mouseX,
+                        mouseY,
+                        tracksTop
+                );
+
+        long now = System.currentTimeMillis();
+
+        if (hit != null)
+        {
+            boolean doubleClick =
+                    lastClickBone == boneIndex &&
+                    Math.abs(lastClickX - mouseX) <=
+                            DOUBLE_CLICK_DISTANCE &&
+                    Math.abs(lastClickY - mouseY) <=
+                            DOUBLE_CLICK_DISTANCE &&
+                    now - lastClickTime <=
+                            DOUBLE_CLICK_DELAY &&
+                    lastClickedAttachment == hit;
+
+            controller.setSelectedActorBone(boneIndex);
+            controller.selectAttachment(hit);
+            timeline.setTick(frame);
+
+            if (doubleClick)
+            {
+                resetClickState();
+
+                if (hit.hasModel())
+                {
+                    controller.selectModel(hit);
+                    boneScroll = 0;
+                }
+
+                return true;
+            }
+
+            startAttachmentDrag(
+                    hit,
+                    mouseX,
+                    mouseY,
+                    timeline.getFrameX(
+                            hit.getStartFrame(),
+                            TIMELINE_START_X
+                    ),
+                    timeline.getFrameX(
+                            hit.getEndFrame(),
+                            TIMELINE_START_X
+                    )
+            );
+
+            lastClickTime = now;
+            lastClickX = mouseX;
+            lastClickY = mouseY;
+            lastClickBone = boneIndex;
+            lastClickedAttachment = hit;
+
+            return true;
+        }
+
+        /*
+         * Empty actor-bone track. A double-click creates the
+         * rectangle at the clicked frame. A single click only
+         * moves the playhead/selects the actor bone.
+         */
+        boolean doubleClick =
+                lastClickBone == boneIndex &&
+                Math.abs(lastClickX - mouseX) <=
+                        DOUBLE_CLICK_DISTANCE &&
+                Math.abs(lastClickY - mouseY) <=
+                        DOUBLE_CLICK_DISTANCE &&
+                now - lastClickTime <=
+                        DOUBLE_CLICK_DELAY &&
+                lastClickedAttachment == null;
+
+        controller.setSelectedActorBone(boneIndex);
+        timeline.setTick(frame);
+
+        if (doubleClick)
+        {
+            BodyPartModelData created =
+                    controller.createAttachment(
+                            frame,
+                            sceneLength
+                    );
+
+            resetClickState();
+
+            if (created != null)
+            {
+                controller.selectAttachment(created);
+            }
+
+            return true;
+        }
+
+        lastClickTime = now;
         lastClickX = mouseX;
         lastClickY = mouseY;
         lastClickBone = boneIndex;
+        lastClickedAttachment = null;
 
         return true;
+    }
+
+    private BodyPartModelData lastClickedAttachment;
+
+    private BodyPartModelData findAttachmentAt(
+            AnimationBone bone,
+            int boneIndex,
+            int mouseX,
+            int mouseY,
+            int tracksTop)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        int visibleBone =
+                boneIndex - boneScroll;
+
+        int barTop =
+                tracksTop +
+                visibleBone * TRACK_HEIGHT +
+                4;
+
+        int stack = 0;
+
+        for (BodyPartModelData item :
+                controller.getModels())
+        {
+            if (item == null ||
+                    !bone.getName().equals(
+                            item.getAttachmentBoneName()))
+            {
+                continue;
+            }
+
+            int left =
+                    timeline.getFrameX(
+                            item.getStartFrame(),
+                            TIMELINE_START_X
+                    );
+
+            int right =
+                    timeline.getFrameX(
+                            item.getEndFrame(),
+                            TIMELINE_START_X
+                    );
+
+            int currentTop =
+                    barTop +
+                    stack * 12;
+
+            if (mouseX >= left &&
+                    mouseX <= right &&
+                    mouseY >= currentTop &&
+                    mouseY <= currentTop + 12)
+            {
+                return item;
+            }
+
+            stack++;
+        }
+
+        return null;
     }
 
     private boolean mouseClickedModelTimeline(
@@ -1513,21 +1632,25 @@ public class BodyPartsTimelineController
 
     public void mouseReleased()
     {
+        /*
+         * A single click selects the attachment.
+         * Opening Level 2 is intentionally handled only by the
+         * second click in mouseClickedActorTimeline().
+         *
+         * This keeps click and drag semantics separate:
+         *   click  -> select
+         *   drag   -> move/resize
+         *   double -> open Level 2
+         */
         if (draggingModel != null &&
-                dragMode == DRAG_MOVE &&
                 !dragMoved)
         {
             controller.selectAttachment(draggingModel);
-
-            if (draggingModel.hasModel())
-            {
-                controller.selectModel(draggingModel);
-                boneScroll = 0;
-            }
         }
 
         draggingModel = null;
         dragMode = DRAG_NONE;
+        dragMoved = false;
 
         controller.getKeyframeController()
                 .stopKeyframeDragging();
