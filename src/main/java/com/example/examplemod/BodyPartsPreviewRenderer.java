@@ -4,6 +4,7 @@ import java.util.List;
 
 import mchorse.blockbuster.api.Model;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
+import mchorse.metamorph.api.MorphManager;
 import mchorse.metamorph.api.morphs.AbstractMorph;
 import mchorse.metamorph.bodypart.BodyPart;
 import mchorse.metamorph.bodypart.BodyPartManager;
