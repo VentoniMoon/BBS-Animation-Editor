@@ -34,6 +34,15 @@ public class CharacterTimelineEditorController
     private static final int HEADER_HEIGHT = 35;
 
     /*
+     * Character Timeline keeps the same fixed height as the
+     * other editor timelines. Body Part rows scroll inside
+     * this fixed viewport when their count becomes large.
+     */
+    private static final int TIMELINE_HEIGHT = 180;
+
+    private int trackScroll = 0;
+
+    /*
      * Character Timeline имеет одну основную дорожку.
      * Остальные дорожки создаются динамически для Body Parts.
      */
@@ -312,12 +321,15 @@ public class CharacterTimelineEditorController
             this.dragKey = null;
 
             resetDoubleClickState();
+            this.trackScroll = 0;
         }
 
         this.selectedActor = actor;
 
         if (this.selectedActor != null)
         {
+            clampTrackScroll();
+
             CharacterTimelineController characterTimeline =
                     this.selectedActor.getCharacterTimeline();
 
@@ -352,9 +364,34 @@ public class CharacterTimelineEditorController
 
     public int getTimelineHeight()
     {
-        return HEADER_HEIGHT +
-                Math.max(1, getTrackCount()) * TRACK_HEIGHT +
-                25;
+        return TIMELINE_HEIGHT;
+    }
+
+    private int getVisibleTrackCount()
+    {
+        return Math.max(
+                1,
+                (TIMELINE_HEIGHT - HEADER_HEIGHT - 5) / TRACK_HEIGHT
+        );
+    }
+
+    private int getMaxTrackScroll()
+    {
+        return Math.max(
+                0,
+                getTrackCount() - getVisibleTrackCount()
+        );
+    }
+
+    private void clampTrackScroll()
+    {
+        this.trackScroll = Math.max(
+                0,
+                Math.min(
+                        this.trackScroll,
+                        getMaxTrackScroll()
+                )
+        );
     }
 
     public int getTrackHeight()
@@ -616,15 +653,29 @@ public class CharacterTimelineEditorController
         int trackCount =
                 getTrackCount();
 
+        int visibleTracks =
+                getVisibleTrackCount();
+
+        clampTrackScroll();
+
         for (
-                int i = 0;
-                i < trackCount;
-                i++
+                int visibleIndex = 0;
+                visibleIndex < visibleTracks;
+                visibleIndex++
         )
         {
+            int i =
+                    this.trackScroll +
+                            visibleIndex;
+
+            if (i >= trackCount)
+            {
+                break;
+            }
+
             int y =
                     tracksTop +
-                            i * TRACK_HEIGHT;
+                            visibleIndex * TRACK_HEIGHT;
 
             int bottom =
                     y +
@@ -956,12 +1007,26 @@ public class CharacterTimelineEditorController
         Minecraft mc =
                 Minecraft.getMinecraft();
 
+        int visibleTracks =
+                getVisibleTrackCount();
+
+        clampTrackScroll();
+
         for (
-                int trackIndex = 0;
-                trackIndex < timeline.getTrackCount();
-                trackIndex++
+                int visibleIndex = 0;
+                visibleIndex < visibleTracks;
+                visibleIndex++
         )
         {
+            int trackIndex =
+                    this.trackScroll +
+                            visibleIndex;
+
+            if (trackIndex >= timeline.getTrackCount())
+            {
+                break;
+            }
+
             CharacterTrack track =
                     timeline.getTrack(trackIndex);
 
@@ -972,7 +1037,7 @@ public class CharacterTimelineEditorController
 
             int centerY =
                     tracksTop +
-                            trackIndex * TRACK_HEIGHT +
+                            visibleIndex * TRACK_HEIGHT +
                             TRACK_HEIGHT / 2;
 
             for (
@@ -1412,12 +1477,18 @@ public class CharacterTimelineEditorController
                 mouseY -
                         tracksTop;
 
-        int trackIndex =
+        int visibleIndex =
                 relativeY /
                         TRACK_HEIGHT;
 
+        int trackIndex =
+                this.trackScroll +
+                        visibleIndex;
+
         if (
-                trackIndex < 0 ||
+                visibleIndex < 0 ||
+                        visibleIndex >= getVisibleTrackCount() ||
+                        trackIndex < 0 ||
                         trackIndex >= getTrackCount()
         )
         {
@@ -1839,26 +1910,19 @@ public class CharacterTimelineEditorController
         }
 
         /*
-         * Обычная прокрутка =
-         * горизонтальное движение Timeline.
+         * Обычная прокрутка Character Timeline =
+         * вертикальная прокрутка дорожек.
+         *
+         * Горизонтальный Timeline остаётся неподвижным:
+         * при большом количестве Body Parts пользователь
+         * должен видеть следующие строки, не меняя высоту
+         * самого Timeline.
          */
-
-        this.timeline.addOffset(
-                wheel > 0
-                        ? -20
-                        : 20
-        );
-
-        this.timeline.clampOffset(
-                getMaximumFrame(
-                        sceneLength
-                ),
-                Math.max(
-                        1,
-                        width -
-                                timelineStartX
-                )
-        );
+        if (getMaxTrackScroll() > 0)
+        {
+            this.trackScroll += wheel > 0 ? -1 : 1;
+            clampTrackScroll();
+        }
 
         return true;
     }
