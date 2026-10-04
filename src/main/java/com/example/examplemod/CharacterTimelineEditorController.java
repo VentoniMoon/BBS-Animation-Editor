@@ -1708,6 +1708,11 @@ public class CharacterTimelineEditorController
             {
                 this.selectedBodyPartModel = bodyPart;
                 this.selectedKey = null;
+                this.timeline.setTick(existingFrame);
+                if (this.playbackController != null)
+                {
+                    this.playbackController.setCurrentFrame(existingFrame);
+                }
 
                 if (mouseButton == 1)
                 {
@@ -1807,6 +1812,11 @@ public class CharacterTimelineEditorController
                     {
                         this.selectedBodyPartModel = bodyPartForCreate;
                         this.selectedKey = null;
+                        this.timeline.setTick(frame);
+                        if (this.playbackController != null)
+                        {
+                            this.playbackController.setCurrentFrame(frame);
+                        }
                         this.draggingKey = false;
                         this.dragTrack = -1;
                         this.dragKey = null;
