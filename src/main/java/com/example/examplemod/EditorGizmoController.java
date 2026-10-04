@@ -1076,12 +1076,34 @@ public class EditorGizmoController
             float y2,
             int color)
     {
-        setColor(color);
+        /*
+         * Use Minecraft's GUI tessellation path instead of the fixed
+         * function GL line primitive. The Preview may have just rendered
+         * through an OptiFine/FBO pipeline, and relying on GL_LINES here
+         * can leave the gizmo invisible even though the GUI itself is
+         * still rendering correctly.
+         */
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float length =
+                (float) Math.sqrt(dx * dx + dy * dy);
 
-        GL11.glBegin(GL11.GL_LINES);
-        GL11.glVertex2f(x1, y1);
-        GL11.glVertex2f(x2, y2);
-        GL11.glEnd();
+        if (length < 0.001F)
+        {
+            return;
+        }
+
+        float halfWidth = 1.5F;
+        float px = -dy / length * halfWidth;
+        float py = dx / length * halfWidth;
+
+        drawRectFilled(
+                x1 + px,
+                y1 + py,
+                x2 - px,
+                y2 - py,
+                color
+        );
     }
 
     private void drawTriangle(
@@ -1093,13 +1115,9 @@ public class EditorGizmoController
             float y3,
             int color)
     {
-        setColor(color);
-
-        GL11.glBegin(GL11.GL_TRIANGLES);
-        GL11.glVertex2f(x1, y1);
-        GL11.glVertex2f(x2, y2);
-        GL11.glVertex2f(x3, y3);
-        GL11.glEnd();
+        drawLine(x1, y1, x2, y2, color);
+        drawLine(x2, y2, x3, y3, color);
+        drawLine(x3, y3, x1, y1, color);
     }
 
     private void drawCircle(
@@ -1109,22 +1127,35 @@ public class EditorGizmoController
             int color,
             int segments)
     {
-        setColor(color);
+        int count = Math.max(12, segments);
 
-        GL11.glBegin(GL11.GL_LINE_LOOP);
+        float previousX =
+                cx + radius;
+        float previousY =
+                cy;
 
-        for (int i = 0; i < segments; i++)
+        for (int i = 1; i <= count; i++)
         {
             double angle =
-                    Math.PI * 2.0D * i / segments;
+                    Math.PI * 2.0D * i / count;
 
-            GL11.glVertex2f(
-                    cx + (float) Math.cos(angle) * radius,
-                    cy + (float) Math.sin(angle) * radius
+            float currentX =
+                    cx + (float) Math.cos(angle) * radius;
+
+            float currentY =
+                    cy + (float) Math.sin(angle) * radius;
+
+            drawLine(
+                    previousX,
+                    previousY,
+                    currentX,
+                    currentY,
+                    color
             );
-        }
 
-        GL11.glEnd();
+            previousX = currentX;
+            previousY = currentY;
+        }
     }
 
     private void drawRectOutline(
@@ -1134,14 +1165,10 @@ public class EditorGizmoController
             float height,
             int color)
     {
-        setColor(color);
-
-        GL11.glBegin(GL11.GL_LINE_LOOP);
-        GL11.glVertex2f(x, y);
-        GL11.glVertex2f(x + width, y);
-        GL11.glVertex2f(x + width, y + height);
-        GL11.glVertex2f(x, y + height);
-        GL11.glEnd();
+        drawRectFilled(x, y, x + width, y + 1.5F, color);
+        drawRectFilled(x, y + height - 1.5F, x + width, y + height, color);
+        drawRectFilled(x, y, x + 1.5F, y + height, color);
+        drawRectFilled(x + width - 1.5F, y, x + width, y + height, color);
     }
 
     private void drawRectFilled(
@@ -1151,14 +1178,28 @@ public class EditorGizmoController
             float y2,
             int color)
     {
-        setColor(color);
+        int left = (int) Math.floor(Math.min(x1, x2));
+        int top = (int) Math.floor(Math.min(y1, y2));
+        int right = (int) Math.ceil(Math.max(x1, x2));
+        int bottom = (int) Math.ceil(Math.max(y1, y2));
 
-        GL11.glBegin(GL11.GL_QUADS);
-        GL11.glVertex2f(x1, y1);
-        GL11.glVertex2f(x2, y1);
-        GL11.glVertex2f(x2, y2);
-        GL11.glVertex2f(x1, y2);
-        GL11.glEnd();
+        if (right <= left)
+        {
+            right = left + 1;
+        }
+
+        if (bottom <= top)
+        {
+            bottom = top + 1;
+        }
+
+        Gui.drawRect(
+                left,
+                top,
+                right,
+                bottom,
+                color
+        );
     }
 
     private void setColor(int color)
