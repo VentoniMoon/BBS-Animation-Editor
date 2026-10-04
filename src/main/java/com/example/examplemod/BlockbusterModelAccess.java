@@ -196,7 +196,8 @@ public class BlockbusterModelAccess
                  * ModelHandler model map as the authoritative model
                  * repository, so use that as a skeleton fallback.
                  */
-                if (this.originalLimbData.isEmpty())
+                if (this.originalLimbData.isEmpty()
+                        || allLimbPivotsAreZero())
                 {
                     captureModelHandlerLimbData(name);
                 }
@@ -232,6 +233,32 @@ public class BlockbusterModelAccess
 
             return false;
         }
+    }
+
+    private boolean allLimbPivotsAreZero()
+    {
+        if (this.originalLimbData.isEmpty())
+        {
+            return true;
+        }
+
+        for (BlockbusterLimbData limb :
+                this.originalLimbData)
+        {
+            if (limb == null)
+            {
+                continue;
+            }
+
+            if (Math.abs(limb.getX()) > 0.0001F
+                    || Math.abs(limb.getY()) > 0.0001F
+                    || Math.abs(limb.getZ()) > 0.0001F)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
