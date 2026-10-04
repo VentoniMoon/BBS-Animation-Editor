@@ -202,6 +202,8 @@ public class CharacterEditorPanel
      */
     private CharacterKey selectedKey;
 
+    private BodyPartModelData selectedBodyPartModel;
+
     /**
      * Текущая позиция playhead.
      */
@@ -442,6 +444,16 @@ public class CharacterEditorPanel
 
             resetBodyPartScroll();
         }
+    }
+
+    public void setSelectedBodyPartModel(BodyPartModelData model)
+    {
+        this.selectedBodyPartModel = model;
+    }
+
+    public BodyPartModelData getSelectedBodyPartModel()
+    {
+        return this.selectedBodyPartModel;
     }
 
     public CharacterKey getSelectedKey()
