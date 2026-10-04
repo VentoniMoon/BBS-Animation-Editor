@@ -82,12 +82,137 @@ public class CharacterTimelineController
      */
     public CharacterTrack addTrack()
     {
+        return addTrack("", "");
+    }
+
+    public CharacterTrack addTrack(
+            String trackId,
+            String label)
+    {
         CharacterTrack track =
-                new CharacterTrack();
+                new CharacterTrack(
+                        trackId,
+                        label
+                );
 
         this.tracks.add(track);
 
         return track;
+    }
+
+    public CharacterTrack getTrackById(String trackId)
+    {
+        if (trackId == null || trackId.length() == 0)
+        {
+            return null;
+        }
+
+        for (CharacterTrack track : this.tracks)
+        {
+            if (track != null &&
+                    trackId.equals(track.getTrackId()))
+            {
+                return track;
+            }
+        }
+
+        return null;
+    }
+
+    public CharacterTrack ensureMainTrack()
+    {
+        CharacterTrack main = getTrackById("main");
+
+        if (main == null)
+        {
+            if (this.tracks.isEmpty())
+            {
+                main = addTrack("main", "Main Character");
+            }
+            else
+            {
+                main = this.tracks.get(0);
+                main.setTrackId("main");
+                main.setLabel("Main Character");
+            }
+        }
+        else
+        {
+            main.setLabel("Main Character");
+        }
+
+        return main;
+    }
+
+    public void syncBodyPartTracks(
+            List<BodyPartModelData> models)
+    {
+        ensureMainTrack();
+
+        java.util.HashSet<String> activeIds =
+                new java.util.HashSet<String>();
+
+        if (models != null)
+        {
+            int number = 1;
+
+            for (BodyPartModelData model : models)
+            {
+                if (model == null)
+                {
+                    continue;
+                }
+
+                String id = model.getTimelineId();
+
+                if (id == null || id.length() == 0)
+                {
+                    continue;
+                }
+
+                activeIds.add(id);
+
+                CharacterTrack track =
+                        getTrackById(id);
+
+                String label = model.getModelName();
+
+                if (label == null || label.length() == 0)
+                {
+                    label = "Body Part " + number;
+                }
+
+                if (track == null)
+                {
+                    track = addTrack(id, label);
+                }
+                else
+                {
+                    track.setLabel(label);
+                }
+
+                number++;
+            }
+        }
+
+        for (int i = this.tracks.size() - 1; i >= 0; i--)
+        {
+            CharacterTrack track = this.tracks.get(i);
+
+            if (track == null || track.isMainTrack())
+            {
+                continue;
+            }
+
+            String id = track.getTrackId();
+
+            if (id != null &&
+                    id.startsWith("bodypart:") &&
+                    !activeIds.contains(id))
+            {
+                this.tracks.remove(i);
+            }
+        }
     }
 
 
