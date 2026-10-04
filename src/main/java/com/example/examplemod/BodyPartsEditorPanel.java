@@ -45,7 +45,7 @@ public class BodyPartsEditorPanel
     private boolean globalSectionOpen = false;
     private int globalScroll = 0;
     private static final int SECTION_HEIGHT = 22;
-    private static final int GLOBAL_CONTENT_HEIGHT = 230;
+    private static final int GLOBAL_CONTENT_HEIGHT = 250;
 
     public BodyPartsEditorPanel(
             BodyPartsEditorController controller)
