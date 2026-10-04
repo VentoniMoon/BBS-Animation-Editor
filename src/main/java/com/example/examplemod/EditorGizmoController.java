@@ -77,6 +77,23 @@ public class EditorGizmoController
     };
     private double[] dragPixelsPerWorld = new double[] {1.0D, 1.0D, 1.0D};
 
+    private BodyPartModelData bodyPartTarget;
+    private AnimationBone bodyPartAttachmentBone;
+    private AnimationTransform globalTransformTarget;
+
+    public void setBodyPartTarget(
+            BodyPartModelData model,
+            AnimationBone attachmentBone)
+    {
+        this.bodyPartTarget = model;
+        this.bodyPartAttachmentBone = attachmentBone;
+    }
+
+    public void setGlobalTransformTarget(AnimationTransform transform)
+    {
+        this.globalTransformTarget = transform;
+    }
+
     public Mode getMode()
     {
         return this.mode;
@@ -167,8 +184,8 @@ public class EditorGizmoController
             }
         }
 
-        if (bone == null || keyframe == null
-                || recordFrame == null || camera == null)
+        if (bone == null || camera == null
+                || (keyframe == null && this.globalTransformTarget == null))
         {
             return false;
         }
@@ -266,7 +283,9 @@ public class EditorGizmoController
         this.dragStartY = mouseY;
 
         AnimationTransform transform =
-                keyframe.getTransform();
+                this.globalTransformTarget != null
+                        ? this.globalTransformTarget
+                        : keyframe.getTransform();
 
         this.dragStartPX = transform.getPositionX();
         this.dragStartPY = transform.getPositionY();
@@ -285,7 +304,7 @@ public class EditorGizmoController
 
     public boolean mouseDragged(int mouseX, int mouseY)
     {
-        if (!this.dragging || this.activeKeyframe == null)
+        if (!this.dragging || (this.activeKeyframe == null && this.globalTransformTarget == null))
         {
             return false;
         }
@@ -372,6 +391,7 @@ public class EditorGizmoController
         this.dragging = false;
         this.activePart = -1;
         this.activeKeyframe = null;
+        this.globalTransformTarget = null;
 
         return true;
     }
@@ -1205,7 +1225,7 @@ public class EditorGizmoController
 
     private double getDataAxisSign(int axisId)
     {
-        return axisId == AXIS_X ? 1.0D : -1.0D;
+        return 1.0D;
     }
 
     private double getRotationDragAngle(
@@ -1258,7 +1278,7 @@ public class EditorGizmoController
 
     private double[] transformBoneDirection(float[] d,BlockbusterRecordFrame recordFrame)
     {
-        double x=-d[0], y=-d[1], z=-d[2];
+        double x=-d[0], y=d[1], z=-d[2];
         double yaw=Math.toRadians(180.0D-(recordFrame!=null?recordFrame.getYaw():0.0D));
         double c=Math.cos(yaw), s=Math.sin(yaw);
         double wx=c*x+s*z, wz=-s*x+c*z;
@@ -1423,6 +1443,109 @@ public class EditorGizmoController
         if (pivot == null)
         {
             return null;
+        }
+
+        /*
+         * Body Part model bones are local to the attached model.
+         * Resolve them through the actor attachment bone before
+         * converting model pixels into world blocks.
+         */
+        if (this.bodyPartTarget != null &&
+                this.bodyPartAttachmentBone != null &&
+                bone != this.bodyPartAttachmentBone)
+        {
+            AnimationTransform attachment =
+                    this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+
+            if (attachment == null)
+            {
+                return null;
+            }
+
+            double x = pivot.getPositionX();
+            double y = pivot.getPositionY();
+            double z = pivot.getPositionZ();
+
+            AnimationTransform global =
+                    this.bodyPartTarget.getGlobalTransform();
+
+            if (global != null)
+            {
+                x *= global.getScaleX();
+                y *= global.getScaleY();
+                z *= global.getScaleZ();
+
+                float[] p = rotateVector(
+                        (float) x, (float) y, (float) z,
+                        global.getRotationX(),
+                        global.getRotationY(),
+                        global.getRotationZ()
+                );
+
+                x = p[0] + global.getPositionX();
+                y = p[1] + global.getPositionY();
+                z = p[2] + global.getPositionZ();
+            }
+
+            float[] p = rotateVector(
+                    (float) x, (float) y, (float) z,
+                    attachment.getRotationX(),
+                    attachment.getRotationY(),
+                    attachment.getRotationZ()
+            );
+
+            double bx = attachment.getPositionX() / 16.0D;
+            double by = attachment.getPositionY() / 16.0D;
+            double bz = attachment.getPositionZ() / 16.0D;
+
+            return new double[]
+            {
+                (recordFrame != null ? recordFrame.getX() : 0.0D)
+                        + bx + p[0] / 16.0D,
+                (recordFrame != null ? recordFrame.getY() : 0.0D)
+                        + by - p[1] / 16.0D,
+                (recordFrame != null ? recordFrame.getZ() : 0.0D)
+                        + bz + p[2] / 16.0D
+            };
+        }
+
+        /*
+         * Global Body Part transform is located at the actor attachment
+         * pivot and translated in that attachment's local space.
+         */
+        if (this.globalTransformTarget != null &&
+                this.bodyPartAttachmentBone != null)
+        {
+            AnimationTransform attachment =
+                    this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+
+            if (attachment == null)
+            {
+                return null;
+            }
+
+            float[] p = rotateVector(
+                    this.globalTransformTarget.getPositionX(),
+                    this.globalTransformTarget.getPositionY(),
+                    this.globalTransformTarget.getPositionZ(),
+                    attachment.getRotationX(),
+                    attachment.getRotationY(),
+                    attachment.getRotationZ()
+            );
+
+            double bx = attachment.getPositionX() / 16.0D;
+            double by = attachment.getPositionY() / 16.0D;
+            double bz = attachment.getPositionZ() / 16.0D;
+
+            return new double[]
+            {
+                (recordFrame != null ? recordFrame.getX() : 0.0D)
+                        + bx + p[0] / 16.0D,
+                (recordFrame != null ? recordFrame.getY() : 0.0D)
+                        + by - p[1] / 16.0D,
+                (recordFrame != null ? recordFrame.getZ() : 0.0D)
+                        + bz + p[2] / 16.0D
+            };
         }
 
         double recordX =
