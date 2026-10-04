@@ -17,6 +17,11 @@ public class AnimationBone
     private float localY;
     private float localZ;
 
+    /* Rest-pose rotation from the source model. */
+    private float baseRotationX;
+    private float baseRotationY;
+    private float baseRotationZ;
+
     public AnimationBone(
             String name)
     {
@@ -33,6 +38,10 @@ public class AnimationBone
         this.localX = 0.0F;
         this.localY = 0.0F;
         this.localZ = 0.0F;
+
+        this.baseRotationX = 0.0F;
+        this.baseRotationY = 0.0F;
+        this.baseRotationZ = 0.0F;
     }
 
     public String getName()
@@ -69,6 +78,17 @@ public class AnimationBone
     {
         return this.localZ;
     }
+
+    public void setBaseRotation(float x, float y, float z)
+    {
+        this.baseRotationX = x;
+        this.baseRotationY = y;
+        this.baseRotationZ = z;
+    }
+
+    public float getBaseRotationX() { return this.baseRotationX; }
+    public float getBaseRotationY() { return this.baseRotationY; }
+    public float getBaseRotationZ() { return this.baseRotationZ; }
 
     public AnimationBone getParent()
     {
