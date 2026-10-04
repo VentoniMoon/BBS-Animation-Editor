@@ -399,6 +399,38 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
+            AnimationKeyframe selected =
+                    this.keyframeController
+                            .getSelectedKeyframe();
+
+            if (selected != null)
+            {
+                List<AnimationBone> bones =
+                        this.actorPreviewController
+                                .getBones();
+
+                if (bones != null)
+                {
+                    for (AnimationBone bone : bones)
+                    {
+                        if (bone == null
+                                || bone.getKeyframes() == null)
+                        {
+                            continue;
+                        }
+
+                        for (AnimationKeyframe keyframe :
+                                bone.getKeyframes())
+                        {
+                            if (keyframe == selected)
+                            {
+                                return bone;
+                            }
+                        }
+                    }
+                }
+            }
+
             return this.actorPreviewController
                     .getSelectedBone(
                             this.keyframeController
