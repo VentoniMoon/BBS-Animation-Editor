@@ -279,28 +279,30 @@ public class BlockbusterCharacterGuiBridge
 
         try
         {
-            CustomMorph morph = new CustomMorph();
-            morph.name = "blockbuster." + bodyPart.getModelNameAt(frame);
-            morph.updateModel(true);
+            AbstractMorph source = bodyPart.getMorphAt(this.targetBodyPartFrame);
 
-            if (morph.model == null)
+            if (source == null)
             {
-                return;
+                String modelName = bodyPart.getModelNameAt(this.targetBodyPartFrame);
+                CustomMorph custom = new CustomMorph();
+                custom.name = "blockbuster." + modelName;
+                custom.updateModel(true);
+                if (custom.model == null)
+                {
+                    return;
+                }
+                source = custom;
             }
 
-            editorActor.morph.set(morph);
+            editorActor.morph.set(source.copy());
             this.runtimeActor = editorActor;
-
-            this.mc.displayGuiScreen(
-                    new MorphGuiActor(this.mc, editorActor, this)
-            );
+            this.mc.displayGuiScreen(new MorphGuiActor(this.mc, editorActor, this));
         }
         catch (Throwable error)
         {
             error.printStackTrace();
         }
     }
-
 
     /*
      * =========================================================
@@ -684,34 +686,47 @@ public class BlockbusterCharacterGuiBridge
 
     private void saveBodyPartMorph(AbstractMorph morph)
     {
-        if (this.targetBodyPartModel == null ||
-                !(morph instanceof CustomMorph))
+        if (this.targetBodyPartModel == null || morph == null)
         {
             return;
         }
 
-        CustomMorph custom = (CustomMorph) morph;
-        String modelName = custom.getKey();
-
-        if (modelName == null || modelName.length() == 0)
+        try
         {
-            return;
+            if (morph instanceof CustomMorph)
+            {
+                CustomMorph custom = (CustomMorph) morph;
+                String modelName = custom.getKey();
+
+                if (modelName != null && modelName.length() > 0)
+                {
+                    this.targetBodyPartModel.setModelKey(
+                            this.targetBodyPartFrame,
+                            modelName
+                    );
+                }
+            }
+            else
+            {
+                this.targetBodyPartModel.setMorphKey(
+                        this.targetBodyPartFrame,
+                        morph
+                );
+            }
+
+            if (this.returnScreen != null)
+            {
+                this.returnScreen.refreshCharacterState();
+            }
         }
-
-        this.targetBodyPartModel.setModelKey(
-                this.targetBodyPartFrame,
-                modelName
-        );
-
-        if (this.returnScreen != null)
+        catch (Throwable error)
         {
-            this.returnScreen.refreshCharacterState();
+            error.printStackTrace();
         }
 
         this.targetBodyPartModel = null;
         this.targetBodyPartFrame = 0;
     }
-
 
     public void openBodyPartSkinEditor(
             BodyPartModelData bodyPart,
