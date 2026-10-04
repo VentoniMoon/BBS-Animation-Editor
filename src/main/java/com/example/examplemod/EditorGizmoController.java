@@ -721,7 +721,6 @@ public class EditorGizmoController
         if (exactChameleon != null)
         {
             GL11.glScalef(
-                    1.0F / exactChameleon[1],
                     1.0F / exactChameleon[3],
                     1.0F / exactChameleon[4],
                     1.0F / exactChameleon[5]
