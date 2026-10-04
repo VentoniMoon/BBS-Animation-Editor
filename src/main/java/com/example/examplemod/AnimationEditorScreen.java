@@ -377,7 +377,7 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
-    private boolean isGizmoEnabled()
+    public boolean isGizmoEnabled()
     {
         EditorModeController.EditorMode mode =
                 this.editorModeController.getMode();
@@ -389,7 +389,7 @@ public class AnimationEditorScreen extends GuiScreen
                 EditorModeController.EditorMode.BODY_PARTS;
     }
 
-    private AnimationBone getGizmoBone()
+    public AnimationBone getGizmoBone()
     {
         if (!isGizmoEnabled())
         {
@@ -437,7 +437,7 @@ public class AnimationEditorScreen extends GuiScreen
         return null;
     }
 
-    private AnimationKeyframe getGizmoKeyframe()
+    public AnimationKeyframe getGizmoKeyframe()
     {
         if (!isGizmoEnabled())
         {
