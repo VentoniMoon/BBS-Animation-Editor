@@ -83,6 +83,7 @@ public class EditorGizmoController
     private AnimationTransform globalTransformTarget;
     private int gizmoFrame;
     private boolean chameleonCoordinateSpace;
+    private EntityActor previewActor;
 
     public void setBodyPartTarget(
             BodyPartModelData model,
@@ -100,6 +101,11 @@ public class EditorGizmoController
     public void setGlobalTransformTarget(AnimationTransform transform)
     {
         this.globalTransformTarget = transform;
+    }
+
+    public void setPreviewActor(EntityActor actor)
+    {
+        this.previewActor = actor;
     }
 
     public void setChameleonCoordinateSpace(boolean value)
