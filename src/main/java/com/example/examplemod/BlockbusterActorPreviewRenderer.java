@@ -1151,10 +1151,10 @@ public class BlockbusterActorPreviewRenderer
          * Keep framebuffer dimensions out of the actor projection.
          */
         int previewWidth =
-                width;
+                viewportWidth;
 
         int previewHeight =
-                height;
+                viewportHeight;
 
         if (previewWidth <= 0 ||
                 previewHeight <= 0)
