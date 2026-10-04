@@ -508,8 +508,10 @@ public class AnimationEditorInput
          * =========================================================
          * ACTOR LIST
          * =========================================================
+         *
+         * The actor list is shared by Character, Pose and Body Parts
+         * modes. Its own panel owns the scroll offset.
          */
-
         int actorTop =
                 AnimationEditorScreen.TOP_BAR_HEIGHT;
 
@@ -517,28 +519,24 @@ public class AnimationEditorInput
                 actorTop +
                         AnimationEditorScreen.ACTOR_PANEL_HEIGHT;
 
-        final int actorRowHeight = 31;
-
         if (mouseX >= 0
                 && mouseX <=
                 AnimationEditorScreen.LEFT_PANEL_WIDTH
                 && mouseY >= actorTop + 30
                 && mouseY < actorBottom)
         {
-            int relativeY =
-                    mouseY -
-                            actorTop -
-                            30;
-
             int actorIndex =
-                    relativeY /
-                            actorRowHeight;
-
-            if (actorIndex >= 0
-                    && actorIndex <
                     this.screen
-                            .getSceneActors()
-                            .size())
+                            .getActorListPanel()
+                            .getActorIndexAt(
+                                    mouseX,
+                                    mouseY - actorTop,
+                                    this.screen.getSceneActors(),
+                                    AnimationEditorScreen.LEFT_PANEL_WIDTH,
+                                    AnimationEditorScreen.ACTOR_PANEL_HEIGHT
+                            );
+
+            if (actorIndex >= 0)
             {
                 this.screen.selectActor(actorIndex);
                 return;
@@ -1025,6 +1023,31 @@ public class AnimationEditorInput
                     wheel > 0
                             ? 1
                             : -1;
+
+            /*
+             * =====================================================
+             * ACTOR LIST
+             * =====================================================
+             *
+             * This is checked before the mode-specific inspectors,
+             * because the actor list exists in all three modes.
+             */
+            int actorTop =
+                    AnimationEditorScreen.TOP_BAR_HEIGHT;
+
+            int actorBottom =
+                    actorTop +
+                            AnimationEditorScreen.ACTOR_PANEL_HEIGHT;
+
+            if (mouseX >= 0
+                    && mouseX <= AnimationEditorScreen.LEFT_PANEL_WIDTH
+                    && mouseY >= actorTop + 30
+                    && mouseY < actorBottom)
+            {
+                this.screen.scrollActorList(direction);
+                return;
+            }
+
 
             /*
              * =====================================================
