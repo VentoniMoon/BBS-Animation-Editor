@@ -3,6 +3,7 @@ package com.example.examplemod;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.nbt.NBTTagCompound;
 import java.util.TreeMap;
 
 public class BodyPartModelData
@@ -18,6 +19,14 @@ public class BodyPartModelData
     /** Model replacements made by the Character Timeline. */
     private final TreeMap<Integer, String> modelKeys =
             new TreeMap<Integer, String>();
+
+    /**
+     * Character state keys belonging ONLY to this Body Part.
+     * The existing Character systems (Skin, Animation and Bones)
+     * operate on these keys exactly like they operate on Actor keys.
+     */
+    private final CharacterTimelineController characterTimeline =
+            new CharacterTimelineController();
 
     private int startFrame;
     private int endFrame;
@@ -168,6 +177,92 @@ public class BodyPartModelData
     public List<Integer> getModelKeyFrames()
     {
         return new ArrayList<Integer>(this.modelKeys.keySet());
+    }
+
+    public CharacterTimelineController getCharacterTimeline()
+    {
+        return this.characterTimeline;
+    }
+
+    public CharacterKey getCharacterStateKeyAt(int frame)
+    {
+        CharacterKey latest = null;
+        int target = Math.max(0, frame);
+
+        for (CharacterTrack track : this.characterTimeline.getTracks())
+        {
+            if (track == null) continue;
+
+            for (CharacterKey key : track.getKeys())
+            {
+                if (key == null || key.getFrame() > target)
+                {
+                    continue;
+                }
+
+                if (latest == null || key.getFrame() > latest.getFrame())
+                {
+                    latest = key;
+                }
+            }
+        }
+
+        return latest;
+    }
+
+    public CharacterKey getOrCreateCharacterStateKey(int frame)
+    {
+        int target = Math.max(0, frame);
+        CharacterKey existing = getCharacterStateKeyAt(target);
+
+        if (existing != null && existing.getFrame() == target)
+        {
+            return existing;
+        }
+
+        CharacterTimelineController timeline = this.characterTimeline;
+        CharacterTrack track = timeline.ensureMainTrack();
+        CharacterKey key = CharacterKey.create(target);
+        track.addKey(key);
+        return key;
+    }
+
+    public void removeCharacterStateKey(int frame)
+    {
+        int target = Math.max(0, frame);
+        CharacterTimelineController timeline = this.characterTimeline;
+
+        for (CharacterTrack track : timeline.getTracks())
+        {
+            if (track == null) continue;
+            CharacterKey key = track.getKeyAtFrame(target);
+
+            if (key != null)
+            {
+                track.removeKey(key);
+            }
+        }
+    }
+
+    public List<Integer> getCharacterStateKeyFrames()
+    {
+        List<Integer> result = new ArrayList<Integer>();
+
+        for (CharacterTrack track : this.characterTimeline.getTracks())
+        {
+            if (track == null) continue;
+
+            for (CharacterKey key : track.getKeys())
+            {
+                if (key != null && !result.contains(key.getFrame()))
+                {
+                    result.add(key.getFrame());
+                }
+            }
+        }
+
+        java.util.Collections.sort(result);
+        return result;
     }
 
     public boolean replaceModelByName(String newModelName)
