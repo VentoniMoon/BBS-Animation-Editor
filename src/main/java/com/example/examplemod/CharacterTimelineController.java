@@ -175,12 +175,20 @@ public class CharacterTimelineController
                 CharacterTrack track =
                         getTrackById(id);
 
-                String label = model.getModelName();
+                String boneName = model.getAttachmentBoneName();
+                String morphName = model.getModelName();
 
-                if (label == null || label.length() == 0)
+                if (boneName == null || boneName.length() == 0)
                 {
-                    label = "Body Part " + number;
+                    boneName = "Body Part " + number;
                 }
+
+                if (morphName == null || morphName.length() == 0)
+                {
+                    morphName = "Unknown Morph";
+                }
+
+                String label = boneName + " - " + morphName;
 
                 if (track == null)
                 {
@@ -195,6 +203,16 @@ public class CharacterTimelineController
             }
         }
 
+        /*
+         * Character Timeline intentionally contains only:
+         *
+         * 1. Main Character
+         * 2. Active Body Part tracks
+         *
+         * Old generic "Character Track" rows are legacy UI
+         * tracks from the previous implementation and must not
+         * remain visible.
+         */
         for (int i = this.tracks.size() - 1; i >= 0; i--)
         {
             CharacterTrack track = this.tracks.get(i);
@@ -206,8 +224,8 @@ public class CharacterTimelineController
 
             String id = track.getTrackId();
 
-            if (id != null &&
-                    id.startsWith("bodypart:") &&
+            if (id == null ||
+                    !id.startsWith("bodypart:") ||
                     !activeIds.contains(id))
             {
                 this.tracks.remove(i);
