@@ -571,6 +571,10 @@ public class AnimationEditorScreen extends GuiScreen
         this.gizmoController.setGlobalTransformTarget(
                 getGizmoGlobalTransform()
         );
+
+        this.gizmoController.setGizmoFrame(
+                this.playbackController.getCurrentFrame()
+        );
     }
 
     public AnimationKeyframe getGizmoKeyframe()
