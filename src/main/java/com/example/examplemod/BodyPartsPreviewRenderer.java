@@ -1,31 +1,3 @@
-package com.example.examplemod;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.nio.FloatBuffer;
-
-import javax.vecmath.Matrix4f;
-
-import mchorse.blockbuster.api.ModelTransform;
-import mchorse.blockbuster.common.entity.EntityActor;
-import mchorse.blockbuster_pack.morphs.CustomMorph;
-import mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone;
-import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.RenderHelper;
-
-import org.lwjgl.opengl.GL11;
-
-/**
- * Renders the temporary Body Parts attachments on top of the
- * selected Blockbuster actor.
- *
- * Body Parts are editor-only data, so they are rendered here rather
- * than being inserted into the real Character morph.
- */
 public class BodyPartsPreviewRenderer
 {
     private final Map<String, CustomMorph> morphs =
@@ -33,6 +5,13 @@ public class BodyPartsPreviewRenderer
 
     private final Map<String, EntityActor> entities =
             new HashMap<String, EntityActor>();
+
+    private BodyPartsEditorController preparedController;
+    private EntityActor preparedActor;
+    private int preparedFrame;
+    private boolean renderingAttachments;
+
+    private net.minecraft.client.renderer.entity.layers.LayerRenderer<EntityActor> layer;
 
     public void clear()
     {
@@ -47,19 +26,188 @@ public class BodyPartsPreviewRenderer
         }
 
         this.entities.clear();
+        this.preparedController = null;
+        this.preparedActor = null;
+        this.renderingAttachments = false;
     }
 
-    public void render(
-            Minecraft mc,
+    /**
+     * Installs an actual RenderCustomModel layer.
+     *
+     * This is deliberately the same rendering architecture used by
+     * Blockbuster's own LayerBodyPart: the attachment is rendered while
+     * the parent model's limb matrix is still active.
+     */
+    public void prepare(
+            BodyPartsEditorController controller,
+            EntityActor actor,
+            int frame)
+    {
+        this.preparedController = controller;
+        this.preparedActor = actor;
+        this.preparedFrame = frame;
+
+        if (this.layer == null)
+        {
+            this.layer =
+                    new net.minecraft.client.renderer.entity.layers.LayerRenderer<EntityActor>()
+                    {
+                        @Override
+                        public void doRenderLayer(
+                                EntityActor entity,
+                                float limbSwing,
+                                float limbSwingAmount,
+                                float partialTicks,
+                                float ageInTicks,
+                                float netHeadYaw,
+                                float headPitch,
+                                float scale)
+                        {
+                            if (renderingAttachments ||
+                                    entity != preparedActor ||
+                                    preparedController == null)
+                            {
+                                return;
+                            }
+
+                            renderingAttachments = true;
+
+                            try
+                            {
+                                renderInsideParentModel(
+                                        entity,
+                                        preparedController,
+                                        preparedFrame,
+                                        partialTicks,
+                                        scale
+                                );
+                            }
+                            finally
+                            {
+                                renderingAttachments = false;
+                            }
+                        }
+
+                        @Override
+                        public boolean shouldCombineTextures()
+                        {
+                            return false;
+                        }
+                    };
+        }
+
+        installLayer();
+    }
+
+    private void installLayer()
+    {
+        if (this.layer == null)
+        {
+            return;
+        }
+
+        mchorse.blockbuster_pack.client.render.RenderCustomActor renderer =
+                mchorse.blockbuster.ClientProxy.actorRenderer;
+
+        if (renderer == null)
+        {
+            return;
+        }
+
+        try
+        {
+            java.lang.reflect.Method addLayer =
+                    net.minecraft.client.renderer.entity.RenderLivingBase.class
+                            .getDeclaredMethod(
+                                    "addLayer",
+                                    net.minecraft.client.renderer.entity.layers.LayerRenderer.class
+                            );
+
+            addLayer.setAccessible(true);
+
+            /*
+             * addLayer() does not expose a public duplicate check, so the
+             * layer is installed only once per BodyPartsPreviewRenderer.
+             */
+            if (!isLayerInstalled(renderer))
+            {
+                addLayer.invoke(
+                        renderer,
+                        this.layer
+                );
+            }
+        }
+        catch (Exception exception)
+        {
+            System.out.println(
+                    "[BBS Animation Editor] Failed to install Body Parts preview layer"
+            );
+            exception.printStackTrace();
+        }
+    }
+
+    private boolean isLayerInstalled(
+            net.minecraft.client.renderer.entity.RenderLivingBase renderer)
+    {
+        try
+        {
+            java.lang.reflect.Field field =
+                    net.minecraft.client.renderer.entity.RenderLivingBase.class
+                            .getDeclaredField("layerRenderers");
+
+            field.setAccessible(true);
+
+            java.util.List<?> layers =
+                    (java.util.List<?>) field.get(renderer);
+
+            return layers != null &&
+                    layers.contains(this.layer);
+        }
+        catch (Exception exception)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * This method intentionally mirrors Blockbuster's LayerBodyPart:
+     *
+     *   limb.postRender(1/16)
+     *   childMorph.render(entity, 0, 0, 0, 0, partialTicks)
+     *
+     * Therefore the child inherits the exact parent limb transform,
+     * including the complete parent chain, animation and model pose.
+     */
+    private void renderInsideParentModel(
             EntityActor actor,
             BodyPartsEditorController controller,
             int frame,
-            float partialTicks)
+            float partialTicks,
+            float scale)
     {
-        if (mc == null ||
-                mc.world == null ||
-                actor == null ||
-                controller == null)
+        mchorse.blockbuster_pack.client.render.RenderCustomActor renderer =
+                mchorse.blockbuster.ClientProxy.actorRenderer;
+
+        if (renderer == null ||
+                renderer.getMainModel() == null)
+        {
+            return;
+        }
+
+        if (!(renderer.getMainModel() instanceof
+                mchorse.blockbuster.client.model.ModelCustom))
+        {
+            return;
+        }
+
+        mchorse.blockbuster.client.model.ModelCustom model =
+                (mchorse.blockbuster.client.model.ModelCustom)
+                        renderer.getMainModel();
+
+        CustomMorph parentMorph =
+                renderer.current;
+
+        if (parentMorph == null)
         {
             return;
         }
@@ -76,26 +224,33 @@ public class BodyPartsPreviewRenderer
         for (BodyPartModelData data : models)
         {
             if (data == null ||
-                    !data.hasModel())
-            {
-                continue;
-            }
-
-            if (frame < data.getStartFrame() ||
+                    !data.hasModel() ||
+                    frame < data.getStartFrame() ||
                     frame > data.getEndFrame())
             {
                 continue;
             }
 
-            if (data.getAttachmentBoneName() == null ||
-                    data.getAttachmentBoneName().isEmpty())
+            String boneName =
+                    data.getAttachmentBoneName();
+
+            if (boneName == null ||
+                    boneName.isEmpty())
+            {
+                continue;
+            }
+
+            mchorse.blockbuster.client.model.ModelCustomRenderer limb =
+                    model.get(boneName);
+
+            if (limb == null)
             {
                 continue;
             }
 
             CustomMorph morph =
                     getMorph(
-                            mc,
+                            Minecraft.getMinecraft(),
                             data.getModelName()
                     );
 
@@ -111,56 +266,62 @@ public class BodyPartsPreviewRenderer
                     frame
             );
 
-            BoneAttachment attachment =
-                    findAttachment(
-                            actor,
-                            controller,
-                            data.getAttachmentBoneName(),
-                            frame
-                    );
+            GL11.glPushMatrix();
 
-            if (attachment == null)
-            {
-                continue;
-            }
-
-            EntityActor renderEntity =
-                    getRenderEntity(
-                            mc,
-                            data.getModelName()
-                    );
-
-            renderEntity.posX = actor.posX;
-            renderEntity.posY = actor.posY;
-            renderEntity.posZ = actor.posZ;
-            renderEntity.prevPosX = actor.posX;
-            renderEntity.prevPosY = actor.posY;
-            renderEntity.prevPosZ = actor.posZ;
-
-            renderEntity.rotationYaw =
-                    actor.rotationYaw;
-            renderEntity.prevRotationYaw =
-                    actor.rotationYaw;
-
-            renderEntity.rotationPitch =
-                    actor.rotationPitch;
-            renderEntity.prevRotationPitch =
-                    actor.rotationPitch;
-
-            renderEntity.setSneaking(
-                    actor.isSneaking()
+            /*
+             * THIS is the important part copied from Blockbuster's
+             * LayerBodyPart. postRender() recursively applies all
+             * parent limbs before the selected limb.
+             */
+            limb.postRender(
+                    1.0F / 16.0F
             );
 
-            renderEntity.isDead = false;
-            renderEntity.noClip = true;
+            applyGlobalTransform(
+                    data.getGlobalTransform()
+            );
 
-            renderAttached(
-                    mc,
+            GlStateManager.enableDepth();
+            GlStateManager.depthMask(true);
+            GlStateManager.enableAlpha();
+            GlStateManager.enableBlend();
+            GlStateManager.enableTexture2D();
+            GlStateManager.color(
+                    1.0F,
+                    1.0F,
+                    1.0F,
+                    1.0F
+            );
+
+            RenderHelper.enableStandardItemLighting();
+
+            /*
+             * Exactly like Metamorph/Blockbuster BodyPart:
+             * render at 0,0,0 because the parent limb matrix is
+             * already on the OpenGL stack.
+             */
+            morph.render(
                     actor,
-                    renderEntity,
-                    morph,
-                    attachment,
-                    data.getGlobalTransform(),
+                    0.0D,
+                    0.0D,
+                    0.0D,
+                    0.0F,
+                    partialTicks
+            );
+
+            RenderHelper.disableStandardItemLighting();
+
+            GL11.glPopMatrix();
+
+            /*
+             * CustomMorph.render temporarily changes the shared
+             * Blockbuster actor renderer to the child morph. Restore
+             * the parent model exactly as Blockbuster's LayerBodyPart
+             * does after rendering a body part.
+             */
+            renderer.current = parentMorph;
+            renderer.setupModel(
+                    actor,
                     partialTicks
             );
         }
@@ -199,34 +360,6 @@ public class BodyPartsPreviewRenderer
         }
 
         return morph;
-    }
-
-    private EntityActor getRenderEntity(
-            Minecraft mc,
-            String name)
-    {
-        EntityActor entity =
-                this.entities.get(name);
-
-        if (entity == null ||
-                entity.world != mc.world ||
-                entity.isDead)
-        {
-            entity =
-                    new EntityActor(
-                            mc.world
-                    );
-
-            entity.noClip = true;
-            entity.isDead = false;
-
-            this.entities.put(
-                    name,
-                    entity
-            );
-        }
-
-        return entity;
     }
 
     private void applyLocalAnimation(
@@ -306,198 +439,6 @@ public class BodyPartsPreviewRenderer
                 pose;
     }
 
-    private BoneAttachment findAttachment(
-            EntityActor actor,
-            BodyPartsEditorController controller,
-            String boneName,
-            int frame)
-    {
-        if (controller == null ||
-                boneName == null ||
-                boneName.isEmpty())
-        {
-            return null;
-        }
-
-        /*
-         * AnimatedMorph is the important case for the current actor
-         * preview.  Its BOBJ bones contain the already evaluated
-         * Emoticons animation, so this is the transform the attachment
-         * must follow.
-         */
-        if (actor != null &&
-                actor.getMorph() instanceof AnimatedMorph)
-        {
-            BOBJBone runtimeBone =
-                    EmoticonsModelAccess.findBone(
-                            (AnimatedMorph) actor.getMorph(),
-                            boneName
-                    );
-
-            if (runtimeBone != null)
-            {
-                Matrix4f runtimeMatrix = runtimeBone.compute();
-
-                if (runtimeMatrix != null)
-                {
-                    return new BoneAttachment(
-                            new Matrix4f(runtimeMatrix)
-                    );
-                }
-            }
-        }
-
-        /*
-         * Fallback to the editor skeleton for Blockbuster/other actors.
-         * This still includes the BBS parent chain and keyframes.
-         */
-        List<AnimationBone> bones =
-                controller.getActorBones();
-
-        if (bones == null)
-        {
-            return null;
-        }
-
-        for (AnimationBone bone : bones)
-        {
-            if (bone != null &&
-                    boneName.equals(bone.getName()))
-            {
-                AnimationTransform transform =
-                        bone.getWorldTransformAt(frame);
-
-                if (transform != null)
-                {
-                    return new BoneAttachment(transform);
-                }
-
-                return null;
-            }
-        }
-
-        /*
-         * Keep the attachment visible even if the actor skeleton
-         * contains a bone without a transform.
-         */
-        return null;
-    }
-
-    private void renderAttached(
-            Minecraft mc,
-            EntityActor actor,
-            EntityActor renderEntity,
-            CustomMorph morph,
-            BoneAttachment attachment,
-            AnimationTransform modelTransform,
-            float partialTicks)
-    {
-        GL11.glPushMatrix();
-
-        attachment = attachment.withModelTransform(modelTransform);
-
-        if (attachment.runtimeMatrix != null)
-        {
-            FloatBuffer matrixBuffer =
-                    java.nio.ByteBuffer
-                            .allocateDirect(16 * 4)
-                            .order(java.nio.ByteOrder.nativeOrder())
-                            .asFloatBuffer();
-
-            Matrix4f matrix =
-                    new Matrix4f(attachment.runtimeMatrix);
-
-            /*
-             * BOBJ stores bone translations in model pixels, while the
-             * Minecraft render matrix uses block units.  The previous
-             * implementation fed the raw matrix to OpenGL, which could
-             * place the attachment many blocks away from the actor.
-             */
-            matrix.m03 /= 16.0F;
-            matrix.m13 /= 16.0F;
-            matrix.m23 /= 16.0F;
-
-            matrixBuffer.put(matrix.m00).put(matrix.m10).put(matrix.m20).put(matrix.m30);
-            matrixBuffer.put(matrix.m01).put(matrix.m11).put(matrix.m21).put(matrix.m31);
-            matrixBuffer.put(matrix.m02).put(matrix.m12).put(matrix.m22).put(matrix.m32);
-            matrixBuffer.put(matrix.m03).put(matrix.m13).put(matrix.m23).put(matrix.m33);
-            matrixBuffer.flip();
-
-            GL11.glMultMatrix(matrixBuffer);
-
-            applyGlobalTransform(attachment.modelTransform);
-        }
-        else
-        {
-            /*
-             * ModelTransform coordinates are Blockbuster model pixels.
-             * The render engine uses 1/16 block units.
-             */
-            GL11.glTranslatef(
-                    attachment.transform.getPositionX() / 16.0F,
-                    attachment.transform.getPositionY() / 16.0F,
-                    attachment.transform.getPositionZ() / 16.0F
-            );
-
-            GL11.glRotatef(
-                    attachment.transform.getRotationZ(),
-                    0.0F, 0.0F, 1.0F
-            );
-            GL11.glRotatef(
-                    attachment.transform.getRotationY(),
-                    0.0F, 1.0F, 0.0F
-            );
-            GL11.glRotatef(
-                    attachment.transform.getRotationX(),
-                    1.0F, 0.0F, 0.0F
-            );
-
-            applyGlobalTransform(attachment.modelTransform);
-        }
-
-        if (attachment.runtimeMatrix == null &&
-                attachment.transform != null)
-        {
-            GL11.glScalef(
-                    attachment.transform.getScaleX(),
-                    attachment.transform.getScaleY(),
-                    attachment.transform.getScaleZ()
-            );
-        }
-
-        GlStateManager.enableDepth();
-        GlStateManager.depthMask(true);
-        GlStateManager.enableAlpha();
-        GlStateManager.enableBlend();
-        GlStateManager.enableTexture2D();
-        GlStateManager.color(
-                1.0F,
-                1.0F,
-                1.0F,
-                1.0F
-        );
-
-        RenderHelper.enableStandardItemLighting();
-
-        /*
-         * The temporary entity is rendered at the actor origin.
-         * The attachment translation above moves it onto the
-         * selected actor limb.
-         */
-        morph.render(
-                renderEntity,
-                actor.posX,
-                actor.posY,
-                actor.posZ,
-                actor.rotationYaw,
-                partialTicks
-        );
-
-        RenderHelper.disableStandardItemLighting();
-
-        GL11.glPopMatrix();
-    }
-
     private void applyGlobalTransform(
             AnimationTransform transform)
     {
@@ -530,42 +471,5 @@ public class BodyPartsPreviewRenderer
                 transform.getScaleY(),
                 transform.getScaleZ()
         );
-    }
-
-    private static class BoneAttachment
-    {
-        private final AnimationTransform transform;
-        private final Matrix4f runtimeMatrix;
-        private final AnimationTransform modelTransform;
-
-        private BoneAttachment(AnimationTransform transform)
-        {
-            this(transform, null, null);
-        }
-
-        private BoneAttachment(Matrix4f runtimeMatrix)
-        {
-            this(null, runtimeMatrix, null);
-        }
-
-        private BoneAttachment(
-                AnimationTransform transform,
-                Matrix4f runtimeMatrix,
-                AnimationTransform modelTransform)
-        {
-            this.transform = transform;
-            this.runtimeMatrix = runtimeMatrix;
-            this.modelTransform = modelTransform;
-        }
-
-        private BoneAttachment withModelTransform(
-                AnimationTransform modelTransform)
-        {
-            return new BoneAttachment(
-                    this.transform,
-                    this.runtimeMatrix,
-                    modelTransform
-            );
-        }
     }
 }
