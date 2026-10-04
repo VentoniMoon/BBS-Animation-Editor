@@ -2448,6 +2448,27 @@ public class AnimationEditorScreen extends GuiScreen
 
         syncCharacterEditor();
 
+        /*
+         * Stage 5:
+         * The actual gizmo belongs to the 3D Preview pass. It must be
+         * drawn while the Preview framebuffer is still active, before
+         * finishPreviewRender() copies the finished scene back to the GUI.
+         *
+         * The tool buttons are drawn later in GUI space by draw().
+         */
+        this.gizmoController.draw3D(
+                mc,
+                left,
+                top,
+                previewWidth,
+                previewHeight,
+                getGizmoBone(),
+                getGizmoKeyframe(),
+                getCurrentRecordFrame(),
+                this.sceneViewport.getCamera(),
+                isGizmoEnabled()
+        );
+
         this.sceneViewport.finishPreviewRender();
         this.sceneViewport.renderPreviewToScreen();
 
