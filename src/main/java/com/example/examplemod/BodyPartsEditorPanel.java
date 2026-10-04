@@ -45,7 +45,15 @@ public class BodyPartsEditorPanel
     private boolean globalSectionOpen = false;
     private int globalScroll = 0;
     private static final int SECTION_HEIGHT = 22;
-    private static final int GLOBAL_CONTENT_HEIGHT = 250;
+
+    /*
+     * The last control is Scale Z:
+     * contentY + 205 (top) + 16 px (control height).
+     * contentY starts at viewportTop + 4, so the real content
+     * occupies 225 px. Keep the scroll range tied to that
+     * actual content size instead of an arbitrary larger value.
+     */
+    private static final int GLOBAL_CONTENT_HEIGHT = 225;
 
     public BodyPartsEditorPanel(
             BodyPartsEditorController controller)
@@ -118,7 +126,7 @@ public class BodyPartsEditorPanel
         }
 
         int modelY = y + 67;
-        int globalY = modelY + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
+        int globalY = getGlobalY(modelY);
 
         drawAccordionHeader(mc, "MODEL", modelY, modelSectionOpen, mouseX, mouseY);
         if (modelSectionOpen)
@@ -304,12 +312,47 @@ public class BodyPartsEditorPanel
                 && mouseY >= sectionY && mouseY < sectionY + SECTION_HEIGHT;
     }
 
+    private int getGlobalY(int modelY)
+    {
+        return modelY + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
+    }
+
+    private int getGlobalViewportTop(int modelY)
+    {
+        return getGlobalY(modelY) + SECTION_HEIGHT;
+    }
+
+    private int getGlobalViewportBottom()
+    {
+        return y + HEIGHT - 5;
+    }
+
+    private int getGlobalViewportHeight(int modelY)
+    {
+        return Math.max(
+                0,
+                getGlobalViewportBottom()
+                        - getGlobalViewportTop(modelY)
+        );
+    }
+
+    private int getGlobalMaxScroll(int modelY)
+    {
+        return Math.max(
+                0,
+                GLOBAL_CONTENT_HEIGHT
+                        - getGlobalViewportHeight(modelY)
+        );
+    }
+
     private boolean globalContains(int mouseX, int mouseY)
     {
         if (!globalSectionOpen) return false;
-        int globalY = y + 67 + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
-        int viewportTop = globalY + SECTION_HEIGHT;
-        int viewportBottom = y + HEIGHT - 5;
+
+        int modelY = y + 67;
+        int viewportTop = getGlobalViewportTop(modelY);
+        int viewportBottom = getGlobalViewportBottom();
+
         return mouseX >= x + 6 && mouseX < x + WIDTH - 6
                 && mouseY >= viewportTop && mouseY < viewportBottom;
     }
@@ -332,12 +375,16 @@ public class BodyPartsEditorPanel
     public boolean mouseScrolled(int mouseX, int mouseY, int wheel)
     {
         if (!globalContains(mouseX, mouseY) || wheel == 0) return false;
-        int globalY = y + 67 + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
-        int viewportTop = globalY + SECTION_HEIGHT;
-        int viewportBottom = y + HEIGHT - 5;
-        int maxScroll = Math.max(0,
-                GLOBAL_CONTENT_HEIGHT - (viewportBottom - viewportTop));
-        globalScroll = Math.max(0, Math.min(maxScroll, globalScroll - wheel * 18));
+        int modelY = y + 67;
+        int maxScroll = getGlobalMaxScroll(modelY);
+
+        globalScroll = Math.max(
+                0,
+                Math.min(
+                        maxScroll,
+                        globalScroll - wheel * 18
+                )
+        );
         return true;
     }
 
