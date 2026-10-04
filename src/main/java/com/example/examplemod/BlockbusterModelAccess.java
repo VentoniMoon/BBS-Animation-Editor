@@ -476,11 +476,16 @@ public class BlockbusterModelAccess
                  *   rotationPointZ = -translate.z
                  *
                  * and render() converts those values to blocks.
-                 * Therefore the editor's local pivot is:
+                 * Therefore the AnimationBone local pivot is kept in the
+                 * same model-pixel units as AnimationTransform:
                  *
-                 *   X = translate.x / 16
-                 *   Y = -translate.y / 16
-                 *   Z = -translate.z / 16
+                 *   X = translate.x
+                 *   Y = -translate.y
+                 *   Z = -translate.z
+                 *
+                 * The /16 conversion happens only when the gizmo is
+                 * placed into the Preview world, exactly like the
+                 * Blockbuster renderer.
                  *
                  * The +24 root offset cancels inside
                  * ModelCustomRenderer.cachedTranslation.
@@ -524,9 +529,9 @@ public class BlockbusterModelAccess
 
                                     if (values.length >= 3)
                                     {
-                                        x = values[0] / 16.0F;
-                                        y = -values[1] / 16.0F;
-                                        z = -values[2] / 16.0F;
+                                        x = values[0];
+                                        y = -values[1];
+                                        z = -values[2];
                                     }
                                 }
                             }
