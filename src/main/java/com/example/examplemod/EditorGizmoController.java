@@ -1,229 +1,1259 @@
-    private double getAxisDragAmount(
-            double[] axis,
-            double mouseDX,
-            double mouseDY)
+package com.example.examplemod;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.util.glu.GLU;
+import org.lwjgl.BufferUtils;
+import java.nio.IntBuffer;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.ScaledResolution;
+
+/**
+ * Stage 5 - 3D transform gizmo.
+ *
+ * The gizmo is an editor overlay. It never owns animation data:
+ * all edits are written directly into the currently selected
+ * AnimationKeyframe transform.
+ */
+public class EditorGizmoController
+{
+    public enum Mode
     {
-        /*
-         * Project the world axis to the same screen used by the gizmo.
-         * The mouse delta is then measured along that projected direction.
-         * This automatically fixes the old reversed movement and keeps
-         * dragging intuitive after the bone is rotated.
-         */
-        double screenX = axis[0];
-        double screenY = -axis[1];
-        double screenZ = axis[2];
-
-        double yaw = Math.toRadians(0.0D);
-        double pitch = Math.toRadians(0.0D);
-        // The caller supplies a world-space axis; its screen direction is
-        // resolved in mouseDragged through the captured basis. For the
-        // editor's current drag scale, use the corresponding screen slope
-        // encoded by the basis itself. A small stable fallback preserves
-        // movement for nearly edge-on axes.
-        double length = Math.sqrt(screenX * screenX + screenY * screenY);
-        if (length < 0.0001D)
-        {
-            return mouseDY * -0.10D;
-        }
-
-        double ux = screenX / length;
-        double uy = screenY / length;
-        return (mouseDX * ux + mouseDY * uy) * 0.10D;
+        POSITION,
+        ROTATION,
+        SCALE
     }
 
-    private double getAxisDragAngle(
-            double[] axis,
-            double mouseDX,
-            double mouseDY)
-    {
-        double screenX = axis[0];
-        double screenY = -axis[1];
-        double length = Math.sqrt(screenX * screenX + screenY * screenY);
-        if (length < 0.0001D)
-        {
-            return (mouseDX - mouseDY) * 0.5D;
-        }
+    private static final int AXIS_X = 0;
+    private static final int AXIS_Y = 1;
+    private static final int AXIS_Z = 2;
+    private static final int PLANE_XY = 3;
+    private static final int PLANE_XZ = 4;
+    private static final int PLANE_YZ = 5;
 
-        double ux = screenX / length;
-        double uy = screenY / length;
-        return (mouseDX * ux + mouseDY * uy) * 0.5D;
+    private static final int BUTTON_SIZE = 26;
+    private static final int BUTTON_GAP = 4;
+    private static final int BUTTON_MARGIN = 8;
+
+    private static final int AXIS_X_COLOR = 0xFFE85C5C;
+    private static final int AXIS_Y_COLOR = 0xFF65D37A;
+    private static final int AXIS_Z_COLOR = 0xFF5CA8E8;
+    private static final int PLANE_COLOR = 0xFFBFC5CA;
+
+    private Mode mode = Mode.POSITION;
+
+    private int activePart = -1;
+    private boolean dragging;
+
+    private int dragStartX;
+    private int dragStartY;
+
+    private float dragStartPX;
+    private float dragStartPY;
+    private float dragStartPZ;
+
+    private float dragStartRX;
+    private float dragStartRY;
+    private float dragStartRZ;
+
+    private float dragStartSX;
+    private float dragStartSY;
+    private float dragStartSZ;
+
+    private AnimationKeyframe activeKeyframe;
+
+    private double[] dragAxisX = new double[] {1.0D, 0.0D, 0.0D};
+    private double[] dragAxisY = new double[] {0.0D, 1.0D, 0.0D};
+    private double[] dragAxisZ = new double[] {0.0D, 0.0D, 1.0D};
+    private double[][] dragScreenAxes = new double[][]
+    {
+        {1.0D, 0.0D}, {0.0D, -1.0D}, {1.0D, 0.0D}
+    };
+    private double[] dragPixelsPerWorld = new double[] {1.0D, 1.0D, 1.0D};
+
+    public Mode getMode()
+    {
+        return this.mode;
     }
 
-    private double[] getPlaneDragAmount(
-            double[] axisA,
-            double[] axisB,
-            double mouseDX,
-            double mouseDY)
+    public void setMode(Mode mode)
     {
-        double ax = axisA[0];
-        double ay = -axisA[1];
-        double bx = axisB[0];
-        double by = -axisB[1];
-
-        double det = ax * by - ay * bx;
-        if (Math.abs(det) < 0.0001D)
+        if (mode != null)
         {
-            return new double[] {0.0D, 0.0D};
+            this.mode = mode;
         }
 
-        double da =
-                (mouseDX * by - mouseDY * bx)
-                        / det
-                        * 0.10D;
-        double db =
-                (ax * mouseDY - ay * mouseDX)
-                        / det
-                        * 0.10D;
-
-        return new double[] {da, db};
+        this.activePart = -1;
+        this.dragging = false;
     }
 
-    private double[][] getBoneWorldAxes(
+    public boolean isDragging()
+    {
+        return this.dragging;
+    }
+
+    public boolean isButtonHit(
+            int mouseX,
+            int mouseY,
+            int viewportX,
+            int viewportY,
+            int viewportWidth)
+    {
+        int x = viewportX + viewportWidth - BUTTON_MARGIN - BUTTON_SIZE;
+        int y = viewportY + BUTTON_MARGIN;
+
+        return mouseX >= x
+                && mouseX < x + BUTTON_SIZE
+                && mouseY >= y
+                && mouseY < y + BUTTON_SIZE * 3 + BUTTON_GAP * 2;
+    }
+
+    /**
+     * Handles the three editor buttons and gizmo hit testing.
+     */
+    public boolean mouseClicked(
+            int mouseX,
+            int mouseY,
+            int mouseButton,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
             AnimationBone bone,
-            AnimationKeyframe selectedKeyframe,
-            BlockbusterRecordFrame recordFrame)
+            AnimationKeyframe keyframe,
+            BlockbusterRecordFrame recordFrame,
+            EditorCamera camera,
+            boolean enabled)
     {
-        if (bone == null)
+        if (!enabled || mouseButton != 0)
         {
-            return null;
+            return false;
         }
 
-        int frame =
-                selectedKeyframe != null
-                        ? selectedKeyframe.getFrame()
-                        : 0;
+        int buttonX =
+                viewportX + viewportWidth - BUTTON_MARGIN - BUTTON_SIZE;
+        int buttonY =
+                viewportY + BUTTON_MARGIN;
 
-        AnimationTransform pivot =
-                bone.getWorldPivotAt(frame);
-
-        if (pivot == null)
+        for (int i = 0; i < 3; i++)
         {
-            return null;
+            int y = buttonY + i * (BUTTON_SIZE + BUTTON_GAP);
+
+            if (mouseX >= buttonX
+                    && mouseX < buttonX + BUTTON_SIZE
+                    && mouseY >= y
+                    && mouseY < y + BUTTON_SIZE)
+            {
+                if (i == 0)
+                {
+                    setMode(Mode.POSITION);
+                }
+                else if (i == 1)
+                {
+                    setMode(Mode.ROTATION);
+                }
+                else
+                {
+                    setMode(Mode.SCALE);
+                }
+
+                return true;
+            }
         }
 
-        double[][] result =
-                new double[3][3];
+        if (bone == null || keyframe == null
+                || recordFrame == null || camera == null)
+        {
+            return false;
+        }
 
-        result[0] = transformBoneDirection(
-                rotateVector(1.0F, 0.0F, 0.0F,
-                        pivot.getRotationX(),
-                        pivot.getRotationY(),
-                        pivot.getRotationZ()),
-                recordFrame
-        );
-
-        result[1] = transformBoneDirection(
-                rotateVector(0.0F, 1.0F, 0.0F,
-                        pivot.getRotationX(),
-                        pivot.getRotationY(),
-                        pivot.getRotationZ()),
-                recordFrame
-        );
-
-        result[2] = transformBoneDirection(
-                rotateVector(0.0F, 0.0F, 1.0F,
-                        pivot.getRotationX(),
-                        pivot.getRotationY(),
-                        pivot.getRotationZ()),
-                recordFrame
-        );
-
-        return result;
-    }
-
-    private double[] transformBoneDirection(
-            float[] modelDirection,
-            BlockbusterRecordFrame recordFrame)
-    {
-        double x = -modelDirection[0];
-        double y = -modelDirection[1];
-        double z = modelDirection[2];
-
-        double yaw = Math.toRadians(
-                180.0D
-                        - (
-                                recordFrame != null
-                                        ? recordFrame.getYaw()
-                                        : 0.0D
-                        )
-        );
-
-        double cos = Math.cos(yaw);
-        double sin = Math.sin(yaw);
-
-        double worldX = cos * x + sin * z;
-        double worldZ = -sin * x + cos * z;
-
-        double length =
-                Math.sqrt(
-                        worldX * worldX
-                                + y * y
-                                + worldZ * worldZ
+        ScreenPoint center =
+                getGizmoCenter(
+                        viewportX,
+                        viewportY,
+                        viewportWidth,
+                        viewportHeight,
+                        bone,
+                        keyframe,
+                        recordFrame,
+                        camera
                 );
 
-        if (length < 0.000001D)
+        if (center == null)
         {
-            return new double[] {0.0D, 0.0D, 0.0D};
+            return false;
         }
 
-        return new double[]
+        double[] gizmoWorld =
+                getBoneWorldPosition(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
+
+        if (gizmoWorld == null)
         {
-            worldX / length,
-            y / length,
-            worldZ / length
-        };
+            return false;
+        }
+
+        float gizmoSize =
+                getWorldGizmoSize(
+                        camera,
+                        gizmoWorld[0],
+                        gizmoWorld[1],
+                        gizmoWorld[2]
+                );
+
+        int hit =
+                hitTest(
+                        mouseX, mouseY,
+                        viewportX, viewportY, viewportWidth, viewportHeight,
+                        center, gizmoWorld, gizmoSize, camera,
+                        getBoneWorldAxes(bone, keyframe, recordFrame)
+                );
+
+        if (hit < 0)
+        {
+            return false;
+        }
+
+        this.activePart = hit;
+        this.dragging = true;
+        this.activeKeyframe = keyframe;
+
+        double[][] axes = getBoneWorldAxes(bone, keyframe, recordFrame);
+        if (axes != null)
+        {
+            this.dragAxisX = axes[0].clone();
+            this.dragAxisY = axes[1].clone();
+            this.dragAxisZ = axes[2].clone();
+
+            double[][] captured = new double[][]
+            {
+                this.dragAxisX, this.dragAxisY, this.dragAxisZ
+            };
+
+            for (int axis = 0; axis < 3; axis++)
+            {
+                ScreenPoint endpoint = project(
+                        gizmoWorld[0] + captured[axis][0],
+                        gizmoWorld[1] + captured[axis][1],
+                        gizmoWorld[2] + captured[axis][2],
+                        viewportX, viewportY, viewportWidth, viewportHeight, camera
+                );
+                if (endpoint != null)
+                {
+                    double sx = endpoint.x - center.x;
+                    double sy = endpoint.y - center.y;
+                    double length = Math.sqrt(sx * sx + sy * sy);
+                    if (length > 0.0001D)
+                    {
+                        this.dragScreenAxes[axis][0] = sx / length;
+                        this.dragScreenAxes[axis][1] = sy / length;
+                        this.dragPixelsPerWorld[axis] = length;
+                    }
+                }
+            }
+        }
+
+        this.dragStartX = mouseX;
+        this.dragStartY = mouseY;
+
+        AnimationTransform transform =
+                keyframe.getTransform();
+
+        this.dragStartPX = transform.getPositionX();
+        this.dragStartPY = transform.getPositionY();
+        this.dragStartPZ = transform.getPositionZ();
+
+        this.dragStartRX = transform.getRotationX();
+        this.dragStartRY = transform.getRotationY();
+        this.dragStartRZ = transform.getRotationZ();
+
+        this.dragStartSX = transform.getScaleX();
+        this.dragStartSY = transform.getScaleY();
+        this.dragStartSZ = transform.getScaleZ();
+
+        return true;
     }
 
-    private double[] cross(
-            double[] a,
-            double[] b)
+    public boolean mouseDragged(int mouseX, int mouseY)
     {
-        return new double[]
+        if (!this.dragging || this.activeKeyframe == null)
         {
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0]
-        };
+            return false;
+        }
+
+        AnimationTransform transform = this.activeKeyframe.getTransform();
+        double mouseDX = mouseX - this.dragStartX;
+        double mouseDY = mouseY - this.dragStartY;
+
+        if (this.mode == Mode.POSITION)
+        {
+            float px = this.dragStartPX;
+            float py = this.dragStartPY;
+            float pz = this.dragStartPZ;
+
+            if (this.activePart == AXIS_X)
+            {
+                px += (float) getAxisDragAmount(AXIS_X, mouseDX, mouseDY);
+            }
+            else if (this.activePart == AXIS_Y)
+            {
+                py += (float) getAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
+            }
+            else if (this.activePart == AXIS_Z)
+            {
+                pz += (float) getAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
+            }
+            else if (this.activePart == PLANE_XY)
+            {
+                double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
+                px += (float) d[0]; py += (float) d[1];
+            }
+            else if (this.activePart == PLANE_XZ)
+            {
+                double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
+                px += (float) d[0]; pz += (float) d[1];
+            }
+            else if (this.activePart == PLANE_YZ)
+            {
+                double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
+                py += (float) d[0]; pz += (float) d[1];
+            }
+            transform.setPosition(px, py, pz);
+        }
+        else if (this.mode == Mode.ROTATION)
+        {
+            float amount = (float) getAxisDragAngle(this.activePart, mouseDX, mouseDY);
+            if (this.activePart == AXIS_X)
+            {
+                transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
+            }
+            else if (this.activePart == AXIS_Y)
+            {
+                transform.setRotation(this.dragStartRX, this.dragStartRY + amount, this.dragStartRZ);
+            }
+            else
+            {
+                transform.setRotation(this.dragStartRX, this.dragStartRY, this.dragStartRZ + amount);
+            }
+        }
+        else
+        {
+            float amount = (float) (getAxisDragAmount(this.activePart, mouseDX, mouseDY) * 0.05D);
+            float sx = this.dragStartSX;
+            float sy = this.dragStartSY;
+            float sz = this.dragStartSZ;
+            if (this.activePart == AXIS_X) sx = Math.max(0.01F, sx + amount);
+            else if (this.activePart == AXIS_Y) sy = Math.max(0.01F, sy + amount);
+            else sz = Math.max(0.01F, sz + amount);
+            transform.setScale(sx, sy, sz);
+        }
+        return true;
     }
 
-    private void normalize(double[] vector)
+    public boolean mouseReleased()
     {
-        double length = Math.sqrt(
-                vector[0] * vector[0]
-                        + vector[1] * vector[1]
-                        + vector[2] * vector[2]
-        );
+        if (!this.dragging)
+        {
+            return false;
+        }
 
-        if (length < 0.000001D)
+        this.dragging = false;
+        this.activePart = -1;
+        this.activeKeyframe = null;
+
+        return true;
+    }
+
+    /**
+     * Draw only the three tool buttons in GUI space.
+     *
+     * The actual transform gizmo is rendered by draw3D() inside the
+     * Preview render target. This is important: the gizmo must live in
+     * the same perspective/camera space as the actor instead of being a
+     * flat 2D decoration over the Preview texture.
+     */
+    public void draw(
+            Minecraft mc,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            AnimationBone bone,
+            AnimationKeyframe keyframe,
+            BlockbusterRecordFrame recordFrame,
+            EditorCamera camera,
+            boolean enabled)
+    {
+        if (mc == null
+                || !enabled
+                || viewportWidth <= 0
+                || viewportHeight <= 0)
         {
             return;
         }
 
-        vector[0] /= length;
-        vector[1] /= length;
-        vector[2] /= length;
+        int oldMatrixMode =
+                GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+
+        ScaledResolution resolution =
+                new ScaledResolution(mc);
+
+        GL11.glOrtho(
+                0,
+                resolution.getScaledWidth(),
+                resolution.getScaledHeight(),
+                0,
+                -1,
+                1
+        );
+
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(
+                GL11.GL_SRC_ALPHA,
+                GL11.GL_ONE_MINUS_SRC_ALPHA
+        );
+
+        drawButtons(
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight
+        );
+
+        GL11.glPopMatrix();
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPopMatrix();
+        GL11.glPopAttrib();
+        GL11.glMatrixMode(oldMatrixMode);
     }
 
-    private double[] addScaled(
-            double[] base,
-            double amount)
+    /**
+     * Render the actual gizmo in the Preview's 3D coordinate system.
+     *
+     * This pass is called while the Preview framebuffer is still bound,
+     * after the actor has been rendered and before the Preview is copied
+     * to the editor GUI. The gizmo therefore gets real perspective:
+     * camera movement, depth and distance all affect its appearance.
+     */
+    public void draw3D(
+            Minecraft mc,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            AnimationBone bone,
+            AnimationKeyframe keyframe,
+            BlockbusterRecordFrame recordFrame,
+            EditorCamera camera,
+            boolean enabled)
     {
-        return new double[]
+        if (mc == null
+                || !enabled
+                || bone == null
+                || keyframe == null
+                || recordFrame == null
+                || camera == null
+                || viewportWidth <= 0
+                || viewportHeight <= 0)
         {
-            base[0] * amount,
-            base[1] * amount,
-            base[2] * amount
+            return;
+        }
+
+        double[] world =
+                getBoneWorldPosition(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
+
+        if (world == null)
+        {
+            return;
+        }
+
+        /*
+         * The Preview FBO is full-screen sized, but the Preview renderer
+         * does NOT render into the whole FBO. PreviewShaderBridge binds
+         * the FBO with a viewport corresponding to the GUI Preview
+         * rectangle multiplied by the Minecraft scale factor.
+         *
+         * PreviewWorldRenderer then uses that same viewport while the
+         * actor is rendered. We must use exactly the same viewport here.
+         * Using displayWidth/displayHeight was the reason the gizmo
+         * appeared to drift and react to the camera differently from
+         * the actor.
+         */
+        ScaledResolution scaledResolution =
+                new ScaledResolution(mc);
+
+        int scaleFactor =
+                Math.max(1, scaledResolution.getScaleFactor());
+
+        int framebufferWidth =
+                Math.max(1, mc.displayWidth);
+
+        int framebufferHeight =
+                Math.max(1, mc.displayHeight);
+
+        int glX =
+                Math.max(0, viewportX * scaleFactor);
+
+        int glY =
+                Math.max(
+                        0,
+                        framebufferHeight
+                                - (
+                                        viewportY
+                                                + viewportHeight
+                                ) * scaleFactor
+                );
+
+        int glWidth =
+                Math.max(
+                        1,
+                        viewportWidth * scaleFactor
+                );
+
+        int glHeight =
+                Math.max(
+                        1,
+                        viewportHeight * scaleFactor
+                );
+
+        if (glX + glWidth > framebufferWidth)
+        {
+            glWidth =
+                    framebufferWidth - glX;
+        }
+
+        if (glY + glHeight > framebufferHeight)
+        {
+            glHeight =
+                    framebufferHeight - glY;
+        }
+
+        if (glWidth <= 0 || glHeight <= 0)
+        {
+            return;
+        }
+
+        int oldMatrixMode =
+                GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+
+        IntBuffer viewportBuffer =
+                BufferUtils.createIntBuffer(16);
+
+        GL11.glGetInteger(
+                GL11.GL_VIEWPORT,
+                viewportBuffer
+        );
+
+        int oldViewportX = viewportBuffer.get(0);
+        int oldViewportY = viewportBuffer.get(1);
+        int oldViewportW = viewportBuffer.get(2);
+        int oldViewportH = viewportBuffer.get(3);
+
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+
+        GL11.glViewport(
+                glX,
+                glY,
+                glWidth,
+                glHeight
+        );
+
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+
+        /*
+         * The actor renderer uses the Preview GUI aspect ratio here,
+         * not the physical framebuffer aspect ratio. The viewport
+         * already contains the scale factor, so the ratio is identical
+         * to viewportWidth / viewportHeight.
+         */
+        GLU.gluPerspective(
+                60.0F,
+                (float) viewportWidth
+                        / (float) viewportHeight,
+                0.05F,
+                500.0F
+        );
+
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+
+        GL11.glRotatef(
+                -camera.getPitch(),
+                1.0F,
+                0.0F,
+                0.0F
+        );
+
+        GL11.glRotatef(
+                -camera.getYaw(),
+                0.0F,
+                1.0F,
+                0.0F
+        );
+
+        GL11.glTranslated(
+                -camera.getCameraX(),
+                -camera.getCameraY(),
+                -camera.getCameraZ()
+        );
+
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(
+                GL11.GL_SRC_ALPHA,
+                GL11.GL_ONE_MINUS_SRC_ALPHA
+        );
+        GL11.glLineWidth(5.0F);
+
+        /*
+         * getBoneWorldPosition() already returns the final rendered
+         * world-space pivot. Keep the draw pass and hit testing on
+         * exactly the same coordinates; previously the draw pass applied
+         * the actor transform here while hitTest() projected the
+         * pre-transform position, which made the controls effectively
+         * unclickable and visually offset.
+         */
+        double gizmoX = world[0];
+        double gizmoY = world[1];
+        double gizmoZ = world[2];
+
+        GL11.glPushMatrix();
+        GL11.glTranslated(gizmoX, gizmoY, gizmoZ);
+
+        float size =
+                getWorldGizmoSize(
+                        camera,
+                        gizmoX,
+                        gizmoY,
+                        gizmoZ
+                );
+
+        if (this.mode == Mode.POSITION)
+        {
+            drawPositionGizmo3D(size, getBoneWorldAxes(bone, keyframe, recordFrame));
+        }
+        else if (this.mode == Mode.ROTATION)
+        {
+            drawRotationGizmo3D(size, getBoneWorldAxes(bone, keyframe, recordFrame));
+        }
+        else
+        {
+            drawScaleGizmo3D(size, getBoneWorldAxes(bone, keyframe, recordFrame));
+        }
+
+        GL11.glPopMatrix();
+
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPopMatrix();
+
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPopMatrix();
+
+        GL11.glViewport(
+                oldViewportX,
+                oldViewportY,
+                oldViewportW,
+                oldViewportH
+        );
+
+        GL11.glPopAttrib();
+        GL11.glMatrixMode(oldMatrixMode);
+    }
+
+    private float getWorldGizmoSize(
+            EditorCamera camera,
+            double x,
+            double y,
+            double z)
+    {
+        double dx = x - camera.getCameraX();
+        double dy = y - camera.getCameraY();
+        double dz = z - camera.getCameraZ();
+
+        double distance =
+                Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        return (float) Math.max(
+                0.35D,
+                Math.min(2.5D, distance * 0.10D)
+        );
+    }
+
+    private void drawPositionGizmo3D(float size, double[][] axes)
+    {
+        if (axes == null) return;
+        drawAxisVector3D(axes[0], AXIS_X_COLOR, size, AXIS_X);
+        drawAxisVector3D(axes[1], AXIS_Y_COLOR, size, AXIS_Y);
+        drawAxisVector3D(axes[2], AXIS_Z_COLOR, size, AXIS_Z);
+        drawPlaneVector3D(axes[0], axes[1], size, PLANE_XY);
+        drawPlaneVector3D(axes[0], axes[2], size, PLANE_XZ);
+        drawPlaneVector3D(axes[1], axes[2], size, PLANE_YZ);
+    }
+
+    private void drawRotationGizmo3D(float size, double[][] axes)
+    {
+        if (axes == null) return;
+        drawRingVector3D(axes[1], axes[2], size * 0.95F, AXIS_X_COLOR);
+        drawRingVector3D(axes[2], axes[0], size * 0.95F, AXIS_Y_COLOR);
+        drawRingVector3D(axes[0], axes[1], size * 0.95F, AXIS_Z_COLOR);
+    }
+
+    private void drawScaleGizmo3D(float size, double[][] axes)
+    {
+        if (axes == null) return;
+        drawAxisVector3D(axes[0], AXIS_X_COLOR, size, AXIS_X);
+        drawAxisVector3D(axes[1], AXIS_Y_COLOR, size, AXIS_Y);
+        drawAxisVector3D(axes[2], AXIS_Z_COLOR, size, AXIS_Z);
+        drawCubeHandleVector(axes[0], size, AXIS_X_COLOR);
+        drawCubeHandleVector(axes[1], size, AXIS_Y_COLOR);
+        drawCubeHandleVector(axes[2], size, AXIS_Z_COLOR);
+    }
+
+    private void drawAxisVector3D(double[] axis, int color, float size, int axisId)
+    {
+        float length = 1.8F * size;
+        int finalColor = this.activePart == axisId
+                ? EditorThemeManager.get().getAccentBright() : color;
+        float ex = (float) (axis[0] * length);
+        float ey = (float) (axis[1] * length);
+        float ez = (float) (axis[2] * length);
+        setColor(finalColor);
+        GL11.glBegin(GL11.GL_LINES);
+        GL11.glVertex3f(0, 0, 0);
+        GL11.glVertex3f(ex, ey, ez);
+        GL11.glEnd();
+        drawArrowHeadVector(axis, ex, ey, ez, 0.18F * size, finalColor);
+    }
+
+    private void drawArrowHeadVector(double[] axis, float x, float y, float z, float head, int color)
+    {
+        double[] reference = Math.abs(axis[1]) < 0.9D
+                ? new double[] {0,1,0} : new double[] {1,0,0};
+        double[] side = cross(axis, reference); normalize(side);
+        double[] up = cross(side, axis); normalize(up);
+        double bx = x - axis[0] * head;
+        double by = y - axis[1] * head;
+        double bz = z - axis[2] * head;
+        setColor(color);
+        GL11.glBegin(GL11.GL_TRIANGLES);
+        GL11.glVertex3f(x,y,z);
+        GL11.glVertex3f((float)(bx+side[0]*head*.65D),(float)(by+side[1]*head*.65D),(float)(bz+side[2]*head*.65D));
+        GL11.glVertex3f((float)(bx-side[0]*head*.65D),(float)(by-side[1]*head*.65D),(float)(bz-side[2]*head*.65D));
+        GL11.glVertex3f(x,y,z);
+        GL11.glVertex3f((float)(bx+up[0]*head*.65D),(float)(by+up[1]*head*.65D),(float)(bz+up[2]*head*.65D));
+        GL11.glVertex3f((float)(bx-up[0]*head*.65D),(float)(by-up[1]*head*.65D),(float)(bz-up[2]*head*.65D));
+        GL11.glEnd();
+    }
+
+    private void drawPlaneVector3D(double[] a, double[] b, float size, int planeId)
+    {
+        float offset=.48F*size, extent=.38F*size;
+        int color=this.activePart==planeId ? EditorThemeManager.get().getAccentBright() : 0x99BFC5CA;
+        double[] p1=addScaled(a,offset); addScaledInPlace(p1,b,offset);
+        double[] p2=addScaled(a,offset+extent); addScaledInPlace(p2,b,offset);
+        double[] p3=addScaled(a,offset+extent); addScaledInPlace(p3,b,offset+extent);
+        double[] p4=addScaled(a,offset); addScaledInPlace(p4,b,offset+extent);
+        setColor(color); GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex3d(p1[0],p1[1],p1[2]); GL11.glVertex3d(p2[0],p2[1],p2[2]);
+        GL11.glVertex3d(p3[0],p3[1],p3[2]); GL11.glVertex3d(p4[0],p4[1],p4[2]);
+        GL11.glEnd();
+    }
+
+    private void drawRingVector3D(double[] a, double[] b, float radius, int color)
+    {
+        setColor(color); GL11.glBegin(GL11.GL_LINE_LOOP);
+        for(int i=0;i<64;i++)
+        {
+            double angle=Math.PI*2.0D*i/64.0D;
+            double c=Math.cos(angle)*radius, d=Math.sin(angle)*radius;
+            GL11.glVertex3d(a[0]*c+b[0]*d,a[1]*c+b[1]*d,a[2]*c+b[2]*d);
+        }
+        GL11.glEnd();
+    }
+
+    private void drawCubeHandleVector(double[] axis, float size, int color)
+    {
+        float center=1.8F*size, h=.11F;
+        double[] ref=Math.abs(axis[1])<.9D ? new double[]{0,1,0} : new double[]{1,0,0};
+        double[] side=cross(axis,ref); normalize(side);
+        double[] up=cross(side,axis); normalize(up);
+        double[] c=addScaled(axis,center);
+        double[][] p=new double[8][3]; int n=0;
+        for(int a=-1;a<=1;a+=2) for(int b=-1;b<=1;b+=2) for(int d=-1;d<=1;d+=2)
+        {
+            p[n++]=new double[]{c[0]+side[0]*h*a+up[0]*h*b+axis[0]*h*d,c[1]+side[1]*h*a+up[1]*h*b+axis[1]*h*d,c[2]+side[2]*h*a+up[2]*h*b+axis[2]*h*d};
+        }
+        int[][] e={{0,1},{0,2},{0,4},{1,3},{1,5},{2,3},{2,6},{3,7},{4,5},{4,6},{5,7},{6,7}};
+        setColor(color); GL11.glBegin(GL11.GL_LINES);
+        for(int[] q:e){GL11.glVertex3d(p[q[0]][0],p[q[0]][1],p[q[0]][2]);GL11.glVertex3d(p[q[1]][0],p[q[1]][1],p[q[1]][2]);}
+        GL11.glEnd();
+    }
+
+    private void drawButtons(
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight)
+    {
+        int x =
+                viewportX + viewportWidth - BUTTON_MARGIN - BUTTON_SIZE;
+        int y =
+                viewportY + BUTTON_MARGIN;
+
+        int accent =
+                EditorThemeManager.get().getAccent();
+
+        int bright =
+                EditorThemeManager.get().getAccentBright();
+
+        for (int i = 0; i < 3; i++)
+        {
+            int top =
+                    y + i * (BUTTON_SIZE + BUTTON_GAP);
+
+            Mode buttonMode =
+                    i == 0
+                            ? Mode.POSITION
+                            : i == 1
+                                    ? Mode.ROTATION
+                                    : Mode.SCALE;
+
+            boolean selected =
+                    this.mode == buttonMode;
+
+            Gui.drawRect(
+                    x,
+                    top,
+                    x + BUTTON_SIZE,
+                    top + BUTTON_SIZE,
+                    selected
+                            ? accent
+                            : 0xAA111111
+            );
+
+            Gui.drawRect(
+                    x,
+                    top,
+                    x + BUTTON_SIZE,
+                    top + 1,
+                    selected
+                            ? bright
+                            : 0xAA303030
+            );
+
+            Gui.drawRect(
+                    x,
+                    top + BUTTON_SIZE - 1,
+                    x + BUTTON_SIZE,
+                    top + BUTTON_SIZE,
+                    0xAA0D0F10
+            );
+
+            int icon =
+                    selected
+                            ? 0xFFFFFFFF
+                            : 0xFFB8BEC3;
+
+            drawIcon(i, x, top, icon);
+        }
+    }
+
+    private void drawIcon(
+            int index,
+            int x,
+            int y,
+            int color)
+    {
+        float cx = x + BUTTON_SIZE / 2.0F;
+        float cy = y + BUTTON_SIZE / 2.0F;
+
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glLineWidth(2.0F);
+
+        if (index == 0)
+        {
+            drawLine(cx - 7, cy, cx + 7, cy, color);
+            drawLine(cx, cy - 7, cx, cy + 7, color);
+            drawTriangle(cx + 7, cy, cx + 3, cy - 3, cx + 3, cy + 3, color);
+            drawTriangle(cx - 7, cy, cx - 3, cy - 3, cx - 3, cy + 3, color);
+            drawTriangle(cx, cy - 7, cx - 3, cy - 3, cx + 3, cy - 3, color);
+            drawTriangle(cx, cy + 7, cx - 3, cy + 3, cx + 3, cy + 3, color);
+        }
+        else if (index == 1)
+        {
+            drawCircle(cx, cy, 7, color, 24);
+        }
+        else
+        {
+            drawLine(cx - 6, cy - 6, cx + 6, cy + 6, color);
+            drawLine(cx - 6, cy + 6, cx + 6, cy - 6, color);
+            drawRectOutline(cx + 3, cy - 8, 5, 5, color);
+            drawRectOutline(cx - 8, cy + 3, 5, 5, color);
+        }
+
+        GL11.glPopAttrib();
+    }
+
+    private void drawPositionGizmo(
+            ScreenPoint c,
+            float scale)
+    {
+        float len = 58.0F * scale;
+
+        drawAxis(c, c.x + len, c.y, AXIS_X_COLOR, AXIS_X, false);
+        drawAxis(c, c.x, c.y - len, AXIS_Y_COLOR, AXIS_Y, false);
+        drawAxis(c, c.x - len * 0.70F, c.y + len * 0.70F, AXIS_Z_COLOR, AXIS_Z, false);
+
+        drawPlaneSquare(
+                c.x + 18,
+                c.y - 18,
+                14,
+                PLANE_COLOR,
+                0.45F
+        );
+
+        drawPlaneSquare(
+                c.x - 18,
+                c.y + 18,
+                14,
+                PLANE_COLOR,
+                0.45F
+        );
+
+        drawPlaneSquare(
+                c.x + 17,
+                c.y + 17,
+                14,
+                PLANE_COLOR,
+                0.45F
+        );
+    }
+
+    private void drawRotationGizmo(
+            ScreenPoint c,
+            float scale)
+    {
+        float radius = 48.0F * scale;
+
+        drawCircle(
+                c.x,
+                c.y,
+                radius,
+                AXIS_X_COLOR,
+                48
+        );
+
+        drawCircle(
+                c.x,
+                c.y,
+                radius - 8.0F,
+                AXIS_Y_COLOR,
+                48
+        );
+
+        drawCircle(
+                c.x,
+                c.y,
+                radius - 16.0F,
+                AXIS_Z_COLOR,
+                48
+        );
+
+        if (this.activePart >= 0)
+        {
+            drawCircle(
+                    c.x,
+                    c.y,
+                    radius + 3.0F,
+                    EditorThemeManager.get().getAccentBright(),
+                    48
+            );
+        }
+    }
+
+    private void drawScaleGizmo(
+            ScreenPoint c,
+            float scale)
+    {
+        float len = 58.0F * scale;
+
+        drawScaleAxis(
+                c,
+                c.x + len,
+                c.y,
+                AXIS_X_COLOR
+        );
+
+        drawScaleAxis(
+                c,
+                c.x,
+                c.y - len,
+                AXIS_Y_COLOR
+        );
+
+        drawScaleAxis(
+                c,
+                c.x - len * 0.70F,
+                c.y + len * 0.70F,
+                AXIS_Z_COLOR
+        );
+    }
+
+    private void drawAxis(
+            ScreenPoint c,
+            float x,
+            float y,
+            int color,
+            int axis,
+            boolean selected)
+    {
+        int finalColor =
+                this.activePart == axis
+                        ? EditorThemeManager.get().getAccentBright()
+                        : color;
+
+        drawLine(
+                c.x,
+                c.y,
+                x,
+                y,
+                finalColor
+        );
+
+        float dx = x - c.x;
+        float dy = y - c.y;
+        float length =
+                (float) Math.sqrt(dx * dx + dy * dy);
+
+        if (length < 0.001F)
+        {
+            return;
+        }
+
+        dx /= length;
+        dy /= length;
+
+        float px = -dy;
+        float py = dx;
+
+        float size = 8.0F;
+
+        drawTriangle(
+                x,
+                y,
+                x - dx * size + px * 3.5F,
+                y - dy * size + py * 3.5F,
+                x - dx * size - px * 3.5F,
+                y - dy * size - py * 3.5F,
+                finalColor
+        );
+    }
+
+    private void drawScaleAxis(
+            ScreenPoint c,
+            float x,
+            float y,
+            int color)
+    {
+        int finalColor =
+                this.activePart == AXIS_X && x != c.x
+                        || this.activePart == AXIS_Y && y != c.y
+                        ? EditorThemeManager.get().getAccentBright()
+                        : color;
+
+        drawLine(
+                c.x,
+                c.y,
+                x,
+                y,
+                finalColor
+        );
+
+        drawRectOutline(
+                x - 5,
+                y - 5,
+                10,
+                10,
+                finalColor
+        );
+    }
+
+    private void drawPlaneSquare(
+            float x,
+            float y,
+            float size,
+            int color,
+            float alpha)
+    {
+        int a =
+                Math.max(
+                        0,
+                        Math.min(
+                                255,
+                                (int) (alpha * 255.0F)
+                        )
+                );
+
+        int finalColor =
+                (a << 24)
+                        | (color & 0x00FFFFFF);
+
+        drawRectFilled(
+                x - size / 2.0F,
+                y - size / 2.0F,
+                x + size / 2.0F,
+                y + size / 2.0F,
+                finalColor
+        );
+    }
+
+    private int hitTest(
+            int mouseX, int mouseY,
+            int viewportX, int viewportY, int viewportWidth, int viewportHeight,
+            ScreenPoint center, double[] world, float size, EditorCamera camera,
+            double[][] axes)
+    {
+        if (axes == null) return -1;
+        float length=1.8F*size;
+        if (this.mode == Mode.ROTATION)
+        {
+            int best=-1; double bestDistance=12.0D;
+            for(int axis=0;axis<3;axis++)
+            {
+                double[] a=axes[(axis+1)%3], b=axes[(axis+2)%3];
+                double min=Double.MAX_VALUE;
+                for(int i=0;i<64;i++)
+                {
+                    double angle=Math.PI*2.0D*i/64.0D;
+                    double c=Math.cos(angle)*size*.95D, d=Math.sin(angle)*size*.95D;
+                    ScreenPoint p=project(world[0]+a[0]*c+b[0]*d,world[1]+a[1]*c+b[1]*d,world[2]+a[2]*c+b[2]*d,viewportX,viewportY,viewportWidth,viewportHeight,camera);
+                    if(p!=null){double dx=mouseX-p.x,dy=mouseY-p.y;min=Math.min(min,Math.sqrt(dx*dx+dy*dy));}
+                }
+                if(min<bestDistance){bestDistance=min;best=axis;}
+            }
+            return best;
+        }
+        int best=-1; double bestDistance=11.0D;
+        for(int axis=0;axis<3;axis++)
+        {
+            ScreenPoint p=project(world[0]+axes[axis][0]*length,world[1]+axes[axis][1]*length,world[2]+axes[axis][2]*length,viewportX,viewportY,viewportWidth,viewportHeight,camera);
+            if(p==null) continue;
+            double d=distanceToSegment(mouseX,mouseY,center.x,center.y,p.x,p.y);
+            if(d<bestDistance){bestDistance=d;best=axis;}
+        }
+        float offset=.48F*size, extent=.38F*size;
+        int[] ids={PLANE_XY,PLANE_XZ,PLANE_YZ}; int[][] pairs={{0,1},{0,2},{1,2}};
+        for(int i=0;i<3;i++)
+        {
+            double[] p=addScaled(axes[pairs[i][0]],offset+extent*.5D);
+            addScaledInPlace(p,axes[pairs[i][1]],offset+extent*.5D);
+            ScreenPoint sp=project(world[0]+p[0],world[1]+p[1],world[2]+p[2],viewportX,viewportY,viewportWidth,viewportHeight,camera);
+            if(sp!=null){double dx=mouseX-sp.x,dy=mouseY-sp.y;if(dx*dx+dy*dy<=144.0D)return ids[i];}
+        }
+        return best;
+    }
+
+    private double getAxisDragAmount(int axisId,double mouseDX,double mouseDY)
+    {
+        if(axisId<0||axisId>2)return 0.0D;
+        double ux=this.dragScreenAxes[axisId][0], uy=this.dragScreenAxes[axisId][1];
+        double scale=Math.max(.0001D,this.dragPixelsPerWorld[axisId]);
+        return (mouseDX*ux+mouseDY*uy)/scale*.10D;
+    }
+
+    private double getAxisDragAngle(int axisId,double mouseDX,double mouseDY)
+    {
+        if(axisId<0||axisId>2)return 0.0D;
+        return (mouseDX*this.dragScreenAxes[axisId][0]+mouseDY*this.dragScreenAxes[axisId][1])*.5D;
+    }
+
+    private double[] getPlaneDragAmount(int axisA,int axisB,double mouseDX,double mouseDY)
+    {
+        double ax=this.dragScreenAxes[axisA][0]*this.dragPixelsPerWorld[axisA];
+        double ay=this.dragScreenAxes[axisA][1]*this.dragPixelsPerWorld[axisA];
+        double bx=this.dragScreenAxes[axisB][0]*this.dragPixelsPerWorld[axisB];
+        double by=this.dragScreenAxes[axisB][1]*this.dragPixelsPerWorld[axisB];
+        double det=ax*by-ay*bx;
+        if(Math.abs(det)<.0001D)return new double[]{0,0};
+        return new double[]{(mouseDX*by-mouseDY*bx)/det*.10D,(ax*mouseDY-ay*mouseDX)/det*.10D};
+    }
+
+    private double[][] getBoneWorldAxes(AnimationBone bone,AnimationKeyframe selectedKeyframe,BlockbusterRecordFrame recordFrame)
+    {
+        if(bone==null)return null;
+        int frame=selectedKeyframe!=null?selectedKeyframe.getFrame():0;
+        AnimationTransform pivot=bone.getWorldPivotAt(frame);
+        if(pivot==null)return null;
+        return new double[][]
+        {
+            transformBoneDirection(rotateVector(1,0,0,pivot.getRotationX(),pivot.getRotationY(),pivot.getRotationZ()),recordFrame),
+            transformBoneDirection(rotateVector(0,1,0,pivot.getRotationX(),pivot.getRotationY(),pivot.getRotationZ()),recordFrame),
+            transformBoneDirection(rotateVector(0,0,1,pivot.getRotationX(),pivot.getRotationY(),pivot.getRotationZ()),recordFrame)
         };
     }
 
-    private void addScaledInPlace(
-            double[] base,
-            double[] vector,
-            double amount)
+    private double[] transformBoneDirection(float[] d,BlockbusterRecordFrame recordFrame)
     {
-        base[0] += vector[0] * amount;
-        base[1] += vector[1] * amount;
-        base[2] += vector[2] * amount;
+        double x=-d[0], y=-d[1], z=d[2];
+        double yaw=Math.toRadians(180.0D-(recordFrame!=null?recordFrame.getYaw():0.0D));
+        double c=Math.cos(yaw), s=Math.sin(yaw);
+        double wx=c*x+s*z, wz=-s*x+c*z;
+        double len=Math.sqrt(wx*wx+y*y+wz*wz);
+        if(len<.000001D)return new double[]{0,0,0};
+        return new double[]{wx/len,y/len,wz/len};
+    }
+
+    private double[] cross(double[] a,double[] b)
+    {
+        return new double[]{a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]};
+    }
+
+    private void normalize(double[] v)
+    {
+        double len=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+        if(len<.000001D)return;
+        v[0]/=len;v[1]/=len;v[2]/=len;
+    }
+
+    private double[] addScaled(double[] v,double amount)
+    {
+        return new double[]{v[0]*amount,v[1]*amount,v[2]*amount};
+    }
+
+    private void addScaledInPlace(double[] base,double[] v,double amount)
+    {
+        base[0]+=v[0]*amount;base[1]+=v[1]*amount;base[2]+=v[2]*amount;
     }
 
     private double distanceToSegment(
