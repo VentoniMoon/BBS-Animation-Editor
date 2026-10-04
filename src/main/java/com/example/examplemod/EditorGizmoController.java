@@ -401,9 +401,7 @@ public class EditorGizmoController
                 viewportHeight
         );
 
-        if (bone == null
-                || keyframe == null
-                || camera == null)
+        if (camera == null)
         {
             GL11.glPopMatrix();
 
