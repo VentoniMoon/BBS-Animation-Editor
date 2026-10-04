@@ -1,5 +1,7 @@
 package com.example.examplemod;
 
+import mchorse.blockbuster.common.entity.EntityActor;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
