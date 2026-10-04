@@ -36,6 +36,13 @@ public class CharacterAnimationParametersPanel
 
     private String fieldSignature = "";
     private boolean suppressFieldSync;
+    private CharacterTimelineController selectedTimeline;
+
+    public void setBodyPartTimeline(CharacterTimelineController timeline)
+    {
+        this.selectedTimeline = timeline;
+        this.fieldSignature = "";
+    }
 
     public void setBounds(int x, int y, int width)
     {
@@ -454,11 +461,17 @@ public class CharacterAnimationParametersPanel
 
     private ActionConfig getSelectedConfig()
     {
-        return CharacterAnimationSetupController.getEffectiveConfig(
-                this.selectedActor,
-                this.currentFrame,
-                this.selectedAction
-        );
+        return this.selectedTimeline != null
+                ? CharacterAnimationSetupController.getEffectiveConfig(
+                        this.selectedTimeline,
+                        this.currentFrame,
+                        this.selectedAction
+                )
+                : CharacterAnimationSetupController.getEffectiveConfig(
+                        this.selectedActor,
+                        this.currentFrame,
+                        this.selectedAction
+                );
     }
 
     private void drawTextFieldFrame(GuiTextField field)
