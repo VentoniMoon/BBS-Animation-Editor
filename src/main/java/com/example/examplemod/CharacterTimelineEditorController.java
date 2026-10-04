@@ -1184,76 +1184,57 @@ public class CharacterTimelineEditorController
                 distance = d;
             }
         }
+        for (Integer value : model.getCharacterStateKeyFrames())
+        {
+            if (value == null) continue;
+            int d = Math.abs(value.intValue() - frame);
+            if (d <= 1 && d < distance)
+            {
+                nearest = value.intValue();
+                distance = d;
+            }
+        }
         return nearest;
     }
 
     private boolean createBodyPartKey(BodyPartModelData model, int frame)
     {
         if (model == null || !model.hasModel()) return false;
-        if (model.hasModelKeyAt(frame)) return true;
-        model.setModelKey(frame, model.getModelNameAt(frame));
+        model.getOrCreateCharacterStateKey(frame);
         return true;
     }
 
-    private void removeBodyPartKey(
-            BodyPartModelData model,
-            int frame)
+    private void removeBodyPartKey(BodyPartModelData model, int frame)
     {
-        if (model == null || model.getBones() == null)
-        {
-            return;
-        }
-
-        for (AnimationBone bone : model.getBones())
-        {
-            if (bone != null)
-            {
-                bone.removeKeyframe(frame);
-            }
-        }
+        if (model == null) return;
+        model.removeModelKey(frame);
+        model.removeCharacterStateKey(frame);
     }
 
-    private boolean moveBodyPartKey(
-            BodyPartModelData model,
-            int oldFrame,
-            int newFrame)
+    private boolean moveBodyPartKey(BodyPartModelData model, int oldFrame, int newFrame)
     {
-        if (model == null ||
-                oldFrame == newFrame ||
-                model.getBones() == null)
+        if (model == null || oldFrame == newFrame) return true;
+        if (findBodyPartKeyNearFrame(model, newFrame) == newFrame) return false;
+        boolean modelMoved = model.moveModelKey(oldFrame, newFrame);
+        CharacterKey state = model.getCharacterStateKeyAt(oldFrame);
+        if (state != null && state.getFrame() == oldFrame)
         {
-            return true;
+            state.setFrame(newFrame);
         }
-
-        if (findBodyPartKeyNearFrame(model, newFrame) == newFrame)
-        {
-            return false;
-        }
-
-        for (AnimationBone bone : model.getBones())
-        {
-            if (bone == null)
-            {
-                continue;
-            }
-
-            AnimationKeyframe keyframe =
-                    bone.getKeyframeAt(oldFrame);
-
-            if (keyframe != null &&
-                    !bone.moveKeyframe(keyframe, newFrame))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return modelMoved || state != null;
     }
 
     private void drawBodyPartKeyframes(GuiScreen screen, int width, int centerY, int timelineStartX, BodyPartModelData model)
     {
         if (model == null) return;
-        for (Integer value : model.getModelKeyFrames())
+        java.util.List<Integer> frames = new java.util.ArrayList<Integer>();
+        frames.addAll(model.getModelKeyFrames());
+        for (Integer value : model.getCharacterStateKeyFrames())
+        {
+            if (value != null && !frames.contains(value)) frames.add(value);
+        }
+        java.util.Collections.sort(frames);
+        for (Integer value : frames)
         {
             if (value == null) continue;
             int frame = value.intValue();
@@ -1261,7 +1242,8 @@ public class CharacterTimelineEditorController
             if (frameX < timelineStartX - 10 || frameX > width + 10) continue;
             drawKeyframe(screen, frameX, centerY,
                     this.selectedBodyPartModel == model && this.dragBodyPartFrame == frame);
-            screen.drawString(Minecraft.getMinecraft().fontRenderer, "M",
+            String marker = model.hasModelKeyAt(frame) ? "M" : "C";
+            screen.drawString(Minecraft.getMinecraft().fontRenderer, marker,
                     frameX - 2, centerY - 4, getTimelineKeyframeInnerColor());
         }
     }
