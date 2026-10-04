@@ -241,6 +241,22 @@ public class EditorActorPreviewController
         }
 
         /*
+         * Chameleon models have their own real bone hierarchy.  Do this
+         * before the Blockbuster fallback: otherwise every Chameleon
+         * actor was being converted to the default Blockbuster skeleton
+         * (or an empty list), which is why Pose and Body Parts saw no
+         * Chameleon bones at all.
+         */
+        if (morph != null &&
+                morph.getClass().getName().endsWith(".ChameleonMorph"))
+        {
+            return new ActorAnimationData(
+                    actorId,
+                    morph
+            );
+        }
+
+        /*
          * Blockbuster actors store their custom model as a Metamorph
          * morph. Resolve that model first so the skeleton belongs to
          * the selected actor rather than the editor's default model.
