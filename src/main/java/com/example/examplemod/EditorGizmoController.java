@@ -315,7 +315,10 @@ public class EditorGizmoController
             return false;
         }
 
-        AnimationTransform transform = this.activeKeyframe.getTransform();
+        AnimationTransform transform =
+                this.globalTransformTarget != null
+                        ? this.globalTransformTarget
+                        : this.activeKeyframe.getTransform();
         double mouseDX = mouseX - this.dragStartX;
         double mouseDY = mouseY - this.dragStartY;
 
