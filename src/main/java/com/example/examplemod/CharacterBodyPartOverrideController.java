@@ -775,17 +775,26 @@ public class CharacterBodyPartOverrideController
             int frame,
             String bone)
     {
-        if (actorData == null ||
-                bone == null ||
-                bone.isEmpty())
+        if (actorData == null)
         {
             return -1;
         }
 
-        CharacterTimelineController timeline =
-                actorData.getCharacterTimeline();
+        return getEffectiveKeyState(
+                actorData.getCharacterTimeline(),
+                frame,
+                bone
+        );
+    }
 
-        if (timeline == null)
+    public static int getEffectiveKeyState(
+            CharacterTimelineController timeline,
+            int frame,
+            String bone)
+    {
+        if (timeline == null ||
+                bone == null ||
+                bone.isEmpty())
         {
             return -1;
         }
@@ -890,9 +899,23 @@ public class CharacterBodyPartOverrideController
             int frame,
             String bone)
     {
+        return isEnabled(
+                morph,
+                actorData == null ? null : actorData.getCharacterTimeline(),
+                frame,
+                bone
+        );
+    }
+
+    public static boolean isEnabled(
+            AbstractMorph morph,
+            CharacterTimelineController timeline,
+            int frame,
+            String bone)
+    {
         int state =
                 getEffectiveKeyState(
-                        actorData,
+                        timeline,
                         frame,
                         bone
                 );
@@ -927,6 +950,22 @@ public class CharacterBodyPartOverrideController
             int frame,
             String bone)
     {
+        return toggleBone(
+                key,
+                morph,
+                actorData == null ? null : actorData.getCharacterTimeline(),
+                frame,
+                bone
+        );
+    }
+
+    public static boolean toggleBone(
+            CharacterKey key,
+            AbstractMorph morph,
+            CharacterTimelineController timeline,
+            int frame,
+            String bone)
+    {
         if (!isOverrideKey(key) ||
                 bone == null ||
                 bone.isEmpty())
@@ -949,7 +988,7 @@ public class CharacterBodyPartOverrideController
          */
         int effectiveState =
                 getEffectiveKeyState(
-                        actorData,
+                        timeline,
                         frame,
                         bone
                 );
