@@ -17,9 +17,29 @@ import net.minecraft.nbt.NBTTagList;
  */
 public class CharacterTrack
 {
+    private String trackId;
+    private String label;
+
     private final List<CharacterKey> keys =
             new ArrayList<CharacterKey>();
 
+
+    public CharacterTrack()
+    {
+        this("", "");
+    }
+
+    public CharacterTrack(String trackId, String label)
+    {
+        this.trackId = trackId == null ? "" : trackId;
+        this.label = label == null ? "" : label;
+    }
+
+    public String getTrackId() { return this.trackId; }
+    public void setTrackId(String trackId) { this.trackId = trackId == null ? "" : trackId; }
+    public String getLabel() { return this.label; }
+    public void setLabel(String label) { this.label = label == null ? "" : label; }
+    public boolean isMainTrack() { return "main".equals(this.trackId); }
 
     /*
      * =========================================================
@@ -170,6 +190,9 @@ public class CharacterTrack
             );
         }
 
+        tag.setString("TrackId", this.trackId);
+        tag.setString("Label", this.label);
+
         tag.setTag(
                 "Keys",
                 list
@@ -188,6 +211,16 @@ public class CharacterTrack
         if (tag == null)
         {
             return track;
+        }
+
+        if (tag.hasKey("TrackId", 8))
+        {
+            track.trackId = tag.getString("TrackId");
+        }
+
+        if (tag.hasKey("Label", 8))
+        {
+            track.label = tag.getString("Label");
         }
 
         if (tag.hasKey("Keys", 9))
