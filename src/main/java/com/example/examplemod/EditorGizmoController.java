@@ -1300,37 +1300,112 @@ public class EditorGizmoController
             return null;
         }
 
-        float rx = pivot.getRotationX();
-        float ry = pivot.getRotationY();
-        float rz = pivot.getRotationZ();
+        float rx;
+        float ry;
+        float rz;
 
         /*
-         * Body Part bones are rotated by the attachment bone and the
-         * Body Part global transform before entering actor space.
+         * Chameleon keyframes contain LOCAL transforms.
+         * The gizmo is displayed in world space, so its visual basis is
+         * the selected bone's local basis converted through its parent.
          */
-        if (this.bodyPartAttachmentBone != null &&
-                (this.bodyPartTarget != null ||
-                 this.globalTransformTarget != null))
+        if (this.chameleonCoordinateSpace)
         {
-            AnimationTransform attachment =
-                    this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+            AnimationTransform local = bone.getTransformAt(frame);
 
-            if (attachment != null)
+            if (local == null)
             {
-                rx += attachment.getRotationX();
-                ry += attachment.getRotationY();
-                rz += attachment.getRotationZ();
+                local = new AnimationTransform();
+            }
 
-                AnimationTransform global =
-                        this.globalTransformTarget != null
-                                ? this.globalTransformTarget
-                                : this.bodyPartTarget.getGlobalTransform();
+            rx = local.getRotationX();
+            ry = local.getRotationY();
+            rz = local.getRotationZ();
 
-                if (global != null)
+            AnimationBone parent = bone.getParent();
+
+            if (parent != null)
+            {
+                AnimationTransform parentWorld =
+                        parent.getWorldTransformAt(frame);
+
+                if (parentWorld != null)
                 {
-                    rx += global.getRotationX();
-                    ry += global.getRotationY();
-                    rz += global.getRotationZ();
+                    float[] localX =
+                            rotateVector(1.0F, 0.0F, 0.0F, rx, ry, rz);
+                    float[] localY =
+                            rotateVector(0.0F, 1.0F, 0.0F, rx, ry, rz);
+                    float[] localZ =
+                            rotateVector(0.0F, 0.0F, 1.0F, rx, ry, rz);
+
+                    localX = rotateVector(
+                            localX[0], localX[1], localX[2],
+                            parentWorld.getRotationX(),
+                            parentWorld.getRotationY(),
+                            parentWorld.getRotationZ());
+
+                    localY = rotateVector(
+                            localY[0], localY[1], localY[2],
+                            parentWorld.getRotationX(),
+                            parentWorld.getRotationY(),
+                            parentWorld.getRotationZ());
+
+                    localZ = rotateVector(
+                            localZ[0], localZ[1], localZ[2],
+                            parentWorld.getRotationX(),
+                            parentWorld.getRotationY(),
+                            parentWorld.getRotationZ());
+
+                    return new double[][]
+                    {
+                        transformBoneDirection(localX, recordFrame),
+                        transformBoneDirection(localY, recordFrame),
+                        transformBoneDirection(localZ, recordFrame)
+                    };
+                }
+            }
+        }
+        else
+        {
+            AnimationTransform world = bone.getWorldTransformAt(frame);
+
+            if (world == null)
+            {
+                world = pivot;
+            }
+
+            rx = world.getRotationX();
+            ry = world.getRotationY();
+            rz = world.getRotationZ();
+
+            /*
+             * Body Part bones are rotated by the attachment bone and the
+             * Body Part global transform before entering actor space.
+             */
+            if (this.bodyPartAttachmentBone != null &&
+                    (this.bodyPartTarget != null ||
+                     this.globalTransformTarget != null))
+            {
+                AnimationTransform attachment =
+                        this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+
+                if (attachment != null)
+                {
+                    rx += attachment.getRotationX();
+                    ry += attachment.getRotationY();
+                    rz += attachment.getRotationZ();
+
+                    AnimationTransform global =
+                            this.globalTransformTarget != null
+                                    ? this.globalTransformTarget
+                                    : this.bodyPartTarget.getGlobalTransform();
+
+                    if (global != null)
+                    {
+                        rx += global.getRotationX();
+                        ry += global.getRotationY();
+                        rz += global.getRotationZ();
+                    }
                 }
             }
         }
