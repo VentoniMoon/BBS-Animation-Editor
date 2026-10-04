@@ -119,6 +119,36 @@ public class CharacterAnimationSetupController
      * This is intentionally analogous to CharacterBodyPartOverrideController.
      */
     public static ActionConfig getEffectiveConfig(
+            CharacterTimelineController timeline,
+            int frame,
+            String action)
+    {
+        String actionKey = getActionKey(action);
+        ActionConfig result = new ActionConfig(actionKey);
+
+        if (timeline == null || actionKey.isEmpty())
+        {
+            return result;
+        }
+
+        String name = findLatestString(timeline, frame, actionKey, NAME_TAG);
+        Boolean clamp = findLatestBoolean(timeline, frame, actionKey, CLAMP_TAG);
+        Boolean reset = findLatestBoolean(timeline, frame, actionKey, RESET_TAG);
+        Float speed = findLatestFloat(timeline, frame, actionKey, SPEED_TAG);
+        Float fade = findLatestFloat(timeline, frame, actionKey, FADE_TAG);
+        Integer tick = findLatestInteger(timeline, frame, actionKey, TICK_TAG);
+
+        if (name != null) result.name = name;
+        if (clamp != null) result.clamp = clamp.booleanValue();
+        if (reset != null) result.reset = reset.booleanValue();
+        if (speed != null) result.speed = speed.floatValue();
+        if (fade != null) result.fade = fade.floatValue();
+        if (tick != null) result.tick = tick.intValue();
+
+        return result;
+    }
+
+    public static ActionConfig getEffectiveConfig(
             BlockbusterSceneActorData actorData,
             int frame,
             String action)
@@ -795,6 +825,38 @@ public class CharacterAnimationSetupController
         NBTTagCompound data = getActionData(key, actionKey);
         return data != null && data.hasKey(field, 99)
                 ? Integer.valueOf(data.getInteger(field)) : null;
+    }
+
+    private static String findLatestString(CharacterTimelineController timeline, int frame, String actionKey, String field)
+    {
+        CharacterKey key = findLatestKeyWithField(timeline, frame, actionKey, field);
+        if (key == null) return null;
+        NBTTagCompound data = getActionData(key, actionKey);
+        return data != null && data.hasKey(field, 8) ? data.getString(field) : null;
+    }
+
+    private static Boolean findLatestBoolean(CharacterTimelineController timeline, int frame, String actionKey, String field)
+    {
+        CharacterKey key = findLatestKeyWithField(timeline, frame, actionKey, field);
+        if (key == null) return null;
+        NBTTagCompound data = getActionData(key, actionKey);
+        return data != null && data.hasKey(field, 99) ? Boolean.valueOf(data.getBoolean(field)) : null;
+    }
+
+    private static Float findLatestFloat(CharacterTimelineController timeline, int frame, String actionKey, String field)
+    {
+        CharacterKey key = findLatestKeyWithField(timeline, frame, actionKey, field);
+        if (key == null) return null;
+        NBTTagCompound data = getActionData(key, actionKey);
+        return data != null && data.hasKey(field, 99) ? Float.valueOf(data.getFloat(field)) : null;
+    }
+
+    private static Integer findLatestInteger(CharacterTimelineController timeline, int frame, String actionKey, String field)
+    {
+        CharacterKey key = findLatestKeyWithField(timeline, frame, actionKey, field);
+        if (key == null) return null;
+        NBTTagCompound data = getActionData(key, actionKey);
+        return data != null && data.hasKey(field, 99) ? Integer.valueOf(data.getInteger(field)) : null;
     }
 
     private static CharacterKey findLatestKeyWithField(
