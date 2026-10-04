@@ -390,6 +390,12 @@ public class BodyPartsPreviewRenderer
          */
         child.currentPose = "";
 
+        CharacterBodyPartOverrideController.apply(
+                child,
+                data.getCharacterTimeline(),
+                frame
+        );
+
         return child;
     }
 
