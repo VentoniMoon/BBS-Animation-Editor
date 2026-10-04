@@ -533,91 +533,37 @@ public class EditorGizmoController
             return;
         }
 
-        double[] world = null;
+        /*
+         * The Preview actor is rendered into the complete Preview FBO.
+         * Keep the gizmo on that exact projection surface. The previous
+         * implementation changed the OpenGL viewport to the GUI preview
+         * rectangle, which made the 3D gizmo disappear after the native
+         * anchor pass was introduced.
+         */
+        double[] world =
+                getNativeBoneWorldPosition(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
 
-        if (this.previewActor != null &&
-                this.previewActor.getMorph() instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+        if (world == null)
         {
-            world = getExactEmoticonsBoneWorldPosition(bone);
-        }
-        else if (this.previewActor != null &&
-                this.previewActor.getMorph() instanceof mchorse.blockbuster_pack.morphs.CustomMorph)
-        {
-            world = getExactBlockbusterBoneWorldPosition(bone);
+            world =
+                    getBoneWorldPosition(
+                            bone,
+                            keyframe,
+                            recordFrame
+                    );
         }
 
         if (world == null)
         {
-            world = getBoneWorldPosition(bone, keyframe, recordFrame);
-        }
-
-        if (world == null) return;
-
-        /*
-         * The Preview FBO is full-screen sized, but the Preview renderer
-         * does NOT render into the whole FBO. PreviewShaderBridge binds
-         * the FBO with a viewport corresponding to the GUI Preview
-         * rectangle multiplied by the Minecraft scale factor.
-         *
-         * PreviewWorldRenderer then uses that same viewport while the
-         * actor is rendered. We must use exactly the same viewport here.
-         * Using displayWidth/displayHeight was the reason the gizmo
-         * appeared to drift and react to the camera differently from
-         * the actor.
-         */
-        ScaledResolution scaledResolution =
-                new ScaledResolution(mc);
-
-        int scaleFactor =
-                Math.max(1, scaledResolution.getScaleFactor());
-
-        int framebufferWidth =
-                Math.max(1, mc.displayWidth);
-
-        int framebufferHeight =
-                Math.max(1, mc.displayHeight);
-
-        int glX =
-                Math.max(0, viewportX * scaleFactor);
-
-        int glY =
-                Math.max(
-                        0,
-                        framebufferHeight
-                                - (
-                                        viewportY
-                                                + viewportHeight
-                                ) * scaleFactor
-                );
-
-        int glWidth =
-                Math.max(
-                        1,
-                        viewportWidth * scaleFactor
-                );
-
-        int glHeight =
-                Math.max(
-                        1,
-                        viewportHeight * scaleFactor
-                );
-
-        if (glX + glWidth > framebufferWidth)
-        {
-            glWidth =
-                    framebufferWidth - glX;
-        }
-
-        if (glY + glHeight > framebufferHeight)
-        {
-            glHeight =
-                    framebufferHeight - glY;
-        }
-
-        if (glWidth <= 0 || glHeight <= 0)
-        {
             return;
         }
+
+        int glWidth = Math.max(1, mc.displayWidth);
+        int glHeight = Math.max(1, mc.displayHeight);
 
         int oldMatrixMode =
                 GL11.glGetInteger(GL11.GL_MATRIX_MODE);
@@ -638,8 +584,8 @@ public class EditorGizmoController
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
 
         GL11.glViewport(
-                glX,
-                glY,
+                0,
+                0,
                 glWidth,
                 glHeight
         );
@@ -648,16 +594,9 @@ public class EditorGizmoController
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
 
-        /*
-         * The actor renderer uses the Preview GUI aspect ratio here,
-         * not the physical framebuffer aspect ratio. The viewport
-         * already contains the scale factor, so the ratio is identical
-         * to viewportWidth / viewportHeight.
-         */
         GLU.gluPerspective(
                 60.0F,
-                (float) viewportWidth
-                        / (float) viewportHeight,
+                (float) glWidth / (float) glHeight,
                 0.05F,
                 500.0F
         );
@@ -686,11 +625,6 @@ public class EditorGizmoController
                 -camera.getCameraZ()
         );
 
-        float[] exactChameleon =
-                this.chameleonCoordinateSpace
-                        ? beginExactChameleonBoneTransform(bone)
-                        : null;
-
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glDisable(GL11.GL_LIGHTING);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
@@ -701,50 +635,31 @@ public class EditorGizmoController
         );
         GL11.glLineWidth(5.0F);
 
-        /*
-         * getBoneWorldPosition() already returns the final rendered
-         * world-space pivot. Keep the draw pass and hit testing on
-         * exactly the same coordinates; previously the draw pass applied
-         * the actor transform here while hitTest() projected the
-         * pre-transform position, which made the controls effectively
-         * unclickable and visually offset.
-         */
-        double gizmoX = world[0];
-        double gizmoY = world[1];
-        double gizmoZ = world[2];
-
         GL11.glPushMatrix();
 
-        float size;
-        double[][] axes;
+        GL11.glTranslated(
+                world[0],
+                world[1],
+                world[2]
+        );
 
-        if (exactChameleon != null)
+        float size =
+                getWorldGizmoSize(
+                        camera,
+                        world[0],
+                        world[1],
+                        world[2]
+                );
+
+        double[][] axes =
+                getBoneWorldAxes(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
+
+        if (axes == null)
         {
-            GL11.glScalef(
-                    1.0F / exactChameleon[3],
-                    1.0F / exactChameleon[4],
-                    1.0F / exactChameleon[5]
-            );
-
-            double distance =
-                    Math.max(
-                            0.05D,
-                            Math.sqrt(
-                            (exactChameleon[0] - camera.getCameraX()) * (exactChameleon[0] - camera.getCameraX()) +
-                            (exactChameleon[1] - camera.getCameraY()) * (exactChameleon[1] - camera.getCameraY()) +
-                            (exactChameleon[2] - camera.getCameraZ()) * (exactChameleon[2] - camera.getCameraZ())
-                    )
-                    );
-
-            size =
-                    (float) Math.max(
-                            0.35D,
-                            Math.min(
-                                    2.5D,
-                                    distance * 0.10D
-                            )
-                    );
-
             axes =
                     new double[][]
                     {
@@ -752,29 +667,6 @@ public class EditorGizmoController
                         {0.0D, 1.0D, 0.0D},
                         {0.0D, 0.0D, 1.0D}
                     };
-        }
-        else
-        {
-            GL11.glTranslated(
-                    gizmoX,
-                    gizmoY,
-                    gizmoZ
-            );
-
-            size =
-                    getWorldGizmoSize(
-                            camera,
-                            gizmoX,
-                            gizmoY,
-                            gizmoZ
-                    );
-
-            axes =
-                    getBoneWorldAxes(
-                            bone,
-                            keyframe,
-                            recordFrame
-                    );
         }
 
         if (this.mode == Mode.POSITION)
@@ -791,11 +683,6 @@ public class EditorGizmoController
         }
 
         GL11.glPopMatrix();
-
-        if (exactChameleon != null)
-        {
-            GL11.glPopMatrix();
-        }
 
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPopMatrix();
