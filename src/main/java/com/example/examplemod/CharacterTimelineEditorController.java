@@ -324,6 +324,7 @@ public class CharacterTimelineEditorController
         {
             this.selectedTrack = -1;
             this.selectedKey = null;
+            this.selectedBodyPartModel = null;
 
             this.draggingKey = false;
             this.dragTrack = -1;
@@ -1751,6 +1752,7 @@ public class CharacterTimelineEditorController
 
         if (clickedKey != null)
         {
+            this.selectedBodyPartModel = null;
             this.selectedKey =
                     clickedKey;
 
@@ -1845,6 +1847,7 @@ public class CharacterTimelineEditorController
             }
 
             this.selectedKey = null;
+            this.selectedBodyPartModel = null;
 
             this.timeline.setTick(
                     frame
