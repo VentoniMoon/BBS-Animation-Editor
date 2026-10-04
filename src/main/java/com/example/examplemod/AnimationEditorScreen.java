@@ -447,13 +447,54 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
-            return this.keyframeController
-                    .getSelectedKeyframe();
+            AnimationKeyframe selected =
+                    this.keyframeController
+                            .getSelectedKeyframe();
+
+            if (selected != null)
+            {
+                return selected;
+            }
+
+            /*
+             * A key created directly on the timeline is the gizmo
+             * target even if another timeline operation cleared the
+             * transient selectedKeyframe reference afterwards.
+             *
+             * Resolve the key from the currently selected bone and
+             * the actual editor frame.  This keeps the gizmo tied to
+             * the animation data, not to a fragile UI selection flag.
+             */
+            AnimationBone bone =
+                    this.actorPreviewController
+                            .getSelectedBone(
+                                    this.keyframeController
+                            );
+
+            if (bone != null)
+            {
+                return this.keyframeController
+                        .findKeyframe(
+                                bone,
+                                this.playbackController
+                                        .getCurrentFrame()
+                        );
+            }
+
+            return null;
         }
 
-        return this.bodyPartsController
-                .getKeyframeController()
-                .getSelectedKeyframe();
+        AnimationKeyframe selected =
+                this.bodyPartsController
+                        .getKeyframeController()
+                        .getSelectedKeyframe();
+
+        if (selected != null)
+        {
+            return selected;
+        }
+
+        return null;
     }
 
     /*
