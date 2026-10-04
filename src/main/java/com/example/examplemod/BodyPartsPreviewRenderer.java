@@ -1,209 +1,75 @@
 package com.example.examplemod;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-import org.lwjgl.opengl.GL11;
-
-import mchorse.blockbuster.api.ModelTransform;
-import mchorse.blockbuster.common.entity.EntityActor;
+import mchorse.blockbuster.api.Model;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
+import mchorse.metamorph.api.morphs.AbstractMorph;
+import mchorse.metamorph.bodypart.BodyPart;
+import mchorse.metamorph.bodypart.BodyPartManager;
+import mchorse.blockbuster.common.entity.EntityActor;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.RenderHelper;
-
+/**
+ * Bridges the editor's Body Parts data to Metamorph's real body-part system.
+ *
+ * The important rule here is that the editor does NOT render an attached
+ * model itself.  It creates the same runtime objects Blockbuster creates:
+ *
+ *   parent CustomMorph
+ *       -> BodyPartManager
+ *           -> BodyPart
+ *               -> child CustomMorph
+ *
+ * Blockbuster's own LayerBodyPart then renders those objects.  This keeps
+ * attachment transforms, model rendering, lighting and nested morph
+ * rendering on the exact 1.12.2 code path used by Metamorph/Blockbuster.
+ */
 public class BodyPartsPreviewRenderer
 {
-    private final Map<String, CustomMorph> morphs =
-            new HashMap<String, CustomMorph>();
-
-    private final Map<String, EntityActor> entities =
-            new HashMap<String, EntityActor>();
-
-    private BodyPartsEditorController preparedController;
-    private EntityActor preparedActor;
-    private int preparedFrame;
-    private boolean renderingAttachments;
-
-    private net.minecraft.client.renderer.entity.layers.LayerRenderer<EntityActor> layer;
-
-    public void clear()
-    {
-        this.morphs.clear();
-
-        for (EntityActor entity : this.entities.values())
-        {
-            if (entity != null)
-            {
-                entity.setDead();
-            }
-        }
-
-        this.entities.clear();
-        this.preparedController = null;
-        this.preparedActor = null;
-        this.renderingAttachments = false;
-    }
-
+    /**
+     * Rebuild the parent morph's real Metamorph body-part list for the
+     * current editor frame.
+     *
+     * This is called BEFORE RenderCustomActor renders the actor, so its
+     * original LayerBodyPart sees the generated BodyPart objects.
+     */
     public void prepare(
             BodyPartsEditorController controller,
             EntityActor actor,
             int frame)
     {
-        this.preparedController = controller;
-        this.preparedActor = actor;
-        this.preparedFrame = frame;
-
-        if (this.layer == null)
-        {
-            this.layer =
-                    new net.minecraft.client.renderer.entity.layers.LayerRenderer<EntityActor>()
-                    {
-                        @Override
-                        public void doRenderLayer(
-                                EntityActor entity,
-                                float limbSwing,
-                                float limbSwingAmount,
-                                float partialTicks,
-                                float ageInTicks,
-                                float netHeadYaw,
-                                float headPitch,
-                                float scale)
-                        {
-                            if (renderingAttachments ||
-                                    entity != preparedActor ||
-                                    preparedController == null)
-                            {
-                                return;
-                            }
-
-                            renderingAttachments = true;
-
-                            try
-                            {
-                                renderInsideParentModel(
-                                        entity,
-                                        preparedController,
-                                        preparedFrame,
-                                        partialTicks,
-                                        scale
-                                );
-                            }
-                            finally
-                            {
-                                renderingAttachments = false;
-                            }
-                        }
-
-                        @Override
-                        public boolean shouldCombineTextures()
-                        {
-                            return false;
-                        }
-                    };
-        }
-
-        installLayer();
-    }
-
-    private void installLayer()
-    {
-        if (this.layer == null)
+        if (actor == null)
         {
             return;
         }
 
-        mchorse.blockbuster_pack.client.render.RenderCustomActor renderer =
-                mchorse.blockbuster.ClientProxy.actorRenderer;
+        AbstractMorph abstractMorph =
+                actor.getMorph();
 
-        if (renderer == null)
+        if (!(abstractMorph instanceof CustomMorph))
         {
             return;
         }
 
-        try
-        {
-            java.lang.reflect.Method addLayer =
-                    net.minecraft.client.renderer.entity.RenderLivingBase.class
-                            .getDeclaredMethod(
-                                    "addLayer",
-                                    net.minecraft.client.renderer.entity.layers.LayerRenderer.class
-                            );
+        CustomMorph parent =
+                (CustomMorph) abstractMorph;
 
-            addLayer.setAccessible(true);
+        BodyPartManager manager =
+                parent.parts;
 
-            if (!isLayerInstalled(renderer))
-            {
-                addLayer.invoke(
-                        renderer,
-                        this.layer
-                );
-            }
-        }
-        catch (Exception exception)
-        {
-            System.out.println(
-                    "[BBS Animation Editor] Failed to install Body Parts preview layer"
-            );
-            exception.printStackTrace();
-        }
-    }
-
-    private boolean isLayerInstalled(
-            net.minecraft.client.renderer.entity.RenderLivingBase renderer)
-    {
-        try
-        {
-            java.lang.reflect.Field field =
-                    net.minecraft.client.renderer.entity.RenderLivingBase.class
-                            .getDeclaredField("layerRenderers");
-
-            field.setAccessible(true);
-
-            java.util.List<?> layers =
-                    (java.util.List<?>) field.get(renderer);
-
-            return layers != null &&
-                    layers.contains(this.layer);
-        }
-        catch (Exception exception)
-        {
-            return false;
-        }
-    }
-
-    private void renderInsideParentModel(
-            EntityActor actor,
-            BodyPartsEditorController controller,
-            int frame,
-            float partialTicks,
-            float scale)
-    {
-        mchorse.blockbuster_pack.client.render.RenderCustomActor renderer =
-                mchorse.blockbuster.ClientProxy.actorRenderer;
-
-        if (renderer == null ||
-                renderer.getMainModel() == null)
+        if (manager == null)
         {
             return;
         }
 
-        if (!(renderer.getMainModel() instanceof
-                mchorse.blockbuster.client.model.ModelCustom))
-        {
-            return;
-        }
+        /*
+         * The editor is the source of truth for the current frame.
+         * Do not leave body parts from a previous frame alive.
+         */
+        manager.parts.clear();
 
-        mchorse.blockbuster.client.model.ModelCustom model =
-                (mchorse.blockbuster.client.model.ModelCustom)
-                        renderer.getMainModel();
-
-        CustomMorph parentMorph =
-                renderer.current;
-
-        if (parentMorph == null)
+        if (controller == null)
         {
             return;
         }
@@ -211,8 +77,7 @@ public class BodyPartsPreviewRenderer
         List<BodyPartModelData> models =
                 controller.getModels();
 
-        if (models == null ||
-                models.isEmpty())
+        if (models == null || models.isEmpty())
         {
             return;
         }
@@ -227,272 +92,266 @@ public class BodyPartsPreviewRenderer
                 continue;
             }
 
-            String boneName =
-                    data.getAttachmentBoneName();
-
-            if (boneName == null ||
-                    boneName.isEmpty())
-            {
-                continue;
-            }
-
-            mchorse.blockbuster.client.model.ModelCustomRenderer limb =
-                    model.get(boneName);
-
-            if (limb == null)
-            {
-                continue;
-            }
-
-            CustomMorph morph =
-                    getMorph(
-                            data
+            BodyPart part =
+                    createBodyPart(
+                            data,
+                            frame
                     );
 
-            if (morph == null ||
-                    morph.model == null)
+            if (part != null)
             {
-                continue;
+                manager.parts.add(part);
             }
-
-            applyLocalAnimation(
-                    morph,
-                    data,
-                    frame
-            );
-
-            GL11.glPushMatrix();
-
-            try
-            {
-                /*
-                 * This intentionally follows Blockbuster/Metamorph's own
-                 * LayerBodyPart implementation.
-                 *
-                 * The parent limb establishes the bone matrix first.
-                 * Metamorph then renders the child through MorphUtils,
-                 * which is the same path used by BodyPart.render().
-                 */
-                limb.postRender(
-                        1.0F / 16.0F
-                );
-
-                applyGlobalTransform(
-                        data.getGlobalTransform()
-                );
-
-                GlStateManager.enableDepth();
-                GlStateManager.depthMask(true);
-                GlStateManager.enableAlpha();
-                GlStateManager.enableBlend();
-                GlStateManager.enableTexture2D();
-                GlStateManager.enableRescaleNormal();
-                GlStateManager.color(
-                        1.0F,
-                        1.0F,
-                        1.0F,
-                        1.0F
-                );
-
-                RenderHelper.enableStandardItemLighting();
-
-                mchorse.metamorph.api.MorphUtils.renderDirect(
-                        morph,
-                        actor,
-                        0.0D,
-                        0.0D,
-                        0.0D,
-                        0.0F,
-                        partialTicks
-                );
-            }
-            finally
-            {
-                RenderHelper.disableStandardItemLighting();
-                GlStateManager.disableRescaleNormal();
-                GL11.glPopMatrix();
-            }
-
-            renderer.current = parentMorph;
-            renderer.setupModel(
-                    actor,
-                    partialTicks
-            );
         }
     }
 
-    private CustomMorph getMorph(
-            BodyPartModelData data)
+    /**
+     * Create one genuine Metamorph BodyPart.
+     */
+    private BodyPart createBodyPart(
+            BodyPartModelData data,
+            int frame)
     {
         if (data == null ||
-                data.getModelName() == null ||
-                data.getModelName().isEmpty() ||
                 data.getModelAccess() == null)
         {
             return null;
         }
 
-        String name =
+        String modelName =
                 data.getModelName();
 
-        CustomMorph morph =
-                this.morphs.get(name);
-
-        if (morph == null)
-        {
-            morph =
-                    new CustomMorph();
-
-            /*
-             * Use the exact ModelCustom object already resolved by
-             * BlockbusterModelAccess.  In 1.12.2 CustomMorph.updateModel()
-             * can resolve through a different model registry, while the
-             * editor already has the render-side model that was selected.
-             */
-            morph.name =
-                    "blockbuster." + name;
-
-            morph.model =
-                    (mchorse.blockbuster.api.Model)
-                            data.getModelAccess().getModel();
-
-            this.morphs.put(
-                    name,
-                    morph
-            );
-        }
-        else
-        {
-            Object loadedModel =
-                    data.getModelAccess().getModel();
-
-            if (loadedModel != null &&
-                    morph.model != loadedModel)
-            {
-                morph.model =
-                        (mchorse.blockbuster.api.Model)
-                                loadedModel;
-            }
-
-            morph.customPose = null;
-        }
-
-        if (morph.model == null)
+        if (modelName == null ||
+                modelName.length() == 0)
         {
             return null;
         }
 
-        return morph;
+        Object apiModelObject =
+                data.getModelAccess().getApiModel();
+
+        if (!(apiModelObject instanceof Model))
+        {
+            /*
+             * The editor deliberately refuses to cast ModelCustom to
+             * Model.  They are different classes in Blockbuster 1.12.2.
+             *
+             * If the render-side model has no API-model reference, try
+             * resolving it again through BlockbusterModelAccess.
+             */
+            BlockbusterModelAccess access =
+                    data.getModelAccess();
+
+            if (!access.loadModelByName(modelName))
+            {
+                return null;
+            }
+
+            apiModelObject =
+                    access.getApiModel();
+        }
+
+        if (!(apiModelObject instanceof Model))
+        {
+            return null;
+        }
+
+        Model apiModel =
+                (Model) apiModelObject;
+
+        CustomMorph child =
+                createChildMorph(
+                        modelName,
+                        apiModel,
+                        data,
+                        frame
+                );
+
+        if (child == null)
+        {
+            return null;
+        }
+
+        BodyPart part =
+                new BodyPart();
+
+        part.limb =
+                data.getAttachmentBoneName();
+
+        if (part.limb == null ||
+                part.limb.length() == 0)
+        {
+            return null;
+        }
+
+        /*
+         * BodyPart transforms are expressed in Minecraft world/model
+         * units.  The editor's global translation is expressed in model
+         * pixels, hence the same /16 conversion used by Blockbuster's
+         * renderer.
+         */
+        AnimationTransform global =
+                data.getGlobalTransform();
+
+        if (global != null)
+        {
+            part.translate.set(
+                    global.getPositionX() / 16.0F,
+                    global.getPositionY() / 16.0F,
+                    global.getPositionZ() / 16.0F
+            );
+
+            part.rotate.set(
+                    global.getRotationX(),
+                    global.getRotationY(),
+                    global.getRotationZ()
+            );
+
+            part.scale.set(
+                    global.getScaleX(),
+                    global.getScaleY(),
+                    global.getScaleZ()
+            );
+        }
+
+        /*
+         * The attached morph must use the real actor entity.  Metamorph's
+         * default is false (DummyEntity), which is useful for the morph GUI
+         * but is wrong for our live actor preview.
+         */
+        part.useTarget = true;
+        part.enabled = true;
+        part.animate = false;
+
+        part.morph.setDirect(child);
+
+        return part;
     }
 
-    private void applyLocalAnimation(
-            CustomMorph morph,
+    /**
+     * Build the child CustomMorph which Metamorph's BodyPart will render.
+     */
+    private CustomMorph createChildMorph(
+            String modelName,
+            Model apiModel,
             BodyPartModelData data,
             int frame)
     {
-        if (morph == null ||
-                morph.model == null)
+        CustomMorph child =
+                new CustomMorph();
+
+        child.name =
+                "blockbuster." + modelName;
+
+        child.model =
+                apiModel;
+
+        /*
+         * CustomMorph.updateModel() is the normal Blockbuster model
+         * resolution path.  The API model is assigned first so the morph
+         * remains valid even before ModelHandler's next update.
+         */
+        child.updateModel(true);
+
+        if (child.model == null)
         {
-            return;
+            child.model = apiModel;
         }
 
         CustomMorph.ModelProperties pose =
                 new CustomMorph.ModelProperties();
 
         pose.updateLimbs(
-                morph.model,
+                apiModel,
                 true
         );
 
-        for (AnimationBone bone : data.getBones())
+        List<AnimationBone> bones =
+                data.getBones();
+
+        if (bones != null)
         {
-            if (bone == null ||
-                    bone.getName() == null)
+            for (AnimationBone bone : bones)
             {
-                continue;
+                if (bone == null ||
+                        bone.getName() == null)
+                {
+                    continue;
+                }
+
+                mchorse.blockbuster.api.ModelTransform target =
+                        pose.limbs.get(
+                                bone.getName()
+                        );
+
+                if (target == null)
+                {
+                    continue;
+                }
+
+                AnimationTransform transform =
+                        bone.getTransformAt(
+                                frame
+                        );
+
+                if (transform == null)
+                {
+                    continue;
+                }
+
+                /*
+                 * Keep the editor's local skeleton position and add the
+                 * animated transform exactly once.
+                 */
+                target.translate[0] =
+                        bone.getLocalX()
+                                + transform.getPositionX();
+
+                target.translate[1] =
+                        bone.getLocalY()
+                                + transform.getPositionY();
+
+                target.translate[2] =
+                        bone.getLocalZ()
+                                + transform.getPositionZ();
+
+                target.rotate[0] =
+                        transform.getRotationX();
+
+                target.rotate[1] =
+                        transform.getRotationY();
+
+                target.rotate[2] =
+                        transform.getRotationZ();
+
+                target.scale[0] =
+                        transform.getScaleX();
+
+                target.scale[1] =
+                        transform.getScaleY();
+
+                target.scale[2] =
+                        transform.getScaleZ();
             }
-
-            ModelTransform target =
-                    pose.limbs.get(
-                            bone.getName()
-                    );
-
-            if (target == null)
-            {
-                continue;
-            }
-
-            AnimationTransform transform =
-                    bone.getTransformAt(
-                            frame
-                    );
-
-            target.translate[0] =
-                    bone.getLocalX()
-                            + transform.getPositionX();
-
-            target.translate[1] =
-                    bone.getLocalY()
-                            + transform.getPositionY();
-
-            target.translate[2] =
-                    bone.getLocalZ()
-                            + transform.getPositionZ();
-
-            target.rotate[0] =
-                    transform.getRotationX();
-
-            target.rotate[1] =
-                    transform.getRotationY();
-
-            target.rotate[2] =
-                    transform.getRotationZ();
-
-            target.scale[0] =
-                    transform.getScaleX();
-
-            target.scale[1] =
-                    transform.getScaleY();
-
-            target.scale[2] =
-                    transform.getScaleZ();
         }
 
-        morph.customPose =
+        child.customPose =
                 pose;
+
+        /*
+         * Force the child to use the freshly prepared pose and model.
+         */
+        child.currentPose = "";
+
+        return child;
     }
 
-    private void applyGlobalTransform(
-            AnimationTransform transform)
+    public void clear()
     {
-        if (transform == null)
-        {
-            return;
-        }
-
-        GL11.glTranslatef(
-                transform.getPositionX() / 16.0F,
-                transform.getPositionY() / 16.0F,
-                transform.getPositionZ() / 16.0F
-        );
-
-        GL11.glRotatef(
-                transform.getRotationZ(),
-                0.0F, 0.0F, 1.0F
-        );
-        GL11.glRotatef(
-                transform.getRotationY(),
-                0.0F, 1.0F, 0.0F
-        );
-        GL11.glRotatef(
-                transform.getRotationX(),
-                1.0F, 0.0F, 0.0F
-        );
-
-        GL11.glScalef(
-                transform.getScaleX(),
-                transform.getScaleY(),
-                transform.getScaleZ()
-        );
+        /*
+         * There is no renderer-owned LayerRenderer anymore.
+         * Body parts live inside the actor's CustomMorph and are rebuilt
+         * on the next prepare() call.
+         */
     }
 }
