@@ -563,10 +563,30 @@ public class AnimationEditorScreen extends GuiScreen
 
     public void prepareGizmoTarget()
     {
+        boolean chameleonGizmoTarget =
+                this.actorPreviewController.isCurrentActorChameleon();
+
+        BodyPartModelData gizmoBodyPart =
+                this.bodyPartsController.getSelectedModel();
+
+        if (gizmoBodyPart == null)
+        {
+            gizmoBodyPart =
+                    this.bodyPartsController.getSelectedAttachment();
+        }
+
+        if (gizmoBodyPart != null &&
+                gizmoBodyPart.getBaseMorph() != null)
+        {
+            chameleonGizmoTarget =
+                    gizmoBodyPart.getBaseMorph()
+                            .getClass()
+                            .getName()
+                            .endsWith(".ChameleonMorph");
+        }
+
         this.gizmoController.setChameleonCoordinateSpace(
-                this.editorModeController.getMode()
-                        == EditorModeController.EditorMode.POSE
-                        && this.actorPreviewController.isCurrentActorChameleon()
+                chameleonGizmoTarget
         );
 
         this.gizmoController.setBodyPartTarget(
