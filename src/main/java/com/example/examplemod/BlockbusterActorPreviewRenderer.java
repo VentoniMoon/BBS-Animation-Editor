@@ -316,6 +316,324 @@ public class BlockbusterActorPreviewRenderer
     }
 
 
+
+    /*
+     * =========================================================
+     * CHAMELEON ANIMATION POSE
+     * =========================================================
+     *
+     * ChameleonMorph is not a CustomMorph, so the normal Blockbuster
+     * customPose path never reaches it. Apply our AnimationBone
+     * snapshots directly to Chameleon's ModelBone.current transforms.
+     *
+     * Reflection is intentional: Chameleon is an optional 1.12.2
+     * dependency and the editor must still compile without it.
+     */
+    private void applyChameleonAnimationPose(
+            AbstractMorph morph)
+    {
+        if (morph == null ||
+                !morph.getClass().getName().endsWith(".ChameleonMorph"))
+        {
+            return;
+        }
+
+        List<AnimationBoneSnapshot> snapshots =
+                BlockbusterPreviewAnimationState.getSnapshots();
+
+        if (snapshots == null || snapshots.isEmpty())
+        {
+            return;
+        }
+
+        try
+        {
+            Object chameleonModel =
+                    morph.getClass()
+                            .getMethod("getModel")
+                            .invoke(morph);
+
+            if (chameleonModel == null)
+            {
+                return;
+            }
+
+            Object model =
+                    chameleonModel.getClass()
+                            .getField("model")
+                            .get(chameleonModel);
+
+            if (model == null)
+            {
+                return;
+            }
+
+            Object roots =
+                    model.getClass()
+                            .getField("bones")
+                            .get(model);
+
+            if (!(roots instanceof List))
+            {
+                return;
+            }
+
+            for (AnimationBoneSnapshot snapshot : snapshots)
+            {
+                if (snapshot == null ||
+                        snapshot.getName() == null ||
+                        snapshot.getName().isEmpty())
+                {
+                    continue;
+                }
+
+                Object bone =
+                        findChameleonBone(
+                                (List<?>) roots,
+                                snapshot.getName()
+                        );
+
+                if (bone == null)
+                {
+                    continue;
+                }
+
+                applyChameleonSnapshot(
+                        bone,
+                        snapshot
+                );
+            }
+        }
+        catch (Throwable error)
+        {
+            /*
+             * Chameleon is optional. Never let a reflection mismatch
+             * break the actor preview.
+             */
+        }
+    }
+
+    private Object findChameleonBone(
+            List<?> bones,
+            String name)
+    {
+        if (bones == null)
+        {
+            return null;
+        }
+
+        for (Object bone : bones)
+        {
+            if (bone == null)
+            {
+                continue;
+            }
+
+            try
+            {
+                Object id =
+                        bone.getClass()
+                                .getField("id")
+                                .get(bone);
+
+                if (name.equals(String.valueOf(id)))
+                {
+                    return bone;
+                }
+
+                Object children =
+                        bone.getClass()
+                                .getField("children")
+                                .get(bone);
+
+                if (children instanceof List)
+                {
+                    Object found =
+                            findChameleonBone(
+                                    (List<?>) children,
+                                    name
+                            );
+
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private void applyChameleonSnapshot(
+            Object bone,
+            AnimationBoneSnapshot snapshot)
+    {
+        try
+        {
+            Object initial =
+                    bone.getClass()
+                            .getField("initial")
+                            .get(bone);
+
+            Object current =
+                    bone.getClass()
+                            .getField("current")
+                            .get(bone);
+
+            if (initial == null || current == null)
+            {
+                return;
+            }
+
+            Object initialTranslate =
+                    initial.getClass()
+                            .getField("translate")
+                            .get(initial);
+
+            Object currentTranslate =
+                    current.getClass()
+                            .getField("translate")
+                            .get(current);
+
+            Object currentRotation =
+                    current.getClass()
+                            .getField("rotation")
+                            .get(current);
+
+            Object currentScale =
+                    current.getClass()
+                            .getField("scale")
+                            .get(current);
+
+            if (initialTranslate != null &&
+                    currentTranslate != null)
+            {
+                /*
+                 * Chameleon's MatrixStack.translateBone() negates X
+                 * but keeps Y/Z. Convert the editor's actor-space
+                 * translation into Chameleon's local translation.
+                 */
+                setVectorComponent(
+                        currentTranslate,
+                        "x",
+                        readVectorComponent(initialTranslate, "x")
+                                - snapshot.getPositionX()
+                );
+
+                setVectorComponent(
+                        currentTranslate,
+                        "y",
+                        readVectorComponent(initialTranslate, "y")
+                                + snapshot.getPositionY()
+                );
+
+                setVectorComponent(
+                        currentTranslate,
+                        "z",
+                        readVectorComponent(initialTranslate, "z")
+                                + snapshot.getPositionZ()
+                );
+            }
+
+            if (currentRotation != null)
+            {
+                setVectorComponent(
+                        currentRotation,
+                        "x",
+                        readVectorComponent(currentRotation, "x")
+                                + snapshot.getRotationX()
+                );
+
+                setVectorComponent(
+                        currentRotation,
+                        "y",
+                        readVectorComponent(currentRotation, "y")
+                                + snapshot.getRotationY()
+                );
+
+                setVectorComponent(
+                        currentRotation,
+                        "z",
+                        readVectorComponent(currentRotation, "z")
+                                + snapshot.getRotationZ()
+                );
+            }
+
+            if (currentScale != null)
+            {
+                setVectorComponent(
+                        currentScale,
+                        "x",
+                        readVectorComponent(currentScale, "x")
+                                * snapshot.getScaleX()
+                );
+
+                setVectorComponent(
+                        currentScale,
+                        "y",
+                        readVectorComponent(currentScale, "y")
+                                * snapshot.getScaleY()
+                );
+
+                setVectorComponent(
+                        currentScale,
+                        "z",
+                        readVectorComponent(currentScale, "z")
+                                * snapshot.getScaleZ()
+                );
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+    private float readVectorComponent(
+            Object vector,
+            String field)
+    {
+        try
+        {
+            Object value =
+                    vector.getClass()
+                            .getField(field)
+                            .get(vector);
+
+            return value instanceof Number
+                    ? ((Number) value).floatValue()
+                    : 0.0F;
+        }
+        catch (Throwable ignored)
+        {
+            return 0.0F;
+        }
+    }
+
+    private void setVectorComponent(
+            Object vector,
+            String field,
+            float value)
+    {
+        try
+        {
+            java.lang.reflect.Field target =
+                    vector.getClass()
+                            .getField(field);
+
+            target.setFloat(
+                    vector,
+                    value
+            );
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
     /*
      * =========================================================
      * MOVEMENT
@@ -899,6 +1217,15 @@ public class BlockbusterActorPreviewRenderer
 
         applyAnimationPose(
                 entityActor
+        );
+
+        /*
+         * ChameleonMorph has its own ModelBone hierarchy and does not
+         * use CustomMorph.customPose. Apply the same editor snapshots
+         * directly to that hierarchy after the normal pose pass.
+         */
+        applyChameleonAnimationPose(
+                entityActor.getMorph()
         );
 
         /*
