@@ -2,7 +2,6 @@ package com.example.examplemod;
 
 import java.util.function.Consumer;
 
-import mchorse.blockbuster_pack.morphs.CustomMorph;
 import mchorse.metamorph.api.morphs.AbstractMorph;
 import mchorse.metamorph.client.gui.creative.GuiCreativeMorphsList;
 import mchorse.mclib.client.gui.framework.GuiBase;
@@ -20,7 +19,7 @@ import net.minecraft.client.gui.Gui;
 public class BodyPartModelPickerScreen extends GuiBase
 {
     private final AnimationEditorScreen returnScreen;
-    private final Consumer<String> callback;
+    private final Consumer<AbstractMorph> callback;
 
     private final GuiCreativeMorphsList picker;
 
@@ -29,7 +28,7 @@ public class BodyPartModelPickerScreen extends GuiBase
     public BodyPartModelPickerScreen(
             Minecraft mc,
             AnimationEditorScreen returnScreen,
-            Consumer<String> callback)
+            Consumer<AbstractMorph> callback)
     {
         super();
 
@@ -54,56 +53,18 @@ public class BodyPartModelPickerScreen extends GuiBase
      */
     private void onMorphSelected(AbstractMorph morph)
     {
-        if (morph == null)
+        if (morph == null || this.committed)
         {
             return;
         }
 
-        System.out.println(
-                "[BBS Animation Editor] " +
-                        "Body Parts picker callback: " +
-                        morph.getClass().getName() +
-                        " name=" +
-                        morph.name
-        );
-
-        /*
-         * The callback argument is the morph which the original
-         * Metamorph browser has just selected. Use that object
-         * directly instead of reading picker.getSelected(), because
-         * the browser's internal selected entry may still be one
-         * dispatch behind at this point.
-         */
-        if (morph instanceof CustomMorph)
+        this.committed = true;
+        if (this.callback != null)
         {
-            CustomMorph custom =
-                    (CustomMorph) morph;
-
-            String key =
-                    custom.getKey();
-
-            System.out.println(
-                    "[BBS Animation Editor] " +
-                            "Body Parts picker CustomMorph key=" +
-                            key
-            );
-
-            if (key != null &&
-                    !key.isEmpty() &&
-                    !this.committed)
-            {
-                this.committed = true;
-
-                if (this.callback != null)
-                {
-                    this.callback.accept(key);
-                }
-
-                this.mc.displayGuiScreen(
-                        this.returnScreen
-                );
-            }
+            this.callback.accept(morph);
         }
+
+        this.mc.displayGuiScreen(this.returnScreen);
     }
 
     /**
@@ -116,88 +77,28 @@ public class BodyPartModelPickerScreen extends GuiBase
             return;
         }
 
-        this.committed = true;
-
-        AbstractMorph morph =
-                this.picker.getSelected();
-
-        if (morph instanceof CustomMorph)
+        AbstractMorph morph = this.picker.getSelected();
+        if (morph != null && this.callback != null)
         {
-            CustomMorph custom =
-                    (CustomMorph) morph;
-
-            String key =
-                    custom.getKey();
-
-            if (key != null &&
-                    !key.isEmpty() &&
-                    this.callback != null)
-            {
-                System.out.println(
-                        "[BBS Animation Editor] " +
-                                "Body Parts selected model on close: " +
-                                key
-                );
-
-                this.callback.accept(key);
-            }
+            this.committed = true;
+            this.callback.accept(morph);
         }
     }
 
     @Override
-    protected void mouseClicked(
-            int mouseX,
-            int mouseY,
-            int mouseButton)
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton)
             throws java.io.IOException
     {
-        /*
-         * Let the original Metamorph GUI process the click first.
-         * Its GuiMorphSection updates picker.getSelected() during
-         * this dispatch. Only after that do we read the selected
-         * morph and pass its Blockbuster key to our controller.
-         */
-        super.mouseClicked(
-                mouseX,
-                mouseY,
-                mouseButton
-        );
+        super.mouseClicked(mouseX, mouseY, mouseButton);
 
         if (mouseButton == 0)
         {
-            AbstractMorph selected =
-                    this.picker.getSelected();
-
-            if (selected instanceof CustomMorph)
+            AbstractMorph selected = this.picker.getSelected();
+            if (selected != null && !this.committed && this.callback != null)
             {
-                CustomMorph custom =
-                        (CustomMorph) selected;
-
-                String key =
-                        custom.getKey();
-
-                System.out.println(
-                        "[BBS Animation Editor] " +
-                                "Body Parts picker selected: " +
-                                selected.getClass().getName() +
-                                " key=" +
-                                key
-                );
-
-                if (key != null &&
-                        !key.isEmpty())
-                {
-                    if (!this.committed &&
-                            this.callback != null)
-                    {
-                        this.committed = true;
-                        this.callback.accept(key);
-                    }
-
-                    this.mc.displayGuiScreen(
-                            this.returnScreen
-                    );
-                }
+                this.committed = true;
+                this.callback.accept(selected);
+                this.mc.displayGuiScreen(this.returnScreen);
             }
         }
     }
