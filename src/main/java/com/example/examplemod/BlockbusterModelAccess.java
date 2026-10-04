@@ -346,75 +346,75 @@ public class BlockbusterModelAccess
      * CustomMorph.changeModel()/updateModel() resolve models through
      * Blockbuster.proxy.models.models, not through ModelCustom.MODELS.
      */
-    private void captureModelHandlerLimbData(String name)
+    private void captureModelHandlerLimbData(
+            String name)
     {
+        this.originalLimbData.clear();
+
+        if (name == null || name.isEmpty())
+        {
+            return;
+        }
+
         try
         {
-            Class<?> blockbusterClass =
+            Class<?> modelHandlerClass =
                     Class.forName(
-                            "mchorse.blockbuster.Blockbuster"
+                            "mchorse.blockbuster.api.ModelHandler"
                     );
 
-            Field proxyField =
-                    blockbusterClass.getField("proxy");
-
-            Object proxy =
-                    proxyField.get(null);
-
-            if (proxy == null)
-            {
-                return;
-            }
-
             Field modelsField =
-                    proxy.getClass().getField("models");
+                    modelHandlerClass.getField("models");
 
-            Object modelHandler =
-                    modelsField.get(proxy);
+            Object modelsObject =
+                    modelsField.get(null);
 
-            if (modelHandler == null)
-            {
-                return;
-            }
-
-            Field modelMapField =
-                    modelHandler.getClass().getField("models");
-
-            Object modelMap =
-                    modelMapField.get(modelHandler);
-
-            if (!(modelMap instanceof Map))
+            if (!(modelsObject instanceof Map))
             {
                 return;
             }
 
             Object apiModel =
-                    ((Map<?, ?>) modelMap).get(name);
+                    ((Map<?, ?>) modelsObject).get(name);
 
             if (apiModel == null)
             {
-                System.out.println(
-                        "[BBS Animation Editor] "
-                                + "ModelHandler model not found: "
-                                + name
-                );
-
                 return;
             }
 
             Field limbsField =
                     apiModel.getClass().getField("limbs");
 
-            Object limbs =
+            Object limbsObject =
                     limbsField.get(apiModel);
 
-            if (!(limbs instanceof Map))
+            if (!(limbsObject instanceof Map))
             {
                 return;
             }
 
+            /*
+             * ModelLimb itself contains hierarchy/meta data, but the
+             * actual default pivot positions live in the "standing"
+             * ModelPose. This is exactly what ModelCustomRenderer
+             * applies before rendering the model.
+             */
+            Field posesField =
+                    apiModel.getClass().getField("poses");
+
+            Object posesObject =
+                    posesField.get(apiModel);
+
+            Object standingPose = null;
+
+            if (posesObject instanceof Map)
+            {
+                standingPose =
+                        ((Map<?, ?>) posesObject).get("standing");
+            }
+
             for (Object value :
-                    ((Map<?, ?>) limbs).values())
+                    ((Map<?, ?>) limbsObject).values())
             {
                 if (value == null)
                 {
@@ -427,40 +427,108 @@ public class BlockbusterModelAccess
                 Field parentField =
                         value.getClass().getField("parent");
 
-                Object nameValue =
-                        nameField.get(value);
-
-                Object parentValue =
-                        parentField.get(value);
-
-                if (nameValue == null)
-                {
-                    continue;
-                }
-
                 String limbName =
-                        String.valueOf(nameValue);
+                        String.valueOf(
+                                nameField.get(value)
+                        );
 
                 String parentName =
-                        parentValue == null ||
-                        String.valueOf(parentValue).isEmpty()
-                                ? null
-                                : String.valueOf(parentValue);
+                        String.valueOf(
+                                parentField.get(value)
+                        );
+
+                float x = 0.0F;
+                float y = 0.0F;
+                float z = 0.0F;
+
+                /*
+                 * ModelCustomRenderer.applyTransform() stores:
+                 *
+                 *   rotationPointX = translate.x
+                 *   rotationPointY = -translate.y + 24 (root)
+                 *   rotationPointZ = -translate.z
+                 *
+                 * and render() converts those values to blocks.
+                 * Therefore the editor's local pivot is:
+                 *
+                 *   X = translate.x / 16
+                 *   Y = -translate.y / 16
+                 *   Z = -translate.z / 16
+                 *
+                 * The +24 root offset cancels inside
+                 * ModelCustomRenderer.cachedTranslation.
+                 */
+                if (standingPose != null)
+                {
+                    try
+                    {
+                        Field poseLimbsField =
+                                standingPose.getClass()
+                                        .getField("limbs");
+
+                        Object poseLimbsObject =
+                                poseLimbsField.get(
+                                        standingPose
+                                );
+
+                        if (poseLimbsObject instanceof Map)
+                        {
+                            Object transform =
+                                    ((Map<?, ?>) poseLimbsObject)
+                                        .get(limbName);
+
+                            if (transform != null)
+                            {
+                                Field translateField =
+                                        transform.getClass()
+                                                .getField(
+                                                        "translate"
+                                                );
+
+                                Object translate =
+                                        translateField.get(
+                                                transform
+                                        );
+
+                                if (translate instanceof float[])
+                                {
+                                    float[] values =
+                                            (float[]) translate;
+
+                                    if (values.length >= 3)
+                                    {
+                                        x = values[0] / 16.0F;
+                                        y = -values[1] / 16.0F;
+                                        z = -values[2] / 16.0F;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ignored)
+                    {
+                        /*
+                         * Keep the zero pivot if a custom model does
+                         * not expose a standing transform in the
+                         * expected form.
+                         */
+                    }
+                }
 
                 this.originalLimbData.add(
                         new BlockbusterLimbData(
                                 limbName,
                                 parentName,
-                                0.0F,
-                                0.0F,
-                                0.0F
+                                x,
+                                y,
+                                z
                         )
                 );
             }
 
             System.out.println(
                     "[BBS Animation Editor] "
-                            + "Captured ModelHandler skeleton: "
+                            + "Captured ModelHandler skeleton with standing pivots: "
                             + this.originalLimbData.size()
                             + " limbs"
             );
