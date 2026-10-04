@@ -1564,18 +1564,23 @@ public class EditorGizmoController
                     attachment.getRotationZ()
             );
 
-            double bx = attachment.getPositionX() / 16.0D;
-            double by = attachment.getPositionY() / 16.0D;
-            double bz = attachment.getPositionZ() / 16.0D;
+            double[] base =
+                    getWorldFromPivot(
+                            attachment,
+                            recordFrame
+                    );
+
+            double[] offset =
+                    transformBoneDirection(
+                            p,
+                            recordFrame
+                    );
 
             return new double[]
             {
-                (recordFrame != null ? recordFrame.getX() : 0.0D)
-                        + bx + p[0] / 16.0D,
-                (recordFrame != null ? recordFrame.getY() : 0.0D)
-                        + by - p[1] / 16.0D,
-                (recordFrame != null ? recordFrame.getZ() : 0.0D)
-                        + bz + p[2] / 16.0D
+                base[0] + offset[0] / 16.0D,
+                base[1] + offset[1] / 16.0D,
+                base[2] + offset[2] / 16.0D
             };
         }
 
@@ -1603,21 +1608,36 @@ public class EditorGizmoController
                     attachment.getRotationZ()
             );
 
-            double bx = attachment.getPositionX() / 16.0D;
-            double by = attachment.getPositionY() / 16.0D;
-            double bz = attachment.getPositionZ() / 16.0D;
+            double[] base =
+                    getWorldFromPivot(
+                            attachment,
+                            recordFrame
+                    );
+
+            double[] offset =
+                    transformBoneDirection(
+                            p,
+                            recordFrame
+                    );
 
             return new double[]
             {
-                (recordFrame != null ? recordFrame.getX() : 0.0D)
-                        + bx + p[0] / 16.0D,
-                (recordFrame != null ? recordFrame.getY() : 0.0D)
-                        + by - p[1] / 16.0D,
-                (recordFrame != null ? recordFrame.getZ() : 0.0D)
-                        + bz + p[2] / 16.0D
+                base[0] + offset[0] / 16.0D,
+                base[1] + offset[1] / 16.0D,
+                base[2] + offset[2] / 16.0D
             };
         }
 
+        return getWorldFromPivot(
+                pivot,
+                recordFrame
+        );
+    }
+
+    private double[] getWorldFromPivot(
+            AnimationTransform pivot,
+            BlockbusterRecordFrame recordFrame)
+    {
         double recordX =
                 recordFrame != null
                         ? recordFrame.getX()
@@ -1633,34 +1653,13 @@ public class EditorGizmoController
                         ? recordFrame.getZ()
                         : 0.0D;
 
-        /*
-         * Match RenderCustomModel / vanilla living-model placement:
-         *
-         *   model pixels -> blocks (/16)
-         *   X/Z orientation -> 180 - actor yaw
-         *   model handedness -> X/Y inverted
-         *   model origin -> +1.501 on world Y
-         *
-         * This is the ONE conversion used by both rendering and mouse
-         * hit testing.
-         */
-        double modelX =
-                pivot.getPositionX() / 16.0D;
+        double modelX = pivot.getPositionX() / 16.0D;
+        double modelY = pivot.getPositionY() / 16.0D;
+        double modelZ = pivot.getPositionZ() / 16.0D;
 
-        double modelY =
-                pivot.getPositionY() / 16.0D;
-
-        double modelZ =
-                pivot.getPositionZ() / 16.0D;
-
-        double transformedX =
-                -modelX;
-
-        double transformedY =
-                -modelY + 1.501D;
-
-        double transformedZ =
-                -modelZ;
+        double transformedX = -modelX;
+        double transformedY = -modelY + 1.501D;
+        double transformedZ = -modelZ;
 
         double yaw =
                 Math.toRadians(
@@ -1672,11 +1671,8 @@ public class EditorGizmoController
                                 )
                 );
 
-        double cos =
-                Math.cos(yaw);
-
-        double sin =
-                Math.sin(yaw);
+        double cos = Math.cos(yaw);
+        double sin = Math.sin(yaw);
 
         double rotatedX =
                 cos * transformedX
