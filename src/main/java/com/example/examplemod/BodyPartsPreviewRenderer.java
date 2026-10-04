@@ -355,7 +355,8 @@ public class BodyPartsPreviewRenderer
                     morph.model != loadedModel)
             {
                 morph.model =
-                        loadedModel;
+                        (mchorse.blockbuster.api.Model)
+                                loadedModel;
             }
 
             morph.customPose = null;
