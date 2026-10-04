@@ -451,6 +451,12 @@ public class CharacterEditorPanel
     public void setSelectedBodyPartModel(BodyPartModelData model)
     {
         this.selectedBodyPartModel = model;
+
+        CharacterTimelineController timeline =
+                model == null ? null : model.getCharacterTimeline();
+
+        this.animationSetupPanel.setBodyPartTimeline(timeline);
+        this.animationParametersPanel.setBodyPartTimeline(timeline);
     }
 
     public BodyPartModelData getSelectedBodyPartModel()
