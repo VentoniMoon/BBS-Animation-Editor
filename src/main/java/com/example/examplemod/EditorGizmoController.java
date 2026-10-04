@@ -503,7 +503,7 @@ public class EditorGizmoController
         if (mc == null
                 || !enabled
                 || bone == null
-                || keyframe == null
+                || (keyframe == null && this.globalTransformTarget == null)
                 || recordFrame == null
                 || camera == null
                 || viewportWidth <= 0
