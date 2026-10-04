@@ -960,15 +960,24 @@ public class CharacterEditorPanel
                 morph = "Default";
             }
 
-            if (this.selectedKey != null)
+            if (this.selectedBodyPartModel != null)
             {
-                if (this.selectedKey.getType() ==
-                        CharacterKey.Type.MORPH)
+                morph = this.selectedBodyPartModel.getModelNameAt(
+                        this.currentFrame
+                );
+
+                if (morph == null || morph.length() == 0)
+                {
+                    morph = "No model";
+                }
+            }
+            else if (this.selectedKey != null)
+            {
+                if (this.selectedKey.getType() == CharacterKey.Type.MORPH)
                 {
                     morph = "MORPH KEY";
                 }
-                else if (this.selectedKey.getType() ==
-                        CharacterKey.Type.SKIN)
+                else if (this.selectedKey.getType() == CharacterKey.Type.SKIN)
                 {
                     morph = "SKIN KEY";
                 }
