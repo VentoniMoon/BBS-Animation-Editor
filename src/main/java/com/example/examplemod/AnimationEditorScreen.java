@@ -126,6 +126,10 @@ public class AnimationEditorScreen extends GuiScreen
     private final BodyPartsTimelineController bodyPartsTimelineController =
             new BodyPartsTimelineController(bodyPartsController);
 
+    private final EditorActorListPanel actorListPanel =
+            new EditorActorListPanel();
+
+
     /*
      * =========================================================
      * EDITOR STATE
@@ -1097,6 +1101,19 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+    public EditorActorListPanel getActorListPanel()
+    {
+        return this.actorListPanel;
+    }
+
+    public void scrollActorList(int direction)
+    {
+        this.actorListPanel.scroll(
+                direction,
+                getSceneActors()
+        );
+    }
+
     public void selectActor(int index)
     {
         List<BlockbusterSceneActorData> actors =
@@ -1116,6 +1133,7 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         this.sceneState.setSelectedActor(index);
+        this.actorListPanel.clamp(actors);
 
         this.characterTimelineEditorController
                 .setSelectedActor(data);
@@ -2021,140 +2039,26 @@ public class AnimationEditorScreen extends GuiScreen
     private void drawActorPanel()
     {
         int top = TOP_BAR_HEIGHT;
-        int bottom =
-                top + ACTOR_PANEL_HEIGHT;
 
-        drawRect(
+        this.actorListPanel.draw(
+                this.mc,
                 0,
                 top,
                 LEFT_PANEL_WIDTH,
-                bottom,
-                COLOR_PANEL
+                ACTOR_PANEL_HEIGHT,
+                getSceneActors(),
+                this.sceneState == null
+                        ? -1
+                        : this.sceneState.getSelectedActor(),
+                COLOR_PANEL,
+                COLOR_PANEL_DARK,
+                COLOR_SELECTED,
+                COLOR_BORDER,
+                COLOR_TEXT,
+                COLOR_TEXT_SECONDARY,
+                COLOR_TEXT_MUTED,
+                getAccentColor()
         );
-
-        drawRect(
-                LEFT_PANEL_WIDTH - 1,
-                top,
-                LEFT_PANEL_WIDTH,
-                bottom,
-                COLOR_BORDER
-        );
-
-        drawPanelHeader(
-                "ACTORS",
-                0,
-                top,
-                LEFT_PANEL_WIDTH
-        );
-
-        List<BlockbusterSceneActorData> actors =
-                getSceneActors();
-
-        if (actors.isEmpty())
-        {
-            drawString(
-                    fontRenderer,
-                    "No actors",
-                    12,
-                    top + 38,
-                    COLOR_TEXT_MUTED
-            );
-
-            return;
-        }
-
-        int actorY = top + 30;
-        final int actorRowHeight = 31;
-
-        for (int i = 0; i < actors.size(); i++)
-        {
-            BlockbusterSceneActorData actor =
-                    actors.get(i);
-
-            if (actor == null)
-            {
-                continue;
-            }
-
-            if (actorY + actorRowHeight
-                    > bottom - 3)
-            {
-                break;
-            }
-
-            boolean selected =
-                    i == sceneState.getSelectedActor();
-
-            if (selected)
-            {
-                drawRect(
-                        5,
-                        actorY - 2,
-                        LEFT_PANEL_WIDTH - 5,
-                        actorY + actorRowHeight - 2,
-                        COLOR_SELECTED
-                );
-
-                drawRect(
-                        5,
-                        actorY - 2,
-                        7,
-                        actorY + actorRowHeight - 2,
-                        getAccentColor()
-                );
-            }
-
-            String id = actor.getId();
-            String name = actor.getName();
-
-            if (name == null
-                    || name.length() == 0)
-            {
-                name = actor.getMorphName();
-            }
-
-            if (name == null
-                    || name.length() == 0)
-            {
-                name = "Unnamed Actor";
-            }
-
-            if (id.length() > 22)
-            {
-                id =
-                        id.substring(0, 19)
-                                + "...";
-            }
-
-            if (name.length() > 22)
-            {
-                name =
-                        name.substring(0, 19)
-                                + "...";
-            }
-
-            drawString(
-                    fontRenderer,
-                    id,
-                    13,
-                    actorY + 1,
-                    selected
-                            ? COLOR_TEXT
-                            : COLOR_TEXT_SECONDARY
-            );
-
-            drawString(
-                    fontRenderer,
-                    name,
-                    13,
-                    actorY + 13,
-                    selected
-                            ? getAccentColor()
-                            : COLOR_TEXT_MUTED
-            );
-
-            actorY += actorRowHeight;
-        }
     }
 
     private void drawPanelHeader(
