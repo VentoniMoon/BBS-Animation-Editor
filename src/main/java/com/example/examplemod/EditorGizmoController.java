@@ -634,62 +634,16 @@ public class EditorGizmoController
         GL11.glLineWidth(5.0F);
 
         /*
-         * AnimationBone coordinates come from Blockbuster's model
-         * rotation points. Those values are model-space pixels, not
-         * world-space blocks.
-         *
-         * RenderCustomModel uses Minecraft's normal living-entity
-         * transform before rendering the custom model:
-         *
-         *   rotate(180 - entityYaw)
-         *   scale(-1, -1, 1)
-         *   translate(0, -1.501, 0)
-         *   model coordinates / 16
-         *
-         * Reproduce that exact transform here. This is the important
-         * difference between a gizmo that merely follows the actor and
-         * one that actually sits on the rendered bone.
+         * getBoneWorldPosition() already returns the final rendered
+         * world-space pivot. Keep the draw pass and hit testing on
+         * exactly the same coordinates; previously the draw pass applied
+         * the actor transform here while hitTest() projected the
+         * pre-transform position, which made the controls effectively
+         * unclickable and visually offset.
          */
-        double localX = world[0] - recordFrame.getX();
-        double localY = world[1] - recordFrame.getY();
-        double localZ = world[2] - recordFrame.getZ();
-
-        double modelX = localX / 16.0D;
-        double modelY = localY / 16.0D;
-        double modelZ = localZ / 16.0D;
-
-        /*
-         * RenderLivingBase applies scale(-1,-1,1), then the model
-         * origin offset of -1.501 blocks on Y, then rotates the model
-         * by 180 - entity yaw.
-         */
-        double transformedX = -modelX;
-        double transformedY = -modelY + 1.501D;
-        double transformedZ = modelZ;
-
-        double yaw = Math.toRadians(
-                180.0D - recordFrame.getYaw()
-        );
-
-        double cos = Math.cos(yaw);
-        double sin = Math.sin(yaw);
-
-        double rotatedX =
-                cos * transformedX
-                        + sin * transformedZ;
-
-        double rotatedZ =
-                -sin * transformedX
-                        + cos * transformedZ;
-
-        double gizmoX =
-                recordFrame.getX() + rotatedX;
-
-        double gizmoY =
-                recordFrame.getY() + transformedY;
-
-        double gizmoZ =
-                recordFrame.getZ() + rotatedZ;
+        double gizmoX = world[0];
+        double gizmoY = world[1];
+        double gizmoZ = world[2];
 
         GL11.glPushMatrix();
         GL11.glTranslated(gizmoX, gizmoY, gizmoZ);
@@ -1593,23 +1547,20 @@ public class EditorGizmoController
             return null;
         }
 
-        /*
-         * AnimationBone already owns the authoritative local/world
-         * transform calculation used by the Preview animation.
-         *
-         * Do NOT divide these values by 16 here. The same coordinate
-         * space is used when the AnimationBone snapshot is applied to
-         * Blockbuster's ModelTransform.
-         */
         int frame =
                 selectedKeyframe != null
                         ? selectedKeyframe.getFrame()
                         : 0;
 
-        AnimationTransform world =
+        /*
+         * AnimationBone stores pivots in Blockbuster model pixels.
+         * getWorldPivotAt() includes the complete parent hierarchy and
+         * the selected keyframe transform.
+         */
+        AnimationTransform pivot =
                 bone.getWorldPivotAt(frame);
 
-        if (world == null)
+        if (pivot == null)
         {
             return null;
         }
@@ -1630,16 +1581,63 @@ public class EditorGizmoController
                         : 0.0D;
 
         /*
-         * The values stored in AnimationBone are the same model-space
-         * coordinates used by Blockbuster's ModelCustomRenderer.
-         * Keep them in that space here; draw3D() performs the exact
-         * model-to-world conversion used by the actor renderer.
+         * Match RenderCustomModel / vanilla living-model placement:
+         *
+         *   model pixels -> blocks (/16)
+         *   X/Z orientation -> 180 - actor yaw
+         *   model handedness -> X/Y inverted
+         *   model origin -> +1.501 on world Y
+         *
+         * This is the ONE conversion used by both rendering and mouse
+         * hit testing.
          */
+        double modelX =
+                pivot.getPositionX() / 16.0D;
+
+        double modelY =
+                pivot.getPositionY() / 16.0D;
+
+        double modelZ =
+                pivot.getPositionZ() / 16.0D;
+
+        double transformedX =
+                -modelX;
+
+        double transformedY =
+                -modelY + 1.501D;
+
+        double transformedZ =
+                modelZ;
+
+        double yaw =
+                Math.toRadians(
+                        180.0D
+                                - (
+                                        recordFrame != null
+                                                ? recordFrame.getYaw()
+                                                : 0.0D
+                                )
+                );
+
+        double cos =
+                Math.cos(yaw);
+
+        double sin =
+                Math.sin(yaw);
+
+        double rotatedX =
+                cos * transformedX
+                        + sin * transformedZ;
+
+        double rotatedZ =
+                -sin * transformedX
+                        + cos * transformedZ;
+
         return new double[]
         {
-            recordX + world.getPositionX(),
-            recordY + world.getPositionY(),
-            recordZ + world.getPositionZ()
+            recordX + rotatedX,
+            recordY + transformedY,
+            recordZ + rotatedZ
         };
     }
 
