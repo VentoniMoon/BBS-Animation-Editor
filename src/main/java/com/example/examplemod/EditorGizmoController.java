@@ -79,6 +79,7 @@ public class EditorGizmoController
 
     private BodyPartModelData bodyPartTarget;
     private AnimationBone bodyPartAttachmentBone;
+    private AnimationBone gizmoAttachmentBone;
     private AnimationTransform globalTransformTarget;
     private int gizmoFrame;
     private boolean chameleonCoordinateSpace;
@@ -89,6 +90,11 @@ public class EditorGizmoController
     {
         this.bodyPartTarget = model;
         this.bodyPartAttachmentBone = attachmentBone;
+    }
+
+    public void setGizmoAttachmentBone(AnimationBone bone)
+    {
+        this.gizmoAttachmentBone = bone;
     }
 
     public void setGlobalTransformTarget(AnimationTransform transform)
@@ -1745,6 +1751,24 @@ public class EditorGizmoController
         if (pivot == null)
         {
             return null;
+        }
+
+        /*
+         * Use the exact actor bone resolved by the editor's Body Parts
+         * attachment mechanism as the Gizmo anchor.
+         */
+        if (this.gizmoAttachmentBone != null &&
+                (this.bodyPartTarget == null ||
+                 this.bodyPartAttachmentBone == null ||
+                 bone == this.bodyPartAttachmentBone))
+        {
+            AnimationTransform attachmentPivot =
+                    this.gizmoAttachmentBone.getWorldPivotAt(frame);
+
+            if (attachmentPivot != null)
+            {
+                pivot = attachmentPivot;
+            }
         }
 
         /*
