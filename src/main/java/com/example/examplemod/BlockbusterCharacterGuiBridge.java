@@ -698,14 +698,6 @@ public class BlockbusterCharacterGuiBridge
             return;
         }
 
-        if (!this.targetBodyPartModel.replaceModelByName(modelName))
-        {
-            System.err.println(
-                    "[BBS Animation Editor] Cannot apply Body Part model: " + modelName
-            );
-            return;
-        }
-
         this.targetBodyPartModel.setModelKey(
                 this.targetBodyPartFrame,
                 modelName
