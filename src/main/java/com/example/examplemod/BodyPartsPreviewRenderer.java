@@ -120,14 +120,31 @@ public class BodyPartsPreviewRenderer
             BodyPartModelData data,
             int frame)
     {
-        if (data == null ||
-                data.getModelAccess() == null)
+        if (data == null)
         {
             return null;
         }
 
         String modelName =
-                data.getModelName();
+                data.getModelNameAt(frame);
+
+        BlockbusterModelAccess modelAccess =
+                data.getModelAccess();
+
+        if (!modelName.equals(data.getModelName()))
+        {
+            modelAccess = new BlockbusterModelAccess(null);
+
+            if (!modelAccess.loadModelByName(modelName))
+            {
+                return null;
+            }
+        }
+
+        if (modelAccess == null)
+        {
+            return null;
+        }
 
         if (modelName == null ||
                 modelName.length() == 0)
@@ -148,7 +165,7 @@ public class BodyPartsPreviewRenderer
              * resolving it again through BlockbusterModelAccess.
              */
             BlockbusterModelAccess access =
-                    data.getModelAccess();
+                    modelAccess;
 
             if (!access.loadModelByName(modelName))
             {
@@ -275,7 +292,9 @@ public class BodyPartsPreviewRenderer
         );
 
         List<AnimationBone> bones =
-                data.getBones();
+                modelName.equals(data.getModelName())
+                        ? data.getBones()
+                        : null;
 
         if (bones != null)
         {
