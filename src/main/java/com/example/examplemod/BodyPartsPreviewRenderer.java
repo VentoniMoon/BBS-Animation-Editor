@@ -263,14 +263,33 @@ public class BodyPartsPreviewRenderer
             BodyPartModelData data,
             int frame)
     {
-        CustomMorph child =
-                new CustomMorph();
+        CustomMorph child = null;
 
-        child.name =
-                "blockbuster." + modelName;
+        CharacterKey stateKey = data.getCharacterStateKeyAt(frame);
 
-        child.model =
-                apiModel;
+        if (stateKey != null && stateKey.hasSkin())
+        {
+            try
+            {
+                AbstractMorph savedSkin = MorphManager.INSTANCE.morphFromNBT(stateKey.getSkin());
+                if (savedSkin instanceof CustomMorph)
+                {
+                    child = (CustomMorph) savedSkin;
+                    child.model = apiModel;
+                }
+            }
+            catch (Throwable error)
+            {
+                error.printStackTrace();
+            }
+        }
+
+        if (child == null)
+        {
+            child = new CustomMorph();
+            child.name = "blockbuster." + modelName;
+            child.model = apiModel;
+        }
 
         /*
          * CustomMorph.updateModel() is the normal Blockbuster model
