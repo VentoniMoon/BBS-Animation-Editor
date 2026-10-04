@@ -231,6 +231,20 @@ public class ActorAnimationData
                                 readChameleonVector(translate, "z")
                         );
                     }
+
+                    Object rotation =
+                            initial.getClass()
+                                    .getField("rotation")
+                                    .get(initial);
+
+                    if (rotation != null)
+                    {
+                        bone.setBaseRotation(
+                                readChameleonVector(rotation, "x"),
+                                readChameleonVector(rotation, "y"),
+                                readChameleonVector(rotation, "z")
+                        );
+                    }
                 }
             }
             catch (Throwable ignored)
