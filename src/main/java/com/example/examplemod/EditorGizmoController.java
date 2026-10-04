@@ -181,11 +181,38 @@ public class EditorGizmoController
             return false;
         }
 
+        double[] gizmoWorld =
+                getBoneWorldPosition(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
+
+        if (gizmoWorld == null)
+        {
+            return false;
+        }
+
+        float gizmoSize =
+                getWorldGizmoSize(
+                        camera,
+                        gizmoWorld[0],
+                        gizmoWorld[1],
+                        gizmoWorld[2]
+                );
+
         int hit =
                 hitTest(
                         mouseX,
                         mouseY,
-                        center
+                        viewportX,
+                        viewportY,
+                        viewportWidth,
+                        viewportHeight,
+                        center,
+                        gizmoWorld,
+                        gizmoSize,
+                        camera
                 );
 
         if (hit < 0)
@@ -1195,76 +1222,251 @@ public class EditorGizmoController
     private int hitTest(
             int mouseX,
             int mouseY,
-            ScreenPoint center)
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            ScreenPoint center,
+            double[] world,
+            float size,
+            EditorCamera camera)
     {
-        float dx = mouseX - center.x;
-        float dy = mouseY - center.y;
+        /*
+         * Hit testing is performed against the projected 3D handles,
+         * not against a fixed 2D cross. This keeps the clickable area
+         * attached to the geometry when the camera rotates or zooms.
+         */
+        float length = 1.8F * size;
 
         if (this.mode == Mode.ROTATION)
         {
-            float distance =
-                    (float) Math.sqrt(dx * dx + dy * dy);
+            float radius = size * 0.95F;
 
-            if (Math.abs(distance - 48.0F) < 9.0F)
+            int bestAxis = -1;
+            double bestDistance = 12.0D;
+
+            for (int axis = 0; axis < 3; axis++)
             {
-                return AXIS_X;
+                double minDistance = Double.MAX_VALUE;
+
+                for (int i = 0; i < 64; i++)
+                {
+                    double angle =
+                            Math.PI * 2.0D * i / 64.0D;
+
+                    double px;
+                    double py;
+                    double pz;
+
+                    if (axis == AXIS_X)
+                    {
+                        px = world[0];
+                        py = world[1] + Math.cos(angle) * radius;
+                        pz = world[2] + Math.sin(angle) * radius;
+                    }
+                    else if (axis == AXIS_Y)
+                    {
+                        px = world[0] + Math.cos(angle) * radius;
+                        py = world[1];
+                        pz = world[2] + Math.sin(angle) * radius;
+                    }
+                    else
+                    {
+                        px = world[0] + Math.cos(angle) * radius;
+                        py = world[1] + Math.sin(angle) * radius;
+                        pz = world[2];
+                    }
+
+                    ScreenPoint point =
+                            project(
+                                    px,
+                                    py,
+                                    pz,
+                                    viewportX,
+                                    viewportY,
+                                    viewportWidth,
+                                    viewportHeight,
+                                    camera
+                            );
+
+                    if (point == null)
+                    {
+                        continue;
+                    }
+
+                    double dx =
+                            mouseX - point.x;
+                    double dy =
+                            mouseY - point.y;
+
+                    double distance =
+                            Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < minDistance)
+                    {
+                        minDistance = distance;
+                    }
+                }
+
+                if (minDistance < bestDistance)
+                {
+                    bestDistance = minDistance;
+                    bestAxis = axis;
+                }
             }
 
-            if (Math.abs(distance - 40.0F) < 9.0F)
+            return bestAxis;
+        }
+
+        int bestAxis = -1;
+        double bestDistance = 11.0D;
+
+        double[][] axes =
+                new double[][]
+                {
+                    {length, 0.0D, 0.0D},
+                    {0.0D, length, 0.0D},
+                    {0.0D, 0.0D, length}
+                };
+
+        for (int axis = 0; axis < 3; axis++)
+        {
+            ScreenPoint endpoint =
+                    project(
+                            world[0] + axes[axis][0],
+                            world[1] + axes[axis][1],
+                            world[2] + axes[axis][2],
+                            viewportX,
+                            viewportY,
+                            viewportWidth,
+                            viewportHeight,
+                            camera
+                    );
+
+            if (endpoint == null)
             {
-                return AXIS_Y;
+                continue;
             }
 
-            if (Math.abs(distance - 32.0F) < 9.0F)
-            {
-                return AXIS_Z;
-            }
+            double distance =
+                    distanceToSegment(
+                            mouseX,
+                            mouseY,
+                            center.x,
+                            center.y,
+                            endpoint.x,
+                            endpoint.y
+                    );
 
-            return -1;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestAxis = axis;
+            }
         }
 
         /*
-         * Plane handles are small squares between the axes.
+         * Plane handles are projected from their real 3D positions.
+         * They are deliberately tested after the axes so the larger
+         * axis handles retain priority at their intersection.
          */
-        if (insideSquare(dx, dy, 18.0F, -18.0F, 9.0F))
+        float offset = 0.48F * size;
+        float extent = 0.38F * size;
+
+        double[][] planeCenters =
+                new double[][]
+                {
+                    {offset + extent * 0.5D, offset + extent * 0.5D, 0.0D},
+                    {offset + extent * 0.5D, 0.0D, offset + extent * 0.5D},
+                    {0.0D, offset + extent * 0.5D, offset + extent * 0.5D}
+                };
+
+        for (int plane = 0; plane < 3; plane++)
         {
-            return PLANE_XY;
+            ScreenPoint point =
+                    project(
+                            world[0] + planeCenters[plane][0],
+                            world[1] + planeCenters[plane][1],
+                            world[2] + planeCenters[plane][2],
+                            viewportX,
+                            viewportY,
+                            viewportWidth,
+                            viewportHeight,
+                            camera
+                    );
+
+            if (point == null)
+            {
+                continue;
+            }
+
+            double dx =
+                    mouseX - point.x;
+            double dy =
+                    mouseY - point.y;
+
+            if (dx * dx + dy * dy <= 12.0D * 12.0D)
+            {
+                return PLANE_XY + plane;
+            }
         }
 
-        if (insideSquare(dx, dy, 17.0F, 17.0F, 9.0F))
+        return bestAxis;
+    }
+
+    private double distanceToSegment(
+            double px,
+            double py,
+            double x1,
+            double y1,
+            double x2,
+            double y2)
+    {
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+
+        double lengthSquared =
+                dx * dx + dy * dy;
+
+        if (lengthSquared <= 0.000001D)
         {
-            return PLANE_XZ;
+            double ex = px - x1;
+            double ey = py - y1;
+
+            return Math.sqrt(
+                    ex * ex + ey * ey
+            );
         }
 
-        if (insideSquare(dx, dy, -18.0F, 18.0F, 9.0F))
-        {
-            return PLANE_YZ;
-        }
+        double t =
+                (
+                        (px - x1) * dx
+                                + (py - y1) * dy
+                )
+                        / lengthSquared;
 
-        float length = 58.0F;
+        t =
+                Math.max(
+                        0.0D,
+                        Math.min(
+                                1.0D,
+                                t
+                        )
+                );
 
-        if (Math.abs(dy) < 10.0F
-                && dx > 12.0F
-                && dx < length + 12.0F)
-        {
-            return AXIS_X;
-        }
+        double closestX =
+                x1 + t * dx;
+        double closestY =
+                y1 + t * dy;
 
-        if (Math.abs(dx) < 10.0F
-                && dy < -12.0F
-                && dy > -length - 12.0F)
-        {
-            return AXIS_Y;
-        }
+        double ex =
+                px - closestX;
+        double ey =
+                py - closestY;
 
-        if (dx < -8.0F
-                && dy > 8.0F
-                && Math.abs(Math.abs(dx) - Math.abs(dy)) < 15.0F)
-        {
-            return AXIS_Z;
-        }
-
-        return -1;
+        return Math.sqrt(
+                ex * ex + ey * ey
+        );
     }
 
     private boolean insideSquare(
