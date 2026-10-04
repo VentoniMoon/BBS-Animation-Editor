@@ -39,6 +39,8 @@ public class CharacterAnimationSetupPanel
     private int actionOffset;
     private String selectedAction = "Idle";
 
+    private CharacterTimelineController selectedTimeline;
+
     private final CharacterAnimationPickerPopup pickerPopup;
 
     public CharacterAnimationSetupPanel()
@@ -56,6 +58,11 @@ public class CharacterAnimationSetupPanel
                             }
                         }
                 );
+    }
+
+    public void setBodyPartTimeline(CharacterTimelineController timeline)
+    {
+        this.selectedTimeline = timeline;
     }
 
     public void setBounds(
