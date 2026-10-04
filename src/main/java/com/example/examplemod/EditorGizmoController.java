@@ -428,16 +428,19 @@ public class EditorGizmoController
                         camera
                 );
 
+        /*
+         * The gizmo must remain visible even when the selected actor
+         * does not currently have a Record frame.  The animation bone
+         * itself is still a valid target, so fall back to the centre of
+         * the Preview instead of silently hiding the gizmo.
+         */
         if (center == null)
         {
-            GL11.glPopMatrix();
-
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPopMatrix();
-
-            GL11.glPopAttrib();
-            GL11.glMatrixMode(oldMatrixMode);
-            return;
+            center =
+                    new ScreenPoint(
+                            viewportX + viewportWidth / 2.0F,
+                            viewportY + viewportHeight / 2.0F
+                    );
         }
 
         float scale =
@@ -909,7 +912,7 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
-        if (bone == null || recordFrame == null)
+        if (bone == null)
         {
             return null;
         }
@@ -935,11 +938,26 @@ public class EditorGizmoController
             return null;
         }
 
+        double recordX =
+                recordFrame != null
+                        ? recordFrame.getX()
+                        : 0.0D;
+
+        double recordY =
+                recordFrame != null
+                        ? recordFrame.getY()
+                        : 0.0D;
+
+        double recordZ =
+                recordFrame != null
+                        ? recordFrame.getZ()
+                        : 0.0D;
+
         return new double[]
         {
-            recordFrame.getX() + world.getPositionX(),
-            recordFrame.getY() + world.getPositionY(),
-            recordFrame.getZ() + world.getPositionZ()
+            recordX + world.getPositionX(),
+            recordY + world.getPositionY(),
+            recordZ + world.getPositionZ()
         };
     }
 
