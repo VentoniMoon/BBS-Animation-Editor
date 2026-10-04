@@ -323,9 +323,11 @@ public class BodyPartsEditorController
         return -1;
     }
 
-    private List<AnimationBone> createAnimationBonesFromMorph(AbstractMorph morph)
+    private List<AnimationBone> createAnimationBonesFromMorph(
+            AbstractMorph morph)
     {
-        List<AnimationBone> result = new ArrayList<AnimationBone>();
+        List<AnimationBone> result =
+                new ArrayList<AnimationBone>();
 
         if (morph == null)
         {
@@ -334,32 +336,240 @@ public class BodyPartsEditorController
 
         try
         {
-            Object model = morph.getClass().getMethod("getModel").invoke(morph);
+            /*
+             * ChameleonMorph.getModel() returns ChameleonModel.
+             * ChameleonModel.getBoneNames() gives the names, but names
+             * alone are not enough for the editor: we also need the
+             * real ModelBone hierarchy and initial pivots.
+             *
+             * Read the underlying "model.bones" reflectively so this
+             * code keeps compiling even when Chameleon is optional.
+             */
+            Object chameleonModel =
+                    morph.getClass()
+                            .getMethod("getModel")
+                            .invoke(morph);
+
+            if (chameleonModel == null)
+            {
+                return result;
+            }
+
+            Object model =
+                    null;
+
+            try
+            {
+                java.lang.reflect.Field modelField =
+                        chameleonModel.getClass()
+                                .getField("model");
+
+                model = modelField.get(chameleonModel);
+            }
+            catch (Throwable ignored)
+            {
+            }
+
             if (model == null)
             {
                 return result;
             }
 
-            Object names = model.getClass().getMethod("getBoneNames").invoke(model);
-            if (!(names instanceof List))
+            java.lang.reflect.Field bonesField =
+                    model.getClass()
+                            .getField("bones");
+
+            Object roots =
+                    bonesField.get(model);
+
+            if (!(roots instanceof List))
             {
                 return result;
             }
 
-            for (Object name : (List<?>) names)
+            for (Object root :
+                    (List<?>) roots)
             {
-                if (name != null)
+                createAnimationBonesFromChameleonBone(
+                        root,
+                        null,
+                        result
+                );
+            }
+        }
+        catch (Throwable error)
+        {
+            /*
+             * Do not silently turn a real Chameleon skeleton into an
+             * empty Body Part.  Keep the old name-only fallback for
+             * other morph implementations which expose getBoneNames().
+             */
+            try
+            {
+                Object model =
+                        morph.getClass()
+                                .getMethod("getModel")
+                                .invoke(morph);
+
+                Object names =
+                        model.getClass()
+                                .getMethod("getBoneNames")
+                                .invoke(model);
+
+                if (names instanceof List)
                 {
-                    result.add(new AnimationBone(String.valueOf(name)));
+                    for (Object name :
+                            (List<?>) names)
+                    {
+                        if (name != null)
+                        {
+                            result.add(
+                                    new AnimationBone(
+                                            String.valueOf(name)
+                                    )
+                            );
+                        }
+                    }
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+
+        return result;
+    }
+
+    private void createAnimationBonesFromChameleonBone(
+            Object modelBone,
+            AnimationBone parent,
+            List<AnimationBone> result)
+    {
+        if (modelBone == null)
+        {
+            return;
+        }
+
+        try
+        {
+            java.lang.reflect.Field idField =
+                    modelBone.getClass()
+                            .getField("id");
+
+            String name =
+                    String.valueOf(
+                            idField.get(modelBone)
+                    );
+
+            AnimationBone bone =
+                    new AnimationBone(name);
+
+            /*
+             * ModelBone.initial.translate is the actual Chameleon
+             * pivot.  ChameleonRenderer moves to this pivot before
+             * rotation/scale, so this is the point where the gizmo
+             * belongs.
+             */
+            java.lang.reflect.Field initialField =
+                    modelBone.getClass()
+                            .getField("initial");
+
+            Object initial =
+                    initialField.get(modelBone);
+
+            if (initial != null)
+            {
+                java.lang.reflect.Field translateField =
+                        initial.getClass()
+                                .getField("translate");
+
+                Object translate =
+                        translateField.get(initial);
+
+                if (translate != null)
+                {
+                    float x =
+                            readVectorComponent(
+                                    translate,
+                                    "x"
+                            );
+
+                    float y =
+                            readVectorComponent(
+                                    translate,
+                                    "y"
+                            );
+
+                    float z =
+                            readVectorComponent(
+                                    translate,
+                                    "z"
+                            );
+
+                    bone.setLocalPosition(
+                            x,
+                            y,
+                            z
+                    );
+                }
+            }
+
+            if (parent != null)
+            {
+                bone.setParent(parent);
+            }
+
+            result.add(bone);
+
+            java.lang.reflect.Field childrenField =
+                    modelBone.getClass()
+                            .getField("children");
+
+            Object children =
+                    childrenField.get(modelBone);
+
+            if (children instanceof List)
+            {
+                for (Object child :
+                        (List<?>) children)
+                {
+                    createAnimationBonesFromChameleonBone(
+                            child,
+                            bone,
+                            result
+                    );
                 }
             }
         }
         catch (Throwable ignored)
         {
-            /* Morphs which don't expose a bone model simply have no local bone tracks. */
+            /*
+             * A malformed optional Chameleon bone must not prevent the
+             * rest of the editor from opening.
+             */
         }
+    }
 
-        return result;
+    private float readVectorComponent(
+            Object vector,
+            String field)
+    {
+        try
+        {
+            java.lang.reflect.Field value =
+                    vector.getClass().getField(field);
+
+            Object number =
+                    value.get(vector);
+
+            return number instanceof Number
+                    ? ((Number) number).floatValue()
+                    : 0.0F;
+        }
+        catch (Throwable ignored)
+        {
+            return 0.0F;
+        }
     }
 
     private List<AnimationBone> createAnimationBones(
