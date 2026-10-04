@@ -1,6 +1,7 @@
 package com.example.examplemod;
 
 import net.minecraft.client.Minecraft;
+import mchorse.metamorph.api.morphs.AbstractMorph;
 import net.minecraft.client.gui.Gui;
 
 public class BodyPartsEditorPanel
@@ -297,7 +298,7 @@ public class BodyPartsEditorPanel
                     Minecraft.getMinecraft().displayGuiScreen(
                             new BodyPartModelPickerScreen(
                                     Minecraft.getMinecraft(), this.screen,
-                                    (modelName) -> controller.assignModelToSelected(modelName)
+                                    (morph) -> controller.assignMorphToSelected((AbstractMorph) morph)
                             )
                     );
                 }
