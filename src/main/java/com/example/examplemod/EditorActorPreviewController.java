@@ -33,6 +33,8 @@ public class EditorActorPreviewController
     private List<AnimationBone> bones =
             new ArrayList<AnimationBone>();
 
+    private boolean currentActorIsChameleon;
+
 
     public EditorActorPreviewController()
     {
@@ -47,6 +49,8 @@ public class EditorActorPreviewController
 
         this.animationPreview =
                 new AnimationPreview();
+
+        this.currentActorIsChameleon = false;
     }
 
 
@@ -121,6 +125,12 @@ public class EditorActorPreviewController
             this.bones =
                     bones;
         }
+    }
+
+
+    public boolean isCurrentActorChameleon()
+    {
+        return this.currentActorIsChameleon;
     }
 
 
@@ -252,11 +262,15 @@ public class EditorActorPreviewController
         if (morph != null &&
                 morph.getClass().getName().endsWith(".ChameleonMorph"))
         {
+            this.currentActorIsChameleon = true;
+
             return new ActorAnimationData(
                     actorId,
                     morph
             );
         }
+
+        this.currentActorIsChameleon = false;
 
         /*
          * Blockbuster actors store their custom model as a Metamorph
