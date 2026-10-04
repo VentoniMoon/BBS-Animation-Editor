@@ -131,6 +131,7 @@ public class PlayerSkinEditorScreen extends GuiBase
 
         String[] classNames =
                 {
+                        "mchorse.chameleon.metamorph.editor.GuiChameleonMorph",
                         "mchorse.emoticons.skin_n_bones.api.metamorph.editor.GuiEmoticonsMorph",
                         "mchorse.emoticons.skin_n_bones.api.metamorph.editor.GuiAnimatedMorph"
                 };
@@ -222,25 +223,21 @@ public class PlayerSkinEditorScreen extends GuiBase
 
         try
         {
-            java.lang.reflect.Field meshes =
-                    findField(
-                            this.editor.getClass(),
-                            "meshes"
-                    );
+            java.lang.reflect.Field panelField =
+                    findField(this.editor.getClass(), "mainPanel");
 
-            if (meshes != null)
+            if (panelField == null)
             {
-                Object value =
-                        meshes.get(
-                                this.editor
-                        );
+                panelField = findField(this.editor.getClass(), "meshes");
+            }
 
-                if (value instanceof
-                        mchorse.metamorph.client.gui.editor.GuiMorphPanel)
+            if (panelField != null)
+            {
+                Object value = panelField.get(this.editor);
+                if (value instanceof mchorse.metamorph.client.gui.editor.GuiMorphPanel)
                 {
                     this.editor.setPanel(
-                            (mchorse.metamorph.client.gui.editor.GuiMorphPanel)
-                                    value
+                            (mchorse.metamorph.client.gui.editor.GuiMorphPanel) value
                     );
                 }
             }
