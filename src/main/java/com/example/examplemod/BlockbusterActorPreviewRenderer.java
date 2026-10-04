@@ -1096,6 +1096,20 @@ public class BlockbusterActorPreviewRenderer
          * =====================================================
          */
 
+        /*
+         * Body Parts must be rendered as a real RenderCustomModel layer.
+         * This gives us the same GL transform context used by
+         * Blockbuster's own LayerBodyPart.
+         */
+        if (this.bodyPartsController != null)
+        {
+            this.bodyPartsPreviewRenderer.prepare(
+                    this.bodyPartsController,
+                    entityActor,
+                    previewFrame
+            );
+        }
+
         renderManager.renderEntity(
                 entityActor,
                 entityActor.posX,
@@ -1105,17 +1119,6 @@ public class BlockbusterActorPreviewRenderer
                 actorPartialTicks,
                 true
         );
-
-        if (this.bodyPartsController != null)
-        {
-            this.bodyPartsPreviewRenderer.render(
-                    mc,
-                    entityActor,
-                    this.bodyPartsController,
-                    previewFrame,
-                    actorPartialTicks
-            );
-        }
 
         /*
          * =====================================================
