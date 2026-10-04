@@ -1168,42 +1168,21 @@ public class CharacterTimelineEditorController
         return null;
     }
 
-    private int findBodyPartKeyNearFrame(
-            BodyPartModelData model,
-            int frame)
+    private int findBodyPartKeyNearFrame(BodyPartModelData model, int frame)
     {
-        if (model == null || model.getBones() == null)
-        {
-            return -1;
-        }
-
+        if (model == null) return -1;
         int nearest = -1;
         int distance = Integer.MAX_VALUE;
-
-        for (AnimationBone bone : model.getBones())
+        for (Integer value : model.getModelKeyFrames())
         {
-            if (bone == null || bone.getKeyframes() == null)
+            if (value == null) continue;
+            int d = Math.abs(value.intValue() - frame);
+            if (d <= 1 && d < distance)
             {
-                continue;
-            }
-
-            for (AnimationKeyframe keyframe : bone.getKeyframes())
-            {
-                if (keyframe == null)
-                {
-                    continue;
-                }
-
-                int d = Math.abs(keyframe.getFrame() - frame);
-
-                if (d <= 1 && d < distance)
-                {
-                    nearest = keyframe.getFrame();
-                    distance = d;
-                }
+                nearest = value.intValue();
+                distance = d;
             }
         }
-
         return nearest;
     }
 
