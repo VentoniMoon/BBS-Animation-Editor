@@ -713,7 +713,7 @@ public class AnimationEditorInput
                     this.screen.width,
                     this.screen.height -
                             this.screen.getTimelineHeight(),
-                    0))
+                    AnimationEditorScreen.LEFT_PANEL_WIDTH))
             {
                 this.markDirty();
                 return;
@@ -804,7 +804,7 @@ public class AnimationEditorInput
                     this.screen.width,
                     this.screen.height -
                             this.screen.getTimelineHeight(),
-                    0))
+                    AnimationEditorScreen.LEFT_PANEL_WIDTH))
             {
                 this.markDirty();
                 return;
@@ -1068,9 +1068,9 @@ public class AnimationEditorInput
                                 mouseY,
                                 direction,
                                 this.screen.width,
-                                this.screen.height -
-                                        this.screen.getTimelineHeight(),
-                                0))
+                                this.screen.height,
+                                AnimationEditorScreen.LEFT_PANEL_WIDTH,
+                                this.screen.getSceneLength()))
                 {
                     return;
                 }
