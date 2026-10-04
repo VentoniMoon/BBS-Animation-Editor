@@ -432,6 +432,10 @@ public class AnimationEditorScreen extends GuiScreen
                 getSelectedActor()
         );
 
+        this.characterTimelineEditorController.setBodyPartModels(
+                this.bodyPartsController.getModels()
+        );
+
         BlockbusterSceneActorData actor =
                 getSelectedActor();
 
