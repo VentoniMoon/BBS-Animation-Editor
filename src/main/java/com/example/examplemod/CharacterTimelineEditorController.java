@@ -1249,68 +1249,19 @@ public class CharacterTimelineEditorController
         return true;
     }
 
-    private void drawBodyPartKeyframes(
-            GuiScreen screen,
-            int width,
-            int centerY,
-            int timelineStartX,
-            BodyPartModelData model)
+    private void drawBodyPartKeyframes(GuiScreen screen, int width, int centerY, int timelineStartX, BodyPartModelData model)
     {
-        if (model == null || model.getBones() == null)
+        if (model == null) return;
+        for (Integer value : model.getModelKeyFrames())
         {
-            return;
-        }
-
-        java.util.HashSet<Integer> frames =
-                new java.util.HashSet<Integer>();
-
-        for (AnimationBone bone : model.getBones())
-        {
-            if (bone == null || bone.getKeyframes() == null)
-            {
-                continue;
-            }
-
-            for (AnimationKeyframe keyframe : bone.getKeyframes())
-            {
-                if (keyframe != null)
-                {
-                    frames.add(keyframe.getFrame());
-                }
-            }
-        }
-
-        for (Integer value : frames)
-        {
-            if (value == null)
-            {
-                continue;
-            }
-
+            if (value == null) continue;
             int frame = value.intValue();
             int frameX = getFrameX(frame, timelineStartX);
-
-            if (frameX < timelineStartX - 10 ||
-                    frameX > width + 10)
-            {
-                continue;
-            }
-
-            drawKeyframe(
-                    screen,
-                    frameX,
-                    centerY,
-                    this.selectedBodyPartModel == model &&
-                            this.dragBodyPartFrame == frame
-            );
-
-            screen.drawString(
-                    Minecraft.getMinecraft().fontRenderer,
-                    "B",
-                    frameX - 2,
-                    centerY - 4,
-                    getTimelineKeyframeInnerColor()
-            );
+            if (frameX < timelineStartX - 10 || frameX > width + 10) continue;
+            drawKeyframe(screen, frameX, centerY,
+                    this.selectedBodyPartModel == model && this.dragBodyPartFrame == frame);
+            screen.drawString(Minecraft.getMinecraft().fontRenderer, "M",
+                    frameX - 2, centerY - 4, getTimelineKeyframeInnerColor());
         }
     }
 
