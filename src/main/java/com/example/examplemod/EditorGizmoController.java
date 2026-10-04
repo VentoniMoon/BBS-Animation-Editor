@@ -2045,6 +2045,7 @@ public class EditorGizmoController
         double[] world =
                 getNativeBoneWorldPosition(
                         bone,
+                        keyframe,
                         recordFrame
                 );
 
