@@ -246,8 +246,7 @@ public class BodyPartsPreviewRenderer
 
             CustomMorph morph =
                     getMorph(
-                            Minecraft.getMinecraft(),
-                            data.getModelName()
+                            data
                     );
 
             if (morph == null ||
@@ -308,9 +307,19 @@ public class BodyPartsPreviewRenderer
     }
 
     private CustomMorph getMorph(
-            Minecraft mc,
-            String name)
+            BodyPartModelData data)
     {
+        if (data == null ||
+                data.getModelName() == null ||
+                data.getModelName().isEmpty() ||
+                data.getModelAccess() == null)
+        {
+            return null;
+        }
+
+        String name =
+                data.getModelName();
+
         CustomMorph morph =
                 this.morphs.get(name);
 
@@ -319,10 +328,17 @@ public class BodyPartsPreviewRenderer
             morph =
                     new CustomMorph();
 
+            /*
+             * Use the exact ModelCustom object already resolved by
+             * BlockbusterModelAccess.  In 1.12.2 CustomMorph.updateModel()
+             * can resolve through a different model registry, while the
+             * editor already has the render-side model that was selected.
+             */
             morph.name =
-                    "blockbuster." + name;
+                    name;
 
-            morph.updateModel(true);
+            morph.model =
+                    data.getModelAccess().getModel();
 
             this.morphs.put(
                     name,
@@ -331,7 +347,17 @@ public class BodyPartsPreviewRenderer
         }
         else
         {
-            morph.updateModel();
+            Object loadedModel =
+                    data.getModelAccess().getModel();
+
+            if (loadedModel != null &&
+                    morph.model != loadedModel)
+            {
+                morph.model =
+                        loadedModel;
+            }
+
+            morph.customPose = null;
         }
 
         if (morph.model == null)
