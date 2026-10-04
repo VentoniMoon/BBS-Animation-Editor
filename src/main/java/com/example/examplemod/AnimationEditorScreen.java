@@ -2555,7 +2555,7 @@ public class AnimationEditorScreen extends GuiScreen
                     this,
                     width,
                     height,
-                    0,
+                    LEFT_PANEL_WIDTH,
                     top,
                     this.playbackController
                             .getCurrentFrame(),
