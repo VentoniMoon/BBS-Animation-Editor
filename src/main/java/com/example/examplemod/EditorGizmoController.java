@@ -909,76 +909,38 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
-        List<AnimationBone> chain =
-                new ArrayList<AnimationBone>();
-
-        AnimationBone current = bone;
-
-        while (current != null)
+        if (bone == null || recordFrame == null)
         {
-            chain.add(current);
-            current = current.getParent();
+            return null;
         }
 
-        Collections.reverse(chain);
+        /*
+         * AnimationBone already owns the authoritative local/world
+         * transform calculation used by the Preview animation.
+         *
+         * Do NOT divide these values by 16 here. The same coordinate
+         * space is used when the AnimationBone snapshot is applied to
+         * Blockbuster's ModelTransform.
+         */
+        int frame =
+                selectedKeyframe != null
+                        ? selectedKeyframe.getFrame()
+                        : 0;
 
-        double x = recordFrame.getX();
-        double y = recordFrame.getY();
-        double z = recordFrame.getZ();
+        AnimationTransform world =
+                bone.getWorldPivotAt(frame);
 
-        float parentRX = 0.0F;
-        float parentRY = recordFrame.getYaw();
-        float parentRZ = 0.0F;
-
-        for (AnimationBone item : chain)
+        if (world == null)
         {
-            AnimationTransform transform;
-
-            if (item == bone && selectedKeyframe != null)
-            {
-                transform = selectedKeyframe.getTransform();
-            }
-            else
-            {
-                transform = item.getTransformAt(
-                        selectedKeyframe == null
-                                ? 0
-                                : selectedKeyframe.getFrame()
-                );
-            }
-
-            if (transform == null)
-            {
-                transform = new AnimationTransform();
-            }
-
-            float lx = item.getLocalX() / 16.0F
-                    + transform.getPositionX() / 16.0F;
-            float ly = item.getLocalY() / 16.0F
-                    + transform.getPositionY() / 16.0F;
-            float lz = item.getLocalZ() / 16.0F
-                    + transform.getPositionZ() / 16.0F;
-
-            float[] rotated =
-                    rotateVector(
-                            lx,
-                            ly,
-                            lz,
-                            parentRX,
-                            parentRY,
-                            parentRZ
-                    );
-
-            x += rotated[0];
-            y += rotated[1];
-            z += rotated[2];
-
-            parentRX += transform.getRotationX();
-            parentRY += transform.getRotationY();
-            parentRZ += transform.getRotationZ();
+            return null;
         }
 
-        return new double[] {x, y, z};
+        return new double[]
+        {
+            recordFrame.getX() + world.getPositionX(),
+            recordFrame.getY() + world.getPositionY(),
+            recordFrame.getZ() + world.getPositionZ()
+        };
     }
 
     private float[] rotateVector(
