@@ -201,11 +201,13 @@ public class EditorActorPreviewController
         NBTTagCompound morphNBT =
                 sceneActor.getMorph();
 
+        AbstractMorph morph = null;
+
         if (morphNBT != null)
         {
             try
             {
-                AbstractMorph morph =
+                morph =
                         MorphManager.INSTANCE
                                 .morphFromNBT(
                                         morphNBT.copy()
