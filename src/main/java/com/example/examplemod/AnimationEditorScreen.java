@@ -589,6 +589,18 @@ public class AnimationEditorScreen extends GuiScreen
                 chameleonGizmoTarget
         );
 
+        AnimationBone gizmoAttachmentBone =
+                getGizmoBodyPartAttachmentBone();
+
+        if (gizmoAttachmentBone == null)
+        {
+            gizmoAttachmentBone = getGizmoBone();
+        }
+
+        this.gizmoController.setGizmoAttachmentBone(
+                gizmoAttachmentBone
+        );
+
         this.gizmoController.setBodyPartTarget(
                 getGizmoBodyPartModel(),
                 getGizmoBodyPartAttachmentBone()
