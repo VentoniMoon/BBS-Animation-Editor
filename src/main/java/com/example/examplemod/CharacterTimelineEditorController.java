@@ -189,6 +189,11 @@ public class CharacterTimelineEditorController
 
     private BlockbusterSceneActorData selectedActor;
 
+    private java.util.List<BodyPartModelData> bodyPartModels =
+            new java.util.ArrayList<BodyPartModelData>();
+
+    private BodyPartModelData selectedBodyPartModel;
+
     private int selectedTrack = -1;
 
     private CharacterKey selectedKey;
@@ -202,6 +207,10 @@ public class CharacterTimelineEditorController
     private int dragTrack = -1;
 
     private CharacterKey dragKey = null;
+
+    private boolean draggingBodyPart = false;
+    private int dragBodyPartFrame = -1;
+    private BodyPartModelData dragBodyPartModel;
 
     /*
      * Состояние последнего ЛКМ.
@@ -343,6 +352,25 @@ public class CharacterTimelineEditorController
     public BlockbusterSceneActorData getSelectedActor()
     {
         return this.selectedActor;
+    }
+
+    public void setBodyPartModels(
+            java.util.List<BodyPartModelData> models)
+    {
+        this.bodyPartModels = models == null
+                ? new java.util.ArrayList<BodyPartModelData>()
+                : models;
+
+        if (this.selectedBodyPartModel != null &&
+                !this.bodyPartModels.contains(this.selectedBodyPartModel))
+        {
+            this.selectedBodyPartModel = null;
+        }
+    }
+
+    public BodyPartModelData getSelectedBodyPartModel()
+    {
+        return this.selectedBodyPartModel;
     }
 
     public CharacterTimelineController getCharacterTimeline()
@@ -1040,6 +1068,22 @@ public class CharacterTimelineEditorController
                             visibleIndex * TRACK_HEIGHT +
                             TRACK_HEIGHT / 2;
 
+            BodyPartModelData bodyPart =
+                    getBodyPartModel(track);
+
+            if (bodyPart != null)
+            {
+                drawBodyPartKeyframes(
+                        screen,
+                        width,
+                        centerY,
+                        timelineStartX,
+                        bodyPart
+                );
+
+                continue;
+            }
+
             for (
                     CharacterKey key :
                     track.getKeys()
@@ -1095,6 +1139,256 @@ public class CharacterTimelineEditorController
                     );
                 }
             }
+        }
+    }
+
+    private BodyPartModelData getBodyPartModel(
+            CharacterTrack track)
+    {
+        if (track == null)
+        {
+            return null;
+        }
+
+        String id = track.getTrackId();
+
+        if (id == null || !id.startsWith("bodypart:"))
+        {
+            return null;
+        }
+
+        for (BodyPartModelData model : this.bodyPartModels)
+        {
+            if (model != null && id.equals(model.getTimelineId()))
+            {
+                return model;
+            }
+        }
+
+        return null;
+    }
+
+    private int findBodyPartKeyNearFrame(
+            BodyPartModelData model,
+            int frame)
+    {
+        if (model == null || model.getBones() == null)
+        {
+            return -1;
+        }
+
+        int nearest = -1;
+        int distance = Integer.MAX_VALUE;
+
+        for (AnimationBone bone : model.getBones())
+        {
+            if (bone == null || bone.getKeyframes() == null)
+            {
+                continue;
+            }
+
+            for (AnimationKeyframe keyframe : bone.getKeyframes())
+            {
+                if (keyframe == null)
+                {
+                    continue;
+                }
+
+                int d = Math.abs(keyframe.getFrame() - frame);
+
+                if (d <= 1 && d < distance)
+                {
+                    nearest = keyframe.getFrame();
+                    distance = d;
+                }
+            }
+        }
+
+        return nearest;
+    }
+
+    private boolean createBodyPartKey(
+            BodyPartModelData model,
+            int frame)
+    {
+        if (model == null ||
+                !model.hasModel() ||
+                model.getBones() == null ||
+                model.getBones().isEmpty())
+        {
+            return false;
+        }
+
+        java.util.List<AnimationTransform> snapshot =
+                new java.util.ArrayList<AnimationTransform>();
+
+        for (AnimationBone bone : model.getBones())
+        {
+            snapshot.add(
+                    bone == null
+                            ? new AnimationTransform()
+                            : bone.getTransformAt(frame).copy()
+            );
+        }
+
+        for (int i = 0; i < model.getBones().size(); i++)
+        {
+            AnimationBone bone = model.getBones().get(i);
+
+            if (bone == null || bone.hasKeyframe(frame))
+            {
+                continue;
+            }
+
+            bone.addKeyframe(frame);
+
+            AnimationKeyframe keyframe =
+                    bone.getKeyframeAt(frame);
+
+            if (keyframe != null)
+            {
+                AnimationTransform transform = snapshot.get(i);
+
+                keyframe.getTransform().setPosition(
+                        transform.getPositionX(),
+                        transform.getPositionY(),
+                        transform.getPositionZ()
+                );
+
+                keyframe.getTransform().setRotation(
+                        transform.getRotationX(),
+                        transform.getRotationY(),
+                        transform.getRotationZ()
+                );
+
+                keyframe.getTransform().setScale(
+                        transform.getScaleX(),
+                        transform.getScaleY(),
+                        transform.getScaleZ()
+                );
+            }
+        }
+
+        return true;
+    }
+
+    private void removeBodyPartKey(
+            BodyPartModelData model,
+            int frame)
+    {
+        if (model == null || model.getBones() == null)
+        {
+            return;
+        }
+
+        for (AnimationBone bone : model.getBones())
+        {
+            if (bone != null)
+            {
+                bone.removeKeyframe(frame);
+            }
+        }
+    }
+
+    private boolean moveBodyPartKey(
+            BodyPartModelData model,
+            int oldFrame,
+            int newFrame)
+    {
+        if (model == null ||
+                oldFrame == newFrame ||
+                model.getBones() == null)
+        {
+            return true;
+        }
+
+        if (findBodyPartKeyNearFrame(model, newFrame) == newFrame)
+        {
+            return false;
+        }
+
+        for (AnimationBone bone : model.getBones())
+        {
+            if (bone == null)
+            {
+                continue;
+            }
+
+            AnimationKeyframe keyframe =
+                    bone.getKeyframeAt(oldFrame);
+
+            if (keyframe != null &&
+                    !bone.moveKeyframe(keyframe, newFrame))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void drawBodyPartKeyframes(
+            GuiScreen screen,
+            int width,
+            int centerY,
+            int timelineStartX,
+            BodyPartModelData model)
+    {
+        if (model == null || model.getBones() == null)
+        {
+            return;
+        }
+
+        java.util.HashSet<Integer> frames =
+                new java.util.HashSet<Integer>();
+
+        for (AnimationBone bone : model.getBones())
+        {
+            if (bone == null || bone.getKeyframes() == null)
+            {
+                continue;
+            }
+
+            for (AnimationKeyframe keyframe : bone.getKeyframes())
+            {
+                if (keyframe != null)
+                {
+                    frames.add(keyframe.getFrame());
+                }
+            }
+        }
+
+        for (Integer value : frames)
+        {
+            if (value == null)
+            {
+                continue;
+            }
+
+            int frame = value.intValue();
+            int frameX = getFrameX(frame, timelineStartX);
+
+            if (frameX < timelineStartX - 10 ||
+                    frameX > width + 10)
+            {
+                continue;
+            }
+
+            drawKeyframe(
+                    screen,
+                    frameX,
+                    centerY,
+                    this.selectedBodyPartModel == model &&
+                            this.dragBodyPartFrame == frame
+            );
+
+            screen.drawString(
+                    Minecraft.getMinecraft().fontRenderer,
+                    "B",
+                    frameX - 2,
+                    centerY - 4,
+                    getTimelineKeyframeInnerColor()
+            );
         }
     }
 
@@ -1315,6 +1609,9 @@ public class CharacterTimelineEditorController
         this.draggingKey = false;
         this.dragTrack = -1;
         this.dragKey = null;
+        this.draggingBodyPart = false;
+        this.dragBodyPartFrame = -1;
+        this.dragBodyPartModel = null;
 
         resetDoubleClickState();
     }
@@ -1523,6 +1820,51 @@ public class CharacterTimelineEditorController
          * =====================================================
          */
 
+        BodyPartModelData bodyPart =
+                getBodyPartModel(track);
+
+        if (bodyPart != null)
+        {
+            int existingFrame =
+                    findBodyPartKeyNearFrame(
+                            bodyPart,
+                            frame
+                    );
+
+            if (existingFrame >= 0)
+            {
+                this.selectedBodyPartModel = bodyPart;
+                this.selectedKey = null;
+
+                if (mouseButton == 1)
+                {
+                    removeBodyPartKey(
+                            bodyPart,
+                            existingFrame
+                    );
+
+                    this.draggingBodyPart = false;
+                    this.dragBodyPartFrame = -1;
+                    this.dragBodyPartModel = null;
+
+                    resetDoubleClickState();
+                    return true;
+                }
+
+                if (mouseButton == 0)
+                {
+                    this.draggingBodyPart = true;
+                    this.dragBodyPartFrame = existingFrame;
+                    this.dragBodyPartModel = bodyPart;
+
+                    resetDoubleClickState();
+                    return true;
+                }
+
+                return true;
+            }
+        }
+
         CharacterKey clickedKey =
                 findKeyNearFrame(
                         track,
@@ -1534,10 +1876,6 @@ public class CharacterTimelineEditorController
             this.selectedKey =
                     clickedKey;
 
-            /*
-             * ПКМ по существующему ключу =
-             * удалить ключ.
-             */
             if (mouseButton == 1)
             {
                 track.removeKey(
@@ -1554,10 +1892,6 @@ public class CharacterTimelineEditorController
                 return true;
             }
 
-            /*
-             * ЛКМ по существующему ключу =
-             * выбрать и начать перетаскивание.
-             */
             if (mouseButton == 0)
             {
                 this.draggingKey = true;
@@ -1589,6 +1923,25 @@ public class CharacterTimelineEditorController
              */
             if (isDoubleClick(trackIndex, frame))
             {
+                BodyPartModelData bodyPart =
+                        getBodyPartModel(track);
+
+                if (bodyPart != null)
+                {
+                    if (createBodyPartKey(
+                            bodyPart,
+                            frame))
+                    {
+                        this.selectedBodyPartModel = bodyPart;
+                        this.selectedKey = null;
+                        this.draggingKey = false;
+                        this.dragTrack = -1;
+                        this.dragKey = null;
+                    }
+
+                    return true;
+                }
+
                 CharacterKey key =
                         createKey(
                                 track,
@@ -1747,16 +2100,43 @@ public class CharacterTimelineEditorController
             int timelineTop,
             int timelineStartX)
     {
-        if (
-                !this.draggingKey ||
-                        this.dragKey == null ||
-                        clickedMouseButton != 0
-        )
+        if (clickedMouseButton != 0)
         {
             return false;
         }
 
         if (this.selectedActor == null)
+        {
+            return false;
+        }
+
+        if (this.draggingBodyPart &&
+                this.dragBodyPartModel != null)
+        {
+            int frame =
+                    getFrameFromMouseX(
+                            mouseX,
+                            timelineStartX
+                    );
+
+            if (frame < FIRST_FRAME)
+            {
+                frame = FIRST_FRAME;
+            }
+
+            if (moveBodyPartKey(
+                    this.dragBodyPartModel,
+                    this.dragBodyPartFrame,
+                    frame))
+            {
+                this.dragBodyPartFrame = frame;
+            }
+
+            return true;
+        }
+
+        if (!this.draggingKey ||
+                this.dragKey == null)
         {
             return false;
         }
