@@ -676,6 +676,11 @@ public class EditorGizmoController
                 -camera.getCameraZ()
         );
 
+        float[] exactChameleon =
+                this.chameleonCoordinateSpace
+                        ? beginExactChameleonBoneTransform(bone)
+                        : null;
+
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glDisable(GL11.GL_LIGHTING);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
@@ -699,30 +704,84 @@ public class EditorGizmoController
         double gizmoZ = world[2];
 
         GL11.glPushMatrix();
-        GL11.glTranslated(gizmoX, gizmoY, gizmoZ);
 
-        float size =
-                getWorldGizmoSize(
-                        camera,
-                        gizmoX,
-                        gizmoY,
-                        gizmoZ
-                );
+        float size;
+        double[][] axes;
 
-        if (this.mode == Mode.POSITION)
+        if (exactChameleon != null)
         {
-            drawPositionGizmo3D(size, getBoneWorldAxes(bone, keyframe, recordFrame));
-        }
-        else if (this.mode == Mode.ROTATION)
-        {
-            drawRotationGizmo3D(size, getBoneWorldAxes(bone, keyframe, recordFrame));
+            GL11.glScalef(
+                    1.0F / exactChameleon[1],
+                    1.0F / exactChameleon[2],
+                    1.0F / exactChameleon[3]
+            );
+
+            double distance =
+                    Math.max(
+                            0.05D,
+                            Math.abs(exactChameleon[0])
+                    );
+
+            size =
+                    (float) Math.max(
+                            0.35D,
+                            Math.min(
+                                    2.5D,
+                                    distance * 0.10D
+                            )
+                    );
+
+            axes =
+                    new double[][]
+                    {
+                        {1.0D, 0.0D, 0.0D},
+                        {0.0D, 1.0D, 0.0D},
+                        {0.0D, 0.0D, 1.0D}
+                    };
         }
         else
         {
-            drawScaleGizmo3D(size, getBoneWorldAxes(bone, keyframe, recordFrame));
+            GL11.glTranslated(
+                    gizmoX,
+                    gizmoY,
+                    gizmoZ
+            );
+
+            size =
+                    getWorldGizmoSize(
+                            camera,
+                            gizmoX,
+                            gizmoY,
+                            gizmoZ
+                    );
+
+            axes =
+                    getBoneWorldAxes(
+                            bone,
+                            keyframe,
+                            recordFrame
+                    );
+        }
+
+        if (this.mode == Mode.POSITION)
+        {
+            drawPositionGizmo3D(size, axes);
+        }
+        else if (this.mode == Mode.ROTATION)
+        {
+            drawRotationGizmo3D(size, axes);
+        }
+        else
+        {
+            drawScaleGizmo3D(size, axes);
         }
 
         GL11.glPopMatrix();
+
+        if (exactChameleon != null)
+        {
+            GL11.glPopMatrix();
+        }
 
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPopMatrix();
