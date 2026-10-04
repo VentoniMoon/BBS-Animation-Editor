@@ -563,6 +563,12 @@ public class AnimationEditorScreen extends GuiScreen
 
     public void prepareGizmoTarget()
     {
+        this.gizmoController.setChameleonCoordinateSpace(
+                this.editorModeController.getMode()
+                        == EditorModeController.EditorMode.POSE
+                        && this.actorPreviewController.isCurrentActorChameleon()
+        );
+
         this.gizmoController.setBodyPartTarget(
                 getGizmoBodyPartModel(),
                 getGizmoBodyPartAttachmentBone()
