@@ -461,18 +461,17 @@ public class EditorGizmoController
             return;
         }
 
-        ScaledResolution resolution =
-                new ScaledResolution(mc);
-
-        int scaleFactor =
-                Math.max(1, resolution.getScaleFactor());
-
-        int glX = viewportX * scaleFactor;
-        int glWidth = Math.max(1, viewportWidth * scaleFactor);
-        int glHeight = Math.max(1, viewportHeight * scaleFactor);
-        int glY =
-                mc.displayHeight
-                        - (viewportY + viewportHeight) * scaleFactor;
+        /*
+         * The actor renderer uses the complete Preview FBO as its
+         * projection surface (mc.displayWidth x mc.displayHeight).
+         * We deliberately use the exact same surface here. The finished
+         * FBO is later scaled into the GUI Preview rectangle, so this
+         * keeps the gizmo pixel-for-pixel attached to the rendered bone.
+         */
+        int glX = 0;
+        int glY = 0;
+        int glWidth = Math.max(1, mc.displayWidth);
+        int glHeight = Math.max(1, mc.displayHeight);
 
         int oldMatrixMode =
                 GL11.glGetInteger(GL11.GL_MATRIX_MODE);
@@ -497,7 +496,7 @@ public class EditorGizmoController
 
         GLU.gluPerspective(
                 60.0F,
-                (float) viewportWidth / (float) viewportHeight,
+                (float) glWidth / (float) glHeight,
                 0.05F,
                 500.0F
         );
