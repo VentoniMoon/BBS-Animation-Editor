@@ -261,31 +261,17 @@ public class BodyPartsPreviewRenderer
                     frame
             );
 
-            mchorse.blockbuster.client.model.ModelCustom attachmentModel =
-                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
-                            data.getModelName()
-                    );
-
-            if (attachmentModel == null ||
-                    attachmentModel.renderable == null)
-            {
-                continue;
-            }
-
             GL11.glPushMatrix();
 
             try
             {
                 /*
-                 * We are already inside the parent actor's model layer.
+                 * This intentionally follows Blockbuster/Metamorph's own
+                 * LayerBodyPart implementation.
                  *
-                 * Do NOT call CustomMorph.render() here.  That method
-                 * re-enters RenderCustomModel.doRender(), which starts a
-                 * completely new entity render and therefore loses the
-                 * bone matrix we just received from limb.postRender().
-                 *
-                 * Render the resolved ModelCustom directly, exactly like
-                 * Blockbuster's own LayerBodyPart does.
+                 * The parent limb establishes the bone matrix first.
+                 * Metamorph then renders the child through MorphUtils,
+                 * which is the same path used by BodyPart.render().
                  */
                 limb.postRender(
                         1.0F / 16.0F
@@ -310,86 +296,18 @@ public class BodyPartsPreviewRenderer
 
                 RenderHelper.enableStandardItemLighting();
 
-                attachmentModel.materials =
-                        morph.materials;
-                attachmentModel.shapes =
-                        morph.getShapesForRendering(
-                                partialTicks
-                        );
-                attachmentModel.pose =
-                        morph.getPose(
-                                actor,
-                                true,
-                                partialTicks
-                        );
-                attachmentModel.current =
-                        morph;
-                attachmentModel.swingProgress =
-                        0.0F;
-
-                if (attachmentModel.pose != null)
-                {
-                    attachmentModel.setRotationAngles(
-                            0.0F,
-                            0.0F,
-                            actor.ticksExisted + partialTicks,
-                            0.0F,
-                            0.0F,
-                            1.0F / 16.0F,
-                            actor
-                    );
-
-                    /*
-                     * RenderCustomModel.preRenderCallback normally applies
-                     * these scales.  We are bypassing RenderCustomModel, so
-                     * apply them here.
-                     */
-                    float modelScaleX =
-                            morph.model.scale[0] *
-                            morph.scale;
-                    float modelScaleY =
-                            morph.model.scale[1] *
-                            morph.scale;
-                    float modelScaleZ =
-                            morph.model.scale[2] *
-                            morph.scale;
-
-                    GlStateManager.scale(
-                            modelScaleX,
-                            modelScaleY,
-                            modelScaleZ
-                    );
-
-                    net.minecraft.client.renderer.entity.RenderManager
-                            renderManager =
-                            Minecraft.getMinecraft()
-                                    .getRenderManager();
-
-                    net.minecraft.util.ResourceLocation texture =
-                            morph.skin != null
-                                    ? morph.skin
-                                    : morph.model.defaultTexture;
-
-                    if (texture != null)
-                    {
-                        renderManager.renderEngine
-                                .bindTexture(texture);
-                    }
-
-                    attachmentModel.render(
-                            actor,
-                            0.0F,
-                            0.0F,
-                            actor.ticksExisted + partialTicks,
-                            0.0F,
-                            0.0F,
-                            1.0F / 16.0F
-                    );
-                }
+                mchorse.metamorph.api.MorphUtils.renderDirect(
+                        morph,
+                        actor,
+                        0.0D,
+                        0.0D,
+                        0.0D,
+                        0.0F,
+                        partialTicks
+                );
             }
             finally
             {
-                attachmentModel.current = null;
                 RenderHelper.disableStandardItemLighting();
                 GlStateManager.disableRescaleNormal();
                 GL11.glPopMatrix();
@@ -432,7 +350,7 @@ public class BodyPartsPreviewRenderer
              * editor already has the render-side model that was selected.
              */
             morph.name =
-                    name;
+                    "blockbuster." + name;
 
             morph.model =
                     (mchorse.blockbuster.api.Model)
