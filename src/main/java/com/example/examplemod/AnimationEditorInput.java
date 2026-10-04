@@ -252,6 +252,11 @@ public class AnimationEditorInput
          * other editor controls. It is checked before the generic
          * UI routing so a click on an axis cannot rotate the camera.
          */
+        if (this.gizmoController != null)
+        {
+            this.screen.prepareGizmoTarget();
+        }
+
         if (this.gizmoController != null &&
                 this.gizmoController.mouseClicked(
                         mouseX,
