@@ -1323,48 +1323,70 @@ public class EditorGizmoController
             rz = local.getRotationZ();
 
             /*
-             * IMPORTANT:
-             * Do not manually rotate the local basis by the parent's
-             * extracted Euler angles here. AnimationTransform.combine()
-             * composes rotations as matrices (parent * local) and then
-             * converts that matrix back to Euler angles. Reconstructing
-             * the basis through a second Euler composition can produce a
-             * different visual basis, especially when the parent has
-             * more than one rotation component.
+             * Build the visual basis from the actual rotation matrices.
              *
-             * The editor writes LOCAL values into the keyframe. For the
-             * visual gizmo we therefore build exactly the same WORLD
-             * orientation that the animation system uses, then derive
-             * the three local axes from that composed orientation.
+             * The previous implementation converted the composed world
+             * matrix to Euler angles and then reconstructed the axes.
+             * That loses the exact basis for some X/Y/Z combinations.
+             *
+             * Chameleon stores this bone transform locally. Therefore:
+             *
+             *     WORLD_BASIS = PARENT_WORLD_BASIS * LOCAL_BASIS
+             *
+             * We keep the matrix itself all the way to the gizmo. This
+             * makes the displayed axes follow the real local bone
+             * orientation instead of falling back to global X/Y/Z.
              */
-            AnimationTransform visualWorld =
-                    bone.getWorldTransformAt(frame);
+            float[][] localMatrix =
+                    createRotationMatrix(
+                            local.getRotationX(),
+                            local.getRotationY(),
+                            local.getRotationZ()
+                    );
 
-            if (visualWorld == null)
+            float[][] worldMatrix =
+                    localMatrix;
+
+            AnimationBone parent = bone.getParent();
+
+            if (parent != null)
             {
-                visualWorld = local;
+                float[][] parentWorldMatrix =
+                        getWorldRotationMatrix(parent, frame);
+
+                if (parentWorldMatrix != null)
+                {
+                    worldMatrix =
+                            multiplyMatrix(
+                                    parentWorldMatrix,
+                                    localMatrix
+                            );
+                }
             }
 
             float[] worldX =
-                    rotateVector(
-                            1.0F, 0.0F, 0.0F,
-                            visualWorld.getRotationX(),
-                            visualWorld.getRotationY(),
-                            visualWorld.getRotationZ());
+                    new float[]
+                    {
+                            worldMatrix[0][0],
+                            worldMatrix[1][0],
+                            worldMatrix[2][0]
+                    };
 
             float[] worldY =
-                    rotateVector(
-                            0.0F, 1.0F, 0.0F,
-                            visualWorld.getRotationX(),
-                            visualWorld.getRotationY(),
-                            visualWorld.getRotationZ());
+                    new float[]
+                    {
+                            worldMatrix[0][1],
+                            worldMatrix[1][1],
+                            worldMatrix[2][1]
+                    };
 
             float[] worldZ =
-                    rotateVector(
-                            0.0F, 0.0F, 1.0F,
-                            visualWorld.getRotationX(),
-                            visualWorld.getRotationY(),
-                            visualWorld.getRotationZ());
+                    new float[]
+                    {
+                            worldMatrix[0][2],
+                            worldMatrix[1][2],
+                            worldMatrix[2][2]
+                    };
 
             return new double[][]
             {
@@ -1433,6 +1455,125 @@ public class EditorGizmoController
                     recordFrame
             )
         };
+    }
+
+    private float[][] getWorldRotationMatrix(
+            AnimationBone bone,
+            float frame)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        AnimationTransform local =
+                bone.getTransformAt(frame);
+
+        if (local == null)
+        {
+            local = new AnimationTransform();
+        }
+
+        float[][] localMatrix =
+                createRotationMatrix(
+                        local.getRotationX(),
+                        local.getRotationY(),
+                        local.getRotationZ()
+                );
+
+        AnimationBone parent =
+                bone.getParent();
+
+        if (parent == null)
+        {
+            return localMatrix;
+        }
+
+        float[][] parentMatrix =
+                getWorldRotationMatrix(parent, frame);
+
+        if (parentMatrix == null)
+        {
+            return localMatrix;
+        }
+
+        return multiplyMatrix(
+                parentMatrix,
+                localMatrix
+        );
+    }
+
+    private float[][] createRotationMatrix(
+            float rotationX,
+            float rotationY,
+            float rotationZ)
+    {
+        double rx = Math.toRadians(rotationX);
+        double ry = Math.toRadians(rotationY);
+        double rz = Math.toRadians(rotationZ);
+
+        float cx = (float) Math.cos(rx);
+        float sx = (float) Math.sin(rx);
+        float cy = (float) Math.cos(ry);
+        float sy = (float) Math.sin(ry);
+        float cz = (float) Math.cos(rz);
+        float sz = (float) Math.sin(rz);
+
+        float[][] matrixX =
+                new float[][]
+                {
+                    {1.0F, 0.0F, 0.0F},
+                    {0.0F, cx, -sx},
+                    {0.0F, sx, cx}
+                };
+
+        float[][] matrixY =
+                new float[][]
+                {
+                    {cy, 0.0F, sy},
+                    {0.0F, 1.0F, 0.0F},
+                    {-sy, 0.0F, cy}
+                };
+
+        float[][] matrixZ =
+                new float[][]
+                {
+                    {cz, -sz, 0.0F},
+                    {sz, cz, 0.0F},
+                    {0.0F, 0.0F, 1.0F}
+                };
+
+        return multiplyMatrix(
+                multiplyMatrix(matrixZ, matrixY),
+                matrixX
+        );
+    }
+
+    private float[][] multiplyMatrix(
+            float[][] a,
+            float[][] b)
+    {
+        float[][] result =
+                new float[3][3];
+
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                float value = 0.0F;
+
+                for (int i = 0; i < 3; i++)
+                {
+                    value +=
+                            a[row][i]
+                                    * b[i][column];
+                }
+
+                result[row][column] = value;
+            }
+        }
+
+        return result;
     }
 
     private double[] transformBoneDirection(float[] d,BlockbusterRecordFrame recordFrame)
