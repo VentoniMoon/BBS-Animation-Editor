@@ -235,9 +235,8 @@ public class EditorGizmoController
         }
 
         double[] gizmoWorld =
-                getBoneWorldPosition(
+                getNativeBoneWorldPosition(
                         bone,
-                        keyframe,
                         recordFrame
                 );
 
@@ -979,6 +978,52 @@ public class EditorGizmoController
         }
     }
 
+    private double[] getExactChameleonBoneWorldPosition(AnimationBone bone)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
+        if (!this.previewActor.getMorph().getClass().getName().endsWith(".ChameleonMorph")) return null;
+        try
+        {
+            Object morph = this.previewActor.getMorph();
+            Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
+            if (chameleonModel == null) return null;
+            Object model = chameleonModel.getClass().getField("model").get(chameleonModel);
+            Class<?> modelClass = Class.forName("mchorse.chameleon.lib.data.model.Model");
+            Class<?> rendererClass = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
+            java.lang.reflect.Method postRender = rendererClass.getMethod("postRender", modelClass, String.class);
+            GL11.glPushMatrix();
+            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
+            float scale = 1.0F;
+            Object value = morph.getClass().getMethod("getScale", float.class).invoke(morph, 0.0F);
+            if (value instanceof Number) scale = ((Number) value).floatValue();
+            GL11.glScalef(scale, scale, scale);
+            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+            Object result = postRender.invoke(null, model, bone.getName());
+            if (result instanceof Boolean && !((Boolean) result).booleanValue())
+            {
+                GL11.glPopMatrix();
+                return null;
+            }
+            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+            float[] matrix = new float[16];
+            buffer.get(matrix);
+            GL11.glPopMatrix();
+            return new double[] {matrix[12], matrix[13], matrix[14]};
+        }
+        catch (Throwable ignored) { return null; }
+    }
+
+    private double[] getNativeBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
+    {
+        double[] result = getExactChameleonBoneWorldPosition(bone);
+        if (result != null) return result;
+        result = getExactEmoticonsBoneWorldPosition(bone);
+        if (result != null) return result;
+        result = getExactBlockbusterBoneWorldPosition(bone);
+        if (result != null) return result;
+        return getBoneWorldPosition(bone, null, recordFrame);
+    }
     private double[] getExactBlockbusterBoneWorldPosition(AnimationBone bone)
     {
         if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
@@ -1998,9 +2043,8 @@ public class EditorGizmoController
             EditorCamera camera)
     {
         double[] world =
-                getBoneWorldPosition(
+                getNativeBoneWorldPosition(
                         bone,
-                        keyframe,
                         recordFrame
                 );
 
