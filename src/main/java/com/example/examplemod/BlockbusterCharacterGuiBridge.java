@@ -770,6 +770,14 @@ public class BlockbusterCharacterGuiBridge
 
             if (sourceMorph == null)
             {
+                sourceMorph =
+                        bodyPart.getMorphAt(
+                                this.targetBodyPartFrame
+                        );
+            }
+
+            if (sourceMorph == null)
+            {
                 String modelName =
                         bodyPart.getModelNameAt(this.targetBodyPartFrame);
 
