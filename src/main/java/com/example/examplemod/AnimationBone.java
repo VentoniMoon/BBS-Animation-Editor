@@ -205,6 +205,21 @@ public class AnimationBone
         sortKeyframes();
     }
 
+    public AnimationKeyframe getKeyframeAt(
+            int frame)
+    {
+        for (AnimationKeyframe keyframe : this.keyframes)
+        {
+            if (keyframe != null &&
+                    keyframe.getFrame() == frame)
+            {
+                return keyframe;
+            }
+        }
+
+        return null;
+    }
+
     public void removeKeyframe(
             int frame)
     {
