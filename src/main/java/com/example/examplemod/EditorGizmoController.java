@@ -403,7 +403,6 @@ public class EditorGizmoController
 
         if (bone == null
                 || keyframe == null
-                || recordFrame == null
                 || camera == null)
         {
             GL11.glPopMatrix();
