@@ -403,6 +403,15 @@ public class AnimationEditorScreen extends GuiScreen
                     this.keyframeController
                             .getSelectedKeyframe();
 
+            AnimationBone owner =
+                    this.keyframeController
+                            .getSelectedKeyframeBone();
+
+            if (owner != null && selected != null)
+            {
+                return owner;
+            }
+
             if (selected != null)
             {
                 List<AnimationBone> bones =
