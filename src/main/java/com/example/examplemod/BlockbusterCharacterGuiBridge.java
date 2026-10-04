@@ -713,6 +713,78 @@ public class BlockbusterCharacterGuiBridge
     }
 
 
+    public void openBodyPartSkinEditor(
+            BodyPartModelData bodyPart,
+            int frame)
+    {
+        if (this.mc == null || bodyPart == null || !bodyPart.hasModel())
+        {
+            return;
+        }
+
+        if (this.mc.currentScreen instanceof AnimationEditorScreen)
+        {
+            this.returnScreen = (AnimationEditorScreen) this.mc.currentScreen;
+        }
+
+        this.targetBodyPartModel = bodyPart;
+        this.targetBodyPartFrame = Math.max(0, frame);
+        this.targetKey = null;
+        this.targetFrame = this.targetBodyPartFrame;
+
+        try
+        {
+            CharacterKey stateKey =
+                    bodyPart.getOrCreateCharacterStateKey(
+                            this.targetBodyPartFrame
+                    );
+
+            AbstractMorph sourceMorph = null;
+
+            if (stateKey.hasSkin())
+            {
+                NBTTagCompound skin = stateKey.getSkin();
+                if (skin != null && !skin.hasNoTags())
+                {
+                    sourceMorph =
+                            MorphManager.INSTANCE.morphFromNBT(
+                                    skin.copy()
+                            );
+                }
+            }
+
+            if (sourceMorph == null)
+            {
+                String modelName =
+                        bodyPart.getModelNameAt(this.targetBodyPartFrame);
+
+                CustomMorph morph = new CustomMorph();
+                morph.name = "blockbuster." + modelName;
+                morph.updateModel(true);
+
+                if (morph.model == null)
+                {
+                    return;
+                }
+
+                sourceMorph = morph;
+            }
+
+            this.mc.displayGuiScreen(
+                    new PlayerSkinEditorScreen(
+                            this.mc,
+                            sourceMorph,
+                            this
+                    )
+            );
+        }
+        catch (Throwable error)
+        {
+            error.printStackTrace();
+        }
+    }
+
+
     /*
      * =========================================================
      * SKIN / EDITOR
@@ -972,6 +1044,12 @@ public class BlockbusterCharacterGuiBridge
         }
 
 
+        if (this.targetBodyPartModel != null)
+        {
+            saveBodyPartSkin(edited);
+            return;
+        }
+
         if (this.targetKey == null)
         {
             System.err.println(
@@ -1089,6 +1167,44 @@ public class BlockbusterCharacterGuiBridge
 
                 this.returnScreen.refreshCharacterState();
             }
+        }
+        catch (Throwable error)
+        {
+            error.printStackTrace();
+        }
+    }
+
+
+    private void saveBodyPartSkin(AbstractMorph edited)
+    {
+        if (this.targetBodyPartModel == null || edited == null)
+        {
+            return;
+        }
+
+        try
+        {
+            NBTTagCompound nbt = edited.toNBT();
+
+            if (nbt == null || nbt.hasNoTags())
+            {
+                return;
+            }
+
+            CharacterKey key =
+                    this.targetBodyPartModel.getOrCreateCharacterStateKey(
+                            this.targetBodyPartFrame
+                    );
+
+            key.setSkin(nbt.copy());
+
+            if (this.returnScreen != null)
+            {
+                this.returnScreen.refreshCharacterState();
+            }
+
+            this.targetBodyPartModel = null;
+            this.targetBodyPartFrame = 0;
         }
         catch (Throwable error)
         {
