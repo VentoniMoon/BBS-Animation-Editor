@@ -1339,9 +1339,9 @@ public class EditorGizmoController
              */
             float[][] localMatrix =
                     createRotationMatrix(
-                            local.getRotationX(),
-                            local.getRotationY(),
-                            local.getRotationZ()
+                            bone.getBaseRotationX() + local.getRotationX(),
+                            bone.getBaseRotationY() + local.getRotationY(),
+                            bone.getBaseRotationZ() + local.getRotationZ()
                     );
 
             float[][] worldMatrix =
