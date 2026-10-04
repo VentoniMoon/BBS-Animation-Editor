@@ -4,6 +4,7 @@ import mchorse.blockbuster.client.gui.GuiActor;
 import mchorse.blockbuster.common.entity.EntityActor;
 import mchorse.metamorph.api.MorphManager;
 import mchorse.metamorph.api.morphs.AbstractMorph;
+import mchorse.blockbuster_pack.morphs.CustomMorph;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.NBTTagCompound;
@@ -98,6 +99,10 @@ public class BlockbusterCharacterGuiBridge
      * не выбрал существующий CharacterKey.
      */
     private int targetFrame;
+
+    /** Body Part model currently edited from Character Timeline. */
+    private BodyPartModelData targetBodyPartModel;
+    private int targetBodyPartFrame;
 
 
     /*
@@ -247,6 +252,53 @@ public class BlockbusterCharacterGuiBridge
                         this
                 )
         );
+    }
+
+
+    public void openBodyPartMorphEditor(
+            BodyPartModelData bodyPart,
+            int frame)
+    {
+        if (this.mc == null || bodyPart == null || !bodyPart.hasModel())
+        {
+            return;
+        }
+
+        if (this.mc.currentScreen instanceof AnimationEditorScreen)
+        {
+            this.returnScreen = (AnimationEditorScreen) this.mc.currentScreen;
+        }
+
+        this.targetBodyPartModel = bodyPart;
+        this.targetBodyPartFrame = Math.max(0, frame);
+        this.targetKey = null;
+        this.targetFrame = this.targetBodyPartFrame;
+
+        EntityActor editorActor = new EntityActor(this.mc.world);
+        editorActor.setPosition(0, 0, 0);
+
+        try
+        {
+            CustomMorph morph = new CustomMorph();
+            morph.name = "blockbuster." + bodyPart.getModelNameAt(frame);
+            morph.updateModel(true);
+
+            if (morph.model == null)
+            {
+                return;
+            }
+
+            editorActor.morph.set(morph);
+            this.runtimeActor = editorActor;
+
+            this.mc.displayGuiScreen(
+                    new MorphGuiActor(this.mc, editorActor, this)
+            );
+        }
+        catch (Throwable error)
+        {
+            error.printStackTrace();
+        }
     }
 
 
@@ -545,8 +597,18 @@ public class BlockbusterCharacterGuiBridge
     private void saveMorph(
             AbstractMorph morph)
     {
-        if (morph == null ||
-                this.targetKey == null)
+        if (morph == null)
+        {
+            return;
+        }
+
+        if (this.targetBodyPartModel != null)
+        {
+            saveBodyPartMorph(morph);
+            return;
+        }
+
+        if (this.targetKey == null)
         {
             return;
         }
@@ -617,6 +679,45 @@ public class BlockbusterCharacterGuiBridge
         {
             error.printStackTrace();
         }
+    }
+
+
+    private void saveBodyPartMorph(AbstractMorph morph)
+    {
+        if (this.targetBodyPartModel == null ||
+                !(morph instanceof CustomMorph))
+        {
+            return;
+        }
+
+        CustomMorph custom = (CustomMorph) morph;
+        String modelName = custom.getKey();
+
+        if (modelName == null || modelName.length() == 0)
+        {
+            return;
+        }
+
+        if (!this.targetBodyPartModel.replaceModelByName(modelName))
+        {
+            System.err.println(
+                    "[BBS Animation Editor] Cannot apply Body Part model: " + modelName
+            );
+            return;
+        }
+
+        this.targetBodyPartModel.setModelKey(
+                this.targetBodyPartFrame,
+                modelName
+        );
+
+        if (this.returnScreen != null)
+        {
+            this.returnScreen.refreshCharacterState();
+        }
+
+        this.targetBodyPartModel = null;
+        this.targetBodyPartFrame = 0;
     }
 
 
