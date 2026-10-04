@@ -16,7 +16,7 @@ public class BodyPartModelData
     private List<AnimationBone> bones;
 
     /** Model replacements made by the Character Timeline. */
-    private final Map<Integer, String> modelKeys =
+    private final TreeMap<Integer, String> modelKeys =
             new TreeMap<Integer, String>();
 
     private int startFrame;
