@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import net.minecraft.nbt.NBTTagCompound;
+import mchorse.metamorph.api.morphs.AbstractMorph;
+
 public class BodyPartModelData
 {
     private static int NEXT_TIMELINE_ID = 1;
@@ -14,6 +17,13 @@ public class BodyPartModelData
     private String attachmentBoneName;
     private BlockbusterModelAccess modelAccess;
     private List<AnimationBone> bones;
+
+    /** Optional non-Blockbuster morph used by Chameleon and other Metamorph add-ons. */
+    private AbstractMorph baseMorph;
+
+    /** Morph replacements made by the Character Timeline. */
+    private final TreeMap<Integer, NBTTagCompound> morphKeys =
+            new TreeMap<Integer, NBTTagCompound>();
 
     /** Model replacements made by the Character Timeline. */
     private final TreeMap<Integer, String> modelKeys =
@@ -47,6 +57,7 @@ public class BodyPartModelData
         this.attachmentBoneName = attachmentBoneName == null
                 ? ""
                 : attachmentBoneName;
+        this.baseMorph = null;
         this.modelAccess = modelAccess;
         this.bones = bones == null
                 ? new ArrayList<AnimationBone>()
@@ -60,10 +71,80 @@ public class BodyPartModelData
     public String getAttachmentBoneName() { return this.attachmentBoneName; }
     public BlockbusterModelAccess getModelAccess() { return this.modelAccess; }
     public List<AnimationBone> getBones() { return this.bones; }
+    public AbstractMorph getBaseMorph() { return this.baseMorph; }
+
+    public boolean hasMorphModel()
+    {
+        return this.baseMorph != null;
+    }
+
+    public AbstractMorph getMorphAt(int frame)
+    {
+        AbstractMorph result = this.baseMorph == null ? null : this.baseMorph.copy();
+        Map.Entry<Integer, NBTTagCompound> entry =
+                this.morphKeys.floorEntry(Math.max(0, frame));
+
+        if (entry != null)
+        {
+            try
+            {
+                result = mchorse.metamorph.api.MorphManager.INSTANCE.morphFromNBT(entry.getValue());
+            }
+            catch (Throwable error)
+            {
+                error.printStackTrace();
+            }
+        }
+
+        return result;
+    }
+
+    public void setMorph(AbstractMorph morph)
+    {
+        this.baseMorph = morph == null ? null : morph.copy();
+        if (this.baseMorph != null)
+        {
+            this.modelName = this.baseMorph.name == null ? "" : this.baseMorph.name;
+        }
+        this.modelAccess = null;
+    }
+
+    public void setMorphKey(int frame, AbstractMorph morph)
+    {
+        if (frame < 0 || morph == null)
+        {
+            return;
+        }
+        this.morphKeys.put(frame, morph.toNBT());
+    }
+
+    public boolean hasMorphKeyAt(int frame)
+    {
+        return this.morphKeys.containsKey(frame);
+    }
+
+    public void removeMorphKey(int frame)
+    {
+        this.morphKeys.remove(frame);
+    }
+
+    public boolean moveMorphKey(int oldFrame, int newFrame)
+    {
+        if (oldFrame == newFrame) return true;
+        if (!this.morphKeys.containsKey(oldFrame) || this.morphKeys.containsKey(newFrame)) return false;
+        NBTTagCompound value = this.morphKeys.remove(oldFrame);
+        this.morphKeys.put(newFrame, value);
+        return true;
+    }
+
+    public List<Integer> getMorphKeyFrames()
+    {
+        return new ArrayList<Integer>(this.morphKeys.keySet());
+    }
 
     public boolean hasModel()
     {
-        return this.modelAccess != null &&
+        return (this.hasMorphModel() || this.modelAccess != null) &&
                 this.modelName != null &&
                 this.modelName.length() > 0 &&
                 this.bones != null &&
