@@ -450,15 +450,52 @@ public class AnimationEditorScreen extends GuiScreen
                 this.bodyPartsController
                         .getSelectedModel();
 
-        if (model == null)
+        if (model != null)
+        {
+            AnimationKeyframe selected =
+                    this.bodyPartsController
+                            .getKeyframeController()
+                            .getSelectedKeyframe();
+
+            if (selected != null)
+            {
+                AnimationBone selectedBone =
+                        this.bodyPartsController
+                                .getKeyframeController()
+                                .getSelectedBone(
+                                        model.getBones()
+                                );
+
+                if (selectedBone != null)
+                {
+                    return selectedBone;
+                }
+            }
+
+            /*
+             * Level 1 / Global Transform operates on the attachment
+             * bone itself.
+             */
+            return findBodyPartAttachmentBone(model);
+        }
+
+        BodyPartModelData attachmentModel =
+                this.bodyPartsController
+                        .getSelectedAttachment();
+
+        if (attachmentModel == null)
         {
             return null;
         }
 
-        String attachment =
-                model.getAttachmentBoneName();
+        return findBodyPartAttachmentBone(attachmentModel);
+    }
 
-        if (attachment == null)
+    private AnimationBone findBodyPartAttachmentBone(
+            BodyPartModelData model)
+    {
+        if (model == null ||
+                model.getAttachmentBoneName() == null)
         {
             return null;
         }
@@ -467,15 +504,73 @@ public class AnimationEditorScreen extends GuiScreen
                 this.bodyPartsController.getActorBones())
         {
             if (bone != null &&
-                    attachment.equals(
-                            bone.getName()
-                    ))
+                    model.getAttachmentBoneName().equals(
+                            bone.getName()))
             {
                 return bone;
             }
         }
 
         return null;
+    }
+
+    public BodyPartModelData getGizmoBodyPartModel()
+    {
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.BODY_PARTS)
+        {
+            return null;
+        }
+
+        return this.bodyPartsController.getSelectedModel();
+    }
+
+    public AnimationBone getGizmoBodyPartAttachmentBone()
+    {
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.BODY_PARTS)
+        {
+            return null;
+        }
+
+        BodyPartModelData model =
+                this.bodyPartsController.getSelectedModel();
+
+        if (model == null)
+        {
+            model = this.bodyPartsController.getSelectedAttachment();
+        }
+
+        return findBodyPartAttachmentBone(model);
+    }
+
+    public AnimationTransform getGizmoGlobalTransform()
+    {
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.BODY_PARTS
+                || this.bodyPartsController.getSelectedModel() != null)
+        {
+            return null;
+        }
+
+        BodyPartModelData model =
+                this.bodyPartsController.getSelectedAttachment();
+
+        return model == null
+                ? null
+                : model.getGlobalTransform();
+    }
+
+    public void prepareGizmoTarget()
+    {
+        this.gizmoController.setBodyPartTarget(
+                getGizmoBodyPartModel(),
+                getGizmoBodyPartAttachmentBone()
+        );
+
+        this.gizmoController.setGlobalTransformTarget(
+                getGizmoGlobalTransform()
+        );
     }
 
     public AnimationKeyframe getGizmoKeyframe()
@@ -2456,6 +2551,8 @@ public class AnimationEditorScreen extends GuiScreen
          *
          * The tool buttons are drawn later in GUI space by draw().
          */
+        prepareGizmoTarget();
+
         this.gizmoController.draw3D(
                 mc,
                 left,
@@ -2495,6 +2592,8 @@ public class AnimationEditorScreen extends GuiScreen
          * inspector on the right. The three tool buttons therefore
          * belong visually to the Preview itself.
          */
+        prepareGizmoTarget();
+
         this.gizmoController.draw(
                 mc,
                 left,
