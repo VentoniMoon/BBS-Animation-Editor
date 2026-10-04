@@ -107,14 +107,6 @@ public class BodyPartsEditorPanel
                 EditorThemeManager.get().getAccent());
         mc.fontRenderer.drawString("BODY PARTS", x + 16, y + 8, 0xFFE2E5E7);
 
-        String target = controller.getSelectedActorBoneName();
-        mc.fontRenderer.drawString("ATTACH TO", x + 9, y + 34, 0xFF9AA1A6);
-        mc.fontRenderer.drawString(
-                target.length() == 0 ? "Select a bone" : target,
-                x + 9, y + 48,
-                target.length() == 0 ? 0xFF666D72 : EditorThemeManager.get().getAccentBright()
-        );
-
         BodyPartModelData selected = controller.getSelectedAttachment();
         if (selected == null)
         {
@@ -125,7 +117,16 @@ public class BodyPartsEditorPanel
             return;
         }
 
-        int modelY = y + 67;
+        /*
+         * The old layout reserved space for "ATTACH TO" and the selected
+         * bone name. That made MODEL start far too low and left the rest
+         * of the inspector cramped.
+         *
+         * MODEL now starts directly below the BODY PARTS title bar.
+         * The selected actor bone is still used internally by the
+         * controller, but it is no longer rendered in this inspector.
+         */
+        int modelY = y + 30;
         int globalY = getGlobalY(modelY);
 
         drawAccordionHeader(mc, "MODEL", modelY, modelSectionOpen, mouseX, mouseY);
@@ -256,8 +257,8 @@ public class BodyPartsEditorPanel
             return false;
         }
 
-        int modelY = y + 67;
-        int globalY = modelY + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
+        int modelY = y + 30;
+        int globalY = getGlobalY(modelY);
 
         if (insideSectionHeader(mouseX, mouseY, modelY))
         {
@@ -349,7 +350,7 @@ public class BodyPartsEditorPanel
     {
         if (!globalSectionOpen) return false;
 
-        int modelY = y + 67;
+        int modelY = y + 30;
         int viewportTop = getGlobalViewportTop(modelY);
         int viewportBottom = getGlobalViewportBottom();
 
@@ -375,7 +376,7 @@ public class BodyPartsEditorPanel
     public boolean mouseScrolled(int mouseX, int mouseY, int wheel)
     {
         if (!globalContains(mouseX, mouseY) || wheel == 0) return false;
-        int modelY = y + 67;
+        int modelY = y + 30;
         int maxScroll = getGlobalMaxScroll(modelY);
 
         globalScroll = Math.max(
