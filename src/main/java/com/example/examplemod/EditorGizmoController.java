@@ -491,16 +491,70 @@ public class EditorGizmoController
         }
 
         /*
-         * The actor renderer uses the complete Preview FBO as its
-         * projection surface (mc.displayWidth x mc.displayHeight).
-         * We deliberately use the exact same surface here. The finished
-         * FBO is later scaled into the GUI Preview rectangle, so this
-         * keeps the gizmo pixel-for-pixel attached to the rendered bone.
+         * The Preview FBO is full-screen sized, but the Preview renderer
+         * does NOT render into the whole FBO. PreviewShaderBridge binds
+         * the FBO with a viewport corresponding to the GUI Preview
+         * rectangle multiplied by the Minecraft scale factor.
+         *
+         * PreviewWorldRenderer then uses that same viewport while the
+         * actor is rendered. We must use exactly the same viewport here.
+         * Using displayWidth/displayHeight was the reason the gizmo
+         * appeared to drift and react to the camera differently from
+         * the actor.
          */
-        int glX = 0;
-        int glY = 0;
-        int glWidth = Math.max(1, mc.displayWidth);
-        int glHeight = Math.max(1, mc.displayHeight);
+        ScaledResolution scaledResolution =
+                new ScaledResolution(mc);
+
+        int scaleFactor =
+                Math.max(1, scaledResolution.getScaleFactor());
+
+        int framebufferWidth =
+                Math.max(1, mc.displayWidth);
+
+        int framebufferHeight =
+                Math.max(1, mc.displayHeight);
+
+        int glX =
+                Math.max(0, viewportX * scaleFactor);
+
+        int glY =
+                Math.max(
+                        0,
+                        framebufferHeight
+                                - (
+                                        viewportY
+                                                + viewportHeight
+                                ) * scaleFactor
+                );
+
+        int glWidth =
+                Math.max(
+                        1,
+                        viewportWidth * scaleFactor
+                );
+
+        int glHeight =
+                Math.max(
+                        1,
+                        viewportHeight * scaleFactor
+                );
+
+        if (glX + glWidth > framebufferWidth)
+        {
+            glWidth =
+                    framebufferWidth - glX;
+        }
+
+        if (glY + glHeight > framebufferHeight)
+        {
+            glHeight =
+                    framebufferHeight - glY;
+        }
+
+        if (glWidth <= 0 || glHeight <= 0)
+        {
+            return;
+        }
 
         int oldMatrixMode =
                 GL11.glGetInteger(GL11.GL_MATRIX_MODE);
@@ -531,9 +585,16 @@ public class EditorGizmoController
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
 
+        /*
+         * The actor renderer uses the Preview GUI aspect ratio here,
+         * not the physical framebuffer aspect ratio. The viewport
+         * already contains the scale factor, so the ratio is identical
+         * to viewportWidth / viewportHeight.
+         */
         GLU.gluPerspective(
                 60.0F,
-                (float) glWidth / (float) glHeight,
+                (float) viewportWidth
+                        / (float) viewportHeight,
                 0.05F,
                 500.0F
         );
