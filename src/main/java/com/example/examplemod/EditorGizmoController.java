@@ -360,23 +360,6 @@ public class EditorGizmoController
             return;
         }
 
-        ScreenPoint center =
-                getGizmoCenter(
-                        viewportX,
-                        viewportY,
-                        viewportWidth,
-                        viewportHeight,
-                        bone,
-                        keyframe,
-                        recordFrame,
-                        camera
-                );
-
-        if (center == null)
-        {
-            return;
-        }
-
         int oldMatrixMode =
                 GL11.glGetInteger(GL11.GL_MATRIX_MODE);
 
@@ -418,6 +401,30 @@ public class EditorGizmoController
                 || keyframe == null
                 || recordFrame == null
                 || camera == null)
+        {
+            GL11.glPopMatrix();
+
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPopMatrix();
+
+            GL11.glPopAttrib();
+            GL11.glMatrixMode(oldMatrixMode);
+            return;
+        }
+
+        ScreenPoint center =
+                getGizmoCenter(
+                        viewportX,
+                        viewportY,
+                        viewportWidth,
+                        viewportHeight,
+                        bone,
+                        keyframe,
+                        recordFrame,
+                        camera
+                );
+
+        if (center == null)
         {
             GL11.glPopMatrix();
 
