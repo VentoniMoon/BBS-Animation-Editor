@@ -34,12 +34,10 @@ public class CharacterTimelineEditorController
     private static final int HEADER_HEIGHT = 35;
 
     /*
-     * Начальное количество Character-дорожек.
-     *
-     * Они намеренно остаются без названий:
-     * смысл дорожки определяется самими ключами.
+     * Character Timeline имеет одну основную дорожку.
+     * Остальные дорожки создаются динамически для Body Parts.
      */
-    private static final int DEFAULT_TRACK_COUNT = 6;
+    private static final String MAIN_TRACK_ID = "main";
 
     /*
      * ---------------------------------------------------------
@@ -318,12 +316,6 @@ public class CharacterTimelineEditorController
 
         this.selectedActor = actor;
 
-        /*
-         * Каждый Actor получает несколько Character-дорожек.
-         *
-         * Если дорожки уже существуют, ничего не удаляем
-         * и не создаём заново.
-         */
         if (this.selectedActor != null)
         {
             CharacterTimelineController characterTimeline =
@@ -331,13 +323,7 @@ public class CharacterTimelineEditorController
 
             if (characterTimeline != null)
             {
-                while (
-                        characterTimeline.getTrackCount()
-                                < DEFAULT_TRACK_COUNT
-                )
-                {
-                    characterTimeline.addTrack();
-                }
+                characterTimeline.ensureMainTrack();
             }
         }
     }
@@ -366,14 +352,9 @@ public class CharacterTimelineEditorController
 
     public int getTimelineHeight()
     {
-        /*
-         * HEADER 35
-         *
-         * 6 дорожек × 20 = 120
-         *
-         * Оставляем небольшой запас снизу.
-         */
-        return 180;
+        return HEADER_HEIGHT +
+                Math.max(1, getTrackCount()) * TRACK_HEIGHT +
+                25;
     }
 
     public int getTrackHeight()
@@ -405,6 +386,28 @@ public class CharacterTimelineEditorController
 
         return timeline.getTrackCount();
     }
+
+    public String getTrackLabel(int index)
+    {
+        CharacterTrack track = getTrack(index);
+
+        if (track == null)
+        {
+            return "Track " + (index + 1);
+        }
+
+        String label = track.getLabel();
+
+        if (label == null || label.length() == 0)
+        {
+            return track.isMainTrack()
+                    ? "Main Character"
+                    : "Character Track " + (index + 1);
+        }
+
+        return label;
+    }
+
 
     public CharacterTrack getTrack(int index)
     {
@@ -639,11 +642,21 @@ public class CharacterTimelineEditorController
             }
 
             screen.drawRect(
-                    0,
+                    AnimationEditorScreen.LEFT_PANEL_WIDTH,
                     y,
                     width,
                     bottom,
                     background
+            );
+
+            screen.drawRect(
+                    0,
+                    y,
+                    AnimationEditorScreen.LEFT_PANEL_WIDTH,
+                    bottom,
+                    i == this.selectedTrack
+                            ? getTimelineTrackSelectedColor()
+                            : getTimelineTrackColor()
             );
 
             if (i == this.selectedTrack)
@@ -651,7 +664,7 @@ public class CharacterTimelineEditorController
                 screen.drawRect(
                         0,
                         y,
-                        2,
+                        3,
                         bottom,
                         getAccentColor()
                 );
@@ -663,6 +676,30 @@ public class CharacterTimelineEditorController
                     width,
                     bottom,
                     getTimelineTrackBorderColor()
+            );
+
+            Minecraft mc = Minecraft.getMinecraft();
+            String label = getTrackLabel(i);
+            int labelWidth =
+                    AnimationEditorScreen.LEFT_PANEL_WIDTH - 14;
+
+            if (mc.fontRenderer.getStringWidth(label) > labelWidth)
+            {
+                label =
+                        mc.fontRenderer.trimStringToWidth(
+                                label,
+                                labelWidth
+                        );
+            }
+
+            screen.drawString(
+                    mc.fontRenderer,
+                    label,
+                    10,
+                    y + 6,
+                    i == this.selectedTrack
+                            ? getAccentBrightColor()
+                            : COLOR_TEXT_SECONDARY
             );
         }
     }
@@ -696,11 +733,29 @@ public class CharacterTimelineEditorController
                         getTimelineHeight();
 
         screen.drawRect(
-                timelineStartX,
+                0,
                 rulerTop,
                 width,
                 rulerBottom,
                 getTimelineHeaderColor()
+        );
+
+        screen.drawRect(
+                0,
+                rulerTop,
+                timelineStartX,
+                rulerBottom,
+                getTimelineHeaderLightColor()
+        );
+
+        Minecraft mc = Minecraft.getMinecraft();
+
+        screen.drawString(
+                mc.fontRenderer,
+                "CHARACTER",
+                10,
+                rulerTop + 11,
+                getAccentBrightColor()
         );
 
         screen.drawRect(
