@@ -45,7 +45,7 @@ public class BodyPartsEditorPanel
     private boolean globalSectionOpen = false;
     private int globalScroll = 0;
     private static final int SECTION_HEIGHT = 22;
-    private static final int GLOBAL_CONTENT_HEIGHT = 240;
+    private static final int GLOBAL_CONTENT_HEIGHT = 230;
 
     public BodyPartsEditorPanel(
             BodyPartsEditorController controller)
@@ -73,16 +73,15 @@ public class BodyPartsEditorPanel
         if (mc == null) return;
 
         drawRect(mc, x, y, x + WIDTH, y + HEIGHT, 0xFF181818);
-        drawRect(mc, x, y, x + WIDTH, y + 25, 0xFF111111);
-        drawRect(mc, x, y + 24, x + WIDTH, y + 25, 0xFF303030);
-        drawRect(mc, x + 9, y + 7, x + 11, y + 18,
-                EditorThemeManager.get().getAccent());
-        mc.fontRenderer.drawString("BODY PARTS", x + 16, y + 8, 0xFFE2E5E7);
-
         BodyPartModelData selectedModel = controller.getSelectedModel();
         if (selectedModel != null)
         {
-            controller.getTransformPanel().setPosition(x + 5, y + 34);
+            /*
+             * When editing an individual Body Part key, give the
+             * transform panel the full upper area. The BODY PARTS
+             * header is no longer needed here and was wasting 25 px.
+             */
+            controller.getTransformPanel().setPosition(x + 5, y + 5);
             controller.getTransformPanel().draw(
                     mc,
                     controller.getKeyframeController().getSelectedKeyframe(),
@@ -93,6 +92,12 @@ public class BodyPartsEditorPanel
             );
             return;
         }
+
+        drawRect(mc, x, y, x + WIDTH, y + 25, 0xFF111111);
+        drawRect(mc, x, y + 24, x + WIDTH, y + 25, 0xFF303030);
+        drawRect(mc, x + 9, y + 7, x + 11, y + 18,
+                EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString("BODY PARTS", x + 16, y + 8, 0xFFE2E5E7);
 
         String target = controller.getSelectedActorBoneName();
         mc.fontRenderer.drawString("ATTACH TO", x + 9, y + 34, 0xFF9AA1A6);
@@ -169,14 +174,14 @@ public class BodyPartsEditorPanel
         int cx = x + 9;
         int contentY = viewportTop + 4 - globalScroll;
         globalPositionX.setPosition(cx, contentY + 15);
-        globalPositionY.setPosition(cx, contentY + 37);
-        globalPositionZ.setPosition(cx, contentY + 59);
-        globalRotationX.setPosition(cx, contentY + 92);
-        globalRotationY.setPosition(cx, contentY + 114);
-        globalRotationZ.setPosition(cx, contentY + 136);
-        globalScaleX.setPosition(cx, contentY + 169);
-        globalScaleY.setPosition(cx, contentY + 191);
-        globalScaleZ.setPosition(cx, contentY + 213);
+        globalPositionY.setPosition(cx, contentY + 36);
+        globalPositionZ.setPosition(cx, contentY + 57);
+        globalRotationX.setPosition(cx, contentY + 89);
+        globalRotationY.setPosition(cx, contentY + 110);
+        globalRotationZ.setPosition(cx, contentY + 131);
+        globalScaleX.setPosition(cx, contentY + 163);
+        globalScaleY.setPosition(cx, contentY + 184);
+        globalScaleZ.setPosition(cx, contentY + 205);
     }
 
     private void drawGlobalControls(Minecraft mc, int viewportTop, int viewportBottom)
@@ -184,9 +189,9 @@ public class BodyPartsEditorPanel
         int contentY = viewportTop + 4 - globalScroll;
         drawGlobalLabel(mc, "Position", contentY + 1, viewportTop, viewportBottom);
         globalPositionX.draw(mc); globalPositionY.draw(mc); globalPositionZ.draw(mc);
-        drawGlobalLabel(mc, "Rotation", contentY + 78, viewportTop, viewportBottom);
+        drawGlobalLabel(mc, "Rotation", contentY + 75, viewportTop, viewportBottom);
         globalRotationX.draw(mc); globalRotationY.draw(mc); globalRotationZ.draw(mc);
-        drawGlobalLabel(mc, "Scale", contentY + 155, viewportTop, viewportBottom);
+        drawGlobalLabel(mc, "Scale", contentY + 150, viewportTop, viewportBottom);
         globalScaleX.draw(mc); globalScaleY.draw(mc); globalScaleZ.draw(mc);
     }
 
