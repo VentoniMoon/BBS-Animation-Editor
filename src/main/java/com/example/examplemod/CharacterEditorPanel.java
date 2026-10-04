@@ -2735,6 +2735,15 @@ public class CharacterEditorPanel
             return;
         }
 
+        if (this.selectedBodyPartModel != null)
+        {
+            this.guiBridge.openBodyPartMorphEditor(
+                    this.selectedBodyPartModel,
+                    this.currentFrame
+            );
+            return;
+        }
+
         this.guiBridge.openMorphEditor(
                 this.selectedActor,
                 this.runtimeActor,
