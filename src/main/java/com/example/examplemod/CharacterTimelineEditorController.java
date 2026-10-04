@@ -1186,68 +1186,11 @@ public class CharacterTimelineEditorController
         return nearest;
     }
 
-    private boolean createBodyPartKey(
-            BodyPartModelData model,
-            int frame)
+    private boolean createBodyPartKey(BodyPartModelData model, int frame)
     {
-        if (model == null ||
-                !model.hasModel() ||
-                model.getBones() == null ||
-                model.getBones().isEmpty())
-        {
-            return false;
-        }
-
-        java.util.List<AnimationTransform> snapshot =
-                new java.util.ArrayList<AnimationTransform>();
-
-        for (AnimationBone bone : model.getBones())
-        {
-            snapshot.add(
-                    bone == null
-                            ? new AnimationTransform()
-                            : bone.getTransformAt(frame).copy()
-            );
-        }
-
-        for (int i = 0; i < model.getBones().size(); i++)
-        {
-            AnimationBone bone = model.getBones().get(i);
-
-            if (bone == null || bone.hasKeyframe(frame))
-            {
-                continue;
-            }
-
-            bone.addKeyframe(frame);
-
-            AnimationKeyframe keyframe =
-                    bone.getKeyframeAt(frame);
-
-            if (keyframe != null)
-            {
-                AnimationTransform transform = snapshot.get(i);
-
-                keyframe.getTransform().setPosition(
-                        transform.getPositionX(),
-                        transform.getPositionY(),
-                        transform.getPositionZ()
-                );
-
-                keyframe.getTransform().setRotation(
-                        transform.getRotationX(),
-                        transform.getRotationY(),
-                        transform.getRotationZ()
-                );
-
-                keyframe.getTransform().setScale(
-                        transform.getScaleX(),
-                        transform.getScaleY(),
-                        transform.getScaleZ()
-                );
-            }
-        }
-
+        if (model == null || !model.hasModel()) return false;
+        if (model.hasModelKeyAt(frame)) return true;
+        model.setModelKey(frame, model.getModelNameAt(frame));
         return true;
     }
 
