@@ -50,6 +50,8 @@ public class AnimationEditorInput
     private final BodyPartsEditorPanel bodyPartsEditorPanel;
     private final BodyPartsTimelineController bodyPartsTimelineController;
 
+    private final EditorGizmoController gizmoController;
+
     /*
      * =========================================================
      * SAVE
@@ -86,7 +88,8 @@ public class AnimationEditorInput
             InterpolationPanel interpolationPanel,
             BodyPartsEditorController bodyPartsController,
             BodyPartsEditorPanel bodyPartsEditorPanel,
-            BodyPartsTimelineController bodyPartsTimelineController)
+            BodyPartsTimelineController bodyPartsTimelineController,
+            EditorGizmoController gizmoController)
     {
         this.screen = screen;
         this.editorModeController = editorModeController;
@@ -108,6 +111,7 @@ public class AnimationEditorInput
         this.bodyPartsController = bodyPartsController;
         this.bodyPartsEditorPanel = bodyPartsEditorPanel;
         this.bodyPartsTimelineController = bodyPartsTimelineController;
+        this.gizmoController = gizmoController;
 
         /*
          * Save input deliberately remains outside
@@ -238,6 +242,34 @@ public class AnimationEditorInput
         }
 
         this.transformDragging = false;
+
+        /*
+         * =========================================================
+         * STAGE 5 - GIZMO
+         * =========================================================
+         *
+         * The gizmo has priority over the Preview camera and all
+         * other editor controls. It is checked before the generic
+         * UI routing so a click on an axis cannot rotate the camera.
+         */
+        if (this.gizmoController != null &&
+                this.gizmoController.mouseClicked(
+                        mouseX,
+                        mouseY,
+                        mouseButton,
+                        this.screen.getPreviewX(),
+                        this.screen.getPreviewY(),
+                        this.screen.getPreviewWidth(),
+                        this.screen.getPreviewHeight(),
+                        this.screen.getGizmoBone(),
+                        this.screen.getGizmoKeyframe(),
+                        this.screen.getCurrentRecordFrame(),
+                        this.sceneViewport.getCamera(),
+                        this.screen.isGizmoEnabled()
+                ))
+        {
+            return;
+        }
 
         /*
          * =========================================================
@@ -790,6 +822,26 @@ public class AnimationEditorInput
     {
         /*
          * =========================================================
+         * STAGE 5 - GIZMO DRAG
+         * =========================================================
+         */
+        if (this.gizmoController != null &&
+                this.gizmoController.isDragging())
+        {
+            if (this.gizmoController.mouseDragged(
+                    mouseX,
+                    mouseY
+            ))
+            {
+                this.markDirty();
+                this.screen.applyRecordFrame();
+                this.screen.applyAdapters();
+                return;
+            }
+        }
+
+        /*
+         * =========================================================
          * CHARACTER TIMELINE
          * =========================================================
          */
@@ -936,6 +988,18 @@ public class AnimationEditorInput
             int mouseY,
             int state)
     {
+        /*
+         * Gizmo must release before the Preview camera receives
+         * the same mouse-up event.
+         */
+        if (this.gizmoController != null &&
+                this.gizmoController.isDragging())
+        {
+            this.gizmoController.mouseReleased();
+            this.transformDragging = false;
+            return;
+        }
+
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CHARACTER)
         {
