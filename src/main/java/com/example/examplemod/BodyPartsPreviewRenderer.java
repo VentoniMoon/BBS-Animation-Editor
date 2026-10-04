@@ -153,7 +153,7 @@ public class BodyPartsPreviewRenderer
         }
 
         Object apiModelObject =
-                data.getModelAccess().getApiModel();
+                modelAccess.getApiModel();
 
         if (!(apiModelObject instanceof Model))
         {
