@@ -118,7 +118,7 @@ public class EditorGizmoController
             EditorCamera camera,
             boolean enabled)
     {
-        if (!enabled || mouseButton != 0 || bone == null || keyframe == null)
+        if (!enabled || mouseButton != 0)
         {
             return false;
         }
@@ -154,7 +154,8 @@ public class EditorGizmoController
             }
         }
 
-        if (recordFrame == null || camera == null)
+        if (bone == null || keyframe == null
+                || recordFrame == null || camera == null)
         {
             return false;
         }
@@ -380,13 +381,6 @@ public class EditorGizmoController
             return;
         }
 
-        drawButtons(
-                viewportX,
-                viewportY,
-                viewportWidth,
-                viewportHeight
-        );
-
         int oldMatrixMode =
                 GL11.glGetInteger(GL11.GL_MATRIX_MODE);
 
@@ -415,6 +409,13 @@ public class EditorGizmoController
         GL11.glBlendFunc(
                 GL11.GL_SRC_ALPHA,
                 GL11.GL_ONE_MINUS_SRC_ALPHA
+        );
+
+        drawButtons(
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight
         );
 
         float scale =
