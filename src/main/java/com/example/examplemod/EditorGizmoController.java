@@ -741,6 +741,168 @@ public class EditorGizmoController
         GL11.glMatrixMode(oldMatrixMode);
     }
 
+    private float[] beginExactChameleonBoneTransform(
+            AnimationBone bone)
+    {
+        if (bone == null ||
+                this.previewActor == null ||
+                this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
+        if (!this.previewActor.getMorph().getClass()
+                .getName().endsWith(".ChameleonMorph"))
+        {
+            return null;
+        }
+
+        try
+        {
+            Object morph =
+                    this.previewActor.getMorph();
+
+            Object chameleonModel =
+                    morph.getClass()
+                            .getMethod("getModel")
+                            .invoke(morph);
+
+            if (chameleonModel == null)
+            {
+                return null;
+            }
+
+            Object model =
+                    chameleonModel.getClass()
+                            .getField("model")
+                            .get(chameleonModel);
+
+            Class<?> modelClass =
+                    Class.forName(
+                            "mchorse.chameleon.lib.data.model.Model"
+                    );
+
+            Class<?> rendererClass =
+                    Class.forName(
+                            "mchorse.chameleon.lib.render.ChameleonRenderer"
+                    );
+
+            java.lang.reflect.Method postRender =
+                    rendererClass.getMethod(
+                            "postRender",
+                            modelClass,
+                            String.class
+                    );
+
+            GL11.glPushMatrix();
+
+            GL11.glTranslated(
+                    this.previewActor.posX,
+                    this.previewActor.posY,
+                    this.previewActor.posZ
+            );
+
+            float scale = 1.0F;
+
+            try
+            {
+                Object value =
+                        morph.getClass()
+                                .getMethod(
+                                        "getScale",
+                                        float.class
+                                )
+                                .invoke(
+                                        morph,
+                                        0.0F
+                                );
+
+                if (value instanceof Number)
+                {
+                    scale =
+                            ((Number) value).floatValue();
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+
+            GL11.glScalef(
+                    scale,
+                    scale,
+                    scale
+            );
+
+            GL11.glRotatef(
+                    -this.previewActor.renderYawOffset
+                            + 180.0F,
+                    0.0F,
+                    1.0F,
+                    0.0F
+            );
+
+            Object result =
+                    postRender.invoke(
+                            null,
+                            model,
+                            bone.getName()
+                    );
+
+            if (result instanceof Boolean &&
+                    !((Boolean) result).booleanValue())
+            {
+                GL11.glPopMatrix();
+                return null;
+            }
+
+            FloatBuffer buffer =
+                    BufferUtils.createFloatBuffer(16);
+
+            GL11.glGetFloat(
+                    GL11.GL_MODELVIEW_MATRIX,
+                    buffer
+            );
+
+            float[] m =
+                    new float[16];
+
+            buffer.get(m);
+
+            float sx =
+                    (float) Math.sqrt(
+                            m[0] * m[0]
+                                    + m[1] * m[1]
+                                    + m[2] * m[2]
+                    );
+
+            float sy =
+                    (float) Math.sqrt(
+                            m[4] * m[4]
+                                    + m[5] * m[5]
+                                    + m[6] * m[6]
+                    );
+
+            float sz =
+                    (float) Math.sqrt(
+                            m[8] * m[8]
+                                    + m[9] * m[9]
+                                    + m[10] * m[10]
+                    );
+
+            return new float[]
+            {
+                m[14],
+                Math.max(0.0001F, sx),
+                Math.max(0.0001F, sy),
+                Math.max(0.0001F, sz)
+            };
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
     private float getWorldGizmoSize(
             EditorCamera camera,
             double x,
