@@ -5,6 +5,9 @@ import java.util.List;
 
 public class BodyPartModelData
 {
+    private static int NEXT_TIMELINE_ID = 1;
+    private final String timelineId;
+
     private String modelName;
     private String attachmentBoneName;
     private BlockbusterModelAccess modelAccess;
@@ -25,6 +28,7 @@ public class BodyPartModelData
             int startFrame,
             int endFrame)
     {
+        this.timelineId = "bodypart:" + NEXT_TIMELINE_ID++;
         this.modelName = modelName == null ? "" : modelName;
         this.attachmentBoneName = attachmentBoneName == null
                 ? ""
@@ -37,6 +41,7 @@ public class BodyPartModelData
         this.endFrame = Math.max(this.startFrame + 1, endFrame);
     }
 
+    public String getTimelineId() { return this.timelineId; }
     public String getModelName() { return this.modelName; }
     public String getAttachmentBoneName() { return this.attachmentBoneName; }
     public BlockbusterModelAccess getModelAccess() { return this.modelAccess; }
