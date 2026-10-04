@@ -144,7 +144,12 @@ public class BodyPartModelData
 
     public boolean hasModel()
     {
-        return (this.hasMorphModel() || this.modelAccess != null) &&
+        if (this.hasMorphModel())
+        {
+            return true;
+        }
+
+        return this.modelAccess != null &&
                 this.modelName != null &&
                 this.modelName.length() > 0 &&
                 this.bones != null &&
