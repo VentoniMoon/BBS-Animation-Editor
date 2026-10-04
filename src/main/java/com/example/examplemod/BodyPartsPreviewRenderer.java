@@ -338,7 +338,8 @@ public class BodyPartsPreviewRenderer
                     name;
 
             morph.model =
-                    data.getModelAccess().getModel();
+                    (mchorse.blockbuster.api.Model)
+                            data.getModelAccess().getModel();
 
             this.morphs.put(
                     name,
