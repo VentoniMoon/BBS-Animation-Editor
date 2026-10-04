@@ -80,6 +80,7 @@ public class EditorGizmoController
     private BodyPartModelData bodyPartTarget;
     private AnimationBone bodyPartAttachmentBone;
     private AnimationTransform globalTransformTarget;
+    private int gizmoFrame;
 
     public void setBodyPartTarget(
             BodyPartModelData model,
@@ -92,6 +93,11 @@ public class EditorGizmoController
     public void setGlobalTransformTarget(AnimationTransform transform)
     {
         this.globalTransformTarget = transform;
+    }
+
+    public void setGizmoFrame(int frame)
+    {
+        this.gizmoFrame = Math.max(0, frame);
     }
 
     public Mode getMode()
@@ -1430,7 +1436,7 @@ public class EditorGizmoController
         int frame =
                 selectedKeyframe != null
                         ? selectedKeyframe.getFrame()
-                        : 0;
+                        : this.gizmoFrame;
 
         /*
          * AnimationBone stores pivots in Blockbuster model pixels.
