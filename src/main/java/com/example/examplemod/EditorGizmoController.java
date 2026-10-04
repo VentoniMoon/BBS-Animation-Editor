@@ -6,6 +6,8 @@ import java.util.List;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
+import org.lwjgl.BufferUtils;
+import java.nio.IntBuffer;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -476,10 +478,18 @@ public class EditorGizmoController
         int oldMatrixMode =
                 GL11.glGetInteger(GL11.GL_MATRIX_MODE);
 
-        int oldViewportX = GL11.glGetInteger(GL11.GL_VIEWPORT, 0);
-        int oldViewportY = GL11.glGetInteger(GL11.GL_VIEWPORT, 1);
-        int oldViewportW = GL11.glGetInteger(GL11.GL_VIEWPORT, 2);
-        int oldViewportH = GL11.glGetInteger(GL11.GL_VIEWPORT, 3);
+        IntBuffer viewportBuffer =
+                BufferUtils.createIntBuffer(16);
+
+        GL11.glGetInteger(
+                GL11.GL_VIEWPORT,
+                viewportBuffer
+        );
+
+        int oldViewportX = viewportBuffer.get(0);
+        int oldViewportY = viewportBuffer.get(1);
+        int oldViewportW = viewportBuffer.get(2);
+        int oldViewportH = viewportBuffer.get(3);
 
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
 
