@@ -4,6 +4,7 @@ import java.util.List;
 
 import mchorse.blockbuster.common.entity.EntityActor;
 import mchorse.metamorph.api.morphs.AbstractMorph;
+import mchorse.blockbuster_pack.morphs.CustomMorph;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
@@ -712,7 +713,7 @@ public class CharacterEditorPanel
 
             this.animationSetupPanel.setState(
                     this.selectedActor,
-                    this.selectedKey,
+                    getEditorKey(),
                     this.runtimeActor,
                     this.currentFrame
             );
@@ -1211,6 +1212,32 @@ public class CharacterEditorPanel
 
     private AbstractMorph getCurrentMorph()
     {
+        if (this.selectedBodyPartModel != null)
+        {
+            try
+            {
+                String modelName =
+                        this.selectedBodyPartModel.getModelNameAt(
+                                this.currentFrame
+                        );
+
+                if (modelName == null || modelName.isEmpty())
+                {
+                    return null;
+                }
+
+                CustomMorph morph = new CustomMorph();
+                morph.name = "blockbuster." + modelName;
+                morph.updateModel(true);
+
+                return morph.model == null ? null : morph;
+            }
+            catch (Throwable error)
+            {
+                return null;
+            }
+        }
+
         if (this.runtimeActor == null ||
                 this.runtimeActor.morph == null)
         {
@@ -1225,6 +1252,30 @@ public class CharacterEditorPanel
         {
             return null;
         }
+    }
+
+    private CharacterKey getEditorKey()
+    {
+        if (this.selectedBodyPartModel != null)
+        {
+            return this.selectedBodyPartModel.getOrCreateCharacterStateKey(
+                    this.currentFrame
+            );
+        }
+
+        return this.selectedKey;
+    }
+
+    private CharacterTimelineController getEditorTimeline()
+    {
+        if (this.selectedBodyPartModel != null)
+        {
+            return this.selectedBodyPartModel.getCharacterTimeline();
+        }
+
+        return this.selectedActor == null
+                ? null
+                : this.selectedActor.getCharacterTimeline();
     }
 
     private List<String> getBodyPartBones()
@@ -1245,8 +1296,8 @@ public class CharacterEditorPanel
 
     private boolean canEditBodyPartOverrides()
     {
-        return this.selectedKey != null &&
-                isSelectedKeyValid();
+        return this.selectedBodyPartModel != null ||
+                (this.selectedKey != null && isSelectedKeyValid());
     }
 
     /**
@@ -2183,9 +2234,9 @@ public class CharacterEditorPanel
 
             CharacterBodyPartOverrideController
                     .toggleBone(
-                            this.selectedKey,
+                            getEditorKey(),
                             morph,
-                            this.selectedActor,
+                            getEditorTimeline(),
                             this.currentFrame,
                             bone
                     );
@@ -2277,7 +2328,7 @@ public class CharacterEditorPanel
 
             this.animationParametersPanel.setState(
                     this.selectedActor,
-                    this.selectedKey,
+                    getEditorKey(),
                     this.currentFrame,
                     this.animationSetupPanel.getSelectedAction()
             );
@@ -2789,6 +2840,15 @@ public class CharacterEditorPanel
                 this.selectedActor,
                 this.runtimeActor))
         {
+            return;
+        }
+
+        if (this.selectedBodyPartModel != null)
+        {
+            this.guiBridge.openBodyPartSkinEditor(
+                    this.selectedBodyPartModel,
+                    this.currentFrame
+            );
             return;
         }
 
