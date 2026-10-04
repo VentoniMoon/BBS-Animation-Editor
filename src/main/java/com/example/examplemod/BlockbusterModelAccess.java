@@ -81,6 +81,40 @@ public class BlockbusterModelAccess
         }
     }
 
+    /**
+     * Returns the authoritative Blockbuster API Model used by
+     * CustomMorph.  ModelCustom.MODELS contains the client renderer,
+     * not the API Model itself, so the renderer object must never be
+     * cast to mchorse.blockbuster.api.Model.
+     */
+    public Object getApiModel()
+    {
+        if (this.model == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            java.lang.reflect.Field modelField =
+                    this.model.getClass().getField("model");
+
+            Object apiModel =
+                    modelField.get(this.model);
+
+            if (apiModel != null)
+            {
+                return apiModel;
+            }
+        }
+        catch (Exception ignored)
+        {
+            /* Fall through to Blockbuster's authoritative model map. */
+        }
+
+        return null;
+    }
+
     public boolean isValid()
     {
         return this.model != null;
