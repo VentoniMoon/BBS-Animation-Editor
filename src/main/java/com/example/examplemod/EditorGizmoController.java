@@ -302,36 +302,39 @@ public class EditorGizmoController
 
             if (this.activePart == AXIS_X)
             {
-                px += (float) getAxisDragAmount(AXIS_X, mouseDX, mouseDY);
+                px += (float) getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY);
             }
             else if (this.activePart == AXIS_Y)
             {
-                py += (float) getAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
+                py += (float) getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
             }
             else if (this.activePart == AXIS_Z)
             {
-                pz += (float) getAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
+                pz += (float) getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
             }
             else if (this.activePart == PLANE_XY)
             {
                 double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
-                px += (float) d[0]; py += (float) d[1];
+                px += (float) getDataAxisDelta(AXIS_X, d[0]);
+                py += (float) getDataAxisDelta(AXIS_Y, d[1]);
             }
             else if (this.activePart == PLANE_XZ)
             {
                 double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
-                px += (float) d[0]; pz += (float) d[1];
+                px += (float) getDataAxisDelta(AXIS_X, d[0]);
+                pz += (float) getDataAxisDelta(AXIS_Z, d[1]);
             }
             else if (this.activePart == PLANE_YZ)
             {
                 double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
-                py += (float) d[0]; pz += (float) d[1];
+                py += (float) getDataAxisDelta(AXIS_Y, d[0]);
+                pz += (float) getDataAxisDelta(AXIS_Z, d[1]);
             }
             transform.setPosition(px, py, pz);
         }
         else if (this.mode == Mode.ROTATION)
         {
-            float amount = (float) getAxisDragAngle(this.activePart, mouseDX, mouseDY);
+            float amount = (float) getRotationDragAngle(this.activePart, mouseDX, mouseDY);
             if (this.activePart == AXIS_X)
             {
                 transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
@@ -347,7 +350,7 @@ public class EditorGizmoController
         }
         else
         {
-            float amount = (float) (getAxisDragAmount(this.activePart, mouseDX, mouseDY) * 0.05D);
+            float amount = (float) (getAxisDragAmount(this.activePart, mouseDX, mouseDY) * 0.25D);
             float sx = this.dragStartSX;
             float sy = this.dragStartSY;
             float sz = this.dragStartSZ;
@@ -1184,6 +1187,36 @@ public class EditorGizmoController
         return best;
     }
 
+    private double getDataAxisDragAmount(
+            int axisId,
+            double mouseDX,
+            double mouseDY)
+    {
+        return getAxisDragAmount(axisId, mouseDX, mouseDY)
+                * getDataAxisSign(axisId);
+    }
+
+    private double getDataAxisDelta(
+            int axisId,
+            double visualDelta)
+    {
+        return visualDelta * getDataAxisSign(axisId);
+    }
+
+    private double getDataAxisSign(int axisId)
+    {
+        return axisId == AXIS_X ? 1.0D : -1.0D;
+    }
+
+    private double getRotationDragAngle(
+            int axisId,
+            double mouseDX,
+            double mouseDY)
+    {
+        return getAxisDragAngle(axisId, mouseDX, mouseDY)
+                * getDataAxisSign(axisId);
+    }
+
     private double getAxisDragAmount(int axisId,double mouseDX,double mouseDY)
     {
         if(axisId<0||axisId>2)return 0.0D;
@@ -1434,7 +1467,7 @@ public class EditorGizmoController
                 -modelY + 1.501D;
 
         double transformedZ =
-                modelZ;
+                -modelZ;
 
         double yaw =
                 Math.toRadians(
