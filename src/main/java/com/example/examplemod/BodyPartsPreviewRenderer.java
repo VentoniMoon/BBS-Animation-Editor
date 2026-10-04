@@ -1,3 +1,19 @@
+package com.example.examplemod;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.lwjgl.opengl.GL11;
+
+import mchorse.blockbuster.api.ModelTransform;
+import mchorse.blockbuster.common.entity.EntityActor;
+import mchorse.blockbuster_pack.morphs.CustomMorph;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.RenderHelper;
+
 public class BodyPartsPreviewRenderer
 {
     private final Map<String, CustomMorph> morphs =
@@ -31,13 +47,6 @@ public class BodyPartsPreviewRenderer
         this.renderingAttachments = false;
     }
 
-    /**
-     * Installs an actual RenderCustomModel layer.
-     *
-     * This is deliberately the same rendering architecture used by
-     * Blockbuster's own LayerBodyPart: the attachment is rendered while
-     * the parent model's limb matrix is still active.
-     */
     public void prepare(
             BodyPartsEditorController controller,
             EntityActor actor,
@@ -125,10 +134,6 @@ public class BodyPartsPreviewRenderer
 
             addLayer.setAccessible(true);
 
-            /*
-             * addLayer() does not expose a public duplicate check, so the
-             * layer is installed only once per BodyPartsPreviewRenderer.
-             */
             if (!isLayerInstalled(renderer))
             {
                 addLayer.invoke(
@@ -169,15 +174,6 @@ public class BodyPartsPreviewRenderer
         }
     }
 
-    /**
-     * This method intentionally mirrors Blockbuster's LayerBodyPart:
-     *
-     *   limb.postRender(1/16)
-     *   childMorph.render(entity, 0, 0, 0, 0, partialTicks)
-     *
-     * Therefore the child inherits the exact parent limb transform,
-     * including the complete parent chain, animation and model pose.
-     */
     private void renderInsideParentModel(
             EntityActor actor,
             BodyPartsEditorController controller,
@@ -268,11 +264,6 @@ public class BodyPartsPreviewRenderer
 
             GL11.glPushMatrix();
 
-            /*
-             * THIS is the important part copied from Blockbuster's
-             * LayerBodyPart. postRender() recursively applies all
-             * parent limbs before the selected limb.
-             */
             limb.postRender(
                     1.0F / 16.0F
             );
@@ -295,11 +286,6 @@ public class BodyPartsPreviewRenderer
 
             RenderHelper.enableStandardItemLighting();
 
-            /*
-             * Exactly like Metamorph/Blockbuster BodyPart:
-             * render at 0,0,0 because the parent limb matrix is
-             * already on the OpenGL stack.
-             */
             morph.render(
                     actor,
                     0.0D,
@@ -313,12 +299,6 @@ public class BodyPartsPreviewRenderer
 
             GL11.glPopMatrix();
 
-            /*
-             * CustomMorph.render temporarily changes the shared
-             * Blockbuster actor renderer to the child morph. Restore
-             * the parent model exactly as Blockbuster's LayerBodyPart
-             * does after rendering a body part.
-             */
             renderer.current = parentMorph;
             renderer.setupModel(
                     actor,
