@@ -145,6 +145,11 @@ public class PlayerSkinEditorScreen extends GuiBase
                                 className
                         );
 
+                System.out.println(
+                        "[BBS Animation Editor] Skin GUI candidate: " +
+                                className
+                );
+
                 Object instance =
                         clazz
                                 .getConstructor(
@@ -161,15 +166,21 @@ public class PlayerSkinEditorScreen extends GuiBase
 
                     if (result.canEdit(morph))
                     {
+                        System.out.println(
+                                "[BBS Animation Editor] Skin GUI selected: " +
+                                        className
+                        );
                         return result;
                     }
                 }
             }
             catch(Throwable error)
             {
-                /*
-                 * Optional editor is not available.
-                 */
+                System.err.println(
+                        "[BBS Animation Editor] Skin GUI candidate failed: " +
+                                className
+                );
+                error.printStackTrace();
             }
         }
 
