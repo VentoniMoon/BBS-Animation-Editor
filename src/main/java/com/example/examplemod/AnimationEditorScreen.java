@@ -486,6 +486,11 @@ public class AnimationEditorScreen extends GuiScreen
                 this.characterTimelineEditorController
                         .getSelectedKey()
         );
+
+        this.characterEditorPanel.setSelectedBodyPartModel(
+                this.characterTimelineEditorController
+                        .getSelectedBodyPartModel()
+        );
     }
 
     private void applyCharacterState()
