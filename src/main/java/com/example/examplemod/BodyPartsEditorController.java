@@ -384,7 +384,9 @@ public class BodyPartsEditorController
 
             if (!(roots instanceof List))
             {
-                return result;
+                return createAnimationBonesFromMorphNames(
+                        chameleonModel
+                );
             }
 
             for (Object root :
@@ -435,6 +437,42 @@ public class BodyPartsEditorController
             catch (Throwable ignored)
             {
             }
+        }
+
+        return result;
+    }
+
+    private List<AnimationBone> createAnimationBonesFromMorphNames(
+            Object chameleonModel)
+    {
+        List<AnimationBone> result =
+                new ArrayList<AnimationBone>();
+
+        try
+        {
+            Object names =
+                    chameleonModel.getClass()
+                            .getMethod("getBoneNames")
+                            .invoke(chameleonModel);
+
+            if (names instanceof List)
+            {
+                for (Object name :
+                        (List<?>) names)
+                {
+                    if (name != null)
+                    {
+                        result.add(
+                                new AnimationBone(
+                                        String.valueOf(name)
+                                )
+                        );
+                    }
+                }
+            }
+        }
+        catch (Throwable ignored)
+        {
         }
 
         return result;
