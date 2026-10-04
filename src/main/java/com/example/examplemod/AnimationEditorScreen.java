@@ -1208,7 +1208,7 @@ public class AnimationEditorScreen extends GuiScreen
                 : this.sceneState.getSelectedActorRecord();
     }
 
-    private BlockbusterRecordFrame getCurrentRecordFrame()
+    public BlockbusterRecordFrame getCurrentRecordFrame()
     {
         return this.recordController.getCurrentRecordFrame(
                 getSelectedActorRecord()
