@@ -1137,14 +1137,27 @@ public class BlockbusterActorPreviewRenderer
         double oldViewerPosZ =
                 renderManager.viewerPosZ;
 
-        int framebufferWidth =
-                mc.displayWidth;
+        /*
+         * The Preview framebuffer is full-screen sized, but the actor is
+         * rendered into the Preview viewport inside that framebuffer.
+         *
+         * The old code used mc.displayWidth/displayHeight for the
+         * perspective aspect ratio.  That is wrong when the editor
+         * Preview is only a rectangle of the screen: the GL viewport is
+         * previewWidth x previewHeight, while the projection was using
+         * the whole display aspect.  The Gizmo uses the Preview aspect,
+         * so the two projections no longer described the same camera.
+         *
+         * Keep framebuffer dimensions out of the actor projection.
+         */
+        int previewWidth =
+                width;
 
-        int framebufferHeight =
-                mc.displayHeight;
+        int previewHeight =
+                height;
 
-        if (framebufferWidth <= 0 ||
-                framebufferHeight <= 0)
+        if (previewWidth <= 0 ||
+                previewHeight <= 0)
         {
             return;
         }
@@ -1210,8 +1223,8 @@ public class BlockbusterActorPreviewRenderer
         GL11.glLoadIdentity();
 
         float aspect =
-                (float) framebufferWidth /
-                        (float) framebufferHeight;
+                (float) previewWidth /
+                        (float) previewHeight;
 
         GLU.gluPerspective(
                 60.0F,
