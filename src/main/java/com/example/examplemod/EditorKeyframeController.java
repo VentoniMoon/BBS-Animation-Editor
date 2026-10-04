@@ -148,9 +148,29 @@ public class EditorKeyframeController
     }
 
 
+    public AnimationBone getSelectedKeyframeBone()
+    {
+        return this.selectedKeyframeBone;
+    }
+
+
     public void setSelectedKeyframe(
             AnimationKeyframe keyframe)
     {
+        this.selectedKeyframe = keyframe;
+
+        if (keyframe == null)
+        {
+            this.selectedKeyframeBone = null;
+        }
+    }
+
+
+    public void setSelectedKeyframe(
+            AnimationBone bone,
+            AnimationKeyframe keyframe)
+    {
+        this.selectedKeyframeBone = bone;
         this.selectedKeyframe = keyframe;
     }
 
@@ -298,6 +318,7 @@ public class EditorKeyframeController
                         frame
                 );
 
+        this.selectedKeyframeBone = bone;
         this.selectedKeyframe =
                 created;
 
@@ -398,6 +419,7 @@ public class EditorKeyframeController
         this.draggingKeyframe =
                 keyframe;
 
+        this.selectedKeyframeBone = bone;
         this.selectedKeyframe =
                 keyframe;
     }
@@ -500,6 +522,7 @@ public class EditorKeyframeController
                 bone
         );
 
+        this.selectedKeyframeBone = bone;
         this.selectedKeyframe =
                 keyframe;
 
