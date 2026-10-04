@@ -3,6 +3,8 @@ package com.example.examplemod;
 import java.util.ArrayList;
 import java.util.List;
 
+import mchorse.metamorph.api.morphs.AbstractMorph;
+
 public class BodyPartsEditorController
 {
     private final EditorTimeline localTimeline;
@@ -138,6 +140,33 @@ public class BodyPartsEditorController
     /**
      * Assigns a Blockbuster model to the currently selected rectangle.
      */
+    /** Assign any Metamorph morph (including Chameleon) to the selected attachment. */
+    public boolean assignMorphToSelected(AbstractMorph morph)
+    {
+        BodyPartModelData selected = this.selectedAttachment;
+
+        if (selected == null || morph == null)
+        {
+            return false;
+        }
+
+        AbstractMorph copy = morph.copy();
+        selected.setMorph(copy);
+
+        List<AnimationBone> bones = createAnimationBonesFromMorph(copy);
+        if (!bones.isEmpty())
+        {
+            selected.setModel(
+                    copy.name == null ? "" : copy.name,
+                    null,
+                    bones
+            );
+            selected.setMorph(copy);
+        }
+
+        return true;
+    }
+
     public boolean assignModelToSelected(String modelName)
     {
         BodyPartModelData selected =
@@ -292,6 +321,45 @@ public class BodyPartsEditorController
         }
 
         return -1;
+    }
+
+    private List<AnimationBone> createAnimationBonesFromMorph(AbstractMorph morph)
+    {
+        List<AnimationBone> result = new ArrayList<AnimationBone>();
+
+        if (morph == null)
+        {
+            return result;
+        }
+
+        try
+        {
+            Object model = morph.getClass().getMethod("getModel").invoke(morph);
+            if (model == null)
+            {
+                return result;
+            }
+
+            Object names = model.getClass().getMethod("getBoneNames").invoke(model);
+            if (!(names instanceof List))
+            {
+                return result;
+            }
+
+            for (Object name : (List<?>) names)
+            {
+                if (name != null)
+                {
+                    result.add(new AnimationBone(String.valueOf(name)));
+                }
+            }
+        }
+        catch (Throwable ignored)
+        {
+            /* Morphs which don't expose a bone model simply have no local bone tracks. */
+        }
+
+        return result;
     }
 
     private List<AnimationBone> createAnimationBones(
