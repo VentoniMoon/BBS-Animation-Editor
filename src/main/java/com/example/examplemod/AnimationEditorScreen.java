@@ -2594,6 +2594,9 @@ public class AnimationEditorScreen extends GuiScreen
          * The tool buttons are drawn later in GUI space by draw().
          */
         prepareGizmoTarget();
+        this.gizmoController.setPreviewActor(
+                findRuntimeActor()
+        );
 
         this.gizmoController.draw3D(
                 mc,
