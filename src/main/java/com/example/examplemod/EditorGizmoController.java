@@ -543,28 +543,65 @@ public class EditorGizmoController
                 GL11.GL_SRC_ALPHA,
                 GL11.GL_ONE_MINUS_SRC_ALPHA
         );
-        GL11.glLineWidth(3.0F);
+        GL11.glLineWidth(5.0F);
 
         /*
-         * AnimationBone coordinates are local to the actor. The actor
-         * itself can be rotated by the Record frame, so rotate the bone
-         * pivot by the actor yaw before placing the gizmo in world space.
+         * AnimationBone coordinates come from Blockbuster's model
+         * rotation points. Those values are model-space pixels, not
+         * world-space blocks.
+         *
+         * RenderCustomModel uses Minecraft's normal living-entity
+         * transform before rendering the custom model:
+         *
+         *   rotate(180 - entityYaw)
+         *   scale(-1, -1, 1)
+         *   translate(0, -1.501, 0)
+         *   model coordinates / 16
+         *
+         * Reproduce that exact transform here. This is the important
+         * difference between a gizmo that merely follows the actor and
+         * one that actually sits on the rendered bone.
          */
         double localX = world[0] - recordFrame.getX();
         double localY = world[1] - recordFrame.getY();
         double localZ = world[2] - recordFrame.getZ();
 
-        double yaw = Math.toRadians(recordFrame.getYaw());
-        double rotatedX =
-                Math.cos(yaw) * localX
-                        + Math.sin(yaw) * localZ;
-        double rotatedZ =
-                -Math.sin(yaw) * localX
-                        + Math.cos(yaw) * localZ;
+        double modelX = localX / 16.0D;
+        double modelY = localY / 16.0D;
+        double modelZ = localZ / 16.0D;
 
-        double gizmoX = recordFrame.getX() + rotatedX;
-        double gizmoY = recordFrame.getY() + localY;
-        double gizmoZ = recordFrame.getZ() + rotatedZ;
+        /*
+         * RenderLivingBase applies scale(-1,-1,1), then the model
+         * origin offset of -1.501 blocks on Y, then rotates the model
+         * by 180 - entity yaw.
+         */
+        double transformedX = -modelX;
+        double transformedY = -modelY + 1.501D;
+        double transformedZ = modelZ;
+
+        double yaw = Math.toRadians(
+                180.0D - recordFrame.getYaw()
+        );
+
+        double cos = Math.cos(yaw);
+        double sin = Math.sin(yaw);
+
+        double rotatedX =
+                cos * transformedX
+                        + sin * transformedZ;
+
+        double rotatedZ =
+                -sin * transformedX
+                        + cos * transformedZ;
+
+        double gizmoX =
+                recordFrame.getX() + rotatedX;
+
+        double gizmoY =
+                recordFrame.getY() + transformedY;
+
+        double gizmoZ =
+                recordFrame.getZ() + rotatedZ;
 
         GL11.glPushMatrix();
         GL11.glTranslated(gizmoX, gizmoY, gizmoZ);
@@ -1329,6 +1366,12 @@ public class EditorGizmoController
                         ? recordFrame.getZ()
                         : 0.0D;
 
+        /*
+         * The values stored in AnimationBone are the same model-space
+         * coordinates used by Blockbuster's ModelCustomRenderer.
+         * Keep them in that space here; draw3D() performs the exact
+         * model-to-world conversion used by the actor renderer.
+         */
         return new double[]
         {
             recordX + world.getPositionX(),
