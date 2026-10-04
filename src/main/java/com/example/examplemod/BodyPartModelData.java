@@ -2,6 +2,8 @@ package com.example.examplemod;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class BodyPartModelData
 {
@@ -12,6 +14,10 @@ public class BodyPartModelData
     private String attachmentBoneName;
     private BlockbusterModelAccess modelAccess;
     private List<AnimationBone> bones;
+
+    /** Model replacements made by the Character Timeline. */
+    private final Map<Integer, String> modelKeys =
+            new TreeMap<Integer, String>();
 
     private int startFrame;
     private int endFrame;
@@ -105,6 +111,128 @@ public class BodyPartModelData
                         this.startFrame + 1,
                         frame
                 );
+    }
+
+    public String getModelNameAt(int frame)
+    {
+        String result = this.modelName;
+        Map.Entry<Integer, String> entry =
+                this.modelKeys.floorEntry(Math.max(0, frame));
+
+        if (entry != null && entry.getValue() != null && entry.getValue().length() > 0)
+        {
+            result = entry.getValue();
+        }
+
+        return result == null ? "" : result;
+    }
+
+    public boolean hasModelKeyAt(int frame)
+    {
+        return this.modelKeys.containsKey(frame);
+    }
+
+    public void setModelKey(int frame, String modelName)
+    {
+        if (frame < 0 || modelName == null || modelName.length() == 0)
+        {
+            return;
+        }
+
+        this.modelKeys.put(frame, modelName);
+    }
+
+    public void removeModelKey(int frame)
+    {
+        this.modelKeys.remove(frame);
+    }
+
+    public boolean moveModelKey(int oldFrame, int newFrame)
+    {
+        if (oldFrame == newFrame)
+        {
+            return true;
+        }
+
+        if (!this.modelKeys.containsKey(oldFrame) ||
+                this.modelKeys.containsKey(newFrame))
+        {
+            return false;
+        }
+
+        String value = this.modelKeys.remove(oldFrame);
+        this.modelKeys.put(newFrame, value);
+        return true;
+    }
+
+    public List<Integer> getModelKeyFrames()
+    {
+        return new ArrayList<Integer>(this.modelKeys.keySet());
+    }
+
+    public boolean replaceModelByName(String newModelName)
+    {
+        if (newModelName == null || newModelName.length() == 0)
+        {
+            return false;
+        }
+
+        BlockbusterModelAccess access = new BlockbusterModelAccess(null);
+
+        if (!access.loadModelByName(newModelName))
+        {
+            return false;
+        }
+
+        List<AnimationBone> newBones = new ArrayList<AnimationBone>();
+        List<BlockbusterLimbData> limbs = access.getLimbData();
+
+        if (limbs != null)
+        {
+            for (BlockbusterLimbData limb : limbs)
+            {
+                if (limb == null) continue;
+
+                AnimationBone bone = new AnimationBone(limb.getName());
+                bone.setLocalPosition(limb.getX(), limb.getY(), limb.getZ());
+                newBones.add(bone);
+            }
+
+            for (AnimationBone bone : newBones)
+            {
+                for (BlockbusterLimbData limb : limbs)
+                {
+                    if (limb != null && limb.getName().equals(bone.getName()))
+                    {
+                        String parentName = limb.getParentName();
+
+                        if (parentName != null)
+                        {
+                            for (AnimationBone parent : newBones)
+                            {
+                                if (parentName.equals(parent.getName()))
+                                {
+                                    bone.setParent(parent);
+                                    break;
+                                }
+                            }
+                        }
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (newBones.isEmpty())
+        {
+            return false;
+        }
+
+        this.modelName = newModelName;
+        this.modelAccess = access;
+        this.bones = newBones;
+        return true;
     }
 
     public AnimationBone getBone(int index)
