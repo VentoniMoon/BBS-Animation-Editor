@@ -533,13 +533,6 @@ public class EditorGizmoController
             return;
         }
 
-        /*
-         * The Preview actor is rendered into the complete Preview FBO.
-         * Keep the gizmo on that exact projection surface. The previous
-         * implementation changed the OpenGL viewport to the GUI preview
-         * rectangle, which made the 3D gizmo disappear after the native
-         * anchor pass was introduced.
-         */
         double[] world =
                 getNativeBoneWorldPosition(
                         bone,
@@ -562,8 +555,67 @@ public class EditorGizmoController
             return;
         }
 
-        int glWidth = Math.max(1, mc.displayWidth);
-        int glHeight = Math.max(1, mc.displayHeight);
+        /*
+         * PreviewShaderBridge.bindPreviewFramebuffer() renders the actor
+         * into the Preview rectangle inside the Preview FBO. The gizmo
+         * must use that exact same OpenGL viewport and aspect ratio.
+         */
+        ScaledResolution resolution =
+                new ScaledResolution(mc);
+
+        int scaleFactor =
+                Math.max(1, resolution.getScaleFactor());
+
+        int framebufferWidth =
+                Math.max(1, mc.displayWidth);
+
+        int framebufferHeight =
+                Math.max(1, mc.displayHeight);
+
+        int glX =
+                Math.max(
+                        0,
+                        viewportX * scaleFactor
+                );
+
+        int glY =
+                Math.max(
+                        0,
+                        framebufferHeight
+                                - (
+                                        viewportY
+                                                + viewportHeight
+                                ) * scaleFactor
+                );
+
+        int glWidth =
+                Math.max(
+                        1,
+                        viewportWidth * scaleFactor
+                );
+
+        int glHeight =
+                Math.max(
+                        1,
+                        viewportHeight * scaleFactor
+                );
+
+        if (glX + glWidth > framebufferWidth)
+        {
+            glWidth =
+                    framebufferWidth - glX;
+        }
+
+        if (glY + glHeight > framebufferHeight)
+        {
+            glHeight =
+                    framebufferHeight - glY;
+        }
+
+        if (glWidth <= 0 || glHeight <= 0)
+        {
+            return;
+        }
 
         int oldMatrixMode =
                 GL11.glGetInteger(GL11.GL_MATRIX_MODE);
@@ -584,8 +636,8 @@ public class EditorGizmoController
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
 
         GL11.glViewport(
-                0,
-                0,
+                glX,
+                glY,
                 glWidth,
                 glHeight
         );
@@ -596,7 +648,8 @@ public class EditorGizmoController
 
         GLU.gluPerspective(
                 60.0F,
-                (float) glWidth / (float) glHeight,
+                (float) viewportWidth
+                        / (float) viewportHeight,
                 0.05F,
                 500.0F
         );
@@ -637,6 +690,10 @@ public class EditorGizmoController
 
         GL11.glPushMatrix();
 
+        /*
+         * Native adapters already return world-space coordinates.
+         * Do not apply another actor/model transform here.
+         */
         GL11.glTranslated(
                 world[0],
                 world[1],
@@ -671,15 +728,24 @@ public class EditorGizmoController
 
         if (this.mode == Mode.POSITION)
         {
-            drawPositionGizmo3D(size, axes);
+            drawPositionGizmo3D(
+                    size,
+                    axes
+            );
         }
         else if (this.mode == Mode.ROTATION)
         {
-            drawRotationGizmo3D(size, axes);
+            drawRotationGizmo3D(
+                    size,
+                    axes
+            );
         }
         else
         {
-            drawScaleGizmo3D(size, axes);
+            drawScaleGizmo3D(
+                    size,
+                    axes
+            );
         }
 
         GL11.glPopMatrix();
