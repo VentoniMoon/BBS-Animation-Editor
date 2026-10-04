@@ -321,6 +321,7 @@ public class CharacterEditorPanel
         if (this.selectedActor != actor)
         {
             this.selectedKey = null;
+            this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
         }
@@ -373,6 +374,7 @@ public class CharacterEditorPanel
         if (key == null)
         {
             this.selectedKey = null;
+            this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
 
@@ -382,6 +384,7 @@ public class CharacterEditorPanel
         if (this.selectedActor == null)
         {
             this.selectedKey = null;
+            this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
 
