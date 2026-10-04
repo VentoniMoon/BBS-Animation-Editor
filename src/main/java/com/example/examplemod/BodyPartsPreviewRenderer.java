@@ -7,6 +7,7 @@ import mchorse.blockbuster_pack.morphs.CustomMorph;
 import mchorse.metamorph.api.morphs.AbstractMorph;
 import mchorse.metamorph.bodypart.BodyPart;
 import mchorse.metamorph.bodypart.BodyPartManager;
+import mchorse.metamorph.bodypart.IBodyPartProvider;
 import mchorse.blockbuster.common.entity.EntityActor;
 
 /**
@@ -46,16 +47,24 @@ public class BodyPartsPreviewRenderer
         AbstractMorph abstractMorph =
                 actor.getMorph();
 
-        if (!(abstractMorph instanceof CustomMorph))
+        /*
+         * Both Blockbuster CustomMorph and Emoticons AnimatedMorph
+         * expose the same Metamorph IBodyPartProvider contract.
+         *
+         * Previously this renderer accepted only CustomMorph.  That
+         * accidentally made Body Parts a no-op for AnimatedMorph:
+         * prepare() returned before even creating the BodyPart objects.
+         *
+         * This is the exact abstraction used by Metamorph itself.
+         */
+        if (!(abstractMorph instanceof IBodyPartProvider))
         {
             return;
         }
 
-        CustomMorph parent =
-                (CustomMorph) abstractMorph;
-
         BodyPartManager manager =
-                parent.parts;
+                ((IBodyPartProvider) abstractMorph)
+                        .getBodyPart();
 
         if (manager == null)
         {
