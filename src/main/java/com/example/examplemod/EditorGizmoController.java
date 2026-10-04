@@ -1258,7 +1258,7 @@ public class EditorGizmoController
 
     private double[] transformBoneDirection(float[] d,BlockbusterRecordFrame recordFrame)
     {
-        double x=-d[0], y=-d[1], z=d[2];
+        double x=-d[0], y=-d[1], z=-d[2];
         double yaw=Math.toRadians(180.0D-(recordFrame!=null?recordFrame.getYaw():0.0D));
         double c=Math.cos(yaw), s=Math.sin(yaw);
         double wx=c*x+s*z, wz=-s*x+c*z;
