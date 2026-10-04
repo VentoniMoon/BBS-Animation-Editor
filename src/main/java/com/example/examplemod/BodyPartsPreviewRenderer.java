@@ -129,7 +129,26 @@ public class BodyPartsPreviewRenderer
         /* Chameleon and other Metamorph add-ons are stored as real morphs. */
         if (data.hasMorphModel())
         {
-            AbstractMorph morph = data.getMorphAt(frame);
+            AbstractMorph morph = null;
+            CharacterKey stateKey = data.getCharacterStateKeyAt(frame);
+
+            if (stateKey != null && stateKey.hasSkin())
+            {
+                try
+                {
+                    morph = MorphManager.INSTANCE.morphFromNBT(stateKey.getSkin());
+                }
+                catch (Throwable error)
+                {
+                    error.printStackTrace();
+                }
+            }
+
+            if (morph == null)
+            {
+                morph = data.getMorphAt(frame);
+            }
+
             if (morph != null)
             {
                 return createMorphBodyPart(data, morph);
