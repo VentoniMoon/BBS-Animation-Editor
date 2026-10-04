@@ -1923,16 +1923,16 @@ public class CharacterTimelineEditorController
              */
             if (isDoubleClick(trackIndex, frame))
             {
-                BodyPartModelData bodyPart =
+                BodyPartModelData bodyPartForCreate =
                         getBodyPartModel(track);
 
-                if (bodyPart != null)
+                if (bodyPartForCreate != null)
                 {
                     if (createBodyPartKey(
-                            bodyPart,
+                            bodyPartForCreate,
                             frame))
                     {
-                        this.selectedBodyPartModel = bodyPart;
+                        this.selectedBodyPartModel = bodyPartForCreate;
                         this.selectedKey = null;
                         this.draggingKey = false;
                         this.dragTrack = -1;
