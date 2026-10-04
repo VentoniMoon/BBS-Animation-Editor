@@ -892,6 +892,17 @@ public class EditorGizmoController
                         recordFrame
                 );
 
+        /*
+         * A gizmo draw pass can happen before the editor has a complete
+         * bone/keyframe target.  In that case there is no world position
+         * to project.  Return null and let draw() use its safe fallback
+         * position instead of dereferencing world[0] here.
+         */
+        if (world == null)
+        {
+            return null;
+        }
+
         return project(
                 world[0],
                 world[1],
