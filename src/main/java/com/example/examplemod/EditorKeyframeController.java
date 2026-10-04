@@ -42,6 +42,8 @@ public class EditorKeyframeController
 
     private AnimationKeyframe selectedKeyframe = null;
 
+    private AnimationBone selectedKeyframeBone = null;
+
     /*
      * =========================================================
      * DRAGGING
@@ -96,6 +98,7 @@ public class EditorKeyframeController
         {
             this.selectedBone = 0;
             this.selectedKeyframe = null;
+            this.selectedKeyframeBone = null;
 
             return;
         }
@@ -112,6 +115,7 @@ public class EditorKeyframeController
 
         this.selectedBone = index;
         this.selectedKeyframe = null;
+        this.selectedKeyframeBone = null;
     }
 
 
@@ -154,6 +158,7 @@ public class EditorKeyframeController
     public void clearSelection()
     {
         this.selectedKeyframe = null;
+        this.selectedKeyframeBone = null;
 
         stopKeyframeDragging();
     }
@@ -277,8 +282,8 @@ public class EditorKeyframeController
 
         if (existing != null)
         {
-            this.selectedKeyframe =
-                    existing;
+            this.selectedKeyframeBone = bone;
+            this.selectedKeyframe = existing;
 
             return existing;
         }
@@ -649,6 +654,7 @@ public class EditorKeyframeController
         this.selectedBone = 0;
 
         this.selectedKeyframe = null;
+        this.selectedKeyframeBone = null;
 
         stopKeyframeDragging();
 
@@ -659,6 +665,7 @@ public class EditorKeyframeController
     public void resetSelectionOnly()
     {
         this.selectedKeyframe = null;
+        this.selectedKeyframeBone = null;
 
         stopKeyframeDragging();
 
