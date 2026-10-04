@@ -533,17 +533,25 @@ public class EditorGizmoController
             return;
         }
 
-        double[] world =
-                getBoneWorldPosition(
-                        bone,
-                        keyframe,
-                        recordFrame
-                );
+        double[] world = null;
+
+        if (this.previewActor != null &&
+                this.previewActor.getMorph() instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+        {
+            world = getExactEmoticonsBoneWorldPosition(bone);
+        }
+        else if (this.previewActor != null &&
+                this.previewActor.getMorph() instanceof mchorse.blockbuster_pack.morphs.CustomMorph)
+        {
+            world = getExactBlockbusterBoneWorldPosition(bone);
+        }
 
         if (world == null)
         {
-            return;
+            world = getBoneWorldPosition(bone, keyframe, recordFrame);
         }
+
+        if (world == null) return;
 
         /*
          * The Preview FBO is full-screen sized, but the Preview renderer
@@ -714,14 +722,19 @@ public class EditorGizmoController
         {
             GL11.glScalef(
                     1.0F / exactChameleon[1],
-                    1.0F / exactChameleon[2],
-                    1.0F / exactChameleon[3]
+                    1.0F / exactChameleon[3],
+                    1.0F / exactChameleon[4],
+                    1.0F / exactChameleon[5]
             );
 
             double distance =
                     Math.max(
                             0.05D,
-                            Math.abs(exactChameleon[0])
+                            Math.sqrt(
+                            (exactChameleon[0] - camera.getCameraX()) * (exactChameleon[0] - camera.getCameraX()) +
+                            (exactChameleon[1] - camera.getCameraY()) * (exactChameleon[1] - camera.getCameraY()) +
+                            (exactChameleon[2] - camera.getCameraZ()) * (exactChameleon[2] - camera.getCameraZ())
+                    )
                     );
 
             size =
@@ -952,6 +965,8 @@ public class EditorGizmoController
 
             return new float[]
             {
+                m[12],
+                m[13],
                 m[14],
                 Math.max(0.0001F, sx),
                 Math.max(0.0001F, sy),
@@ -964,6 +979,61 @@ public class EditorGizmoController
         }
     }
 
+    private double[] getExactBlockbusterBoneWorldPosition(AnimationBone bone)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
+        try
+        {
+            Object morph = this.previewActor.getMorph();
+            if (!(morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph)) return null;
+            mchorse.blockbuster_pack.morphs.CustomMorph customMorph =
+                    (mchorse.blockbuster_pack.morphs.CustomMorph) morph;
+            mchorse.blockbuster.client.model.ModelCustom model =
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(customMorph.getKey());
+            if (model == null) return null;
+            mchorse.blockbuster.client.model.ModelCustomRenderer renderer = model.get(bone.getName());
+            if (renderer == null) return null;
+            GL11.glPushMatrix();
+            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
+            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+            mchorse.blockbuster.api.Model sourceModel = model.model;
+            float morphScale = customMorph.scale;
+            GL11.glScalef(sourceModel.scale[0] * morphScale, sourceModel.scale[1] * morphScale, sourceModel.scale[2] * morphScale);
+            renderer.postRender(0.0625F);
+            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+            float[] matrix = new float[16];
+            buffer.get(matrix);
+            GL11.glPopMatrix();
+            return new double[] {matrix[12], matrix[13], matrix[14]};
+        }
+        catch (Throwable ignored) { return null; }
+    }
+
+    private double[] getExactEmoticonsBoneWorldPosition(AnimationBone bone)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
+        try
+        {
+            if (!(this.previewActor.getMorph() instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)) return null;
+            mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph morph =
+                    (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph) this.previewActor.getMorph();
+            if (morph.animator == null) return null;
+            mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone sourceBone =
+                    EmoticonsModelAccess.findBone(morph, bone.getName());
+            if (sourceBone == null) return null;
+            java.lang.reflect.Method method = morph.animator.getClass().getMethod(
+                    "calcPosition",
+                    net.minecraft.entity.EntityLivingBase.class,
+                    mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone.class,
+                    float.class, float.class, float.class, float.class);
+            Object result = method.invoke(morph.animator, this.previewActor, sourceBone, 0.0F, 0.0F, 0.0F, 0.0F);
+            if (!(result instanceof javax.vecmath.Vector4f)) return null;
+            javax.vecmath.Vector4f position = (javax.vecmath.Vector4f) result;
+            return new double[] {position.x, position.y, position.z};
+        }
+        catch (Throwable ignored) { return null; }
+    }
     private float getWorldGizmoSize(
             EditorCamera camera,
             double x,
