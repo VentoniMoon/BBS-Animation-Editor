@@ -790,22 +790,23 @@ public class EditorGizmoController
     {
         float dx = mouseX - center.x;
         float dy = mouseY - center.y;
-        float distance =
-                (float) Math.sqrt(dx * dx + dy * dy);
 
         if (this.mode == Mode.ROTATION)
         {
-            if (Math.abs(distance - 48.0F) < 10.0F)
+            float distance =
+                    (float) Math.sqrt(dx * dx + dy * dy);
+
+            if (Math.abs(distance - 48.0F) < 9.0F)
             {
                 return AXIS_X;
             }
 
-            if (Math.abs(distance - 40.0F) < 10.0F)
+            if (Math.abs(distance - 40.0F) < 9.0F)
             {
                 return AXIS_Y;
             }
 
-            if (Math.abs(distance - 32.0F) < 10.0F)
+            if (Math.abs(distance - 32.0F) < 9.0F)
             {
                 return AXIS_Z;
             }
@@ -813,42 +814,61 @@ public class EditorGizmoController
             return -1;
         }
 
-        float len = 58.0F;
-
-        if (distance < 14.0F)
-        {
-            return -1;
-        }
-
-        if (Math.abs(dy) < 12.0F && dx > 12.0F && dx < len + 12.0F)
-        {
-            return AXIS_X;
-        }
-
-        if (Math.abs(dx) < 12.0F && dy < -12.0F && dy > -len - 12.0F)
-        {
-            return AXIS_Y;
-        }
-
-        if (dx < -8.0F && dy > 8.0F
-                && Math.abs(Math.abs(dx) - Math.abs(dy)) < 18.0F)
-        {
-            return AXIS_Z;
-        }
-
-        if (dx > 8.0F && dy < -8.0F
-                && Math.abs(Math.abs(dx) - Math.abs(dy)) < 18.0F)
+        /*
+         * Plane handles are small squares between the axes.
+         */
+        if (insideSquare(dx, dy, 18.0F, -18.0F, 9.0F))
         {
             return PLANE_XY;
         }
 
-        if (dx < -8.0F && dy > 8.0F
-                && Math.abs(Math.abs(dx) - Math.abs(dy)) < 18.0F)
+        if (insideSquare(dx, dy, 17.0F, 17.0F, 9.0F))
+        {
+            return PLANE_XZ;
+        }
+
+        if (insideSquare(dx, dy, -18.0F, 18.0F, 9.0F))
         {
             return PLANE_YZ;
         }
 
+        float length = 58.0F;
+
+        if (Math.abs(dy) < 10.0F
+                && dx > 12.0F
+                && dx < length + 12.0F)
+        {
+            return AXIS_X;
+        }
+
+        if (Math.abs(dx) < 10.0F
+                && dy < -12.0F
+                && dy > -length - 12.0F)
+        {
+            return AXIS_Y;
+        }
+
+        if (dx < -8.0F
+                && dy > 8.0F
+                && Math.abs(Math.abs(dx) - Math.abs(dy)) < 15.0F)
+        {
+            return AXIS_Z;
+        }
+
         return -1;
+    }
+
+    private boolean insideSquare(
+            float x,
+            float y,
+            float centerX,
+            float centerY,
+            float halfSize)
+    {
+        return x >= centerX - halfSize
+                && x <= centerX + halfSize
+                && y >= centerY - halfSize
+                && y <= centerY + halfSize;
     }
 
     private ScreenPoint getGizmoCenter(
