@@ -139,6 +139,14 @@ public class AnimationEditorScreen extends GuiScreen
     private EditorSceneState sceneState;
     private EditorSceneViewport sceneViewport;
 
+    /*
+     * Stage 5 - 3D transform gizmo.
+     *
+     * The gizmo is an editor overlay and does not own animation data.
+     */
+    private final EditorGizmoController gizmoController =
+            new EditorGizmoController();
+
     private AnimationEditorInput editorInput;
 
     /*
@@ -253,7 +261,8 @@ public class AnimationEditorScreen extends GuiScreen
                             this.interpolationPanel,
                             this.bodyPartsController,
                             this.bodyPartsEditorPanel,
-                            this.bodyPartsTimelineController
+                            this.bodyPartsTimelineController,
+                            this.gizmoController
                     );
 
             this.editorInput.resetInputState();
@@ -360,6 +369,91 @@ public class AnimationEditorScreen extends GuiScreen
          */
 
         updateSceneViewportPosition();
+    }
+
+    /*
+     * =========================================================
+     * GIZMO
+     * =========================================================
+     */
+
+    private boolean isGizmoEnabled()
+    {
+        EditorModeController.EditorMode mode =
+                this.editorModeController.getMode();
+
+        return mode ==
+                EditorModeController.EditorMode.POSE
+                ||
+                mode ==
+                EditorModeController.EditorMode.BODY_PARTS;
+    }
+
+    private AnimationBone getGizmoBone()
+    {
+        if (!isGizmoEnabled())
+        {
+            return null;
+        }
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.POSE)
+        {
+            return this.actorPreviewController
+                    .getSelectedBone(
+                            this.keyframeController
+                    );
+        }
+
+        BodyPartModelData model =
+                this.bodyPartsController
+                        .getSelectedModel();
+
+        if (model == null)
+        {
+            return null;
+        }
+
+        String attachment =
+                model.getAttachmentBoneName();
+
+        if (attachment == null)
+        {
+            return null;
+        }
+
+        for (AnimationBone bone :
+                this.bodyPartsController.getActorBones())
+        {
+            if (bone != null &&
+                    attachment.equals(
+                            bone.getName()
+                    ))
+            {
+                return bone;
+            }
+        }
+
+        return null;
+    }
+
+    private AnimationKeyframe getGizmoKeyframe()
+    {
+        if (!isGizmoEnabled())
+        {
+            return null;
+        }
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.POSE)
+        {
+            return this.keyframeController
+                    .getSelectedKeyframe();
+        }
+
+        return this.bodyPartsController
+                .getKeyframeController()
+                .getSelectedKeyframe();
     }
 
     /*
@@ -2287,6 +2381,28 @@ public class AnimationEditorScreen extends GuiScreen
                 previewRight,
                 top,
                 bottom
+        );
+
+        /*
+         * ---------------------------------------------------------
+         * STAGE 5 - GIZMO
+         * ---------------------------------------------------------
+         *
+         * Drawn on top of the rendered Preview, but before the
+         * inspector on the right. The three tool buttons therefore
+         * belong visually to the Preview itself.
+         */
+        this.gizmoController.draw(
+                mc,
+                left,
+                top,
+                previewWidth,
+                previewHeight,
+                getGizmoBone(),
+                getGizmoKeyframe(),
+                getCurrentRecordFrame(),
+                this.sceneViewport.getCamera(),
+                isGizmoEnabled()
         );
 
         int panelX =
