@@ -437,6 +437,7 @@ public class CharacterEditorPanel
             }
 
             this.selectedKey = key;
+        this.selectedBodyPartModel = null;
         }
         else
         {
