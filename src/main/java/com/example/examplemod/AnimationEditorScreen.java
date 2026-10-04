@@ -2328,9 +2328,10 @@ public class AnimationEditorScreen extends GuiScreen
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
         {
-            this.bodyPartsEditorPanel.setPosition(
+            this.bodyPartsEditorPanel.setBounds(
                     panelX,
-                    top
+                    top,
+                    bottom - top
             );
 
             this.bodyPartsEditorPanel.draw(
