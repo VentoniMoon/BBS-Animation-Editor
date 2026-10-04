@@ -99,6 +99,197 @@ public class ActorAnimationData
 
 
     /**
+     * Creates AnimationBone data directly from an optional Chameleon
+     * morph.  Chameleon is intentionally accessed through reflection so
+     * the editor still compiles and runs when Chameleon is not installed.
+     */
+    public ActorAnimationData(
+            String actorId,
+            mchorse.metamorph.api.morphs.AbstractMorph morph)
+    {
+        this.actorId = actorId;
+
+        if (morph != null && isChameleonMorph(morph))
+        {
+            createBonesFromChameleon(morph);
+        }
+    }
+
+
+    private boolean isChameleonMorph(
+            mchorse.metamorph.api.morphs.AbstractMorph morph)
+    {
+        String name = morph.getClass().getName();
+
+        return name.equals("mchorse.chameleon.morph.ChameleonMorph")
+                || name.endsWith(".ChameleonMorph");
+    }
+
+
+    private void createBonesFromChameleon(
+            mchorse.metamorph.api.morphs.AbstractMorph morph)
+    {
+        this.bones.clear();
+
+        try
+        {
+            Object chameleonModel =
+                    morph.getClass()
+                            .getMethod("getModel")
+                            .invoke(morph);
+
+            if (chameleonModel == null)
+            {
+                return;
+            }
+
+            Object model = null;
+
+            try
+            {
+                java.lang.reflect.Field modelField =
+                        chameleonModel.getClass().getField("model");
+                model = modelField.get(chameleonModel);
+            }
+            catch (Throwable ignored)
+            {
+            }
+
+            if (model == null)
+            {
+                return;
+            }
+
+            Object roots =
+                    model.getClass().getField("bones").get(model);
+
+            if (!(roots instanceof List))
+            {
+                return;
+            }
+
+            for (Object root : (List<?>) roots)
+            {
+                createChameleonBone(
+                        root,
+                        null,
+                        this.bones
+                );
+            }
+        }
+        catch (Throwable error)
+        {
+            /* Optional Chameleon: never break actor initialization. */
+        }
+    }
+
+
+    private void createChameleonBone(
+            Object source,
+            AnimationBone parent,
+            List<AnimationBone> result)
+    {
+        if (source == null)
+        {
+            return;
+        }
+
+        try
+        {
+            java.lang.reflect.Field idField =
+                    source.getClass().getField("id");
+
+            Object id = idField.get(source);
+
+            if (id == null)
+            {
+                return;
+            }
+
+            AnimationBone bone =
+                    new AnimationBone(String.valueOf(id));
+
+            try
+            {
+                Object initial =
+                        source.getClass()
+                                .getField("initial")
+                                .get(source);
+
+                if (initial != null)
+                {
+                    Object translate =
+                            initial.getClass()
+                                    .getField("translate")
+                                    .get(initial);
+
+                    if (translate != null)
+                    {
+                        bone.setLocalPosition(
+                                readChameleonVector(translate, "x"),
+                                readChameleonVector(translate, "y"),
+                                readChameleonVector(translate, "z")
+                        );
+                    }
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+
+            if (parent != null)
+            {
+                parent.addChild(bone);
+            }
+
+            result.add(bone);
+
+            Object children =
+                    source.getClass()
+                            .getField("children")
+                            .get(source);
+
+            if (children instanceof List)
+            {
+                for (Object child : (List<?>) children)
+                {
+                    createChameleonBone(
+                            child,
+                            bone,
+                            result
+                    );
+                }
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+    }
+
+
+    private float readChameleonVector(
+            Object vector,
+            String field)
+    {
+        try
+        {
+            Object value =
+                    vector.getClass()
+                            .getField(field)
+                            .get(vector);
+
+            return value instanceof Number
+                    ? ((Number) value).floatValue()
+                    : 0.0F;
+        }
+        catch (Throwable ignored)
+        {
+            return 0.0F;
+        }
+    }
+
+
+    /**
      * =========================================================
      * BLOCKBUSTER
      * =========================================================
