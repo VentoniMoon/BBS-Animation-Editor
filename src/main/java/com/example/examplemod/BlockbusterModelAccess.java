@@ -723,6 +723,22 @@ public class BlockbusterModelAccess
                             "rotationPointZ"
                     );
 
+            /*
+             * Blockbuster's ModelCustomRenderer stores root Y as
+             * (-translateY + 24), while child limbs use -translateY.
+             * AnimationBone stores the model-space pivot relative to
+             * the actor origin, so remove the root-only +24 here.
+             *
+             * This makes renderer-captured skeleton data use the same
+             * coordinate space as the ModelHandler/standing-pose
+             * fallback and, consequently, the same space used by the
+             * 3D gizmo.
+             */
+            if (parentName == null)
+            {
+                y -= 24.0F;
+            }
+
             return new BlockbusterLimbData(
                     name,
                     parentName,
