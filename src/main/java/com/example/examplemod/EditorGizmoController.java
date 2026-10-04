@@ -81,6 +81,7 @@ public class EditorGizmoController
     private AnimationBone bodyPartAttachmentBone;
     private AnimationTransform globalTransformTarget;
     private int gizmoFrame;
+    private boolean chameleonCoordinateSpace;
 
     public void setBodyPartTarget(
             BodyPartModelData model,
@@ -93,6 +94,11 @@ public class EditorGizmoController
     public void setGlobalTransformTarget(AnimationTransform transform)
     {
         this.globalTransformTarget = transform;
+    }
+
+    public void setChameleonCoordinateSpace(boolean value)
+    {
+        this.chameleonCoordinateSpace = value;
     }
 
     public void setGizmoFrame(int frame)
@@ -1348,7 +1354,9 @@ public class EditorGizmoController
 
     private double[] transformBoneDirection(float[] d,BlockbusterRecordFrame recordFrame)
     {
-        double x=-d[0], y=d[1], z=-d[2];
+        double x = this.chameleonCoordinateSpace ? d[0] : -d[0];
+        double y = d[1];
+        double z = this.chameleonCoordinateSpace ? d[2] : -d[2];
         double yaw=Math.toRadians(180.0D-(recordFrame!=null?recordFrame.getYaw():0.0D));
         double c=Math.cos(yaw), s=Math.sin(yaw);
         double wx=c*x+s*z, wz=-s*x+c*z;
@@ -1657,9 +1665,16 @@ public class EditorGizmoController
         double modelY = pivot.getPositionY() / 16.0D;
         double modelZ = pivot.getPositionZ() / 16.0D;
 
-        double transformedX = -modelX;
-        double transformedY = -modelY + 1.501D;
-        double transformedZ = -modelZ;
+        double transformedX =
+                this.chameleonCoordinateSpace ? modelX : -modelX;
+
+        double transformedY =
+                this.chameleonCoordinateSpace
+                        ? modelY
+                        : -modelY + 1.501D;
+
+        double transformedZ =
+                this.chameleonCoordinateSpace ? modelZ : -modelZ;
 
         double yaw =
                 Math.toRadians(
