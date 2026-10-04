@@ -1299,7 +1299,9 @@ public class EditorGizmoController
                         : this.gizmoFrame;
 
         AnimationTransform pivot =
-                bone.getWorldPivotAt(frame);
+                this.chameleonCoordinateSpace
+                        ? getChameleonWorldPivot(bone, frame)
+                        : bone.getWorldPivotAt(frame);
 
         if (pivot == null)
         {
@@ -1763,7 +1765,9 @@ public class EditorGizmoController
                  bone == this.bodyPartAttachmentBone))
         {
             AnimationTransform attachmentPivot =
-                    this.gizmoAttachmentBone.getWorldPivotAt(frame);
+                    this.chameleonCoordinateSpace
+                            ? getChameleonWorldPivot(this.gizmoAttachmentBone, frame)
+                            : this.gizmoAttachmentBone.getWorldPivotAt(frame);
 
             if (attachmentPivot != null)
             {
@@ -1781,7 +1785,9 @@ public class EditorGizmoController
                 bone != this.bodyPartAttachmentBone)
         {
             AnimationTransform attachment =
-                    this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+                    this.chameleonCoordinateSpace
+                            ? getChameleonWorldPivot(this.bodyPartAttachmentBone, frame)
+                            : this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
             if (attachment == null)
             {
@@ -1888,6 +1894,62 @@ public class EditorGizmoController
                 pivot,
                 recordFrame
         );
+    }
+
+    /**
+     * Reconstructs the bone pivot exactly in the coordinate convention
+     * used by Chameleon's MatrixStack.translateBone().
+     *
+     * Chameleon does NOT apply the animation translation as
+     * (+x,+y,+z). Its renderer applies:
+     *   x = -deltaX, y = +deltaY, z = +deltaZ.
+     * The old Gizmo path used AnimationBone.getWorldPivotAt(), which added
+     * deltaX directly and therefore put the Gizmo away from the real pivot.
+     */
+    private AnimationTransform getChameleonWorldPivot(
+            AnimationBone bone,
+            float frame)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        AnimationTransform animation = bone.getTransformAt(frame);
+        if (animation == null)
+        {
+            animation = new AnimationTransform();
+        }
+
+        AnimationTransform local = new AnimationTransform();
+        local.setPosition(
+                bone.getLocalX() - animation.getPositionX(),
+                bone.getLocalY() + animation.getPositionY(),
+                bone.getLocalZ() + animation.getPositionZ()
+        );
+        local.setRotation(
+                bone.getBaseRotationX() + animation.getRotationX(),
+                bone.getBaseRotationY() + animation.getRotationY(),
+                bone.getBaseRotationZ() + animation.getRotationZ()
+        );
+        local.setScale(
+                animation.getScaleX(),
+                animation.getScaleY(),
+                animation.getScaleZ()
+        );
+
+        AnimationBone parent = bone.getParent();
+        if (parent == null)
+        {
+            return local;
+        }
+
+        AnimationTransform parentWorld =
+                getChameleonWorldPivot(parent, frame);
+
+        return parentWorld == null
+                ? local
+                : parentWorld.combine(local);
     }
 
     private double[] getWorldFromPivot(
