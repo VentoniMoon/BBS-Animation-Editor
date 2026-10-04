@@ -237,6 +237,7 @@ public class EditorGizmoController
         double[] gizmoWorld =
                 getNativeBoneWorldPosition(
                         bone,
+                        keyframe,
                         recordFrame
                 );
 
@@ -1014,7 +1015,7 @@ public class EditorGizmoController
         catch (Throwable ignored) { return null; }
     }
 
-    private double[] getNativeBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
+    private double[] getNativeBoneWorldPosition(AnimationBone bone, AnimationKeyframe keyframe, BlockbusterRecordFrame recordFrame)
     {
         double[] result = getExactChameleonBoneWorldPosition(bone);
         if (result != null) return result;
@@ -1022,7 +1023,7 @@ public class EditorGizmoController
         if (result != null) return result;
         result = getExactBlockbusterBoneWorldPosition(bone);
         if (result != null) return result;
-        return getBoneWorldPosition(bone, null, recordFrame);
+        return getBoneWorldPosition(bone, keyframe, recordFrame);
     }
     private double[] getExactBlockbusterBoneWorldPosition(AnimationBone bone)
     {
