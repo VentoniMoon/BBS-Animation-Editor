@@ -354,10 +354,6 @@ public class EditorGizmoController
     {
         if (mc == null
                 || !enabled
-                || bone == null
-                || keyframe == null
-                || recordFrame == null
-                || camera == null
                 || viewportWidth <= 0
                 || viewportHeight <= 0)
         {
@@ -417,6 +413,21 @@ public class EditorGizmoController
                 viewportWidth,
                 viewportHeight
         );
+
+        if (bone == null
+                || keyframe == null
+                || recordFrame == null
+                || camera == null)
+        {
+            GL11.glPopMatrix();
+
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPopMatrix();
+
+            GL11.glPopAttrib();
+            GL11.glMatrixMode(oldMatrixMode);
+            return;
+        }
 
         float scale =
                 getGizmoScreenScale(
