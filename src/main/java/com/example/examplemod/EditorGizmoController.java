@@ -1271,17 +1271,78 @@ public class EditorGizmoController
         return new double[]{(mouseDX*by-mouseDY*bx)/det*.10D,(ax*mouseDY-ay*mouseDX)/det*.10D};
     }
 
-    private double[][] getBoneWorldAxes(AnimationBone bone,AnimationKeyframe selectedKeyframe,BlockbusterRecordFrame recordFrame)
+    private double[][] getBoneWorldAxes(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe,
+            BlockbusterRecordFrame recordFrame)
     {
-        if(bone==null)return null;
-        int frame=selectedKeyframe!=null?selectedKeyframe.getFrame():0;
-        AnimationTransform pivot=bone.getWorldPivotAt(frame);
-        if(pivot==null)return null;
+        if (bone == null)
+        {
+            return null;
+        }
+
+        int frame =
+                selectedKeyframe != null
+                        ? selectedKeyframe.getFrame()
+                        : this.gizmoFrame;
+
+        AnimationTransform pivot =
+                bone.getWorldPivotAt(frame);
+
+        if (pivot == null)
+        {
+            return null;
+        }
+
+        float rx = pivot.getRotationX();
+        float ry = pivot.getRotationY();
+        float rz = pivot.getRotationZ();
+
+        /*
+         * Body Part bones are rotated by the attachment bone and the
+         * Body Part global transform before entering actor space.
+         */
+        if (this.bodyPartAttachmentBone != null &&
+                (this.bodyPartTarget != null ||
+                 this.globalTransformTarget != null))
+        {
+            AnimationTransform attachment =
+                    this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+
+            if (attachment != null)
+            {
+                rx += attachment.getRotationX();
+                ry += attachment.getRotationY();
+                rz += attachment.getRotationZ();
+
+                AnimationTransform global =
+                        this.globalTransformTarget != null
+                                ? this.globalTransformTarget
+                                : this.bodyPartTarget.getGlobalTransform();
+
+                if (global != null)
+                {
+                    rx += global.getRotationX();
+                    ry += global.getRotationY();
+                    rz += global.getRotationZ();
+                }
+            }
+        }
+
         return new double[][]
         {
-            transformBoneDirection(rotateVector(1,0,0,pivot.getRotationX(),pivot.getRotationY(),pivot.getRotationZ()),recordFrame),
-            transformBoneDirection(rotateVector(0,1,0,pivot.getRotationX(),pivot.getRotationY(),pivot.getRotationZ()),recordFrame),
-            transformBoneDirection(rotateVector(0,0,1,pivot.getRotationX(),pivot.getRotationY(),pivot.getRotationZ()),recordFrame)
+            transformBoneDirection(
+                    rotateVector(1, 0, 0, rx, ry, rz),
+                    recordFrame
+            ),
+            transformBoneDirection(
+                    rotateVector(0, 1, 0, rx, ry, rz),
+                    recordFrame
+            ),
+            transformBoneDirection(
+                    rotateVector(0, 0, 1, rx, ry, rz),
+                    recordFrame
+            )
         };
     }
 
