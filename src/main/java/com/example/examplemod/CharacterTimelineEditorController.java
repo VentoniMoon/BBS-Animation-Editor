@@ -1725,6 +1725,7 @@ public class CharacterTimelineEditorController
                     this.draggingBodyPart = false;
                     this.dragBodyPartFrame = -1;
                     this.dragBodyPartModel = null;
+                    this.selectedBodyPartModel = null;
 
                     resetDoubleClickState();
                     return true;
