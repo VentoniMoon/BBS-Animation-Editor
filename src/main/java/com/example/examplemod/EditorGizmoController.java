@@ -1322,48 +1322,56 @@ public class EditorGizmoController
             ry = local.getRotationY();
             rz = local.getRotationZ();
 
-            AnimationBone parent = bone.getParent();
+            /*
+             * IMPORTANT:
+             * Do not manually rotate the local basis by the parent's
+             * extracted Euler angles here. AnimationTransform.combine()
+             * composes rotations as matrices (parent * local) and then
+             * converts that matrix back to Euler angles. Reconstructing
+             * the basis through a second Euler composition can produce a
+             * different visual basis, especially when the parent has
+             * more than one rotation component.
+             *
+             * The editor writes LOCAL values into the keyframe. For the
+             * visual gizmo we therefore build exactly the same WORLD
+             * orientation that the animation system uses, then derive
+             * the three local axes from that composed orientation.
+             */
+            AnimationTransform visualWorld =
+                    bone.getWorldTransformAt(frame);
 
-            if (parent != null)
+            if (visualWorld == null)
             {
-                AnimationTransform parentWorld =
-                        parent.getWorldTransformAt(frame);
-
-                if (parentWorld != null)
-                {
-                    float[] localX =
-                            rotateVector(1.0F, 0.0F, 0.0F, rx, ry, rz);
-                    float[] localY =
-                            rotateVector(0.0F, 1.0F, 0.0F, rx, ry, rz);
-                    float[] localZ =
-                            rotateVector(0.0F, 0.0F, 1.0F, rx, ry, rz);
-
-                    localX = rotateVector(
-                            localX[0], localX[1], localX[2],
-                            parentWorld.getRotationX(),
-                            parentWorld.getRotationY(),
-                            parentWorld.getRotationZ());
-
-                    localY = rotateVector(
-                            localY[0], localY[1], localY[2],
-                            parentWorld.getRotationX(),
-                            parentWorld.getRotationY(),
-                            parentWorld.getRotationZ());
-
-                    localZ = rotateVector(
-                            localZ[0], localZ[1], localZ[2],
-                            parentWorld.getRotationX(),
-                            parentWorld.getRotationY(),
-                            parentWorld.getRotationZ());
-
-                    return new double[][]
-                    {
-                        transformBoneDirection(localX, recordFrame),
-                        transformBoneDirection(localY, recordFrame),
-                        transformBoneDirection(localZ, recordFrame)
-                    };
-                }
+                visualWorld = local;
             }
+
+            float[] worldX =
+                    rotateVector(
+                            1.0F, 0.0F, 0.0F,
+                            visualWorld.getRotationX(),
+                            visualWorld.getRotationY(),
+                            visualWorld.getRotationZ());
+
+            float[] worldY =
+                    rotateVector(
+                            0.0F, 1.0F, 0.0F,
+                            visualWorld.getRotationX(),
+                            visualWorld.getRotationY(),
+                            visualWorld.getRotationZ());
+
+            float[] worldZ =
+                    rotateVector(
+                            0.0F, 0.0F, 1.0F,
+                            visualWorld.getRotationX(),
+                            visualWorld.getRotationY(),
+                            visualWorld.getRotationZ());
+
+            return new double[][]
+            {
+                transformBoneDirection(worldX, recordFrame),
+                transformBoneDirection(worldY, recordFrame),
+                transformBoneDirection(worldZ, recordFrame)
+            };
         }
         else
         {
