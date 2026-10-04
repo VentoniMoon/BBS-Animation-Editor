@@ -261,42 +261,139 @@ public class BodyPartsPreviewRenderer
                     frame
             );
 
+            mchorse.blockbuster.client.model.ModelCustom attachmentModel =
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
+                            data.getModelName()
+                    );
+
+            if (attachmentModel == null ||
+                    attachmentModel.renderable == null)
+            {
+                continue;
+            }
+
             GL11.glPushMatrix();
 
-            limb.postRender(
-                    1.0F / 16.0F
-            );
+            try
+            {
+                /*
+                 * We are already inside the parent actor's model layer.
+                 *
+                 * Do NOT call CustomMorph.render() here.  That method
+                 * re-enters RenderCustomModel.doRender(), which starts a
+                 * completely new entity render and therefore loses the
+                 * bone matrix we just received from limb.postRender().
+                 *
+                 * Render the resolved ModelCustom directly, exactly like
+                 * Blockbuster's own LayerBodyPart does.
+                 */
+                limb.postRender(
+                        1.0F / 16.0F
+                );
 
-            applyGlobalTransform(
-                    data.getGlobalTransform()
-            );
+                applyGlobalTransform(
+                        data.getGlobalTransform()
+                );
 
-            GlStateManager.enableDepth();
-            GlStateManager.depthMask(true);
-            GlStateManager.enableAlpha();
-            GlStateManager.enableBlend();
-            GlStateManager.enableTexture2D();
-            GlStateManager.color(
-                    1.0F,
-                    1.0F,
-                    1.0F,
-                    1.0F
-            );
+                GlStateManager.enableDepth();
+                GlStateManager.depthMask(true);
+                GlStateManager.enableAlpha();
+                GlStateManager.enableBlend();
+                GlStateManager.enableTexture2D();
+                GlStateManager.enableRescaleNormal();
+                GlStateManager.color(
+                        1.0F,
+                        1.0F,
+                        1.0F,
+                        1.0F
+                );
 
-            RenderHelper.enableStandardItemLighting();
+                RenderHelper.enableStandardItemLighting();
 
-            morph.render(
-                    actor,
-                    0.0D,
-                    0.0D,
-                    0.0D,
-                    0.0F,
-                    partialTicks
-            );
+                attachmentModel.materials =
+                        morph.materials;
+                attachmentModel.shapes =
+                        morph.getShapesForRendering(
+                                partialTicks
+                        );
+                attachmentModel.pose =
+                        morph.getPose(
+                                actor,
+                                true,
+                                partialTicks
+                        );
+                attachmentModel.current =
+                        morph;
+                attachmentModel.swingProgress =
+                        0.0F;
 
-            RenderHelper.disableStandardItemLighting();
+                if (attachmentModel.pose != null)
+                {
+                    attachmentModel.setRotationAngles(
+                            0.0F,
+                            0.0F,
+                            actor.ticksExisted + partialTicks,
+                            0.0F,
+                            0.0F,
+                            1.0F / 16.0F,
+                            actor
+                    );
 
-            GL11.glPopMatrix();
+                    /*
+                     * RenderCustomModel.preRenderCallback normally applies
+                     * these scales.  We are bypassing RenderCustomModel, so
+                     * apply them here.
+                     */
+                    float modelScaleX =
+                            morph.model.scale[0] *
+                            morph.scale;
+                    float modelScaleY =
+                            morph.model.scale[1] *
+                            morph.scale;
+                    float modelScaleZ =
+                            morph.model.scale[2] *
+                            morph.scale;
+
+                    GlStateManager.scale(
+                            modelScaleX,
+                            modelScaleY,
+                            modelScaleZ
+                    );
+
+                    net.minecraft.client.renderer.entity.RenderManager
+                            renderManager =
+                            Minecraft.getMinecraft()
+                                    .getRenderManager();
+
+                    net.minecraft.util.ResourceLocation texture =
+                            morph.skin != null
+                                    ? morph.skin
+                                    : morph.model.defaultTexture;
+
+                    if (texture != null)
+                    {
+                        renderManager.renderEngine
+                                .bindTexture(texture);
+                    }
+
+                    attachmentModel.render(
+                            actor,
+                            0.0F,
+                            0.0F,
+                            actor.ticksExisted + partialTicks,
+                            0.0F,
+                            0.0F,
+                            1.0F / 16.0F
+                    );
+                }
+            }
+            finally
+            {
+                attachmentModel.current = null;
+                RenderHelper.disableStandardItemLighting();
+                GlStateManager.disableRescaleNormal();
+                GL11.glPopMatrix();
+            }
 
             renderer.current = parentMorph;
             renderer.setupModel(
