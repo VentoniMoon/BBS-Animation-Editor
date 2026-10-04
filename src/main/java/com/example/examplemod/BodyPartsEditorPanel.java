@@ -14,6 +14,7 @@ public class BodyPartsEditorPanel
 
     private int x;
     private int y;
+    private int panelHeight = HEIGHT;
 
     private final BodyPartsEditorController controller;
     private AnimationEditorScreen screen;
@@ -70,6 +71,14 @@ public class BodyPartsEditorPanel
     {
         this.x = x;
         this.y = y;
+        this.panelHeight = HEIGHT;
+    }
+
+    public void setBounds(int x, int y, int height)
+    {
+        this.x = x;
+        this.y = y;
+        this.panelHeight = Math.max(1, height);
     }
 
     public void draw(
@@ -80,7 +89,7 @@ public class BodyPartsEditorPanel
     {
         if (mc == null) return;
 
-        drawRect(mc, x, y, x + WIDTH, y + HEIGHT, 0xFF181818);
+        drawRect(mc, x, y, x + WIDTH, y + panelHeight, 0xFF181818);
         BodyPartModelData selectedModel = controller.getSelectedModel();
         if (selectedModel != null)
         {
@@ -144,7 +153,7 @@ public class BodyPartsEditorPanel
         {
             AnimationTransform transform = selected.getGlobalTransform();
             int viewportTop = globalY + SECTION_HEIGHT;
-            int viewportBottom = y + HEIGHT - 5;
+            int viewportBottom = y + panelHeight - 5;
             drawRect(mc, x + 6, viewportTop, x + WIDTH - 6, viewportBottom, 0xFF151515);
             syncGlobalControls(transform, viewportTop);
             drawGlobalControls(mc, viewportTop, viewportBottom);
@@ -325,7 +334,7 @@ public class BodyPartsEditorPanel
 
     private int getGlobalViewportBottom()
     {
-        return y + HEIGHT - 5;
+        return y + panelHeight - 5;
     }
 
     private int getGlobalViewportHeight(int modelY)
