@@ -126,6 +126,16 @@ public class BodyPartsPreviewRenderer
             return null;
         }
 
+        /* Chameleon and other Metamorph add-ons are stored as real morphs. */
+        if (data.hasMorphModel())
+        {
+            AbstractMorph morph = data.getMorphAt(frame);
+            if (morph != null)
+            {
+                return createMorphBodyPart(data, morph);
+            }
+        }
+
         String modelName =
                 data.getModelNameAt(frame);
 
@@ -251,6 +261,35 @@ public class BodyPartsPreviewRenderer
 
         part.morph.setDirect(child);
 
+        return part;
+    }
+
+    /** Build a BodyPart around a non-Blockbuster Metamorph (notably Chameleon). */
+    private BodyPart createMorphBodyPart(BodyPartModelData data, AbstractMorph child)
+    {
+        BodyPart part = new BodyPart();
+        part.limb = data.getAttachmentBoneName();
+
+        if (part.limb == null || part.limb.length() == 0)
+        {
+            return null;
+        }
+
+        AnimationTransform global = data.getGlobalTransform();
+        if (global != null)
+        {
+            part.translate.set(global.getPositionX() / 16.0F,
+                    global.getPositionY() / 16.0F,
+                    global.getPositionZ() / 16.0F);
+            part.rotate.set(global.getRotationX(), global.getRotationY(), global.getRotationZ());
+            part.scale.set(global.getScaleX(), global.getScaleY(), global.getScaleZ());
+        }
+
+        part.useTarget = true;
+        part.enabled = true;
+        /* Chameleon animations must keep ticking while the actor preview plays. */
+        part.animate = true;
+        part.morph.setDirect(child);
         return part;
     }
 
