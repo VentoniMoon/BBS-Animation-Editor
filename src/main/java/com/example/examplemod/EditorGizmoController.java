@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.util.glu.GLU;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -341,6 +342,14 @@ public class EditorGizmoController
         return true;
     }
 
+    /**
+     * Draw only the three tool buttons in GUI space.
+     *
+     * The actual transform gizmo is rendered by draw3D() inside the
+     * Preview render target. This is important: the gizmo must live in
+     * the same perspective/camera space as the actor instead of being a
+     * flat 2D decoration over the Preview texture.
+     */
     public void draw(
             Minecraft mc,
             int viewportX,
@@ -401,71 +410,421 @@ public class EditorGizmoController
                 viewportHeight
         );
 
-        if (camera == null)
+        GL11.glPopMatrix();
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPopMatrix();
+        GL11.glPopAttrib();
+        GL11.glMatrixMode(oldMatrixMode);
+    }
+
+    /**
+     * Render the actual gizmo in the Preview's 3D coordinate system.
+     *
+     * This pass is called while the Preview framebuffer is still bound,
+     * after the actor has been rendered and before the Preview is copied
+     * to the editor GUI. The gizmo therefore gets real perspective:
+     * camera movement, depth and distance all affect its appearance.
+     */
+    public void draw3D(
+            Minecraft mc,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            AnimationBone bone,
+            AnimationKeyframe keyframe,
+            BlockbusterRecordFrame recordFrame,
+            EditorCamera camera,
+            boolean enabled)
+    {
+        if (mc == null
+                || !enabled
+                || bone == null
+                || keyframe == null
+                || recordFrame == null
+                || camera == null
+                || viewportWidth <= 0
+                || viewportHeight <= 0)
         {
-            GL11.glPopMatrix();
-
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPopMatrix();
-
-            GL11.glPopAttrib();
-            GL11.glMatrixMode(oldMatrixMode);
             return;
         }
 
-        ScreenPoint center =
-                getGizmoCenter(
-                        viewportX,
-                        viewportY,
-                        viewportWidth,
-                        viewportHeight,
+        double[] world =
+                getBoneWorldPosition(
                         bone,
                         keyframe,
-                        recordFrame,
-                        camera
+                        recordFrame
                 );
 
-        /*
-         * The gizmo must remain visible even when the selected actor
-         * does not currently have a Record frame.  The animation bone
-         * itself is still a valid target, so fall back to the centre of
-         * the Preview instead of silently hiding the gizmo.
-         */
-        if (center == null)
+        if (world == null)
         {
-            center =
-                    new ScreenPoint(
-                            viewportX + viewportWidth / 2.0F,
-                            viewportY + viewportHeight / 2.0F
-                    );
+            return;
         }
 
-        float scale =
-                getGizmoScreenScale(
-                        center,
-                        camera
+        ScaledResolution resolution =
+                new ScaledResolution(mc);
+
+        int scaleFactor =
+                Math.max(1, resolution.getScaleFactor());
+
+        int glX = viewportX * scaleFactor;
+        int glWidth = Math.max(1, viewportWidth * scaleFactor);
+        int glHeight = Math.max(1, viewportHeight * scaleFactor);
+        int glY =
+                mc.displayHeight
+                        - (viewportY + viewportHeight) * scaleFactor;
+
+        int oldMatrixMode =
+                GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+
+        int oldViewportX = GL11.glGetInteger(GL11.GL_VIEWPORT, 0);
+        int oldViewportY = GL11.glGetInteger(GL11.GL_VIEWPORT, 1);
+        int oldViewportW = GL11.glGetInteger(GL11.GL_VIEWPORT, 2);
+        int oldViewportH = GL11.glGetInteger(GL11.GL_VIEWPORT, 3);
+
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+
+        GL11.glViewport(
+                glX,
+                glY,
+                glWidth,
+                glHeight
+        );
+
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+
+        GLU.gluPerspective(
+                60.0F,
+                (float) viewportWidth / (float) viewportHeight,
+                0.05F,
+                500.0F
+        );
+
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+
+        GL11.glRotatef(
+                -camera.getPitch(),
+                1.0F,
+                0.0F,
+                0.0F
+        );
+
+        GL11.glRotatef(
+                -camera.getYaw(),
+                0.0F,
+                1.0F,
+                0.0F
+        );
+
+        GL11.glTranslated(
+                -camera.getCameraX(),
+                -camera.getCameraY(),
+                -camera.getCameraZ()
+        );
+
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(
+                GL11.GL_SRC_ALPHA,
+                GL11.GL_ONE_MINUS_SRC_ALPHA
+        );
+        GL11.glLineWidth(3.0F);
+
+        /*
+         * AnimationBone coordinates are local to the actor. The actor
+         * itself can be rotated by the Record frame, so rotate the bone
+         * pivot by the actor yaw before placing the gizmo in world space.
+         */
+        double localX = world[0] - recordFrame.getX();
+        double localY = world[1] - recordFrame.getY();
+        double localZ = world[2] - recordFrame.getZ();
+
+        double yaw = Math.toRadians(recordFrame.getYaw());
+        double rotatedX =
+                Math.cos(yaw) * localX
+                        + Math.sin(yaw) * localZ;
+        double rotatedZ =
+                -Math.sin(yaw) * localX
+                        + Math.cos(yaw) * localZ;
+
+        double gizmoX = recordFrame.getX() + rotatedX;
+        double gizmoY = recordFrame.getY() + localY;
+        double gizmoZ = recordFrame.getZ() + rotatedZ;
+
+        GL11.glPushMatrix();
+        GL11.glTranslated(gizmoX, gizmoY, gizmoZ);
+
+        float size =
+                getWorldGizmoSize(
+                        camera,
+                        gizmoX,
+                        gizmoY,
+                        gizmoZ
                 );
 
         if (this.mode == Mode.POSITION)
         {
-            drawPositionGizmo(center, scale);
+            drawPositionGizmo3D(size);
         }
         else if (this.mode == Mode.ROTATION)
         {
-            drawRotationGizmo(center, scale);
+            drawRotationGizmo3D(size);
         }
         else
         {
-            drawScaleGizmo(center, scale);
+            drawScaleGizmo3D(size);
         }
 
+        GL11.glPopMatrix();
+
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPopMatrix();
 
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPopMatrix();
 
+        GL11.glViewport(
+                oldViewportX,
+                oldViewportY,
+                oldViewportW,
+                oldViewportH
+        );
+
         GL11.glPopAttrib();
         GL11.glMatrixMode(oldMatrixMode);
+    }
+
+    private float getWorldGizmoSize(
+            EditorCamera camera,
+            double x,
+            double y,
+            double z)
+    {
+        double dx = x - camera.getCameraX();
+        double dy = y - camera.getCameraY();
+        double dz = z - camera.getCameraZ();
+
+        double distance =
+                Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        return (float) Math.max(
+                0.35D,
+                Math.min(2.5D, distance * 0.10D)
+        );
+    }
+
+    private void drawPositionGizmo3D(float size)
+    {
+        drawAxis3D(
+                1, 0, 0,
+                AXIS_X_COLOR,
+                size
+        );
+        drawAxis3D(
+                0, 1, 0,
+                AXIS_Y_COLOR,
+                size
+        );
+        drawAxis3D(
+                0, 0, 1,
+                AXIS_Z_COLOR,
+                size
+        );
+
+        drawPlane3D(1, 1, 0, size);
+        drawPlane3D(1, 0, 1, size);
+        drawPlane3D(0, 1, 1, size);
+    }
+
+    private void drawRotationGizmo3D(float size)
+    {
+        drawRing3D(1, 0, 0, size * 0.95F, AXIS_X_COLOR);
+        drawRing3D(0, 1, 0, size * 0.95F, AXIS_Y_COLOR);
+        drawRing3D(0, 0, 1, size * 0.95F, AXIS_Z_COLOR);
+    }
+
+    private void drawScaleGizmo3D(float size)
+    {
+        drawAxis3D(1, 0, 0, AXIS_X_COLOR, size);
+        drawAxis3D(0, 1, 0, AXIS_Y_COLOR, size);
+        drawAxis3D(0, 0, 1, AXIS_Z_COLOR, size);
+
+        drawCubeHandle(size, 0, 0, AXIS_X_COLOR);
+        drawCubeHandle(0, size, 0, AXIS_Y_COLOR);
+        drawCubeHandle(0, 0, size, AXIS_Z_COLOR);
+    }
+
+    private void drawAxis3D(
+            float x,
+            float y,
+            float z,
+            int color,
+            float size)
+    {
+        float length = 1.8F * size;
+        int finalColor =
+                this.activePart == (x != 0 ? AXIS_X : y != 0 ? AXIS_Y : AXIS_Z)
+                        ? EditorThemeManager.get().getAccentBright()
+                        : color;
+
+        setColor(finalColor);
+
+        GL11.glBegin(GL11.GL_LINES);
+        GL11.glVertex3f(0, 0, 0);
+        GL11.glVertex3f(x * length, y * length, z * length);
+        GL11.glEnd();
+
+        float head = 0.18F * size;
+        float bx = x * length;
+        float by = y * length;
+        float bz = z * length;
+
+        GL11.glBegin(GL11.GL_TRIANGLES);
+
+        if (x != 0)
+        {
+            GL11.glVertex3f(bx, by, bz);
+            GL11.glVertex3f(bx - x * head, by + head, bz);
+            GL11.glVertex3f(bx - x * head, by - head, bz);
+            GL11.glVertex3f(bx, by, bz);
+            GL11.glVertex3f(bx - x * head, by, bz + head);
+            GL11.glVertex3f(bx - x * head, by, bz - head);
+        }
+        else if (y != 0)
+        {
+            GL11.glVertex3f(bx, by, bz);
+            GL11.glVertex3f(bx + head, by - y * head, bz);
+            GL11.glVertex3f(bx - head, by - y * head, bz);
+            GL11.glVertex3f(bx, by, bz);
+            GL11.glVertex3f(bx, by - y * head, bz + head);
+            GL11.glVertex3f(bx, by - y * head, bz - head);
+        }
+        else
+        {
+            GL11.glVertex3f(bx, by, bz);
+            GL11.glVertex3f(bx + head, by, bz - z * head);
+            GL11.glVertex3f(bx - head, by, bz - z * head);
+            GL11.glVertex3f(bx, by, bz);
+            GL11.glVertex3f(bx, by + head, bz - z * head);
+            GL11.glVertex3f(bx, by - head, bz - z * head);
+        }
+
+        GL11.glEnd();
+    }
+
+    private void drawPlane3D(
+            float x,
+            float y,
+            float z,
+            float size)
+    {
+        float offset = 0.48F * size;
+        float extent = 0.38F * size;
+        int color = 0x99BFC5CA;
+
+        setColor(color);
+        GL11.glBegin(GL11.GL_QUADS);
+
+        if (z == 0)
+        {
+            GL11.glVertex3f(offset, offset, 0);
+            GL11.glVertex3f(offset + extent, offset, 0);
+            GL11.glVertex3f(offset + extent, offset + extent, 0);
+            GL11.glVertex3f(offset, offset + extent, 0);
+        }
+        else if (y == 0)
+        {
+            GL11.glVertex3f(offset, 0, offset);
+            GL11.glVertex3f(offset + extent, 0, offset);
+            GL11.glVertex3f(offset + extent, 0, offset + extent);
+            GL11.glVertex3f(offset, 0, offset + extent);
+        }
+        else
+        {
+            GL11.glVertex3f(0, offset, offset);
+            GL11.glVertex3f(0, offset + extent, offset);
+            GL11.glVertex3f(0, offset + extent, offset + extent);
+            GL11.glVertex3f(0, offset, offset + extent);
+        }
+
+        GL11.glEnd();
+    }
+
+    private void drawRing3D(
+            float nx,
+            float ny,
+            float nz,
+            float radius,
+            int color)
+    {
+        setColor(color);
+
+        GL11.glBegin(GL11.GL_LINE_LOOP);
+
+        for (int i = 0; i < 64; i++)
+        {
+            double a =
+                    Math.PI * 2.0D * i / 64.0D;
+
+            float c = (float) Math.cos(a) * radius;
+            float s = (float) Math.sin(a) * radius;
+
+            if (nx != 0)
+            {
+                GL11.glVertex3f(0, c, s);
+            }
+            else if (ny != 0)
+            {
+                GL11.glVertex3f(c, 0, s);
+            }
+            else
+            {
+                GL11.glVertex3f(c, s, 0);
+            }
+        }
+
+        GL11.glEnd();
+    }
+
+    private void drawCubeHandle(
+            float x,
+            float y,
+            float z,
+            int color)
+    {
+        float h = 0.11F;
+        setColor(color);
+
+        GL11.glBegin(GL11.GL_LINE_LOOP);
+        GL11.glVertex3f(x - h, y - h, z - h);
+        GL11.glVertex3f(x + h, y - h, z - h);
+        GL11.glVertex3f(x + h, y + h, z - h);
+        GL11.glVertex3f(x - h, y + h, z - h);
+        GL11.glEnd();
+
+        GL11.glBegin(GL11.GL_LINE_LOOP);
+        GL11.glVertex3f(x - h, y - h, z + h);
+        GL11.glVertex3f(x + h, y - h, z + h);
+        GL11.glVertex3f(x + h, y + h, z + h);
+        GL11.glVertex3f(x - h, y + h, z + h);
+        GL11.glEnd();
+
+        GL11.glBegin(GL11.GL_LINES);
+        GL11.glVertex3f(x - h, y - h, z - h);
+        GL11.glVertex3f(x - h, y - h, z + h);
+        GL11.glVertex3f(x + h, y - h, z - h);
+        GL11.glVertex3f(x + h, y - h, z + h);
+        GL11.glVertex3f(x + h, y + h, z - h);
+        GL11.glVertex3f(x + h, y + h, z + h);
+        GL11.glVertex3f(x - h, y + h, z - h);
+        GL11.glVertex3f(x - h, y + h, z + h);
+        GL11.glEnd();
     }
 
     private void drawButtons(
