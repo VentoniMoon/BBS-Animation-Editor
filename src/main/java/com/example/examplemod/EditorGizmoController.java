@@ -9,6 +9,7 @@ import org.lwjgl.opengl.GL11;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.ScaledResolution;
 
 /**
  * Stage 5 - 3D transform gizmo.
@@ -373,10 +374,13 @@ public class EditorGizmoController
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
 
+        ScaledResolution resolution =
+                new ScaledResolution(mc);
+
         GL11.glOrtho(
                 0,
-                mc.displayWidth,
-                mc.displayHeight,
+                resolution.getScaledWidth(),
+                resolution.getScaledHeight(),
                 0,
                 -1,
                 1
