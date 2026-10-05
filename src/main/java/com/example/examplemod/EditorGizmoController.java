@@ -483,11 +483,100 @@ public class EditorGizmoController
 
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_LIGHTING);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(
                 GL11.GL_SRC_ALPHA,
                 GL11.GL_ONE_MINUS_SRC_ALPHA
         );
+
+        /*
+         * The gizmo itself is deliberately drawn in this GUI pass.
+         *
+         * The Preview texture has already been rendered at this point,
+         * and this pass is the same reliable 2D OpenGL context in which
+         * the three gizmo mode buttons are visible.  We therefore project
+         * the real world anchor through the editor camera and draw the
+         * gizmo over the Preview image.  This avoids depending on the
+         * framebuffer/shader state left by the world renderer.
+         */
+        if (bone != null
+                && camera != null
+                && (keyframe != null || this.globalTransformTarget != null))
+        {
+            double[] world =
+                    getNativeBoneWorldPosition(
+                            bone,
+                            keyframe,
+                            recordFrame
+                    );
+
+            if (world == null)
+            {
+                world =
+                        getBoneWorldPosition(
+                                bone,
+                                keyframe,
+                                recordFrame
+                        );
+            }
+
+            if (world != null)
+            {
+                ScreenPoint center =
+                        project(
+                                world[0],
+                                world[1],
+                                world[2],
+                                viewportX,
+                                viewportY,
+                                viewportWidth,
+                                viewportHeight,
+                                camera
+                        );
+
+                if (center != null)
+                {
+                    float size =
+                            getWorldGizmoSize(
+                                    camera,
+                                    world[0],
+                                    world[1],
+                                    world[2]
+                            );
+
+                    double[][] axes =
+                            getBoneWorldAxes(
+                                    bone,
+                                    keyframe,
+                                    recordFrame
+                            );
+
+                    if (axes == null)
+                    {
+                        axes =
+                                new double[][]
+                                {
+                                    {1.0D, 0.0D, 0.0D},
+                                    {0.0D, 1.0D, 0.0D},
+                                    {0.0D, 0.0D, 1.0D}
+                                };
+                    }
+
+                    drawProjectedGizmo(
+                            center,
+                            world,
+                            size,
+                            axes,
+                            viewportX,
+                            viewportY,
+                            viewportWidth,
+                            viewportHeight,
+                            camera
+                    );
+                }
+            }
+        }
 
         drawButtons(
                 viewportX,
@@ -501,6 +590,435 @@ public class EditorGizmoController
         GL11.glPopMatrix();
         GL11.glPopAttrib();
         GL11.glMatrixMode(oldMatrixMode);
+    }
+
+    private void drawProjectedGizmo(
+            ScreenPoint center,
+            double[] world,
+            float size,
+            double[][] axes,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        if (center == null || world == null || axes == null)
+        {
+            return;
+        }
+
+        if (this.mode == Mode.ROTATION)
+        {
+            drawProjectedRotationGizmo(
+                    center,
+                    world,
+                    size,
+                    axes,
+                    viewportX,
+                    viewportY,
+                    viewportWidth,
+                    viewportHeight,
+                    camera
+            );
+            return;
+        }
+
+        drawProjectedAxis(
+                center,
+                world,
+                axes[0],
+                size,
+                AXIS_X_COLOR,
+                AXIS_X,
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight,
+                camera
+        );
+
+        drawProjectedAxis(
+                center,
+                world,
+                axes[1],
+                size,
+                AXIS_Y_COLOR,
+                AXIS_Y,
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight,
+                camera
+        );
+
+        drawProjectedAxis(
+                center,
+                world,
+                axes[2],
+                size,
+                AXIS_Z_COLOR,
+                AXIS_Z,
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight,
+                camera
+        );
+
+        if (this.mode == Mode.POSITION)
+        {
+            drawProjectedPlane(
+                    center, world, axes[0], axes[1],
+                    size, PLANE_XY,
+                    viewportX, viewportY,
+                    viewportWidth, viewportHeight, camera
+            );
+
+            drawProjectedPlane(
+                    center, world, axes[0], axes[2],
+                    size, PLANE_XZ,
+                    viewportX, viewportY,
+                    viewportWidth, viewportHeight, camera
+            );
+
+            drawProjectedPlane(
+                    center, world, axes[1], axes[2],
+                    size, PLANE_YZ,
+                    viewportX, viewportY,
+                    viewportWidth, viewportHeight, camera
+            );
+        }
+        else
+        {
+            drawProjectedCubeHandle(
+                    center, world, axes[0], size, AXIS_X_COLOR,
+                    viewportX, viewportY, viewportWidth, viewportHeight, camera
+            );
+            drawProjectedCubeHandle(
+                    center, world, axes[1], size, AXIS_Y_COLOR,
+                    viewportX, viewportY, viewportWidth, viewportHeight, camera
+            );
+            drawProjectedCubeHandle(
+                    center, world, axes[2], size, AXIS_Z_COLOR,
+                    viewportX, viewportY, viewportWidth, viewportHeight, camera
+            );
+        }
+
+        drawProjectedCenter(center);
+    }
+
+    private void drawProjectedAxis(
+            ScreenPoint center,
+            double[] world,
+            double[] axis,
+            float size,
+            int color,
+            int axisId,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        if (axis == null)
+        {
+            return;
+        }
+
+        float length = 1.8F * size;
+
+        ScreenPoint end =
+                project(
+                        world[0] + axis[0] * length,
+                        world[1] + axis[1] * length,
+                        world[2] + axis[2] * length,
+                        viewportX,
+                        viewportY,
+                        viewportWidth,
+                        viewportHeight,
+                        camera
+                );
+
+        if (end == null)
+        {
+            return;
+        }
+
+        int finalColor =
+                this.activePart == axisId
+                        ? EditorThemeManager.get().getAccentBright()
+                        : color;
+
+        drawLine(
+                center.x,
+                center.y,
+                end.x,
+                end.y,
+                finalColor
+        );
+
+        drawProjectedArrow(
+                center,
+                end,
+                8.0F,
+                finalColor
+        );
+    }
+
+    private void drawProjectedPlane(
+            ScreenPoint center,
+            double[] world,
+            double[] axisA,
+            double[] axisB,
+            float size,
+            int planeId,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        float offset = 0.48F * size;
+        float extent = 0.38F * size;
+
+        ScreenPoint p1 = projectOffset(
+                world, axisA, axisB,
+                offset, offset,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        ScreenPoint p2 = projectOffset(
+                world, axisA, axisB,
+                offset + extent, offset,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        ScreenPoint p3 = projectOffset(
+                world, axisA, axisB,
+                offset + extent, offset + extent,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        ScreenPoint p4 = projectOffset(
+                world, axisA, axisB,
+                offset, offset + extent,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+
+        if (p1 == null || p2 == null || p3 == null || p4 == null)
+        {
+            return;
+        }
+
+        int color =
+                this.activePart == planeId
+                        ? EditorThemeManager.get().getAccentBright()
+                        : 0x99BFC5CA;
+
+        drawLine(p1.x, p1.y, p2.x, p2.y, color);
+        drawLine(p2.x, p2.y, p3.x, p3.y, color);
+        drawLine(p3.x, p3.y, p4.x, p4.y, color);
+        drawLine(p4.x, p4.y, p1.x, p1.y, color);
+    }
+
+    private ScreenPoint projectOffset(
+            double[] world,
+            double[] axisA,
+            double[] axisB,
+            double amountA,
+            double amountB,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        return project(
+                world[0] + axisA[0] * amountA + axisB[0] * amountB,
+                world[1] + axisA[1] * amountA + axisB[1] * amountB,
+                world[2] + axisA[2] * amountA + axisB[2] * amountB,
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight,
+                camera
+        );
+    }
+
+    private void drawProjectedRotationGizmo(
+            ScreenPoint center,
+            double[] world,
+            float size,
+            double[][] axes,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        drawProjectedRing(
+                center, world, axes[1], axes[2],
+                size * 0.95F, AXIS_X_COLOR,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        drawProjectedRing(
+                center, world, axes[2], axes[0],
+                size * 0.95F, AXIS_Y_COLOR,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        drawProjectedRing(
+                center, world, axes[0], axes[1],
+                size * 0.95F, AXIS_Z_COLOR,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        drawProjectedCenter(center);
+    }
+
+    private void drawProjectedRing(
+            ScreenPoint center,
+            double[] world,
+            double[] axisA,
+            double[] axisB,
+            float radius,
+            int color,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        ScreenPoint previous = null;
+        int segments = 48;
+
+        for (int i = 0; i <= segments; i++)
+        {
+            double angle =
+                    Math.PI * 2.0D * i / segments;
+
+            double x =
+                    world[0]
+                            + (axisA[0] * Math.cos(angle)
+                            + axisB[0] * Math.sin(angle)) * radius;
+
+            double y =
+                    world[1]
+                            + (axisA[1] * Math.cos(angle)
+                            + axisB[1] * Math.sin(angle)) * radius;
+
+            double z =
+                    world[2]
+                            + (axisA[2] * Math.cos(angle)
+                            + axisB[2] * Math.sin(angle)) * radius;
+
+            ScreenPoint current =
+                    project(
+                            x, y, z,
+                            viewportX, viewportY,
+                            viewportWidth, viewportHeight,
+                            camera
+                    );
+
+            if (current != null && previous != null)
+            {
+                drawLine(
+                        previous.x,
+                        previous.y,
+                        current.x,
+                        current.y,
+                        color
+                );
+            }
+
+            previous = current;
+        }
+    }
+
+    private void drawProjectedArrow(
+            ScreenPoint from,
+            ScreenPoint to,
+            float size,
+            int color)
+    {
+        float dx = to.x - from.x;
+        float dy = to.y - from.y;
+        float length =
+                (float)Math.sqrt(dx * dx + dy * dy);
+
+        if (length < 2.0F)
+        {
+            return;
+        }
+
+        float nx = dx / length;
+        float ny = dy / length;
+
+        float px = -ny;
+        float py = nx;
+
+        float bx = to.x - nx * size;
+        float by = to.y - ny * size;
+
+        drawLine(
+                to.x,
+                to.y,
+                bx + px * size * 0.55F,
+                by + py * size * 0.55F,
+                color
+        );
+
+        drawLine(
+                to.x,
+                to.y,
+                bx - px * size * 0.55F,
+                by - py * size * 0.55F,
+                color
+        );
+    }
+
+    private void drawProjectedCubeHandle(
+            ScreenPoint center,
+            double[] world,
+            double[] axis,
+            float size,
+            int color,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        ScreenPoint end =
+                project(
+                        world[0] + axis[0] * size,
+                        world[1] + axis[1] * size,
+                        world[2] + axis[2] * size,
+                        viewportX, viewportY,
+                        viewportWidth, viewportHeight, camera
+                );
+
+        if (end == null)
+        {
+            return;
+        }
+
+        float half = 5.0F;
+
+        drawRectOutline(
+                end.x - half,
+                end.y - half,
+                half * 2.0F,
+                half * 2.0F,
+                color
+        );
+    }
+
+    private void drawProjectedCenter(ScreenPoint center)
+    {
+        drawCircle(
+                center.x,
+                center.y,
+                4.0F,
+                EditorThemeManager.get().getAccentBright(),
+                16
+        );
     }
 
     /**
