@@ -261,7 +261,9 @@ public class EditorGizmoController
                         mouseX, mouseY,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center, gizmoWorld, gizmoSize, camera,
-                        getBoneWorldAxes(bone, keyframe, recordFrame)
+                        getNativeBoneWorldAxes(bone) != null
+                        ? getNativeBoneWorldAxes(bone)
+                        : getBoneWorldAxes(bone, keyframe, recordFrame)
                 );
 
         if (hit < 0)
@@ -273,7 +275,13 @@ public class EditorGizmoController
         this.dragging = true;
         this.activeKeyframe = keyframe;
 
-        double[][] axes = getBoneWorldAxes(bone, keyframe, recordFrame);
+        double[][] axes =
+                getNativeBoneWorldAxes(bone);
+
+        if (axes == null)
+        {
+            axes = getBoneWorldAxes(bone, keyframe, recordFrame);
+        }
         if (axes != null)
         {
             this.dragAxisX = axes[0].clone();
@@ -887,7 +895,7 @@ public class EditorGizmoController
             return;
         }
 
-        float length = 1.8F * size;
+        float length = 2.15F * size;
 
         ScreenPoint end =
                 project(
@@ -1397,7 +1405,7 @@ public class EditorGizmoController
                 GL11.GL_SRC_ALPHA,
                 GL11.GL_ONE_MINUS_SRC_ALPHA
         );
-        GL11.glLineWidth(4.0F);
+        GL11.glLineWidth(7.0F);
 
         GL11.glPushMatrix();
 
@@ -1985,9 +1993,9 @@ public class EditorGizmoController
     private void drawRotationGizmo3D(float size, double[][] axes)
     {
         if (axes == null) return;
-        drawRingVector3D(axes[1], axes[2], size * 0.95F, AXIS_X_COLOR);
-        drawRingVector3D(axes[2], axes[0], size * 0.95F, AXIS_Y_COLOR);
-        drawRingVector3D(axes[0], axes[1], size * 0.95F, AXIS_Z_COLOR);
+        drawRingVector3D(axes[1], axes[2], size * 1.05F, AXIS_X_COLOR);
+        drawRingVector3D(axes[2], axes[0], size * 1.05F, AXIS_Y_COLOR);
+        drawRingVector3D(axes[0], axes[1], size * 1.05F, AXIS_Z_COLOR);
     }
 
     private void drawScaleGizmo3D(float size, double[][] axes)
@@ -2014,7 +2022,7 @@ public class EditorGizmoController
         GL11.glVertex3f(0, 0, 0);
         GL11.glVertex3f(ex, ey, ez);
         GL11.glEnd();
-        drawArrowHeadVector(axis, ex, ey, ez, 0.18F * size, finalColor);
+        drawArrowHeadVector(axis, ex, ey, ez, 0.28F * size, finalColor);
     }
 
     private void drawArrowHeadVector(double[] axis, float x, float y, float z, float head, int color)
@@ -2039,7 +2047,7 @@ public class EditorGizmoController
 
     private void drawPlaneVector3D(double[] a, double[] b, float size, int planeId)
     {
-        float offset=.48F*size, extent=.38F*size;
+        float offset=.52F*size, extent=.48F*size;
         int color=this.activePart==planeId ? EditorThemeManager.get().getAccentBright() : 0x99BFC5CA;
         double[] p1=addScaled(a,offset); addScaledInPlace(p1,b,offset);
         double[] p2=addScaled(a,offset+extent); addScaledInPlace(p2,b,offset);
@@ -2065,7 +2073,7 @@ public class EditorGizmoController
 
     private void drawCubeHandleVector(double[] axis, float size, int color)
     {
-        float center=1.8F*size, h=.11F;
+        float center=2.15F*size, h=.16F;
         double[] ref=Math.abs(axis[1])<.9D ? new double[]{0,1,0} : new double[]{1,0,0};
         double[] side=cross(axis,ref); normalize(side);
         double[] up=cross(side,axis); normalize(up);
@@ -2407,10 +2415,10 @@ public class EditorGizmoController
             double[][] axes)
     {
         if (axes == null) return -1;
-        float length=1.8F*size;
+        float length=2.15F*size;
         if (this.mode == Mode.ROTATION)
         {
-            int best=-1; double bestDistance=12.0D;
+            int best=-1; double bestDistance=20.0D;
             for(int axis=0;axis<3;axis++)
             {
                 double[] a=axes[(axis+1)%3], b=axes[(axis+2)%3];
@@ -2418,7 +2426,7 @@ public class EditorGizmoController
                 for(int i=0;i<64;i++)
                 {
                     double angle=Math.PI*2.0D*i/64.0D;
-                    double c=Math.cos(angle)*size*.95D, d=Math.sin(angle)*size*.95D;
+                    double c=Math.cos(angle)*size*1.05D, d=Math.sin(angle)*size*1.05D;
                     ScreenPoint p=project(world[0]+a[0]*c+b[0]*d,world[1]+a[1]*c+b[1]*d,world[2]+a[2]*c+b[2]*d,viewportX,viewportY,viewportWidth,viewportHeight,camera);
                     if(p!=null){double dx=mouseX-p.x,dy=mouseY-p.y;min=Math.min(min,Math.sqrt(dx*dx+dy*dy));}
                 }
@@ -2426,7 +2434,7 @@ public class EditorGizmoController
             }
             return best;
         }
-        int best=-1; double bestDistance=11.0D;
+        int best=-1; double bestDistance=20.0D;
         for(int axis=0;axis<3;axis++)
         {
             ScreenPoint p=project(world[0]+axes[axis][0]*length,world[1]+axes[axis][1]*length,world[2]+axes[axis][2]*length,viewportX,viewportY,viewportWidth,viewportHeight,camera);
@@ -2441,7 +2449,7 @@ public class EditorGizmoController
             double[] p=addScaled(axes[pairs[i][0]],offset+extent*.5D);
             addScaledInPlace(p,axes[pairs[i][1]],offset+extent*.5D);
             ScreenPoint sp=project(world[0]+p[0],world[1]+p[1],world[2]+p[2],viewportX,viewportY,viewportWidth,viewportHeight,camera);
-            if(sp!=null){double dx=mouseX-sp.x,dy=mouseY-sp.y;if(dx*dx+dy*dy<=144.0D)return ids[i];}
+            if(sp!=null){double dx=mouseX-sp.x,dy=mouseY-sp.y;if(dx*dx+dy*dy<=324.0D)return ids[i];}
         }
         return best;
     }
