@@ -262,9 +262,11 @@ public class EditorGizmoController
                         mouseX, mouseY,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center, gizmoWorld, gizmoSize, camera,
-                        getNativeBoneWorldAxes(bone, recordFrame) != null
-                        ? getNativeBoneWorldAxes(bone, recordFrame)
-                        : getBoneWorldAxes(bone, keyframe, recordFrame)
+                        getGizmoWorldAxes(
+                        bone,
+                        keyframe,
+                        recordFrame
+                )
                 );
 
         if (hit < 0)
@@ -277,12 +279,11 @@ public class EditorGizmoController
         this.activeKeyframe = keyframe;
 
         double[][] axes =
-                getNativeBoneWorldAxes(bone, recordFrame);
-
-        if (axes == null)
-        {
-            axes = getBoneWorldAxes(bone, keyframe, recordFrame);
-        }
+                getGizmoWorldAxes(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
         if (axes != null)
         {
             this.dragAxisX = axes[0].clone();
@@ -2596,6 +2597,147 @@ public class EditorGizmoController
         double det=ax*by-ay*bx;
         if(Math.abs(det)<.0001D)return new double[]{0,0};
         return new double[]{(mouseDX*by-mouseDY*bx)/det,(ax*mouseDY-ay*mouseDX)/det};
+    }
+
+    /*
+     * Translation gizmo axes must describe the coordinate space in which
+     * AnimationTransform.positionX/Y/Z are actually stored.
+     *
+     * A bone's OWN rotation must not be used for its translation axes.
+     * AnimationBone.combine() rotates a child's position by the PARENT
+     * transform, then applies the child's rotation to the bone itself.
+     *
+     * The previous gizmo used the fully composed bone rotation here.
+     * For an arm (or any rotated bone) that makes editor X/Z appear on
+     * the wrong world axes: dragging the red X handle changes position X,
+     * while the rendered handle can point along world Z.
+     *
+     * Keep rotation/scale gizmos on the native bone basis, but make the
+     * position gizmo follow the actual translation basis.
+     */
+    private double[][] getGizmoWorldAxes(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (this.mode != Mode.POSITION)
+        {
+            double[][] nativeAxes =
+                    getNativeBoneWorldAxes(
+                            bone,
+                            recordFrame
+                    );
+
+            if (nativeAxes != null)
+            {
+                return nativeAxes;
+            }
+
+            return getBoneWorldAxes(
+                    bone,
+                    selectedKeyframe,
+                    recordFrame
+            );
+        }
+
+        return getBoneTranslationWorldAxes(
+                bone,
+                selectedKeyframe,
+                recordFrame
+        );
+    }
+
+    private double[][] getBoneTranslationWorldAxes(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        int frame =
+                selectedKeyframe != null
+                        ? selectedKeyframe.getFrame()
+                        : this.gizmoFrame;
+
+        /*
+         * Chameleon and the editor's AnimationBone hierarchy both apply
+         * a local position through the parent's basis. The current bone's
+         * own rotation affects its rendered orientation, but it does not
+         * rotate its own translation values.
+         */
+        float rx = 0.0F;
+        float ry = 0.0F;
+        float rz = 0.0F;
+
+        AnimationBone parent = bone.getParent();
+
+        if (parent != null)
+        {
+            AnimationTransform parentWorld =
+                    this.chameleonCoordinateSpace
+                            ? getChameleonWorldPivot(parent, frame)
+                            : parent.getWorldTransformAt(frame);
+
+            if (parentWorld != null)
+            {
+                rx = parentWorld.getRotationX();
+                ry = parentWorld.getRotationY();
+                rz = parentWorld.getRotationZ();
+            }
+        }
+
+        /*
+         * Body Part model translations are additionally expressed through
+         * the attachment bone and the Body Part global transform.
+         */
+        if (!this.chameleonCoordinateSpace &&
+                this.bodyPartAttachmentBone != null &&
+                (this.bodyPartTarget != null ||
+                 this.globalTransformTarget != null))
+        {
+            AnimationTransform attachment =
+                    this.bodyPartAttachmentBone.getWorldTransformAt(frame);
+
+            if (attachment != null)
+            {
+                rx += attachment.getRotationX();
+                ry += attachment.getRotationY();
+                rz += attachment.getRotationZ();
+            }
+
+            AnimationTransform global =
+                    this.globalTransformTarget != null
+                            ? this.globalTransformTarget
+                            : this.bodyPartTarget != null
+                                    ? this.bodyPartTarget.getGlobalTransform()
+                                    : null;
+
+            if (global != null)
+            {
+                rx += global.getRotationX();
+                ry += global.getRotationY();
+                rz += global.getRotationZ();
+            }
+        }
+
+        return new double[][]
+        {
+            transformBoneDirection(
+                    rotateVector(1, 0, 0, rx, ry, rz),
+                    recordFrame
+            ),
+            transformBoneDirection(
+                    rotateVector(0, 1, 0, rx, ry, rz),
+                    recordFrame
+            ),
+            transformBoneDirection(
+                    rotateVector(0, 0, 1, rx, ry, rz),
+                    recordFrame
+            )
+        };
     }
 
     private double[][] getBoneWorldAxes(
