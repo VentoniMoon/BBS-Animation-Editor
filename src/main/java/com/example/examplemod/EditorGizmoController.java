@@ -3406,15 +3406,24 @@ public class EditorGizmoController
         double transformedZ =
                 this.chameleonCoordinateSpace ? modelZ : -modelZ;
 
+        /*
+         * The visual gizmo must use the same actor orientation as the
+         * Preview renderer.  The animation data's record yaw can differ
+         * from EntityActor.renderYawOffset, especially while the preview
+         * actor is being updated.  Using recordFrame yaw here rotates the
+         * gizmo's movement path away from the actual bone path.
+         *
+         * The bone and gizmo must therefore share one world conversion:
+         * a change of one model-space unit must produce the same world-space
+         * displacement for both of them.
+         */
+        double actorYaw =
+                this.previewActor != null
+                        ? this.previewActor.renderYawOffset
+                        : (recordFrame != null ? recordFrame.getYaw() : 0.0D);
+
         double yaw =
-                Math.toRadians(
-                        180.0D
-                                - (
-                                        recordFrame != null
-                                                ? recordFrame.getYaw()
-                                                : 0.0D
-                                )
-                );
+                Math.toRadians(180.0D - actorYaw);
 
         double cos = Math.cos(yaw);
         double sin = Math.sin(yaw);
