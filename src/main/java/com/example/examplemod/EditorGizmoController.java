@@ -1905,6 +1905,37 @@ public class EditorGizmoController
         }
     }
 
+    private double[] getGizmoWorldPosition(
+            AnimationBone bone,
+            AnimationKeyframe keyframe,
+            BlockbusterRecordFrame recordFrame)
+    {
+        /*
+         * Position edits are stored in the animation/model coordinate
+         * system.  Use the editor's reconstructed bone pivot for the
+         * gizmo anchor so X/Y/Z follow the exact same convention as the
+         * keyframe data.  The native renderer is only a fallback for
+         * cases where the editor cannot reconstruct the pivot.
+         */
+        double[] world =
+                getBoneWorldPosition(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
+
+        if (world != null)
+        {
+            return world;
+        }
+
+        return getNativeBoneWorldPosition(
+                bone,
+                keyframe,
+                recordFrame
+        );
+    }
+
     private double[] getNativeBoneWorldPosition(AnimationBone bone, AnimationKeyframe keyframe, BlockbusterRecordFrame recordFrame)
     {
         double[] result = getExactChameleonBoneWorldPosition(bone, recordFrame);
