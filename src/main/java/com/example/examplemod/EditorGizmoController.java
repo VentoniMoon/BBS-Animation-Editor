@@ -437,12 +437,10 @@ public class EditorGizmoController
      * flat 2D decoration over the Preview texture.
      */
     /**
-     * Draw the visible gizmo as a GUI overlay over the already rendered
-     * Preview.  The previous implementation mixed a 3D/FBO render pass
-     * with the GUI projection and could disappear after the world/shader
-     * renderer changed OpenGL state.  The editor interaction already uses
-     * the projected screen position, so the visual gizmo now uses that
-     * exact screen-space anchor and screen-space axis directions.
+     * Draw the GUI portion of the gizmo.
+     *
+     * The handles themselves are rendered by draw3D() inside the Preview
+     * framebuffer, following the architecture of the original BBS editor.
      */
     public void draw(
             Minecraft mc,
@@ -489,50 +487,11 @@ public class EditorGizmoController
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 
-        if (bone != null && camera != null
-                && (keyframe != null || this.globalTransformTarget != null))
-        {
-            double[] world = getNativeBoneWorldPosition(bone, keyframe, recordFrame);
-            if (world == null)
-            {
-                world = getBoneWorldPosition(bone, keyframe, recordFrame);
-            }
-
-            if (world != null)
-            {
-                ScreenPoint center = project(
-                        world[0], world[1], world[2],
-                        viewportX, viewportY, viewportWidth, viewportHeight,
-                        camera
-                );
-
-                if (center != null)
-                {
-                    double[][] axes = getBoneWorldAxes(bone, keyframe, recordFrame);
-                    if (axes == null || axes.length < 3)
-                    {
-                        axes = new double[][]
-                        {
-                            {1.0D, 0.0D, 0.0D},
-                            {0.0D, 1.0D, 0.0D},
-                            {0.0D, 0.0D, 1.0D}
-                        };
-                    }
-
-                    drawScreenSpaceGizmo(
-                            center,
-                            world,
-                            axes,
-                            viewportX,
-                            viewportY,
-                            viewportWidth,
-                            viewportHeight,
-                            camera
-                    );
-                }
-            }
-        }
-
+        /*
+         * Visible 3D gizmo is rendered by draw3D() while the Preview
+         * framebuffer is still bound. This GUI method is intentionally
+         * limited to the three tool buttons.
+         */
         drawButtons(viewportX, viewportY, viewportWidth, viewportHeight);
 
         GL11.glPopMatrix();
@@ -1418,15 +1377,24 @@ public class EditorGizmoController
                 1.0F
         );
 
+        /*
+         * This is the important part of the original BBS approach:
+         * the gizmo is real 3D geometry, but depth comparison is
+         * disabled for the gizmo pass so it is always visible over
+         * the actor.
+         */
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glDepthFunc(GL11.GL_ALWAYS);
+        GL11.glDepthMask(false);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(
                 GL11.GL_SRC_ALPHA,
                 GL11.GL_ONE_MINUS_SRC_ALPHA
         );
-        GL11.glLineWidth(5.0F);
+        GL11.glLineWidth(4.0F);
 
         GL11.glPushMatrix();
 
