@@ -1690,10 +1690,10 @@ public class EditorGizmoController
             double localY = matrix[13];
             double localZ = matrix[14];
 
-            double actorX = recordFrame != null ? recordFrame.getX() : this.previewActor.posX;
-            double actorY = recordFrame != null ? recordFrame.getY() : this.previewActor.posY;
-            double actorZ = recordFrame != null ? recordFrame.getZ() : this.previewActor.posZ;
-            double yaw = Math.toRadians(180.0D - (recordFrame != null ? recordFrame.getYaw() : this.previewActor.renderYawOffset));
+            double actorX = this.previewActor.posX;
+            double actorY = this.previewActor.posY;
+            double actorZ = this.previewActor.posZ;
+            double yaw = Math.toRadians(180.0D - this.previewActor.renderYawOffset);
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
@@ -1886,7 +1886,7 @@ public class EditorGizmoController
                 return null;
             }
 
-            double yaw = Math.toRadians(180.0D - (recordFrame != null ? recordFrame.getYaw() : this.previewActor.renderYawOffset));
+            double yaw = Math.toRadians(180.0D - this.previewActor.renderYawOffset);
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
@@ -1991,11 +1991,11 @@ public class EditorGizmoController
             Object result = method.invoke(morph.animator, this.previewActor, sourceBone, 0.0F, 0.0F, 0.0F, 0.0F);
             if (!(result instanceof javax.vecmath.Vector4f)) return null;
             javax.vecmath.Vector4f position = (javax.vecmath.Vector4f) result;
-            double actorX = recordFrame != null ? recordFrame.getX() : this.previewActor.posX;
-            double actorY = recordFrame != null ? recordFrame.getY() : this.previewActor.posY;
-            double actorZ = recordFrame != null ? recordFrame.getZ() : this.previewActor.posZ;
+            double actorX = this.previewActor.posX;
+            double actorY = this.previewActor.posY;
+            double actorZ = this.previewActor.posZ;
 
-            double yaw = Math.toRadians(180.0D - (recordFrame != null ? recordFrame.getYaw() : this.previewActor.renderYawOffset));
+            double yaw = Math.toRadians(180.0D - this.previewActor.renderYawOffset);
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
@@ -2520,6 +2520,32 @@ public class EditorGizmoController
 
     private double getDataAxisSign(int axisId)
     {
+        /*
+         * The gizmo axes are displayed in actor/world space, while
+         * AnimationBone translation is stored in the model's LOCAL space.
+         *
+         * Chameleon keeps the local X/Y/Z directions as-is.
+         * Blockbuster's ModelCustomRenderer converts editor translation
+         * to Minecraft model coordinates as:
+         *
+         *     X -> +X
+         *     Y -> -Y
+         *     Z -> -Z
+         *
+         * Therefore the visual drag scalar must be converted back before
+         * writing it into the selected keyframe. Without this conversion
+         * the gizmo looks correct but edits the wrong coordinate space.
+         */
+        if (this.chameleonCoordinateSpace)
+        {
+            return 1.0D;
+        }
+
+        if (axisId == AXIS_Y || axisId == AXIS_Z)
+        {
+            return -1.0D;
+        }
+
         return 1.0D;
     }
 
@@ -2537,7 +2563,7 @@ public class EditorGizmoController
         if(axisId<0||axisId>2)return 0.0D;
         double ux=this.dragScreenAxes[axisId][0], uy=this.dragScreenAxes[axisId][1];
         double scale=Math.max(.0001D,this.dragPixelsPerWorld[axisId]);
-        return (mouseDX*ux+mouseDY*uy)/scale*.10D;
+        return (mouseDX*ux+mouseDY*uy)/scale;
     }
 
     private double getAxisDragAngle(int axisId,double mouseDX,double mouseDY)
@@ -2554,7 +2580,7 @@ public class EditorGizmoController
         double by=this.dragScreenAxes[axisB][1]*this.dragPixelsPerWorld[axisB];
         double det=ax*by-ay*bx;
         if(Math.abs(det)<.0001D)return new double[]{0,0};
-        return new double[]{(mouseDX*by-mouseDY*bx)/det*.10D,(ax*mouseDY-ay*mouseDX)/det*.10D};
+        return new double[]{(mouseDX*by-mouseDY*bx)/det,(ax*mouseDY-ay*mouseDX)/det};
     }
 
     private double[][] getBoneWorldAxes(
@@ -2863,7 +2889,7 @@ public class EditorGizmoController
         double x = this.chameleonCoordinateSpace ? d[0] : -d[0];
         double y = d[1];
         double z = this.chameleonCoordinateSpace ? d[2] : -d[2];
-        double yaw=Math.toRadians(180.0D-(recordFrame!=null?recordFrame.getYaw():0.0D));
+        double yaw=Math.toRadians(180.0D-(this.previewActor != null ? this.previewActor.renderYawOffset : (recordFrame != null ? recordFrame.getYaw() : 0.0D)));
         double c=Math.cos(yaw), s=Math.sin(yaw);
         double wx=c*x+s*z, wz=-s*x+c*z;
         double len=Math.sqrt(wx*wx+y*y+wz*wz);
