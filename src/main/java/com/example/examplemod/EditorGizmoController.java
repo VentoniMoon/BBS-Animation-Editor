@@ -1670,7 +1670,6 @@ public class EditorGizmoController
             float[] matrix = new float[16];
             buffer.get(matrix);
             GL11.glPopMatrix();
-            GL11.glMatrixMode(oldMatrixMode);
             return new double[] {matrix[12], matrix[13], matrix[14]};
         }
         catch (Throwable ignored) { return null; }
@@ -1732,6 +1731,7 @@ public class EditorGizmoController
             float[] matrix = new float[16];
             buffer.get(matrix);
             GL11.glPopMatrix();
+            GL11.glMatrixMode(oldMatrixMode);
             return new double[] {matrix[12], matrix[13], matrix[14]};
         }
         catch (Throwable ignored) { return null; }
