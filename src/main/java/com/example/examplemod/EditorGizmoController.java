@@ -488,11 +488,80 @@ public class EditorGizmoController
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 
         /*
-         * Visible 3D gizmo is rendered by draw3D() while the Preview
-         * framebuffer is still bound. This GUI method is intentionally
-         * limited to the three tool buttons.
+         * The Preview itself is already copied to the normal Minecraft GUI
+         * framebuffer when this method is called. Render the visible gizmo
+         * here as a true GUI overlay. This deliberately does NOT depend on
+         * the Preview FBO, OptiFine shader state, or the modelview matrix
+         * left behind by the actor renderer.
          */
         drawButtons(viewportX, viewportY, viewportWidth, viewportHeight);
+
+        if (bone != null && camera != null)
+        {
+            double[] world =
+                    getNativeBoneWorldPosition(
+                            bone,
+                            keyframe,
+                            recordFrame
+                    );
+
+            if (world == null)
+            {
+                world =
+                        getBoneWorldPosition(
+                                bone,
+                                keyframe,
+                                recordFrame
+                        );
+            }
+
+            if (world != null)
+            {
+                ScreenPoint center =
+                        project(
+                                world[0],
+                                world[1],
+                                world[2],
+                                viewportX,
+                                viewportY,
+                                viewportWidth,
+                                viewportHeight,
+                                camera
+                        );
+
+                if (center != null)
+                {
+                    double[][] axes =
+                            getBoneWorldAxes(
+                                    bone,
+                                    keyframe,
+                                    recordFrame
+                            );
+
+                    if (axes == null)
+                    {
+                        axes =
+                                new double[][]
+                                {
+                                    {1.0D, 0.0D, 0.0D},
+                                    {0.0D, 1.0D, 0.0D},
+                                    {0.0D, 0.0D, 1.0D}
+                                };
+                    }
+
+                    drawScreenSpaceGizmo(
+                            center,
+                            world,
+                            axes,
+                            viewportX,
+                            viewportY,
+                            viewportWidth,
+                            viewportHeight,
+                            camera
+                    );
+                }
+            }
+        }
 
         GL11.glPopMatrix();
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
