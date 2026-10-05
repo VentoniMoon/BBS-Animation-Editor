@@ -1670,6 +1670,7 @@ public class EditorGizmoController
             float[] matrix = new float[16];
             buffer.get(matrix);
             GL11.glPopMatrix();
+            GL11.glMatrixMode(oldMatrixMode);
             return new double[] {matrix[12], matrix[13], matrix[14]};
         }
         catch (Throwable ignored) { return null; }
@@ -1699,7 +1700,27 @@ public class EditorGizmoController
             if (model == null) return null;
             mchorse.blockbuster.client.model.ModelCustomRenderer renderer = model.get(bone.getName());
             if (renderer == null) return null;
+            /*
+             * postRender() is a real model-space transform operation.
+             * It must start from an identity modelview matrix here.
+             *
+             * The gizmo anchor is queried after the Preview world has
+             * rendered, so inheriting the Preview camera matrix would
+             * bake camera rotation into matrix[12..14]. draw3D() then
+             * applies the camera again and the gizmo can end up completely
+             * outside the viewport.
+             *
+             * The original BBS renderer obtains bone matrices from its
+             * model renderer rather than from whatever GL matrix happens
+             * to be active at the time of the query.
+             */
+            int oldMatrixMode =
+                    GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glPushMatrix();
+            GL11.glLoadIdentity();
+
             GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
             GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
             mchorse.blockbuster.api.Model sourceModel = model.model;
