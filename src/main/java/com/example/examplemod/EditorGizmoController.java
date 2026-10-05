@@ -262,7 +262,7 @@ public class EditorGizmoController
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center, gizmoWorld, gizmoSize, camera,
                         getNativeBoneWorldAxes(bone) != null
-                        ? getNativeBoneWorldAxes(bone)
+                        ? getNativeBoneWorldAxes(bone, recordFrame)
                         : getBoneWorldAxes(bone, keyframe, recordFrame)
                 );
 
@@ -1710,7 +1710,7 @@ public class EditorGizmoController
     /**
      * Reads the real orientation of the rendered native bone.
      */
-    private double[][] getNativeBoneWorldAxes(AnimationBone bone)
+    private double[][] getNativeBoneWorldAxes(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
         if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
         {
