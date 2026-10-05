@@ -436,6 +436,14 @@ public class EditorGizmoController
      * the same perspective/camera space as the actor instead of being a
      * flat 2D decoration over the Preview texture.
      */
+    /**
+     * Draw the visible gizmo as a GUI overlay over the already rendered
+     * Preview.  The previous implementation mixed a 3D/FBO render pass
+     * with the GUI projection and could disappear after the world/shader
+     * renderer changed OpenGL state.  The editor interaction already uses
+     * the projected screen position, so the visual gizmo now uses that
+     * exact screen-space anchor and screen-space axis directions.
+     */
     public void draw(
             Minecraft mc,
             int viewportX,
@@ -448,30 +456,22 @@ public class EditorGizmoController
             EditorCamera camera,
             boolean enabled)
     {
-        if (mc == null
-                || !enabled
-                || viewportWidth <= 0
-                || viewportHeight <= 0)
+        if (mc == null || !enabled || viewportWidth <= 0 || viewportHeight <= 0)
         {
             return;
         }
 
-        int oldMatrixMode =
-                GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        int oldMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
 
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
-
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
-
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
 
-        ScaledResolution resolution =
-                new ScaledResolution(mc);
-
+        ScaledResolution resolution = new ScaledResolution(mc);
         GL11.glOrtho(
                 0,
                 resolution.getScaledWidth(),
@@ -484,89 +484,44 @@ public class EditorGizmoController
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(
-                GL11.GL_SRC_ALPHA,
-                GL11.GL_ONE_MINUS_SRC_ALPHA
-        );
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 
-        /*
-         * The gizmo itself is deliberately drawn in this GUI pass.
-         *
-         * The Preview texture has already been rendered at this point,
-         * and this pass is the same reliable 2D OpenGL context in which
-         * the three gizmo mode buttons are visible.  We therefore project
-         * the real world anchor through the editor camera and draw the
-         * gizmo over the Preview image.  This avoids depending on the
-         * framebuffer/shader state left by the world renderer.
-         */
-        if (bone != null
-                && camera != null
+        if (bone != null && camera != null
                 && (keyframe != null || this.globalTransformTarget != null))
         {
-            double[] world =
-                    getNativeBoneWorldPosition(
-                            bone,
-                            keyframe,
-                            recordFrame
-                    );
-
+            double[] world = getNativeBoneWorldPosition(bone, keyframe, recordFrame);
             if (world == null)
             {
-                world =
-                        getBoneWorldPosition(
-                                bone,
-                                keyframe,
-                                recordFrame
-                        );
+                world = getBoneWorldPosition(bone, keyframe, recordFrame);
             }
 
             if (world != null)
             {
-                ScreenPoint center =
-                        project(
-                                world[0],
-                                world[1],
-                                world[2],
-                                viewportX,
-                                viewportY,
-                                viewportWidth,
-                                viewportHeight,
-                                camera
-                        );
+                ScreenPoint center = project(
+                        world[0], world[1], world[2],
+                        viewportX, viewportY, viewportWidth, viewportHeight,
+                        camera
+                );
 
                 if (center != null)
                 {
-                    float size =
-                            getWorldGizmoSize(
-                                    camera,
-                                    world[0],
-                                    world[1],
-                                    world[2]
-                            );
-
-                    double[][] axes =
-                            getBoneWorldAxes(
-                                    bone,
-                                    keyframe,
-                                    recordFrame
-                            );
-
-                    if (axes == null)
+                    double[][] axes = getBoneWorldAxes(bone, keyframe, recordFrame);
+                    if (axes == null || axes.length < 3)
                     {
-                        axes =
-                                new double[][]
-                                {
-                                    {1.0D, 0.0D, 0.0D},
-                                    {0.0D, 1.0D, 0.0D},
-                                    {0.0D, 0.0D, 1.0D}
-                                };
+                        axes = new double[][]
+                        {
+                            {1.0D, 0.0D, 0.0D},
+                            {0.0D, 1.0D, 0.0D},
+                            {0.0D, 0.0D, 1.0D}
+                        };
                     }
 
-                    drawProjectedGizmo(
+                    drawScreenSpaceGizmo(
                             center,
                             world,
-                            size,
                             axes,
                             viewportX,
                             viewportY,
@@ -578,18 +533,262 @@ public class EditorGizmoController
             }
         }
 
-        drawButtons(
-                viewportX,
-                viewportY,
-                viewportWidth,
-                viewportHeight
-        );
+        drawButtons(viewportX, viewportY, viewportWidth, viewportHeight);
 
         GL11.glPopMatrix();
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPopMatrix();
         GL11.glPopAttrib();
         GL11.glMatrixMode(oldMatrixMode);
+    }
+
+    /**
+     * Rebuild of the visible gizmo.  World-space geometry is projected only
+     * to determine the orientation on screen; the actual handle size is
+     * deliberately pixel based.  This keeps the gizmo readable at every
+     * camera distance and, more importantly, makes it independent of the
+     * Preview FBO, OptiFine shaders and depth-buffer state.
+     */
+    private void drawScreenSpaceGizmo(
+            ScreenPoint center,
+            double[] world,
+            double[][] axes,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        final float axisLength = 72.0F;
+        final float planeOffset = 24.0F;
+        final float planeSize = 24.0F;
+        final float ringRadius = 62.0F;
+
+        ScreenDirection[] directions = new ScreenDirection[3];
+
+        for (int i = 0; i < 3; i++)
+        {
+            directions[i] = getScreenDirection(
+                    center,
+                    world,
+                    axes[i],
+                    viewportX,
+                    viewportY,
+                    viewportWidth,
+                    viewportHeight,
+                    camera
+            );
+
+            if (directions[i] == null)
+            {
+                directions[i] = fallbackScreenDirection(i);
+            }
+        }
+
+        if (this.mode == Mode.ROTATION)
+        {
+            drawScreenRing(center, directions[1], directions[2], ringRadius, AXIS_X_COLOR);
+            drawScreenRing(center, directions[2], directions[0], ringRadius, AXIS_Y_COLOR);
+            drawScreenRing(center, directions[0], directions[1], ringRadius, AXIS_Z_COLOR);
+            drawScreenCenter(center);
+        }
+        else
+        {
+            drawScreenAxis(center, directions[0], axisLength, AXIS_X_COLOR, AXIS_X);
+            drawScreenAxis(center, directions[1], axisLength, AXIS_Y_COLOR, AXIS_Y);
+            drawScreenAxis(center, directions[2], axisLength, AXIS_Z_COLOR, AXIS_Z);
+
+            if (this.mode == Mode.POSITION)
+            {
+                drawScreenPlane(center, directions[0], directions[1], planeOffset, planeSize, PLANE_XY);
+                drawScreenPlane(center, directions[0], directions[2], planeOffset, planeSize, PLANE_XZ);
+                drawScreenPlane(center, directions[1], directions[2], planeOffset, planeSize, PLANE_YZ);
+            }
+            else
+            {
+                drawScreenHandle(center, directions[0], axisLength, AXIS_X_COLOR);
+                drawScreenHandle(center, directions[1], axisLength, AXIS_Y_COLOR);
+                drawScreenHandle(center, directions[2], axisLength, AXIS_Z_COLOR);
+            }
+
+            drawScreenCenter(center);
+        }
+    }
+
+    private ScreenDirection getScreenDirection(
+            ScreenPoint center,
+            double[] world,
+            double[] axis,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            EditorCamera camera)
+    {
+        if (axis == null)
+        {
+            return null;
+        }
+
+        double sample = 0.35D;
+        ScreenPoint positive = project(
+                world[0] + axis[0] * sample,
+                world[1] + axis[1] * sample,
+                world[2] + axis[2] * sample,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        ScreenPoint negative = project(
+                world[0] - axis[0] * sample,
+                world[1] - axis[1] * sample,
+                world[2] - axis[2] * sample,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+
+        double dx;
+        double dy;
+
+        if (positive != null)
+        {
+            dx = positive.x - center.x;
+            dy = positive.y - center.y;
+        }
+        else if (negative != null)
+        {
+            dx = center.x - negative.x;
+            dy = center.y - negative.y;
+        }
+        else
+        {
+            return null;
+        }
+
+        double length = Math.sqrt(dx * dx + dy * dy);
+        if (length < 0.001D)
+        {
+            return null;
+        }
+
+        return new ScreenDirection(dx / length, dy / length);
+    }
+
+    private ScreenDirection fallbackScreenDirection(int axis)
+    {
+        if (axis == AXIS_X)
+        {
+            return new ScreenDirection(1.0D, 0.0D);
+        }
+        if (axis == AXIS_Y)
+        {
+            return new ScreenDirection(0.0D, -1.0D);
+        }
+        return new ScreenDirection(-0.72D, 0.72D);
+    }
+
+    private void drawScreenAxis(
+            ScreenPoint center,
+            ScreenDirection direction,
+            float length,
+            int color,
+            int axisId)
+    {
+        int finalColor = this.activePart == axisId
+                ? EditorThemeManager.get().getAccentBright()
+                : color;
+
+        float endX = center.x + (float) direction.x * length;
+        float endY = center.y + (float) direction.y * length;
+
+        drawLine(center.x, center.y, endX, endY, finalColor);
+        drawProjectedArrow(center, new ScreenPoint(endX, endY), 9.0F, finalColor);
+    }
+
+    private void drawScreenPlane(
+            ScreenPoint center,
+            ScreenDirection a,
+            ScreenDirection b,
+            float offset,
+            float size,
+            int planeId)
+    {
+        float x1 = center.x + (float) (a.x * offset + b.x * offset);
+        float y1 = center.y + (float) (a.y * offset + b.y * offset);
+        float x2 = center.x + (float) (a.x * (offset + size) + b.x * offset);
+        float y2 = center.y + (float) (a.y * (offset + size) + b.y * offset);
+        float x3 = center.x + (float) (a.x * (offset + size) + b.x * (offset + size));
+        float y3 = center.y + (float) (a.y * (offset + size) + b.y * (offset + size));
+        float x4 = center.x + (float) (a.x * offset + b.x * (offset + size));
+        float y4 = center.y + (float) (a.y * offset + b.y * (offset + size));
+
+        int color = this.activePart == planeId
+                ? EditorThemeManager.get().getAccentBright()
+                : 0xCCBFC5CA;
+
+        drawLine(x1, y1, x2, y2, color);
+        drawLine(x2, y2, x3, y3, color);
+        drawLine(x3, y3, x4, y4, color);
+        drawLine(x4, y4, x1, y1, color);
+    }
+
+    private void drawScreenHandle(
+            ScreenPoint center,
+            ScreenDirection direction,
+            float length,
+            int color)
+    {
+        float x = center.x + (float) direction.x * length;
+        float y = center.y + (float) direction.y * length;
+        float half = 5.0F;
+        drawRectOutline(x - half, y - half, half * 2.0F, half * 2.0F, color);
+    }
+
+    private void drawScreenRing(
+            ScreenPoint center,
+            ScreenDirection a,
+            ScreenDirection b,
+            float radius,
+            int color)
+    {
+        float previousX = center.x + (float) a.x * radius;
+        float previousY = center.y + (float) a.y * radius;
+
+        for (int i = 1; i <= 64; i++)
+        {
+            double angle = Math.PI * 2.0D * i / 64.0D;
+            float x = center.x + (float) (a.x * Math.cos(angle) + b.x * Math.sin(angle)) * radius;
+            float y = center.y + (float) (a.y * Math.cos(angle) + b.y * Math.sin(angle)) * radius;
+            drawLine(previousX, previousY, x, y, color);
+            previousX = x;
+            previousY = y;
+        }
+    }
+
+    private void drawScreenCenter(ScreenPoint center)
+    {
+        int bright = EditorThemeManager.get().getAccentBright();
+        drawCircle(center.x, center.y, 5.0F, bright, 20);
+        drawLine(center.x - 7.0F, center.y, center.x + 7.0F, center.y, bright);
+        drawLine(center.x, center.y - 7.0F, center.x, center.y + 7.0F, bright);
+    }
+
+    private static class ScreenDirection
+    {
+        private final double x;
+        private final double y;
+
+        private ScreenDirection(double x, double y)
+        {
+            double length = Math.sqrt(x * x + y * y);
+            if (length < 0.000001D)
+            {
+                this.x = 1.0D;
+                this.y = 0.0D;
+            }
+            else
+            {
+                this.x = x / length;
+                this.y = y / length;
+            }
+        }
     }
 
     private void drawProjectedGizmo(
