@@ -2614,27 +2614,31 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
-        if (this.mode != Mode.POSITION)
+        /*
+         * The transform gizmo is LOCAL to the rendered model/bone.
+         *
+         * Position mode must NOT use the global XYZ basis.  The selected
+         * bone can be rotated relative to the actor, and the handles must
+         * follow that local orientation on screen.  The native renderer is
+         * the best source for that orientation because it already contains
+         * the model hierarchy, bone rotations and actor orientation.
+         *
+         * Keep the exact same basis for drawing, hit testing and dragging;
+         * otherwise the handle can look correct while dragging along a
+         * different plane.
+         */
+        double[][] nativeAxes =
+                getNativeBoneWorldAxes(
+                        bone,
+                        recordFrame
+                );
+
+        if (nativeAxes != null)
         {
-            double[][] nativeAxes =
-                    getNativeBoneWorldAxes(
-                            bone,
-                            recordFrame
-                    );
-
-            if (nativeAxes != null)
-            {
-                return nativeAxes;
-            }
-
-            return getBoneWorldAxes(
-                    bone,
-                    selectedKeyframe,
-                    recordFrame
-            );
+            return nativeAxes;
         }
 
-        return getBoneTranslationWorldAxes(
+        return getBoneWorldAxes(
                 bone,
                 selectedKeyframe,
                 recordFrame
