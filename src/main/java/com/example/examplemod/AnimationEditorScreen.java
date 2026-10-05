@@ -2595,6 +2595,24 @@ public class AnimationEditorScreen extends GuiScreen
         prepareGizmoTarget();
         this.gizmoController.setPreviewActor(findRuntimeActor());
 
+        /*
+         * Original BBS-style gizmo pass:
+         * render actual 3D handles before the Preview framebuffer
+         * is closed/copied to the GUI.
+         */
+        this.gizmoController.draw3D(
+                mc,
+                left,
+                top,
+                previewWidth,
+                previewHeight,
+                getGizmoBone(),
+                getGizmoKeyframe(),
+                getCurrentRecordFrame(),
+                this.sceneViewport.getCamera(),
+                isGizmoEnabled()
+        );
+
         this.sceneViewport.finishPreviewRender();
         this.sceneViewport.renderPreviewToScreen();
 
@@ -2617,24 +2635,10 @@ public class AnimationEditorScreen extends GuiScreen
          * STAGE 5 - GIZMO
          * ---------------------------------------------------------
          *
-         * Drawn on top of the rendered Preview, but before the
-         * inspector on the right. The three tool buttons therefore
-         * belong visually to the Preview itself.
+         * The original BBS architecture renders the gizmo as real
+         * 3D geometry while the Preview framebuffer is still bound.
+         * Keep the gizmo inside that same camera/render pass.
          */
-        prepareGizmoTarget();
-
-        this.gizmoController.draw(
-                mc,
-                left,
-                top,
-                previewWidth,
-                previewHeight,
-                getGizmoBone(),
-                getGizmoKeyframe(),
-                getCurrentRecordFrame(),
-                this.sceneViewport.getCamera(),
-                isGizmoEnabled()
-        );
 
         int panelX =
                 width - rightPanelWidth;
