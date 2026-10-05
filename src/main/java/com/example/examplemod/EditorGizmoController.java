@@ -1430,17 +1430,11 @@ public class EditorGizmoController
                 );
 
         double[][] axes =
-                getNativeBoneWorldAxes(bone, recordFrame);
-
-        if (axes == null)
-        {
-            axes =
-                    getBoneWorldAxes(
-                            bone,
-                            keyframe,
-                            recordFrame
-                    );
-        }
+                getGizmoWorldAxes(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
 
         if (axes == null)
         {
