@@ -214,7 +214,7 @@ public class EditorGizmoController
         }
 
         if (bone == null || camera == null
-                || (keyframe == null && this.globalTransformTarget == null))
+                || keyframe == null)
         {
             return false;
         }
@@ -496,73 +496,7 @@ public class EditorGizmoController
          */
         drawButtons(viewportX, viewportY, viewportWidth, viewportHeight);
 
-        if (bone != null && camera != null)
-        {
-            double[] world =
-                    getNativeBoneWorldPosition(
-                            bone,
-                            keyframe,
-                            recordFrame
-                    );
-
-            if (world == null)
-            {
-                world =
-                        getBoneWorldPosition(
-                                bone,
-                                keyframe,
-                                recordFrame
-                        );
-            }
-
-            if (world != null)
-            {
-                ScreenPoint center =
-                        project(
-                                world[0],
-                                world[1],
-                                world[2],
-                                viewportX,
-                                viewportY,
-                                viewportWidth,
-                                viewportHeight,
-                                camera
-                        );
-
-                if (center != null)
-                {
-                    double[][] axes =
-                            getBoneWorldAxes(
-                                    bone,
-                                    keyframe,
-                                    recordFrame
-                            );
-
-                    if (axes == null)
-                    {
-                        axes =
-                                new double[][]
-                                {
-                                    {1.0D, 0.0D, 0.0D},
-                                    {0.0D, 1.0D, 0.0D},
-                                    {0.0D, 0.0D, 1.0D}
-                                };
-                    }
-
-                    drawScreenSpaceGizmo(
-                            center,
-                            world,
-                            axes,
-                            viewportX,
-                            viewportY,
-                            viewportWidth,
-                            viewportHeight,
-                            camera
-                    );
-                }
-            }
-        }
-
+        /* Transform handles are rendered only by draw3D(). */
         GL11.glPopMatrix();
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPopMatrix();
@@ -1486,11 +1420,17 @@ public class EditorGizmoController
                 );
 
         double[][] axes =
-                getBoneWorldAxes(
-                        bone,
-                        keyframe,
-                        recordFrame
-                );
+                getNativeBoneWorldAxes(bone);
+
+        if (axes == null)
+        {
+            axes =
+                    getBoneWorldAxes(
+                            bone,
+                            keyframe,
+                            recordFrame
+                    );
+        }
 
         if (axes == null)
         {
@@ -1742,6 +1682,188 @@ public class EditorGizmoController
             return new double[] {matrix[12], matrix[13], matrix[14]};
         }
         catch (Throwable ignored) { return null; }
+    }
+
+    /**
+     * Reads the real orientation of the rendered native bone.
+     */
+    private double[][] getNativeBoneWorldAxes(AnimationBone bone)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
+        double[][] result = getExactChameleonBoneWorldAxes(bone);
+
+        if (result != null)
+        {
+            return result;
+        }
+
+        return getExactBlockbusterBoneWorldAxes(bone);
+    }
+
+    private double[][] axesFromMatrix(float[] matrix)
+    {
+        if (matrix == null || matrix.length < 16)
+        {
+            return null;
+        }
+
+        double[] x = {matrix[0], matrix[1], matrix[2]};
+        double[] y = {matrix[4], matrix[5], matrix[6]};
+        double[] z = {matrix[8], matrix[9], matrix[10]};
+
+        normalize(x);
+        normalize(y);
+        normalize(z);
+
+        return new double[][] {x, y, z};
+    }
+
+    private double[][] getExactBlockbusterBoneWorldAxes(AnimationBone bone)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            Object morph = this.previewActor.getMorph();
+
+            if (!(morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
+            {
+                return null;
+            }
+
+            mchorse.blockbuster_pack.morphs.CustomMorph customMorph =
+                    (mchorse.blockbuster_pack.morphs.CustomMorph) morph;
+
+            mchorse.blockbuster.client.model.ModelCustom model =
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(customMorph.getKey());
+
+            if (model == null)
+            {
+                return null;
+            }
+
+            mchorse.blockbuster.client.model.ModelCustomRenderer renderer =
+                    model.get(bone.getName());
+
+            if (renderer == null)
+            {
+                return null;
+            }
+
+            int oldMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            GL11.glLoadIdentity();
+
+            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
+            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+
+            mchorse.blockbuster.api.Model sourceModel = model.model;
+            float morphScale = customMorph.scale;
+
+            GL11.glScalef(
+                    sourceModel.scale[0] * morphScale,
+                    sourceModel.scale[1] * morphScale,
+                    sourceModel.scale[2] * morphScale
+            );
+
+            renderer.postRender(0.0625F);
+
+            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+            float[] matrix = new float[16];
+            buffer.get(matrix);
+
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(oldMatrixMode);
+
+            return axesFromMatrix(matrix);
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private double[][] getExactChameleonBoneWorldAxes(AnimationBone bone)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
+        if (!this.previewActor.getMorph().getClass().getName().endsWith(".ChameleonMorph"))
+        {
+            return null;
+        }
+
+        try
+        {
+            Object morph = this.previewActor.getMorph();
+            Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
+
+            if (chameleonModel == null)
+            {
+                return null;
+            }
+
+            Object model = chameleonModel.getClass().getField("model").get(chameleonModel);
+
+            Class<?> modelClass = Class.forName("mchorse.chameleon.lib.data.model.Model");
+            Class<?> rendererClass = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
+
+            java.lang.reflect.Method postRender =
+                    rendererClass.getMethod("postRender", modelClass, String.class);
+
+            GL11.glPushMatrix();
+            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
+
+            float scale = 1.0F;
+
+            try
+            {
+                Object value = morph.getClass().getMethod("getScale", float.class).invoke(morph, 0.0F);
+
+                if (value instanceof Number)
+                {
+                    scale = ((Number) value).floatValue();
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+
+            GL11.glScalef(scale, scale, scale);
+            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+
+            Object result = postRender.invoke(null, model, bone.getName());
+
+            if (result instanceof Boolean && !((Boolean) result).booleanValue())
+            {
+                GL11.glPopMatrix();
+                return null;
+            }
+
+            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+            float[] matrix = new float[16];
+            buffer.get(matrix);
+
+            GL11.glPopMatrix();
+
+            return axesFromMatrix(matrix);
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
     }
 
     private double[] getNativeBoneWorldPosition(AnimationBone bone, AnimationKeyframe keyframe, BlockbusterRecordFrame recordFrame)
