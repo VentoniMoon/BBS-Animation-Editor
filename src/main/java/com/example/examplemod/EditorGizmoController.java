@@ -50,6 +50,7 @@ public class EditorGizmoController
     private static final int AXIS_Y_COLOR = 0xFF65D37A;
     private static final int AXIS_Z_COLOR = 0xFF5CA8E8;
     private static final int PLANE_COLOR = 0xFFBFC5CA;
+    private static final int ACTIVE_RING_COLOR = 0xFFFFD84A;
 
     private Mode mode = Mode.POSITION;
 
@@ -2041,9 +2042,12 @@ public class EditorGizmoController
     private void drawRotationGizmo3D(float size, double[][] axes)
     {
         if (axes == null) return;
-        drawRingVector3D(axes[1], axes[2], size * 1.05F, AXIS_X_COLOR);
-        drawRingVector3D(axes[2], axes[0], size * 1.05F, AXIS_Y_COLOR);
-        drawRingVector3D(axes[0], axes[1], size * 1.05F, AXIS_Z_COLOR);
+        drawRingVector3D(axes[1], axes[2], size * 1.05F,
+                this.activePart == AXIS_X ? ACTIVE_RING_COLOR : AXIS_X_COLOR);
+        drawRingVector3D(axes[2], axes[0], size * 1.05F,
+                this.activePart == AXIS_Y ? ACTIVE_RING_COLOR : AXIS_Y_COLOR);
+        drawRingVector3D(axes[0], axes[1], size * 1.05F,
+                this.activePart == AXIS_Z ? ACTIVE_RING_COLOR : AXIS_Z_COLOR);
     }
 
     private void drawScaleGizmo3D(float size, double[][] axes)
@@ -2541,9 +2545,20 @@ public class EditorGizmoController
             return 1.0D;
         }
 
-        if (axisId == AXIS_Y || axisId == AXIS_Z)
+        if (axisId == AXIS_Y)
         {
             return -1.0D;
+        }
+
+        /*
+         * Z is already represented in the editor's local animation
+         * coordinate system with the same sign as the visual gizmo.
+         * The previous extra inversion made the bone move backwards
+         * while the gizmo moved forwards.
+         */
+        if (axisId == AXIS_Z)
+        {
+            return 1.0D;
         }
 
         return 1.0D;
