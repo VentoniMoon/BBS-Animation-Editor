@@ -2646,91 +2646,25 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
-        if (bone == null)
-        {
-            return null;
-        }
-
-        int frame =
-                selectedKeyframe != null
-                        ? selectedKeyframe.getFrame()
-                        : this.gizmoFrame;
-
         /*
-         * Chameleon and the editor's AnimationBone hierarchy both apply
-         * a local position through the parent's basis. The current bone's
-         * own rotation affects its rendered orientation, but it does not
-         * rotate its own translation values.
+         * Position mode is a WORLD gizmo.
+         *
+         * The keyframe values are still written to local X/Y/Z, but the
+         * visible handles must stay aligned with the actor/world axes.
+         * Using the parent or the selected bone rotation here makes the
+         * red X handle become a mixture of X/Z for arm/head bones. That is
+         * exactly the symptom where dragging X changes the bone correctly
+         * while the gizmo appears to travel forward.
+         *
+         * The actor yaw is already part of the Preview camera/model
+         * transform. Therefore the basis below is deliberately the plain
+         * world basis and is not rotated by the selected bone.
          */
-        float rx = 0.0F;
-        float ry = 0.0F;
-        float rz = 0.0F;
-
-        AnimationBone parent = bone.getParent();
-
-        if (parent != null)
-        {
-            AnimationTransform parentWorld =
-                    this.chameleonCoordinateSpace
-                            ? getChameleonWorldPivot(parent, frame)
-                            : parent.getWorldTransformAt(frame);
-
-            if (parentWorld != null)
-            {
-                rx = parentWorld.getRotationX();
-                ry = parentWorld.getRotationY();
-                rz = parentWorld.getRotationZ();
-            }
-        }
-
-        /*
-         * Body Part model translations are additionally expressed through
-         * the attachment bone and the Body Part global transform.
-         */
-        if (!this.chameleonCoordinateSpace &&
-                this.bodyPartAttachmentBone != null &&
-                (this.bodyPartTarget != null ||
-                 this.globalTransformTarget != null))
-        {
-            AnimationTransform attachment =
-                    this.bodyPartAttachmentBone.getWorldTransformAt(frame);
-
-            if (attachment != null)
-            {
-                rx += attachment.getRotationX();
-                ry += attachment.getRotationY();
-                rz += attachment.getRotationZ();
-            }
-
-            AnimationTransform global =
-                    this.globalTransformTarget != null
-                            ? this.globalTransformTarget
-                            : this.bodyPartTarget != null
-                                    ? this.bodyPartTarget.getGlobalTransform()
-                                    : null;
-
-            if (global != null)
-            {
-                rx += global.getRotationX();
-                ry += global.getRotationY();
-                rz += global.getRotationZ();
-            }
-        }
-
         return new double[][]
         {
-            transformBoneDirection(
-                    rotateVector(1, 0, 0, rx, ry, rz),
-                    recordFrame
-            ),
-            transformBoneDirection(
-                    rotateVector(0, 1, 0, rx, ry, rz),
-                    recordFrame
-            ),
-            transformBoneDirection(
-                    rotateVector(0, 0, 1, rx, ry, rz),
-                    recordFrame
-            )
+            {1.0D, 0.0D, 0.0D},
+            {0.0D, 1.0D, 0.0D},
+            {0.0D, 0.0D, 1.0D}
         };
     }
 
