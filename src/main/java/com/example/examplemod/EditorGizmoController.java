@@ -1656,7 +1656,7 @@ public class EditorGizmoController
         }
     }
 
-    private double[] getExactChameleonBoneWorldPosition(AnimationBone bone)
+    private double[] getExactChameleonBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
         if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
         if (!this.previewActor.getMorph().getClass().getName().endsWith(".ChameleonMorph")) return null;
@@ -1670,12 +1670,11 @@ public class EditorGizmoController
             Class<?> rendererClass = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
             java.lang.reflect.Method postRender = rendererClass.getMethod("postRender", modelClass, String.class);
             GL11.glPushMatrix();
-            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
             float scale = 1.0F;
             Object value = morph.getClass().getMethod("getScale", float.class).invoke(morph, 0.0F);
             if (value instanceof Number) scale = ((Number) value).floatValue();
             GL11.glScalef(scale, scale, scale);
-            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+            /* Keep the bone matrix local; actor placement is applied below. */
             Object result = postRender.invoke(null, model, bone.getName());
             if (result instanceof Boolean && !((Boolean) result).booleanValue())
             {
@@ -1687,7 +1686,23 @@ public class EditorGizmoController
             float[] matrix = new float[16];
             buffer.get(matrix);
             GL11.glPopMatrix();
-            return new double[] {matrix[12], matrix[13], matrix[14]};
+            double localX = matrix[12];
+            double localY = matrix[13];
+            double localZ = matrix[14];
+
+            double actorX = recordFrame != null ? recordFrame.getX() : this.previewActor.posX;
+            double actorY = recordFrame != null ? recordFrame.getY() : this.previewActor.posY;
+            double actorZ = recordFrame != null ? recordFrame.getZ() : this.previewActor.posZ;
+            double yaw = Math.toRadians(180.0D - (recordFrame != null ? recordFrame.getYaw() : this.previewActor.renderYawOffset));
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
+
+            return new double[]
+            {
+                actorX + cos * localX + sin * localZ,
+                actorY + localY,
+                actorZ - sin * localX + cos * localZ
+            };
         }
         catch (Throwable ignored) { return null; }
     }
@@ -1702,7 +1717,7 @@ public class EditorGizmoController
             return null;
         }
 
-        double[][] result = getExactChameleonBoneWorldAxes(bone);
+        double[][] result = getExactChameleonBoneWorldAxes(bone, recordFrame);
 
         if (result != null)
         {
@@ -1800,7 +1815,7 @@ public class EditorGizmoController
         }
     }
 
-    private double[][] getExactChameleonBoneWorldAxes(AnimationBone bone)
+    private double[][] getExactChameleonBoneWorldAxes(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
         if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
         {
@@ -1831,7 +1846,6 @@ public class EditorGizmoController
                     rendererClass.getMethod("postRender", modelClass, String.class);
 
             GL11.glPushMatrix();
-            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
 
             float scale = 1.0F;
 
@@ -1849,7 +1863,7 @@ public class EditorGizmoController
             }
 
             GL11.glScalef(scale, scale, scale);
-            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+            /* Actor yaw is applied to the returned local basis below. */
 
             Object result = postRender.invoke(null, model, bone.getName());
 
@@ -1866,7 +1880,28 @@ public class EditorGizmoController
 
             GL11.glPopMatrix();
 
-            return axesFromMatrix(matrix);
+            double[][] localAxes = axesFromMatrix(matrix);
+            if (localAxes == null)
+            {
+                return null;
+            }
+
+            double yaw = Math.toRadians(180.0D - (recordFrame != null ? recordFrame.getYaw() : this.previewActor.renderYawOffset));
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
+
+            double[][] worldAxes = new double[3][3];
+            for (int i = 0; i < 3; i++)
+            {
+                double x = localAxes[i][0];
+                double z = localAxes[i][2];
+                worldAxes[i][0] = cos * x + sin * z;
+                worldAxes[i][1] = localAxes[i][1];
+                worldAxes[i][2] = -sin * x + cos * z;
+                normalize(worldAxes[i]);
+            }
+
+            return worldAxes;
         }
         catch (Throwable ignored)
         {
@@ -1876,9 +1911,9 @@ public class EditorGizmoController
 
     private double[] getNativeBoneWorldPosition(AnimationBone bone, AnimationKeyframe keyframe, BlockbusterRecordFrame recordFrame)
     {
-        double[] result = getExactChameleonBoneWorldPosition(bone);
+        double[] result = getExactChameleonBoneWorldPosition(bone, recordFrame);
         if (result != null) return result;
-        result = getExactEmoticonsBoneWorldPosition(bone);
+        result = getExactEmoticonsBoneWorldPosition(bone, recordFrame);
         if (result != null) return result;
         result = getExactBlockbusterBoneWorldPosition(bone);
         if (result != null) return result;
@@ -1936,7 +1971,7 @@ public class EditorGizmoController
         catch (Throwable ignored) { return null; }
     }
 
-    private double[] getExactEmoticonsBoneWorldPosition(AnimationBone bone)
+    private double[] getExactEmoticonsBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
         if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
         try
@@ -1956,7 +1991,20 @@ public class EditorGizmoController
             Object result = method.invoke(morph.animator, this.previewActor, sourceBone, 0.0F, 0.0F, 0.0F, 0.0F);
             if (!(result instanceof javax.vecmath.Vector4f)) return null;
             javax.vecmath.Vector4f position = (javax.vecmath.Vector4f) result;
-            return new double[] {position.x, position.y, position.z};
+            double actorX = recordFrame != null ? recordFrame.getX() : this.previewActor.posX;
+            double actorY = recordFrame != null ? recordFrame.getY() : this.previewActor.posY;
+            double actorZ = recordFrame != null ? recordFrame.getZ() : this.previewActor.posZ;
+
+            double yaw = Math.toRadians(180.0D - (recordFrame != null ? recordFrame.getYaw() : this.previewActor.renderYawOffset));
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
+
+            return new double[]
+            {
+                actorX + cos * position.x + sin * position.z,
+                actorY + position.y,
+                actorZ - sin * position.x + cos * position.z
+            };
         }
         catch (Throwable ignored) { return null; }
     }
