@@ -1689,7 +1689,18 @@ public class EditorGizmoController
             double actorX = this.previewActor.posX;
             double actorY = this.previewActor.posY;
             double actorZ = this.previewActor.posZ;
-            double yaw = Math.toRadians(180.0D - this.previewActor.renderYawOffset);
+            /*
+             * The gizmo anchor follows the animation/record coordinate
+             * space.  renderYawOffset is a renderer-facing value and can
+             * differ from the record yaw by the X/Z orientation convention.
+             * Using it here rotates the visual anchor while the actual bone
+             * still moves correctly, which makes X and Z appear swapped.
+             */
+            double visualYaw =
+                    recordFrame != null
+                            ? recordFrame.getYaw()
+                            : this.previewActor.renderYawOffset;
+            double yaw = Math.toRadians(180.0D - visualYaw);
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
@@ -1882,7 +1893,16 @@ public class EditorGizmoController
                 return null;
             }
 
-            double yaw = Math.toRadians(180.0D - this.previewActor.renderYawOffset);
+            /*
+             * Keep the visual anchor in the same yaw space as the
+             * animation record.  This is a display-only correction:
+             * keyframe translation and drag math are untouched.
+             */
+            double visualYaw =
+                    recordFrame != null
+                            ? recordFrame.getYaw()
+                            : this.previewActor.renderYawOffset;
+            double yaw = Math.toRadians(180.0D - visualYaw);
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
@@ -2022,7 +2042,16 @@ public class EditorGizmoController
             double actorY = this.previewActor.posY;
             double actorZ = this.previewActor.posZ;
 
-            double yaw = Math.toRadians(180.0D - this.previewActor.renderYawOffset);
+            /*
+             * Use record yaw for the visual anchor whenever available.
+             * This keeps the gizmo's X/Z movement in the same plane as
+             * the correctly reconstructed animation bone position.
+             */
+            double visualYaw =
+                    recordFrame != null
+                            ? recordFrame.getYaw()
+                            : this.previewActor.renderYawOffset;
+            double yaw = Math.toRadians(180.0D - visualYaw);
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
@@ -2573,7 +2602,12 @@ public class EditorGizmoController
 
         if (axisId == AXIS_Y)
         {
-            return -1.0D;
+            /*
+             * Y is already in the same visual direction as the editor
+             * transform.  The previous -1 inverted the whole vertical
+             * movement: dragging upward moved the bone downward.
+             */
+            return 1.0D;
         }
 
         /*
