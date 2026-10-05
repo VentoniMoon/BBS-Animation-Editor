@@ -261,7 +261,7 @@ public class EditorGizmoController
                         mouseX, mouseY,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center, gizmoWorld, gizmoSize, camera,
-                        getNativeBoneWorldAxes(bone) != null
+                        getNativeBoneWorldAxes(bone, recordFrame) != null
                         ? getNativeBoneWorldAxes(bone, recordFrame)
                         : getBoneWorldAxes(bone, keyframe, recordFrame)
                 );
@@ -276,7 +276,7 @@ public class EditorGizmoController
         this.activeKeyframe = keyframe;
 
         double[][] axes =
-                getNativeBoneWorldAxes(bone);
+                getNativeBoneWorldAxes(bone, recordFrame);
 
         if (axes == null)
         {
