@@ -7,6 +7,8 @@ import java.util.Collections;
 import java.util.List;
 
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.util.glu.GLU;
 import org.lwjgl.BufferUtils;
 import java.nio.IntBuffer;
@@ -676,6 +678,28 @@ public class EditorGizmoController
                 -camera.getCameraX(),
                 -camera.getCameraY(),
                 -camera.getCameraZ()
+        );
+
+        /*
+         * The Preview may have just been rendered through OptiFine.
+         * That render path can leave a GLSL program bound. The gizmo
+         * below uses the legacy fixed-function GL11 pipeline, so an
+         * active shader program can make all glBegin/glVertex geometry
+         * disappear even though the viewport and projection are valid.
+         *
+         * Explicitly return to the fixed-function pipeline here.
+         */
+        GL20.glUseProgram(0);
+
+        GL13.glActiveTexture(
+                GL13.GL_TEXTURE0
+        );
+
+        GL11.glColor4f(
+                1.0F,
+                1.0F,
+                1.0F,
+                1.0F
         );
 
         GL11.glDisable(GL11.GL_TEXTURE_2D);
