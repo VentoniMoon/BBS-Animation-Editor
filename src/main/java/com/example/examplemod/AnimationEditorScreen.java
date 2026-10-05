@@ -2617,10 +2617,9 @@ public class AnimationEditorScreen extends GuiScreen
         this.sceneViewport.renderPreviewToScreen();
 
         /*
-         * Stage 5:
-         * Draw the gizmo only after the Preview texture has been copied
-         * to the normal GUI framebuffer. This makes the visible gizmo
-         * independent from the Preview FBO and from OptiFine's GL state.
+         * The GUI pass only draws the three gizmo mode buttons.
+         * Transform handles are rendered exclusively by draw3D(), before
+         * the Preview framebuffer is copied to the GUI.
          */
         this.gizmoController.draw(
                 mc,
@@ -2628,9 +2627,9 @@ public class AnimationEditorScreen extends GuiScreen
                 top,
                 previewWidth,
                 previewHeight,
-                getGizmoBone(),
-                getGizmoKeyframe(),
-                getCurrentRecordFrame(),
+                null,
+                null,
+                null,
                 this.sceneViewport.getCamera(),
                 isGizmoEnabled()
         );
