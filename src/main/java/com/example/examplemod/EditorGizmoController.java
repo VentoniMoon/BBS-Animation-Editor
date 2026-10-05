@@ -1428,7 +1428,7 @@ public class EditorGizmoController
                 );
 
         double[][] axes =
-                getNativeBoneWorldAxes(bone);
+                getNativeBoneWorldAxes(bone, recordFrame);
 
         if (axes == null)
         {
