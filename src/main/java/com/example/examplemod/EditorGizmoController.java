@@ -238,7 +238,7 @@ public class EditorGizmoController
         }
 
         double[] gizmoWorld =
-                getGizmoWorldPosition(
+                getNativeBoneWorldPosition(
                         bone,
                         keyframe,
                         recordFrame
@@ -1224,7 +1224,7 @@ public class EditorGizmoController
         }
 
         double[] world =
-                getGizmoWorldPosition(
+                getNativeBoneWorldPosition(
                         bone,
                         keyframe,
                         recordFrame
@@ -3152,7 +3152,7 @@ public class EditorGizmoController
             EditorCamera camera)
     {
         double[] world =
-                getGizmoWorldPosition(
+                getNativeBoneWorldPosition(
                         bone,
                         keyframe,
                         recordFrame
