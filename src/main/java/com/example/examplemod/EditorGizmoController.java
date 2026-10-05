@@ -1864,6 +1864,13 @@ public class EditorGizmoController
             return result;
         }
 
+        result = getExactEmoticonsBoneTranslationWorldAxes(bone, recordFrame);
+
+        if (result != null)
+        {
+            return result;
+        }
+
         return getExactBlockbusterBoneWorldAxes(bone);
     }
 
@@ -2279,50 +2286,180 @@ public class EditorGizmoController
 
     private double[] getExactEmoticonsBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
-        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
         try
         {
-            if (!(this.previewActor.getMorph() instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)) return null;
+            if (!(this.previewActor.getMorph() instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph))
+            {
+                return null;
+            }
+
             mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph morph =
                     (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph) this.previewActor.getMorph();
-            if (morph.animator == null) return null;
+
+            if (morph.animator == null)
+            {
+                return null;
+            }
+
             mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone sourceBone =
                     EmoticonsModelAccess.findBone(morph, bone.getName());
-            if (sourceBone == null) return null;
-            java.lang.reflect.Method method = morph.animator.getClass().getMethod(
-                    "calcPosition",
-                    net.minecraft.entity.EntityLivingBase.class,
-                    mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone.class,
-                    float.class, float.class, float.class, float.class);
-            Object result = method.invoke(morph.animator, this.previewActor, sourceBone, 0.0F, 0.0F, 0.0F, 0.0F);
-            if (!(result instanceof javax.vecmath.Vector4f)) return null;
-            javax.vecmath.Vector4f position = (javax.vecmath.Vector4f) result;
-            double actorX = this.previewActor.posX;
-            double actorY = this.previewActor.posY;
-            double actorZ = this.previewActor.posZ;
+
+            if (sourceBone == null)
+            {
+                return null;
+            }
 
             /*
-             * Use record yaw for the visual anchor whenever available.
-             * This keeps the gizmo's X/Z movement in the same plane as
-             * the correctly reconstructed animation bone position.
+             * This is intentionally the same transformation used by
+             * Emoticons AnimatorController.calcPosition().
+             *
+             * calcPosition() does:
+             *
+             *   bone.mat.transform(point)
+             *   rotateY(360 - renderYawOffset)
+             *   scale(0.9375)
+             *   add entity position
+             *
+             * The previous Gizmo path used (180 - recordYaw), which
+             * introduced the observed X/Z displacement in the opposite
+             * direction from the rendered Emoticons bone.
              */
-            double visualYaw =
-                    recordFrame != null
-                            ? recordFrame.getYaw()
-                            : this.previewActor.renderYawOffset;
-            double yaw = Math.toRadians(180.0D - visualYaw);
+            javax.vecmath.Vector4f position =
+                    new javax.vecmath.Vector4f(0.0F, 0.0F, 0.0F, 1.0F);
+
+            sourceBone.mat.transform(position);
+
+            double yaw =
+                    Math.toRadians(
+                            -this.previewActor.renderYawOffset
+                    );
+
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
+            double localX = position.x * 0.9375D;
+            double localY = position.y * 0.9375D;
+            double localZ = position.z * 0.9375D;
+
+            double worldX =
+                    cos * localX + sin * localZ;
+            double worldZ =
+                    -sin * localX + cos * localZ;
+
             return new double[]
             {
-                actorX + cos * position.x + sin * position.z,
-                actorY + position.y,
-                actorZ - sin * position.x + cos * position.z
+                this.previewActor.posX + worldX,
+                this.previewActor.posY + localY,
+                this.previewActor.posZ + worldZ
             };
         }
-        catch (Throwable ignored) { return null; }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
     }
+
+    /**
+     * Exact Emoticons translation basis.
+     *
+     * BOBJBone.applyTransformations() applies the editable x/y/z
+     * translation before the selected bone's own rotation. Therefore
+     * the translation axes are parentBone.mat * relBoneMat, not the
+     * final bone.mat.
+     *
+     * This is the same local model hierarchy used when
+     * EditorAnimatorMorphController writes snapshot X/Y/Z directly to
+     * BOBJBone.x/y/z.
+     */
+    private double[][] getExactEmoticonsBoneTranslationWorldAxes(
+            AnimationBone bone,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!(this.previewActor.getMorph() instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph))
+            {
+                return null;
+            }
+
+            mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph morph =
+                    (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph) this.previewActor.getMorph();
+
+            mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone sourceBone =
+                    EmoticonsModelAccess.findBone(morph, bone.getName());
+
+            if (sourceBone == null)
+            {
+                return null;
+            }
+
+            javax.vecmath.Matrix4f basis =
+                    new javax.vecmath.Matrix4f(sourceBone.relBoneMat);
+
+            if (sourceBone.parentBone != null)
+            {
+                basis.set(sourceBone.parentBone.mat);
+                basis.mul(sourceBone.relBoneMat);
+            }
+
+            double yaw =
+                    Math.toRadians(
+                            -this.previewActor.renderYawOffset
+                    );
+
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
+
+            double[] x = transformEmoticonsDirection(
+                    basis.m00, basis.m10, basis.m20,
+                    cos, sin
+            );
+            double[] y = transformEmoticonsDirection(
+                    basis.m01, basis.m11, basis.m21,
+                    cos, sin
+            );
+            double[] z = transformEmoticonsDirection(
+                    basis.m02, basis.m12, basis.m22,
+                    cos, sin
+            );
+
+            normalize(x);
+            normalize(y);
+            normalize(z);
+
+            return new double[][] {x, y, z};
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private double[] transformEmoticonsDirection(
+            double x,
+            double y,
+            double z,
+            double cos,
+            double sin)
+    {
+        return new double[]
+        {
+            cos * x + sin * z,
+            y,
+            -sin * x + cos * z
+        };
+    }
+
     private float getWorldGizmoSize(
             EditorCamera camera,
             double x,
@@ -2958,6 +3095,17 @@ public class EditorGizmoController
         if (this.mode == Mode.POSITION)
         {
             double[][] translationAxes =
+                    getExactEmoticonsBoneTranslationWorldAxes(
+                            bone,
+                            recordFrame
+                    );
+
+            if (translationAxes != null)
+            {
+                return translationAxes;
+            }
+
+            translationAxes =
                     getExactBlockbusterBoneTranslationWorldAxes(
                             bone,
                             recordFrame
