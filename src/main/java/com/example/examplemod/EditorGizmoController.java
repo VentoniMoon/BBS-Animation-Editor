@@ -527,7 +527,6 @@ public class EditorGizmoController
                 || !enabled
                 || bone == null
                 || (keyframe == null && this.globalTransformTarget == null)
-                || recordFrame == null
                 || camera == null
                 || viewportWidth <= 0
                 || viewportHeight <= 0)
