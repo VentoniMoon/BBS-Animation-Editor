@@ -1717,6 +1717,139 @@ public class EditorGizmoController
     /**
      * Reads the real orientation of the rendered native bone.
      */
+    private double[][] getExactBlockbusterBoneTranslationWorldAxes(
+            AnimationBone bone,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (bone == null ||
+                this.previewActor == null ||
+                this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            Object morph =
+                    this.previewActor.getMorph();
+
+            if (!(morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
+            {
+                return null;
+            }
+
+            mchorse.blockbuster_pack.morphs.CustomMorph customMorph =
+                    (mchorse.blockbuster_pack.morphs.CustomMorph) morph;
+
+            mchorse.blockbuster.client.model.ModelCustom model =
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
+                            customMorph.getKey()
+                    );
+
+            if (model == null)
+            {
+                return null;
+            }
+
+            mchorse.blockbuster.client.model.ModelCustomRenderer renderer =
+                    model.get(bone.getName());
+
+            if (renderer == null)
+            {
+                return null;
+            }
+
+            /*
+             * Translation happens before the selected renderer's own
+             * rotation.  For a child limb the parent's cached world
+             * matrix is therefore the exact basis in which
+             * rotationPointX/Y/Z are translated.
+             */
+            if (renderer.parent != null)
+            {
+                javax.vecmath.Matrix4d parentWorld =
+                        renderer.parent.getWorldTransformation();
+
+                if (parentWorld != null)
+                {
+                    double[] x =
+                            new double[]
+                            {
+                                parentWorld.m00,
+                                parentWorld.m10,
+                                parentWorld.m20
+                            };
+
+                    double[] y =
+                            new double[]
+                            {
+                                -parentWorld.m01,
+                                -parentWorld.m11,
+                                -parentWorld.m21
+                            };
+
+                    double[] z =
+                            new double[]
+                            {
+                                -parentWorld.m02,
+                                -parentWorld.m12,
+                                -parentWorld.m22
+                            };
+
+                    normalize(x);
+                    normalize(y);
+                    normalize(z);
+
+                    return new double[][] {x, y, z};
+                }
+            }
+
+            /*
+             * Root limbs have no parent renderer.  Recreate only the
+             * actor/model basis used by Blockbuster's root transform.
+             * Body yaw comes from the same record value that is written
+             * into EntityActor.renderYawOffset by the preview renderer.
+             */
+            double visualYaw =
+                    recordFrame != null
+                            ? (
+                                    recordFrame.hasBodyYaw()
+                                            ? recordFrame.getBodyYaw()
+                                            : recordFrame.getYaw()
+                              )
+                            : this.previewActor.renderYawOffset;
+
+            double yaw =
+                    Math.toRadians(
+                            180.0D - visualYaw
+                    );
+
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
+
+            double[] x =
+                    new double[] {cos, 0.0D, -sin};
+
+            double[] y =
+                    new double[] {0.0D, -1.0D, 0.0D};
+
+            double[] z =
+                    new double[] {-sin, 0.0D, -cos};
+
+            return new double[][] {x, y, z};
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private boolean isFinite(double value)
+    {
+        return !Double.isNaN(value) &&
+                !Double.isInfinite(value);
+    }
+
     private double[][] getNativeBoneWorldAxes(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
         if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
@@ -1787,13 +1920,56 @@ public class EditorGizmoController
                 return null;
             }
 
-            int oldMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+            /*
+             * Use the same cached world matrix as the anchor.  This keeps
+             * the visible local rotation basis, hit testing and the actual
+             * rendered bone in exactly the same coordinate space.
+             */
+            javax.vecmath.Matrix4d world =
+                    renderer.getWorldTransformation();
+
+            if (world != null)
+            {
+                float[] matrix =
+                        new float[]
+                        {
+                            (float) world.m00, (float) world.m10, (float) world.m20, 0.0F,
+                            (float) world.m01, (float) world.m11, (float) world.m21, 0.0F,
+                            (float) world.m02, (float) world.m12, (float) world.m22, 0.0F,
+                            (float) world.m03, (float) world.m13, (float) world.m23, 1.0F
+                        };
+
+                double[][] axes = axesFromMatrix(matrix);
+
+                if (axes != null)
+                {
+                    return axes;
+                }
+            }
+
+            /*
+             * Fallback to the previous native query when no cached matrix
+             * exists yet.
+             */
+            int oldMatrixMode =
+                    GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glPushMatrix();
             GL11.glLoadIdentity();
 
-            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
-            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+            GL11.glTranslated(
+                    this.previewActor.posX,
+                    this.previewActor.posY,
+                    this.previewActor.posZ
+            );
+
+            GL11.glRotatef(
+                    -this.previewActor.renderYawOffset + 180.0F,
+                    0.0F,
+                    1.0F,
+                    0.0F
+            );
 
             mchorse.blockbuster.api.Model sourceModel = model.model;
             float morphScale = customMorph.scale;
@@ -1806,8 +1982,14 @@ public class EditorGizmoController
 
             renderer.postRender(0.0625F);
 
-            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
-            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+            FloatBuffer buffer =
+                    BufferUtils.createFloatBuffer(16);
+
+            GL11.glGetFloat(
+                    GL11.GL_MODELVIEW_MATRIX,
+                    buffer
+            );
+
             float[] matrix = new float[16];
             buffer.get(matrix);
 
@@ -1968,31 +2150,74 @@ public class EditorGizmoController
     }
     private double[] getExactBlockbusterBoneWorldPosition(AnimationBone bone)
     {
-        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
         try
         {
             Object morph = this.previewActor.getMorph();
-            if (!(morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph)) return null;
+
+            if (!(morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
+            {
+                return null;
+            }
+
             mchorse.blockbuster_pack.morphs.CustomMorph customMorph =
                     (mchorse.blockbuster_pack.morphs.CustomMorph) morph;
+
             mchorse.blockbuster.client.model.ModelCustom model =
                     mchorse.blockbuster.client.model.ModelCustom.MODELS.get(customMorph.getKey());
-            if (model == null) return null;
-            mchorse.blockbuster.client.model.ModelCustomRenderer renderer = model.get(bone.getName());
-            if (renderer == null) return null;
+
+            if (model == null)
+            {
+                return null;
+            }
+
+            mchorse.blockbuster.client.model.ModelCustomRenderer renderer =
+                    model.get(bone.getName());
+
+            if (renderer == null)
+            {
+                return null;
+            }
+
             /*
-             * postRender() is a real model-space transform operation.
-             * It must start from an identity modelview matrix here.
+             * Blockbuster already caches the exact world transform of every
+             * ModelCustomRenderer while it renders the limb.  That matrix
+             * contains the complete parent hierarchy, the current
+             * CustomMorph pose, the current keyframe translation and the
+             * actor/body orientation.
              *
-             * The gizmo anchor is queried after the Preview world has
-             * rendered, so inheriting the Preview camera matrix would
-             * bake camera rotation into matrix[12..14]. draw3D() then
-             * applies the camera again and the gizmo can end up completely
-             * outside the viewport.
-             *
-             * The original BBS renderer obtains bone matrices from its
-             * model renderer rather than from whatever GL matrix happens
-             * to be active at the time of the query.
+             * This is the authoritative source for the gizmo anchor.
+             * Rebuilding the transform with postRender() here was subtly
+             * wrong: postRender() reconstructs the model hierarchy outside
+             * the actual render pass and therefore loses the exact
+             * coordinate/sign conventions used by the renderer for
+             * different limbs.
+             */
+            javax.vecmath.Matrix4d world =
+                    renderer.getWorldTransformation();
+
+            if (world != null &&
+                    isFinite(world.m03) &&
+                    isFinite(world.m13) &&
+                    isFinite(world.m23))
+            {
+                return new double[]
+                {
+                    world.m03,
+                    world.m13,
+                    world.m23
+                };
+            }
+
+            /*
+             * Safe fallback for a renderer which has not rendered yet.
+             * Keep the old postRender path only as a fallback; the normal
+             * path above must always use the transform captured by the
+             * actual Blockbuster renderer.
              */
             int oldMatrixMode =
                     GL11.glGetInteger(GL11.GL_MATRIX_MODE);
@@ -2001,21 +2226,55 @@ public class EditorGizmoController
             GL11.glPushMatrix();
             GL11.glLoadIdentity();
 
-            GL11.glTranslated(this.previewActor.posX, this.previewActor.posY, this.previewActor.posZ);
-            GL11.glRotatef(-this.previewActor.renderYawOffset + 180.0F, 0.0F, 1.0F, 0.0F);
+            GL11.glTranslated(
+                    this.previewActor.posX,
+                    this.previewActor.posY,
+                    this.previewActor.posZ
+            );
+
+            GL11.glRotatef(
+                    -this.previewActor.renderYawOffset + 180.0F,
+                    0.0F,
+                    1.0F,
+                    0.0F
+            );
+
             mchorse.blockbuster.api.Model sourceModel = model.model;
             float morphScale = customMorph.scale;
-            GL11.glScalef(sourceModel.scale[0] * morphScale, sourceModel.scale[1] * morphScale, sourceModel.scale[2] * morphScale);
+
+            GL11.glScalef(
+                    sourceModel.scale[0] * morphScale,
+                    sourceModel.scale[1] * morphScale,
+                    sourceModel.scale[2] * morphScale
+            );
+
             renderer.postRender(0.0625F);
-            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
-            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+
+            FloatBuffer buffer =
+                    BufferUtils.createFloatBuffer(16);
+
+            GL11.glGetFloat(
+                    GL11.GL_MODELVIEW_MATRIX,
+                    buffer
+            );
+
             float[] matrix = new float[16];
             buffer.get(matrix);
+
             GL11.glPopMatrix();
             GL11.glMatrixMode(oldMatrixMode);
-            return new double[] {matrix[12], matrix[13], matrix[14]};
+
+            return new double[]
+            {
+                matrix[12],
+                matrix[13],
+                matrix[14]
+            };
         }
-        catch (Throwable ignored) { return null; }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
     }
 
     private double[] getExactEmoticonsBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
@@ -2680,17 +2939,40 @@ public class EditorGizmoController
             BlockbusterRecordFrame recordFrame)
     {
         /*
-         * The transform gizmo is LOCAL to the rendered model/bone.
+         * POSITION is different from ROTATION/SCALE.
          *
-         * Position mode must NOT use the global XYZ basis.  The selected
-         * bone can be rotated relative to the actor, and the handles must
-         * follow that local orientation on screen.  The native renderer is
-         * the best source for that orientation because it already contains
-         * the model hierarchy, bone rotations and actor orientation.
+         * Blockbuster applies a limb's translation before that limb's own
+         * rotation:
          *
-         * Keep the exact same basis for drawing, hit testing and dragging;
-         * otherwise the handle can look correct while dragging along a
-         * different plane.
+         *     translate(rotationPoint) -> rotate -> scale
+         *
+         * Therefore a position handle must use the parent's rendered
+         * basis, not the selected limb's rotated basis.  Using the full
+         * bone matrix here is what caused the red/blue handles to become
+         * inverted or to point into the X/Z plane on arms and legs.
+         *
+         * The translation basis is still LOCAL to the model hierarchy:
+         * parent rotation/body-part rotation is preserved, but the
+         * selected bone's own rotation is intentionally not applied.
+         */
+        if (this.mode == Mode.POSITION)
+        {
+            double[][] translationAxes =
+                    getExactBlockbusterBoneTranslationWorldAxes(
+                            bone,
+                            recordFrame
+                    );
+
+            if (translationAxes != null)
+            {
+                return translationAxes;
+            }
+        }
+
+        /*
+         * Rotation and scale continue to use the exact rendered bone
+         * orientation.  This keeps the existing local behaviour of those
+         * tools unchanged.
          */
         double[][] nativeAxes =
                 getNativeBoneWorldAxes(
