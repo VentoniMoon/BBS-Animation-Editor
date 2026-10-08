@@ -2175,7 +2175,9 @@ public class EditorGizmoController
                     (mchorse.blockbuster_pack.morphs.CustomMorph) morph;
 
             mchorse.blockbuster.client.model.ModelCustom model =
-                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(customMorph.getKey());
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
+                            customMorph.getKey()
+                    );
 
             if (model == null)
             {
@@ -2191,22 +2193,49 @@ public class EditorGizmoController
             }
 
             /*
-             * Use Blockbuster's own renderer to reconstruct the selected
-             * limb in the same coordinate system as the CustomMorph preview.
-             * This is intentionally evaluated before draw3D changes the
-             * camera/viewport state.
+             * IMPORTANT:
+             *
+             * Blockbuster already calculates the exact world transform of
+             * every ModelCustomRenderer while rendering the model.  The
+             * renderer stores that matrix in worldTransformation from
+             * renderRenderer().  That matrix contains the COMPLETE parent
+             * hierarchy, rotationPoint, rotation, scale and the same
+             * animation pose which was actually rendered.
+             *
+             * This is therefore the authoritative Gizmo anchor.  Rebuilding
+             * the hierarchy with postRender() is subtly different from the
+             * real render path and was the reason the Gizmo moved when the
+             * selected bone changed but did not sit on the rendered bone.
+             *
+             * draw3D() is called immediately after drawActor(), so the cache
+             * has already been populated for the current preview frame.
+             */
+            javax.vecmath.Matrix4d worldTransformation =
+                    renderer.getWorldTransformation();
+
+            if (worldTransformation != null &&
+                    isFinite(worldTransformation.m03) &&
+                    isFinite(worldTransformation.m13) &&
+                    isFinite(worldTransformation.m23))
+            {
+                return new double[]
+                {
+                    worldTransformation.m03,
+                    worldTransformation.m13,
+                    worldTransformation.m23
+                };
+            }
+
+            /*
+             * Fallback for a renderer which has not yet produced its cache.
+             * Keep the old reconstruction path so the Gizmo can still appear
+             * during unusual render states.
              */
             int oldMatrixMode =
                     GL11.glGetInteger(GL11.GL_MATRIX_MODE);
 
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glPushMatrix();
-
-            /*
-             * postRender() appends the bone transform to MODELVIEW.
-             * Start from identity so camera/FBO state from the previous
-             * preview pass cannot become part of the returned world anchor.
-             */
             GL11.glLoadIdentity();
 
             GL11.glTranslated(
