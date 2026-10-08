@@ -2157,6 +2157,29 @@ public class EditorGizmoController
         if (result != null) return result;
         result = getExactEmoticonsBoneWorldPosition(bone, recordFrame);
         if (result != null) return result;
+
+        /*
+         * Blockbuster CustomMorph is edited through AnimationBone's
+         * selected-keyframe hierarchy.  Use that same pivot for the Gizmo
+         * anchor so a selected pose key moves the Gizmo with the bone.
+         * The native renderer pivot is only a fallback.
+         */
+        if (this.previewActor != null
+                && this.previewActor.getMorph()
+                        instanceof mchorse.blockbuster_pack.morphs.CustomMorph)
+        {
+            result = getBoneWorldPosition(
+                    bone,
+                    keyframe,
+                    recordFrame
+            );
+
+            if (result != null)
+            {
+                return result;
+            }
+        }
+
         result = getExactBlockbusterBoneWorldPosition(bone);
         if (result != null) return result;
         return getBoneWorldPosition(bone, keyframe, recordFrame);
@@ -3017,12 +3040,17 @@ public class EditorGizmoController
             return 1.0D;
         }
 
-        if (axisId == AXIS_Y || axisId == AXIS_Z)
+        if (axisId == AXIS_X)
         {
             return -1.0D;
         }
 
-        return 1.0D;
+        if (axisId == AXIS_Y)
+        {
+            return 1.0D;
+        }
+
+        return -1.0D;
     }
 
     private boolean isBlockbusterCustomMorph()
