@@ -1805,28 +1805,13 @@ public class EditorGizmoController
             }
 
             /*
-             * Root limbs have no parent renderer, so there is no parent
-             * matrix we can use directly.  Do NOT reconstruct the actor
-             * yaw from RecordFrame here.
+             * Root renderer: use the renderer's cached world matrix
+             * directly.  This is deliberately conservative for now:
+             * the matrix is guaranteed to exist after Blockbuster has
+             * rendered the model, and using it cannot abort draw3D().
              *
-             * Blockbuster has already rendered this exact root renderer
-             * and cached its complete world transformation.  That matrix
-             * is:
-             *
-             *     actor/model basis * root rotation * root scale
-             *
-             * The editable translation, however, is applied BEFORE the
-             * root's own rotation:
-             *
-             *     translate(+x, -y, -z) -> rotate -> scale
-             *
-             * Therefore remove the root's scale and rotation from the
-             * cached matrix.  What remains is the exact actor/model basis
-             * used to translate the root bone.
-             *
-             * This is important because RecordFrame yaw and the renderer's
-             * actual model basis are not necessarily the same coordinate
-             * convention.  The renderer itself is the authoritative source.
+             * We will derive the exact pre-rotation translation basis
+             * separately once the visual anchor is confirmed.
              */
             javax.vecmath.Matrix4d world =
                     renderer.getWorldTransformation();
@@ -1836,88 +1821,28 @@ public class EditorGizmoController
                 return null;
             }
 
-            javax.vecmath.Matrix3d basis =
-                    new javax.vecmath.Matrix3d(
-                            world.m00, world.m01, world.m02,
-                            world.m10, world.m11, world.m12,
-                            world.m20, world.m21, world.m22
-                    );
-
-            double scaleX = Math.max(0.000001D, renderer.scaleX);
-            double scaleY = Math.max(0.000001D, renderer.scaleY);
-            double scaleZ = Math.max(0.000001D, renderer.scaleZ);
-
-            /*
-             * Remove the root's local scale.  Scale is applied after
-             * rotation by ModelCustomRenderer, so each matrix column
-             * contains its corresponding scale factor.
-             */
-            javax.vecmath.Matrix3d inverseScale =
-                    new javax.vecmath.Matrix3d(
-                            1.0D / scaleX, 0.0D, 0.0D,
-                            0.0D, 1.0D / scaleY, 0.0D,
-                            0.0D, 0.0D, 1.0D / scaleZ
-                    );
-
-            basis.mul(inverseScale);
-
-            /*
-             * ModelCustomRenderer.render() applies rotations in this exact
-             * order: Z, then Y, then X.  The stored angles already contain
-             * Blockbuster's sign conversion from ModelTransform.
-             */
-            javax.vecmath.Matrix3d localRotation =
-                    new javax.vecmath.Matrix3d();
-
-            localRotation.setIdentity();
-
-            javax.vecmath.Matrix3d rotationZ =
-                    new javax.vecmath.Matrix3d();
-            rotationZ.rotZ(renderer.rotateAngleZ);
-
-            javax.vecmath.Matrix3d rotationY =
-                    new javax.vecmath.Matrix3d();
-            rotationY.rotY(renderer.rotateAngleY);
-
-            javax.vecmath.Matrix3d rotationX =
-                    new javax.vecmath.Matrix3d();
-            rotationX.rotX(renderer.rotateAngleX);
-
-            localRotation.mul(rotationZ);
-            localRotation.mul(rotationY);
-            localRotation.mul(rotationX);
-
-            localRotation.invert();
-            basis.mul(localRotation);
-
-            /*
-             * AnimationTransform uses Blockbuster's model-space signs:
-             *   X -> +X
-             *   Y -> -Y
-             *   Z -> -Z
-             */
             double[] x =
                     new double[]
                     {
-                        basis.m00,
-                        basis.m10,
-                        basis.m20
+                        world.m00,
+                        world.m10,
+                        world.m20
                     };
 
             double[] y =
                     new double[]
                     {
-                        -basis.m01,
-                        -basis.m11,
-                        -basis.m21
+                        world.m01,
+                        world.m11,
+                        world.m21
                     };
 
             double[] z =
                     new double[]
                     {
-                        -basis.m02,
-                        -basis.m12,
-                        -basis.m22
+                        world.m02,
+                        world.m12,
+                        world.m22
                     };
 
             normalize(x);
