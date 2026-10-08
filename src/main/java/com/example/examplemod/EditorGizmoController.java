@@ -1955,25 +1955,22 @@ public class EditorGizmoController
 
     private double[][] getExactBlockbusterBoneWorldAxes(AnimationBone bone)
     {
-        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        if (bone == null ||
+                this.previewActor == null ||
+                !(this.previewActor.getMorph() instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
         {
             return null;
         }
 
         try
         {
-            Object morph = this.previewActor.getMorph();
-
-            if (!(morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
-            {
-                return null;
-            }
-
             mchorse.blockbuster_pack.morphs.CustomMorph customMorph =
-                    (mchorse.blockbuster_pack.morphs.CustomMorph) morph;
+                    (mchorse.blockbuster_pack.morphs.CustomMorph) this.previewActor.getMorph();
 
             mchorse.blockbuster.client.model.ModelCustom model =
-                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(customMorph.getKey());
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
+                            customMorph.getKey()
+                    );
 
             if (model == null)
             {
@@ -1989,82 +1986,17 @@ public class EditorGizmoController
             }
 
             /*
-             * Use the same cached world matrix as the anchor.  This keeps
-             * the visible local rotation basis, hit testing and the actual
-             * rendered bone in exactly the same coordinate space.
+             * postRender() gives us the exact same parent/rotation/scale
+             * hierarchy as the rendered Blockbuster limb.  Unlike
+             * worldTransformation, this calculation is independent of
+             * Minecraft's camera matrix and therefore remains stable when
+             * the editor's custom camera rotates.
              */
-            javax.vecmath.Matrix4d world =
-                    renderer.getWorldTransformation();
-
-            if (world != null)
-            {
-                float[] matrix =
-                        new float[]
-                        {
-                            (float) world.m00, (float) world.m10, (float) world.m20, 0.0F,
-                            (float) world.m01, (float) world.m11, (float) world.m21, 0.0F,
-                            (float) world.m02, (float) world.m12, (float) world.m22, 0.0F,
-                            (float) world.m03, (float) world.m13, (float) world.m23, 1.0F
-                        };
-
-                double[][] axes = axesFromMatrix(matrix);
-
-                if (axes != null)
-                {
-                    return axes;
-                }
-            }
-
-            /*
-             * Fallback to the previous native query when no cached matrix
-             * exists yet.
-             */
-            int oldMatrixMode =
-                    GL11.glGetInteger(GL11.GL_MATRIX_MODE);
-
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPushMatrix();
-            GL11.glLoadIdentity();
-
-            GL11.glTranslated(
-                    this.previewActor.posX,
-                    this.previewActor.posY,
-                    this.previewActor.posZ
+            return getBlockbusterRendererBasis(
+                    model,
+                    customMorph,
+                    renderer
             );
-
-            GL11.glRotatef(
-                    -this.previewActor.renderYawOffset + 180.0F,
-                    0.0F,
-                    1.0F,
-                    0.0F
-            );
-
-            mchorse.blockbuster.api.Model sourceModel = model.model;
-            float morphScale = customMorph.scale;
-
-            GL11.glScalef(
-                    sourceModel.scale[0] * morphScale,
-                    sourceModel.scale[1] * morphScale,
-                    sourceModel.scale[2] * morphScale
-            );
-
-            renderer.postRender(0.0625F);
-
-            FloatBuffer buffer =
-                    BufferUtils.createFloatBuffer(16);
-
-            GL11.glGetFloat(
-                    GL11.GL_MODELVIEW_MATRIX,
-                    buffer
-            );
-
-            float[] matrix = new float[16];
-            buffer.get(matrix);
-
-            GL11.glPopMatrix();
-            GL11.glMatrixMode(oldMatrixMode);
-
-            return axesFromMatrix(matrix);
         }
         catch (Throwable ignored)
         {
