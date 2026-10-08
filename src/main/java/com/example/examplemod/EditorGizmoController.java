@@ -3000,21 +3000,36 @@ public class EditorGizmoController
     private double getTranslationAxisSign(int axisId)
     {
         /*
-         * Blockbuster's rendered model coordinates are mirrored relative
-         * to the editor gizmo translation direction on all three axes.
+         * Only Blockbuster CustomMorph uses the ModelCustomRenderer
+         * translation convention:
          *
-         * This is intentionally applied ONLY to POSITION dragging.
-         * Rotation dragging keeps its existing sign convention.
+         *     X = +translateX
+         *     Y = -translateY
+         *     Z = -translateZ
          *
-         * Chameleon is already correct and must not receive this
-         * Blockbuster-specific conversion.
+         * Emoticons and every other model keep the editor's native
+         * translation direction.  In particular, do NOT use
+         * chameleonCoordinateSpace as a generic "non-Blockbuster"
+         * test: Emoticons also has that flag set to false.
          */
-        if (this.chameleonCoordinateSpace)
+        if (!isBlockbusterCustomMorph())
         {
             return 1.0D;
         }
 
-        return -1.0D;
+        if (axisId == AXIS_Y || axisId == AXIS_Z)
+        {
+            return -1.0D;
+        }
+
+        return 1.0D;
+    }
+
+    private boolean isBlockbusterCustomMorph()
+    {
+        return this.previewActor != null
+                && this.previewActor.getMorph()
+                        instanceof mchorse.blockbuster_pack.morphs.CustomMorph;
     }
 
     private double getDataAxisSign(int axisId)
