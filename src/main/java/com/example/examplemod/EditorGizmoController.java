@@ -1910,17 +1910,11 @@ public class EditorGizmoController
             normalize(z);
 
             /*
-             * The editor's visible Blockbuster gizmo uses the opposite
-             * handedness for its X/Y display axes. Keep Z unchanged.
+             * Keep the rendered Blockbuster basis untouched here.
+             * The native renderer already gives us the actual local
+             * orientation of the parent/bone. Coordinate conversion for
+             * editor translation is handled separately below.
              */
-            x[0] = -x[0];
-            x[1] = -x[1];
-            x[2] = -x[2];
-
-            y[0] = -y[0];
-            y[1] = -y[1];
-            y[2] = -y[2];
-
             return new double[][] {x, y, z};
         }
         catch (Throwable ignored)
@@ -3050,15 +3044,12 @@ public class EditorGizmoController
         }
 
         /*
-         * After the native Blockbuster pivot reconstruction, X and Y
-         * need the normal editor drag direction again. Z remains mirrored
-         * by Blockbuster's renderer.
+         * Blockbuster's AnimationTransform position values use the
+         * opposite sign from the visual world-space drag direction.
+         * Keep this conversion independent from the displayed basis.
+         *
+         * X, Y and Z therefore all need the native-to-editor sign flip.
          */
-        if (axisId == AXIS_X || axisId == AXIS_Y)
-        {
-            return 1.0D;
-        }
-
         return -1.0D;
     }
 
