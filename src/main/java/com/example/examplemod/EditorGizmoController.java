@@ -3038,12 +3038,17 @@ public class EditorGizmoController
         }
 
         /*
-         * Blockbuster's renderer mirrors Y and Z when it applies a
-         * ModelTransform. X is direct.
+         * X/Z already match the user's tested visual direction.
+         * Y is the remaining inverted Blockbuster data axis.
          */
         if (axisId == AXIS_X)
         {
-            return 1.0D;
+            return -1.0D;
+        }
+
+        if (axisId == AXIS_Y)
+        {
+            return -1.0D;
         }
 
         return -1.0D;
