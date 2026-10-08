@@ -2214,6 +2214,7 @@ public class EditorGizmoController
                     renderer.getWorldTransformation();
 
             if (worldTransformation != null &&
+                    !isIdentityMatrix(worldTransformation) &&
                     isFinite(worldTransformation.m03) &&
                     isFinite(worldTransformation.m13) &&
                     isFinite(worldTransformation.m23))
@@ -2294,6 +2295,31 @@ public class EditorGizmoController
         {
             return null;
         }
+    }
+
+    private boolean isIdentityMatrix(javax.vecmath.Matrix4d matrix)
+    {
+        if (matrix == null)
+        {
+            return true;
+        }
+
+        return Math.abs(matrix.m00 - 1.0D) < 0.000001D
+                && Math.abs(matrix.m11 - 1.0D) < 0.000001D
+                && Math.abs(matrix.m22 - 1.0D) < 0.000001D
+                && Math.abs(matrix.m33 - 1.0D) < 0.000001D
+                && Math.abs(matrix.m01) < 0.000001D
+                && Math.abs(matrix.m02) < 0.000001D
+                && Math.abs(matrix.m03) < 0.000001D
+                && Math.abs(matrix.m10) < 0.000001D
+                && Math.abs(matrix.m12) < 0.000001D
+                && Math.abs(matrix.m13) < 0.000001D
+                && Math.abs(matrix.m20) < 0.000001D
+                && Math.abs(matrix.m21) < 0.000001D
+                && Math.abs(matrix.m23) < 0.000001D
+                && Math.abs(matrix.m30) < 0.000001D
+                && Math.abs(matrix.m31) < 0.000001D
+                && Math.abs(matrix.m32) < 0.000001D;
     }
 
     private double[] getExactEmoticonsBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
