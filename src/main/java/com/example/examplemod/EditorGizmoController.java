@@ -1805,36 +1805,124 @@ public class EditorGizmoController
             }
 
             /*
-             * Root limbs have no parent renderer.  Recreate only the
-             * actor/model basis used by Blockbuster's root transform.
-             * Body yaw comes from the same record value that is written
-             * into EntityActor.renderYawOffset by the preview renderer.
+             * Root limbs have no parent renderer, so there is no parent
+             * matrix we can use directly.  Do NOT reconstruct the actor
+             * yaw from RecordFrame here.
+             *
+             * Blockbuster has already rendered this exact root renderer
+             * and cached its complete world transformation.  That matrix
+             * is:
+             *
+             *     actor/model basis * root rotation * root scale
+             *
+             * The editable translation, however, is applied BEFORE the
+             * root's own rotation:
+             *
+             *     translate(+x, -y, -z) -> rotate -> scale
+             *
+             * Therefore remove the root's scale and rotation from the
+             * cached matrix.  What remains is the exact actor/model basis
+             * used to translate the root bone.
+             *
+             * This is important because RecordFrame yaw and the renderer's
+             * actual model basis are not necessarily the same coordinate
+             * convention.  The renderer itself is the authoritative source.
              */
-            double visualYaw =
-                    recordFrame != null
-                            ? (
-                                    recordFrame.hasBodyYaw()
-                                            ? recordFrame.getBodyYaw()
-                                            : recordFrame.getYaw()
-                              )
-                            : this.previewActor.renderYawOffset;
+            javax.vecmath.Matrix4d world =
+                    renderer.getWorldTransformation();
 
-            double yaw =
-                    Math.toRadians(
-                            180.0D - visualYaw
+            if (world == null)
+            {
+                return null;
+            }
+
+            javax.vecmath.Matrix3d basis =
+                    new javax.vecmath.Matrix3d(
+                            world.m00, world.m01, world.m02,
+                            world.m10, world.m11, world.m12,
+                            world.m20, world.m21, world.m22
                     );
 
-            double cos = Math.cos(yaw);
-            double sin = Math.sin(yaw);
+            double scaleX = Math.max(0.000001D, renderer.scaleX);
+            double scaleY = Math.max(0.000001D, renderer.scaleY);
+            double scaleZ = Math.max(0.000001D, renderer.scaleZ);
 
+            /*
+             * Remove the root's local scale.  Scale is applied after
+             * rotation by ModelCustomRenderer, so each matrix column
+             * contains its corresponding scale factor.
+             */
+            javax.vecmath.Matrix3d inverseScale =
+                    new javax.vecmath.Matrix3d(
+                            1.0D / scaleX, 0.0D, 0.0D,
+                            0.0D, 1.0D / scaleY, 0.0D,
+                            0.0D, 0.0D, 1.0D / scaleZ
+                    );
+
+            basis.mul(inverseScale);
+
+            /*
+             * ModelCustomRenderer.render() applies rotations in this exact
+             * order: Z, then Y, then X.  The stored angles already contain
+             * Blockbuster's sign conversion from ModelTransform.
+             */
+            javax.vecmath.Matrix3d localRotation =
+                    new javax.vecmath.Matrix3d();
+
+            localRotation.setIdentity();
+
+            javax.vecmath.Matrix3d rotationZ =
+                    new javax.vecmath.Matrix3d();
+            rotationZ.rotZ(renderer.rotateAngleZ);
+
+            javax.vecmath.Matrix3d rotationY =
+                    new javax.vecmath.Matrix3d();
+            rotationY.rotY(renderer.rotateAngleY);
+
+            javax.vecmath.Matrix3d rotationX =
+                    new javax.vecmath.Matrix3d();
+            rotationX.rotX(renderer.rotateAngleX);
+
+            localRotation.mul(rotationZ);
+            localRotation.mul(rotationY);
+            localRotation.mul(rotationX);
+
+            localRotation.invert();
+            basis.mul(localRotation);
+
+            /*
+             * AnimationTransform uses Blockbuster's model-space signs:
+             *   X -> +X
+             *   Y -> -Y
+             *   Z -> -Z
+             */
             double[] x =
-                    new double[] {cos, 0.0D, -sin};
+                    new double[]
+                    {
+                        basis.m00,
+                        basis.m10,
+                        basis.m20
+                    };
 
             double[] y =
-                    new double[] {0.0D, -1.0D, 0.0D};
+                    new double[]
+                    {
+                        -basis.m01,
+                        -basis.m11,
+                        -basis.m21
+                    };
 
             double[] z =
-                    new double[] {-sin, 0.0D, -cos};
+                    new double[]
+                    {
+                        -basis.m02,
+                        -basis.m12,
+                        -basis.m22
+                    };
+
+            normalize(x);
+            normalize(y);
+            normalize(z);
 
             return new double[][] {x, y, z};
         }
