@@ -1909,6 +1909,18 @@ public class EditorGizmoController
             normalize(y);
             normalize(z);
 
+            /*
+             * The editor's visible Blockbuster gizmo uses the opposite
+             * handedness for its X/Y display axes. Keep Z unchanged.
+             */
+            x[0] = -x[0];
+            x[1] = -x[1];
+            x[2] = -x[2];
+
+            y[0] = -y[0];
+            y[1] = -y[1];
+            y[2] = -y[2];
+
             return new double[][] {x, y, z};
         }
         catch (Throwable ignored)
@@ -3038,17 +3050,13 @@ public class EditorGizmoController
         }
 
         /*
-         * X/Z already match the user's tested visual direction.
-         * Y is the remaining inverted Blockbuster data axis.
+         * After the native Blockbuster pivot reconstruction, X and Y
+         * need the normal editor drag direction again. Z remains mirrored
+         * by Blockbuster's renderer.
          */
-        if (axisId == AXIS_X)
+        if (axisId == AXIS_X || axisId == AXIS_Y)
         {
-            return -1.0D;
-        }
-
-        if (axisId == AXIS_Y)
-        {
-            return -1.0D;
+            return 1.0D;
         }
 
         return -1.0D;
