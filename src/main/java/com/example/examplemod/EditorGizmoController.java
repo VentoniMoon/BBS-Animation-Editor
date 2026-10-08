@@ -2191,47 +2191,16 @@ public class EditorGizmoController
             }
 
             /*
-             * Blockbuster already caches the exact world transform of every
-             * ModelCustomRenderer while it renders the limb.  That matrix
-             * contains the complete parent hierarchy, the current
-             * CustomMorph pose, the current keyframe translation and the
-             * actor/body orientation.
-             *
-             * This is the authoritative source for the gizmo anchor.
-             * Rebuilding the transform with postRender() here was subtly
-             * wrong: postRender() reconstructs the model hierarchy outside
-             * the actual render pass and therefore loses the exact
-             * coordinate/sign conventions used by the renderer for
-             * different limbs.
-             */
-            javax.vecmath.Matrix4d world =
-                    renderer.getWorldTransformation();
-
-            if (world != null &&
-                    isFinite(world.m03) &&
-                    isFinite(world.m13) &&
-                    isFinite(world.m23))
-            {
-                return new double[]
-                {
-                    world.m03,
-                    world.m13,
-                    world.m23
-                };
-            }
-
-            /*
-             * Safe fallback for a renderer which has not rendered yet.
-             * Keep the old postRender path only as a fallback; the normal
-             * path above must always use the transform captured by the
-             * actual Blockbuster renderer.
+             * Use Blockbuster's own renderer to reconstruct the selected
+             * limb in the same coordinate system as the CustomMorph preview.
+             * This is intentionally evaluated before draw3D changes the
+             * camera/viewport state.
              */
             int oldMatrixMode =
                     GL11.glGetInteger(GL11.GL_MATRIX_MODE);
 
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glPushMatrix();
-            GL11.glLoadIdentity();
 
             GL11.glTranslated(
                     this.previewActor.posX,
@@ -2270,6 +2239,13 @@ public class EditorGizmoController
 
             GL11.glPopMatrix();
             GL11.glMatrixMode(oldMatrixMode);
+
+            if (!isFinite(matrix[12]) ||
+                    !isFinite(matrix[13]) ||
+                    !isFinite(matrix[14]))
+            {
+                return null;
+            }
 
             return new double[]
             {
