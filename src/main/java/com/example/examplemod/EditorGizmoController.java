@@ -1796,11 +1796,24 @@ public class EditorGizmoController
                 double cos = Math.cos(yaw);
                 double sin = Math.sin(yaw);
 
+                double[] x =
+                        new double[] { cos, 0.0D, -sin };
+
+                double[] y =
+                        new double[] { 0.0D, -1.0D, 0.0D };
+
+                double[] z =
+                        new double[] { -sin, 0.0D, -cos };
+
+                normalize(x);
+                normalize(y);
+                normalize(z);
+
                 return new double[][]
                 {
-                    normalize(new double[] { cos, 0.0D, -sin }),
-                    normalize(new double[] { 0.0D, -1.0D, 0.0D }),
-                    normalize(new double[] { -sin, 0.0D, -cos })
+                    x,
+                    y,
+                    z
                 };
             }
 
