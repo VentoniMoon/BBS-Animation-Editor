@@ -2202,6 +2202,13 @@ public class EditorGizmoController
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glPushMatrix();
 
+            /*
+             * postRender() appends the bone transform to MODELVIEW.
+             * Start from identity so camera/FBO state from the previous
+             * preview pass cannot become part of the returned world anchor.
+             */
+            GL11.glLoadIdentity();
+
             GL11.glTranslated(
                     this.previewActor.posX,
                     this.previewActor.posY,
