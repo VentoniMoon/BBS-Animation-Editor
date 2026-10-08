@@ -2157,7 +2157,9 @@ public class EditorGizmoController
     }
     private double[] getExactBlockbusterBoneWorldPosition(AnimationBone bone)
     {
-        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        if (bone == null ||
+                this.previewActor == null ||
+                this.previewActor.getMorph() == null)
         {
             return null;
         }
@@ -2193,44 +2195,17 @@ public class EditorGizmoController
             }
 
             /*
-             * IMPORTANT:
+             * Do not use ModelCustomRenderer.worldTransformation here.
+             * That cache is maintained by Blockbuster's render pipeline and
+             * is not guaranteed to contain a usable value when the editor
+             * asks for the Gizmo anchor.  In particular, a freshly created
+             * renderer starts with an identity matrix.
              *
-             * Blockbuster already calculates the exact world transform of
-             * every ModelCustomRenderer while rendering the model.  The
-             * renderer stores that matrix in worldTransformation from
-             * renderRenderer().  That matrix contains the COMPLETE parent
-             * hierarchy, rotationPoint, rotation, scale and the same
-             * animation pose which was actually rendered.
-             *
-             * This is therefore the authoritative Gizmo anchor.  Rebuilding
-             * the hierarchy with postRender() is subtly different from the
-             * real render path and was the reason the Gizmo moved when the
-             * selected bone changed but did not sit on the rendered bone.
-             *
-             * draw3D() is called immediately after drawActor(), so the cache
-             * has already been populated for the current preview frame.
-             */
-            javax.vecmath.Matrix4d worldTransformation =
-                    renderer.getWorldTransformation();
-
-            if (worldTransformation != null &&
-                    !isIdentityMatrix(worldTransformation) &&
-                    isFinite(worldTransformation.m03) &&
-                    isFinite(worldTransformation.m13) &&
-                    isFinite(worldTransformation.m23))
-            {
-                return new double[]
-                {
-                    worldTransformation.m03,
-                    worldTransformation.m13,
-                    worldTransformation.m23
-                };
-            }
-
-            /*
-             * Fallback for a renderer which has not yet produced its cache.
-             * Keep the old reconstruction path so the Gizmo can still appear
-             * during unusual render states.
+             * postRender() is the same hierarchy traversal Blockbuster uses
+             * for the actual limb: parent -> rotationPoint -> rotation ->
+             * scale.  We reproduce only the actor/model root transform
+             * before calling it, so the resulting translation is the real
+             * rendered bone pivot.
              */
             int oldMatrixMode =
                     GL11.glGetInteger(GL11.GL_MATRIX_MODE);
@@ -2252,8 +2227,11 @@ public class EditorGizmoController
                     0.0F
             );
 
-            mchorse.blockbuster.api.Model sourceModel = model.model;
-            float morphScale = customMorph.scale;
+            mchorse.blockbuster.api.Model sourceModel =
+                    model.model;
+
+            float morphScale =
+                    customMorph.scale;
 
             GL11.glScalef(
                     sourceModel.scale[0] * morphScale,
@@ -2271,7 +2249,9 @@ public class EditorGizmoController
                     buffer
             );
 
-            float[] matrix = new float[16];
+            float[] matrix =
+                    new float[16];
+
             buffer.get(matrix);
 
             GL11.glPopMatrix();
