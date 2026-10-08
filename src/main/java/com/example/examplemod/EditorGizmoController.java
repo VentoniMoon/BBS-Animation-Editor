@@ -2987,60 +2987,42 @@ public class EditorGizmoController
             double mouseDY)
     {
         return getAxisDragAmount(axisId, mouseDX, mouseDY)
-                * getDataAxisSign(axisId);
+                * getTranslationAxisSign(axisId);
     }
 
     private double getDataAxisDelta(
             int axisId,
             double visualDelta)
     {
-        return visualDelta * getDataAxisSign(axisId);
+        return visualDelta * getTranslationAxisSign(axisId);
     }
 
-    private double getDataAxisSign(int axisId)
+    private double getTranslationAxisSign(int axisId)
     {
         /*
-         * The gizmo axes are displayed in actor/world space, while
-         * AnimationBone translation is stored in the model's LOCAL space.
+         * Blockbuster's rendered model coordinates are mirrored relative
+         * to the editor gizmo translation direction on all three axes.
          *
-         * Chameleon keeps the local X/Y/Z directions as-is.
-         * Blockbuster's ModelCustomRenderer converts editor translation
-         * to Minecraft model coordinates as:
+         * This is intentionally applied ONLY to POSITION dragging.
+         * Rotation dragging keeps its existing sign convention.
          *
-         *     X -> +X
-         *     Y -> -Y
-         *     Z -> -Z
-         *
-         * Therefore the visual drag scalar must be converted back before
-         * writing it into the selected keyframe. Without this conversion
-         * the gizmo looks correct but edits the wrong coordinate space.
+         * Chameleon is already correct and must not receive this
+         * Blockbuster-specific conversion.
          */
         if (this.chameleonCoordinateSpace)
         {
             return 1.0D;
         }
 
-        if (axisId == AXIS_Y)
-        {
-            /*
-             * Y is already in the same visual direction as the editor
-             * transform.  The previous -1 inverted the whole vertical
-             * movement: dragging upward moved the bone downward.
-             */
-            return 1.0D;
-        }
+        return -1.0D;
+    }
 
+    private double getDataAxisSign(int axisId)
+    {
         /*
-         * Z is already represented in the editor's local animation
-         * coordinate system with the same sign as the visual gizmo.
-         * The previous extra inversion made the bone move backwards
-         * while the gizmo moved forwards.
+         * Rotation uses the native data-space sign convention.
+         * Keep it separate from the Blockbuster translation inversion.
          */
-        if (axisId == AXIS_Z)
-        {
-            return 1.0D;
-        }
-
         return 1.0D;
     }
 
