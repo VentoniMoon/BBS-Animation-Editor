@@ -2220,9 +2220,9 @@ public class EditorGizmoController
             {
                 return new double[]
                 {
-                    worldTransformation.m03,
-                    worldTransformation.m13,
-                    worldTransformation.m23
+                    worldTransformation.m30,
+                    worldTransformation.m31,
+                    worldTransformation.m32
                 };
             }
 
