@@ -1723,23 +1723,15 @@ public class EditorGizmoController
     {
         if (bone == null ||
                 this.previewActor == null ||
-                this.previewActor.getMorph() == null)
+                !(this.previewActor.getMorph() instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
         {
             return null;
         }
 
         try
         {
-            Object morph =
-                    this.previewActor.getMorph();
-
-            if (!(morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
-            {
-                return null;
-            }
-
             mchorse.blockbuster_pack.morphs.CustomMorph customMorph =
-                    (mchorse.blockbuster_pack.morphs.CustomMorph) morph;
+                    (mchorse.blockbuster_pack.morphs.CustomMorph) this.previewActor.getMorph();
 
             mchorse.blockbuster.client.model.ModelCustom model =
                     mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
@@ -1760,86 +1752,155 @@ public class EditorGizmoController
             }
 
             /*
-             * Translation happens before the selected renderer's own
-             * rotation.  For a child limb the parent's cached world
-             * matrix is therefore the exact basis in which
-             * rotationPointX/Y/Z are translated.
+             * Blockbuster translates a limb in its parent's coordinate
+             * system, BEFORE applying the limb's own rotation. Therefore
+             * Position handles must use the parent's actual rendered basis.
+             *
+             * Do not use getWorldTransformation() here. That cache is
+             * camera-dependent in the editor preview because the preview
+             * uses its own EditorCamera rather than Minecraft's normal
+             * camera matrix.
              */
-            if (renderer.parent != null)
+            mchorse.blockbuster.client.model.ModelCustomRenderer basisRenderer =
+                    renderer.parent != null ? renderer.parent : renderer;
+
+            double[][] axes =
+                    getBlockbusterRendererBasis(
+                            model,
+                            customMorph,
+                            basisRenderer
+                    );
+
+            if (axes == null)
             {
-                javax.vecmath.Matrix4d parentWorld =
-                        renderer.parent.getWorldTransformation();
-
-                if (parentWorld != null)
-                {
-                    double[] x =
-                            new double[]
-                            {
-                                parentWorld.m00,
-                                parentWorld.m10,
-                                parentWorld.m20
-                            };
-
-                    double[] y =
-                            new double[]
-                            {
-                                -parentWorld.m01,
-                                -parentWorld.m11,
-                                -parentWorld.m21
-                            };
-
-                    double[] z =
-                            new double[]
-                            {
-                                -parentWorld.m02,
-                                -parentWorld.m12,
-                                -parentWorld.m22
-                            };
-
-                    normalize(x);
-                    normalize(y);
-                    normalize(z);
-
-                    return new double[][] {x, y, z};
-                }
+                return null;
             }
 
             /*
-             * Root limbs have no parent renderer.  Recreate only the
-             * actor/model basis used by Blockbuster's root transform.
-             * Body yaw comes from the same record value that is written
-             * into EntityActor.renderYawOffset by the preview renderer.
+             * A root limb has no parent. Its translation is applied directly
+             * in the actor/model basis, so remove the root limb's own
+             * rotation from that basis. For a root renderer postRender()
+             * already includes its rotation; reconstruct the actor basis
+             * explicitly in that case.
              */
-            double visualYaw =
-                    recordFrame != null
-                            ? (
-                                    recordFrame.hasBodyYaw()
-                                            ? recordFrame.getBodyYaw()
-                                            : recordFrame.getYaw()
-                              )
-                            : this.previewActor.renderYawOffset;
+            if (renderer.parent == null)
+            {
+                double visualYaw =
+                        this.previewActor.renderYawOffset;
 
-            double yaw =
-                    Math.toRadians(
-                            180.0D - visualYaw
-                    );
+                double yaw =
+                        Math.toRadians(
+                                180.0D - visualYaw
+                        );
 
-            double cos = Math.cos(yaw);
-            double sin = Math.sin(yaw);
+                double cos = Math.cos(yaw);
+                double sin = Math.sin(yaw);
+
+                return new double[][]
+                {
+                    normalize(new double[] { cos, 0.0D, -sin }),
+                    normalize(new double[] { 0.0D, -1.0D, 0.0D }),
+                    normalize(new double[] { -sin, 0.0D, -cos })
+                };
+            }
+
+            return axes;
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private double[][] getBlockbusterRendererBasis(
+            mchorse.blockbuster.client.model.ModelCustom model,
+            mchorse.blockbuster_pack.morphs.CustomMorph customMorph,
+            mchorse.blockbuster.client.model.ModelCustomRenderer renderer)
+    {
+        if (model == null || customMorph == null || renderer == null)
+        {
+            return null;
+        }
+
+        int oldMatrixMode =
+                GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+
+        try
+        {
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            GL11.glLoadIdentity();
+
+            GL11.glTranslated(
+                    this.previewActor.posX,
+                    this.previewActor.posY,
+                    this.previewActor.posZ
+            );
+
+            GL11.glRotatef(
+                    -this.previewActor.renderYawOffset + 180.0F,
+                    0.0F,
+                    1.0F,
+                    0.0F
+            );
+
+            mchorse.blockbuster.api.Model sourceModel = model.model;
+
+            GL11.glScalef(
+                    sourceModel.scale[0] * customMorph.scale,
+                    sourceModel.scale[1] * customMorph.scale,
+                    sourceModel.scale[2] * customMorph.scale
+            );
+
+            renderer.postRender(0.0625F);
+
+            FloatBuffer buffer =
+                    BufferUtils.createFloatBuffer(16);
+
+            GL11.glGetFloat(
+                    GL11.GL_MODELVIEW_MATRIX,
+                    buffer
+            );
+
+            float[] matrix = new float[16];
+            buffer.get(matrix);
+
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(oldMatrixMode);
 
             double[] x =
-                    new double[] {cos, 0.0D, -sin};
+                    new double[]
+                    {
+                        matrix[0],
+                        matrix[1],
+                        matrix[2]
+                    };
 
             double[] y =
-                    new double[] {0.0D, -1.0D, 0.0D};
+                    new double[]
+                    {
+                        matrix[4],
+                        matrix[5],
+                        matrix[6]
+                    };
 
             double[] z =
-                    new double[] {-sin, 0.0D, -cos};
+                    new double[]
+                    {
+                        matrix[8],
+                        matrix[9],
+                        matrix[10]
+                    };
+
+            normalize(x);
+            normalize(y);
+            normalize(z);
 
             return new double[][] {x, y, z};
         }
         catch (Throwable ignored)
         {
+            GL11.glMatrixMode(oldMatrixMode);
             return null;
         }
     }
