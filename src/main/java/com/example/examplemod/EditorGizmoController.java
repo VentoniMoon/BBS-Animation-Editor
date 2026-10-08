@@ -1805,49 +1805,36 @@ public class EditorGizmoController
             }
 
             /*
-             * Root renderer: use the renderer's cached world matrix
-             * directly.  This is deliberately conservative for now:
-             * the matrix is guaranteed to exist after Blockbuster has
-             * rendered the model, and using it cannot abort draw3D().
-             *
-             * We will derive the exact pre-rotation translation basis
-             * separately once the visual anchor is confirmed.
+             * Root limbs have no parent renderer.  Recreate only the
+             * actor/model basis used by Blockbuster's root transform.
+             * Body yaw comes from the same record value that is written
+             * into EntityActor.renderYawOffset by the preview renderer.
              */
-            javax.vecmath.Matrix4d world =
-                    renderer.getWorldTransformation();
+            double visualYaw =
+                    recordFrame != null
+                            ? (
+                                    recordFrame.hasBodyYaw()
+                                            ? recordFrame.getBodyYaw()
+                                            : recordFrame.getYaw()
+                              )
+                            : this.previewActor.renderYawOffset;
 
-            if (world == null)
-            {
-                return null;
-            }
+            double yaw =
+                    Math.toRadians(
+                            180.0D - visualYaw
+                    );
+
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
 
             double[] x =
-                    new double[]
-                    {
-                        world.m00,
-                        world.m10,
-                        world.m20
-                    };
+                    new double[] {cos, 0.0D, -sin};
 
             double[] y =
-                    new double[]
-                    {
-                        world.m01,
-                        world.m11,
-                        world.m21
-                    };
+                    new double[] {0.0D, -1.0D, 0.0D};
 
             double[] z =
-                    new double[]
-                    {
-                        world.m02,
-                        world.m12,
-                        world.m22
-                    };
-
-            normalize(x);
-            normalize(y);
-            normalize(z);
+                    new double[] {-sin, 0.0D, -cos};
 
             return new double[][] {x, y, z};
         }
