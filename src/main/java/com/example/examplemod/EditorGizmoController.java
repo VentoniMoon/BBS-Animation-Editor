@@ -2132,6 +2132,20 @@ public class EditorGizmoController
          * keyframe data.  The native renderer is only a fallback for
          * cases where the editor cannot reconstruct the pivot.
          */
+        if (isBlockbusterCustomMorph())
+        {
+            double[] blockbusterWorld =
+                    getBlockbusterAnimationBoneWorldPosition(
+                            bone,
+                            keyframe
+                    );
+
+            if (blockbusterWorld != null)
+            {
+                return blockbusterWorld;
+            }
+        }
+
         double[] world =
                 getBoneWorldPosition(
                         bone,
@@ -2159,19 +2173,15 @@ public class EditorGizmoController
         if (result != null) return result;
 
         /*
-         * Blockbuster CustomMorph is edited through AnimationBone's
-         * selected-keyframe hierarchy.  Use that same pivot for the Gizmo
-         * anchor so a selected pose key moves the Gizmo with the bone.
-         * The native renderer pivot is only a fallback.
+         * Blockbuster uses a different local transform convention from the
+         * generic AnimationTransform hierarchy. Rebuild the animated pivot
+         * with that native convention so the Gizmo follows the actual key.
          */
-        if (this.previewActor != null
-                && this.previewActor.getMorph()
-                        instanceof mchorse.blockbuster_pack.morphs.CustomMorph)
+        if (isBlockbusterCustomMorph())
         {
-            result = getBoneWorldPosition(
+            result = getBlockbusterAnimationBoneWorldPosition(
                     bone,
-                    keyframe,
-                    recordFrame
+                    keyframe
             );
 
             if (result != null)
@@ -3022,30 +3032,16 @@ public class EditorGizmoController
 
     private double getTranslationAxisSign(int axisId)
     {
-        /*
-         * Only Blockbuster CustomMorph uses the ModelCustomRenderer
-         * translation convention:
-         *
-         *     X = +translateX
-         *     Y = -translateY
-         *     Z = -translateZ
-         *
-         * Emoticons and every other model keep the editor's native
-         * translation direction.  In particular, do NOT use
-         * chameleonCoordinateSpace as a generic "non-Blockbuster"
-         * test: Emoticons also has that flag set to false.
-         */
         if (!isBlockbusterCustomMorph())
         {
             return 1.0D;
         }
 
+        /*
+         * Blockbuster's renderer mirrors Y and Z when it applies a
+         * ModelTransform. X is direct.
+         */
         if (axisId == AXIS_X)
-        {
-            return -1.0D;
-        }
-
-        if (axisId == AXIS_Y)
         {
             return 1.0D;
         }
@@ -3058,6 +3054,169 @@ public class EditorGizmoController
         return this.previewActor != null
                 && this.previewActor.getMorph()
                         instanceof mchorse.blockbuster_pack.morphs.CustomMorph;
+    }
+
+    /**
+     * Reconstruct the animated Blockbuster pivot without using the renderer's
+     * camera-dependent matrix. This mirrors ModelCustomRenderer.applyTransform
+     * and ModelCustomRenderer.render() at the transform level.
+     */
+    private double[] getBlockbusterAnimationBoneWorldPosition(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe)
+    {
+        if (bone == null || !isBlockbusterCustomMorph())
+        {
+            return null;
+        }
+
+        try
+        {
+            mchorse.blockbuster_pack.morphs.CustomMorph customMorph =
+                    (mchorse.blockbuster_pack.morphs.CustomMorph)
+                            this.previewActor.getMorph();
+
+            mchorse.blockbuster.client.model.ModelCustom model =
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
+                            customMorph.getKey()
+                    );
+
+            if (model == null || model.model == null)
+            {
+                return null;
+            }
+
+            int frame =
+                    selectedKeyframe != null
+                            ? selectedKeyframe.getFrame()
+                            : this.gizmoFrame;
+
+            AnimationTransform pivot =
+                    getBlockbusterAnimationBonePivot(
+                            bone,
+                            frame
+                    );
+
+            if (pivot == null)
+            {
+                return null;
+            }
+
+            mchorse.blockbuster.api.Model sourceModel = model.model;
+
+            double x =
+                    pivot.getPositionX()
+                            * sourceModel.scale[0]
+                            * customMorph.scale
+                            * 0.0625D;
+
+            double y =
+                    pivot.getPositionY()
+                            * sourceModel.scale[1]
+                            * customMorph.scale
+                            * 0.0625D;
+
+            double z =
+                    pivot.getPositionZ()
+                            * sourceModel.scale[2]
+                            * customMorph.scale
+                            * 0.0625D;
+
+            double yaw =
+                    Math.toRadians(
+                            -this.previewActor.renderYawOffset
+                                    + 180.0D
+                    );
+
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
+
+            double worldX = cos * x + sin * z;
+            double worldZ = -sin * x + cos * z;
+
+            return new double[]
+            {
+                this.previewActor.posX + worldX,
+                this.previewActor.posY + y,
+                this.previewActor.posZ + worldZ
+            };
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    private AnimationTransform getBlockbusterAnimationBonePivot(
+            AnimationBone bone,
+            int frame)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        AnimationTransform animation =
+                bone.getTransformAt(frame);
+
+        if (animation == null)
+        {
+            animation = new AnimationTransform();
+        }
+
+        AnimationTransform local =
+                new AnimationTransform();
+
+        /*
+         * Exact ModelCustomRenderer.applyTransform() convention.
+         */
+        local.setPosition(
+                bone.getLocalX() + animation.getPositionX(),
+                -(bone.getLocalY() + animation.getPositionY()),
+                -(bone.getLocalZ() + animation.getPositionZ())
+        );
+
+        /*
+         * ModelCustomRenderer.applyTransform() gives root limbs the
+         * additional +24 model-pixel origin.
+         */
+        if (bone.getParent() == null)
+        {
+            local.setPosition(
+                    local.getPositionX(),
+                    local.getPositionY() + 24.0F,
+                    local.getPositionZ()
+            );
+        }
+
+        local.setRotation(
+                animation.getRotationX(),
+                -animation.getRotationY(),
+                -animation.getRotationZ()
+        );
+
+        local.setScale(
+                animation.getScaleX(),
+                animation.getScaleY(),
+                animation.getScaleZ()
+        );
+
+        AnimationBone parent = bone.getParent();
+
+        if (parent == null)
+        {
+            return local;
+        }
+
+        AnimationTransform parentWorld =
+                getBlockbusterAnimationBonePivot(
+                        parent,
+                        frame
+                );
+
+        return parentWorld == null
+                ? local
+                : parentWorld.combine(local);
     }
 
     private double getDataAxisSign(int axisId)
