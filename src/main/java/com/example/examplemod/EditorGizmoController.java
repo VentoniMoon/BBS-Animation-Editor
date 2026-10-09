@@ -1835,6 +1835,7 @@ public class EditorGizmoController
             for (int component = 0; component < 3; component++)
             {
                 axes[1][component] = -axes[1][component];
+                axes[2][component] = -axes[2][component];
             }
 
             normalize(axes[0]);
@@ -2273,7 +2274,7 @@ public class EditorGizmoController
             );
 
             GL11.glRotatef(
-                    -this.previewActor.renderYawOffset,
+                    -this.previewActor.renderYawOffset + 180.0F,
                     0.0F,
                     1.0F,
                     0.0F
