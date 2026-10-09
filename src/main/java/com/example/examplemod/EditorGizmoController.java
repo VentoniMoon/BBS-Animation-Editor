@@ -3024,13 +3024,13 @@ public class EditorGizmoController
                 * getTranslationAxisSign(axisId);
 
         /*
-         * Blockbuster's native renderer basis and AnimationTransform's
-         * stored translation have opposite drag handedness for the individual
-         * position arrows. Correct only the axis-handle drag here; the plane
-         * handles use getDataAxisDelta() and are intentionally left unchanged.
-         * Emoticons and Chameleon keep their existing behavior.
+         * Blockbuster's three position arrows need axis-specific handling.
+         * X is already correct with the reversed drag direction. Y and Z
+         * use the normal projected drag direction instead. Keep this isolated
+         * to the arrow handles: plane dragging and the other morph adapters
+         * are not affected.
          */
-        if (isBlockbusterCustomMorph())
+        if (isBlockbusterCustomMorph() && axisId == AXIS_X)
         {
             amount = -amount;
         }
