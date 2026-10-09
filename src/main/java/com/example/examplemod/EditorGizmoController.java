@@ -1802,17 +1802,10 @@ public class EditorGizmoController
                 double[] z = new double[] {-sin, 0.0D, -cos};
 
                 /*
-                 * The user's preview is viewed from the front. A 180-degree
-                 * horizontal turn is a rotation around vertical Y: invert
-                 * X and Z, but preserve Y. Flipping X/Y instead was a
-                 * rotation around depth and made the gizmo appear upside
-                 * down while moving the anchor away from the bone.
+                 * Keep the actor basis in the same convention as the native
+                 * renderer. Do not apply a second horizontal flip here:
+                 * the renderer yaw already defines the preview orientation.
                  */
-                for (int component = 0; component < 3; component++)
-                {
-                    x[component] = -x[component];
-                    z[component] = -z[component];
-                }
 
                 normalize(x);
                 normalize(y);
@@ -1823,16 +1816,12 @@ public class EditorGizmoController
 
             /*
              * Convert renderer-space basis into AnimationTransform data
-             * directions (Blockbuster negates Y/Z), then rotate the basis
-             * 180 degrees around vertical Y for the front-facing preview.
-             * Keep the visible basis and drag projection in the same space.
+             * directions. Blockbuster negates Y and Z in applyTransform().
+             * Keep this conversion identical for every bone hierarchy level.
              */
             for (int component = 0; component < 3; component++)
             {
                 axes[1][component] = -axes[1][component];
-                axes[2][component] = -axes[2][component];
-
-                axes[0][component] = -axes[0][component];
                 axes[2][component] = -axes[2][component];
             }
 
