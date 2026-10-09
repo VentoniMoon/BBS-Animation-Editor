@@ -3020,8 +3020,22 @@ public class EditorGizmoController
             double mouseDX,
             double mouseDY)
     {
-        return getAxisDragAmount(axisId, mouseDX, mouseDY)
+        double amount = getAxisDragAmount(axisId, mouseDX, mouseDY)
                 * getTranslationAxisSign(axisId);
+
+        /*
+         * Blockbuster's native renderer basis and AnimationTransform's
+         * stored translation have opposite drag handedness for the individual
+         * position arrows. Correct only the axis-handle drag here; the plane
+         * handles use getDataAxisDelta() and are intentionally left unchanged.
+         * Emoticons and Chameleon keep their existing behavior.
+         */
+        if (isBlockbusterCustomMorph())
+        {
+            amount = -amount;
+        }
+
+        return amount;
     }
 
     private double getDataAxisDelta(
