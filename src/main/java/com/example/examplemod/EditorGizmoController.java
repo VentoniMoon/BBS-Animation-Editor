@@ -3033,31 +3033,15 @@ public class EditorGizmoController
             double mouseDX,
             double mouseDY)
     {
-        double amount = getAxisDragAmount(axisId, mouseDX, mouseDY)
+        /*
+         * The screen-space projection was calculated from the same
+         * data-space basis used to render the position handles. Therefore
+         * its signed scalar already tells us how far to change the matching
+         * AnimationTransform coordinate. Do not apply a second X-only sign
+         * correction here: that makes the bone move opposite to its handle.
+         */
+        return getAxisDragAmount(axisId, mouseDX, mouseDY)
                 * getTranslationAxisSign(axisId);
-
-        /*
-         * Blockbuster's three position arrows need axis-specific handling.
-         * X is already correct with the reversed drag direction. Y and Z
-         * use the normal projected drag direction instead. Keep this isolated
-         * to the arrow handles: plane dragging and the other morph adapters
-         * are not affected.
-         */
-        if (isBlockbusterCustomMorph() && axisId == AXIS_X)
-        {
-            amount = -amount;
-        }
-
-        return amount;
-    }
-
-    private double getBlockbusterPositionEditSign(int axisId)
-    {
-        /*
-         * Keep the existing X-arrow correction, while Y/Z now follow the
-         * complete data-space directions supplied by the translation basis.
-         */
-        return axisId == AXIS_X ? -1.0D : 1.0D;
     }
 
     private double getDataAxisDelta(
@@ -3298,18 +3282,11 @@ public class EditorGizmoController
         double deltaB = (ax*mouseDY-ay*mouseDX)/det;
 
         /*
-         * Apply the same per-axis data-space convention as the Blockbuster
-         * arrow handles. X is reversed to preserve the established red-axis
-         * behavior; Y and Z follow their corrected full basis vectors.
-         * The plane solver's deltas are already expressed along the visible
-         * axes, so each component must use its own sign rather than flipping
-         * both components together.
+         * The plane solver returns signed movement along the projected basis
+         * vectors. Those vectors already encode the native Blockbuster
+         * (X, -Y, -Z) translation convention, so applying an extra X sign
+         * here would desynchronize plane dragging from the visible handles.
          */
-        if (isBlockbusterCustomMorph())
-        {
-            deltaA *= getBlockbusterPositionEditSign(axisA);
-            deltaB *= getBlockbusterPositionEditSign(axisB);
-        }
 
         return new double[]{deltaA, deltaB};
     }
