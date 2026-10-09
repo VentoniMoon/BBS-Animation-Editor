@@ -1840,13 +1840,8 @@ public class EditorGizmoController
              * actually move the bone. Keep X's established handle convention;
              * its drag sign is compensated in getDataAxisDragAmount().
              */
-            axes[1][0] = axes[1][0];
             axes[1][1] = -axes[1][1];
-            axes[1][2] = axes[1][2];
-
-            axes[2][0] = axes[2][0];
             axes[2][1] = -axes[2][1];
-            axes[2][2] = axes[2][2];
 
             normalize(axes[0]);
             normalize(axes[1]);
