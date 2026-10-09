@@ -3257,7 +3257,26 @@ public class EditorGizmoController
         double by=this.dragScreenAxes[axisB][1]*this.dragPixelsPerWorld[axisB];
         double det=ax*by-ay*bx;
         if(Math.abs(det)<.0001D)return new double[]{0,0};
-        return new double[]{(mouseDX*by-mouseDY*bx)/det,(ax*mouseDY-ay*mouseDX)/det};
+
+        double deltaA = (mouseDX*by-mouseDY*bx)/det;
+        double deltaB = (ax*mouseDY-ay*mouseDX)/det;
+
+        /*
+         * Blockbuster's position plane handles use renderer-space screen
+         * projections, while AnimationTransform stores its local position
+         * with a different handedness. The individual axis handles already
+         * account for this through their captured axis direction; the plane
+         * solver must reverse its solved deltas for Blockbuster so dragging
+         * a square moves the model with the mouse instead of against it.
+         * Do not change Emoticons or Chameleon behavior.
+         */
+        if (isBlockbusterCustomMorph())
+        {
+            deltaA = -deltaA;
+            deltaB = -deltaB;
+        }
+
+        return new double[]{deltaA, deltaB};
     }
 
     /*
