@@ -257,16 +257,20 @@ public class EditorGizmoController
                         gizmoWorld[2]
                 );
 
+        double[][] axes =
+                getGizmoWorldAxes(
+                        bone,
+                        keyframe,
+                        recordFrame
+                );
+        double[][] displayAxes = getGizmoDisplayAxes(axes);
+
         int hit =
                 hitTest(
                         mouseX, mouseY,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center, gizmoWorld, gizmoSize, camera,
-                        getGizmoWorldAxes(
-                        bone,
-                        keyframe,
-                        recordFrame
-                )
+                        displayAxes
                 );
 
         if (hit < 0)
@@ -278,14 +282,13 @@ public class EditorGizmoController
         this.dragging = true;
         this.activeKeyframe = keyframe;
 
-        double[][] axes =
-                getGizmoWorldAxes(
-                        bone,
-                        keyframe,
-                        recordFrame
-                );
         if (axes != null)
         {
+            /*
+             * Keep the data-space axes unchanged for bone edits, but use the
+             * displayed directions when mapping mouse movement to screen space.
+             * This makes Blockbuster's flipped Y/Z handles clickable and usable.
+             */
             this.dragAxisX = axes[0].clone();
             this.dragAxisY = axes[1].clone();
             this.dragAxisZ = axes[2].clone();
@@ -294,13 +297,14 @@ public class EditorGizmoController
             {
                 this.dragAxisX, this.dragAxisY, this.dragAxisZ
             };
+            double[][] screenAxes = displayAxes != null ? displayAxes : captured;
 
             for (int axis = 0; axis < 3; axis++)
             {
                 ScreenPoint endpoint = project(
-                        gizmoWorld[0] + captured[axis][0],
-                        gizmoWorld[1] + captured[axis][1],
-                        gizmoWorld[2] + captured[axis][2],
+                        gizmoWorld[0] + screenAxes[axis][0],
+                        gizmoWorld[1] + screenAxes[axis][1],
+                        gizmoWorld[2] + screenAxes[axis][2],
                         viewportX, viewportY, viewportWidth, viewportHeight, camera
                 );
                 if (endpoint != null)
@@ -1448,23 +1452,12 @@ public class EditorGizmoController
         }
 
         /*
-         * Blockbuster-only visual correction:
-         * rotate the displayed gizmo 180 degrees around its X axis
-         * (the Y/Z plane). This changes only the vectors sent to the
-         * drawing routines; hit testing, captured drag axes, and the
-         * transform-edit math continue to use the original axes.
-         * Emoticons and Chameleon are intentionally unchanged.
+         * Blockbuster-only visual correction: rotate the displayed gizmo
+         * 180 degrees around its X axis (the Y/Z plane). The same display
+         * basis is used by hit testing and screen-space drag projection,
+         * while bone-edit data axes remain unchanged.
          */
-        double[][] displayAxes = axes;
-        if (isBlockbusterCustomMorph())
-        {
-            displayAxes = new double[][]
-            {
-                axes[0].clone(),
-                new double[] {-axes[1][0], -axes[1][1], -axes[1][2]},
-                new double[] {-axes[2][0], -axes[2][1], -axes[2][2]}
-            };
-        }
+        double[][] displayAxes = getGizmoDisplayAxes(axes);
 
         if (this.mode == Mode.POSITION)
         {
@@ -3003,6 +2996,26 @@ public class EditorGizmoController
                 y + size / 2.0F,
                 finalColor
         );
+    }
+
+    private double[][] getGizmoDisplayAxes(double[][] axes)
+    {
+        if (axes == null)
+        {
+            return null;
+        }
+
+        if (!isBlockbusterCustomMorph())
+        {
+            return axes;
+        }
+
+        return new double[][]
+        {
+            axes[0].clone(),
+            new double[] {-axes[1][0], -axes[1][1], -axes[1][2]},
+            new double[] {-axes[2][0], -axes[2][1], -axes[2][2]}
+        };
     }
 
     private int hitTest(
