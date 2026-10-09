@@ -1827,18 +1827,20 @@ public class EditorGizmoController
              * when a parent bone is rotated.
              */
             /*
-             * Leave the red X axis completely untouched. The bone pivot
-             * uses -renderYawOffset, while this renderer basis contains an
-             * additional 180-degree yaw. Convert only the green Y and blue
-             * Z world directions into the pivot's frame by reversing their
-             * world X/Z components. The existing Y/Z data-axis signs have
-             * already been applied above and must not be applied twice.
+             * Blockbuster stores translation as (X, -Y, -Z) in the
+             * renderer's local coordinate system. Keep the renderer's X
+             * and Z basis vectors, but reverse the ENTIRE Y vector.
+             *
+             * Do not flip only selected world components: that distorts
+             * the axis direction whenever a parent bone is rotated and
+             * makes the displayed gizmo disagree with the edit direction.
+             * The X drag sign is handled separately by
+             * getDataAxisDragAmount(); Y and Z use these data-space axes
+             * directly.
              */
-            for (int axis = 1; axis < 3; axis++)
-            {
-                axes[axis][0] = -axes[axis][0];
-                axes[axis][2] = -axes[axis][2];
-            }
+            axes[1][0] = -axes[1][0];
+            axes[1][1] = -axes[1][1];
+            axes[1][2] = -axes[1][2];
 
             normalize(axes[0]);
             normalize(axes[1]);
@@ -3053,6 +3055,15 @@ public class EditorGizmoController
         return amount;
     }
 
+    private double getBlockbusterPositionEditSign(int axisId)
+    {
+        /*
+         * Keep the existing X-arrow correction, while Y/Z now follow the
+         * complete data-space directions supplied by the translation basis.
+         */
+        return axisId == AXIS_X ? -1.0D : 1.0D;
+    }
+
     private double getDataAxisDelta(
             int axisId,
             double visualDelta)
@@ -3291,18 +3302,17 @@ public class EditorGizmoController
         double deltaB = (ax*mouseDY-ay*mouseDX)/det;
 
         /*
-         * Blockbuster's position plane handles use renderer-space screen
-         * projections, while AnimationTransform stores its local position
-         * with a different handedness. The individual axis handles already
-         * account for this through their captured axis direction; the plane
-         * solver must reverse its solved deltas for Blockbuster so dragging
-         * a square moves the model with the mouse instead of against it.
-         * Do not change Emoticons or Chameleon behavior.
+         * Apply the same per-axis data-space convention as the Blockbuster
+         * arrow handles. X is reversed to preserve the established red-axis
+         * behavior; Y and Z follow their corrected full basis vectors.
+         * The plane solver's deltas are already expressed along the visible
+         * axes, so each component must use its own sign rather than flipping
+         * both components together.
          */
         if (isBlockbusterCustomMorph())
         {
-            deltaA = -deltaA;
-            deltaB = -deltaB;
+            deltaA *= getBlockbusterPositionEditSign(axisA);
+            deltaB *= getBlockbusterPositionEditSign(axisB);
         }
 
         return new double[]{deltaA, deltaB};
