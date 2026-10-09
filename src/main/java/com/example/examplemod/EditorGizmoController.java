@@ -1792,7 +1792,7 @@ public class EditorGizmoController
                  * map to renderer -Y/-Z in ModelCustomRenderer.applyTransform.
                  */
                 double yaw = Math.toRadians(
-                        180.0D - this.previewActor.renderYawOffset
+                        -this.previewActor.renderYawOffset
                 );
                 double cos = Math.cos(yaw);
                 double sin = Math.sin(yaw);
@@ -1800,18 +1800,6 @@ public class EditorGizmoController
                 double[] x = new double[] {cos, 0.0D, -sin};
                 double[] y = new double[] {0.0D, -1.0D, 0.0D};
                 double[] z = new double[] {-sin, 0.0D, -cos};
-
-                /*
-                 * The editor's front-facing preview presents Blockbuster's
-                 * native horizontal/vertical directions reversed. Rotate
-                 * the gizmo basis by 180 degrees in the front-view plane:
-                 * invert X and Y, preserve the depth axis Z.
-                 */
-                for (int component = 0; component < 3; component++)
-                {
-                    x[component] = -x[component];
-                    y[component] = -y[component];
-                }
 
                 normalize(x);
                 normalize(y);
@@ -1832,8 +1820,6 @@ public class EditorGizmoController
                 axes[1][component] = -axes[1][component];
                 axes[2][component] = -axes[2][component];
 
-                axes[0][component] = -axes[0][component];
-                axes[1][component] = -axes[1][component];
             }
 
             normalize(axes[0]);
@@ -2272,7 +2258,7 @@ public class EditorGizmoController
             );
 
             GL11.glRotatef(
-                    -this.previewActor.renderYawOffset + 180.0F,
+                    -this.previewActor.renderYawOffset,
                     0.0F,
                     1.0F,
                     0.0F
