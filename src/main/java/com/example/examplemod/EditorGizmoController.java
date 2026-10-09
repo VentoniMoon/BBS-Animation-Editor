@@ -1452,12 +1452,12 @@ public class EditorGizmoController
         }
 
         /*
-         * Blockbuster-only visual correction: rotate the displayed gizmo
-         * 180 degrees around its X axis (the Y/Z plane). The same display
-         * basis is used by hit testing and screen-space drag projection,
-         * while bone-edit data axes remain unchanged.
+         * Draw the same translation basis that hit testing and local
+         * position editing use. Blockbuster Y/Z are corrected at the
+         * renderer-to-anchor conversion, not by a visual-only 180-degree
+         * rotation that would desynchronize the handles from the bone.
          */
-        double[][] displayAxes = getGizmoDisplayAxes(axes);
+        double[][] displayAxes = axes;
 
         if (this.mode == Mode.POSITION)
         {
@@ -1827,32 +1827,26 @@ public class EditorGizmoController
             }
 
             /*
-             * getBlockbusterRendererBasis() uses the renderer's legacy
-             * yaw (+180 degrees) convention, while the exact pivot used by
-             * the gizmo anchor is reconstructed with -renderYawOffset.
-             * Convert each renderer-space direction into that same anchor
-             * space before applying Blockbuster's data-axis convention.
+             * The anchor position is reconstructed with actor yaw
+             * -renderYawOffset, while getBlockbusterRendererBasis() uses
+             * -renderYawOffset + 180 degrees. Convert the parent's basis
+             * into the anchor's frame by reversing its world X/Z components.
              *
-             * The 180-degree yaw difference reverses world X and Z, but not
-             * world Y. Keep the established X handle direction unchanged;
-             * correct the Y/Z frame so those handles follow the real pivot
-             * when a parent bone is rotated.
+             * Blockbuster's ModelCustomRenderer.applyTransform() maps the
+             * animation translation to renderer coordinates as (X, -Y, -Z).
+             * Combine those two conversions per vector instead of flipping
+             * whole axes or rotating only the drawing. This makes Y/Z point
+             * in the same world directions that their local animation values
+             * actually move the bone. Keep X's established handle convention;
+             * its drag sign is compensated in getDataAxisDragAmount().
              */
-            /*
-             * Blockbuster stores translation as (X, -Y, -Z) in the
-             * renderer's local coordinate system. Keep the renderer's X
-             * and Z basis vectors, but reverse the ENTIRE Y vector.
-             *
-             * Do not flip only selected world components: that distorts
-             * the axis direction whenever a parent bone is rotated and
-             * makes the displayed gizmo disagree with the edit direction.
-             * The X drag sign is handled separately by
-             * getDataAxisDragAmount(); Y and Z use these data-space axes
-             * directly.
-             */
-            axes[1][0] = -axes[1][0];
+            axes[1][0] = axes[1][0];
             axes[1][1] = -axes[1][1];
-            axes[1][2] = -axes[1][2];
+            axes[1][2] = axes[1][2];
+
+            axes[2][0] = axes[2][0];
+            axes[2][1] = -axes[2][1];
+            axes[2][2] = axes[2][2];
 
             normalize(axes[0]);
             normalize(axes[1]);
@@ -2996,26 +2990,6 @@ public class EditorGizmoController
                 y + size / 2.0F,
                 finalColor
         );
-    }
-
-    private double[][] getGizmoDisplayAxes(double[][] axes)
-    {
-        if (axes == null)
-        {
-            return null;
-        }
-
-        if (!isBlockbusterCustomMorph())
-        {
-            return axes;
-        }
-
-        return new double[][]
-        {
-            axes[0].clone(),
-            new double[] {-axes[1][0], -axes[1][1], -axes[1][2]},
-            new double[] {-axes[2][0], -axes[2][1], -axes[2][2]}
-        };
     }
 
     private int hitTest(
