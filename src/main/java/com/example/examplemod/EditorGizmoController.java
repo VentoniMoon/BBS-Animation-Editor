@@ -1826,22 +1826,21 @@ public class EditorGizmoController
              * correct the Y/Z frame so those handles follow the real pivot
              * when a parent bone is rotated.
              */
-            for (int axis = 0; axis < 3; axis++)
+            /*
+             * Leave the red X axis completely untouched. Correct only the
+             * green Y and blue Z directions, first removing the 180-degree
+             * yaw mismatch in world X/Z, then converting the corresponding
+             * AnimationTransform data axis into renderer space.
+             */
+            for (int axis = 1; axis < 3; axis++)
             {
                 axes[axis][0] = -axes[axis][0];
                 axes[axis][2] = -axes[axis][2];
-            }
 
-            /*
-             * Preserve the working red X arrow exactly as it appeared before
-             * the frame correction. Only its basis direction is restored;
-             * the Y/Z handles now use the anchor's matching yaw convention.
-             */
-            for (int component = 0; component < 3; component++)
-            {
-                axes[0][component] = -axes[0][component];
-                axes[1][component] = -axes[1][component];
-                axes[2][component] = -axes[2][component];
+                for (int component = 0; component < 3; component++)
+                {
+                    axes[axis][component] = -axes[axis][component];
+                }
             }
 
             normalize(axes[0]);
