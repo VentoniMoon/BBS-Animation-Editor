@@ -1801,6 +1801,18 @@ public class EditorGizmoController
                 double[] y = new double[] {0.0D, -1.0D, 0.0D};
                 double[] z = new double[] {-sin, 0.0D, -cos};
 
+                /*
+                 * The editor's front-facing preview presents Blockbuster's
+                 * native horizontal/vertical directions reversed. Rotate
+                 * the gizmo basis by 180 degrees in the front-view plane:
+                 * invert X and Y, preserve the depth axis Z.
+                 */
+                for (int component = 0; component < 3; component++)
+                {
+                    x[component] = -x[component];
+                    y[component] = -y[component];
+                }
+
                 normalize(x);
                 normalize(y);
                 normalize(z);
@@ -1809,17 +1821,19 @@ public class EditorGizmoController
             }
 
             /*
-             * postRender() returns renderer-space basis vectors. Convert
-             * them to AnimationTransform's data-space directions exactly
-             * once: Blockbuster negates Y and Z when applying keyframe
-             * translations. The visible handles and plane drag solver now
-             * both use these converted axes, so no second sign flip is
-             * needed when writing the keyframe values.
+             * Convert renderer-space basis into AnimationTransform data
+             * directions (Blockbuster negates Y/Z), then apply the same
+             * 180-degree front-view correction as for root bones. Keeping
+             * this in the basis makes handles, plane hit-tests and drag
+             * projection agree. Do not add another sign flip in mouseDragged.
              */
             for (int component = 0; component < 3; component++)
             {
                 axes[1][component] = -axes[1][component];
                 axes[2][component] = -axes[2][component];
+
+                axes[0][component] = -axes[0][component];
+                axes[1][component] = -axes[1][component];
             }
 
             normalize(axes[0]);
