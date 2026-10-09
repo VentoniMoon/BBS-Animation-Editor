@@ -1827,18 +1827,15 @@ public class EditorGizmoController
             }
 
             /*
-             * The anchor position is reconstructed with actor yaw
-             * -renderYawOffset, while getBlockbusterRendererBasis() uses
-             * -renderYawOffset + 180 degrees. Convert the parent's basis
-             * into the anchor's frame by reversing its world X/Z components.
+             * The anchor and renderer basis now use the same actor yaw
+             * (-renderYawOffset + 180 degrees), so no extra world-frame
+             * correction is needed here.
              *
              * Blockbuster's ModelCustomRenderer.applyTransform() maps the
              * animation translation to renderer coordinates as (X, -Y, -Z).
-             * Combine those two conversions per vector instead of flipping
-             * whole axes or rotating only the drawing. This makes Y/Z point
-             * in the same world directions that their local animation values
-             * actually move the bone. Keep X's established handle convention;
-             * its drag sign is compensated in getDataAxisDragAmount().
+             * Convert the complete Y/Z basis vectors to match that local data
+             * convention. Keep X's established handle convention; its drag
+             * sign is compensated in getDataAxisDragAmount().
              */
             /*
              * The renderer basis is now expressed in the same actor yaw
