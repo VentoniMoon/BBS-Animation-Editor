@@ -1447,25 +1447,44 @@ public class EditorGizmoController
                     };
         }
 
+        /*
+         * Blockbuster-only visual correction:
+         * rotate the displayed gizmo 180 degrees around its X axis
+         * (the Y/Z plane). This changes only the vectors sent to the
+         * drawing routines; hit testing, captured drag axes, and the
+         * transform-edit math continue to use the original axes.
+         * Emoticons and Chameleon are intentionally unchanged.
+         */
+        double[][] displayAxes = axes;
+        if (isBlockbusterCustomMorph())
+        {
+            displayAxes = new double[][]
+            {
+                axes[0].clone(),
+                new double[] {-axes[1][0], -axes[1][1], -axes[1][2]},
+                new double[] {-axes[2][0], -axes[2][1], -axes[2][2]}
+            };
+        }
+
         if (this.mode == Mode.POSITION)
         {
             drawPositionGizmo3D(
                     size,
-                    axes
+                    displayAxes
             );
         }
         else if (this.mode == Mode.ROTATION)
         {
             drawRotationGizmo3D(
                     size,
-                    axes
+                    displayAxes
             );
         }
         else
         {
             drawScaleGizmo3D(
                     size,
-                    axes
+                    displayAxes
             );
         }
 
