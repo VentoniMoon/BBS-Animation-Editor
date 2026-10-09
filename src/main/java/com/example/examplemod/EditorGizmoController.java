@@ -1840,8 +1840,20 @@ public class EditorGizmoController
              * actually move the bone. Keep X's established handle convention;
              * its drag sign is compensated in getDataAxisDragAmount().
              */
-            axes[1][1] = -axes[1][1];
-            axes[2][1] = -axes[2][1];
+            /*
+             * The renderer basis is now expressed in the same actor yaw
+             * frame as the bone anchor. Animation translation uses
+             * (X, -Y, -Z), so convert the complete Y and Z basis vectors,
+             * not only their world-Y components.
+             *
+             * Keep X unchanged because its established drag convention is
+             * separately compensated in getDataAxisDragAmount().
+             */
+            for (int component = 0; component < 3; component++)
+            {
+                axes[1][component] = -axes[1][component];
+                axes[2][component] = -axes[2][component];
+            }
 
             normalize(axes[0]);
             normalize(axes[1]);
@@ -2279,7 +2291,7 @@ public class EditorGizmoController
             );
 
             GL11.glRotatef(
-                    -this.previewActor.renderYawOffset,
+                    -this.previewActor.renderYawOffset + 180.0F,
                     0.0F,
                     1.0F,
                     0.0F
