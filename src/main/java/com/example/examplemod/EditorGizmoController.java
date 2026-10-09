@@ -1815,12 +1815,31 @@ public class EditorGizmoController
             }
 
             /*
-             * Convert renderer-space basis into AnimationTransform data
-             * directions. Blockbuster negates Y and Z in applyTransform().
-             * Keep this conversion identical for every bone hierarchy level.
+             * getBlockbusterRendererBasis() uses the renderer's legacy
+             * yaw (+180 degrees) convention, while the exact pivot used by
+             * the gizmo anchor is reconstructed with -renderYawOffset.
+             * Convert each renderer-space direction into that same anchor
+             * space before applying Blockbuster's data-axis convention.
+             *
+             * The 180-degree yaw difference reverses world X and Z, but not
+             * world Y. Keep the established X handle direction unchanged;
+             * correct the Y/Z frame so those handles follow the real pivot
+             * when a parent bone is rotated.
+             */
+            for (int axis = 0; axis < 3; axis++)
+            {
+                axes[axis][0] = -axes[axis][0];
+                axes[axis][2] = -axes[axis][2];
+            }
+
+            /*
+             * Preserve the working red X arrow exactly as it appeared before
+             * the frame correction. Only its basis direction is restored;
+             * the Y/Z handles now use the anchor's matching yaw convention.
              */
             for (int component = 0; component < 3; component++)
             {
+                axes[0][component] = -axes[0][component];
                 axes[1][component] = -axes[1][component];
                 axes[2][component] = -axes[2][component];
             }
