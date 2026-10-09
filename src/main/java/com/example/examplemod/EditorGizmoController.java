@@ -1827,29 +1827,14 @@ public class EditorGizmoController
             }
 
             /*
-             * The anchor and renderer basis now use the same actor yaw
-             * (-renderYawOffset + 180 degrees), so no extra world-frame
-             * correction is needed here.
-             *
-             * Blockbuster's ModelCustomRenderer.applyTransform() maps the
-             * animation translation to renderer coordinates as (X, -Y, -Z).
-             * Convert the complete Y/Z basis vectors to match that local data
-             * convention. Keep X's established handle convention; its drag
-             * sign is compensated in getDataAxisDragAmount().
-             */
-            /*
-             * The renderer basis is now expressed in the same actor yaw
-             * frame as the bone anchor. Animation translation uses
-             * (X, -Y, -Z), so convert the complete Y and Z basis vectors,
-             * not only their world-Y components.
-             *
-             * Keep X unchanged because its established drag convention is
-             * separately compensated in getDataAxisDragAmount().
+             * Keep the original actor yaw used by the bone anchor. Do not
+             * negate the X or Z basis here: those directions must retain
+             * their established behavior. Correct only the complete Y axis
+             * for Blockbuster's inverted local translation convention.
              */
             for (int component = 0; component < 3; component++)
             {
                 axes[1][component] = -axes[1][component];
-                axes[2][component] = -axes[2][component];
             }
 
             normalize(axes[0]);
@@ -2288,7 +2273,7 @@ public class EditorGizmoController
             );
 
             GL11.glRotatef(
-                    -this.previewActor.renderYawOffset + 180.0F,
+                    -this.previewActor.renderYawOffset,
                     0.0F,
                     1.0F,
                     0.0F
