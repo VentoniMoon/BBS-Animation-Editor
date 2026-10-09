@@ -1785,37 +1785,46 @@ public class EditorGizmoController
              */
             if (renderer.parent == null)
             {
-                double visualYaw =
-                        this.previewActor.renderYawOffset;
-
-                double yaw =
-                        Math.toRadians(
-                                180.0D - visualYaw
-                        );
-
+                /*
+                 * Root renderer has no parent matrix. Reconstruct the
+                 * actor basis from Blockbuster's actual GL yaw convention.
+                 * AnimationTransform +X maps to renderer +X, while +Y/+Z
+                 * map to renderer -Y/-Z in ModelCustomRenderer.applyTransform.
+                 */
+                double yaw = Math.toRadians(
+                        180.0D - this.previewActor.renderYawOffset
+                );
                 double cos = Math.cos(yaw);
                 double sin = Math.sin(yaw);
 
-                double[] x =
-                        new double[] { cos, 0.0D, -sin };
-
-                double[] y =
-                        new double[] { 0.0D, -1.0D, 0.0D };
-
-                double[] z =
-                        new double[] { -sin, 0.0D, -cos };
+                double[] x = new double[] {cos, 0.0D, -sin};
+                double[] y = new double[] {0.0D, -1.0D, 0.0D};
+                double[] z = new double[] {-sin, 0.0D, -cos};
 
                 normalize(x);
                 normalize(y);
                 normalize(z);
 
-                return new double[][]
-                {
-                    x,
-                    y,
-                    z
-                };
+                return new double[][] {x, y, z};
             }
+
+            /*
+             * postRender() returns renderer-space basis vectors. Convert
+             * them to AnimationTransform's data-space directions exactly
+             * once: Blockbuster negates Y and Z when applying keyframe
+             * translations. The visible handles and plane drag solver now
+             * both use these converted axes, so no second sign flip is
+             * needed when writing the keyframe values.
+             */
+            for (int component = 0; component < 3; component++)
+            {
+                axes[1][component] = -axes[1][component];
+                axes[2][component] = -axes[2][component];
+            }
+
+            normalize(axes[0]);
+            normalize(axes[1]);
+            normalize(axes[2]);
 
             return axes;
         }
@@ -3027,13 +3036,12 @@ public class EditorGizmoController
         }
 
         /*
-         * Match ModelCustomRenderer.applyTransform():
-         * X uses translate.x directly, while Y and Z are negated when
-         * converted into ModelRenderer rotationPoint coordinates.
-         * The native parent basis already handles actor yaw and rotation;
-         * only this data-to-renderer axis convention belongs here.
+         * getExactBlockbusterBoneTranslationWorldAxes() already converts
+         * the renderer basis into AnimationTransform data-space directions.
+         * Applying another sign here would make the bone move opposite to
+         * the visible handle (and would also break plane XY dragging).
          */
-        return axisId == AXIS_X ? 1.0D : -1.0D;
+        return 1.0D;
     }
 
     private boolean isBlockbusterCustomMorph()
