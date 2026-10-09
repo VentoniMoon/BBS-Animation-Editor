@@ -2132,23 +2132,19 @@ public class EditorGizmoController
             BlockbusterRecordFrame recordFrame)
     {
         /*
-         * Position edits are stored in the animation/model coordinate
-         * system.  Use the editor's reconstructed bone pivot for the
-         * gizmo anchor so X/Y/Z follow the exact same convention as the
-         * keyframe data.  The native renderer is only a fallback for
-         * cases where the editor cannot reconstruct the pivot.
+         * Follow the same rule as the working Emoticons adapter:
+         * use the model engine's own evaluated bone matrix for the pivot.
+         * Rebuilding the hierarchy from editor transforms separately can
+         * diverge from Blockbuster's actual parent/rotation/scale order.
          */
         if (isBlockbusterCustomMorph())
         {
-            double[] blockbusterWorld =
-                    getBlockbusterAnimationBoneWorldPosition(
-                            bone,
-                            keyframe
-                    );
+            double[] nativeWorld =
+                    getExactBlockbusterBoneWorldPosition(bone);
 
-            if (blockbusterWorld != null)
+            if (nativeWorld != null)
             {
-                return blockbusterWorld;
+                return nativeWorld;
             }
         }
 
@@ -2179,23 +2175,10 @@ public class EditorGizmoController
         if (result != null) return result;
 
         /*
-         * Blockbuster uses a different local transform convention from the
-         * generic AnimationTransform hierarchy. Rebuild the animated pivot
-         * with that native convention so the Gizmo follows the actual key.
+         * As with Emoticons, prefer the engine's evaluated bone transform.
+         * The renderer's postRender() walks the real Blockbuster hierarchy
+         * and avoids a second, potentially mismatched transform calculation.
          */
-        if (isBlockbusterCustomMorph())
-        {
-            result = getBlockbusterAnimationBoneWorldPosition(
-                    bone,
-                    keyframe
-            );
-
-            if (result != null)
-            {
-                return result;
-            }
-        }
-
         result = getExactBlockbusterBoneWorldPosition(bone);
         if (result != null) return result;
         return getBoneWorldPosition(bone, keyframe, recordFrame);
@@ -3044,13 +3027,13 @@ public class EditorGizmoController
         }
 
         /*
-         * Blockbuster's AnimationTransform position values use the
-         * opposite sign from the visual world-space drag direction.
-         * Keep this conversion independent from the displayed basis.
-         *
-         * X, Y and Z therefore all need the native-to-editor sign flip.
+         * Match ModelCustomRenderer.applyTransform():
+         * X uses translate.x directly, while Y and Z are negated when
+         * converted into ModelRenderer rotationPoint coordinates.
+         * The native parent basis already handles actor yaw and rotation;
+         * only this data-to-renderer axis convention belongs here.
          */
-        return -1.0D;
+        return axisId == AXIS_X ? 1.0D : -1.0D;
     }
 
     private boolean isBlockbusterCustomMorph()
