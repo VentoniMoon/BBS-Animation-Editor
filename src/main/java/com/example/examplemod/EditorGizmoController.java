@@ -263,7 +263,7 @@ public class EditorGizmoController
                         keyframe,
                         recordFrame
                 );
-        double[][] displayAxes = getGizmoDisplayAxes(axes);
+        double[][] displayAxes = axes;
 
         int hit =
                 hitTest(
