@@ -1827,20 +1827,17 @@ public class EditorGizmoController
              * when a parent bone is rotated.
              */
             /*
-             * Leave the red X axis completely untouched. Correct only the
-             * green Y and blue Z directions, first removing the 180-degree
-             * yaw mismatch in world X/Z, then converting the corresponding
-             * AnimationTransform data axis into renderer space.
+             * Leave the red X axis completely untouched. The bone pivot
+             * uses -renderYawOffset, while this renderer basis contains an
+             * additional 180-degree yaw. Convert only the green Y and blue
+             * Z world directions into the pivot's frame by reversing their
+             * world X/Z components. The existing Y/Z data-axis signs have
+             * already been applied above and must not be applied twice.
              */
             for (int axis = 1; axis < 3; axis++)
             {
                 axes[axis][0] = -axes[axis][0];
                 axes[axis][2] = -axes[axis][2];
-
-                for (int component = 0; component < 3; component++)
-                {
-                    axes[axis][component] = -axes[axis][component];
-                }
             }
 
             normalize(axes[0]);
