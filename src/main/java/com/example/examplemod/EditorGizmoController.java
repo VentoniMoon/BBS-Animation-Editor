@@ -1801,6 +1801,19 @@ public class EditorGizmoController
                 double[] y = new double[] {0.0D, -1.0D, 0.0D};
                 double[] z = new double[] {-sin, 0.0D, -cos};
 
+                /*
+                 * The user's preview is viewed from the front. A 180-degree
+                 * horizontal turn is a rotation around vertical Y: invert
+                 * X and Z, but preserve Y. Flipping X/Y instead was a
+                 * rotation around depth and made the gizmo appear upside
+                 * down while moving the anchor away from the bone.
+                 */
+                for (int component = 0; component < 3; component++)
+                {
+                    x[component] = -x[component];
+                    z[component] = -z[component];
+                }
+
                 normalize(x);
                 normalize(y);
                 normalize(z);
@@ -1810,16 +1823,17 @@ public class EditorGizmoController
 
             /*
              * Convert renderer-space basis into AnimationTransform data
-             * directions (Blockbuster negates Y/Z), then apply the same
-             * 180-degree front-view correction as for root bones. Keeping
-             * this in the basis makes handles, plane hit-tests and drag
-             * projection agree. Do not add another sign flip in mouseDragged.
+             * directions (Blockbuster negates Y/Z), then rotate the basis
+             * 180 degrees around vertical Y for the front-facing preview.
+             * Keep the visible basis and drag projection in the same space.
              */
             for (int component = 0; component < 3; component++)
             {
                 axes[1][component] = -axes[1][component];
                 axes[2][component] = -axes[2][component];
 
+                axes[0][component] = -axes[0][component];
+                axes[2][component] = -axes[2][component];
             }
 
             normalize(axes[0]);
