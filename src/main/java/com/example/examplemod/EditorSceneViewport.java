@@ -567,12 +567,16 @@ public class EditorSceneViewport
             this.camera.zoom(
                     -0.75D
             );
+
+            return true;
         }
         else if (amount < 0)
         {
             this.camera.zoom(
                     0.75D
             );
+
+            return true;
         }
 
         return false;
