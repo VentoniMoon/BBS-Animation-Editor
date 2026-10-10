@@ -464,9 +464,16 @@ public class BodyPartsPreviewRenderer
                     continue;
                 }
 
-                target.translate[0] = bone.getLocalX() + transform.getPositionX();
-                target.translate[1] = bone.getLocalY() + transform.getPositionY();
-                target.translate[2] = bone.getLocalZ() + transform.getPositionZ();
+                /*
+                 * The copied ModelTransform already stores the rest-pose
+                 * translation in Blockbuster's render coordinate system.
+                 * AnimationBone pivots are converted for editor interaction;
+                 * using localY/localZ here mixes coordinate systems and can
+                 * mirror the limb. Internal position keys are offsets.
+                 */
+                target.translate[0] += transform.getPositionX();
+                target.translate[1] += transform.getPositionY();
+                target.translate[2] += transform.getPositionZ();
 
                 /* Keyframe rotations/scales are offsets from the source pose. */
                 target.rotate[0] += transform.getRotationX();
@@ -627,10 +634,14 @@ public class BodyPartsPreviewRenderer
                     continue;
                 }
 
-                /* Keep the rest-pose pivot and apply only this bone's keyed delta. */
-                target.translate[0] = bone.getLocalX() + transform.getPositionX();
-                target.translate[1] = bone.getLocalY() + transform.getPositionY();
-                target.translate[2] = bone.getLocalZ() + transform.getPositionZ();
+                /*
+                 * Preserve Blockbuster's source translation and apply only
+                 * the keyed delta. Do not use the editor-space bone pivot
+                 * here: its Y/Z conversion differs from ModelTransform.
+                 */
+                target.translate[0] += transform.getPositionX();
+                target.translate[1] += transform.getPositionY();
+                target.translate[2] += transform.getPositionZ();
                 target.rotate[0] += transform.getRotationX();
                 target.rotate[1] += transform.getRotationY();
                 target.rotate[2] += transform.getRotationZ();
