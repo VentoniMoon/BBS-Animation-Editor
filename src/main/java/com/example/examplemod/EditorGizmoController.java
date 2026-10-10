@@ -62,6 +62,11 @@ public class EditorGizmoController
     private double rotationDragLastAngle;
     private double rotationDragAccumulatedDegrees;
     private boolean rotationDragAngleValid;
+    /* Screen-space basis of the selected ring, matching drawScreenRing(). */
+    private double rotationBasisAX = 1.0D;
+    private double rotationBasisAY = 0.0D;
+    private double rotationBasisBX = 0.0D;
+    private double rotationBasisBY = 1.0D;
 
     private int dragStartX;
     private int dragStartY;
@@ -296,11 +301,21 @@ public class EditorGizmoController
         {
             this.rotationDragCenterX = center.x;
             this.rotationDragCenterY = center.y;
+            setRotationDragBasis(
+                    this.activePart,
+                    gizmoWorld,
+                    axes,
+                    viewportX, viewportY, viewportWidth, viewportHeight,
+                    center,
+                    camera
+            );
+
             double startDX = mouseX - center.x;
             double startDY = mouseY - center.y;
             if (startDX * startDX + startDY * startDY >= 64.0D)
             {
-                this.rotationDragLastAngle = Math.atan2(startDY, startDX);
+                double[] ringPoint = getRotationRingCoordinates(startDX, startDY);
+                this.rotationDragLastAngle = Math.atan2(ringPoint[1], ringPoint[0]);
                 this.rotationDragAngleValid = true;
             }
         }
@@ -3405,6 +3420,85 @@ public class EditorGizmoController
      * sample is unwrapped against the previous sample so crossing the
      * atan2 +/-PI seam does not produce a full-turn jump.
      */
+    private void setRotationDragBasis(
+            int axisId,
+            double[] world,
+            double[][] axes,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            ScreenPoint center,
+            EditorCamera camera)
+    {
+        if (world == null || axes == null || axisId < 0 || axisId > 2)
+        {
+            return;
+        }
+
+        /*
+         * The visible rings are drawn in screen space from the two projected
+         * directions perpendicular to the selected axis. Use that same basis
+         * to interpret the mouse position; raw atan2(mouseY, mouseX) ignores
+         * the ring's orientation and reverses the apparent direction on some
+         * bones/camera angles.
+         */
+        int basisA = (axisId + 1) % 3;
+        int basisB = (axisId + 2) % 3;
+        ScreenPoint pointA = project(
+                world[0] + axes[basisA][0],
+                world[1] + axes[basisA][1],
+                world[2] + axes[basisA][2],
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        ScreenPoint pointB = project(
+                world[0] + axes[basisB][0],
+                world[1] + axes[basisB][1],
+                world[2] + axes[basisB][2],
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+
+        if (pointA == null || pointB == null)
+        {
+            return;
+        }
+
+        double ax = pointA.x - center.x;
+        double ay = pointA.y - center.y;
+        double bx = pointB.x - center.x;
+        double by = pointB.y - center.y;
+        double al = Math.sqrt(ax * ax + ay * ay);
+        double bl = Math.sqrt(bx * bx + by * by);
+
+        if (al < 0.0001D || bl < 0.0001D)
+        {
+            return;
+        }
+
+        this.rotationBasisAX = ax / al;
+        this.rotationBasisAY = ay / al;
+        this.rotationBasisBX = bx / bl;
+        this.rotationBasisBY = by / bl;
+    }
+
+    private double[] getRotationRingCoordinates(double dx, double dy)
+    {
+        double determinant =
+                this.rotationBasisAX * this.rotationBasisBY
+                        - this.rotationBasisBX * this.rotationBasisAY;
+
+        if (Math.abs(determinant) < 0.0001D)
+        {
+            /* Edge-on ring: retain a stable fallback instead of exploding. */
+            return new double[] {dx, dy};
+        }
+
+        double a = (dx * this.rotationBasisBY - dy * this.rotationBasisBX) / determinant;
+        double b = (this.rotationBasisAX * dy - this.rotationBasisAY * dx) / determinant;
+
+        return new double[] {a, b};
+    }
+
     private double getRotationDragAngle(int axisId, double mouseX, double mouseY)
     {
         double dx = mouseX - this.rotationDragCenterX;
@@ -3418,7 +3512,8 @@ public class EditorGizmoController
             return this.rotationDragAccumulatedDegrees * getDataAxisSign(axisId);
         }
 
-        double angle = Math.atan2(dy, dx);
+        double[] ringPoint = getRotationRingCoordinates(dx, dy);
+        double angle = Math.atan2(ringPoint[1], ringPoint[0]);
 
         if (!this.rotationDragAngleValid)
         {
