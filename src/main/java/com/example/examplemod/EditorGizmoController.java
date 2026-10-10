@@ -3780,6 +3780,21 @@ public class EditorGizmoController
         }
 
         /*
+         * Level 1 Body Part edits the whole model, not the attachment
+         * bone. Rotation/scale axes therefore follow the attachment basis
+         * composed with the model's own global rotation, rather than the
+         * unmodified rendered parent-bone axes.
+         */
+        if (this.globalTransformTarget != null)
+        {
+            return getBoneWorldAxes(
+                    bone,
+                    selectedKeyframe,
+                    recordFrame
+            );
+        }
+
+        /*
          * Rotation and scale continue to use the exact rendered bone
          * orientation.  This keeps the existing local behaviour of those
          * tools unchanged.
