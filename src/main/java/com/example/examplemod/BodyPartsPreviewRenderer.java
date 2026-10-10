@@ -331,16 +331,46 @@ public class BodyPartsPreviewRenderer
             BodyPartModelData data,
             int frame)
     {
-        if (child == null || data == null || child.model == null)
+        if (child == null || data == null)
         {
             return;
         }
 
         try
         {
+            child.updateModel(true);
+
+            Model apiModel = child.model;
+            if (apiModel == null)
+            {
+                String name = child.name == null ? "" : child.name;
+                if (name.startsWith("blockbuster."))
+                {
+                    name = name.substring("blockbuster.".length());
+                }
+
+                if (!name.isEmpty())
+                {
+                    BlockbusterModelAccess access =
+                            new BlockbusterModelAccess(null);
+
+                    if (access.loadModelByName(name)
+                            && access.getApiModel() instanceof Model)
+                    {
+                        apiModel = (Model) access.getApiModel();
+                        child.model = apiModel;
+                    }
+                }
+            }
+
+            if (apiModel == null)
+            {
+                return;
+            }
+
             CustomMorph.ModelProperties pose =
                     new CustomMorph.ModelProperties();
-            pose.updateLimbs(child.model, true);
+            pose.updateLimbs(apiModel, true);
 
             for (AnimationBone bone : data.getBones())
             {
