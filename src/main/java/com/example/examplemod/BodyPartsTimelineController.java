@@ -1402,7 +1402,7 @@ public class BodyPartsTimelineController
             if (key != null)
             {
                 controller.getKeyframeController()
-                        .setSelectedKeyframe(key);
+                        .setSelectedKeyframe(bone, key);
 
                 controller.getKeyframeController()
                         .startKeyframeDragging(
@@ -1438,7 +1438,7 @@ public class BodyPartsTimelineController
                                 );
 
                 controller.getKeyframeController()
-                        .setSelectedKeyframe(createdKey);
+                        .setSelectedKeyframe(bone, createdKey);
 
                 resetClickState();
                 return true;
