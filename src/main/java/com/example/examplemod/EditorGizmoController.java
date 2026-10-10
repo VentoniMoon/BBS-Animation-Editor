@@ -2294,6 +2294,23 @@ public class EditorGizmoController
 
     private double[] getNativeBoneWorldPosition(AnimationBone bone, AnimationKeyframe keyframe, BlockbusterRecordFrame recordFrame)
     {
+        /*
+         * The Level 1 Body Part gizmo edits the whole model transform.
+         * Its pivot must include that transform's translation, so do not
+         * return the rendered parent-bone pivot before applying it.
+         */
+        if (this.globalTransformTarget != null &&
+                this.bodyPartAttachmentBone != null)
+        {
+            double[] transformed =
+                    getBoneWorldPosition(bone, keyframe, recordFrame);
+
+            if (transformed != null)
+            {
+                return transformed;
+            }
+        }
+
         double[] result = getExactChameleonBoneWorldPosition(bone, recordFrame);
         if (result != null) return result;
         result = getExactEmoticonsBoneWorldPosition(bone, recordFrame);
@@ -4383,7 +4400,9 @@ public class EditorGizmoController
                 this.bodyPartAttachmentBone != null)
         {
             AnimationTransform attachment =
-                    this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+                    this.chameleonCoordinateSpace
+                            ? getChameleonWorldPivot(this.bodyPartAttachmentBone, frame)
+                            : this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
             if (attachment == null)
             {
