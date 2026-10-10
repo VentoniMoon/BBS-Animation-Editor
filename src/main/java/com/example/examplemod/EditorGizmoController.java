@@ -3445,40 +3445,25 @@ public class EditorGizmoController
          */
         int basisA = (axisId + 1) % 3;
         int basisB = (axisId + 2) % 3;
-        ScreenPoint pointA = project(
-                world[0] + axes[basisA][0],
-                world[1] + axes[basisA][1],
-                world[2] + axes[basisA][2],
+        ScreenDirection directionA = getScreenDirection(
+                center, world, axes[basisA],
                 viewportX, viewportY, viewportWidth, viewportHeight, camera
         );
-        ScreenPoint pointB = project(
-                world[0] + axes[basisB][0],
-                world[1] + axes[basisB][1],
-                world[2] + axes[basisB][2],
+        ScreenDirection directionB = getScreenDirection(
+                center, world, axes[basisB],
                 viewportX, viewportY, viewportWidth, viewportHeight, camera
         );
 
-        if (pointA == null || pointB == null)
+        if (directionA == null || directionB == null)
         {
             return;
         }
 
-        double ax = pointA.x - center.x;
-        double ay = pointA.y - center.y;
-        double bx = pointB.x - center.x;
-        double by = pointB.y - center.y;
-        double al = Math.sqrt(ax * ax + ay * ay);
-        double bl = Math.sqrt(bx * bx + by * by);
-
-        if (al < 0.0001D || bl < 0.0001D)
-        {
-            return;
-        }
-
-        this.rotationBasisAX = ax / al;
-        this.rotationBasisAY = ay / al;
-        this.rotationBasisBX = bx / bl;
-        this.rotationBasisBY = by / bl;
+        /* Match the normalized basis used to draw the visible ring exactly. */
+        this.rotationBasisAX = directionA.x;
+        this.rotationBasisAY = directionA.y;
+        this.rotationBasisBX = directionB.x;
+        this.rotationBasisBY = directionB.y;
     }
 
     private double[] getRotationRingCoordinates(double dx, double dy)
