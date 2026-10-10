@@ -3406,18 +3406,15 @@ public class EditorGizmoController
     private double getDataAxisSign(int axisId)
     {
         /*
-         * Blockbuster renders CustomMorph models through a mirrored X/Y
-         * modelview basis (glScalef(-1, -1, 1)). Rotation values are stored
-         * in AnimationTransform space, before that renderer transform.
+         * Blockbuster's rendered CustomMorph coordinate basis does not use
+         * the same handed direction as AnimationTransform for the X and Z
+         * rotation channels. Keep Y unchanged: user testing confirms that
+         * the green ring already rotates correctly on every tested bone.
          *
-         * Convert the drag angle back into that data-space convention for
-         * X and Y only. Z is intentionally unchanged: its current direction
-         * is already correct in the Blockbuster preview.
-         *
-         * Emoticons uses its own BOBJ bone basis and is intentionally left
-         * on the native sign convention.
+         * This conversion applies only to Blockbuster CustomMorphs.
+         * Emoticons uses its own BOBJ bone basis and remains untouched.
          */
-        if (isBlockbusterCustomMorph() && (axisId == AXIS_X || axisId == AXIS_Y))
+        if (isBlockbusterCustomMorph() && (axisId == AXIS_X || axisId == AXIS_Z))
         {
             return -1.0D;
         }
