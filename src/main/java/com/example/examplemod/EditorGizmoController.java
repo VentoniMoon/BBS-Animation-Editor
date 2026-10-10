@@ -1812,8 +1812,8 @@ public class EditorGizmoController
                 double sin = Math.sin(yaw);
 
                 double[] x = new double[] {cos, 0.0D, -sin};
-                double[] y = new double[] {0.0D, -1.0D, 0.0D};
-                double[] z = new double[] {-sin, 0.0D, -cos};
+                double[] y = new double[] {0.0D, 1.0D, 0.0D};
+                double[] z = new double[] {sin, 0.0D, cos};
 
                 /*
                  * Keep the actor basis in the same convention as the native
@@ -1891,6 +1891,16 @@ public class EditorGizmoController
                     sourceModel.scale[1] * customMorph.scale,
                     sourceModel.scale[2] * customMorph.scale
             );
+
+            /*
+             * Match RenderLivingBase.renderModel(): Blockbuster mirrors the
+             * model on X/Y and shifts it down by 1.501 before evaluating the
+             * limb hierarchy. Without this outer transform the gizmo's X/Y
+             * directions disagree with the rendered model and its pivot is
+             * vertically/horizontally displaced.
+             */
+            GL11.glScalef(-1.0F, -1.0F, 1.0F);
+            GL11.glTranslatef(0.0F, -1.501F, 0.0F);
 
             renderer.postRender(0.0625F);
 
@@ -2293,6 +2303,16 @@ public class EditorGizmoController
                     sourceModel.scale[1] * morphScale,
                     sourceModel.scale[2] * morphScale
             );
+
+            /*
+             * Match RenderLivingBase.renderModel(): Blockbuster mirrors the
+             * model on X/Y and shifts it down by 1.501 before evaluating the
+             * limb hierarchy. Without this outer transform the gizmo's X/Y
+             * directions disagree with the rendered model and its pivot is
+             * vertically/horizontally displaced.
+             */
+            GL11.glScalef(-1.0F, -1.0F, 1.0F);
+            GL11.glTranslatef(0.0F, -1.501F, 0.0F);
 
             renderer.postRender(0.0625F);
 
