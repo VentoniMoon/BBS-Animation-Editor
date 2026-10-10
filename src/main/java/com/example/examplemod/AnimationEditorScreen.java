@@ -660,14 +660,38 @@ public class AnimationEditorScreen extends GuiScreen
             return null;
         }
 
+        EditorKeyframeController bodyPartKeys =
+                this.bodyPartsController.getKeyframeController();
+
         AnimationKeyframe selected =
-                this.bodyPartsController
-                        .getKeyframeController()
-                        .getSelectedKeyframe();
+                bodyPartKeys.getSelectedKeyframe();
 
         if (selected != null)
         {
             return selected;
+        }
+
+        /*
+         * Timeline selection can survive while the transient selected-key
+         * reference is cleared by another UI action. Resolve the key from
+         * the selected Body Part bone and current frame, just as the Pose
+         * editor does. This keeps the gizmo connected to the actual track.
+         */
+        BodyPartModelData selectedModel =
+                this.bodyPartsController.getSelectedModel();
+
+        if (selectedModel != null)
+        {
+            AnimationBone selectedBone =
+                    bodyPartKeys.getSelectedBone(selectedModel.getBones());
+
+            if (selectedBone != null)
+            {
+                return bodyPartKeys.findKeyframe(
+                        selectedBone,
+                        this.playbackController.getCurrentFrame()
+                );
+            }
         }
 
         return null;
