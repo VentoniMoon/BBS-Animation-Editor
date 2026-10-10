@@ -151,7 +151,7 @@ public class BodyPartsPreviewRenderer
 
             if (morph != null)
             {
-                return createMorphBodyPart(data, morph);
+                return createMorphBodyPart(data, morph, frame);
             }
         }
 
@@ -284,7 +284,7 @@ public class BodyPartsPreviewRenderer
     }
 
     /** Build a BodyPart around a non-Blockbuster Metamorph (notably Chameleon). */
-    private BodyPart createMorphBodyPart(BodyPartModelData data, AbstractMorph child)
+    private BodyPart createMorphBodyPart(BodyPartModelData data, AbstractMorph child, int frame)
     {
         BodyPart part = new BodyPart();
         part.limb = data.getAttachmentBoneName();
@@ -304,12 +304,88 @@ public class BodyPartsPreviewRenderer
             part.scale.set(global.getScaleX(), global.getScaleY(), global.getScaleZ());
         }
 
+        /*
+         * CustomMorphs selected from the Metamorph browser enter this
+         * morph-backed path, not createChildMorph(). Without applying the
+         * editor pose here, internal keyframe values change in the UI but
+         * the actual attached model keeps its original pose.
+         */
+        if (child instanceof CustomMorph)
+        {
+            applyInternalBonePose((CustomMorph) child, data, frame);
+        }
+
         part.useTarget = true;
         part.enabled = true;
         /* Chameleon animations must keep ticking while the actor preview plays. */
         part.animate = true;
         part.morph.setDirect(child);
         return part;
+    }
+
+    /**
+     * Apply the Body Parts internal-bone keyframes to a CustomMorph pose.
+     */
+    private void applyInternalBonePose(
+            CustomMorph child,
+            BodyPartModelData data,
+            int frame)
+    {
+        if (child == null || data == null || child.model == null)
+        {
+            return;
+        }
+
+        try
+        {
+            CustomMorph.ModelProperties pose =
+                    new CustomMorph.ModelProperties();
+            pose.updateLimbs(child.model, true);
+
+            for (AnimationBone bone : data.getBones())
+            {
+                if (bone == null || bone.getName() == null)
+                {
+                    continue;
+                }
+
+                mchorse.blockbuster.api.ModelTransform target =
+                        pose.limbs.get(bone.getName());
+
+                if (target == null)
+                {
+                    continue;
+                }
+
+                AnimationTransform transform =
+                        bone.getTransformAt(frame);
+
+                if (transform == null)
+                {
+                    continue;
+                }
+
+                target.translate[0] = bone.getLocalX() + transform.getPositionX();
+                target.translate[1] = bone.getLocalY() + transform.getPositionY();
+                target.translate[2] = bone.getLocalZ() + transform.getPositionZ();
+                target.rotate[0] = transform.getRotationX();
+                target.rotate[1] = transform.getRotationY();
+                target.rotate[2] = transform.getRotationZ();
+                target.scale[0] = transform.getScaleX();
+                target.scale[1] = transform.getScaleY();
+                target.scale[2] = transform.getScaleZ();
+            }
+
+            child.customPose = pose;
+            child.currentPose = "";
+        }
+        catch (Throwable error)
+        {
+            System.err.println(
+                    "[BBS Animation Editor] Failed to apply Body Parts internal bone pose"
+            );
+            error.printStackTrace();
+        }
     }
 
     /**
