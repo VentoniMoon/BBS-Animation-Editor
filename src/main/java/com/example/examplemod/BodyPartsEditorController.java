@@ -366,6 +366,19 @@ public class BodyPartsEditorController
                     }
                 }
             }
+
+            /*
+             * The render-side ModelCustom cache is not populated for every
+             * valid CustomMorph at the moment the picker assigns it. The
+             * morph can still already hold Blockbuster's authoritative API
+             * Model, so use that skeleton directly before falling through to
+             * unrelated reflective morph APIs.
+             */
+            result = createAnimationBonesFromCustomMorphModel((CustomMorph) morph);
+            if (!result.isEmpty())
+            {
+                return result;
+            }
         }
 
         try
@@ -498,6 +511,99 @@ public class BodyPartsEditorController
             {
                 result = createAnimationBonesFromMorphNames(morph);
             }
+        }
+
+        return result;
+    }
+
+    private List<AnimationBone> createAnimationBonesFromCustomMorphModel(
+            CustomMorph morph)
+    {
+        List<AnimationBone> result = new ArrayList<AnimationBone>();
+
+        if (morph == null)
+        {
+            return result;
+        }
+
+        try
+        {
+            morph.updateModel();
+            mchorse.blockbuster.api.Model model = morph.model;
+
+            if (model == null || model.limbs == null || model.limbs.isEmpty())
+            {
+                return result;
+            }
+
+            mchorse.blockbuster.api.ModelPose standing = model.getPose("standing");
+
+            for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelLimb> entry
+                    : model.limbs.entrySet())
+            {
+                mchorse.blockbuster.api.ModelLimb limb = entry.getValue();
+                if (limb == null)
+                {
+                    continue;
+                }
+
+                String name = limb.name == null || limb.name.isEmpty()
+                        ? entry.getKey()
+                        : limb.name;
+
+                if (name == null || name.isEmpty())
+                {
+                    continue;
+                }
+
+                AnimationBone bone = new AnimationBone(name);
+                mchorse.blockbuster.api.ModelTransform source =
+                        standing == null ? null : standing.limbs.get(name);
+
+                if (source != null)
+                {
+                    bone.setLocalPosition(
+                            source.translate[0],
+                            -source.translate[1],
+                            -source.translate[2]
+                    );
+                    bone.setBaseRotation(
+                            source.rotate[0],
+                            source.rotate[1],
+                            source.rotate[2]
+                    );
+                }
+
+                result.add(bone);
+            }
+
+            for (AnimationBone bone : result)
+            {
+                for (mchorse.blockbuster.api.ModelLimb limb : model.limbs.values())
+                {
+                    if (limb != null && bone.getName().equals(limb.name)
+                            && limb.parent != null && !limb.parent.isEmpty())
+                    {
+                        for (AnimationBone parent : result)
+                        {
+                            if (limb.parent.equals(parent.getName()))
+                            {
+                                bone.setParent(parent);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        catch (Throwable error)
+        {
+            System.err.println(
+                    "[BBS Animation Editor][BodyParts] "
+                            + "Could not read CustomMorph API skeleton directly"
+            );
+            error.printStackTrace();
         }
 
         return result;
