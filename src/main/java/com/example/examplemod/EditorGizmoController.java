@@ -2088,7 +2088,15 @@ public class EditorGizmoController
             return result;
         }
 
-        result = getExactEmoticonsBoneTranslationWorldAxes(bone, recordFrame);
+        /*
+         * Rotation/scale need the fully evaluated Emoticons bone matrix.
+         * The translation adapter intentionally uses parentBone.mat *
+         * relBoneMat because Emoticons applies editable translation before
+         * the selected bone's own rotation. Reusing that parent-space basis
+         * here makes the rotation rings stay aligned to the pre-rotation
+         * orientation even while the selected bone itself rotates.
+         */
+        result = getExactEmoticonsBoneWorldAxes(bone, recordFrame);
 
         if (result != null)
         {
@@ -2530,6 +2538,75 @@ public class EditorGizmoController
                 this.previewActor.posY + localY,
                 this.previewActor.posZ + worldZ
             };
+        }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Exact Emoticons orientation basis for rotation and scale gizmos.
+     *
+     * Unlike translation, rotation must follow the fully evaluated bone
+     * matrix so the rings visibly turn with the selected bone's pose.
+     */
+    private double[][] getExactEmoticonsBoneWorldAxes(
+            AnimationBone bone,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!(this.previewActor.getMorph() instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph))
+            {
+                return null;
+            }
+
+            mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph morph =
+                    (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph) this.previewActor.getMorph();
+
+            mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone sourceBone =
+                    EmoticonsModelAccess.findBone(morph, bone.getName());
+
+            if (sourceBone == null || sourceBone.mat == null)
+            {
+                return null;
+            }
+
+            javax.vecmath.Matrix4f basis =
+                    new javax.vecmath.Matrix4f(sourceBone.mat);
+
+            double yaw =
+                    Math.toRadians(
+                            -this.previewActor.renderYawOffset
+                    );
+
+            double cos = Math.cos(yaw);
+            double sin = Math.sin(yaw);
+
+            double[] x = transformEmoticonsDirection(
+                    basis.m00, basis.m10, basis.m20,
+                    cos, sin
+            );
+            double[] y = transformEmoticonsDirection(
+                    basis.m01, basis.m11, basis.m21,
+                    cos, sin
+            );
+            double[] z = transformEmoticonsDirection(
+                    basis.m02, basis.m12, basis.m22,
+                    cos, sin
+            );
+
+            normalize(x);
+            normalize(y);
+            normalize(z);
+
+            return new double[][] {x, y, z};
         }
         catch (Throwable ignored)
         {
