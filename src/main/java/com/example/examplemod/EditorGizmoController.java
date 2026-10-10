@@ -228,7 +228,7 @@ public class EditorGizmoController
         }
 
         if (bone == null || camera == null
-                || keyframe == null)
+                || (keyframe == null && this.globalTransformTarget == null))
         {
             return false;
         }
