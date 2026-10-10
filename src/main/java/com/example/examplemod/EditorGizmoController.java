@@ -254,7 +254,8 @@ public class EditorGizmoController
                         camera,
                         gizmoWorld[0],
                         gizmoWorld[1],
-                        gizmoWorld[2]
+                        gizmoWorld[2],
+                        viewportHeight
                 );
 
         double[][] axes =
@@ -1430,7 +1431,8 @@ public class EditorGizmoController
                         camera,
                         world[0],
                         world[1],
-                        world[2]
+                        world[2],
+                        viewportHeight
                 );
 
         double[][] axes =
@@ -2535,18 +2537,51 @@ public class EditorGizmoController
             EditorCamera camera,
             double x,
             double y,
-            double z)
+            double z,
+            int viewportHeight)
     {
+        if (camera == null || viewportHeight <= 0)
+        {
+            return 1.0F;
+        }
+
+        /*
+         * Keep the gizmo at a predictable screen size. Euclidean distance
+         * is not the correct perspective depth when the camera is pitched:
+         * two points at the same view depth should project to the same size.
+         * Use the same 60-degree vertical FOV as project() and target an
+         * approximately 90-pixel axis length (1.8 * worldSize).
+         */
         double dx = x - camera.getCameraX();
         double dy = y - camera.getCameraY();
         double dz = z - camera.getCameraZ();
 
-        double distance =
-                Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double yaw = Math.toRadians(camera.getYaw());
+        double pitch = Math.toRadians(camera.getPitch());
+
+        double cy = Math.cos(yaw);
+        double sy = Math.sin(yaw);
+        double cameraZ = sy * dx + cy * dz;
+
+        double cp = Math.cos(pitch);
+        double sp = Math.sin(pitch);
+        cameraZ = -sp * dy + cp * cameraZ;
+
+        double depth = -cameraZ;
+        if (depth <= 0.05D)
+        {
+            return 0.35F;
+        }
+
+        double focal =
+                viewportHeight /
+                        (2.0D * Math.tan(Math.toRadians(60.0D) / 2.0D));
+
+        double worldSize = 50.0D * depth / focal;
 
         return (float) Math.max(
-                0.35D,
-                Math.min(2.5D, distance * 0.10D)
+                0.02D,
+                Math.min(100.0D, worldSize)
         );
     }
 
