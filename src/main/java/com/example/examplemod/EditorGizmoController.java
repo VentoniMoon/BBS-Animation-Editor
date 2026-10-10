@@ -1668,64 +1668,126 @@ public class EditorGizmoController
 
     private double[] getExactChameleonBoneWorldPosition(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
-        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null) return null;
-        if (!this.previewActor.getMorph().getClass().getName().endsWith(".ChameleonMorph")) return null;
+        if (bone == null || !isChameleonMorph())
+        {
+            return null;
+        }
+
+        float[] matrix = getExactChameleonBoneMatrix(bone.getName());
+
+        if (matrix == null || !isFinite(matrix[12]) || !isFinite(matrix[13]) || !isFinite(matrix[14]))
+        {
+            return null;
+        }
+
+        return new double[] {matrix[12], matrix[13], matrix[14]};
+    }
+
+    /**
+     * Reconstruct the exact root transform used by ChameleonMorph.render(),
+     * then ask Chameleon's own renderer to evaluate the requested bone.
+     *
+     * ChameleonRenderer.postRender() multiplies its private MatrixStack onto
+     * the current OpenGL model-view matrix. The matrix must therefore start
+     * from identity; inheriting the Preview camera matrix and then adding the
+     * actor position/yaw a second time produces a displaced gizmo.
+     */
+    private float[] getExactChameleonBoneMatrix(String boneName)
+    {
+        if (boneName == null || !isChameleonMorph())
+        {
+            return null;
+        }
+
+        int oldMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        boolean pushed = false;
+
         try
         {
             Object morph = this.previewActor.getMorph();
             Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
-            if (chameleonModel == null) return null;
+
+            if (chameleonModel == null)
+            {
+                return null;
+            }
+
             Object model = chameleonModel.getClass().getField("model").get(chameleonModel);
             Class<?> modelClass = Class.forName("mchorse.chameleon.lib.data.model.Model");
             Class<?> rendererClass = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
             java.lang.reflect.Method postRender = rendererClass.getMethod("postRender", modelClass, String.class);
-            GL11.glPushMatrix();
+
             float scale = 1.0F;
-            Object value = morph.getClass().getMethod("getScale", float.class).invoke(morph, 0.0F);
-            if (value instanceof Number) scale = ((Number) value).floatValue();
+
+            try
+            {
+                Object value = morph.getClass().getMethod("getScale", float.class).invoke(morph, 0.0F);
+
+                if (value instanceof Number)
+                {
+                    scale = ((Number) value).floatValue();
+                }
+            }
+            catch (Throwable ignored)
+            {
+                /* A scale of one matches Chameleon's default morph scale. */
+            }
+
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            pushed = true;
+            GL11.glLoadIdentity();
+
+            /* Match ChameleonMorph.render(): translate, scale, then rotate. */
+            GL11.glTranslated(
+                    this.previewActor.posX,
+                    this.previewActor.posY,
+                    this.previewActor.posZ
+            );
             GL11.glScalef(scale, scale, scale);
-            /* Keep the bone matrix local; actor placement is applied below. */
-            Object result = postRender.invoke(null, model, bone.getName());
+            GL11.glRotatef(
+                    -this.previewActor.renderYawOffset + 180.0F,
+                    0.0F,
+                    1.0F,
+                    0.0F
+            );
+
+            Object result = postRender.invoke(null, model, boneName);
+
             if (result instanceof Boolean && !((Boolean) result).booleanValue())
             {
-                GL11.glPopMatrix();
                 return null;
             }
+
             FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
             GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+
             float[] matrix = new float[16];
             buffer.get(matrix);
-            GL11.glPopMatrix();
-            double localX = matrix[12];
-            double localY = matrix[13];
-            double localZ = matrix[14];
 
-            double actorX = this.previewActor.posX;
-            double actorY = this.previewActor.posY;
-            double actorZ = this.previewActor.posZ;
-            /*
-             * The gizmo anchor follows the animation/record coordinate
-             * space.  renderYawOffset is a renderer-facing value and can
-             * differ from the record yaw by the X/Z orientation convention.
-             * Using it here rotates the visual anchor while the actual bone
-             * still moves correctly, which makes X and Z appear swapped.
-             */
-            double visualYaw =
-                    recordFrame != null
-                            ? recordFrame.getYaw()
-                            : this.previewActor.renderYawOffset;
-            double yaw = Math.toRadians(180.0D - visualYaw);
-            double cos = Math.cos(yaw);
-            double sin = Math.sin(yaw);
-
-            return new double[]
-            {
-                actorX + cos * localX + sin * localZ,
-                actorY + localY,
-                actorZ - sin * localX + cos * localZ
-            };
+            return matrix;
         }
-        catch (Throwable ignored) { return null; }
+        catch (Throwable ignored)
+        {
+            return null;
+        }
+        finally
+        {
+            if (pushed)
+            {
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPopMatrix();
+            }
+
+            GL11.glMatrixMode(oldMatrixMode);
+        }
+    }
+
+    private boolean isChameleonMorph()
+    {
+        return this.previewActor != null
+                && this.previewActor.getMorph() != null
+                && this.previewActor.getMorph().getClass().getName().endsWith(".ChameleonMorph");
     }
 
     /**
@@ -2062,105 +2124,67 @@ public class EditorGizmoController
 
     private double[][] getExactChameleonBoneWorldAxes(AnimationBone bone, BlockbusterRecordFrame recordFrame)
     {
-        if (bone == null || this.previewActor == null || this.previewActor.getMorph() == null)
+        if (bone == null || !isChameleonMorph())
         {
             return null;
         }
 
-        if (!this.previewActor.getMorph().getClass().getName().endsWith(".ChameleonMorph"))
+        float[] matrix = getExactChameleonBoneMatrix(bone.getName());
+
+        return axesFromMatrix(matrix);
+    }
+
+    /**
+     * Chameleon applies a bone's translation before its own rotation.
+     * Position handles must therefore follow the parent's basis. Its
+     * translateBone() also negates the X translation delta, while Y and Z
+     * retain their signs; encode that convention in the visible X handle
+     * instead of trying to compensate again during dragging.
+     */
+    private double[][] getExactChameleonBoneTranslationWorldAxes(
+            AnimationBone bone,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (bone == null || !isChameleonMorph())
         {
             return null;
         }
 
-        try
+        double[][] axes;
+        AnimationBone parent = bone.getParent();
+
+        if (parent != null)
         {
-            Object morph = this.previewActor.getMorph();
-            Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
-
-            if (chameleonModel == null)
-            {
-                return null;
-            }
-
-            Object model = chameleonModel.getClass().getField("model").get(chameleonModel);
-
-            Class<?> modelClass = Class.forName("mchorse.chameleon.lib.data.model.Model");
-            Class<?> rendererClass = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
-
-            java.lang.reflect.Method postRender =
-                    rendererClass.getMethod("postRender", modelClass, String.class);
-
-            GL11.glPushMatrix();
-
-            float scale = 1.0F;
-
-            try
-            {
-                Object value = morph.getClass().getMethod("getScale", float.class).invoke(morph, 0.0F);
-
-                if (value instanceof Number)
-                {
-                    scale = ((Number) value).floatValue();
-                }
-            }
-            catch (Throwable ignored)
-            {
-            }
-
-            GL11.glScalef(scale, scale, scale);
-            /* Actor yaw is applied to the returned local basis below. */
-
-            Object result = postRender.invoke(null, model, bone.getName());
-
-            if (result instanceof Boolean && !((Boolean) result).booleanValue())
-            {
-                GL11.glPopMatrix();
-                return null;
-            }
-
-            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
-            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
-            float[] matrix = new float[16];
-            buffer.get(matrix);
-
-            GL11.glPopMatrix();
-
-            double[][] localAxes = axesFromMatrix(matrix);
-            if (localAxes == null)
-            {
-                return null;
-            }
-
-            /*
-             * Keep the visual anchor in the same yaw space as the
-             * animation record.  This is a display-only correction:
-             * keyframe translation and drag math are untouched.
-             */
-            double visualYaw =
-                    recordFrame != null
-                            ? recordFrame.getYaw()
-                            : this.previewActor.renderYawOffset;
-            double yaw = Math.toRadians(180.0D - visualYaw);
+            axes = getExactChameleonBoneWorldAxes(parent, recordFrame);
+        }
+        else
+        {
+            double yaw = Math.toRadians(-this.previewActor.renderYawOffset + 180.0D);
             double cos = Math.cos(yaw);
             double sin = Math.sin(yaw);
 
-            double[][] worldAxes = new double[3][3];
-            for (int i = 0; i < 3; i++)
+            axes = new double[][]
             {
-                double x = localAxes[i][0];
-                double z = localAxes[i][2];
-                worldAxes[i][0] = cos * x + sin * z;
-                worldAxes[i][1] = localAxes[i][1];
-                worldAxes[i][2] = -sin * x + cos * z;
-                normalize(worldAxes[i]);
-            }
-
-            return worldAxes;
+                {cos, 0.0D, -sin},
+                {0.0D, 1.0D, 0.0D},
+                {sin, 0.0D, cos}
+            };
         }
-        catch (Throwable ignored)
+
+        if (axes == null)
         {
             return null;
         }
+
+        axes[0][0] = -axes[0][0];
+        axes[0][1] = -axes[0][1];
+        axes[0][2] = -axes[0][2];
+
+        normalize(axes[0]);
+        normalize(axes[1]);
+        normalize(axes[2]);
+
+        return axes;
     }
 
     private double[] getGizmoWorldPosition(
@@ -2174,6 +2198,17 @@ public class EditorGizmoController
          * Rebuilding the hierarchy from editor transforms separately can
          * diverge from Blockbuster's actual parent/rotation/scale order.
          */
+        if (isChameleonMorph())
+        {
+            double[] nativeWorld =
+                    getExactChameleonBoneWorldPosition(bone, recordFrame);
+
+            if (nativeWorld != null)
+            {
+                return nativeWorld;
+            }
+        }
+
         if (isBlockbusterCustomMorph())
         {
             double[] nativeWorld =
@@ -3424,6 +3459,17 @@ public class EditorGizmoController
         if (this.mode == Mode.POSITION)
         {
             double[][] translationAxes =
+                    getExactChameleonBoneTranslationWorldAxes(
+                            bone,
+                            recordFrame
+                    );
+
+            if (translationAxes != null)
+            {
+                return translationAxes;
+            }
+
+            translationAxes =
                     getExactEmoticonsBoneTranslationWorldAxes(
                             bone,
                             recordFrame
