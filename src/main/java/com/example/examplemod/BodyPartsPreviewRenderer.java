@@ -418,8 +418,16 @@ public class BodyPartsPreviewRenderer
 
             for (AnimationBone bone : data.getBones())
             {
-                if (bone == null || bone.getName() == null)
+                if (bone == null || bone.getName() == null
+                        || bone.getKeyframes().isEmpty())
                 {
+                    /*
+                     * An unkeyed bone must retain the source model's standing
+                     * transform. getTransformAt() returns identity for an
+                     * empty track, and writing that identity to every limb
+                     * was erasing the model's default pose on every preview
+                     * refresh.
+                     */
                     continue;
                 }
 
@@ -459,12 +467,14 @@ public class BodyPartsPreviewRenderer
                 target.translate[0] = bone.getLocalX() + transform.getPositionX();
                 target.translate[1] = bone.getLocalY() + transform.getPositionY();
                 target.translate[2] = bone.getLocalZ() + transform.getPositionZ();
-                target.rotate[0] = transform.getRotationX();
-                target.rotate[1] = transform.getRotationY();
-                target.rotate[2] = transform.getRotationZ();
-                target.scale[0] = transform.getScaleX();
-                target.scale[1] = transform.getScaleY();
-                target.scale[2] = transform.getScaleZ();
+
+                /* Keyframe rotations/scales are offsets from the source pose. */
+                target.rotate[0] += transform.getRotationX();
+                target.rotate[1] += transform.getRotationY();
+                target.rotate[2] += transform.getRotationZ();
+                target.scale[0] *= transform.getScaleX();
+                target.scale[1] *= transform.getScaleY();
+                target.scale[2] *= transform.getScaleZ();
                 matchedBones++;
             }
 
