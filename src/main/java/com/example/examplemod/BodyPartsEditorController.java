@@ -352,7 +352,7 @@ public class BodyPartsEditorController
 
             if (chameleonModel == null)
             {
-                return result;
+                return createAnimationBonesFromMorphNames(morph);
             }
 
             Object model =
@@ -372,7 +372,7 @@ public class BodyPartsEditorController
 
             if (model == null)
             {
-                return result;
+                return createAnimationBonesFromMorphNames(chameleonModel);
             }
 
             java.lang.reflect.Field bonesField =
@@ -439,6 +439,33 @@ public class BodyPartsEditorController
             }
         }
 
+        /*
+         * Some morphs expose a usable getModel()/bones hierarchy, while
+         * others expose only getBoneNames() on either the morph or its
+         * model. Do not silently leave the Body Part timeline without
+         * tracks when the richer hierarchy is unavailable.
+         */
+        if (result.isEmpty())
+        {
+            Object modelCandidate = null;
+
+            try
+            {
+                modelCandidate = morph.getClass()
+                        .getMethod("getModel")
+                        .invoke(morph);
+            }
+            catch (Throwable ignored)
+            {
+            }
+
+            result = createAnimationBonesFromMorphNames(modelCandidate);
+            if (result.isEmpty())
+            {
+                result = createAnimationBonesFromMorphNames(morph);
+            }
+        }
+
         return result;
     }
 
@@ -447,6 +474,11 @@ public class BodyPartsEditorController
     {
         List<AnimationBone> result =
                 new ArrayList<AnimationBone>();
+
+        if (chameleonModel == null)
+        {
+            return result;
+        }
 
         try
         {
@@ -462,11 +494,11 @@ public class BodyPartsEditorController
                 {
                     if (name != null)
                     {
-                        result.add(
-                                new AnimationBone(
-                                        String.valueOf(name)
-                                )
-                        );
+                        String boneName = String.valueOf(name);
+                        if (boneName.length() > 0)
+                        {
+                            result.add(new AnimationBone(boneName));
+                        }
                     }
                 }
             }
