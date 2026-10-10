@@ -56,8 +56,12 @@ public class EditorGizmoController
 
     private int activePart = -1;
     private boolean dragging;
-    /* Keep the rotation rings in their grab orientation until the drag ends. */
-    private double[][] rotationDisplayAxes;
+    /* Rotation is accumulated as an unwrapped angle around the projected pivot. */
+    private double rotationDragCenterX;
+    private double rotationDragCenterY;
+    private double rotationDragLastAngle;
+    private double rotationDragAccumulatedDegrees;
+    private boolean rotationDragAngleValid;
 
     private int dragStartX;
     private int dragStartY;
@@ -140,7 +144,8 @@ public class EditorGizmoController
 
         this.activePart = -1;
         this.dragging = false;
-        this.rotationDisplayAxes = null;
+        this.rotationDragAngleValid = false;
+        this.rotationDragAccumulatedDegrees = 0.0D;
     }
 
     public boolean isDragging()
@@ -285,9 +290,20 @@ public class EditorGizmoController
         this.activePart = hit;
         this.dragging = true;
         this.activeKeyframe = keyframe;
-        this.rotationDisplayAxes = this.mode == Mode.ROTATION && axes != null
-                ? new double[][] {axes[0].clone(), axes[1].clone(), axes[2].clone()}
-                : null;
+        this.rotationDragAngleValid = false;
+        this.rotationDragAccumulatedDegrees = 0.0D;
+        if (this.mode == Mode.ROTATION)
+        {
+            this.rotationDragCenterX = center.x;
+            this.rotationDragCenterY = center.y;
+            double startDX = mouseX - center.x;
+            double startDY = mouseY - center.y;
+            if (startDX * startDX + startDY * startDY >= 64.0D)
+            {
+                this.rotationDragLastAngle = Math.atan2(startDY, startDX);
+                this.rotationDragAngleValid = true;
+            }
+        }
 
         if (axes != null)
         {
@@ -406,7 +422,7 @@ public class EditorGizmoController
         }
         else if (this.mode == Mode.ROTATION)
         {
-            float amount = (float) getRotationDragAngle(this.activePart, mouseDX, mouseDY);
+            float amount = (float) getRotationDragAngle(this.activePart, mouseX, mouseY);
             if (this.activePart == AXIS_X)
             {
                 transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
@@ -445,7 +461,8 @@ public class EditorGizmoController
         this.activePart = -1;
         this.activeKeyframe = null;
         this.globalTransformTarget = null;
-        this.rotationDisplayAxes = null;
+        this.rotationDragAngleValid = false;
+        this.rotationDragAccumulatedDegrees = 0.0D;
 
         return true;
     }
@@ -1469,16 +1486,10 @@ public class EditorGizmoController
         double[][] displayAxes = axes;
 
         /*
-         * BBS FS keeps the picked rotation frame stable during a gesture.
-         * If we recompute the displayed ring planes from the changing Euler
-         * angles every frame, the target can rotate away from the mouse.
-         * This is display-only: the model-specific transform adapters remain
-         * responsible for applying the actual edit.
+         * Rotation rings deliberately use the live native bone basis every
+         * frame. As the selected key changes, all three rings follow the new
+         * orientation instead of freezing at the drag-start pose.
          */
-        if (this.mode == Mode.ROTATION && this.dragging && this.rotationDisplayAxes != null)
-        {
-            displayAxes = this.rotationDisplayAxes;
-        }
 
         if (this.mode == Mode.POSITION)
         {
@@ -3386,13 +3397,45 @@ public class EditorGizmoController
         return 1.0D;
     }
 
-    private double getRotationDragAngle(
-            int axisId,
-            double mouseDX,
-            double mouseDY)
+    /**
+     * Accumulate angular mouse movement around the projected gizmo pivot.
+     *
+     * Unlike a linear pixels-to-degrees mapping, this has no artificial
+     * travel limit: the angle can pass 360 degrees repeatedly. Each mouse
+     * sample is unwrapped against the previous sample so crossing the
+     * atan2 +/-PI seam does not produce a full-turn jump.
+     */
+    private double getRotationDragAngle(int axisId, double mouseX, double mouseY)
     {
-        return getAxisDragAngle(axisId, mouseDX, mouseDY)
-                * getDataAxisSign(axisId);
+        double dx = mouseX - this.rotationDragCenterX;
+        double dy = mouseY - this.rotationDragCenterY;
+        double radiusSquared = dx * dx + dy * dy;
+
+        /* The angular direction is undefined directly at the pivot. */
+        if (radiusSquared < 64.0D)
+        {
+            this.rotationDragAngleValid = false;
+            return this.rotationDragAccumulatedDegrees * getDataAxisSign(axisId);
+        }
+
+        double angle = Math.atan2(dy, dx);
+
+        if (!this.rotationDragAngleValid)
+        {
+            this.rotationDragLastAngle = angle;
+            this.rotationDragAngleValid = true;
+            return this.rotationDragAccumulatedDegrees * getDataAxisSign(axisId);
+        }
+
+        double delta = angle - this.rotationDragLastAngle;
+
+        while (delta > Math.PI) delta -= Math.PI * 2.0D;
+        while (delta < -Math.PI) delta += Math.PI * 2.0D;
+
+        this.rotationDragAccumulatedDegrees += Math.toDegrees(delta);
+        this.rotationDragLastAngle = angle;
+
+        return this.rotationDragAccumulatedDegrees * getDataAxisSign(axisId);
     }
 
     private double getAxisDragAmount(int axisId,double mouseDX,double mouseDY)
