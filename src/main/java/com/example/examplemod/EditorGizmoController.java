@@ -56,6 +56,8 @@ public class EditorGizmoController
 
     private int activePart = -1;
     private boolean dragging;
+    /* Keep the rotation rings in their grab orientation until the drag ends. */
+    private double[][] rotationDisplayAxes;
 
     private int dragStartX;
     private int dragStartY;
@@ -138,6 +140,7 @@ public class EditorGizmoController
 
         this.activePart = -1;
         this.dragging = false;
+        this.rotationDisplayAxes = null;
     }
 
     public boolean isDragging()
@@ -282,6 +285,9 @@ public class EditorGizmoController
         this.activePart = hit;
         this.dragging = true;
         this.activeKeyframe = keyframe;
+        this.rotationDisplayAxes = this.mode == Mode.ROTATION && axes != null
+                ? new double[][] {axes[0].clone(), axes[1].clone(), axes[2].clone()}
+                : null;
 
         if (axes != null)
         {
@@ -439,6 +445,7 @@ public class EditorGizmoController
         this.activePart = -1;
         this.activeKeyframe = null;
         this.globalTransformTarget = null;
+        this.rotationDisplayAxes = null;
 
         return true;
     }
@@ -1460,6 +1467,18 @@ public class EditorGizmoController
          * rotation that would desynchronize the handles from the bone.
          */
         double[][] displayAxes = axes;
+
+        /*
+         * BBS FS keeps the picked rotation frame stable during a gesture.
+         * If we recompute the displayed ring planes from the changing Euler
+         * angles every frame, the target can rotate away from the mouse.
+         * This is display-only: the model-specific transform adapters remain
+         * responsible for applying the actual edit.
+         */
+        if (this.mode == Mode.ROTATION && this.dragging && this.rotationDisplayAxes != null)
+        {
+            displayAxes = this.rotationDisplayAxes;
+        }
 
         if (this.mode == Mode.POSITION)
         {
@@ -2654,12 +2673,26 @@ public class EditorGizmoController
     private void drawRotationGizmo3D(float size, double[][] axes)
     {
         if (axes == null) return;
-        drawRingVector3D(axes[1], axes[2], size * 1.05F,
-                this.activePart == AXIS_X ? ACTIVE_RING_COLOR : AXIS_X_COLOR);
-        drawRingVector3D(axes[2], axes[0], size * 1.05F,
-                this.activePart == AXIS_Y ? ACTIVE_RING_COLOR : AXIS_Y_COLOR);
-        drawRingVector3D(axes[0], axes[1], size * 1.05F,
-                this.activePart == AXIS_Z ? ACTIVE_RING_COLOR : AXIS_Z_COLOR);
+
+        float radius = size * 1.05F;
+        drawRingVector3D(axes[1], axes[2], radius,
+                this.activePart == AXIS_X ? ACTIVE_RING_COLOR : AXIS_X_COLOR,
+                this.activePart == AXIS_X);
+        drawRingVector3D(axes[2], axes[0], radius,
+                this.activePart == AXIS_Y ? ACTIVE_RING_COLOR : AXIS_Y_COLOR,
+                this.activePart == AXIS_Y);
+        drawRingVector3D(axes[0], axes[1], radius,
+                this.activePart == AXIS_Z ? ACTIVE_RING_COLOR : AXIS_Z_COLOR,
+                this.activePart == AXIS_Z);
+
+        /* Clear, visible pivot marker inspired by BBS FS's central grab area. */
+        GL11.glPointSize(9.0F);
+        GL11.glEnable(GL11.GL_POINT_SMOOTH);
+        setColor(0xFFF1F3F5);
+        GL11.glBegin(GL11.GL_POINTS);
+        GL11.glVertex3d(0.0D, 0.0D, 0.0D);
+        GL11.glEnd();
+        GL11.glDisable(GL11.GL_POINT_SMOOTH);
     }
 
     private void drawScaleGizmo3D(float size, double[][] axes)
@@ -2723,14 +2756,31 @@ public class EditorGizmoController
         GL11.glEnd();
     }
 
-    private void drawRingVector3D(double[] a, double[] b, float radius, int color)
+    private void drawRingVector3D(double[] a, double[] b, float radius, int color, boolean active)
     {
-        setColor(color); GL11.glBegin(GL11.GL_LINE_LOOP);
-        for(int i=0;i<64;i++)
+        /* A dark under-stroke gives the rings separation from bright model textures. */
+        GL11.glLineWidth(active ? 12.0F : 9.0F);
+        setColor(0xB8000000);
+        GL11.glBegin(GL11.GL_LINE_LOOP);
+        for (int i = 0; i < 96; i++)
         {
-            double angle=Math.PI*2.0D*i/64.0D;
-            double c=Math.cos(angle)*radius, d=Math.sin(angle)*radius;
-            GL11.glVertex3d(a[0]*c+b[0]*d,a[1]*c+b[1]*d,a[2]*c+b[2]*d);
+            double angle = Math.PI * 2.0D * i / 96.0D;
+            double c = Math.cos(angle) * radius;
+            double d = Math.sin(angle) * radius;
+            GL11.glVertex3d(a[0] * c + b[0] * d, a[1] * c + b[1] * d, a[2] * c + b[2] * d);
+        }
+        GL11.glEnd();
+
+        /* Selected ring turns yellow and grows thicker, like BBS FS feedback. */
+        GL11.glLineWidth(active ? 7.0F : 4.0F);
+        setColor(color);
+        GL11.glBegin(GL11.GL_LINE_LOOP);
+        for (int i = 0; i < 96; i++)
+        {
+            double angle = Math.PI * 2.0D * i / 96.0D;
+            double c = Math.cos(angle) * radius;
+            double d = Math.sin(angle) * radius;
+            GL11.glVertex3d(a[0] * c + b[0] * d, a[1] * c + b[1] * d, a[2] * c + b[2] * d);
         }
         GL11.glEnd();
     }
@@ -3082,7 +3132,7 @@ public class EditorGizmoController
         float length=2.15F*size;
         if (this.mode == Mode.ROTATION)
         {
-            int best=-1; double bestDistance=20.0D;
+            int best=-1; double bestDistance=27.0D;
             for(int axis=0;axis<3;axis++)
             {
                 double[] a=axes[(axis+1)%3], b=axes[(axis+2)%3];
