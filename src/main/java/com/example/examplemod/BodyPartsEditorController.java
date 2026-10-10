@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import mchorse.metamorph.api.morphs.AbstractMorph;
+import mchorse.blockbuster_pack.morphs.CustomMorph;
 
 public class BodyPartsEditorController
 {
@@ -332,6 +333,39 @@ public class BodyPartsEditorController
         if (morph == null)
         {
             return result;
+        }
+
+        /*
+         * The Metamorph picker also returns Blockbuster CustomMorphs
+         * (for example blockbuster.eyes).  They do not expose the
+         * Chameleon getModel()/getBoneNames() API, so the old reflective
+         * path silently produced an empty skeleton for these models.
+         * Resolve their actual Blockbuster model through the same access
+         * class used by the standalone model picker, then copy its limb
+         * hierarchy into the Body Parts timeline.
+         */
+        if (morph instanceof CustomMorph)
+        {
+            String name = morph.name == null ? "" : morph.name;
+            String modelName = name.startsWith("blockbuster.")
+                    ? name.substring("blockbuster.".length())
+                    : name;
+
+            if (!modelName.isEmpty())
+            {
+                BlockbusterModelAccess access =
+                        new BlockbusterModelAccess(null);
+
+                if (access.loadModelByName(modelName))
+                {
+                    result = createAnimationBones(access.getLimbData());
+
+                    if (!result.isEmpty())
+                    {
+                        return result;
+                    }
+                }
+            }
         }
 
         try
