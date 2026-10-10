@@ -3275,20 +3275,57 @@ public class EditorGizmoController
         double ay=this.dragScreenAxes[axisA][1]*this.dragPixelsPerWorld[axisA];
         double bx=this.dragScreenAxes[axisB][0]*this.dragPixelsPerWorld[axisB];
         double by=this.dragScreenAxes[axisB][1]*this.dragPixelsPerWorld[axisB];
-        double det=ax*by-ay*bx;
-        if(Math.abs(det)<.0001D)return new double[]{0,0};
-
-        double deltaA = (mouseDX*by-mouseDY*bx)/det;
-        double deltaB = (ax*mouseDY-ay*mouseDX)/det;
 
         /*
-         * The plane solver returns signed movement along the projected basis
-         * vectors. Those vectors already encode the native Blockbuster
-         * (X, -Y, -Z) translation convention, so applying an extra X sign
-         * here would desynchronize plane dragging from the visible handles.
+         * Solve the 2D least-squares problem for movement in the selected
+         * plane. The direct inverse becomes unstable when the two projected
+         * axes are almost parallel (for example, when the plane faces the
+         * camera edge-on). Instead of dropping the entire drag to zero,
+         * switch to a damped normal-equation solve, matching the strategy
+         * used by BBS FS's GizmoJacobian.
          */
+        double aa = ax * ax + ay * ay;
+        double ab = ax * bx + ay * by;
+        double bb = bx * bx + by * by;
+        double rhsA = ax * mouseDX + ay * mouseDY;
+        double rhsB = bx * mouseDX + by * mouseDY;
 
-        return new double[]{deltaA, deltaB};
+        double det = aa * bb - ab * ab;
+        double scale = Math.max(1.0D, aa + bb);
+
+        if (Math.abs(det) > 1.0E-8D * scale * scale)
+        {
+            return new double[]
+            {
+                (rhsA * bb - rhsB * ab) / det,
+                (rhsB * aa - rhsA * ab) / det
+            };
+        }
+
+        /*
+         * Damping regularizes the nearly singular system. It deliberately
+         * favors a small, stable movement over a huge jump or a dead drag.
+         */
+        double lambda = 1.0E-4D * scale;
+        double dampedAA = aa + lambda;
+        double dampedBB = bb + lambda;
+        double dampedDet = dampedAA * dampedBB - ab * ab;
+
+        if (Math.abs(dampedDet) < 1.0E-12D)
+        {
+            return new double[] {0.0D, 0.0D};
+        }
+
+        double deltaA =
+                (rhsA * dampedBB - rhsB * ab) / dampedDet;
+        double deltaB =
+                (rhsB * dampedAA - rhsA * ab) / dampedDet;
+
+        /*
+         * The projected basis vectors already encode the model's native
+         * translation convention. Do not apply an extra axis sign here.
+         */
+        return new double[] {deltaA, deltaB};
     }
 
     /*
