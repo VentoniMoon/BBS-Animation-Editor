@@ -368,9 +368,53 @@ public class BodyPartsPreviewRenderer
                 return;
             }
 
+            /*
+             * Start from the morph's actual pose rather than an empty pose.
+             * A blank ModelProperties silently replaces the model's standing
+             * pose and can lose limb defaults/properties. Convert every source
+             * transform to LimbProperties so Blockbuster keeps the per-limb
+             * rendering flags as well as its transform.
+             */
             CustomMorph.ModelProperties pose =
                     new CustomMorph.ModelProperties();
-            pose.updateLimbs(apiModel, true);
+
+            mchorse.blockbuster.api.ModelPose sourcePose =
+                    child.customPose != null
+                            ? child.customPose
+                            : apiModel.getPose(child.currentPose);
+
+            if (sourcePose != null)
+            {
+                pose.size = new float[] {
+                        sourcePose.size[0],
+                        sourcePose.size[1],
+                        sourcePose.size[2]
+                };
+
+                for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelTransform> entry
+                        : sourcePose.limbs.entrySet())
+                {
+                    if (entry.getKey() == null || entry.getValue() == null)
+                    {
+                        continue;
+                    }
+
+                    CustomMorph.LimbProperties properties =
+                            new CustomMorph.LimbProperties();
+                    properties.copy(entry.getValue());
+                    pose.limbs.put(entry.getKey(), properties);
+                }
+
+                for (mchorse.blockbuster.api.formats.obj.ShapeKey shape : sourcePose.shapes)
+                {
+                    pose.shapes.add(shape.copy());
+                }
+            }
+
+            pose.updateLimbs(apiModel, false);
+
+            int matchedBones = 0;
+            int missingBones = 0;
 
             for (AnimationBone bone : data.getBones())
             {
@@ -384,6 +428,23 @@ public class BodyPartsPreviewRenderer
 
                 if (target == null)
                 {
+                    /* Model limb names are normally exact, but tolerate case-only
+                     * differences from third-party/custom model metadata. */
+                    for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelTransform> entry
+                            : pose.limbs.entrySet())
+                    {
+                        if (entry.getKey() != null
+                                && entry.getKey().equalsIgnoreCase(bone.getName()))
+                        {
+                            target = entry.getValue();
+                            break;
+                        }
+                    }
+                }
+
+                if (target == null)
+                {
+                    missingBones++;
                     continue;
                 }
 
@@ -404,7 +465,15 @@ public class BodyPartsPreviewRenderer
                 target.scale[0] = transform.getScaleX();
                 target.scale[1] = transform.getScaleY();
                 target.scale[2] = transform.getScaleZ();
+                matchedBones++;
             }
+
+            System.out.println(
+                    "[BBS Animation Editor][BodyParts] Internal pose applied: model="
+                            + child.name + ", frame=" + frame
+                            + ", matchedBones=" + matchedBones
+                            + ", missingBones=" + missingBones
+            );
 
             child.customPose = pose;
             child.currentPose = "";
