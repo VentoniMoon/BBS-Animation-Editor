@@ -3406,17 +3406,27 @@ public class EditorGizmoController
     private double getDataAxisSign(int axisId)
     {
         /*
-         * Blockbuster's rendered CustomMorph coordinate basis does not use
-         * the same handed direction as AnimationTransform for the X and Z
-         * rotation channels. Keep Y unchanged: user testing confirms that
-         * the green ring already rotates correctly on every tested bone.
+         * Match the rotation-channel convention used when reconstructing
+         * Blockbuster's rendered bone hierarchy in getBlockbusterAnimationBonePivot():
          *
-         * This conversion applies only to Blockbuster CustomMorphs.
-         * Emoticons uses its own BOBJ bone basis and remains untouched.
+         *     renderer X rotation =  AnimationTransform X
+         *     renderer Y rotation = -AnimationTransform Y
+         *     renderer Z rotation = -AnimationTransform Z
+         *
+         * The rotation drag angle is measured in the displayed ring basis,
+         * so convert it back to the animation-data convention per channel.
+         * Do not infer these signs from the translation handle signs: those
+         * are derived from the parent's rendered basis and follow a different
+         * transform stage. Emoticons remains on its own native convention.
          */
-        if (isBlockbusterCustomMorph() && (axisId == AXIS_X || axisId == AXIS_Z))
+        if (isBlockbusterCustomMorph())
         {
-            return -1.0D;
+            if (axisId == AXIS_Y || axisId == AXIS_Z)
+            {
+                return -1.0D;
+            }
+
+            return 1.0D;
         }
 
         return 1.0D;
