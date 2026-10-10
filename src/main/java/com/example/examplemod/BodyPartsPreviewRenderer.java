@@ -553,111 +553,13 @@ public class BodyPartsPreviewRenderer
             child.model = apiModel;
         }
 
-        CustomMorph.ModelProperties pose =
-                new CustomMorph.ModelProperties();
-
-        mchorse.blockbuster.api.ModelPose sourcePose =
-                child.customPose != null
-                        ? child.customPose
-                        : apiModel.getPose(child.currentPose);
-
-        if (sourcePose != null)
-        {
-            pose.size = new float[] {
-                    sourcePose.size[0],
-                    sourcePose.size[1],
-                    sourcePose.size[2]
-            };
-
-            for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelTransform> entry
-                    : sourcePose.limbs.entrySet())
-            {
-                if (entry.getKey() == null || entry.getValue() == null)
-                {
-                    continue;
-                }
-
-                CustomMorph.LimbProperties properties =
-                        new CustomMorph.LimbProperties();
-                properties.copy(entry.getValue());
-                pose.limbs.put(entry.getKey(), properties);
-            }
-
-            for (mchorse.blockbuster.api.formats.obj.ShapeKey shape : sourcePose.shapes)
-            {
-                pose.shapes.add(shape.copy());
-            }
-        }
-
-        pose.updateLimbs(apiModel, false);
-
-        List<AnimationBone> bones =
-                modelName.equals(data.getModelName())
-                        ? data.getBones()
-                        : null;
-
-        if (bones != null)
-        {
-            for (AnimationBone bone : bones)
-            {
-                if (bone == null || bone.getName() == null
-                        || bone.getKeyframes().isEmpty())
-                {
-                    continue;
-                }
-
-                mchorse.blockbuster.api.ModelTransform target =
-                        pose.limbs.get(bone.getName());
-
-                if (target == null)
-                {
-                    for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelTransform> entry
-                            : pose.limbs.entrySet())
-                    {
-                        if (entry.getKey() != null
-                                && entry.getKey().equalsIgnoreCase(bone.getName()))
-                        {
-                            target = entry.getValue();
-                            break;
-                        }
-                    }
-                }
-
-                if (target == null)
-                {
-                    continue;
-                }
-
-                AnimationTransform transform = bone.getTransformAt(frame);
-                if (transform == null)
-                {
-                    continue;
-                }
-
-                /*
-                 * Preserve Blockbuster's source translation and apply only
-                 * the keyed delta. Do not use the editor-space bone pivot
-                 * here: its Y/Z conversion differs from ModelTransform.
-                 */
-                target.translate[0] += transform.getPositionX();
-                target.translate[1] += transform.getPositionY();
-                target.translate[2] += transform.getPositionZ();
-                target.rotate[0] += transform.getRotationX();
-                target.rotate[1] += transform.getRotationY();
-                target.rotate[2] += transform.getRotationZ();
-                target.scale[0] *= transform.getScaleX();
-                target.scale[1] *= transform.getScaleY();
-                target.scale[2] *= transform.getScaleZ();
-            }
-        }
-
-        child.customPose =
-                pose;
-
         /*
-         * Force the child to use the freshly prepared pose and model.
+         * Use the same internal-bone pose pipeline for both model-picker
+         * attachments and morph-picker attachments. The old duplicate path
+         * skipped every internal bone whenever a model key selected a name
+         * different from the attachment's original modelName.
          */
-        child.currentPose = "";
+        applyInternalBonePose(child, data, frame);
 
         CharacterBodyPartOverrideController.apply(
                 child,
