@@ -452,24 +452,22 @@ public class AnimationEditorScreen extends GuiScreen
 
         if (model != null)
         {
-            AnimationKeyframe selected =
+            /*
+             * In the model-editing view, target the selected bone of the
+             * Body Part model itself. The parent actor bone is only the
+             * attachment point for the whole model and must not replace
+             * an internal bone just because no keyframe is selected yet.
+             */
+            AnimationBone selectedBone =
                     this.bodyPartsController
                             .getKeyframeController()
-                            .getSelectedKeyframe();
+                            .getSelectedBone(
+                                    model.getBones()
+                            );
 
-            if (selected != null)
+            if (selectedBone != null)
             {
-                AnimationBone selectedBone =
-                        this.bodyPartsController
-                                .getKeyframeController()
-                                .getSelectedBone(
-                                        model.getBones()
-                                );
-
-                if (selectedBone != null)
-                {
-                    return selectedBone;
-                }
+                return selectedBone;
             }
 
             /*
