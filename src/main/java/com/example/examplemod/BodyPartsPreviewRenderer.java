@@ -314,6 +314,10 @@ public class BodyPartsPreviewRenderer
         {
             applyInternalBonePose((CustomMorph) child, data, frame);
         }
+        else
+        {
+            applyChameleonInternalBonePose(child, data, frame);
+        }
 
         part.useTarget = true;
         part.enabled = true;
@@ -321,6 +325,176 @@ public class BodyPartsPreviewRenderer
         part.animate = true;
         part.morph.setDirect(child);
         return part;
+    }
+
+    /**
+     * Apply internal-bone keyframes to a Chameleon morph.
+     *
+     * Chameleon renders its bones from ChameleonMorph.pose. Editing the
+     * underlying ModelBone.current values would be discarded because the
+     * Chameleon renderer resets the model pose before every render. Instead,
+     * clone the morph's AnimatedPose and add the editor's offsets to its
+     * AnimatedPoseTransform entries.
+     *
+     * Reflection keeps Chameleon an optional runtime dependency.
+     */
+    private void applyChameleonInternalBonePose(
+            AbstractMorph child,
+            BodyPartModelData data,
+            int frame)
+    {
+        if (child == null || data == null)
+        {
+            return;
+        }
+
+        try
+        {
+            Class<?> chameleonMorphClass =
+                    Class.forName("mchorse.chameleon.metamorph.ChameleonMorph");
+
+            if (!chameleonMorphClass.isInstance(child))
+            {
+                return;
+            }
+
+            java.lang.reflect.Field poseField =
+                    chameleonMorphClass.getField("pose");
+
+            Object pose =
+                    poseField.get(child);
+
+            if (pose != null)
+            {
+                pose = pose.getClass().getMethod("clone").invoke(pose);
+            }
+            else
+            {
+                pose = Class.forName(
+                        "mchorse.chameleon.metamorph.pose.AnimatedPose"
+                ).newInstance();
+            }
+
+            java.lang.reflect.Field bonesField =
+                    pose.getClass().getField("bones");
+
+            Object bonesObject =
+                    bonesField.get(pose);
+
+            if (!(bonesObject instanceof java.util.Map))
+            {
+                return;
+            }
+
+            java.util.Map<Object, Object> poseBones =
+                    (java.util.Map<Object, Object>) bonesObject;
+
+            Class<?> poseTransformClass =
+                    Class.forName(
+                            "mchorse.chameleon.metamorph.pose.AnimatedPoseTransform"
+                    );
+
+            int matchedBones = 0;
+
+            for (AnimationBone bone : data.getBones())
+            {
+                if (bone == null || bone.getName() == null
+                        || bone.getKeyframes().isEmpty())
+                {
+                    continue;
+                }
+
+                AnimationTransform transform =
+                        bone.getTransformAt(frame);
+
+                if (transform == null)
+                {
+                    continue;
+                }
+
+                Object poseTransform =
+                        poseBones.get(bone.getName());
+
+                if (poseTransform == null)
+                {
+                    for (java.util.Map.Entry<Object, Object> entry
+                            : poseBones.entrySet())
+                    {
+                        if (entry.getKey() != null
+                                && String.valueOf(entry.getKey())
+                                        .equalsIgnoreCase(bone.getName()))
+                        {
+                            poseTransform = entry.getValue();
+                            break;
+                        }
+                    }
+                }
+
+                if (poseTransform == null)
+                {
+                    poseTransform = poseTransformClass
+                            .getConstructor(String.class)
+                            .newInstance(bone.getName());
+
+                    poseBones.put(bone.getName(), poseTransform);
+                }
+
+                addPoseFloat(poseTransform, "x", transform.getPositionX());
+                addPoseFloat(poseTransform, "y", transform.getPositionY());
+                addPoseFloat(poseTransform, "z", transform.getPositionZ());
+
+                /* Chameleon stores pose rotations in radians, unlike Blockbuster. */
+                addPoseFloat(poseTransform, "rotateX",
+                        (float) Math.toRadians(transform.getRotationX()));
+                addPoseFloat(poseTransform, "rotateY",
+                        (float) Math.toRadians(transform.getRotationY()));
+                addPoseFloat(poseTransform, "rotateZ",
+                        (float) Math.toRadians(transform.getRotationZ()));
+
+                /* Chameleon's pose scale is an additive offset from 1.0. */
+                addPoseFloat(poseTransform, "scaleX", transform.getScaleX() - 1.0F);
+                addPoseFloat(poseTransform, "scaleY", transform.getScaleY() - 1.0F);
+                addPoseFloat(poseTransform, "scaleZ", transform.getScaleZ() - 1.0F);
+
+                matchedBones++;
+            }
+
+            poseField.set(child, pose);
+
+            if (matchedBones > 0)
+            {
+                System.out.println(
+                        "[BBS Animation Editor][BodyParts] Chameleon internal pose applied: model="
+                                + child.name + ", frame=" + frame
+                                + ", matchedBones=" + matchedBones
+                );
+            }
+        }
+        catch (ClassNotFoundException ignored)
+        {
+            /* Chameleon isn't installed; this adapter is optional. */
+        }
+        catch (Throwable error)
+        {
+            System.err.println(
+                    "[BBS Animation Editor][BodyParts] Could not apply Chameleon internal pose"
+            );
+            error.printStackTrace();
+        }
+    }
+
+    private void addPoseFloat(
+            Object target,
+            String fieldName,
+            float delta) throws Exception
+    {
+        java.lang.reflect.Field field =
+                target.getClass().getField(fieldName);
+
+        field.setFloat(
+                target,
+                field.getFloat(target) + delta
+        );
     }
 
     /**
