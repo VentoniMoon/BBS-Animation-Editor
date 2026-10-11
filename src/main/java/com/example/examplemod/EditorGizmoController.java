@@ -3757,6 +3757,32 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
+        /*
+         * Translation handles follow the selected bone's complete local
+         * orientation, including the selected bone's own rotation. The
+         * value written to the key is converted separately; the display
+         * basis must not be reduced to the parent basis.
+         */
+        return getBodyPartComposedWorldAxes(
+                bone,
+                selectedKeyframe,
+                recordFrame
+        );
+    }
+
+    /**
+     * Compose the Body Part's rendered orientation in hierarchy order:
+     *
+     * actor attachment * whole-model rotation * internal bone hierarchy.
+     *
+     * Do not add Euler angles. Rotations are non-commutative, and adding
+     * them makes local axes drift after combined X/Y/Z rotations.
+     */
+    private double[][] getBodyPartComposedWorldAxes(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe,
+            BlockbusterRecordFrame recordFrame)
+    {
         if (bone == null)
         {
             return null;
@@ -3766,62 +3792,101 @@ public class EditorGizmoController
                 ? selectedKeyframe.getFrame()
                 : this.gizmoFrame;
 
-        float rx = 0.0F;
-        float ry = 0.0F;
-        float rz = 0.0F;
-
-        AnimationTransform attachment = null;
-        if (this.bodyPartAttachmentBone != null)
+        float[][] identity = new float[][]
         {
-            attachment = this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+            {1.0F, 0.0F, 0.0F},
+            {0.0F, 1.0F, 0.0F},
+            {0.0F, 0.0F, 1.0F}
+        };
+
+        float[][] attachmentMatrix = identity;
+        AnimationBone attachmentBone = this.bodyPartAttachmentBone;
+
+        if (attachmentBone != null)
+        {
+            if (this.bodyPartTarget != null)
+            {
+                float[][] evaluatedAttachment =
+                        getWorldRotationMatrix(attachmentBone, frame);
+
+                if (evaluatedAttachment != null)
+                {
+                    attachmentMatrix = evaluatedAttachment;
+                }
+            }
+            else
+            {
+                AnimationTransform attachment =
+                        attachmentBone.getWorldPivotAt(frame);
+
+                if (attachment != null)
+                {
+                    attachmentMatrix = createRotationMatrix(
+                            attachment.getRotationX(),
+                            attachment.getRotationY(),
+                            attachment.getRotationZ()
+                    );
+                }
+            }
         }
 
-        if (attachment != null)
-        {
-            rx = attachment.getRotationX();
-            ry = attachment.getRotationY();
-            rz = attachment.getRotationZ();
-        }
+        AnimationTransform global = this.globalTransformTarget != null
+                ? this.globalTransformTarget
+                : (this.bodyPartTarget != null
+                   ? this.bodyPartTarget.getGlobalTransform()
+                   : null);
+
+        float[][] globalMatrix = global == null
+                ? identity
+                : createRotationMatrix(
+                        global.getRotationX(),
+                        global.getRotationY(),
+                        global.getRotationZ()
+                );
+
+        float[][] internalMatrix = identity;
 
         if (this.bodyPartTarget != null &&
                 bone != this.bodyPartAttachmentBone)
         {
-            AnimationBone parent = bone.getParent();
-            if (parent != null)
-            {
-                AnimationTransform parentWorld = this.chameleonCoordinateSpace
-                        ? getChameleonWorldPivot(parent, frame)
-                        : getBodyPartBonePivot(parent, frame);
+            float[][] evaluatedBone =
+                    getWorldRotationMatrix(bone, frame);
 
-                if (parentWorld != null)
-                {
-                    rx += parentWorld.getRotationX();
-                    ry += parentWorld.getRotationY();
-                    rz += parentWorld.getRotationZ();
-                }
-            }
-
-            AnimationTransform global = this.bodyPartTarget.getGlobalTransform();
-            if (global != null)
+            if (evaluatedBone != null)
             {
-                rx += global.getRotationX();
-                ry += global.getRotationY();
-                rz += global.getRotationZ();
+                internalMatrix = evaluatedBone;
             }
         }
-        else if (this.globalTransformTarget != null)
+
+        float[][] worldMatrix = multiplyMatrix(
+                attachmentMatrix,
+                multiplyMatrix(globalMatrix, internalMatrix)
+        );
+
+        float[] worldX = new float[]
         {
-            /*
-             * Root translation happens before the child model's own
-             * rotation, so use only the attachment basis here.
-             */
-        }
+            worldMatrix[0][0],
+            worldMatrix[1][0],
+            worldMatrix[2][0]
+        };
+        float[] worldY = new float[]
+        {
+            worldMatrix[0][1],
+            worldMatrix[1][1],
+            worldMatrix[2][1]
+        };
+        float[] worldZ = new float[]
+        {
+            worldMatrix[0][2],
+            worldMatrix[1][2],
+            worldMatrix[2][2]
+        };
 
         return new double[][]
         {
-            transformBoneDirection(rotateVector(1.0F, 0.0F, 0.0F, rx, ry, rz), recordFrame),
-            transformBoneDirection(rotateVector(0.0F, 1.0F, 0.0F, rx, ry, rz), recordFrame),
-            transformBoneDirection(rotateVector(0.0F, 0.0F, 1.0F, rx, ry, rz), recordFrame)
+            transformBoneDirection(worldX, recordFrame),
+            transformBoneDirection(worldY, recordFrame),
+            transformBoneDirection(worldZ, recordFrame)
         };
     }
 
@@ -4019,6 +4084,21 @@ public class EditorGizmoController
         if (bone == null)
         {
             return null;
+        }
+
+        /*
+         * Body Parts use their own attachment/global/internal hierarchy.
+         * Resolve all three axes through the same composed basis for every
+         * tool mode, rather than using a native matrix from the parent actor
+         * or reconstructing orientation by adding Euler angles.
+         */
+        if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+        {
+            return getBodyPartComposedWorldAxes(
+                    bone,
+                    selectedKeyframe,
+                    recordFrame
+            );
         }
 
         int frame =
