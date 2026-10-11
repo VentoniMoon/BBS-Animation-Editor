@@ -3792,43 +3792,24 @@ public class EditorGizmoController
                 ? selectedKeyframe.getFrame()
                 : this.gizmoFrame;
 
-        float[][] identity = new float[][]
+        /*
+         * The attachment basis is already in world space and comes from the
+         * actual parent renderer whenever that adapter is available.
+         */
+        double[][] attachmentAxes =
+                getBodyPartAttachmentWorldAxes(frame, recordFrame);
+
+        if (attachmentAxes == null)
         {
-            {1.0F, 0.0F, 0.0F},
-            {0.0F, 1.0F, 0.0F},
-            {0.0F, 0.0F, 1.0F}
-        };
-
-        float[][] attachmentMatrix = identity;
-        AnimationBone attachmentBone = this.bodyPartAttachmentBone;
-
-        if (attachmentBone != null)
-        {
-            if (this.bodyPartTarget != null)
-            {
-                float[][] evaluatedAttachment =
-                        getWorldRotationMatrix(attachmentBone, frame);
-
-                if (evaluatedAttachment != null)
-                {
-                    attachmentMatrix = evaluatedAttachment;
-                }
-            }
-            else
-            {
-                AnimationTransform attachment =
-                        attachmentBone.getWorldPivotAt(frame);
-
-                if (attachment != null)
-                {
-                    attachmentMatrix = createRotationMatrix(
-                            attachment.getRotationX(),
-                            attachment.getRotationY(),
-                            attachment.getRotationZ()
-                    );
-                }
-            }
+            return null;
         }
+
+        float[][] attachmentMatrix = new float[][]
+        {
+            {(float) attachmentAxes[0][0], (float) attachmentAxes[1][0], (float) attachmentAxes[2][0]},
+            {(float) attachmentAxes[0][1], (float) attachmentAxes[1][1], (float) attachmentAxes[2][1]},
+            {(float) attachmentAxes[0][2], (float) attachmentAxes[1][2], (float) attachmentAxes[2][2]}
+        };
 
         AnimationTransform global = this.globalTransformTarget != null
                 ? this.globalTransformTarget
@@ -3837,57 +3818,132 @@ public class EditorGizmoController
                    : null);
 
         float[][] globalMatrix = global == null
-                ? identity
+                ? identityRotationMatrix()
                 : createRotationMatrix(
                         global.getRotationX(),
                         global.getRotationY(),
                         global.getRotationZ()
                 );
 
-        float[][] internalMatrix = identity;
+        /*
+         * Blockbuster's CustomMorph applies a root mirror before rendering
+         * its limb hierarchy. Other child morph types keep their own local
+         * basis. Keep this adapter between the Body Part transform and the
+         * child bone matrix, where it exists in the actual render pipeline.
+         */
+        float[][] childRootMatrix = identityRotationMatrix();
+
+        if (isBlockbusterBodyPartTarget())
+        {
+            childRootMatrix = new float[][]
+            {
+                {-1.0F, 0.0F, 0.0F},
+                {0.0F, -1.0F, 0.0F},
+                {0.0F, 0.0F, 1.0F}
+            };
+        }
+
+        float[][] internalMatrix = identityRotationMatrix();
 
         if (this.bodyPartTarget != null &&
                 bone != this.bodyPartAttachmentBone)
         {
-            float[][] evaluatedBone =
-                    getWorldRotationMatrix(bone, frame);
+            float[][] evaluated =
+                    getBodyPartInternalRotationMatrix(bone, frame);
 
-            if (evaluatedBone != null)
+            if (evaluated != null)
             {
-                internalMatrix = evaluatedBone;
+                internalMatrix = evaluated;
             }
         }
 
         float[][] worldMatrix = multiplyMatrix(
                 attachmentMatrix,
-                multiplyMatrix(globalMatrix, internalMatrix)
+                multiplyMatrix(
+                        globalMatrix,
+                        multiplyMatrix(childRootMatrix, internalMatrix)
+                )
         );
 
-        float[] worldX = new float[]
+        double[] worldX = normalizeCopy(new double[]
         {
-            worldMatrix[0][0],
-            worldMatrix[1][0],
-            worldMatrix[2][0]
-        };
-        float[] worldY = new float[]
+            worldMatrix[0][0], worldMatrix[1][0], worldMatrix[2][0]
+        });
+        double[] worldY = normalizeCopy(new double[]
         {
-            worldMatrix[0][1],
-            worldMatrix[1][1],
-            worldMatrix[2][1]
-        };
-        float[] worldZ = new float[]
+            worldMatrix[0][1], worldMatrix[1][1], worldMatrix[2][1]
+        });
+        double[] worldZ = normalizeCopy(new double[]
         {
-            worldMatrix[0][2],
-            worldMatrix[1][2],
-            worldMatrix[2][2]
-        };
+            worldMatrix[0][2], worldMatrix[1][2], worldMatrix[2][2]
+        });
 
-        return new double[][]
+        return new double[][] {worldX, worldY, worldZ};
+    }
+
+    private float[][] identityRotationMatrix()
+    {
+        return new float[][]
         {
-            transformBoneDirection(worldX, recordFrame),
-            transformBoneDirection(worldY, recordFrame),
-            transformBoneDirection(worldZ, recordFrame)
+            {1.0F, 0.0F, 0.0F},
+            {0.0F, 1.0F, 0.0F},
+            {0.0F, 0.0F, 1.0F}
         };
+    }
+
+    private double[] normalizeCopy(double[] axis)
+    {
+        normalize(axis);
+        return axis;
+    }
+
+    /**
+     * Native local rotations for the selected child model. Blockbuster
+     * reverses its Y/Z renderer angles; the other supported model adapters
+     * retain the editor's imported rotation convention.
+     */
+    private float[][] getBodyPartInternalRotationMatrix(
+            AnimationBone bone,
+            float frame)
+    {
+        if (bone == null)
+        {
+            return identityRotationMatrix();
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        boolean blockbuster = isBlockbusterBodyPartTarget();
+
+        float rx = bone.getBaseRotationX() + key.getRotationX();
+        float ry = bone.getBaseRotationY() + key.getRotationY();
+        float rz = bone.getBaseRotationZ() + key.getRotationZ();
+
+        if (blockbuster)
+        {
+            ry = -ry;
+            rz = -rz;
+        }
+
+        float[][] local = createRotationMatrix(rx, ry, rz);
+        AnimationBone parent = bone.getParent();
+
+        if (parent == null)
+        {
+            return local;
+        }
+
+        float[][] parentWorld =
+                getBodyPartInternalRotationMatrix(parent, frame);
+
+        return parentWorld == null
+                ? local
+                : multiplyMatrix(parentWorld, local);
     }
 
     private double getBodyPartPositionDelta(int axisId, double worldDelta)
