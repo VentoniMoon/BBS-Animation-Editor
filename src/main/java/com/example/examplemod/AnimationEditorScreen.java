@@ -494,8 +494,39 @@ public class AnimationEditorScreen extends GuiScreen
             }
 
             /*
-             * Level 1 / Global Transform operates on the attachment
-             * bone itself.
+             * A selected child model with internal bones must never silently
+             * fall back to the actor attachment bone. That attachment is the
+             * pivot of the whole added model, not one of its internal bones.
+             *
+             * Some model adapters can temporarily lose their selected-bone
+             * index while rebuilding the child skeleton. Keep the gizmo on
+             * a real child bone in that case (prefer a root, then first valid
+             * bone) instead of making it appear stuck to the actor.
+             */
+            List<AnimationBone> childBones = model.getBones();
+
+            if (childBones != null && !childBones.isEmpty())
+            {
+                for (AnimationBone childBone : childBones)
+                {
+                    if (childBone != null && childBone.getParent() == null)
+                    {
+                        return childBone;
+                    }
+                }
+
+                for (AnimationBone childBone : childBones)
+                {
+                    if (childBone != null)
+                    {
+                        return childBone;
+                    }
+                }
+            }
+
+            /*
+             * Only a model without an internal skeleton may use its actor
+             * attachment as a fallback target.
              */
             return findBodyPartAttachmentBone(model);
         }
