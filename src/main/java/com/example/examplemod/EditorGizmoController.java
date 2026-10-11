@@ -4033,7 +4033,10 @@ public class EditorGizmoController
                         this.bodyPartTarget != null &&
                         bone != this.bodyPartAttachmentBone
                         ? getChameleonWorldPivot(bone, frame)
-                        : bone.getWorldPivotAt(frame);
+                        : (this.bodyPartTarget != null &&
+                           bone != this.bodyPartAttachmentBone
+                           ? getBodyPartBonePivot(bone, frame)
+                           : bone.getWorldPivotAt(frame));
 
         if (pivot == null)
         {
@@ -4137,7 +4140,11 @@ public class EditorGizmoController
         }
         else
         {
-            AnimationTransform world = bone.getWorldTransformAt(frame);
+            AnimationTransform world =
+                    this.bodyPartTarget != null &&
+                            bone != this.bodyPartAttachmentBone
+                            ? getBodyPartBonePivot(bone, frame)
+                            : bone.getWorldTransformAt(frame);
 
             if (world == null)
             {
@@ -4157,7 +4164,9 @@ public class EditorGizmoController
                      this.globalTransformTarget != null))
             {
                 AnimationTransform attachment =
-                        this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+                        this.chameleonCoordinateSpace
+                                ? getChameleonWorldPivot(this.bodyPartAttachmentBone, frame)
+                                : this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
                 if (attachment != null)
                 {
