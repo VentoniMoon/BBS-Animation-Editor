@@ -3871,6 +3871,31 @@ public class EditorGizmoController
             BlockbusterRecordFrame recordFrame)
     {
         /*
+         * Body Parts must never borrow native matrices from the parent
+         * actor morph. Their pivot and orientation belong to the selected
+         * child model, represented by BodyPartModelData's bone hierarchy.
+         * Keep this branch ahead of every native actor adapter so the
+         * behavior is consistent for Blockbuster, Emoticons and Chameleon.
+         */
+        if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+        {
+            if (this.mode == Mode.POSITION)
+            {
+                return getBodyPartTranslationWorldAxes(
+                        bone,
+                        selectedKeyframe,
+                        recordFrame
+                );
+            }
+
+            return getBoneWorldAxes(
+                    bone,
+                    selectedKeyframe,
+                    recordFrame
+            );
+        }
+
+        /*
          * POSITION is different from ROTATION/SCALE.
          *
          * Blockbuster applies a limb's translation before that limb's own
@@ -3889,24 +3914,6 @@ public class EditorGizmoController
          */
         if (this.mode == Mode.POSITION)
         {
-            /*
-             * Body Parts have a different parent than the actor morph:
-             * their selected bones belong to the attached child model.
-             * Never query the parent actor's native bone matrices here.
-             * Build the axes from the editor's own attachment/model
-             * hierarchy so Blockbuster, Emoticons and Chameleon children
-             * all target the selected child bone.
-             */
-            if (this.bodyPartTarget != null ||
-                    this.globalTransformTarget != null)
-            {
-                return getBodyPartTranslationWorldAxes(
-                        bone,
-                        selectedKeyframe,
-                        recordFrame
-                );
-            }
-
             double[][] translationAxes =
                     getExactChameleonBoneTranslationWorldAxes(
                             bone,
