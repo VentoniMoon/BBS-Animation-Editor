@@ -458,12 +458,35 @@ public class AnimationEditorScreen extends GuiScreen
              * attachment point for the whole model and must not replace
              * an internal bone just because no keyframe is selected yet.
              */
+            EditorKeyframeController bodyPartKeys =
+                    this.bodyPartsController.getKeyframeController();
+
+            /*
+             * Mirror Pose's primary resolution rule: when a keyframe is
+             * selected, trust its owning bone if that bone belongs to this
+             * child model. Some model adapters (notably Emoticons) can leave
+             * the selected-bone index stale while the keyframe owner remains
+             * correct.
+             */
+            AnimationKeyframe selectedKey =
+                    bodyPartKeys.getSelectedKeyframe();
+            AnimationBone keyOwner =
+                    bodyPartKeys.getSelectedKeyframeBone();
+
+            if (selectedKey != null && keyOwner != null &&
+                    model.getBones() != null)
+            {
+                for (AnimationBone childBone : model.getBones())
+                {
+                    if (childBone == keyOwner)
+                    {
+                        return keyOwner;
+                    }
+                }
+            }
+
             AnimationBone selectedBone =
-                    this.bodyPartsController
-                            .getKeyframeController()
-                            .getSelectedBone(
-                                    model.getBones()
-                            );
+                    bodyPartKeys.getSelectedBone(model.getBones());
 
             if (selectedBone != null)
             {
@@ -582,6 +605,10 @@ public class AnimationEditorScreen extends GuiScreen
 
     public void prepareGizmoTarget()
     {
+        this.gizmoController.setGizmoFrame(
+                this.playbackController.getCurrentFrame()
+        );
+
         boolean chameleonGizmoTarget =
                 this.actorPreviewController.isCurrentActorChameleon();
 
@@ -594,14 +621,26 @@ public class AnimationEditorScreen extends GuiScreen
                     this.bodyPartsController.getSelectedAttachment();
         }
 
-        if (gizmoBodyPart != null &&
-                gizmoBodyPart.getBaseMorph() != null)
+        if (gizmoBodyPart != null)
         {
-            chameleonGizmoTarget =
-                    gizmoBodyPart.getBaseMorph()
-                            .getClass()
-                            .getName()
-                            .endsWith(".ChameleonMorph");
+            /*
+             * Resolve the active child morph at the current timeline frame,
+             * not just the model's original morph. Character Timeline can
+             * replace an attached model, and the gizmo adapter must follow
+             * that same active model type.
+             */
+            mchorse.metamorph.api.morphs.AbstractMorph activeMorph =
+                    gizmoBodyPart.getMorphAt(
+                            this.playbackController.getCurrentFrame()
+                    );
+
+            if (activeMorph != null)
+            {
+                chameleonGizmoTarget =
+                        activeMorph.getClass()
+                                .getName()
+                                .endsWith(".ChameleonMorph");
+            }
         }
 
         this.gizmoController.setChameleonCoordinateSpace(
@@ -637,9 +676,6 @@ public class AnimationEditorScreen extends GuiScreen
                 getGizmoGlobalTransform()
         );
 
-        this.gizmoController.setGizmoFrame(
-                this.playbackController.getCurrentFrame()
-        );
     }
 
     public AnimationKeyframe getGizmoKeyframe()
