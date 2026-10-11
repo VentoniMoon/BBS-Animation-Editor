@@ -405,33 +405,36 @@ public class EditorGizmoController
 
             if (this.activePart == AXIS_X)
             {
-                px += (float) getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY);
+                double delta = getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY);
+                px += (float) getBodyPartPositionDelta(AXIS_X, delta);
             }
             else if (this.activePart == AXIS_Y)
             {
-                py += (float) getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
+                double delta = getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
+                py += (float) getBodyPartPositionDelta(AXIS_Y, delta);
             }
             else if (this.activePart == AXIS_Z)
             {
-                pz += (float) getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
+                double delta = getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
+                pz += (float) getBodyPartPositionDelta(AXIS_Z, delta);
             }
             else if (this.activePart == PLANE_XY)
             {
                 double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
-                px += (float) getDataAxisDelta(AXIS_X, d[0]);
-                py += (float) getDataAxisDelta(AXIS_Y, d[1]);
+                px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[1]));
             }
             else if (this.activePart == PLANE_XZ)
             {
                 double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
-                px += (float) getDataAxisDelta(AXIS_X, d[0]);
-                pz += (float) getDataAxisDelta(AXIS_Z, d[1]);
+                px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
             }
             else if (this.activePart == PLANE_YZ)
             {
                 double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
-                py += (float) getDataAxisDelta(AXIS_Y, d[0]);
-                pz += (float) getDataAxisDelta(AXIS_Z, d[1]);
+                py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[0]));
+                pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
             }
             transform.setPosition(px, py, pz);
         }
@@ -3743,6 +3746,125 @@ public class EditorGizmoController
      * Keep rotation/scale gizmos on the native bone basis, but make the
      * position gizmo follow the actual translation basis.
      */
+    /**
+     * Position axes for a Body Part target. The added model's root
+     * translation is expressed in the attachment's local space; an
+     * internal bone's translation is expressed in its parent-bone space.
+     * In both cases, do not include the selected bone's own rotation.
+     */
+    private double[][] getBodyPartTranslationWorldAxes(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        int frame = selectedKeyframe != null
+                ? selectedKeyframe.getFrame()
+                : this.gizmoFrame;
+
+        float rx = 0.0F;
+        float ry = 0.0F;
+        float rz = 0.0F;
+
+        AnimationTransform attachment = null;
+        if (this.bodyPartAttachmentBone != null)
+        {
+            attachment = this.chameleonCoordinateSpace
+                    ? getChameleonWorldPivot(this.bodyPartAttachmentBone, frame)
+                    : this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+        }
+
+        if (attachment != null)
+        {
+            rx = attachment.getRotationX();
+            ry = attachment.getRotationY();
+            rz = attachment.getRotationZ();
+        }
+
+        if (this.bodyPartTarget != null &&
+                bone != this.bodyPartAttachmentBone)
+        {
+            AnimationBone parent = bone.getParent();
+            if (parent != null)
+            {
+                AnimationTransform parentWorld = this.chameleonCoordinateSpace
+                        ? getChameleonWorldPivot(parent, frame)
+                        : parent.getWorldTransformAt(frame);
+
+                if (parentWorld != null)
+                {
+                    rx += parentWorld.getRotationX();
+                    ry += parentWorld.getRotationY();
+                    rz += parentWorld.getRotationZ();
+                }
+            }
+
+            AnimationTransform global = this.bodyPartTarget.getGlobalTransform();
+            if (global != null)
+            {
+                rx += global.getRotationX();
+                ry += global.getRotationY();
+                rz += global.getRotationZ();
+            }
+        }
+        else if (this.globalTransformTarget != null)
+        {
+            /*
+             * Root translation happens before the child model's own
+             * rotation, so use only the attachment basis here.
+             */
+        }
+
+        return new double[][]
+        {
+            transformBoneDirection(rotateVector(1.0F, 0.0F, 0.0F, rx, ry, rz), recordFrame),
+            transformBoneDirection(rotateVector(0.0F, 1.0F, 0.0F, rx, ry, rz), recordFrame),
+            transformBoneDirection(rotateVector(0.0F, 0.0F, 1.0F, rx, ry, rz), recordFrame)
+        };
+    }
+
+    private double getBodyPartPositionDelta(int axisId, double worldDelta)
+    {
+        if (this.globalTransformTarget != null)
+        {
+            /*
+             * Whole-model translation is stored in model pixels, while the
+             * gizmo drag is measured in world blocks (one block = 16 pixels).
+             */
+            return worldDelta * 16.0D;
+        }
+
+        if (this.bodyPartTarget != null)
+        {
+            AnimationTransform global = this.bodyPartTarget.getGlobalTransform();
+            float scale = 1.0F;
+
+            if (global != null)
+            {
+                if (axisId == AXIS_X) scale = global.getScaleX();
+                else if (axisId == AXIS_Y) scale = global.getScaleY();
+                else scale = global.getScaleZ();
+            }
+
+            if (Math.abs(scale) < 0.0001F)
+            {
+                scale = 1.0F;
+            }
+
+            /*
+             * Internal-bone offsets are also stored in model pixels and are
+             * subsequently multiplied by the Body Part's global scale.
+             */
+            return worldDelta * 16.0D / scale;
+        }
+
+        return worldDelta;
+    }
+
     private double[][] getGizmoWorldAxes(
             AnimationBone bone,
             AnimationKeyframe selectedKeyframe,
@@ -3767,6 +3889,24 @@ public class EditorGizmoController
          */
         if (this.mode == Mode.POSITION)
         {
+            /*
+             * Body Parts have a different parent than the actor morph:
+             * their selected bones belong to the attached child model.
+             * Never query the parent actor's native bone matrices here.
+             * Build the axes from the editor's own attachment/model
+             * hierarchy so Blockbuster, Emoticons and Chameleon children
+             * all target the selected child bone.
+             */
+            if (this.bodyPartTarget != null ||
+                    this.globalTransformTarget != null)
+            {
+                return getBodyPartTranslationWorldAxes(
+                        bone,
+                        selectedKeyframe,
+                        recordFrame
+                );
+            }
+
             double[][] translationAxes =
                     getExactChameleonBoneTranslationWorldAxes(
                             bone,
