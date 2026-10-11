@@ -314,6 +314,10 @@ public class BodyPartsPreviewRenderer
         {
             applyInternalBonePose((CustomMorph) child, data, frame);
         }
+        else if (isEmoticonsAnimatedMorph(child))
+        {
+            applyEmoticonsInternalBonePose(child, data, frame);
+        }
         else
         {
             applyChameleonInternalBonePose(child, data, frame);
@@ -325,6 +329,186 @@ public class BodyPartsPreviewRenderer
         part.animate = true;
         part.morph.setDirect(child);
         return part;
+    }
+
+    /**
+     * Detect Emoticons' AnimatedMorph without making Emoticons a hard
+     * runtime requirement for users who only install Blockbuster.
+     */
+    private boolean isEmoticonsAnimatedMorph(AbstractMorph child)
+    {
+        if (child == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return Class.forName(
+                    "mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph"
+            ).isInstance(child);
+        }
+        catch (ClassNotFoundException ignored)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * Apply internal-bone keys to Emoticons' AnimatedMorph pose.
+     *
+     * Emoticons does not read ModelBone fields for this morph. Its renderer
+     * reads AnimatedMorph.pose (or the result of PoseAnimation.calculatePose)
+     * and applies AnimatorPoseTransform values to the BOBJ armature. Therefore
+     * editing only the editor-side AnimationBone never changes the rendered
+     * model; update a cloned pose on the morph that will actually be rendered.
+     */
+    private void applyEmoticonsInternalBonePose(
+            AbstractMorph child,
+            BodyPartModelData data,
+            int frame)
+    {
+        if (child == null || data == null)
+        {
+            return;
+        }
+
+        try
+        {
+            Class<?> morphClass = Class.forName(
+                    "mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph"
+            );
+
+            if (!morphClass.isInstance(child))
+            {
+                return;
+            }
+
+            java.lang.reflect.Field poseField = morphClass.getField("pose");
+            Object pose = poseField.get(child);
+            Class<?> poseClass = Class.forName(
+                    "mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedPose"
+            );
+
+            if (pose != null)
+            {
+                pose = poseClass.getMethod("clone").invoke(pose);
+            }
+            else
+            {
+                pose = poseClass.newInstance();
+            }
+
+            java.lang.reflect.Field bonesField = poseClass.getField("bones");
+            Object bonesObject = bonesField.get(pose);
+
+            if (!(bonesObject instanceof java.util.Map))
+            {
+                return;
+            }
+
+            java.util.Map<Object, Object> poseBones =
+                    (java.util.Map<Object, Object>) bonesObject;
+            Class<?> transformClass = Class.forName(
+                    "mchorse.emoticons.skin_n_bones.api.animation.model.AnimatorPoseTransform"
+            );
+
+            int matchedBones = 0;
+
+            for (AnimationBone bone : data.getBones())
+            {
+                if (bone == null || bone.getName() == null
+                        || bone.getKeyframes().isEmpty())
+                {
+                    continue;
+                }
+
+                AnimationTransform transform = bone.getTransformAt(frame);
+
+                if (transform == null)
+                {
+                    continue;
+                }
+
+                Object poseTransform = poseBones.get(bone.getName());
+
+                if (poseTransform == null)
+                {
+                    for (java.util.Map.Entry<Object, Object> entry : poseBones.entrySet())
+                    {
+                        if (entry.getKey() != null
+                                && String.valueOf(entry.getKey())
+                                        .equalsIgnoreCase(bone.getName()))
+                        {
+                            poseTransform = entry.getValue();
+                            break;
+                        }
+                    }
+                }
+
+                if (poseTransform == null)
+                {
+                    poseTransform = transformClass
+                            .getConstructor(String.class)
+                            .newInstance(bone.getName());
+                    poseBones.put(bone.getName(), poseTransform);
+                }
+
+                addPoseFloat(poseTransform, "x", transform.getPositionX());
+                addPoseFloat(poseTransform, "y", transform.getPositionY());
+                addPoseFloat(poseTransform, "z", transform.getPositionZ());
+
+                /* BOBJ bone rotations are radians. Editor values are degrees. */
+                addPoseFloat(poseTransform, "rotateX",
+                        (float) Math.toRadians(transform.getRotationX()));
+                addPoseFloat(poseTransform, "rotateY",
+                        (float) Math.toRadians(transform.getRotationY()));
+                addPoseFloat(poseTransform, "rotateZ",
+                        (float) Math.toRadians(transform.getRotationZ()));
+
+                /*
+                 * Emoticons multiplies the source bone scale by this pose
+                 * scale. Treat the editor scale as a multiplier, not as an
+                 * additive delta like Chameleon's pose representation.
+                 */
+                multiplyPoseFloat(poseTransform, "scaleX", transform.getScaleX());
+                multiplyPoseFloat(poseTransform, "scaleY", transform.getScaleY());
+                multiplyPoseFloat(poseTransform, "scaleZ", transform.getScaleZ());
+
+                matchedBones++;
+            }
+
+            poseField.set(child, pose);
+
+            if (matchedBones > 0)
+            {
+                System.out.println(
+                        "[BBS Animation Editor][BodyParts] Emoticons internal pose applied: model="
+                                + child.name + ", frame=" + frame
+                                + ", matchedBones=" + matchedBones
+                );
+            }
+        }
+        catch (ClassNotFoundException ignored)
+        {
+            /* Emoticons isn't installed; this adapter is optional. */
+        }
+        catch (Throwable error)
+        {
+            System.err.println(
+                    "[BBS Animation Editor][BodyParts] Could not apply Emoticons internal pose"
+            );
+            error.printStackTrace();
+        }
+    }
+
+    private void multiplyPoseFloat(
+            Object target,
+            String fieldName,
+            float multiplier) throws Exception
+    {
+        java.lang.reflect.Field field = target.getClass().getField(fieldName);
+        field.setFloat(target, field.getFloat(target) * multiplier);
     }
 
     /**
