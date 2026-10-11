@@ -499,7 +499,17 @@ public class EditorGizmoController
         else if (this.mode == Mode.ROTATION)
         {
             float amount = (float) getRotationDragAngle(this.activePart, mouseX, mouseY);
-            if (this.activePart == AXIS_X)
+
+            if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+            {
+                applyBodyPartLocalRotationDelta(
+                        transform,
+                        this.activeBone,
+                        this.activePart,
+                        amount
+                );
+            }
+            else if (this.activePart == AXIS_X)
             {
                 transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
             }
@@ -4003,6 +4013,107 @@ public class EditorGizmoController
         return parentWorld == null
                 ? local
                 : multiplyMatrix(parentWorld, local);
+    }
+
+    /**
+     * Apply rotation about the currently displayed LOCAL axis. The selected
+     * bone's rotation is post-multiplied by the incremental local-axis
+     * rotation, then converted back to the key's Euler representation.
+     * This avoids treating a local ring as a world/Euler component handle.
+     */
+    private void applyBodyPartLocalRotationDelta(
+            AnimationTransform transform,
+            AnimationBone bone,
+            int axisId,
+            float amount)
+    {
+        boolean internalBone = isBodyPartInternalBoneTarget(bone);
+        boolean blockbuster = internalBone && isBlockbusterBodyPartTarget();
+
+        float baseX = internalBone ? bone.getBaseRotationX() : 0.0F;
+        float baseY = internalBone ? bone.getBaseRotationY() : 0.0F;
+        float baseZ = internalBone ? bone.getBaseRotationZ() : 0.0F;
+
+        float startX = baseX + this.dragStartRX;
+        float startY = baseY + this.dragStartRY;
+        float startZ = baseZ + this.dragStartRZ;
+
+        if (blockbuster)
+        {
+            startY = -startY;
+            startZ = -startZ;
+        }
+
+        float[][] current = createRotationMatrix(startX, startY, startZ);
+        float[][] delta = identityRotationMatrix();
+
+        double angle = Math.toRadians(amount);
+        float c = (float) Math.cos(angle);
+        float sn = (float) Math.sin(angle);
+
+        if (axisId == AXIS_X)
+        {
+            delta = new float[][]
+            {
+                {1.0F, 0.0F, 0.0F},
+                {0.0F, c, -sn},
+                {0.0F, sn, c}
+            };
+        }
+        else if (axisId == AXIS_Y)
+        {
+            delta = new float[][]
+            {
+                {c, 0.0F, sn},
+                {0.0F, 1.0F, 0.0F},
+                {-sn, 0.0F, c}
+            };
+        }
+        else
+        {
+            delta = new float[][]
+            {
+                {c, -sn, 0.0F},
+                {sn, c, 0.0F},
+                {0.0F, 0.0F, 1.0F}
+            };
+        }
+
+        float[][] result = multiplyMatrix(current, delta);
+        float[] euler = rotationMatrixToEulerDegrees(result);
+
+        float rx = euler[0] - baseX;
+        float ry = (blockbuster ? -euler[1] : euler[1]) - baseY;
+        float rz = (blockbuster ? -euler[2] : euler[2]) - baseZ;
+
+        transform.setRotation(rx, ry, rz);
+    }
+
+    private float[] rotationMatrixToEulerDegrees(float[][] matrix)
+    {
+        double sy = Math.max(-1.0D, Math.min(1.0D, -matrix[2][0]));
+        double y = Math.asin(sy);
+        double cy = Math.cos(y);
+        double x;
+        double z;
+
+        if (Math.abs(cy) > 0.00001D)
+        {
+            x = Math.atan2(matrix[2][1], matrix[2][2]);
+            z = Math.atan2(matrix[1][0], matrix[0][0]);
+        }
+        else
+        {
+            x = Math.atan2(-matrix[1][2], matrix[1][1]);
+            z = 0.0D;
+        }
+
+        return new float[]
+        {
+            (float) Math.toDegrees(x),
+            (float) Math.toDegrees(y),
+            (float) Math.toDegrees(z)
+        };
     }
 
     private boolean isBodyPartInternalBoneTarget(AnimationBone bone)
