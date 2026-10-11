@@ -611,7 +611,15 @@ public class AnimationEditorScreen extends GuiScreen
         AnimationBone gizmoAttachmentBone =
                 getGizmoBodyPartAttachmentBone();
 
-        if (gizmoAttachmentBone == null)
+        /*
+         * Do not substitute the selected internal child bone (or an actor
+         * bone returned by a fallback selection) for a missing attachment.
+         * For Body Parts, the attachment bone is a separate coordinate
+         * anchor; the selected gizmo bone belongs to the child model.
+         * This applies to Blockbuster, Chameleon and Emoticons child models.
+         */
+        if (gizmoAttachmentBone == null &&
+                getGizmoBodyPartModel() == null)
         {
             gizmoAttachmentBone = getGizmoBone();
         }
