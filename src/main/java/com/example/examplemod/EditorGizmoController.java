@@ -4700,7 +4700,23 @@ public class EditorGizmoController
             if (exact != null) return exact;
         }
 
-        return getWorldFromPivot(attachment, recordFrame);
+        return attachment == null
+                ? null
+                : getWorldFromPivot(attachment, recordFrame);
+    }
+
+    private boolean isChameleonBodyPartTarget()
+    {
+        if (this.bodyPartTarget == null ||
+                this.bodyPartTarget.getBaseMorph() == null)
+        {
+            return false;
+        }
+
+        return this.bodyPartTarget.getBaseMorph()
+                .getClass()
+                .getName()
+                .endsWith(".ChameleonMorph");
     }
 
     private boolean isBlockbusterBodyPartTarget()
@@ -4821,8 +4837,12 @@ public class EditorGizmoController
          * translation, so its evaluated hierarchy cannot use the generic
          * AnimationBone pivot calculation.
          */
+        boolean chameleonTarget = this.bodyPartTarget != null
+                ? isChameleonBodyPartTarget()
+                : this.chameleonCoordinateSpace;
+
         AnimationTransform pivot =
-                this.chameleonCoordinateSpace
+                chameleonTarget
                         ? getChameleonWorldPivot(bone, frame)
                         : (this.bodyPartTarget != null
                            ? getBodyPartBonePivot(bone, frame)
