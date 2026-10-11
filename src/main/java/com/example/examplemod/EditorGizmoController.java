@@ -2326,10 +2326,10 @@ public class EditorGizmoController
          * the model root gizmo and its internal-bone gizmos follow the
          * selected model's global transform and attachment point.
          */
-        if (this.bodyPartAttachmentBone != null &&
-                (this.globalTransformTarget != null ||
-                 (this.bodyPartTarget != null &&
-                  bone != this.bodyPartAttachmentBone)))
+        if ((this.bodyPartTarget != null &&
+             bone != this.bodyPartAttachmentBone) ||
+                (this.bodyPartAttachmentBone != null &&
+                 this.globalTransformTarget != null))
         {
             return getBoneWorldPosition(
                     bone,
@@ -2393,10 +2393,10 @@ public class EditorGizmoController
          * actor bone (or the untransformed attachment pivot) can win and
          * make the gizmo stay behind while the added model moves.
          */
-        if (this.bodyPartAttachmentBone != null &&
-                (this.globalTransformTarget != null ||
-                 (this.bodyPartTarget != null &&
-                  bone != this.bodyPartAttachmentBone)))
+        if ((this.bodyPartTarget != null &&
+             bone != this.bodyPartAttachmentBone) ||
+                (this.bodyPartAttachmentBone != null &&
+                 this.globalTransformTarget != null))
         {
             return getBoneWorldPosition(
                     bone,
@@ -4962,7 +4962,7 @@ public class EditorGizmoController
         local.setPosition(
                 bone.getLocalX() + (blockbusterTarget
                         ? key.getPositionX()
-                        : (this.chameleonCoordinateSpace
+                        : (isChameleonBodyPartTarget()
                            ? -key.getPositionX()
                            : key.getPositionX())),
                 localY,
@@ -5096,16 +5096,21 @@ public class EditorGizmoController
 
     private boolean isChameleonBodyPartTarget()
     {
-        if (this.bodyPartTarget == null ||
-                this.bodyPartTarget.getBaseMorph() == null)
+        if (this.bodyPartTarget == null)
         {
             return false;
         }
 
-        return this.bodyPartTarget.getBaseMorph()
-                .getClass()
-                .getName()
-                .endsWith(".ChameleonMorph");
+        mchorse.metamorph.api.morphs.AbstractMorph morph =
+                this.bodyPartTarget.getMorphAt(this.gizmoFrame);
+
+        if (morph == null)
+        {
+            morph = this.bodyPartTarget.getBaseMorph();
+        }
+
+        return morph != null &&
+                morph.getClass().getName().endsWith(".ChameleonMorph");
     }
 
     private boolean isBlockbusterBodyPartTarget()
@@ -5116,7 +5121,12 @@ public class EditorGizmoController
         }
 
         mchorse.metamorph.api.morphs.AbstractMorph morph =
-                this.bodyPartTarget.getBaseMorph();
+                this.bodyPartTarget.getMorphAt(this.gizmoFrame);
+
+        if (morph == null)
+        {
+            morph = this.bodyPartTarget.getBaseMorph();
+        }
 
         if (morph != null)
         {
