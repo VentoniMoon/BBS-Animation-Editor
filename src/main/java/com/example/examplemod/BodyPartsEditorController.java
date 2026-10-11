@@ -390,17 +390,7 @@ public class BodyPartsEditorController
          */
         if (morph instanceof AnimatedMorph)
         {
-            List<String> names = CharacterBodyPartOverrideController.getBones(morph);
-
-            for (String name : names)
-            {
-                if (name != null && !name.isEmpty())
-                {
-                    result.add(new AnimationBone(name));
-                }
-            }
-
-            return result;
+            return createAnimationBonesFromEmoticons((AnimatedMorph) morph);
         }
 
         try
@@ -536,6 +526,125 @@ public class BodyPartsEditorController
         }
 
         return result;
+    }
+
+    /**
+     * Build the editor skeleton from Emoticons' actual BOBJ armature.
+     * Names alone are not sufficient: each AnimationBone needs the source
+     * pivot, rest orientation and parent relation so its gizmo is positioned
+     * relative to the attached model rather than the actor attachment bone.
+     */
+    private List<AnimationBone> createAnimationBonesFromEmoticons(
+            AnimatedMorph morph)
+    {
+        List<AnimationBone> result = new ArrayList<AnimationBone>();
+
+        if (morph == null)
+        {
+            return result;
+        }
+
+        try
+        {
+            morph.initiateAnimator();
+
+            for (mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone source
+                    : EmoticonsModelAccess.getBones(morph))
+            {
+                if (source == null || source.name == null || source.name.isEmpty())
+                {
+                    continue;
+                }
+
+                AnimationBone bone = new AnimationBone(source.name);
+                javax.vecmath.Matrix4f rest = source.relBoneMat != null
+                        ? source.relBoneMat
+                        : source.boneMat;
+
+                if (rest != null)
+                {
+                    bone.setLocalPosition(
+                            rest.m03,
+                            rest.m13,
+                            rest.m23
+                    );
+
+                    float[] rotation = extractEulerDegrees(rest);
+                    bone.setBaseRotation(rotation[0], rotation[1], rotation[2]);
+                }
+
+                result.add(bone);
+            }
+
+            for (AnimationBone bone : result)
+            {
+                mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone source =
+                        EmoticonsModelAccess.findBone(morph, bone.getName());
+
+                if (source == null)
+                {
+                    continue;
+                }
+
+                String parentName = EmoticonsModelAccess.getParentName(source);
+                if (parentName == null || parentName.isEmpty())
+                {
+                    continue;
+                }
+
+                for (AnimationBone parent : result)
+                {
+                    if (parentName.equals(parent.getName()))
+                    {
+                        bone.setParent(parent);
+                        break;
+                    }
+                }
+            }
+        }
+        catch (Throwable error)
+        {
+            System.err.println(
+                    "[BBS Animation Editor][BodyParts] Could not read Emoticons armature"
+            );
+            error.printStackTrace();
+        }
+
+        return result;
+    }
+
+    /**
+     * Extract XYZ Euler angles from the source rest matrix. BOBJ rest
+     * matrices are used only to initialize the editor hierarchy; animation
+     * keys remain in the editor's degree-based transform convention.
+     */
+    private float[] extractEulerDegrees(javax.vecmath.Matrix4f matrix)
+    {
+        double sy = -matrix.m20;
+        sy = Math.max(-1.0D, Math.min(1.0D, sy));
+
+        double y = Math.asin(sy);
+        double cy = Math.cos(y);
+        double x;
+        double z;
+
+        if (Math.abs(cy) > 0.00001D)
+        {
+            x = Math.atan2(matrix.m21, matrix.m22);
+            z = Math.atan2(matrix.m10, matrix.m00);
+        }
+        else
+        {
+            x = Math.atan2(-matrix.m12, matrix.m11);
+            z = 0.0D;
+        }
+
+        return new float[]
+        {
+            (float) Math.toDegrees(x),
+            (float) Math.toDegrees(y),
+            (float) Math.toDegrees(z)
+        };
     }
 
     private List<AnimationBone> createAnimationBonesFromCustomMorphModel(
