@@ -4326,12 +4326,15 @@ public class EditorGizmoController
                         : this.gizmoFrame;
 
         /*
-         * AnimationBone stores pivots in Blockbuster model pixels.
-         * getWorldPivotAt() includes the complete parent hierarchy and
-         * the selected keyframe transform.
+         * Body Part internal bones must use the same coordinate adapter
+         * as their model renderer. Chameleon applies an inverted local X
+         * translation, so its evaluated hierarchy cannot use the generic
+         * AnimationBone pivot calculation.
          */
         AnimationTransform pivot =
-                bone.getWorldPivotAt(frame);
+                this.chameleonCoordinateSpace
+                        ? getChameleonWorldPivot(bone, frame)
+                        : bone.getWorldPivotAt(frame);
 
         if (pivot == null)
         {
