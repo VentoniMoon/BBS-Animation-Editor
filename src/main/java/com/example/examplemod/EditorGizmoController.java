@@ -84,6 +84,7 @@ public class EditorGizmoController
     private float dragStartSZ;
 
     private AnimationKeyframe activeKeyframe;
+    private AnimationBone activeBone;
 
     private double[] dragAxisX = new double[] {1.0D, 0.0D, 0.0D};
     private double[] dragAxisY = new double[] {0.0D, 1.0D, 0.0D};
@@ -149,6 +150,8 @@ public class EditorGizmoController
 
         this.activePart = -1;
         this.dragging = false;
+        this.activeBone = null;
+        this.activeKeyframe = null;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
     }
@@ -295,6 +298,7 @@ public class EditorGizmoController
         this.activePart = hit;
         this.dragging = true;
         this.activeKeyframe = keyframe;
+        this.activeBone = bone;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
         if (this.mode == Mode.ROTATION)
@@ -403,40 +407,94 @@ public class EditorGizmoController
             float py = this.dragStartPY;
             float pz = this.dragStartPZ;
 
-            if (this.activePart == AXIS_X)
+            if (isBodyPartInternalBoneTarget(this.activeBone))
             {
-                double delta = getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY);
-                px += (float) getBodyPartPositionDelta(AXIS_X, delta);
+                /*
+                 * A local gizmo axis follows the selected bone's rotation,
+                 * but the renderer applies the bone's translation before
+                 * that bone's own rotation. Convert the visible-axis delta
+                 * back into the key's parent-space translation coordinates.
+                 */
+                double[] delta = new double[] {0.0D, 0.0D, 0.0D};
+
+                if (this.activePart == AXIS_X)
+                {
+                    addBodyPartLocalAxisDelta(delta, AXIS_X,
+                            getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY));
+                }
+                else if (this.activePart == AXIS_Y)
+                {
+                    addBodyPartLocalAxisDelta(delta, AXIS_Y,
+                            getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY));
+                }
+                else if (this.activePart == AXIS_Z)
+                {
+                    addBodyPartLocalAxisDelta(delta, AXIS_Z,
+                            getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY));
+                }
+                else if (this.activePart == PLANE_XY)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
+                    addBodyPartLocalAxisDelta(delta, AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    addBodyPartLocalAxisDelta(delta, AXIS_Y, getDataAxisDelta(AXIS_Y, d[1]));
+                }
+                else if (this.activePart == PLANE_XZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
+                    addBodyPartLocalAxisDelta(delta, AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    addBodyPartLocalAxisDelta(delta, AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+                else if (this.activePart == PLANE_YZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
+                    addBodyPartLocalAxisDelta(delta, AXIS_Y, getDataAxisDelta(AXIS_Y, d[0]));
+                    addBodyPartLocalAxisDelta(delta, AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+
+                transform.setPosition(
+                        px + (float) delta[0],
+                        py + (float) delta[1],
+                        pz + (float) delta[2]
+                );
             }
-            else if (this.activePart == AXIS_Y)
+            else
             {
-                double delta = getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
-                py += (float) getBodyPartPositionDelta(AXIS_Y, delta);
+                if (this.activePart == AXIS_X)
+                {
+                    double delta = getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY);
+                    px += (float) getBodyPartPositionDelta(AXIS_X, delta);
+                }
+                else if (this.activePart == AXIS_Y)
+                {
+                    double delta = getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
+                    py += (float) getBodyPartPositionDelta(AXIS_Y, delta);
+                }
+                else if (this.activePart == AXIS_Z)
+                {
+                    double delta = getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
+                    pz += (float) getBodyPartPositionDelta(AXIS_Z, delta);
+                }
+                else if (this.activePart == PLANE_XY)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
+                    px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[1]));
+                }
+                else if (this.activePart == PLANE_XZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
+                    px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+                else if (this.activePart == PLANE_YZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
+                    py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[0]));
+                    pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+
+                transform.setPosition(px, py, pz);
             }
-            else if (this.activePart == AXIS_Z)
-            {
-                double delta = getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
-                pz += (float) getBodyPartPositionDelta(AXIS_Z, delta);
-            }
-            else if (this.activePart == PLANE_XY)
-            {
-                double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
-                px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
-                py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[1]));
-            }
-            else if (this.activePart == PLANE_XZ)
-            {
-                double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
-                px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
-                pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
-            }
-            else if (this.activePart == PLANE_YZ)
-            {
-                double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
-                py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[0]));
-                pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
-            }
-            transform.setPosition(px, py, pz);
         }
         else if (this.mode == Mode.ROTATION)
         {
@@ -478,6 +536,7 @@ public class EditorGizmoController
         this.dragging = false;
         this.activePart = -1;
         this.activeKeyframe = null;
+        this.activeBone = null;
         this.globalTransformTarget = null;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
@@ -3944,6 +4003,126 @@ public class EditorGizmoController
         return parentWorld == null
                 ? local
                 : multiplyMatrix(parentWorld, local);
+    }
+
+    private boolean isBodyPartInternalBoneTarget(AnimationBone bone)
+    {
+        return this.bodyPartTarget != null
+                && this.globalTransformTarget == null
+                && bone != null
+                && bone != this.bodyPartAttachmentBone;
+    }
+
+    private void addBodyPartLocalAxisDelta(
+            double[] target,
+            int axisId,
+            double worldDelta)
+    {
+        if (target == null || this.activeBone == null || this.activeKeyframe == null)
+        {
+            return;
+        }
+
+        int frame = this.activeKeyframe.getFrame();
+        float[][] localRotation =
+                getBodyPartLocalRotationMatrix(this.activeBone, frame);
+
+        if (localRotation == null)
+        {
+            return;
+        }
+
+        double vx = localRotation[0][axisId];
+        double vy = localRotation[1][axisId];
+        double vz = localRotation[2][axisId];
+
+        /*
+         * The data adapter may invert one or more translation components,
+         * even though the displayed axis is already in the rendered basis.
+         */
+        if (isBlockbusterBodyPartTarget())
+        {
+            vy = -vy;
+            vz = -vz;
+        }
+        else if (isChameleonBodyPartTarget())
+        {
+            vx = -vx;
+        }
+
+        float[][] internal =
+                getBodyPartInternalRotationMatrix(this.activeBone, frame);
+
+        if (internal == null)
+        {
+            return;
+        }
+
+        float[] axisInModel = new float[]
+        {
+            internal[0][axisId],
+            internal[1][axisId],
+            internal[2][axisId]
+        };
+
+        if (isBlockbusterBodyPartTarget())
+        {
+            axisInModel[0] = -axisInModel[0];
+            axisInModel[1] = -axisInModel[1];
+        }
+
+        AnimationTransform global =
+                this.bodyPartTarget.getGlobalTransform();
+
+        float sx = global == null ? 1.0F : global.getScaleX();
+        float sy = global == null ? 1.0F : global.getScaleY();
+        float sz = global == null ? 1.0F : global.getScaleZ();
+
+        double effectiveScale = Math.sqrt(
+                axisInModel[0] * axisInModel[0] * sx * sx
+                + axisInModel[1] * axisInModel[1] * sy * sy
+                + axisInModel[2] * axisInModel[2] * sz * sz
+        );
+
+        if (effectiveScale < 0.0001D)
+        {
+            effectiveScale = 1.0D;
+        }
+
+        double amount = worldDelta * 16.0D / effectiveScale;
+
+        target[0] += vx * amount;
+        target[1] += vy * amount;
+        target[2] += vz * amount;
+    }
+
+    private float[][] getBodyPartLocalRotationMatrix(
+            AnimationBone bone,
+            float frame)
+    {
+        if (bone == null)
+        {
+            return identityRotationMatrix();
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        float rx = bone.getBaseRotationX() + key.getRotationX();
+        float ry = bone.getBaseRotationY() + key.getRotationY();
+        float rz = bone.getBaseRotationZ() + key.getRotationZ();
+
+        if (isBlockbusterBodyPartTarget())
+        {
+            ry = -ry;
+            rz = -rz;
+        }
+
+        return createRotationMatrix(rx, ry, rz);
     }
 
     private double getBodyPartPositionDelta(int axisId, double worldDelta)
