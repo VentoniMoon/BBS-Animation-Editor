@@ -3773,9 +3773,7 @@ public class EditorGizmoController
         AnimationTransform attachment = null;
         if (this.bodyPartAttachmentBone != null)
         {
-            attachment = this.chameleonCoordinateSpace
-                    ? getChameleonWorldPivot(this.bodyPartAttachmentBone, frame)
-                    : this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+            attachment = this.bodyPartAttachmentBone.getWorldPivotAt(frame);
         }
 
         if (attachment != null)
@@ -4164,9 +4162,7 @@ public class EditorGizmoController
                      this.globalTransformTarget != null))
             {
                 AnimationTransform attachment =
-                        this.chameleonCoordinateSpace
-                                ? getChameleonWorldPivot(this.bodyPartAttachmentBone, frame)
-                                : this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+                        this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
                 if (attachment != null)
                 {
@@ -4223,11 +4219,18 @@ public class EditorGizmoController
             local = new AnimationTransform();
         }
 
+        float baseX = this.bodyPartTarget != null
+                ? bone.getBaseRotationX() : 0.0F;
+        float baseY = this.bodyPartTarget != null
+                ? bone.getBaseRotationY() : 0.0F;
+        float baseZ = this.bodyPartTarget != null
+                ? bone.getBaseRotationZ() : 0.0F;
+
         float[][] localMatrix =
                 createRotationMatrix(
-                        local.getRotationX(),
-                        local.getRotationY(),
-                        local.getRotationZ()
+                        baseX + local.getRotationX(),
+                        baseY + local.getRotationY(),
+                        baseZ + local.getRotationZ()
                 );
 
         AnimationBone parent =
@@ -4587,9 +4590,7 @@ public class EditorGizmoController
                  bone == this.bodyPartAttachmentBone))
         {
             AnimationTransform attachmentPivot =
-                    this.chameleonCoordinateSpace
-                            ? getChameleonWorldPivot(this.gizmoAttachmentBone, frame)
-                            : this.gizmoAttachmentBone.getWorldPivotAt(frame);
+                    this.gizmoAttachmentBone.getWorldPivotAt(frame);
 
             if (attachmentPivot != null)
             {
