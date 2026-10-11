@@ -3793,7 +3793,7 @@ public class EditorGizmoController
             {
                 AnimationTransform parentWorld = this.chameleonCoordinateSpace
                         ? getChameleonWorldPivot(parent, frame)
-                        : parent.getWorldTransformAt(frame);
+                        : getBodyPartBonePivot(parent, frame);
 
                 if (parentWorld != null)
                 {
@@ -4459,6 +4459,82 @@ public class EditorGizmoController
         );
     }
 
+    /**
+     * Evaluate a Body Part's internal bone pivot from the imported rest
+     * transform plus the editor key. AnimationBone.getWorldPivotAt() is
+     * intentionally kept unchanged because Pose uses its existing contract;
+     * Body Parts need the source model's base/rest rotations as well.
+     */
+    private AnimationTransform getBodyPartBonePivot(
+            AnimationBone bone,
+            float frame)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        AnimationTransform local = new AnimationTransform();
+        local.setPosition(
+                bone.getLocalX() + key.getPositionX(),
+                bone.getLocalY() + key.getPositionY(),
+                bone.getLocalZ() + key.getPositionZ()
+        );
+        local.setRotation(
+                bone.getBaseRotationX() + key.getRotationX(),
+                bone.getBaseRotationY() + key.getRotationY(),
+                bone.getBaseRotationZ() + key.getRotationZ()
+        );
+        local.setScale(
+                key.getScaleX(),
+                key.getScaleY(),
+                key.getScaleZ()
+        );
+
+        AnimationBone parent = bone.getParent();
+        if (parent == null)
+        {
+            return local;
+        }
+
+        AnimationTransform parentWorld = getBodyPartBonePivot(parent, frame);
+        return parentWorld == null ? local : parentWorld.combine(local);
+    }
+
+    /**
+     * The parent attachment is the only part of a Body Part pivot that
+     * belongs to the actor skeleton. Prefer the engine-evaluated parent
+     * bone position for the attachment origin, then add the child model's
+     * own local offset separately.
+     */
+    private double[] getBodyPartAttachmentWorldPosition(
+            AnimationTransform attachment,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if (this.bodyPartAttachmentBone != null)
+        {
+            double[] exact = getExactChameleonBoneWorldPosition(
+                    this.bodyPartAttachmentBone, recordFrame);
+            if (exact != null) return exact;
+
+            exact = getExactEmoticonsBoneWorldPosition(
+                    this.bodyPartAttachmentBone, recordFrame);
+            if (exact != null) return exact;
+
+            exact = getExactBlockbusterBoneWorldPosition(
+                    this.bodyPartAttachmentBone);
+            if (exact != null) return exact;
+        }
+
+        return getWorldFromPivot(attachment, recordFrame);
+    }
+
     private double[] getBoneWorldPosition(
             AnimationBone bone,
             AnimationKeyframe selectedKeyframe,
@@ -4483,7 +4559,9 @@ public class EditorGizmoController
         AnimationTransform pivot =
                 this.chameleonCoordinateSpace
                         ? getChameleonWorldPivot(bone, frame)
-                        : bone.getWorldPivotAt(frame);
+                        : (this.bodyPartTarget != null
+                           ? getBodyPartBonePivot(bone, frame)
+                           : bone.getWorldPivotAt(frame));
 
         if (pivot == null)
         {
@@ -4562,7 +4640,7 @@ public class EditorGizmoController
             );
 
             double[] base =
-                    getWorldFromPivot(
+                    getBodyPartAttachmentWorldPosition(
                             attachment,
                             recordFrame
                     );
