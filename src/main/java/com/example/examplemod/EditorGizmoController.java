@@ -84,6 +84,7 @@ public class EditorGizmoController
     private float dragStartSZ;
 
     private AnimationKeyframe activeKeyframe;
+    private AnimationBone activeBone;
 
     private double[] dragAxisX = new double[] {1.0D, 0.0D, 0.0D};
     private double[] dragAxisY = new double[] {0.0D, 1.0D, 0.0D};
@@ -149,6 +150,8 @@ public class EditorGizmoController
 
         this.activePart = -1;
         this.dragging = false;
+        this.activeBone = null;
+        this.activeKeyframe = null;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
     }
@@ -295,6 +298,7 @@ public class EditorGizmoController
         this.activePart = hit;
         this.dragging = true;
         this.activeKeyframe = keyframe;
+        this.activeBone = bone;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
         if (this.mode == Mode.ROTATION)
@@ -403,45 +407,109 @@ public class EditorGizmoController
             float py = this.dragStartPY;
             float pz = this.dragStartPZ;
 
-            if (this.activePart == AXIS_X)
+            if (isBodyPartInternalBoneTarget(this.activeBone))
             {
-                double delta = getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY);
-                px += (float) getBodyPartPositionDelta(AXIS_X, delta);
+                /*
+                 * A local gizmo axis follows the selected bone's rotation,
+                 * but the renderer applies the bone's translation before
+                 * that bone's own rotation. Convert the visible-axis delta
+                 * back into the key's parent-space translation coordinates.
+                 */
+                double[] delta = new double[] {0.0D, 0.0D, 0.0D};
+
+                if (this.activePart == AXIS_X)
+                {
+                    addBodyPartLocalAxisDelta(delta, AXIS_X,
+                            getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY));
+                }
+                else if (this.activePart == AXIS_Y)
+                {
+                    addBodyPartLocalAxisDelta(delta, AXIS_Y,
+                            getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY));
+                }
+                else if (this.activePart == AXIS_Z)
+                {
+                    addBodyPartLocalAxisDelta(delta, AXIS_Z,
+                            getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY));
+                }
+                else if (this.activePart == PLANE_XY)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
+                    addBodyPartLocalAxisDelta(delta, AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    addBodyPartLocalAxisDelta(delta, AXIS_Y, getDataAxisDelta(AXIS_Y, d[1]));
+                }
+                else if (this.activePart == PLANE_XZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
+                    addBodyPartLocalAxisDelta(delta, AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    addBodyPartLocalAxisDelta(delta, AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+                else if (this.activePart == PLANE_YZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
+                    addBodyPartLocalAxisDelta(delta, AXIS_Y, getDataAxisDelta(AXIS_Y, d[0]));
+                    addBodyPartLocalAxisDelta(delta, AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+
+                transform.setPosition(
+                        px + (float) delta[0],
+                        py + (float) delta[1],
+                        pz + (float) delta[2]
+                );
             }
-            else if (this.activePart == AXIS_Y)
+            else
             {
-                double delta = getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
-                py += (float) getBodyPartPositionDelta(AXIS_Y, delta);
+                if (this.activePart == AXIS_X)
+                {
+                    double delta = getDataAxisDragAmount(AXIS_X, mouseDX, mouseDY);
+                    px += (float) getBodyPartPositionDelta(AXIS_X, delta);
+                }
+                else if (this.activePart == AXIS_Y)
+                {
+                    double delta = getDataAxisDragAmount(AXIS_Y, mouseDX, mouseDY);
+                    py += (float) getBodyPartPositionDelta(AXIS_Y, delta);
+                }
+                else if (this.activePart == AXIS_Z)
+                {
+                    double delta = getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
+                    pz += (float) getBodyPartPositionDelta(AXIS_Z, delta);
+                }
+                else if (this.activePart == PLANE_XY)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
+                    px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[1]));
+                }
+                else if (this.activePart == PLANE_XZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
+                    px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
+                    pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+                else if (this.activePart == PLANE_YZ)
+                {
+                    double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
+                    py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[0]));
+                    pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
+                }
+
+                transform.setPosition(px, py, pz);
             }
-            else if (this.activePart == AXIS_Z)
-            {
-                double delta = getDataAxisDragAmount(AXIS_Z, mouseDX, mouseDY);
-                pz += (float) getBodyPartPositionDelta(AXIS_Z, delta);
-            }
-            else if (this.activePart == PLANE_XY)
-            {
-                double[] d = getPlaneDragAmount(AXIS_X, AXIS_Y, mouseDX, mouseDY);
-                px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
-                py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[1]));
-            }
-            else if (this.activePart == PLANE_XZ)
-            {
-                double[] d = getPlaneDragAmount(AXIS_X, AXIS_Z, mouseDX, mouseDY);
-                px += (float) getBodyPartPositionDelta(AXIS_X, getDataAxisDelta(AXIS_X, d[0]));
-                pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
-            }
-            else if (this.activePart == PLANE_YZ)
-            {
-                double[] d = getPlaneDragAmount(AXIS_Y, AXIS_Z, mouseDX, mouseDY);
-                py += (float) getBodyPartPositionDelta(AXIS_Y, getDataAxisDelta(AXIS_Y, d[0]));
-                pz += (float) getBodyPartPositionDelta(AXIS_Z, getDataAxisDelta(AXIS_Z, d[1]));
-            }
-            transform.setPosition(px, py, pz);
         }
         else if (this.mode == Mode.ROTATION)
         {
             float amount = (float) getRotationDragAngle(this.activePart, mouseX, mouseY);
-            if (this.activePart == AXIS_X)
+
+            if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+            {
+                applyBodyPartLocalRotationDelta(
+                        transform,
+                        this.activeBone,
+                        this.activePart,
+                        amount
+                );
+            }
+            else if (this.activePart == AXIS_X)
             {
                 transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
             }
@@ -478,6 +546,7 @@ public class EditorGizmoController
         this.dragging = false;
         this.activePart = -1;
         this.activeKeyframe = null;
+        this.activeBone = null;
         this.globalTransformTarget = null;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
@@ -3757,6 +3826,32 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
+        /*
+         * Translation handles follow the selected bone's complete local
+         * orientation, including the selected bone's own rotation. The
+         * value written to the key is converted separately; the display
+         * basis must not be reduced to the parent basis.
+         */
+        return getBodyPartComposedWorldAxes(
+                bone,
+                selectedKeyframe,
+                recordFrame
+        );
+    }
+
+    /**
+     * Compose the Body Part's rendered orientation in hierarchy order:
+     *
+     * actor attachment * whole-model rotation * internal bone hierarchy.
+     *
+     * Do not add Euler angles. Rotations are non-commutative, and adding
+     * them makes local axes drift after combined X/Y/Z rotations.
+     */
+    private double[][] getBodyPartComposedWorldAxes(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe,
+            BlockbusterRecordFrame recordFrame)
+    {
         if (bone == null)
         {
             return null;
@@ -3766,63 +3861,405 @@ public class EditorGizmoController
                 ? selectedKeyframe.getFrame()
                 : this.gizmoFrame;
 
-        float rx = 0.0F;
-        float ry = 0.0F;
-        float rz = 0.0F;
+        /*
+         * The attachment basis is already in world space and comes from the
+         * actual parent renderer whenever that adapter is available.
+         */
+        double[][] attachmentAxes =
+                getBodyPartAttachmentWorldAxes(frame, recordFrame);
 
-        AnimationTransform attachment = null;
-        if (this.bodyPartAttachmentBone != null)
+        if (attachmentAxes == null)
         {
-            attachment = this.bodyPartAttachmentBone.getWorldPivotAt(frame);
+            return null;
         }
 
-        if (attachment != null)
+        float[][] attachmentMatrix = new float[][]
         {
-            rx = attachment.getRotationX();
-            ry = attachment.getRotationY();
-            rz = attachment.getRotationZ();
+            {(float) attachmentAxes[0][0], (float) attachmentAxes[1][0], (float) attachmentAxes[2][0]},
+            {(float) attachmentAxes[0][1], (float) attachmentAxes[1][1], (float) attachmentAxes[2][1]},
+            {(float) attachmentAxes[0][2], (float) attachmentAxes[1][2], (float) attachmentAxes[2][2]}
+        };
+
+        AnimationTransform global = this.globalTransformTarget != null
+                ? this.globalTransformTarget
+                : (this.bodyPartTarget != null
+                   ? this.bodyPartTarget.getGlobalTransform()
+                   : null);
+
+        float[][] globalRotation = global == null
+                ? identityRotationMatrix()
+                : createRotationMatrix(
+                        global.getRotationX(),
+                        global.getRotationY(),
+                        global.getRotationZ()
+                );
+
+        float[][] globalScale = new float[][]
+        {
+            {global == null ? 1.0F : global.getScaleX(), 0.0F, 0.0F},
+            {0.0F, global == null ? 1.0F : global.getScaleY(), 0.0F},
+            {0.0F, 0.0F, global == null ? 1.0F : global.getScaleZ()}
+        };
+
+        float[] childScaleValues = getBodyPartChildModelScale(frame);
+        float[][] childScale = new float[][]
+        {
+            {childScaleValues[0], 0.0F, 0.0F},
+            {0.0F, childScaleValues[1], 0.0F},
+            {0.0F, 0.0F, childScaleValues[2]}
+        };
+
+        /*
+         * Blockbuster's CustomMorph applies a root mirror before rendering
+         * its limb hierarchy. Other child morph types keep their own local
+         * basis. Keep this adapter between the Body Part transform and the
+         * child bone matrix, where it exists in the actual render pipeline.
+         */
+        float[][] childRootMatrix = identityRotationMatrix();
+
+        if (isBlockbusterBodyPartTarget())
+        {
+            childRootMatrix = new float[][]
+            {
+                {-1.0F, 0.0F, 0.0F},
+                {0.0F, -1.0F, 0.0F},
+                {0.0F, 0.0F, 1.0F}
+            };
         }
+
+        float[][] internalMatrix = identityRotationMatrix();
 
         if (this.bodyPartTarget != null &&
                 bone != this.bodyPartAttachmentBone)
         {
-            AnimationBone parent = bone.getParent();
-            if (parent != null)
-            {
-                AnimationTransform parentWorld = this.chameleonCoordinateSpace
-                        ? getChameleonWorldPivot(parent, frame)
-                        : getBodyPartBonePivot(parent, frame);
+            float[][] evaluated =
+                    getBodyPartInternalRotationMatrix(bone, frame);
 
-                if (parentWorld != null)
-                {
-                    rx += parentWorld.getRotationX();
-                    ry += parentWorld.getRotationY();
-                    rz += parentWorld.getRotationZ();
-                }
-            }
-
-            AnimationTransform global = this.bodyPartTarget.getGlobalTransform();
-            if (global != null)
+            if (evaluated != null)
             {
-                rx += global.getRotationX();
-                ry += global.getRotationY();
-                rz += global.getRotationZ();
+                internalMatrix = evaluated;
             }
         }
-        else if (this.globalTransformTarget != null)
-        {
-            /*
-             * Root translation happens before the child model's own
-             * rotation, so use only the attachment basis here.
-             */
-        }
 
-        return new double[][]
+        float[][] worldMatrix = multiplyMatrix(
+                attachmentMatrix,
+                multiplyMatrix(
+                        globalRotation,
+                        multiplyMatrix(
+                                globalScale,
+                                multiplyMatrix(
+                                        childScale,
+                                        multiplyMatrix(childRootMatrix, internalMatrix)
+                                )
+                        )
+                )
+        );
+
+        double[] worldX = normalizeCopy(new double[]
         {
-            transformBoneDirection(rotateVector(1.0F, 0.0F, 0.0F, rx, ry, rz), recordFrame),
-            transformBoneDirection(rotateVector(0.0F, 1.0F, 0.0F, rx, ry, rz), recordFrame),
-            transformBoneDirection(rotateVector(0.0F, 0.0F, 1.0F, rx, ry, rz), recordFrame)
+            worldMatrix[0][0], worldMatrix[1][0], worldMatrix[2][0]
+        });
+        double[] worldY = normalizeCopy(new double[]
+        {
+            worldMatrix[0][1], worldMatrix[1][1], worldMatrix[2][1]
+        });
+        double[] worldZ = normalizeCopy(new double[]
+        {
+            worldMatrix[0][2], worldMatrix[1][2], worldMatrix[2][2]
+        });
+
+        return new double[][] {worldX, worldY, worldZ};
+    }
+
+    private float[][] identityRotationMatrix()
+    {
+        return new float[][]
+        {
+            {1.0F, 0.0F, 0.0F},
+            {0.0F, 1.0F, 0.0F},
+            {0.0F, 0.0F, 1.0F}
         };
+    }
+
+    private double[] normalizeCopy(double[] axis)
+    {
+        normalize(axis);
+        return axis;
+    }
+
+    /**
+     * Native local rotations for the selected child model. Blockbuster
+     * reverses its Y/Z renderer angles; the other supported model adapters
+     * retain the editor's imported rotation convention.
+     */
+    private float[][] getBodyPartInternalRotationMatrix(
+            AnimationBone bone,
+            float frame)
+    {
+        if (bone == null)
+        {
+            return identityRotationMatrix();
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        boolean blockbuster = isBlockbusterBodyPartTarget();
+
+        float rx = bone.getBaseRotationX() + key.getRotationX();
+        float ry = bone.getBaseRotationY() + key.getRotationY();
+        float rz = bone.getBaseRotationZ() + key.getRotationZ();
+
+        if (blockbuster)
+        {
+            ry = -ry;
+            rz = -rz;
+        }
+
+        float[][] local = createRotationMatrix(rx, ry, rz);
+        AnimationBone parent = bone.getParent();
+
+        if (parent == null)
+        {
+            return local;
+        }
+
+        float[][] parentWorld =
+                getBodyPartInternalRotationMatrix(parent, frame);
+
+        return parentWorld == null
+                ? local
+                : multiplyMatrix(parentWorld, local);
+    }
+
+    /**
+     * Apply rotation about the currently displayed LOCAL axis. The selected
+     * bone's rotation is post-multiplied by the incremental local-axis
+     * rotation, then converted back to the key's Euler representation.
+     * This avoids treating a local ring as a world/Euler component handle.
+     */
+    private void applyBodyPartLocalRotationDelta(
+            AnimationTransform transform,
+            AnimationBone bone,
+            int axisId,
+            float amount)
+    {
+        boolean internalBone = isBodyPartInternalBoneTarget(bone);
+        boolean blockbuster = internalBone && isBlockbusterBodyPartTarget();
+
+        float baseX = internalBone ? bone.getBaseRotationX() : 0.0F;
+        float baseY = internalBone ? bone.getBaseRotationY() : 0.0F;
+        float baseZ = internalBone ? bone.getBaseRotationZ() : 0.0F;
+
+        float startX = baseX + this.dragStartRX;
+        float startY = baseY + this.dragStartRY;
+        float startZ = baseZ + this.dragStartRZ;
+
+        if (blockbuster)
+        {
+            startY = -startY;
+            startZ = -startZ;
+        }
+
+        float[][] current = createRotationMatrix(startX, startY, startZ);
+        float[][] delta = identityRotationMatrix();
+
+        double angle = Math.toRadians(amount);
+        float c = (float) Math.cos(angle);
+        float sn = (float) Math.sin(angle);
+
+        if (axisId == AXIS_X)
+        {
+            delta = new float[][]
+            {
+                {1.0F, 0.0F, 0.0F},
+                {0.0F, c, -sn},
+                {0.0F, sn, c}
+            };
+        }
+        else if (axisId == AXIS_Y)
+        {
+            delta = new float[][]
+            {
+                {c, 0.0F, sn},
+                {0.0F, 1.0F, 0.0F},
+                {-sn, 0.0F, c}
+            };
+        }
+        else
+        {
+            delta = new float[][]
+            {
+                {c, -sn, 0.0F},
+                {sn, c, 0.0F},
+                {0.0F, 0.0F, 1.0F}
+            };
+        }
+
+        float[][] result = multiplyMatrix(current, delta);
+        float[] euler = rotationMatrixToEulerDegrees(result);
+
+        float rx = euler[0] - baseX;
+        float ry = (blockbuster ? -euler[1] : euler[1]) - baseY;
+        float rz = (blockbuster ? -euler[2] : euler[2]) - baseZ;
+
+        transform.setRotation(rx, ry, rz);
+    }
+
+    private float[] rotationMatrixToEulerDegrees(float[][] matrix)
+    {
+        double sy = Math.max(-1.0D, Math.min(1.0D, -matrix[2][0]));
+        double y = Math.asin(sy);
+        double cy = Math.cos(y);
+        double x;
+        double z;
+
+        if (Math.abs(cy) > 0.00001D)
+        {
+            x = Math.atan2(matrix[2][1], matrix[2][2]);
+            z = Math.atan2(matrix[1][0], matrix[0][0]);
+        }
+        else
+        {
+            x = Math.atan2(-matrix[1][2], matrix[1][1]);
+            z = 0.0D;
+        }
+
+        return new float[]
+        {
+            (float) Math.toDegrees(x),
+            (float) Math.toDegrees(y),
+            (float) Math.toDegrees(z)
+        };
+    }
+
+    private boolean isBodyPartInternalBoneTarget(AnimationBone bone)
+    {
+        return this.bodyPartTarget != null
+                && this.globalTransformTarget == null
+                && bone != null
+                && bone != this.bodyPartAttachmentBone;
+    }
+
+    private void addBodyPartLocalAxisDelta(
+            double[] target,
+            int axisId,
+            double worldDelta)
+    {
+        if (target == null || this.activeBone == null || this.activeKeyframe == null)
+        {
+            return;
+        }
+
+        int frame = this.activeKeyframe.getFrame();
+        float[][] localRotation =
+                getBodyPartLocalRotationMatrix(this.activeBone, frame);
+
+        if (localRotation == null)
+        {
+            return;
+        }
+
+        double vx = localRotation[0][axisId];
+        double vy = localRotation[1][axisId];
+        double vz = localRotation[2][axisId];
+
+        /*
+         * The data adapter may invert one or more translation components,
+         * even though the displayed axis is already in the rendered basis.
+         */
+        if (isBlockbusterBodyPartTarget())
+        {
+            vy = -vy;
+            vz = -vz;
+        }
+        else if (isChameleonBodyPartTarget())
+        {
+            vx = -vx;
+        }
+
+        float[][] internal =
+                getBodyPartInternalRotationMatrix(this.activeBone, frame);
+
+        if (internal == null)
+        {
+            return;
+        }
+
+        float[] axisInModel = new float[]
+        {
+            internal[0][axisId],
+            internal[1][axisId],
+            internal[2][axisId]
+        };
+
+        if (isBlockbusterBodyPartTarget())
+        {
+            axisInModel[0] = -axisInModel[0];
+            axisInModel[1] = -axisInModel[1];
+        }
+
+        AnimationTransform global =
+                this.bodyPartTarget.getGlobalTransform();
+
+        float sx = global == null ? 1.0F : global.getScaleX();
+        float sy = global == null ? 1.0F : global.getScaleY();
+        float sz = global == null ? 1.0F : global.getScaleZ();
+
+        float[] childScale = getBodyPartChildModelScale(frame);
+        sx *= childScale[0];
+        sy *= childScale[1];
+        sz *= childScale[2];
+
+        double effectiveScale = Math.sqrt(
+                axisInModel[0] * axisInModel[0] * sx * sx
+                + axisInModel[1] * axisInModel[1] * sy * sy
+                + axisInModel[2] * axisInModel[2] * sz * sz
+        );
+
+        if (effectiveScale < 0.0001D)
+        {
+            effectiveScale = 1.0D;
+        }
+
+        double amount = worldDelta * 16.0D / effectiveScale;
+
+        target[0] += vx * amount;
+        target[1] += vy * amount;
+        target[2] += vz * amount;
+    }
+
+    private float[][] getBodyPartLocalRotationMatrix(
+            AnimationBone bone,
+            float frame)
+    {
+        if (bone == null)
+        {
+            return identityRotationMatrix();
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        float rx = bone.getBaseRotationX() + key.getRotationX();
+        float ry = bone.getBaseRotationY() + key.getRotationY();
+        float rz = bone.getBaseRotationZ() + key.getRotationZ();
+
+        if (isBlockbusterBodyPartTarget())
+        {
+            ry = -ry;
+            rz = -rz;
+        }
+
+        return createRotationMatrix(rx, ry, rz);
     }
 
     private double getBodyPartPositionDelta(int axisId, double worldDelta)
@@ -4019,6 +4456,21 @@ public class EditorGizmoController
         if (bone == null)
         {
             return null;
+        }
+
+        /*
+         * Body Parts use their own attachment/global/internal hierarchy.
+         * Resolve all three axes through the same composed basis for every
+         * tool mode, rather than using a native matrix from the parent actor
+         * or reconstructing orientation by adding Euler angles.
+         */
+        if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+        {
+            return getBodyPartComposedWorldAxes(
+                    bone,
+                    selectedKeyframe,
+                    recordFrame
+            );
         }
 
         int frame =
@@ -4492,16 +4944,36 @@ public class EditorGizmoController
             key = new AnimationTransform();
         }
 
+        /*
+         * The Blockbuster model API and the editor do not use identical
+         * signs for limb translation/rotation. ModelCustomRenderer maps
+         * translation to (x, -y, -z) and rotation to (x, -y, -z).
+         * Apply those signs to animation offsets as well as the imported
+         * rest pose; otherwise the rendered limb moves while the calculated
+         * gizmo pivot drifts in another direction.
+         */
+        boolean blockbusterTarget = isBlockbusterBodyPartTarget();
+        float localY = bone.getLocalY()
+                + (blockbusterTarget ? -key.getPositionY() : key.getPositionY());
+        float localZ = bone.getLocalZ()
+                + (blockbusterTarget ? -key.getPositionZ() : key.getPositionZ());
+
         AnimationTransform local = new AnimationTransform();
         local.setPosition(
-                bone.getLocalX() + key.getPositionX(),
-                bone.getLocalY() + key.getPositionY(),
-                bone.getLocalZ() + key.getPositionZ()
+                bone.getLocalX() + (blockbusterTarget
+                        ? key.getPositionX()
+                        : (this.chameleonCoordinateSpace
+                           ? -key.getPositionX()
+                           : key.getPositionX())),
+                localY,
+                localZ
         );
         local.setRotation(
                 bone.getBaseRotationX() + key.getRotationX(),
-                bone.getBaseRotationY() + key.getRotationY(),
-                bone.getBaseRotationZ() + key.getRotationZ()
+                (blockbusterTarget ? -1.0F : 1.0F)
+                        * (bone.getBaseRotationY() + key.getRotationY()),
+                (blockbusterTarget ? -1.0F : 1.0F)
+                        * (bone.getBaseRotationZ() + key.getRotationZ())
         );
         local.setScale(
                 key.getScaleX(),
@@ -4544,7 +5016,193 @@ public class EditorGizmoController
             if (exact != null) return exact;
         }
 
-        return getWorldFromPivot(attachment, recordFrame);
+        return attachment == null
+                ? null
+                : getWorldFromPivot(attachment, recordFrame);
+    }
+
+    /**
+     * Native model scale applied by the attached child morph. Blockbuster's
+     * source Model scale and CustomMorph scale are both applied before its
+     * limb hierarchy, so the gizmo pivot must include them as well.
+     */
+    private float[] getBodyPartChildModelScale(int frame)
+    {
+        if (!isBlockbusterBodyPartTarget() || this.bodyPartTarget == null)
+        {
+            return new float[] {1.0F, 1.0F, 1.0F};
+        }
+
+        float sx = 1.0F;
+        float sy = 1.0F;
+        float sz = 1.0F;
+        float morphScale = 1.0F;
+        mchorse.blockbuster.api.Model model = null;
+
+        try
+        {
+            mchorse.metamorph.api.morphs.AbstractMorph resolved =
+                    this.bodyPartTarget.getMorphAt(frame);
+
+            if (resolved instanceof mchorse.blockbuster_pack.morphs.CustomMorph)
+            {
+                mchorse.blockbuster_pack.morphs.CustomMorph custom =
+                        (mchorse.blockbuster_pack.morphs.CustomMorph) resolved;
+
+                morphScale = custom.scale;
+                if (custom.model == null)
+                {
+                    custom.updateModel(true);
+                }
+                model = custom.model;
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+
+        if (model == null)
+        {
+            try
+            {
+                Object candidate = this.bodyPartTarget.getModelAccess() == null
+                        ? null
+                        : this.bodyPartTarget.getModelAccess().getApiModel();
+
+                if (candidate instanceof mchorse.blockbuster.api.Model)
+                {
+                    model = (mchorse.blockbuster.api.Model) candidate;
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+
+        if (model != null && model.scale != null && model.scale.length >= 3)
+        {
+            sx = model.scale[0] * morphScale;
+            sy = model.scale[1] * morphScale;
+            sz = model.scale[2] * morphScale;
+        }
+
+        return new float[]
+        {
+            Math.abs(sx) < 0.0001F ? 1.0F : sx,
+            Math.abs(sy) < 0.0001F ? 1.0F : sy,
+            Math.abs(sz) < 0.0001F ? 1.0F : sz
+        };
+    }
+
+    private boolean isChameleonBodyPartTarget()
+    {
+        if (this.bodyPartTarget == null ||
+                this.bodyPartTarget.getBaseMorph() == null)
+        {
+            return false;
+        }
+
+        return this.bodyPartTarget.getBaseMorph()
+                .getClass()
+                .getName()
+                .endsWith(".ChameleonMorph");
+    }
+
+    private boolean isBlockbusterBodyPartTarget()
+    {
+        if (this.bodyPartTarget == null)
+        {
+            return false;
+        }
+
+        mchorse.metamorph.api.morphs.AbstractMorph morph =
+                this.bodyPartTarget.getBaseMorph();
+
+        if (morph != null)
+        {
+            return morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph;
+        }
+
+        return this.bodyPartTarget.getModelAccess() != null;
+    }
+
+    /**
+     * Resolve the actual world-space axes of the actor bone that carries
+     * this Body Part. Prefer the source renderer's evaluated basis; use the
+     * editor hierarchy only as a fallback for morphs without a native adapter.
+     */
+    private double[][] getBodyPartAttachmentWorldAxes(
+            int frame,
+            BlockbusterRecordFrame recordFrame)
+    {
+        AnimationBone attachmentBone = this.bodyPartAttachmentBone;
+
+        if (attachmentBone == null)
+        {
+            return new double[][]
+            {
+                {1.0D, 0.0D, 0.0D},
+                {0.0D, 1.0D, 0.0D},
+                {0.0D, 0.0D, 1.0D}
+            };
+        }
+
+        double[][] nativeAxes =
+                getNativeBoneWorldAxes(attachmentBone, recordFrame);
+
+        if (nativeAxes != null)
+        {
+            return nativeAxes;
+        }
+
+        AnimationTransform attachment =
+                attachmentBone.getWorldPivotAt(frame);
+
+        if (attachment == null)
+        {
+            return null;
+        }
+
+        return new double[][]
+        {
+            transformBoneDirection(
+                    rotateVector(1.0F, 0.0F, 0.0F,
+                            attachment.getRotationX(),
+                            attachment.getRotationY(),
+                            attachment.getRotationZ()),
+                    recordFrame),
+            transformBoneDirection(
+                    rotateVector(0.0F, 1.0F, 0.0F,
+                            attachment.getRotationX(),
+                            attachment.getRotationY(),
+                            attachment.getRotationZ()),
+                    recordFrame),
+            transformBoneDirection(
+                    rotateVector(0.0F, 0.0F, 1.0F,
+                            attachment.getRotationX(),
+                            attachment.getRotationY(),
+                            attachment.getRotationZ()),
+                    recordFrame)
+        };
+    }
+
+    /**
+     * Transform an offset in the attachment's local model-pixel coordinates
+     * through the evaluated attachment basis and convert it to world blocks.
+     */
+    private double[] addLocalOffsetToWorld(
+            double[] base,
+            double[][] axes,
+            double x,
+            double y,
+            double z)
+    {
+        return new double[]
+        {
+            base[0] + (axes[0][0] * x + axes[1][0] * y + axes[2][0] * z) / 16.0D,
+            base[1] + (axes[0][1] * x + axes[1][1] * y + axes[2][1] * z) / 16.0D,
+            base[2] + (axes[0][2] * x + axes[1][2] * y + axes[2][2] * z) / 16.0D
+        };
     }
 
     private double[] getBoneWorldPosition(
@@ -4568,8 +5226,12 @@ public class EditorGizmoController
          * translation, so its evaluated hierarchy cannot use the generic
          * AnimationBone pivot calculation.
          */
+        boolean chameleonTarget = this.bodyPartTarget != null
+                ? isChameleonBodyPartTarget()
+                : this.chameleonCoordinateSpace;
+
         AnimationTransform pivot =
-                this.chameleonCoordinateSpace
+                chameleonTarget
                         ? getChameleonWorldPivot(bone, frame)
                         : (this.bodyPartTarget != null
                            ? getBodyPartBonePivot(bone, frame)
@@ -4599,9 +5261,12 @@ public class EditorGizmoController
         }
 
         /*
-         * Body Part model bones are local to the attached model.
-         * Resolve them through the actor attachment bone before
-         * converting model pixels into world blocks.
+         * Internal Body Part pivots are evaluated in the child model's own
+         * coordinates, then transformed by the child's root convention,
+         * Body Part global transform, and the actual rendered attachment
+         * basis. This mirrors the runtime order:
+         *
+         * attachment -> BodyPart translate/rotate/scale -> child morph.
          */
         if (this.bodyPartTarget != null &&
                 this.bodyPartAttachmentBone != null &&
@@ -4610,7 +5275,15 @@ public class EditorGizmoController
             AnimationTransform attachment =
                     this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
-            if (attachment == null)
+            double[] base = getBodyPartAttachmentWorldPosition(
+                    attachment,
+                    recordFrame
+            );
+
+            double[][] attachmentAxes =
+                    getBodyPartAttachmentWorldAxes(frame, recordFrame);
+
+            if (base == null || attachmentAxes == null)
             {
                 return null;
             }
@@ -4618,6 +5291,22 @@ public class EditorGizmoController
             double x = pivot.getPositionX();
             double y = pivot.getPositionY();
             double z = pivot.getPositionZ();
+
+            /*
+             * Blockbuster's child CustomMorph mirrors X/Y at its model root.
+             * This must happen BEFORE the Body Part's global rotation/scale,
+             * not as a final sign flip after attachment rotation.
+             */
+            if (isBlockbusterBodyPartTarget())
+            {
+                x = -x;
+                y = -y;
+            }
+
+            float[] childScale = getBodyPartChildModelScale(frame);
+            x *= childScale[0];
+            y *= childScale[1];
+            z *= childScale[2];
 
             AnimationTransform global =
                     this.bodyPartTarget.getGlobalTransform();
@@ -4640,36 +5329,14 @@ public class EditorGizmoController
                 z = p[2] + global.getPositionZ();
             }
 
-            float[] p = rotateVector(
-                    (float) x, (float) y, (float) z,
-                    attachment.getRotationX(),
-                    attachment.getRotationY(),
-                    attachment.getRotationZ()
-            );
-
-            double[] base =
-                    getBodyPartAttachmentWorldPosition(
-                            attachment,
-                            recordFrame
-                    );
-
-            double[] offset =
-                    transformBoneDirection(
-                            p,
-                            recordFrame
-                    );
-
-            return new double[]
-            {
-                base[0] + offset[0] / 16.0D,
-                base[1] + offset[1] / 16.0D,
-                base[2] + offset[2] / 16.0D
-            };
+            return addLocalOffsetToWorld(base, attachmentAxes, x, y, z);
         }
 
         /*
-         * Global Body Part transform is located at the actor attachment
-         * pivot and translated in that attachment's local space.
+         * The whole-model gizmo origin is the attachment pivot plus the
+         * Body Part's local translation. Use the attachment's rendered
+         * basis and world position; rebuilding it from editor Euler angles
+         * loses the parent's actual pose/yaw.
          */
         if (this.globalTransformTarget != null &&
                 this.bodyPartAttachmentBone != null)
@@ -4677,38 +5344,26 @@ public class EditorGizmoController
             AnimationTransform attachment =
                     this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
-            if (attachment == null)
+            double[] base = getBodyPartAttachmentWorldPosition(
+                    attachment,
+                    recordFrame
+            );
+
+            double[][] attachmentAxes =
+                    getBodyPartAttachmentWorldAxes(frame, recordFrame);
+
+            if (base == null || attachmentAxes == null)
             {
                 return null;
             }
 
-            float[] p = rotateVector(
+            return addLocalOffsetToWorld(
+                    base,
+                    attachmentAxes,
                     this.globalTransformTarget.getPositionX(),
                     this.globalTransformTarget.getPositionY(),
-                    this.globalTransformTarget.getPositionZ(),
-                    attachment.getRotationX(),
-                    attachment.getRotationY(),
-                    attachment.getRotationZ()
+                    this.globalTransformTarget.getPositionZ()
             );
-
-            double[] base =
-                    getWorldFromPivot(
-                            attachment,
-                            recordFrame
-                    );
-
-            double[] offset =
-                    transformBoneDirection(
-                            p,
-                            recordFrame
-                    );
-
-            return new double[]
-            {
-                base[0] + offset[0] / 16.0D,
-                base[1] + offset[1] / 16.0D,
-                base[2] + offset[2] / 16.0D
-            };
         }
 
         return getWorldFromPivot(
