@@ -5248,7 +5248,6 @@ public class EditorGizmoController
          */
         if (this.gizmoAttachmentBone != null &&
                 (this.bodyPartTarget == null ||
-                 this.bodyPartAttachmentBone == null ||
                  bone == this.bodyPartAttachmentBone))
         {
             AnimationTransform attachmentPivot =
