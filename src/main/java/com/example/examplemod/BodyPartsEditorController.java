@@ -842,6 +842,29 @@ public class BodyPartsEditorController
 
             if (initial != null)
             {
+                /*
+                 * Preserve the model's rest rotation as well as its pivot.
+                 * The gizmo basis must start from the same bind pose the
+                 * Chameleon renderer uses, then compose editor keyframes.
+                 */
+                try
+                {
+                    java.lang.reflect.Field rotateField =
+                            initial.getClass().getField("rotate");
+                    Object rotate = rotateField.get(initial);
+                    if (rotate != null)
+                    {
+                        bone.setBaseRotation(
+                                readVectorComponent(rotate, "x"),
+                                readVectorComponent(rotate, "y"),
+                                readVectorComponent(rotate, "z")
+                        );
+                    }
+                }
+                catch (Throwable ignored)
+                {
+                }
+
                 java.lang.reflect.Field translateField =
                         initial.getClass()
                                 .getField("translate");
