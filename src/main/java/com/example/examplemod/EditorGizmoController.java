@@ -4572,16 +4572,36 @@ public class EditorGizmoController
             key = new AnimationTransform();
         }
 
+        /*
+         * The Blockbuster model API and the editor do not use identical
+         * signs for limb translation/rotation. ModelCustomRenderer maps
+         * translation to (x, -y, -z) and rotation to (x, -y, -z).
+         * Apply those signs to animation offsets as well as the imported
+         * rest pose; otherwise the rendered limb moves while the calculated
+         * gizmo pivot drifts in another direction.
+         */
+        boolean blockbusterTarget = isBlockbusterBodyPartTarget();
+        float localY = bone.getLocalY()
+                + (blockbusterTarget ? -key.getPositionY() : key.getPositionY());
+        float localZ = bone.getLocalZ()
+                + (blockbusterTarget ? -key.getPositionZ() : key.getPositionZ());
+
         AnimationTransform local = new AnimationTransform();
         local.setPosition(
-                bone.getLocalX() + key.getPositionX(),
-                bone.getLocalY() + key.getPositionY(),
-                bone.getLocalZ() + key.getPositionZ()
+                bone.getLocalX() + (blockbusterTarget
+                        ? key.getPositionX()
+                        : (this.chameleonCoordinateSpace
+                           ? -key.getPositionX()
+                           : key.getPositionX())),
+                localY,
+                localZ
         );
         local.setRotation(
                 bone.getBaseRotationX() + key.getRotationX(),
-                bone.getBaseRotationY() + key.getRotationY(),
-                bone.getBaseRotationZ() + key.getRotationZ()
+                (blockbusterTarget ? -1.0F : 1.0F)
+                        * (bone.getBaseRotationY() + key.getRotationY()),
+                (blockbusterTarget ? -1.0F : 1.0F)
+                        * (bone.getBaseRotationZ() + key.getRotationZ())
         );
         local.setScale(
                 key.getScaleX(),
@@ -4625,6 +4645,103 @@ public class EditorGizmoController
         }
 
         return getWorldFromPivot(attachment, recordFrame);
+    }
+
+    private boolean isBlockbusterBodyPartTarget()
+    {
+        if (this.bodyPartTarget == null)
+        {
+            return false;
+        }
+
+        mchorse.metamorph.api.morphs.AbstractMorph morph =
+                this.bodyPartTarget.getBaseMorph();
+
+        if (morph != null)
+        {
+            return morph instanceof mchorse.blockbuster_pack.morphs.CustomMorph;
+        }
+
+        return this.bodyPartTarget.getModelAccess() != null;
+    }
+
+    /**
+     * Resolve the actual world-space axes of the actor bone that carries
+     * this Body Part. Prefer the source renderer's evaluated basis; use the
+     * editor hierarchy only as a fallback for morphs without a native adapter.
+     */
+    private double[][] getBodyPartAttachmentWorldAxes(
+            int frame,
+            BlockbusterRecordFrame recordFrame)
+    {
+        AnimationBone attachmentBone = this.bodyPartAttachmentBone;
+
+        if (attachmentBone == null)
+        {
+            return new double[][]
+            {
+                {1.0D, 0.0D, 0.0D},
+                {0.0D, 1.0D, 0.0D},
+                {0.0D, 0.0D, 1.0D}
+            };
+        }
+
+        double[][] nativeAxes =
+                getNativeBoneWorldAxes(attachmentBone, recordFrame);
+
+        if (nativeAxes != null)
+        {
+            return nativeAxes;
+        }
+
+        AnimationTransform attachment =
+                attachmentBone.getWorldPivotAt(frame);
+
+        if (attachment == null)
+        {
+            return null;
+        }
+
+        return new double[][]
+        {
+            transformBoneDirection(
+                    rotateVector(1.0F, 0.0F, 0.0F,
+                            attachment.getRotationX(),
+                            attachment.getRotationY(),
+                            attachment.getRotationZ()),
+                    recordFrame),
+            transformBoneDirection(
+                    rotateVector(0.0F, 1.0F, 0.0F,
+                            attachment.getRotationX(),
+                            attachment.getRotationY(),
+                            attachment.getRotationZ()),
+                    recordFrame),
+            transformBoneDirection(
+                    rotateVector(0.0F, 0.0F, 1.0F,
+                            attachment.getRotationX(),
+                            attachment.getRotationY(),
+                            attachment.getRotationZ()),
+                    recordFrame)
+        };
+    }
+
+    /**
+     * Transform an offset in the attachment's local model-pixel coordinates
+     * through the evaluated attachment basis and convert it to world blocks.
+     */
+    private double[] addLocalOffsetToWorld(
+            double[] base,
+            double[][] axes,
+            double x,
+            double y,
+            double z)
+    {
+        return new double[]
+        {
+            base[0] + (axes[0][0] * x + axes[1][0] * y + axes[2][0] * z) / 16.0D,
+            base[1] + (axes[0][1] * x + axes[1][1] * y + axes[2][1] * z) / 16.0D,
+            base[2] + (axes[0][2] * x + axes[1][2] * y + axes[2][2] * z) / 16.0D
+        };
     }
 
     private double[] getBoneWorldPosition(
@@ -4679,9 +4796,12 @@ public class EditorGizmoController
         }
 
         /*
-         * Body Part model bones are local to the attached model.
-         * Resolve them through the actor attachment bone before
-         * converting model pixels into world blocks.
+         * Internal Body Part pivots are evaluated in the child model's own
+         * coordinates, then transformed by the child's root convention,
+         * Body Part global transform, and the actual rendered attachment
+         * basis. This mirrors the runtime order:
+         *
+         * attachment -> BodyPart translate/rotate/scale -> child morph.
          */
         if (this.bodyPartTarget != null &&
                 this.bodyPartAttachmentBone != null &&
@@ -4690,7 +4810,15 @@ public class EditorGizmoController
             AnimationTransform attachment =
                     this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
-            if (attachment == null)
+            double[] base = getBodyPartAttachmentWorldPosition(
+                    attachment,
+                    recordFrame
+            );
+
+            double[][] attachmentAxes =
+                    getBodyPartAttachmentWorldAxes(frame, recordFrame);
+
+            if (base == null || attachmentAxes == null)
             {
                 return null;
             }
@@ -4698,6 +4826,17 @@ public class EditorGizmoController
             double x = pivot.getPositionX();
             double y = pivot.getPositionY();
             double z = pivot.getPositionZ();
+
+            /*
+             * Blockbuster's child CustomMorph mirrors X/Y at its model root.
+             * This must happen BEFORE the Body Part's global rotation/scale,
+             * not as a final sign flip after attachment rotation.
+             */
+            if (isBlockbusterBodyPartTarget())
+            {
+                x = -x;
+                y = -y;
+            }
 
             AnimationTransform global =
                     this.bodyPartTarget.getGlobalTransform();
@@ -4720,36 +4859,14 @@ public class EditorGizmoController
                 z = p[2] + global.getPositionZ();
             }
 
-            float[] p = rotateVector(
-                    (float) x, (float) y, (float) z,
-                    attachment.getRotationX(),
-                    attachment.getRotationY(),
-                    attachment.getRotationZ()
-            );
-
-            double[] base =
-                    getBodyPartAttachmentWorldPosition(
-                            attachment,
-                            recordFrame
-                    );
-
-            double[] offset =
-                    transformBoneDirection(
-                            p,
-                            recordFrame
-                    );
-
-            return new double[]
-            {
-                base[0] + offset[0] / 16.0D,
-                base[1] + offset[1] / 16.0D,
-                base[2] + offset[2] / 16.0D
-            };
+            return addLocalOffsetToWorld(base, attachmentAxes, x, y, z);
         }
 
         /*
-         * Global Body Part transform is located at the actor attachment
-         * pivot and translated in that attachment's local space.
+         * The whole-model gizmo origin is the attachment pivot plus the
+         * Body Part's local translation. Use the attachment's rendered
+         * basis and world position; rebuilding it from editor Euler angles
+         * loses the parent's actual pose/yaw.
          */
         if (this.globalTransformTarget != null &&
                 this.bodyPartAttachmentBone != null)
@@ -4757,38 +4874,26 @@ public class EditorGizmoController
             AnimationTransform attachment =
                     this.bodyPartAttachmentBone.getWorldPivotAt(frame);
 
-            if (attachment == null)
+            double[] base = getBodyPartAttachmentWorldPosition(
+                    attachment,
+                    recordFrame
+            );
+
+            double[][] attachmentAxes =
+                    getBodyPartAttachmentWorldAxes(frame, recordFrame);
+
+            if (base == null || attachmentAxes == null)
             {
                 return null;
             }
 
-            float[] p = rotateVector(
+            return addLocalOffsetToWorld(
+                    base,
+                    attachmentAxes,
                     this.globalTransformTarget.getPositionX(),
                     this.globalTransformTarget.getPositionY(),
-                    this.globalTransformTarget.getPositionZ(),
-                    attachment.getRotationX(),
-                    attachment.getRotationY(),
-                    attachment.getRotationZ()
+                    this.globalTransformTarget.getPositionZ()
             );
-
-            double[] base =
-                    getWorldFromPivot(
-                            attachment,
-                            recordFrame
-                    );
-
-            double[] offset =
-                    transformBoneDirection(
-                            p,
-                            recordFrame
-                    );
-
-            return new double[]
-            {
-                base[0] + offset[0] / 16.0D,
-                base[1] + offset[1] / 16.0D,
-                base[2] + offset[2] / 16.0D
-            };
         }
 
         return getWorldFromPivot(
