@@ -189,10 +189,20 @@ public class BodyPartsEditorController
             return false;
         }
 
-        List<AnimationBone> bones =
-                createAnimationBones(
-                        access.getLimbData()
-                );
+        List<AnimationBone> bones = new ArrayList<AnimationBone>();
+        Object apiModel = access.getApiModel();
+
+        if (apiModel instanceof mchorse.blockbuster.api.Model)
+        {
+            bones = createAnimationBonesFromApiModel(
+                    (mchorse.blockbuster.api.Model) apiModel
+            );
+        }
+
+        if (bones.isEmpty())
+        {
+            bones = createAnimationBones(access.getLimbData());
+        }
 
         if (bones.isEmpty())
         {
@@ -660,73 +670,7 @@ public class BodyPartsEditorController
         try
         {
             morph.updateModel();
-            mchorse.blockbuster.api.Model model = morph.model;
-
-            if (model == null || model.limbs == null || model.limbs.isEmpty())
-            {
-                return result;
-            }
-
-            mchorse.blockbuster.api.ModelPose standing = model.getPose("standing");
-
-            for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelLimb> entry
-                    : model.limbs.entrySet())
-            {
-                mchorse.blockbuster.api.ModelLimb limb = entry.getValue();
-                if (limb == null)
-                {
-                    continue;
-                }
-
-                String name = limb.name == null || limb.name.isEmpty()
-                        ? entry.getKey()
-                        : limb.name;
-
-                if (name == null || name.isEmpty())
-                {
-                    continue;
-                }
-
-                AnimationBone bone = new AnimationBone(name);
-                mchorse.blockbuster.api.ModelTransform source =
-                        standing == null ? null : standing.limbs.get(name);
-
-                if (source != null)
-                {
-                    bone.setLocalPosition(
-                            source.translate[0],
-                            -source.translate[1],
-                            -source.translate[2]
-                    );
-                    bone.setBaseRotation(
-                            source.rotate[0],
-                            source.rotate[1],
-                            source.rotate[2]
-                    );
-                }
-
-                result.add(bone);
-            }
-
-            for (AnimationBone bone : result)
-            {
-                for (mchorse.blockbuster.api.ModelLimb limb : model.limbs.values())
-                {
-                    if (limb != null && bone.getName().equals(limb.name)
-                            && limb.parent != null && !limb.parent.isEmpty())
-                    {
-                        for (AnimationBone parent : result)
-                        {
-                            if (limb.parent.equals(parent.getName()))
-                            {
-                                bone.setParent(parent);
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
+            result = createAnimationBonesFromApiModel(morph.model);
         }
         catch (Throwable error)
         {
@@ -735,6 +679,84 @@ public class BodyPartsEditorController
                             + "Could not read CustomMorph API skeleton directly"
             );
             error.printStackTrace();
+        }
+
+        return result;
+    }
+
+    /**
+     * Import Blockbuster's standing-pose pivots and rest rotations for both
+     * a CustomMorph child and a model selected directly from the picker.
+     */
+    private List<AnimationBone> createAnimationBonesFromApiModel(
+            mchorse.blockbuster.api.Model model)
+    {
+        List<AnimationBone> result = new ArrayList<AnimationBone>();
+
+        if (model == null || model.limbs == null || model.limbs.isEmpty())
+        {
+            return result;
+        }
+
+        mchorse.blockbuster.api.ModelPose standing = model.getPose("standing");
+
+        for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelLimb> entry
+                : model.limbs.entrySet())
+        {
+            mchorse.blockbuster.api.ModelLimb limb = entry.getValue();
+            if (limb == null)
+            {
+                continue;
+            }
+
+            String name = limb.name == null || limb.name.isEmpty()
+                    ? entry.getKey()
+                    : limb.name;
+
+            if (name == null || name.isEmpty())
+            {
+                continue;
+            }
+
+            AnimationBone bone = new AnimationBone(name);
+            mchorse.blockbuster.api.ModelTransform source =
+                    standing == null ? null : standing.limbs.get(name);
+
+            if (source != null)
+            {
+                bone.setLocalPosition(
+                        source.translate[0],
+                        -source.translate[1],
+                        -source.translate[2]
+                );
+                bone.setBaseRotation(
+                        source.rotate[0],
+                        source.rotate[1],
+                        source.rotate[2]
+                );
+            }
+
+            result.add(bone);
+        }
+
+        for (AnimationBone bone : result)
+        {
+            for (mchorse.blockbuster.api.ModelLimb limb : model.limbs.values())
+            {
+                if (limb != null && bone.getName().equals(limb.name)
+                        && limb.parent != null && !limb.parent.isEmpty())
+                {
+                    for (AnimationBone parent : result)
+                    {
+                        if (limb.parent.equals(parent.getName()))
+                        {
+                            bone.setParent(parent);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
         }
 
         return result;
