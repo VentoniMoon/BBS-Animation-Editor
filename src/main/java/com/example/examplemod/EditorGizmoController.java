@@ -3882,7 +3882,9 @@ public class EditorGizmoController
                         : this.gizmoFrame;
 
         AnimationTransform pivot =
-                this.chameleonCoordinateSpace
+                this.chameleonCoordinateSpace &&
+                        this.bodyPartTarget != null &&
+                        bone != this.bodyPartAttachmentBone
                         ? getChameleonWorldPivot(bone, frame)
                         : bone.getWorldPivotAt(frame);
 
