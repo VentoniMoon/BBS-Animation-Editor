@@ -2246,10 +2246,30 @@ public class EditorGizmoController
             BlockbusterRecordFrame recordFrame)
     {
         /*
-         * Follow the same rule as the working Emoticons adapter:
-         * use the model engine's own evaluated bone matrix for the pivot.
-         * Rebuilding the hierarchy from editor transforms separately can
-         * diverge from Blockbuster's actual parent/rotation/scale order.
+         * Body Parts have their own transform hierarchy.  In particular,
+         * an internal bone may have the same name as an actor bone, but it
+         * must never borrow that actor bone's native render pivot.
+         *
+         * Resolve Body Parts through the editor hierarchy first so both
+         * the model root gizmo and its internal-bone gizmos follow the
+         * selected model's global transform and attachment point.
+         */
+        if (this.bodyPartAttachmentBone != null &&
+                (this.globalTransformTarget != null ||
+                 (this.bodyPartTarget != null &&
+                  bone != this.bodyPartAttachmentBone)))
+        {
+            return getBoneWorldPosition(
+                    bone,
+                    keyframe,
+                    recordFrame
+            );
+        }
+
+        /*
+         * For ordinary Pose editing, keep using the model engine's
+         * evaluated bone matrix whenever available.  This avoids changing
+         * the already-working Blockbuster, Emoticons and Chameleon paths.
          */
         if (isChameleonMorph())
         {
@@ -2295,20 +2315,22 @@ public class EditorGizmoController
     private double[] getNativeBoneWorldPosition(AnimationBone bone, AnimationKeyframe keyframe, BlockbusterRecordFrame recordFrame)
     {
         /*
-         * The Level 1 Body Part gizmo edits the whole model transform.
-         * Its pivot must include that transform's translation, so do not
-         * return the rendered parent-bone pivot before applying it.
+         * Body Parts use a separate transform hierarchy from the actor.
+         * Always resolve their gizmo pivot through that hierarchy before
+         * consulting native actor-render matrices. Otherwise a same-named
+         * actor bone (or the untransformed attachment pivot) can win and
+         * make the gizmo stay behind while the added model moves.
          */
-        if (this.globalTransformTarget != null &&
-                this.bodyPartAttachmentBone != null)
+        if (this.bodyPartAttachmentBone != null &&
+                (this.globalTransformTarget != null ||
+                 (this.bodyPartTarget != null &&
+                  bone != this.bodyPartAttachmentBone)))
         {
-            double[] transformed =
-                    getBoneWorldPosition(bone, keyframe, recordFrame);
-
-            if (transformed != null)
-            {
-                return transformed;
-            }
+            return getBoneWorldPosition(
+                    bone,
+                    keyframe,
+                    recordFrame
+            );
         }
 
         double[] result = getExactChameleonBoneWorldPosition(bone, recordFrame);
