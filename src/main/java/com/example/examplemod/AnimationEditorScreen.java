@@ -545,14 +545,35 @@ public class AnimationEditorScreen extends GuiScreen
     public AnimationTransform getGizmoGlobalTransform()
     {
         if (this.editorModeController.getMode()
-                != EditorModeController.EditorMode.BODY_PARTS
-                || this.bodyPartsController.getSelectedModel() != null)
+                != EditorModeController.EditorMode.BODY_PARTS)
         {
             return null;
         }
 
         BodyPartModelData model =
-                this.bodyPartsController.getSelectedAttachment();
+                this.bodyPartsController.getSelectedModel();
+
+        if (model != null)
+        {
+            /*
+             * Selecting a Body Part model clears the bone/keyframe
+             * selection. In that state the gizmo edits the transform of
+             * the whole attached model, not the actor attachment bone.
+             *
+             * Once an internal child bone is selected, the gizmo must
+             * return to that bone's keyframe and leave the model transform
+             * untouched.
+             */
+            AnimationBone selectedChildBone =
+                    this.bodyPartsController.getKeyframeController()
+                            .getSelectedBone(model.getBones());
+
+            return selectedChildBone == null
+                    ? model.getGlobalTransform()
+                    : null;
+        }
+
+        model = this.bodyPartsController.getSelectedAttachment();
 
         return model == null
                 ? null
