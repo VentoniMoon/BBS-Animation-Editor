@@ -3886,13 +3886,28 @@ public class EditorGizmoController
                    ? this.bodyPartTarget.getGlobalTransform()
                    : null);
 
-        float[][] globalMatrix = global == null
+        float[][] globalRotation = global == null
                 ? identityRotationMatrix()
                 : createRotationMatrix(
                         global.getRotationX(),
                         global.getRotationY(),
                         global.getRotationZ()
                 );
+
+        float[][] globalScale = new float[][]
+        {
+            {global == null ? 1.0F : global.getScaleX(), 0.0F, 0.0F},
+            {0.0F, global == null ? 1.0F : global.getScaleY(), 0.0F},
+            {0.0F, 0.0F, global == null ? 1.0F : global.getScaleZ()}
+        };
+
+        float[] childScaleValues = getBodyPartChildModelScale(frame);
+        float[][] childScale = new float[][]
+        {
+            {childScaleValues[0], 0.0F, 0.0F},
+            {0.0F, childScaleValues[1], 0.0F},
+            {0.0F, 0.0F, childScaleValues[2]}
+        };
 
         /*
          * Blockbuster's CustomMorph applies a root mirror before rendering
@@ -3929,8 +3944,14 @@ public class EditorGizmoController
         float[][] worldMatrix = multiplyMatrix(
                 attachmentMatrix,
                 multiplyMatrix(
-                        globalMatrix,
-                        multiplyMatrix(childRootMatrix, internalMatrix)
+                        globalRotation,
+                        multiplyMatrix(
+                                globalScale,
+                                multiplyMatrix(
+                                        childScale,
+                                        multiplyMatrix(childRootMatrix, internalMatrix)
+                                )
+                        )
                 )
         );
 
@@ -4188,6 +4209,11 @@ public class EditorGizmoController
         float sx = global == null ? 1.0F : global.getScaleX();
         float sy = global == null ? 1.0F : global.getScaleY();
         float sz = global == null ? 1.0F : global.getScaleZ();
+
+        float[] childScale = getBodyPartChildModelScale(frame);
+        sx *= childScale[0];
+        sy *= childScale[1];
+        sz *= childScale[2];
 
         double effectiveScale = Math.sqrt(
                 axisInModel[0] * axisInModel[0] * sx * sx
@@ -4995,6 +5021,79 @@ public class EditorGizmoController
                 : getWorldFromPivot(attachment, recordFrame);
     }
 
+    /**
+     * Native model scale applied by the attached child morph. Blockbuster's
+     * source Model scale and CustomMorph scale are both applied before its
+     * limb hierarchy, so the gizmo pivot must include them as well.
+     */
+    private float[] getBodyPartChildModelScale(int frame)
+    {
+        if (!isBlockbusterBodyPartTarget() || this.bodyPartTarget == null)
+        {
+            return new float[] {1.0F, 1.0F, 1.0F};
+        }
+
+        float sx = 1.0F;
+        float sy = 1.0F;
+        float sz = 1.0F;
+        float morphScale = 1.0F;
+        mchorse.blockbuster.api.Model model = null;
+
+        try
+        {
+            mchorse.metamorph.api.morphs.AbstractMorph resolved =
+                    this.bodyPartTarget.getMorphAt(frame);
+
+            if (resolved instanceof mchorse.blockbuster_pack.morphs.CustomMorph)
+            {
+                mchorse.blockbuster_pack.morphs.CustomMorph custom =
+                        (mchorse.blockbuster_pack.morphs.CustomMorph) resolved;
+
+                morphScale = custom.scale;
+                if (custom.model == null)
+                {
+                    custom.updateModel(true);
+                }
+                model = custom.model;
+            }
+        }
+        catch (Throwable ignored)
+        {
+        }
+
+        if (model == null)
+        {
+            try
+            {
+                Object candidate = this.bodyPartTarget.getModelAccess() == null
+                        ? null
+                        : this.bodyPartTarget.getModelAccess().getApiModel();
+
+                if (candidate instanceof mchorse.blockbuster.api.Model)
+                {
+                    model = (mchorse.blockbuster.api.Model) candidate;
+                }
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+
+        if (model != null && model.scale != null && model.scale.length >= 3)
+        {
+            sx = model.scale[0] * morphScale;
+            sy = model.scale[1] * morphScale;
+            sz = model.scale[2] * morphScale;
+        }
+
+        return new float[]
+        {
+            Math.abs(sx) < 0.0001F ? 1.0F : sx,
+            Math.abs(sy) < 0.0001F ? 1.0F : sy,
+            Math.abs(sz) < 0.0001F ? 1.0F : sz
+        };
+    }
+
     private boolean isChameleonBodyPartTarget()
     {
         if (this.bodyPartTarget == null ||
@@ -5203,6 +5302,11 @@ public class EditorGizmoController
                 x = -x;
                 y = -y;
             }
+
+            float[] childScale = getBodyPartChildModelScale(frame);
+            x *= childScale[0];
+            y *= childScale[1];
+            z *= childScale[2];
 
             AnimationTransform global =
                     this.bodyPartTarget.getGlobalTransform();
