@@ -5,6 +5,7 @@ import java.util.List;
 
 import mchorse.metamorph.api.morphs.AbstractMorph;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
 
 public class BodyPartsEditorController
 {
@@ -379,6 +380,27 @@ public class BodyPartsEditorController
             {
                 return result;
             }
+        }
+
+        /*
+         * Emoticons AnimatedMorph stores its skeleton in BOBJ armatures,
+         * not in the reflective Chameleon getModel()/getBoneNames() API.
+         * Reuse the existing Character bone resolver so these models get
+         * real selectable tracks instead of an empty Body Parts list.
+         */
+        if (morph instanceof AnimatedMorph)
+        {
+            List<String> names = CharacterBodyPartOverrideController.getBones(morph);
+
+            for (String name : names)
+            {
+                if (name != null && !name.isEmpty())
+                {
+                    result.add(new AnimationBone(name));
+                }
+            }
+
+            return result;
         }
 
         try
