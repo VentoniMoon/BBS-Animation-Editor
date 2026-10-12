@@ -4004,6 +4004,24 @@ public class EditorGizmoController
             worldMatrix[0][2], worldMatrix[1][2], worldMatrix[2][2]
         });
 
+        /*
+         * Blockbuster Body Part translation keys use a different X/Z sign
+         * convention from the attached child renderer. Keep Y as-is (it is
+         * already aligned in the editor), but reverse the displayed X and Z
+         * directions so dragging each handle writes movement in that same
+         * visible direction. This branch is only used for Body Parts
+         * translation axes; it does not affect Pose, rotation/scale, or the
+         * Chameleon/Emoticons adapters.
+         */
+        if (isBlockbusterBodyPartTarget())
+        {
+            for (int component = 0; component < 3; component++)
+            {
+                worldX[component] = -worldX[component];
+                worldZ[component] = -worldZ[component];
+            }
+        }
+
         return new double[][] {worldX, worldY, worldZ};
     }
 
@@ -5437,7 +5455,23 @@ public class EditorGizmoController
         if (nativeChildMatrix != null)
         {
             pivot = new AnimationTransform();
-            pivot.setPosition(nativeChildMatrix[12] * 16.0F,
+
+            /*
+             * The Blockbuster child CustomMorph's native renderer matrix
+             * includes the root X/Y mirror used by the standalone actor
+             * renderer. In the attached Body Part render path, X is already
+             * accounted for by the attachment/model convention, so applying
+             * that mirrored X pivot here places the gizmo on the opposite
+             * limb. Correct X only; keep the currently-correct Y pivot and
+             * leave Z position untouched.
+             */
+            float pivotX = nativeChildMatrix[12];
+            if (isBlockbusterBodyPartTarget())
+            {
+                pivotX = -pivotX;
+            }
+
+            pivot.setPosition(pivotX * 16.0F,
                     nativeChildMatrix[13] * 16.0F,
                     nativeChildMatrix[14] * 16.0F);
         }
