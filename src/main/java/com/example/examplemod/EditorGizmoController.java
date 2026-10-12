@@ -3617,7 +3617,18 @@ public class EditorGizmoController
          * are derived from the parent's rendered basis and follow a different
          * transform stage. Emoticons remains on its own native convention.
          */
-        if (isBlockbusterCustomMorph())
+        /*
+         * In Body Parts mode the selected child morph can be a Blockbuster
+         * CustomMorph even when the actor preview itself is another morph.
+         * Use the actual edit target first; otherwise the Y/Z data-channel
+         * conversion can silently fall back to the actor's unrelated type.
+         */
+        boolean blockbusterTarget =
+                isBodyPartInternalBoneTarget(this.activeBone)
+                        ? isBlockbusterBodyPartTarget()
+                        : isBlockbusterCustomMorph();
+
+        if (blockbusterTarget)
         {
             if (axisId == AXIS_Y || axisId == AXIS_Z)
             {
@@ -5455,6 +5466,7 @@ public class EditorGizmoController
                 ? isChameleonBodyPartTarget()
                 : this.chameleonCoordinateSpace;
 
+        boolean blockbusterBodyPart = isBlockbusterBodyPartTarget();
         float[] nativeChildMatrix =
                 this.bodyPartTarget != null &&
                 bone != this.bodyPartAttachmentBone
@@ -5462,26 +5474,23 @@ public class EditorGizmoController
                         : null;
 
         AnimationTransform pivot;
-        if (nativeChildMatrix != null)
+        /*
+         * The native child-renderer matrix is a reliable rest-pose anchor,
+         * but it does not include the editor's current AnimationTransform
+         * key. Using its translation directly therefore disconnects the
+         * gizmo from an edited internal bone (most visibly on Blockbuster Z).
+         *
+         * For Blockbuster Body Parts, evaluate the pivot from the editor bone
+         * hierarchy so keyframe translation is included. The conversion below
+         * applies the same root mirror and child scale as the non-native path.
+         * Keep the native matrix path for Chameleon, whose renderer pivot is
+         * needed to match its own model hierarchy.
+         */
+        if (nativeChildMatrix != null && !blockbusterBodyPart)
         {
             pivot = new AnimationTransform();
-
-            /*
-             * The Blockbuster child CustomMorph's native renderer matrix
-             * includes the root X/Y mirror used by the standalone actor
-             * renderer. In the attached Body Part render path, X is already
-             * accounted for by the attachment/model convention, so applying
-             * that mirrored X pivot here places the gizmo on the opposite
-             * limb. Correct X only; keep the currently-correct Y pivot and
-             * leave Z position untouched.
-             */
-            float pivotX = nativeChildMatrix[12];
-            if (isBlockbusterBodyPartTarget())
-            {
-                pivotX = -pivotX;
-            }
-
-            pivot.setPosition(pivotX * 16.0F,
+            pivot.setPosition(
+                    nativeChildMatrix[12] * 16.0F,
                     nativeChildMatrix[13] * 16.0F,
                     nativeChildMatrix[14] * 16.0F);
         }
@@ -5553,9 +5562,9 @@ public class EditorGizmoController
              * This must happen BEFORE the Body Part's global rotation/scale,
              * not as a final sign flip after attachment rotation.
              */
-            if (nativeChildMatrix == null)
+            if (nativeChildMatrix == null || blockbusterBodyPart)
             {
-                if (isBlockbusterBodyPartTarget())
+                if (blockbusterBodyPart)
                 {
                     x = -x;
                     y = -y;
