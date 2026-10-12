@@ -4004,6 +4004,13 @@ public class EditorGizmoController
             worldMatrix[0][2], worldMatrix[1][2], worldMatrix[2][2]
         });
 
+        /*
+         * Keep the displayed basis aligned with the mouse-driven handles.
+         * Blockbuster's sign correction belongs in the data-space writeback,
+         * not here; flipping the drawn axes would make the handle itself
+         * appear to run opposite to the drag.
+         */
+
         return new double[][] {worldX, worldY, worldZ};
     }
 
@@ -4210,6 +4217,14 @@ public class EditorGizmoController
          */
         if (isBlockbusterBodyPartTarget())
         {
+            /*
+             * The displayed gizmo follows the mouse correctly. The mismatch
+             * is in the Blockbuster key's local translation convention:
+             * X and Z need their data-space deltas reversed, while Y is
+             * already correct. Do this only when writing the internal bone
+             * key; never change the visible axes or other model adapters.
+             */
+            vx = -vx;
             vy = -vy;
             vz = -vz;
         }
@@ -5437,7 +5452,23 @@ public class EditorGizmoController
         if (nativeChildMatrix != null)
         {
             pivot = new AnimationTransform();
-            pivot.setPosition(nativeChildMatrix[12] * 16.0F,
+
+            /*
+             * The Blockbuster child CustomMorph's native renderer matrix
+             * includes the root X/Y mirror used by the standalone actor
+             * renderer. In the attached Body Part render path, X is already
+             * accounted for by the attachment/model convention, so applying
+             * that mirrored X pivot here places the gizmo on the opposite
+             * limb. Correct X only; keep the currently-correct Y pivot and
+             * leave Z position untouched.
+             */
+            float pivotX = nativeChildMatrix[12];
+            if (isBlockbusterBodyPartTarget())
+            {
+                pivotX = -pivotX;
+            }
+
+            pivot.setPosition(pivotX * 16.0F,
                     nativeChildMatrix[13] * 16.0F,
                     nativeChildMatrix[14] * 16.0F);
         }
