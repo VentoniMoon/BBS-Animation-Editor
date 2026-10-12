@@ -4146,7 +4146,18 @@ public class EditorGizmoController
         float[][] current = createRotationMatrix(startX, startY, startZ);
         float[][] delta = identityRotationMatrix();
 
-        double angle = Math.toRadians(amount);
+        /*
+         * Blockbuster Body Parts exposes a reflected X/Z ring orientation
+         * relative to the model's rotation-matrix convention. The mouse angle
+         * is already correct in the displayed ring basis, so compensate only
+         * when applying the delta to the child-bone matrix. Y is not reflected
+         * and must retain its current direction.
+         */
+        double rotationAmount =
+                blockbuster && (axisId == AXIS_X || axisId == AXIS_Z)
+                        ? -amount
+                        : amount;
+        double angle = Math.toRadians(rotationAmount);
         float c = (float) Math.cos(angle);
         float sn = (float) Math.sin(angle);
 
