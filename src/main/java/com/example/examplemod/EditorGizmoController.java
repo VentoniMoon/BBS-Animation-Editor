@@ -4593,6 +4593,7 @@ public class EditorGizmoController
          * which are also used by the bone rotation conversion.
          */
         if (axes == null || bone == null
+                || this.mode != Mode.ROTATION
                 || !isBodyPartInternalBoneTarget(bone)
                 || !isBlockbusterBodyPartTarget())
         {
