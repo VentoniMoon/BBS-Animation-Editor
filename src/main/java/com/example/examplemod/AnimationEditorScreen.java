@@ -652,6 +652,10 @@ public class AnimationEditorScreen extends GuiScreen
                     this.bodyPartsController.getSelectedAttachment();
         }
 
+        this.gizmoController.setBodyPartRuntimeMorph(
+                this.sceneViewport.getPreparedBodyPartMorph(gizmoBodyPart)
+        );
+
         if (gizmoBodyPart != null)
         {
             /*

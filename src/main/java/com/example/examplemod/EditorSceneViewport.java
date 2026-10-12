@@ -89,6 +89,14 @@ public class EditorSceneViewport
         );
     }
 
+    public mchorse.metamorph.api.morphs.AbstractMorph getPreparedBodyPartMorph(
+            BodyPartModelData data)
+    {
+        return this.actorPreviewRenderer == null
+                ? null
+                : this.actorPreviewRenderer.getPreparedBodyPartMorph(data);
+    }
+
 
     public void setBounds(
             int x,
