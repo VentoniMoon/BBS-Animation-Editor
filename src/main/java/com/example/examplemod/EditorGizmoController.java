@@ -4005,22 +4005,11 @@ public class EditorGizmoController
         });
 
         /*
-         * Blockbuster Body Part translation keys use a different X/Z sign
-         * convention from the attached child renderer. Keep Y as-is (it is
-         * already aligned in the editor), but reverse the displayed X and Z
-         * directions so dragging each handle writes movement in that same
-         * visible direction. This branch is only used for Body Parts
-         * translation axes; it does not affect Pose, rotation/scale, or the
-         * Chameleon/Emoticons adapters.
+         * Keep the displayed basis aligned with the mouse-driven handles.
+         * Blockbuster's sign correction belongs in the data-space writeback,
+         * not here; flipping the drawn axes would make the handle itself
+         * appear to run opposite to the drag.
          */
-        if (isBlockbusterBodyPartTarget())
-        {
-            for (int component = 0; component < 3; component++)
-            {
-                worldX[component] = -worldX[component];
-                worldZ[component] = -worldZ[component];
-            }
-        }
 
         return new double[][] {worldX, worldY, worldZ};
     }
@@ -4228,7 +4217,14 @@ public class EditorGizmoController
          */
         if (isBlockbusterBodyPartTarget())
         {
-            vy = -vy;
+            /*
+             * The displayed gizmo follows the mouse correctly. The mismatch
+             * is in the Blockbuster key's local translation convention:
+             * X and Z need their data-space deltas reversed, while Y is
+             * already correct. Do this only when writing the internal bone
+             * key; never change the visible axes or other model adapters.
+             */
+            vx = -vx;
             vz = -vz;
         }
         else if (isChameleonBodyPartTarget())
