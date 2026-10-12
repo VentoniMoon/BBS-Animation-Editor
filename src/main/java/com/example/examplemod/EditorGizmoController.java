@@ -4304,7 +4304,13 @@ public class EditorGizmoController
          * mouse angle or patching channel signs. Since S is its own inverse,
          * this is S * delta * S. Other adapters remain untouched.
          */
-        double angle = Math.toRadians(amount);
+        /*
+         * The ring mapping has already been corrected in the Blockbuster
+         * drag path. Keep that visible interaction unchanged and reverse only
+         * the delta applied to the rendered bone: the current renderer-space
+         * conversion produces the opposite bone rotation on all three axes.
+         */
+        double angle = Math.toRadians(blockbuster ? -amount : amount);
         float c = (float) Math.cos(angle);
         float sn = (float) Math.sin(angle);
 
