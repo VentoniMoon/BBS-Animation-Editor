@@ -290,7 +290,7 @@ public class EditorGizmoController
                         keyframe,
                         recordFrame
                 );
-        double[][] displayAxes = axes;
+        double[][] displayAxes = getRotationDisplayAxes(axes);
 
         int hit =
                 hitTest(
@@ -318,7 +318,7 @@ public class EditorGizmoController
             setRotationDragBasis(
                     this.activePart,
                     gizmoWorld,
-                    axes,
+                    displayAxes,
                     viewportX, viewportY, viewportWidth, viewportHeight,
                     center,
                     camera
@@ -512,20 +512,6 @@ public class EditorGizmoController
 
             if (this.bodyPartTarget != null || this.globalTransformTarget != null)
             {
-                /*
-                 * Keep the mouse-to-ring drag direction consistent, but
-                 * convert the resulting angle separately for Blockbuster
-                 * internal-bone data. Its X/Z animation channels rotate the
-                 * rendered child model opposite to the displayed ring basis.
-                 * Y has already been verified and must keep its current sign.
-                 */
-                if (isBodyPartInternalBoneTarget(this.activeBone)
-                        && isBlockbusterBodyPartTarget()
-                        && (this.activePart == AXIS_X || this.activePart == AXIS_Z))
-                {
-                    amount = -amount;
-                }
-
                 applyBodyPartLocalRotationDelta(
                         transform,
                         this.activeBone,
@@ -1589,12 +1575,13 @@ public class EditorGizmoController
         }
 
         /*
-         * Draw the same translation basis that hit testing and local
-         * position editing use. Blockbuster Y/Z are corrected at the
-         * renderer-to-anchor conversion, not by a visual-only 180-degree
-         * rotation that would desynchronize the handles from the bone.
+         * Position keeps its validated data-space basis. Rotation uses a
+         * separate display basis for Blockbuster Body Parts so the displayed
+         * X/Z rings follow the mouse convention without changing the bone
+         * rotation result. The paired drag-angle conversion is handled by
+         * the same basis used for drawing and hit testing.
          */
-        double[][] displayAxes = axes;
+        double[][] displayAxes = getRotationDisplayAxes(axes);
 
         /*
          * Rotation rings deliberately use the live native bone basis every
@@ -4402,6 +4389,40 @@ public class EditorGizmoController
         }
 
         return worldDelta;
+    }
+
+    /**
+     * Blockbuster Body Parts store X/Y/Z rotation channels in a convention
+     * that differs from the local axes returned by the native child renderer.
+     * Flip only the displayed X and Z basis vectors for rotation gizmos; use
+     * that same basis for ring drawing, hit testing, and mouse-angle capture.
+     * This keeps the green Y ring unchanged and leaves model/data transforms,
+     * position handles, scale handles, and non-Blockbuster morphs untouched.
+     */
+    private double[][] getRotationDisplayAxes(double[][] axes)
+    {
+        if (axes == null
+                || this.mode != Mode.ROTATION
+                || !isBodyPartInternalBoneTarget(this.activeBone)
+                || !isBlockbusterBodyPartTarget())
+        {
+            return axes;
+        }
+
+        double[][] display = new double[][]
+        {
+            axes[0].clone(),
+            axes[1].clone(),
+            axes[2].clone()
+        };
+
+        for (int i = 0; i < 3; i++)
+        {
+            display[0][i] = -display[0][i];
+            display[2][i] = -display[2][i];
+        }
+
+        return display;
     }
 
     private double[][] getGizmoWorldAxes(
