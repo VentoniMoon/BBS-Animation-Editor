@@ -4965,7 +4965,10 @@ public class EditorGizmoController
                 ? "<none>"
                 : this.bodyPartRuntimeMorph.getClass().getName();
         String boneName = bone == null ? "<none>" : bone.getName();
-        String key = morphName + "|" + boneName + "|" + reason;
+        String category = reason;
+        int detailSeparator = category.indexOf(";");
+        if (detailSeparator >= 0) category = category.substring(0, detailSeparator);
+        String key = morphName + "|" + boneName + "|" + category;
         if (!this.bodyPartMatrixDiagnosticKeys.add(key))
         {
             return;
