@@ -96,12 +96,19 @@ public class EditorGizmoController
     private double[] dragPixelsPerWorld = new double[] {1.0D, 1.0D, 1.0D};
 
     private BodyPartModelData bodyPartTarget;
+    private mchorse.metamorph.api.morphs.AbstractMorph bodyPartRuntimeMorph;
     private AnimationBone bodyPartAttachmentBone;
     private AnimationBone gizmoAttachmentBone;
     private AnimationTransform globalTransformTarget;
     private int gizmoFrame;
     private boolean chameleonCoordinateSpace;
     private EntityActor previewActor;
+
+    public void setBodyPartRuntimeMorph(
+            mchorse.metamorph.api.morphs.AbstractMorph morph)
+    {
+        this.bodyPartRuntimeMorph = morph;
+    }
 
     public void setBodyPartTarget(
             BodyPartModelData model,
