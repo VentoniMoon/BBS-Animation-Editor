@@ -1581,7 +1581,7 @@ public class EditorGizmoController
          * rotation result. The paired drag-angle conversion is handled by
          * the same basis used for drawing and hit testing.
          */
-        double[][] displayAxes = getRotationDisplayAxes(axes);
+        double[][] displayAxes = getRotationDisplayAxes(axes, bone);
 
         /*
          * Rotation rings deliberately use the live native bone basis every
