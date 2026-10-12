@@ -510,16 +510,33 @@ public class EditorGizmoController
         {
             float amount = (float) getRotationDragAngle(this.activePart, mouseX, mouseY);
 
-            if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+            if (isBodyPartInternalBoneTarget(this.activeBone)
+                    && isBlockbusterBodyPartTarget())
             {
                 /*
-                 * Apply the drag as a rotation around the selected LOCAL
-                 * gizmo axis, using the same matrix composition/decomposition
-                 * path as the other Body Parts targets. Directly adding to a
-                 * Blockbuster Euler channel does not represent a local-axis
-                 * rotation once the bone has an existing orientation, and
-                 * causes the rendered X/Z motion to disagree with the rings.
+                 * Match the already-working Pose gizmo path for Blockbuster:
+                 * write the selected Euler channel directly. The child
+                 * renderer converts stored Y/Z channels to negative render
+                 * angles, so getRotationDragAngle() applies the same channel
+                 * convention through getDataAxisSign(). Do not decompose a
+                 * matrix here; that changes the meaning of the channels and
+                 * reverses X/Z for internal Blockbuster bones.
                  */
+                if (this.activePart == AXIS_X)
+                {
+                    transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
+                }
+                else if (this.activePart == AXIS_Y)
+                {
+                    transform.setRotation(this.dragStartRX, this.dragStartRY + amount, this.dragStartRZ);
+                }
+                else
+                {
+                    transform.setRotation(this.dragStartRX, this.dragStartRY, this.dragStartRZ + amount);
+                }
+            }
+            else if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+            {
                 applyBodyPartLocalRotationDelta(
                         transform,
                         this.activeBone,
@@ -3639,17 +3656,11 @@ public class EditorGizmoController
         if (blockbusterBodyPart)
         {
             /*
-             * In Blockbuster Body Parts, the rotation drag angle is measured
-             * in the projected screen basis of the displayed ring. The
-             * Blockbuster child-model rotation adapter already converts the
-             * stored Y/Z channels when applying the local rotation matrix;
-             * applying another per-axis sign inversion here made the red X
-             * and blue Z drag directions oppose the mouse. Use the same drag
-             * direction for all three displayed rings. This is limited to
-             * internal Blockbuster Body Part bones; position, scale,
-             * attachment transforms, and other morph adapters are untouched.
+             * Match Pose-mode Blockbuster bone channels. The renderer uses
+             * X as stored but negates Y and Z, so the mouse angle must be
+             * converted back to the stored animation channel convention.
              */
-            return 1.0D;
+            return axisId == AXIS_Y || axisId == AXIS_Z ? -1.0D : 1.0D;
         }
 
         if (isBlockbusterCustomMorph())
