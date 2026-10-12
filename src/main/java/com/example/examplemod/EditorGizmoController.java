@@ -554,13 +554,16 @@ public class EditorGizmoController
                 );
 
                 /*
-                 * Keep the angle measured from the displayed ring unchanged.
-                 * The renderer-space/channel conversion belongs exclusively
-                 * in applyBodyPartLocalRotationDelta(). Per-axis inversion
-                 * here made the edited bone respond correctly but caused the
-                 * gizmo basis to appear to turn the other way as it was rebuilt
-                 * from the resulting keyframe on the next render.
+                 * The current Blockbuster renderer conversion reverses the
+                 * effective X and Y bone deltas relative to the visible rings.
+                 * Correct those two input channels independently. Z is handled
+                 * by its ring-basis handedness and the matching matrix adapter.
                  */
+                if (this.activePart == AXIS_X || this.activePart == AXIS_Y)
+                {
+                    displayedAngle = -displayedAngle;
+                }
+
                 applyBodyPartLocalRotationDelta(
                         transform,
                         this.activeBone,
@@ -3827,6 +3830,18 @@ public class EditorGizmoController
         this.rotationBasisBX = pointB.x - center.x;
         this.rotationBasisBY = pointB.y - center.y;
 
+        /*
+         * Blockbuster's Z ring has the opposite screen-space handedness from
+         * the X/Y rings. Reverse one vector of the Z ring basis so the angle
+         * accumulated from mouse movement follows the visible ring direction.
+         * The renderer/channel conversion below compensates this for the bone.
+         */
+        if (axisId == AXIS_Z)
+        {
+            this.rotationBasisBX = -this.rotationBasisBX;
+            this.rotationBasisBY = -this.rotationBasisBY;
+        }
+
         double determinant =
                 this.rotationBasisAX * this.rotationBasisBY
                         - this.rotationBasisBX * this.rotationBasisAY;
@@ -4323,7 +4338,7 @@ public class EditorGizmoController
 
         if (blockbuster)
         {
-            int[] basisSigns = new int[] {1, -1, -1};
+            int[] basisSigns = new int[] {1, -1, 1};
             float[][] convertedDelta = identityRotationMatrix();
 
             for (int row = 0; row < 3; row++)
