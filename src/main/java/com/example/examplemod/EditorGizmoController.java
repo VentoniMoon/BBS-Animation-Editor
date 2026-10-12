@@ -563,10 +563,6 @@ public class EditorGizmoController
                 {
                     displayedAngle = -displayedAngle;
                 }
-                else if (this.activePart == AXIS_X || this.activePart == AXIS_Z)
-                {
-                    displayedAngle = -displayedAngle;
-                }
 
                 applyBodyPartLocalRotationDelta(
                         transform,
@@ -4302,7 +4298,11 @@ public class EditorGizmoController
          * the delta applied to the rendered bone: the current renderer-space
          * conversion produces the opposite bone rotation on all three axes.
          */
-        double angle = Math.toRadians(blockbuster ? -amount : amount);
+        double angle = Math.toRadians(
+                blockbuster && axisId == AXIS_Y
+                        ? -amount
+                        : amount
+        );
         float c = (float) Math.cos(angle);
         float sn = (float) Math.sin(angle);
 
