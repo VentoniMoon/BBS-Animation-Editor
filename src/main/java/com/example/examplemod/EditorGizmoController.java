@@ -315,14 +315,40 @@ public class EditorGizmoController
         {
             this.rotationDragCenterX = center.x;
             this.rotationDragCenterY = center.y;
-            setRotationDragBasis(
-                    this.activePart,
-                    gizmoWorld,
-                    displayAxes,
-                    viewportX, viewportY, viewportWidth, viewportHeight,
-                    center,
-                    camera
-            );
+            boolean blockbusterBodyPartRotation =
+                    isBodyPartInternalBoneTarget(bone)
+                            && isBlockbusterBodyPartTarget();
+
+            if (blockbusterBodyPartRotation)
+            {
+                /*
+                 * Blockbuster Body Parts has its own rotation-ring mapping.
+                 * Use the actual projected ring radius, not normalized screen
+                 * directions: normalization turns a perspective ellipse into
+                 * an artificial circle and makes the mouse angle disagree
+                 * with the ring that is actually drawn.
+                 */
+                setBlockbusterBodyPartRotationDragBasis(
+                        this.activePart,
+                        gizmoWorld,
+                        displayAxes,
+                        gizmoSize,
+                        viewportX, viewportY, viewportWidth, viewportHeight,
+                        center,
+                        camera
+                );
+            }
+            else
+            {
+                setRotationDragBasis(
+                        this.activePart,
+                        gizmoWorld,
+                        displayAxes,
+                        viewportX, viewportY, viewportWidth, viewportHeight,
+                        center,
+                        camera
+                );
+            }
 
             double startDX = mouseX - center.x;
             double startDY = mouseY - center.y;
@@ -3732,6 +3758,74 @@ public class EditorGizmoController
         this.rotationBasisAY = directionA.y;
         this.rotationBasisBX = directionB.x;
         this.rotationBasisBY = directionB.y;
+    }
+
+    /**
+     * Body Parts / Blockbuster rotation input basis.
+     *
+     * Build the mouse basis from the same world-space ring radius used by
+     * drawRotationGizmo3D(). The ordinary gizmo path intentionally remains
+     * unchanged so Pose and the other morph adapters keep their existing
+     * behavior.
+     */
+    private void setBlockbusterBodyPartRotationDragBasis(
+            int axisId,
+            double[] world,
+            double[][] axes,
+            float gizmoSize,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight,
+            ScreenPoint center,
+            EditorCamera camera)
+    {
+        if (world == null || axes == null || axisId < 0 || axisId > 2
+                || center == null || gizmoSize <= 0.0F)
+        {
+            return;
+        }
+
+        int basisA = (axisId + 1) % 3;
+        int basisB = (axisId + 2) % 3;
+        double radius = gizmoSize * 1.05D;
+
+        ScreenPoint pointA = project(
+                world[0] + axes[basisA][0] * radius,
+                world[1] + axes[basisA][1] * radius,
+                world[2] + axes[basisA][2] * radius,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+        ScreenPoint pointB = project(
+                world[0] + axes[basisB][0] * radius,
+                world[1] + axes[basisB][1] * radius,
+                world[2] + axes[basisB][2] * radius,
+                viewportX, viewportY, viewportWidth, viewportHeight, camera
+        );
+
+        if (pointA == null || pointB == null)
+        {
+            return;
+        }
+
+        this.rotationBasisAX = pointA.x - center.x;
+        this.rotationBasisAY = pointA.y - center.y;
+        this.rotationBasisBX = pointB.x - center.x;
+        this.rotationBasisBY = pointB.y - center.y;
+
+        double determinant =
+                this.rotationBasisAX * this.rotationBasisBY
+                        - this.rotationBasisBX * this.rotationBasisAY;
+
+        if (Math.abs(determinant) < 0.0001D)
+        {
+            /* Nearly edge-on: fall back to the existing stable basis. */
+            setRotationDragBasis(
+                    axisId, world, axes,
+                    viewportX, viewportY, viewportWidth, viewportHeight,
+                    center, camera
+            );
+        }
     }
 
     private double[] getRotationRingCoordinates(double dx, double dy)
