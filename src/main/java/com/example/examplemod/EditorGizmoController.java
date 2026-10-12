@@ -4281,32 +4281,20 @@ public class EditorGizmoController
         float[][] delta = identityRotationMatrix();
 
         /*
-         * 'amount' is already measured in the displayed ring's right-handed
-         * local basis. Keep that delta in the renderer's rotation space.
+         * Convert the selected gizmo-axis rotation into Blockbuster's
+         * renderer basis instead of applying per-axis sign patches.
          *
-         * Blockbuster's ModelCustomRenderer converts stored channels when
-         * rendering (X stays positive; Y and Z are negated). That conversion
-         * is handled below when the rendered matrix is converted back to the
-         * AnimationTransform channels. Applying another X/Z sign flip here
-         * double-corrects the delta and makes the model rotate opposite to the
-         * ring. The CustomMorph root transform is a fixed parent transform;
-         * it does not justify an extra per-axis sign flip on this local delta.
+         * ModelCustomRenderer.applyTransform stores X as-is but negates Y
+         * and Z before rendering. The corresponding basis conversion is
+         * S = diag(1, -1, -1). Conjugating a rotation by S preserves X and
+         * reverses Y/Z, which is the actual channel-to-renderer mapping.
+         * Keep the non-Blockbuster adapters on their existing convention.
          */
-        /*
-         * Blockbuster's Body Parts ring angle is measured in the displayed
-         * basis, while the child CustomMorph's X/Z renderer channels have
-         * opposite handedness relative to that basis. Correct the rotation
-         * delta at the renderer-matrix boundary, without reversing the
-         * measured drag angle or changing the displayed ring axes.
-         *
-         * Y is intentionally unchanged: its renderer/channel mapping already
-         * matches the gizmo and previous tests showed that inverting it breaks
-         * the working Y rotation.
-         */
-        float rendererAngle = blockbuster
-                && (axisId == AXIS_X || axisId == AXIS_Z)
-                ? -amount
-                : amount;
+        float rendererAngle = amount;
+        if (blockbuster && (axisId == AXIS_Y || axisId == AXIS_Z))
+        {
+            rendererAngle = -rendererAngle;
+        }
         double angle = Math.toRadians(rendererAngle);
         float c = (float) Math.cos(angle);
         float sn = (float) Math.sin(angle);
