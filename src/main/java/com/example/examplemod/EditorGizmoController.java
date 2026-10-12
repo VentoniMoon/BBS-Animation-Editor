@@ -4147,17 +4147,18 @@ public class EditorGizmoController
         float[][] delta = identityRotationMatrix();
 
         /*
-         * Blockbuster Body Parts exposes a reflected X/Z ring orientation
-         * relative to the model's rotation-matrix convention. The mouse angle
-         * is already correct in the displayed ring basis, so compensate only
-         * when applying the delta to the child-bone matrix. Y is not reflected
-         * and must retain its current direction.
+         * 'amount' is already measured in the displayed ring's right-handed
+         * local basis. Keep that delta in the renderer's rotation space.
+         *
+         * Blockbuster's ModelCustomRenderer converts stored channels when
+         * rendering (X stays positive; Y and Z are negated). That conversion
+         * is handled below when the rendered matrix is converted back to the
+         * AnimationTransform channels. Applying another X/Z sign flip here
+         * double-corrects the delta and makes the model rotate opposite to the
+         * ring. The CustomMorph root transform is a fixed parent transform;
+         * it does not justify an extra per-axis sign flip on this local delta.
          */
-        double rotationAmount =
-                blockbuster && (axisId == AXIS_X || axisId == AXIS_Z)
-                        ? -amount
-                        : amount;
-        double angle = Math.toRadians(rotationAmount);
+        double angle = Math.toRadians(amount);
         float c = (float) Math.cos(angle);
         float sn = (float) Math.sin(angle);
 
