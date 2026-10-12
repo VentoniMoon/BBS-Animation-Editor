@@ -3656,15 +3656,15 @@ public class EditorGizmoController
         if (blockbusterBodyPart)
         {
             /*
-             * Body Parts rotation rings are measured in the displayed ring
-             * basis, while the selected Blockbuster bone stores its Euler
-             * channels in the model's native convention. Preserve the
-             * already-correct Y behavior, and reverse only X and Z: these
-             * two channels were applying the model rotation opposite to the
-             * direction indicated by the gizmo. Do not change the display
-             * axes or mouse-angle accumulation.
+             * Use the same mouse-angle -> animation-channel conversion as
+             * the working Blockbuster Pose gizmo. ModelCustomRenderer keeps
+             * X positive and negates the stored Y/Z rotation channels.
+             * Body Parts writes these channels directly (the special case in
+             * mouse-drag handling), so it must use the same signs as Pose;
+             * the former X-/Y-/Z+ mapping made the displayed basis drift
+             * opposite to the rendered bone as its key changed.
              */
-            return axisId == AXIS_Z ? 1.0D : -1.0D;
+            return axisId == AXIS_X ? 1.0D : -1.0D;
         }
 
         if (isBlockbusterCustomMorph())
