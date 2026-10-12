@@ -3837,13 +3837,24 @@ public class EditorGizmoController
             BlockbusterRecordFrame recordFrame)
     {
         /*
-         * Translation handles follow the selected bone's complete local
-         * orientation, including the selected bone's own rotation. The
-         * value written to the key is converted separately; the display
-         * basis must not be reduced to the parent basis.
+         * The renderer applies a bone's translation BEFORE applying that
+         * bone's own rotation. Therefore the visible translation axes must
+         * follow the parent hierarchy, not the selected bone's full matrix.
+         *
+         * Using the selected bone's native matrix here makes its position
+         * handles rotate with the bone itself. On mirrored Blockbuster
+         * models this can make a left-side limb's handles appear on the
+         * opposite side; Chameleon has the same parent-before-local-rotation
+         * rule even though its root coordinate convention differs.
+         *
+         * Keep the selected bone as the fallback for a root bone, because
+         * there is no parent renderer to provide a basis in that case.
          */
+        AnimationBone parent = bone == null ? null : bone.getParent();
+        AnimationBone basisBone = parent != null ? parent : bone;
+
         return getBodyPartComposedWorldAxes(
-                bone,
+                basisBone,
                 selectedKeyframe,
                 recordFrame
         );
