@@ -290,7 +290,7 @@ public class EditorGizmoController
                         keyframe,
                         recordFrame
                 );
-        double[][] displayAxes = getRotationDisplayAxes(axes);
+        double[][] displayAxes = getRotationDisplayAxes(axes, bone);
 
         int hit =
                 hitTest(
@@ -4399,11 +4399,11 @@ public class EditorGizmoController
      * This keeps the green Y ring unchanged and leaves model/data transforms,
      * position handles, scale handles, and non-Blockbuster morphs untouched.
      */
-    private double[][] getRotationDisplayAxes(double[][] axes)
+    private double[][] getRotationDisplayAxes(double[][] axes, AnimationBone bone)
     {
         if (axes == null
                 || this.mode != Mode.ROTATION
-                || !isBodyPartInternalBoneTarget(this.activeBone)
+                || !isBodyPartInternalBoneTarget(bone)
                 || !isBlockbusterBodyPartTarget())
         {
             return axes;
