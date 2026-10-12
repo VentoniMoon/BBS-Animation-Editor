@@ -5181,19 +5181,26 @@ public class EditorGizmoController
         boolean blockbusterTarget = isBlockbusterBodyPartTarget();
         float localY = bone.getLocalY()
                 + (blockbusterTarget ? -key.getPositionY() : key.getPositionY());
-        float localZ = bone.getLocalZ()
-                + (blockbusterTarget ? -key.getPositionZ() : key.getPositionZ());
 
-        AnimationTransform local = new AnimationTransform();
-        local.setPosition(
-                bone.getLocalX() + (blockbusterTarget
-                        ? key.getPositionX()
+        /*
+         * This is the editor-side pivot, not the key writeback convention.
+         * The Blockbuster renderer and the Body Parts attachment apply their
+         * root mirror at different stages. Keep the imported rest pivot intact,
+         * but map the animated X/Z offsets into the rendered pivot convention:
+         * X is mirrored by the root conversion later in getBoneWorldPosition,
+         * while Z is not. Without these offset signs the gizmo walks away from
+         * the correctly moving rendered bone on X and Z.
+         */
+        float localX = bone.getLocalX()
+                + (blockbusterTarget ? -key.getPositionX()
                         : (isChameleonBodyPartTarget()
                            ? -key.getPositionX()
-                           : key.getPositionX())),
-                localY,
-                localZ
-        );
+                           : key.getPositionX()));
+        float localZ = bone.getLocalZ()
+                + (blockbusterTarget ? key.getPositionZ() : key.getPositionZ());
+
+        AnimationTransform local = new AnimationTransform();
+        local.setPosition(localX, localY, localZ);
         local.setRotation(
                 bone.getBaseRotationX() + key.getRotationX(),
                 (blockbusterTarget ? -1.0F : 1.0F)
