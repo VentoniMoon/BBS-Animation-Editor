@@ -4003,27 +4003,20 @@ public class EditorGizmoController
         if (this.bodyPartTarget != null &&
                 bone != this.bodyPartAttachmentBone)
         {
-            double[][] nativeAxes = getBodyPartNativeLocalBoneAxes(bone);
-            if (nativeAxes != null)
+            /*
+             * Unlike Pose mode, the child morph's native renderer matrix is
+             * a rest-pose snapshot: Body Parts keyframe edits are stored in
+             * AnimationBone and are not applied back into that renderer.
+             * Using nativeAxes here therefore freezes the gizmo orientation
+             * while the edited bone rotates. Evaluate the same local bone
+             * hierarchy that receives the drag writes, then compose it with
+             * the attachment and Body Part transforms below. This keeps the
+             * displayed gizmo basis synchronized with the actual edited pose.
+             */
+            float[][] evaluated = getBodyPartInternalRotationMatrix(bone, frame);
+            if (evaluated != null)
             {
-                internalMatrix = new float[][]
-                {
-                    {(float) nativeAxes[0][0], (float) nativeAxes[1][0], (float) nativeAxes[2][0]},
-                    {(float) nativeAxes[0][1], (float) nativeAxes[1][1], (float) nativeAxes[2][1]},
-                    {(float) nativeAxes[0][2], (float) nativeAxes[1][2], (float) nativeAxes[2][2]}
-                };
-                childRootMatrix = identityRotationMatrix();
-                childScale = new float[][]
-                {
-                    {1.0F, 0.0F, 0.0F},
-                    {0.0F, 1.0F, 0.0F},
-                    {0.0F, 0.0F, 1.0F}
-                };
-            }
-            else
-            {
-                float[][] evaluated = getBodyPartInternalRotationMatrix(bone, frame);
-                if (evaluated != null) internalMatrix = evaluated;
+                internalMatrix = evaluated;
             }
         }
 
