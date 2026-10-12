@@ -4440,28 +4440,19 @@ public class EditorGizmoController
      */
     private double[][] getRotationDisplayAxes(double[][] axes, AnimationBone bone)
     {
-        if (axes == null
-                || this.mode != Mode.ROTATION
-                || !isBodyPartInternalBoneTarget(bone)
-                || !isBlockbusterBodyPartTarget())
-        {
-            return axes;
-        }
-
-        double[][] display = new double[][]
-        {
-            axes[0].clone(),
-            axes[1].clone(),
-            axes[2].clone()
-        };
-
-        for (int i = 0; i < 3; i++)
-        {
-            display[0][i] = -display[0][i];
-            display[2][i] = -display[2][i];
-        }
-
-        return display;
+        /*
+         * Do not mirror Blockbuster's X/Z display axes here.
+         *
+         * The renderer's Y/Z angle-channel sign convention is already
+         * handled when applying the selected bone's rotation. Mirroring
+         * the displayed X/Z basis as well made the red and blue rings appear
+         * to rotate opposite to the correctly rotating model.
+         *
+         * Return the same evaluated world basis used to build the bone
+         * rotation matrix. This changes only the displayed/hit-test basis;
+         * it does not alter model transforms or position gizmos.
+         */
+        return axes;
     }
 
     private double[][] getGizmoWorldAxes(
