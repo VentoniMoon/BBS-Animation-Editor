@@ -534,21 +534,48 @@ public class EditorGizmoController
         }
         else if (this.mode == Mode.ROTATION)
         {
-            float amount = (float) getRotationDragAngle(this.activePart, mouseX, mouseY);
-
             if (isBodyPartInternalBoneTarget(this.activeBone)
                     && isBlockbusterBodyPartTarget())
             {
                 /*
-                 * Match the already-working Pose gizmo path for Blockbuster:
-                 * write the selected Euler channel directly. The child
-                 * renderer converts stored Y/Z channels to negative render
-                 * angles, so getRotationDragAngle() applies the same channel
-                 * convention through getDataAxisSign(). Do not decompose a
-                 * matrix here; that changes the meaning of the channels and
-                 * reverses X/Z for internal Blockbuster bones.
+                 * Dedicated Blockbuster Body Parts rotation path:
+                 * measure the mouse angle in the actual projected ring basis,
+                 * then apply that angle in renderer-local rotation space.
+                 * Convert the resulting matrix back to animation channels
+                 * exactly once in applyBodyPartLocalRotationDelta().
+                 *
+                 * Do not use Pose's direct Euler-channel write here: a ring
+                 * follows the bone's composed local basis, which is not
+                 * equivalent to incrementing one stored Euler component when
+                 * the bone already has combined rotations.
                  */
-                if (this.activePart == AXIS_X)
+                float amount = (float) getBlockbusterBodyPartRotationDragAngle(
+                        mouseX, mouseY
+                );
+
+                applyBodyPartLocalRotationDelta(
+                        transform,
+                        this.activeBone,
+                        this.activePart,
+                        amount
+                );
+            }
+            else
+            {
+                float amount = (float) getRotationDragAngle(
+                        this.activePart, mouseX, mouseY
+                );
+
+                if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+                {
+                    applyBodyPartLocalRotationDelta(
+                            transform,
+                            this.activeBone,
+                            this.activePart,
+                            amount
+                    );
+                }
+                else if (this.activePart == AXIS_X)
                 {
                     transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
                 }
@@ -560,27 +587,6 @@ public class EditorGizmoController
                 {
                     transform.setRotation(this.dragStartRX, this.dragStartRY, this.dragStartRZ + amount);
                 }
-            }
-            else if (this.bodyPartTarget != null || this.globalTransformTarget != null)
-            {
-                applyBodyPartLocalRotationDelta(
-                        transform,
-                        this.activeBone,
-                        this.activePart,
-                        amount
-                );
-            }
-            else if (this.activePart == AXIS_X)
-            {
-                transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
-            }
-            else if (this.activePart == AXIS_Y)
-            {
-                transform.setRotation(this.dragStartRX, this.dragStartRY + amount, this.dragStartRZ);
-            }
-            else
-            {
-                transform.setRotation(this.dragStartRX, this.dragStartRY, this.dragStartRZ + amount);
             }
         }
         else
@@ -3848,6 +3854,24 @@ public class EditorGizmoController
 
     private double getRotationDragAngle(int axisId, double mouseX, double mouseY)
     {
+        return accumulateRotationDragAngle(mouseX, mouseY)
+                * getDataAxisSign(axisId);
+    }
+
+    /**
+     * Blockbuster Body Parts already measures angles in renderer-local ring
+     * space. Keep that angle raw; channel signs are applied only when the
+     * renderer-space rotation matrix is converted back to AnimationTransform.
+     */
+    private double getBlockbusterBodyPartRotationDragAngle(
+            double mouseX,
+            double mouseY)
+    {
+        return accumulateRotationDragAngle(mouseX, mouseY);
+    }
+
+    private double accumulateRotationDragAngle(double mouseX, double mouseY)
+    {
         double dx = mouseX - this.rotationDragCenterX;
         double dy = mouseY - this.rotationDragCenterY;
         double radiusSquared = dx * dx + dy * dy;
@@ -3856,7 +3880,7 @@ public class EditorGizmoController
         if (radiusSquared < 64.0D)
         {
             this.rotationDragAngleValid = false;
-            return this.rotationDragAccumulatedDegrees * getDataAxisSign(axisId);
+            return this.rotationDragAccumulatedDegrees;
         }
 
         double[] ringPoint = getRotationRingCoordinates(dx, dy);
@@ -3866,7 +3890,7 @@ public class EditorGizmoController
         {
             this.rotationDragLastAngle = angle;
             this.rotationDragAngleValid = true;
-            return this.rotationDragAccumulatedDegrees * getDataAxisSign(axisId);
+            return this.rotationDragAccumulatedDegrees;
         }
 
         double delta = angle - this.rotationDragLastAngle;
@@ -3877,7 +3901,7 @@ public class EditorGizmoController
         this.rotationDragAccumulatedDegrees += Math.toDegrees(delta);
         this.rotationDragLastAngle = angle;
 
-        return this.rotationDragAccumulatedDegrees * getDataAxisSign(axisId);
+        return this.rotationDragAccumulatedDegrees;
     }
 
     private double getAxisDragAmount(int axisId,double mouseDX,double mouseDY)
