@@ -734,6 +734,11 @@ public class BlockbusterActorPreviewRenderer
         this.bodyPartsController = controller;
     }
 
+    public AbstractMorph getPreparedBodyPartMorph(BodyPartModelData data)
+    {
+        return this.bodyPartsPreviewRenderer.getPreparedMorph(data);
+    }
+
     /*
      * =========================================================
      * DRAW ACTOR
