@@ -510,7 +510,46 @@ public class EditorGizmoController
         {
             float amount = (float) getRotationDragAngle(this.activePart, mouseX, mouseY);
 
-            if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+            if (isBodyPartInternalBoneTarget(this.activeBone)
+                    && isBlockbusterBodyPartTarget())
+            {
+                /*
+                 * Match the Blockbuster bone rotation path used by Pose mode:
+                 * the gizmo edits one stored Euler channel directly instead
+                 * of composing a local matrix and decomposing it back to
+                 * Euler angles. Blockbuster's renderer interprets its stored
+                 * Y/Z channels with inverted signs, while X is unchanged.
+                 *
+                 * Keep this special case limited to internal Blockbuster
+                 * Body Parts bones. Other Body Part adapters retain their
+                 * local-matrix rotation path.
+                 */
+                if (this.activePart == AXIS_X)
+                {
+                    transform.setRotation(
+                            this.dragStartRX + amount,
+                            this.dragStartRY,
+                            this.dragStartRZ
+                    );
+                }
+                else if (this.activePart == AXIS_Y)
+                {
+                    transform.setRotation(
+                            this.dragStartRX,
+                            this.dragStartRY - amount,
+                            this.dragStartRZ
+                    );
+                }
+                else if (this.activePart == AXIS_Z)
+                {
+                    transform.setRotation(
+                            this.dragStartRX,
+                            this.dragStartRY,
+                            this.dragStartRZ - amount
+                    );
+                }
+            }
+            else if (this.bodyPartTarget != null || this.globalTransformTarget != null)
             {
                 applyBodyPartLocalRotationDelta(
                         transform,
