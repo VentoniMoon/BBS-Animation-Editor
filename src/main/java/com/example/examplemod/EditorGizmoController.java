@@ -4225,6 +4225,7 @@ public class EditorGizmoController
              * key; never change the visible axes or other model adapters.
              */
             vx = -vx;
+            vy = -vy;
             vz = -vz;
         }
         else if (isChameleonBodyPartTarget())
