@@ -5072,7 +5072,7 @@ public class EditorGizmoController
                     return null;
                 }
             }
-            logBodyPartMatrixDiagnostic(bone, "OK translation=("
+            logBodyPartMatrixDiagnostic(bone, "native matrix computed; translation=("
                     + matrix[12] + ", " + matrix[13] + ", " + matrix[14] + ")", null);
             return matrix;
         }
