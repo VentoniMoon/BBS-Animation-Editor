@@ -4281,21 +4281,15 @@ public class EditorGizmoController
         float[][] delta = identityRotationMatrix();
 
         /*
-         * Convert the selected gizmo-axis rotation into Blockbuster's
-         * renderer basis instead of applying per-axis sign patches.
-         *
-         * ModelCustomRenderer.applyTransform stores X as-is but negates Y
-         * and Z before rendering. The corresponding basis conversion is
-         * S = diag(1, -1, -1). Conjugating a rotation by S preserves X and
-         * reverses Y/Z, which is the actual channel-to-renderer mapping.
-         * Keep the non-Blockbuster adapters on their existing convention.
+         * Build the drag delta in the gizmo's canonical basis first.
+         * Blockbuster's ModelCustomRenderer.applyTransform maps its stored
+         * channels into renderer space with S = diag(1, -1, -1): X is kept,
+         * Y/Z are negated. Convert the DELTA MATRIX between those bases by
+         * conjugation (S * delta * inverse(S)), rather than changing the
+         * mouse angle or patching channel signs. Since S is its own inverse,
+         * this is S * delta * S. Other adapters remain untouched.
          */
-        float rendererAngle = amount;
-        if (blockbuster && (axisId == AXIS_Y || axisId == AXIS_Z))
-        {
-            rendererAngle = -rendererAngle;
-        }
-        double angle = Math.toRadians(rendererAngle);
+        double angle = Math.toRadians(amount);
         float c = (float) Math.cos(angle);
         float sn = (float) Math.sin(angle);
 
@@ -4325,6 +4319,23 @@ public class EditorGizmoController
                 {sn, c, 0.0F},
                 {0.0F, 0.0F, 1.0F}
             };
+        }
+
+        if (blockbuster)
+        {
+            int[] basisSigns = new int[] {1, -1, -1};
+            float[][] convertedDelta = identityRotationMatrix();
+
+            for (int row = 0; row < 3; row++)
+            {
+                for (int column = 0; column < 3; column++)
+                {
+                    convertedDelta[row][column] =
+                            delta[row][column] * basisSigns[row] * basisSigns[column];
+                }
+            }
+
+            delta = convertedDelta;
         }
 
         float[][] result = multiplyMatrix(current, delta);
