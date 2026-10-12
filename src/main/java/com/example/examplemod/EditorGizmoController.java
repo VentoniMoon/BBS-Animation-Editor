@@ -554,12 +554,16 @@ public class EditorGizmoController
                 );
 
                 /*
-                 * The current Blockbuster renderer conversion reverses the
-                 * effective X and Y bone deltas relative to the visible rings.
-                 * Correct those two input channels independently. Z is handled
-                 * by its ring-basis handedness and the matching matrix adapter.
+                 * Keep ring tracking and model rotation as separate mappings.
+                 * X and Z use the corrected visible ring handedness; compensate
+                 * their input sign here so the already-correct bone motion does
+                 * not change. Y's ring and bone mapping is already correct.
                  */
-                if (this.activePart == AXIS_X || this.activePart == AXIS_Y)
+                if (this.activePart == AXIS_Y)
+                {
+                    displayedAngle = -displayedAngle;
+                }
+                else if (this.activePart == AXIS_X || this.activePart == AXIS_Z)
                 {
                     displayedAngle = -displayedAngle;
                 }
@@ -3829,18 +3833,6 @@ public class EditorGizmoController
         this.rotationBasisAY = pointA.y - center.y;
         this.rotationBasisBX = pointB.x - center.x;
         this.rotationBasisBY = pointB.y - center.y;
-
-        /*
-         * Blockbuster's Z ring has the opposite screen-space handedness from
-         * the X/Y rings. Reverse one vector of the Z ring basis so the angle
-         * accumulated from mouse movement follows the visible ring direction.
-         * The renderer/channel conversion below compensates this for the bone.
-         */
-        if (axisId == AXIS_Z)
-        {
-            this.rotationBasisBX = -this.rotationBasisBX;
-            this.rotationBasisBY = -this.rotationBasisBY;
-        }
 
         double determinant =
                 this.rotationBasisAX * this.rotationBasisBY
