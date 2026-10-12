@@ -3630,14 +3630,17 @@ public class EditorGizmoController
         if (blockbusterBodyPart)
         {
             /*
-             * Keep the already-tested Blockbuster X/Z model rotation mapping
-             * unchanged. The green Y ring uses the same projected screen basis
-             * as the other rings, but its drag direction is opposite to the
-             * user's mouse movement in the BB child-model coordinate space.
-             * Correct only Y here; do not change the position gizmo or other
-             * morph adapters.
+             * In Blockbuster Body Parts, the rotation drag angle is measured
+             * in the projected screen basis of the displayed ring. The
+             * Blockbuster child-model rotation adapter already converts the
+             * stored Y/Z channels when applying the local rotation matrix;
+             * applying another per-axis sign inversion here made the red X
+             * and blue Z drag directions oppose the mouse. Use the same drag
+             * direction for all three displayed rings. This is limited to
+             * internal Blockbuster Body Part bones; position, scale,
+             * attachment transforms, and other morph adapters are untouched.
              */
-            return axisId == AXIS_Y ? 1.0D : -1.0D;
+            return 1.0D;
         }
 
         if (isBlockbusterCustomMorph())
