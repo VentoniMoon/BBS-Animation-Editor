@@ -4583,18 +4583,45 @@ public class EditorGizmoController
     private double[][] getRotationDisplayAxes(double[][] axes, AnimationBone bone)
     {
         /*
-         * Do not mirror Blockbuster's X/Z display axes here.
+         * Blockbuster's stored rotation channels use the opposite handedness
+         * for the visible X/Z rotation rings. Mirror only the displayed ring
+         * basis for internal Blockbuster Body Parts bones. Keep the Y basis
+         * untouched, and leave position/scale gizmos plus all other adapters
+         * on their native basis.
          *
-         * The renderer's Y/Z angle-channel sign convention is already
-         * handled when applying the selected bone's rotation. Mirroring
-         * the displayed X/Z basis as well made the red and blue rings appear
-         * to rotate opposite to the correctly rotating model.
-         *
-         * Return the same evaluated world basis used to build the bone
-         * rotation matrix. This changes only the displayed/hit-test basis;
-         * it does not alter model transforms or position gizmos.
+         * Return a copy: never mutate the renderer's evaluated world axes,
+         * which are also used by the bone rotation conversion.
          */
-        return axes;
+        if (axes == null || bone == null
+                || !isBodyPartInternalBoneTarget(bone)
+                || !isBlockbusterBodyPartTarget())
+        {
+            return axes;
+        }
+
+        double[][] display = new double[axes.length][];
+        for (int i = 0; i < axes.length; i++)
+        {
+            display[i] = axes[i] == null ? null : axes[i].clone();
+        }
+
+        if (display.length > AXIS_X && display[AXIS_X] != null)
+        {
+            for (int i = 0; i < display[AXIS_X].length; i++)
+            {
+                display[AXIS_X][i] = -display[AXIS_X][i];
+            }
+        }
+
+        if (display.length > AXIS_Z && display[AXIS_Z] != null)
+        {
+            for (int i = 0; i < display[AXIS_Z].length; i++)
+            {
+                display[AXIS_Z][i] = -display[AXIS_Z][i];
+            }
+        }
+
+        return display;
     }
 
     private double[][] getGizmoWorldAxes(
