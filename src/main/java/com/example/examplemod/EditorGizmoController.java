@@ -328,10 +328,16 @@ public class EditorGizmoController
                  * an artificial circle and makes the mouse angle disagree
                  * with the ring that is actually drawn.
                  */
+                /*
+                 * Build the interaction basis from the unmodified bone axes.
+                 * Display-only ring mirroring must not leak into the mouse
+                 * angle calculation. The visible X/Z handedness correction
+                 * is applied explicitly to the resulting angle below.
+                 */
                 setBlockbusterBodyPartRotationDragBasis(
                         this.activePart,
                         gizmoWorld,
-                        displayAxes,
+                        axes,
                         gizmoSize,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center,
@@ -554,12 +560,12 @@ public class EditorGizmoController
                 );
 
                 /*
-                 * Keep ring tracking and model rotation as separate mappings.
-                 * X and Z use the corrected visible ring handedness; compensate
-                 * their input sign here so the already-correct bone motion does
-                 * not change. Y's ring and bone mapping is already correct.
+                 * The visible X and Z rings are mirrored for Blockbuster, but
+                 * the mouse angle above is measured in the canonical bone
+                 * basis. Reverse those two angles to match the visible ring's
+                 * handedness. Y is not mirrored and must remain unchanged.
                  */
-                if (this.activePart == AXIS_Y)
+                if (this.activePart == AXIS_X || this.activePart == AXIS_Z)
                 {
                     displayedAngle = -displayedAngle;
                 }
@@ -4336,7 +4342,12 @@ public class EditorGizmoController
 
         if (blockbuster)
         {
-            int[] basisSigns = new int[] {1, -1, 1};
+            /*
+             * Match ModelCustomRenderer.applyTransform(): stored X is kept,
+             * while stored Y and Z are negated in renderer space. Conjugate
+             * the incremental rotation by this same basis conversion.
+             */
+            int[] basisSigns = new int[] {1, -1, -1};
             float[][] convertedDelta = identityRotationMatrix();
 
             for (int row = 0; row < 3; row++)
