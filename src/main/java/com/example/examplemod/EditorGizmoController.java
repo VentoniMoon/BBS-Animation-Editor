@@ -554,22 +554,18 @@ public class EditorGizmoController
                 );
 
                 /*
-                 * The ring basis is now correct in screen space, but
-                 * Blockbuster's rendered CustomMorph hierarchy responds with
-                 * the opposite angular handedness on local X and Z. Convert
-                 * from displayed-ring angle to the bone's renderer-local angle
-                 * here, once, without changing the ring basis or Pose path.
-                 * Y already matches and must remain untouched.
+                 * Keep the angle measured from the displayed ring unchanged.
+                 * The renderer-space/channel conversion belongs exclusively
+                 * in applyBodyPartLocalRotationDelta(). Per-axis inversion
+                 * here made the edited bone respond correctly but caused the
+                 * gizmo basis to appear to turn the other way as it was rebuilt
+                 * from the resulting keyframe on the next render.
                  */
-                float boneAngle = this.activePart == AXIS_Y
-                        ? displayedAngle
-                        : -displayedAngle;
-
                 applyBodyPartLocalRotationDelta(
                         transform,
                         this.activeBone,
                         this.activePart,
-                        boneAngle
+                        displayedAngle
                 );
             }
             else
