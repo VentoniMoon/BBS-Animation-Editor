@@ -4,7 +4,9 @@ import mchorse.blockbuster.common.entity.EntityActor;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -97,6 +99,7 @@ public class EditorGizmoController
 
     private BodyPartModelData bodyPartTarget;
     private mchorse.metamorph.api.morphs.AbstractMorph bodyPartRuntimeMorph;
+    private final Set<String> bodyPartMatrixDiagnosticKeys = new HashSet<String>();
     private AnimationBone bodyPartAttachmentBone;
     private AnimationBone gizmoAttachmentBone;
     private AnimationTransform globalTransformTarget;
@@ -4956,9 +4959,36 @@ public class EditorGizmoController
      * the prepared child morph. The result excludes the parent actor and
      * attachment, which are composed separately by the Body Parts adapter.
      */
+    private void logBodyPartMatrixDiagnostic(AnimationBone bone, String reason, Throwable error)
+    {
+        String morphName = this.bodyPartRuntimeMorph == null
+                ? "<none>"
+                : this.bodyPartRuntimeMorph.getClass().getName();
+        String boneName = bone == null ? "<none>" : bone.getName();
+        String category = reason;
+        int detailSeparator = category.indexOf(";");
+        if (detailSeparator >= 0) category = category.substring(0, detailSeparator);
+        String key = morphName + "|" + boneName + "|" + category;
+        if (!this.bodyPartMatrixDiagnosticKeys.add(key))
+        {
+            return;
+        }
+
+        System.err.println("[BBS Animation Editor][BodyPartsGizmo] native-matrix "
+                + "morph=" + morphName
+                + ", bone=" + boneName
+                + ", result=" + reason
+                + (error == null ? "" : ", error="
+                    + error.getClass().getName() + ": " + String.valueOf(error.getMessage())));
+    }
+
     private float[] getBodyPartNativeLocalBoneMatrix(AnimationBone bone)
     {
-        if (bone == null || this.bodyPartRuntimeMorph == null) return null;
+        if (bone == null || this.bodyPartRuntimeMorph == null)
+        {
+            logBodyPartMatrixDiagnostic(bone, "missing bone or prepared child morph", null);
+            return null;
+        }
         int oldMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
         boolean pushed = false;
         try
@@ -4975,10 +5005,18 @@ public class EditorGizmoController
                 if (morph.model == null) morph.updateModel(true);
                 mchorse.blockbuster.client.model.ModelCustom model =
                         mchorse.blockbuster.client.model.ModelCustom.MODELS.get(morph.getKey());
-                if (model == null || model.model == null) return null;
+                if (model == null || model.model == null)
+                {
+                    logBodyPartMatrixDiagnostic(bone, "Blockbuster model cache/model data missing for key " + morph.getKey(), null);
+                    return null;
+                }
                 mchorse.blockbuster.client.model.ModelCustomRenderer renderer =
                         model.get(bone.getName());
-                if (renderer == null) return null;
+                if (renderer == null)
+                {
+                    logBodyPartMatrixDiagnostic(bone, "Blockbuster renderer not found in child model", null);
+                    return null;
+                }
                 mchorse.blockbuster.api.Model sourceModel = model.model;
                 GL11.glScalef(sourceModel.scale[0] * morph.scale,
                         sourceModel.scale[1] * morph.scale,
@@ -4991,7 +5029,11 @@ public class EditorGizmoController
             {
                 Object morph = this.bodyPartRuntimeMorph;
                 Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
-                if (chameleonModel == null) return null;
+                if (chameleonModel == null)
+                {
+                    logBodyPartMatrixDiagnostic(bone, "Chameleon getModel() returned null", null);
+                    return null;
+                }
                 Object model = chameleonModel.getClass().getField("model").get(chameleonModel);
                 Class<?> modelClass = Class.forName("mchorse.chameleon.lib.data.model.Model");
                 Class<?> rendererClass = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
@@ -5006,18 +5048,39 @@ public class EditorGizmoController
                 catch (Throwable ignored) {}
                 GL11.glScalef(scale, scale, scale);
                 Object result = postRender.invoke(null, model, bone.getName());
-                if (result instanceof Boolean && !((Boolean) result).booleanValue()) return null;
+                if (result instanceof Boolean && !((Boolean) result).booleanValue())
+                {
+                    logBodyPartMatrixDiagnostic(bone, "Chameleon renderer rejected bone name", null);
+                    return null;
+                }
             }
-            else return null;
+            else
+            {
+                logBodyPartMatrixDiagnostic(bone, "unsupported child morph type", null);
+                return null;
+            }
 
             FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
             GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
             float[] matrix = new float[16];
             buffer.get(matrix);
-            for (int i = 0; i < matrix.length; i++) if (!isFinite(matrix[i])) return null;
+            for (int i = 0; i < matrix.length; i++)
+            {
+                if (!isFinite(matrix[i]))
+                {
+                    logBodyPartMatrixDiagnostic(bone, "native matrix contains non-finite values", null);
+                    return null;
+                }
+            }
+            logBodyPartMatrixDiagnostic(bone, "native matrix computed; translation=("
+                    + matrix[12] + ", " + matrix[13] + ", " + matrix[14] + ")", null);
             return matrix;
         }
-        catch (Throwable ignored) { return null; }
+        catch (Throwable error)
+        {
+            logBodyPartMatrixDiagnostic(bone, "native matrix evaluation failed", error);
+            return null;
+        }
         finally
         {
             if (pushed)
