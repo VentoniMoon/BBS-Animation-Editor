@@ -527,15 +527,6 @@ public class EditorGizmoController
                         amount
                 );
             }
-
-            {
-                applyBodyPartLocalRotationDelta(
-                        transform,
-                        this.activeBone,
-                        this.activePart,
-                        amount
-                );
-            }
             else if (this.activePart == AXIS_X)
             {
                 transform.setRotation(this.dragStartRX + amount, this.dragStartRY, this.dragStartRZ);
