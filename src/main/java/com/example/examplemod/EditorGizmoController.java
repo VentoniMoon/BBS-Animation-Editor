@@ -4292,7 +4292,22 @@ public class EditorGizmoController
          * ring. The CustomMorph root transform is a fixed parent transform;
          * it does not justify an extra per-axis sign flip on this local delta.
          */
-        double angle = Math.toRadians(amount);
+        /*
+         * Blockbuster's Body Parts ring angle is measured in the displayed
+         * basis, while the child CustomMorph's X/Z renderer channels have
+         * opposite handedness relative to that basis. Correct the rotation
+         * delta at the renderer-matrix boundary, without reversing the
+         * measured drag angle or changing the displayed ring axes.
+         *
+         * Y is intentionally unchanged: its renderer/channel mapping already
+         * matches the gizmo and previous tests showed that inverting it breaks
+         * the working Y rotation.
+         */
+        float rendererAngle = blockbuster
+                && (axisId == AXIS_X || axisId == AXIS_Z)
+                ? -amount
+                : amount;
+        double angle = Math.toRadians(rendererAngle);
         float c = (float) Math.cos(angle);
         float sn = (float) Math.sin(angle);
 
