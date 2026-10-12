@@ -3939,12 +3939,27 @@ public class EditorGizmoController
         if (this.bodyPartTarget != null &&
                 bone != this.bodyPartAttachmentBone)
         {
-            float[][] evaluated =
-                    getBodyPartInternalRotationMatrix(bone, frame);
-
-            if (evaluated != null)
+            double[][] nativeAxes = getBodyPartNativeLocalBoneAxes(bone);
+            if (nativeAxes != null)
             {
-                internalMatrix = evaluated;
+                internalMatrix = new float[][]
+                {
+                    {(float) nativeAxes[0][0], (float) nativeAxes[1][0], (float) nativeAxes[2][0]},
+                    {(float) nativeAxes[0][1], (float) nativeAxes[1][1], (float) nativeAxes[2][1]},
+                    {(float) nativeAxes[0][2], (float) nativeAxes[1][2], (float) nativeAxes[2][2]}
+                };
+                childRootMatrix = identityRotationMatrix();
+                childScale = new float[][]
+                {
+                    {1.0F, 0.0F, 0.0F},
+                    {0.0F, 1.0F, 0.0F},
+                    {0.0F, 0.0F, 1.0F}
+                };
+            }
+            else
+            {
+                float[][] evaluated = getBodyPartInternalRotationMatrix(bone, frame);
+                if (evaluated != null) internalMatrix = evaluated;
             }
         }
 
@@ -4936,6 +4951,97 @@ public class EditorGizmoController
      * intentionally kept unchanged because Pose uses its existing contract;
      * Body Parts need the source model's base/rest rotations as well.
      */
+    /*
+     * Evaluate an internal Body Parts bone using the renderer hierarchy of
+     * the prepared child morph. The result excludes the parent actor and
+     * attachment, which are composed separately by the Body Parts adapter.
+     */
+    private float[] getBodyPartNativeLocalBoneMatrix(AnimationBone bone)
+    {
+        if (bone == null || this.bodyPartRuntimeMorph == null) return null;
+        int oldMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        boolean pushed = false;
+        try
+        {
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPushMatrix();
+            pushed = true;
+            GL11.glLoadIdentity();
+
+            if (this.bodyPartRuntimeMorph instanceof mchorse.blockbuster_pack.morphs.CustomMorph)
+            {
+                mchorse.blockbuster_pack.morphs.CustomMorph morph =
+                        (mchorse.blockbuster_pack.morphs.CustomMorph) this.bodyPartRuntimeMorph;
+                if (morph.model == null) morph.updateModel(true);
+                mchorse.blockbuster.client.model.ModelCustom model =
+                        mchorse.blockbuster.client.model.ModelCustom.MODELS.get(morph.getKey());
+                if (model == null || model.model == null) return null;
+                mchorse.blockbuster.client.model.ModelCustomRenderer renderer =
+                        model.get(bone.getName());
+                if (renderer == null) return null;
+                mchorse.blockbuster.api.Model sourceModel = model.model;
+                GL11.glScalef(sourceModel.scale[0] * morph.scale,
+                        sourceModel.scale[1] * morph.scale,
+                        sourceModel.scale[2] * morph.scale);
+                GL11.glScalef(-1.0F, -1.0F, 1.0F);
+                GL11.glTranslatef(0.0F, -1.501F, 0.0F);
+                renderer.postRender(0.0625F);
+            }
+            else if (this.bodyPartRuntimeMorph.getClass().getName().endsWith(".ChameleonMorph"))
+            {
+                Object morph = this.bodyPartRuntimeMorph;
+                Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
+                if (chameleonModel == null) return null;
+                Object model = chameleonModel.getClass().getField("model").get(chameleonModel);
+                Class<?> modelClass = Class.forName("mchorse.chameleon.lib.data.model.Model");
+                Class<?> rendererClass = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
+                java.lang.reflect.Method postRender =
+                        rendererClass.getMethod("postRender", modelClass, String.class);
+                float scale = 1.0F;
+                try
+                {
+                    Object value = morph.getClass().getMethod("getScale", float.class).invoke(morph, 0.0F);
+                    if (value instanceof Number) scale = ((Number) value).floatValue();
+                }
+                catch (Throwable ignored) {}
+                GL11.glScalef(scale, scale, scale);
+                Object result = postRender.invoke(null, model, bone.getName());
+                if (result instanceof Boolean && !((Boolean) result).booleanValue()) return null;
+            }
+            else return null;
+
+            FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, buffer);
+            float[] matrix = new float[16];
+            buffer.get(matrix);
+            for (int i = 0; i < matrix.length; i++) if (!isFinite(matrix[i])) return null;
+            return matrix;
+        }
+        catch (Throwable ignored) { return null; }
+        finally
+        {
+            if (pushed)
+            {
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPopMatrix();
+            }
+            GL11.glMatrixMode(oldMatrixMode);
+        }
+    }
+
+    private double[][] getBodyPartNativeLocalBoneAxes(AnimationBone bone)
+    {
+        float[] matrix = getBodyPartNativeLocalBoneMatrix(bone);
+        if (matrix == null) return null;
+        double[] x = new double[] {matrix[0], matrix[1], matrix[2]};
+        double[] y = new double[] {matrix[4], matrix[5], matrix[6]};
+        double[] z = new double[] {matrix[8], matrix[9], matrix[10]};
+        normalize(x);
+        normalize(y);
+        normalize(z);
+        return new double[][] {x, y, z};
+    }
+
     private AnimationTransform getBodyPartBonePivot(
             AnimationBone bone,
             float frame)
@@ -5247,12 +5353,28 @@ public class EditorGizmoController
                 ? isChameleonBodyPartTarget()
                 : this.chameleonCoordinateSpace;
 
-        AnimationTransform pivot =
-                chameleonTarget
-                        ? getChameleonWorldPivot(bone, frame)
-                        : (this.bodyPartTarget != null
-                           ? getBodyPartBonePivot(bone, frame)
-                           : bone.getWorldPivotAt(frame));
+        float[] nativeChildMatrix =
+                this.bodyPartTarget != null &&
+                bone != this.bodyPartAttachmentBone
+                        ? getBodyPartNativeLocalBoneMatrix(bone)
+                        : null;
+
+        AnimationTransform pivot;
+        if (nativeChildMatrix != null)
+        {
+            pivot = new AnimationTransform();
+            pivot.setPosition(nativeChildMatrix[12] * 16.0F,
+                    nativeChildMatrix[13] * 16.0F,
+                    nativeChildMatrix[14] * 16.0F);
+        }
+        else
+        {
+            pivot = chameleonTarget
+                    ? getChameleonWorldPivot(bone, frame)
+                    : (this.bodyPartTarget != null
+                       ? getBodyPartBonePivot(bone, frame)
+                       : bone.getWorldPivotAt(frame));
+        }
 
         if (pivot == null)
         {
@@ -5313,16 +5435,18 @@ public class EditorGizmoController
              * This must happen BEFORE the Body Part's global rotation/scale,
              * not as a final sign flip after attachment rotation.
              */
-            if (isBlockbusterBodyPartTarget())
+            if (nativeChildMatrix == null)
             {
-                x = -x;
-                y = -y;
+                if (isBlockbusterBodyPartTarget())
+                {
+                    x = -x;
+                    y = -y;
+                }
+                float[] childScale = getBodyPartChildModelScale(frame);
+                x *= childScale[0];
+                y *= childScale[1];
+                z *= childScale[2];
             }
-
-            float[] childScale = getBodyPartChildModelScale(frame);
-            x *= childScale[0];
-            y *= childScale[1];
-            z *= childScale[2];
 
             AnimationTransform global =
                     this.bodyPartTarget.getGlobalTransform();
