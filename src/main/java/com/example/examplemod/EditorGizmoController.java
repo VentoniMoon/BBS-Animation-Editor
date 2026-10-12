@@ -527,7 +527,7 @@ public class EditorGizmoController
                 if (this.activePart == AXIS_X)
                 {
                     transform.setRotation(
-                            this.dragStartRX + amount,
+                            this.dragStartRX - amount,
                             this.dragStartRY,
                             this.dragStartRZ
                     );
@@ -545,7 +545,7 @@ public class EditorGizmoController
                     transform.setRotation(
                             this.dragStartRX,
                             this.dragStartRY,
-                            this.dragStartRZ - amount
+                            this.dragStartRZ + amount
                     );
                 }
             }
