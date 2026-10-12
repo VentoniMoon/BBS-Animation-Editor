@@ -512,6 +512,20 @@ public class EditorGizmoController
 
             if (this.bodyPartTarget != null || this.globalTransformTarget != null)
             {
+                /*
+                 * Keep the mouse-to-ring drag direction consistent, but
+                 * convert the resulting angle separately for Blockbuster
+                 * internal-bone data. Its X/Z animation channels rotate the
+                 * rendered child model opposite to the displayed ring basis.
+                 * Y has already been verified and must keep its current sign.
+                 */
+                if (isBodyPartInternalBoneTarget(this.activeBone)
+                        && isBlockbusterBodyPartTarget()
+                        && (this.activePart == AXIS_X || this.activePart == AXIS_Z))
+                {
+                    amount = -amount;
+                }
+
                 applyBodyPartLocalRotationDelta(
                         transform,
                         this.activeBone,
