@@ -3623,12 +3623,23 @@ public class EditorGizmoController
          * Use the actual edit target first; otherwise the Y/Z data-channel
          * conversion can silently fall back to the actor's unrelated type.
          */
-        boolean blockbusterTarget =
+        boolean blockbusterBodyPart =
                 isBodyPartInternalBoneTarget(this.activeBone)
-                        ? isBlockbusterBodyPartTarget()
-                        : isBlockbusterCustomMorph();
+                        && isBlockbusterBodyPartTarget();
 
-        if (blockbusterTarget)
+        if (blockbusterBodyPart)
+        {
+            /*
+             * Body Parts rotation is measured around the visible ring, while
+             * Blockbuster applies its child-model root mirror and inverted
+             * rotation channels afterwards. Invert the drag angle for every
+             * displayed local axis so the ring and rendered bone turn in the
+             * same direction. This is intentionally limited to BB child bones.
+             */
+            return -1.0D;
+        }
+
+        if (isBlockbusterCustomMorph())
         {
             if (axisId == AXIS_Y || axisId == AXIS_Z)
             {
@@ -5191,7 +5202,15 @@ public class EditorGizmoController
          * while Z is not. Without these offset signs the gizmo walks away from
          * the correctly moving rendered bone on X and Z.
          */
-        float localX = bone.getLocalX()
+        /*
+         * Blockbuster's rendered child model mirrors X at the root. The
+         * generic world-pivot path mirrors the completed local pivot again,
+         * so the rest-pose X must be converted separately from the animated
+         * key offset. Keep the key's established sign (validated by drag
+         * tests) and unmirror only the imported rest-pose coordinate here;
+         * otherwise left/right limb pivots are exchanged.
+         */
+        float localX = (blockbusterTarget ? -bone.getLocalX() : bone.getLocalX())
                 + (blockbusterTarget ? -key.getPositionX()
                         : (isChameleonBodyPartTarget()
                            ? -key.getPositionX()
