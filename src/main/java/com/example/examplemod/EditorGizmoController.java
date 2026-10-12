@@ -4227,6 +4227,19 @@ public class EditorGizmoController
             vx = -vx;
             vy = -vy;
             vz = -vz;
+
+            /*
+             * The X correction above is confirmed by in-game testing.
+             * Blockbuster's Z handle still applies the opposite data-space
+             * displacement, so reverse this drag vector only for Z. Keep
+             * X and Y behavior unchanged.
+             */
+            if (axisId == AXIS_Z)
+            {
+                vx = -vx;
+                vy = -vy;
+                vz = -vz;
+            }
         }
         else if (isChameleonBodyPartTarget())
         {
