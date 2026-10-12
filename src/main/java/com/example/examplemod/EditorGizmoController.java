@@ -5196,8 +5196,7 @@ public class EditorGizmoController
                         : (isChameleonBodyPartTarget()
                            ? -key.getPositionX()
                            : key.getPositionX()));
-        float localZ = bone.getLocalZ()
-                + (blockbusterTarget ? key.getPositionZ() : key.getPositionZ());
+        float localZ = bone.getLocalZ() + key.getPositionZ();
 
         AnimationTransform local = new AnimationTransform();
         local.setPosition(localX, localY, localZ);
