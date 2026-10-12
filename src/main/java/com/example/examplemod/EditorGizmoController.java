@@ -549,15 +549,27 @@ public class EditorGizmoController
                  * equivalent to incrementing one stored Euler component when
                  * the bone already has combined rotations.
                  */
-                float amount = (float) getBlockbusterBodyPartRotationDragAngle(
+                float displayedAngle = (float) getBlockbusterBodyPartRotationDragAngle(
                         mouseX, mouseY
                 );
+
+                /*
+                 * The ring basis is now correct in screen space, but
+                 * Blockbuster's rendered CustomMorph hierarchy responds with
+                 * the opposite angular handedness on local X and Z. Convert
+                 * from displayed-ring angle to the bone's renderer-local angle
+                 * here, once, without changing the ring basis or Pose path.
+                 * Y already matches and must remain untouched.
+                 */
+                float boneAngle = this.activePart == AXIS_Y
+                        ? displayedAngle
+                        : -displayedAngle;
 
                 applyBodyPartLocalRotationDelta(
                         transform,
                         this.activeBone,
                         this.activePart,
-                        amount
+                        boneAngle
                 );
             }
             else
