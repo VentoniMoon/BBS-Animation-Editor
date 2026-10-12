@@ -1,6 +1,8 @@
 package com.example.examplemod;
 
 import java.util.List;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 import mchorse.blockbuster.api.Model;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
@@ -28,6 +30,14 @@ import mchorse.blockbuster.common.entity.EntityActor;
  */
 public class BodyPartsPreviewRenderer
 {
+    /* Runtime morphs used by the actual Metamorph body-part render pass. */
+    private final Map<BodyPartModelData, AbstractMorph> preparedMorphs =
+            new IdentityHashMap<BodyPartModelData, AbstractMorph>();
+
+    public AbstractMorph getPreparedMorph(BodyPartModelData data)
+    {
+        return data == null ? null : this.preparedMorphs.get(data);
+    }
     /**
      * Rebuild the parent morph's real Metamorph body-part list for the
      * current editor frame.
@@ -77,6 +87,7 @@ public class BodyPartsPreviewRenderer
          * Do not leave body parts from a previous frame alive.
          */
         manager.parts.clear();
+        this.preparedMorphs.clear();
 
         if (controller == null)
         {
@@ -279,6 +290,7 @@ public class BodyPartsPreviewRenderer
         part.animate = false;
 
         part.morph.setDirect(child);
+        this.preparedMorphs.put(data, child);
 
         return part;
     }
@@ -328,6 +340,7 @@ public class BodyPartsPreviewRenderer
         /* Chameleon animations must keep ticking while the actor preview plays. */
         part.animate = true;
         part.morph.setDirect(child);
+        this.preparedMorphs.put(data, child);
         return part;
     }
 
