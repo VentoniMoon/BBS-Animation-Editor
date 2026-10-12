@@ -510,46 +510,24 @@ public class EditorGizmoController
         {
             float amount = (float) getRotationDragAngle(this.activePart, mouseX, mouseY);
 
-            if (isBodyPartInternalBoneTarget(this.activeBone)
-                    && isBlockbusterBodyPartTarget())
+            if (this.bodyPartTarget != null || this.globalTransformTarget != null)
             {
                 /*
-                 * Match the Blockbuster bone rotation path used by Pose mode:
-                 * the gizmo edits one stored Euler channel directly instead
-                 * of composing a local matrix and decomposing it back to
-                 * Euler angles. Blockbuster's renderer interprets its stored
-                 * Y/Z channels with inverted signs, while X is unchanged.
-                 *
-                 * Keep this special case limited to internal Blockbuster
-                 * Body Parts bones. Other Body Part adapters retain their
-                 * local-matrix rotation path.
+                 * Apply the drag as a rotation around the selected LOCAL
+                 * gizmo axis, using the same matrix composition/decomposition
+                 * path as the other Body Parts targets. Directly adding to a
+                 * Blockbuster Euler channel does not represent a local-axis
+                 * rotation once the bone has an existing orientation, and
+                 * causes the rendered X/Z motion to disagree with the rings.
                  */
-                if (this.activePart == AXIS_X)
-                {
-                    transform.setRotation(
-                            this.dragStartRX - amount,
-                            this.dragStartRY,
-                            this.dragStartRZ
-                    );
-                }
-                else if (this.activePart == AXIS_Y)
-                {
-                    transform.setRotation(
-                            this.dragStartRX,
-                            this.dragStartRY - amount,
-                            this.dragStartRZ
-                    );
-                }
-                else if (this.activePart == AXIS_Z)
-                {
-                    transform.setRotation(
-                            this.dragStartRX,
-                            this.dragStartRY,
-                            this.dragStartRZ + amount
-                    );
-                }
+                applyBodyPartLocalRotationDelta(
+                        transform,
+                        this.activeBone,
+                        this.activePart,
+                        amount
+                );
             }
-            else if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+
             {
                 applyBodyPartLocalRotationDelta(
                         transform,
