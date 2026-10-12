@@ -3664,7 +3664,7 @@ public class EditorGizmoController
              * direction indicated by the gizmo. Do not change the display
              * axes or mouse-angle accumulation.
              */
-            return axisId == AXIS_X || axisId == AXIS_Z ? -1.0D : -1.0D;
+            return axisId == AXIS_Z ? 1.0D : -1.0D;
         }
 
         if (isBlockbusterCustomMorph())
