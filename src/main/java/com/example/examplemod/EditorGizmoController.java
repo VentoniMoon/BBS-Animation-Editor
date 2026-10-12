@@ -329,15 +329,15 @@ public class EditorGizmoController
                  * with the ring that is actually drawn.
                  */
                 /*
-                 * Build the interaction basis from the unmodified bone axes.
-                 * Display-only ring mirroring must not leak into the mouse
-                 * angle calculation. The visible X/Z handedness correction
-                 * is applied explicitly to the resulting angle below.
+                 * The mouse basis must match the actual visible ring geometry.
+                 * Blockbuster mirrors the displayed X/Z ring axes, so use the
+                 * same displayAxes here. The resulting angle is then converted
+                 * back to the bone's rotation convention per axis below.
                  */
                 setBlockbusterBodyPartRotationDragBasis(
                         this.activePart,
                         gizmoWorld,
-                        axes,
+                        displayAxes,
                         gizmoSize,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center,
@@ -560,12 +560,13 @@ public class EditorGizmoController
                 );
 
                 /*
-                 * The visible X and Z rings are mirrored for Blockbuster, but
-                 * the mouse angle above is measured in the canonical bone
-                 * basis. Reverse those two angles to match the visible ring's
-                 * handedness. Y is not mirrored and must remain unchanged.
+                 * The drag basis now follows the visible ring, so X/Z angles
+                 * already include the display mirroring. Keep X's angle as-is
+                 * (its bone direction was correct before), and reverse only Z
+                 * to compensate for Blockbuster's Z-channel renderer sign.
+                 * Y is unchanged because both its ring and bone were correct.
                  */
-                if (this.activePart == AXIS_X || this.activePart == AXIS_Z)
+                if (this.activePart == AXIS_Z)
                 {
                     displayedAngle = -displayedAngle;
                 }
