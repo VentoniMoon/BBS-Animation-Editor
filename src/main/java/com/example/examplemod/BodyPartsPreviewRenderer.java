@@ -505,14 +505,7 @@ public class BodyPartsPreviewRenderer
 
             poseField.set(child, pose);
 
-            if (matchedBones > 0)
-            {
-                System.out.println(
-                        "[BBS Animation Editor][BodyParts] Emoticons internal pose applied: model="
-                                + child.name + ", frame=" + frame
-                                + ", matchedBones=" + matchedBones
-                );
-            }
+            /* Pose is refreshed every Preview frame; do not flood the client log. */
         }
         catch (ClassNotFoundException ignored)
         {
