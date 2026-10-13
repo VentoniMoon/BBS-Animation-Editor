@@ -6,6 +6,11 @@ import java.util.List;
 import mchorse.metamorph.api.morphs.AbstractMorph;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
 import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+import mchorse.metamorph.api.MorphManager;
+import mchorse.metamorph.bodypart.BodyPart;
+import mchorse.metamorph.bodypart.BodyPartManager;
+import mchorse.metamorph.bodypart.IBodyPartProvider;
+import net.minecraft.nbt.NBTTagCompound;
 
 public class BodyPartsEditorController
 {
@@ -43,6 +48,103 @@ public class BodyPartsEditorController
     public EditorKeyframeController getKeyframeController() { return this.keyframeController; }
     public TransformPanel getTransformPanel() { return this.transformPanel; }
     public List<BodyPartModelData> getModels() { return this.models; }
+
+    /*
+     * Embedded Metamorph Body Parts come from the original actor morph in
+     * the Blockbuster scene. Keep them separate from manually added tracks
+     * so a repeated Preview render never imports the same parts twice.
+     */
+    private final List<BodyPartModelData> importedRecordParts =
+            new ArrayList<BodyPartModelData>();
+    private String importedActorSignature = "";
+
+    public void importRecordedBodyParts(BlockbusterSceneActorData actorData)
+    {
+        if (actorData == null || actorData.getActor() == null)
+        {
+            return;
+        }
+
+        NBTTagCompound morphNBT = actorData.getActor().getMorph();
+        String signature = actorData.getId() + "|"
+                + (morphNBT == null ? "" : morphNBT.toString());
+
+        if (signature.equals(this.importedActorSignature))
+        {
+            return;
+        }
+
+        /*
+         * The previous actor's imported Body Parts should not leak into
+         * the new actor. Preserve user-created editor tracks independently.
+         */
+        this.models.removeAll(this.importedRecordParts);
+        this.importedRecordParts.clear();
+        this.importedActorSignature = signature;
+
+        if (morphNBT == null || morphNBT.hasNoTags())
+        {
+            return;
+        }
+
+        try
+        {
+            AbstractMorph morph = MorphManager.INSTANCE.morphFromNBT(
+                    morphNBT.copy());
+            if (!(morph instanceof IBodyPartProvider))
+            {
+                return;
+            }
+
+            BodyPartManager source = ((IBodyPartProvider) morph).getBodyPart();
+            if (source == null || source.parts == null)
+            {
+                return;
+            }
+
+            int lastFrame = Math.max(1, actorData.getLength() - 1);
+            for (BodyPart part : source.parts)
+            {
+                if (part == null || part.limb == null
+                        || part.limb.isEmpty() || part.morph == null
+                        || part.morph.get() == null)
+                {
+                    continue;
+                }
+
+                AbstractMorph child = part.morph.get().copy();
+                BodyPartModelData data = new BodyPartModelData(
+                        child.name == null ? "" : child.name,
+                        part.limb, null,
+                        createAnimationBonesFromMorph(child),
+                        0, lastFrame);
+                data.setMorph(child);
+
+                /*
+                 * BodyPart.translate uses blocks; the editor's global
+                 * transform stores model pixels, as in createMorphBodyPart.
+                 */
+                data.getGlobalTransform().setPosition(
+                        part.translate.x * 16.0F,
+                        part.translate.y * 16.0F,
+                        part.translate.z * 16.0F);
+                data.getGlobalTransform().setRotation(
+                        part.rotate.x, part.rotate.y, part.rotate.z);
+                data.getGlobalTransform().setScale(
+                        part.scale.x, part.scale.y, part.scale.z);
+
+                this.models.add(data);
+                this.importedRecordParts.add(data);
+            }
+        }
+        catch (Throwable error)
+        {
+            System.err.println(
+                    "[BBS Animation Editor] Could not import recorded Body Parts");
+            error.printStackTrace();
+        }
+    }
+
 
     public void setActorBones(List<AnimationBone> bones)
     {
