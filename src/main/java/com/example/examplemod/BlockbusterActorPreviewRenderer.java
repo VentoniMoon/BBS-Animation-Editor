@@ -780,6 +780,17 @@ public class BlockbusterActorPreviewRenderer
                 entityActor
         );
 
+        /*
+         * A recorded actor may already contain Metamorph Body Parts in
+         * its original morph NBT. Import them once into the editor's
+         * Body Parts timeline before prepare() replaces runtime parts
+         * with the editor-evaluated attachments.
+         */
+        if (this.bodyPartsController != null)
+        {
+            this.bodyPartsController.importRecordedBodyParts(actorData);
+        }
+
         CharacterBodyPartPreviewState.set(
                 actorData,
                 BlockbusterPreviewAnimationState.getFrame()
