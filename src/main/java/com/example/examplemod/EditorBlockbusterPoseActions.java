@@ -163,6 +163,21 @@ public final class EditorBlockbusterPoseActions
                     actor.getCharacterTimeline(),
                     sampled.getFrame()
             );
+            /*
+             * MorphAction.apply() uses EntityActor.morph(), which merges
+             * CustomMorph animations. The default 10-tick transition
+             * restarts every time a per-tick Pose snapshot is applied,
+             * causing visible lag/jitter and masking sampled curves.
+             *
+             * All Pose interpolation is already baked by the sampler;
+             * disable ONLY the extra transition on the exported snapshot.
+             * Do not use ignored=true: CustomMorph.canMerge then skips
+             * updating customPose entirely.
+             */
+            exportedMorph.animation.duration = 0;
+            exportedMorph.animation.ignored = false;
+            exportedMorph.animation.animates = false;
+
             NBTTagCompound finalMorph = new NBTTagCompound();
             exportedMorph.toNBT(finalMorph);
 
