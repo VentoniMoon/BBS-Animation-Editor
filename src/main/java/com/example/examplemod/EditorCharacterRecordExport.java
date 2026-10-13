@@ -5,15 +5,19 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTTagCompound;
 
 /**
- * Opt-in first-stage Character export. Produces a separate Record copy in
- * <world>/editor/exports/. Source recordings and Ctrl+S are untouched.
+ * Explicit Ctrl+Shift+E export into the actor's native Blockbuster records/.
+ * Verifies the new NBT before replacing the Record and stores a unique
+ * backup of the previous .dat. Ctrl+S remains editor-project-only.
  */
 public final class EditorCharacterRecordExport
 {
@@ -118,14 +122,21 @@ public final class EditorCharacterRecordExport
         File world = state.getSceneManager().getWorldDirectory();
         if (world == null) throw new IOException("World directory unavailable");
 
-        File folder = new File(new File(world, "editor"), "exports");
-        if (!folder.isDirectory() && !folder.mkdirs())
+        /*
+         * Record exports belong to the exact native records/<actor>.dat path.
+         * Do not overwrite it until the complete new compressed NBT has
+         * passed a read-back check. Both temp and destination reside on the
+         * same filesystem so the final replacement can be atomic.
+         */
+        File destination = original.getCanonicalFile();
+        File records = destination.getParentFile();
+        if (records == null || !records.isDirectory())
         {
-            throw new IOException("Cannot create export directory: " + folder);
+            throw new IOException("Records directory not found: " + records);
         }
 
-        File destination = new File(folder, actorData.getId() + ".dat");
-        Path temporary = Files.createTempFile(folder.toPath(), actorData.getId() + ".", ".tmp");
+        Path temporary = Files.createTempFile(
+                records.toPath(), actorData.getId() + ".", ".tmp");
         try
         {
             try (FileOutputStream output = new FileOutputStream(temporary.toFile()))
@@ -140,10 +151,51 @@ public final class EditorCharacterRecordExport
             }
             if (verification == null || !verification.equals(merged))
             {
-                throw new IOException("Export verification failed");
+                throw new IOException("Record export verification failed; original untouched");
             }
 
-            Files.move(temporary, destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            /*
+             * Every successful overwrite keeps the preceding native Record.
+             * CREATE_NEW prevents even two exports in the same millisecond
+             * from silently overwriting an older backup.
+             */
+            File backupDirectory = new File(
+                    new File(world, "editor"), "record-backups");
+            if (!backupDirectory.isDirectory() && !backupDirectory.mkdirs())
+            {
+                throw new IOException("Cannot create backup directory: " + backupDirectory);
+            }
+
+            String stamp = LocalDateTime.now().format(
+                    DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS"));
+            String prefix = actorData.getId() + "-" + stamp + "-";
+            Path backup = Files.createTempFile(
+                    backupDirectory.toPath(), prefix, ".dat");
+            boolean backupComplete = false;
+            try
+            {
+                Files.copy(original.toPath(), backup,
+                        StandardCopyOption.REPLACE_EXISTING);
+                backupComplete = true;
+            }
+            finally
+            {
+                if (!backupComplete) Files.deleteIfExists(backup);
+            }
+
+            try
+            {
+                Files.move(temporary, destination.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (AtomicMoveNotSupportedException e)
+            {
+                throw new IOException(
+                        "Atomic Record replacement not supported; original untouched. "
+                        + "Backup saved at " + backup, e);
+            }
+
             return destination;
         }
         finally
