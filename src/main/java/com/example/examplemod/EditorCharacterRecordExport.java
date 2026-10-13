@@ -86,11 +86,6 @@ public final class EditorCharacterRecordExport
             if (source instanceof
                     mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
             {
-                if (hasBodyParts)
-                {
-                    throw new IOException(
-                            "Emoticons parent Body Parts export is not supported yet");
-                }
                 actions = EditorEmoticonsPoseExport.prepare(
                         state, actorData, actions);
             }
