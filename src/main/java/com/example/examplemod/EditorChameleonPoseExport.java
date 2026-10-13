@@ -16,8 +16,8 @@ import net.minecraft.nbt.NBTTagCompound;
  * Stage 7 Chameleon Pose exporter.
  *
  * Writes native ChameleonMorph Pose and one-tick Transition, leaving the
- * Emoticons animation name, UserData and other appearance fields intact.
- * The parent Blockbuster export adapter is not used for this morph type.
+ * original Actions, Skin and other appearance fields intact.
+ * Kept separate from the Blockbuster and Emoticons exporters.
  */
 public final class EditorChameleonPoseExport
 {
