@@ -2,6 +2,8 @@ package com.example.examplemod;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
@@ -10,8 +12,8 @@ import net.minecraft.nbt.NBTTagList;
  * a COPY of the original Blockbuster Record NBT.
  *
  * No disk writes and no modifications of the source record are performed.
- * Conflicting original MorphActions are deliberately rejected until an
- * explicit replacement policy is available in the export UI.
+ * Only MorphActions on explicitly exported ticks are replaced in the COPY.
+ * All other actions and all other ticks are preserved.
  */
 public final class EditorCharacterMorphMerge
 {
@@ -38,8 +40,13 @@ public final class EditorCharacterMorphMerge
                 ? result.getCompoundTag("Actions")
                 : new NBTTagCompound();
 
-        // Validate ALL entries first so a conflict cannot produce a
-        // partially merged result.
+        /*
+         * Validate the entire export before applying anything.
+         * One final MorphAction is allowed per tick. Never silently
+         * choose between two different prepared actions on one tick.
+         */
+        TreeMap<Integer, NBTTagCompound> replacementByTick =
+                new TreeMap<Integer, NBTTagCompound>();
         for (EditorCharacterMorphExport.PreparedAction next : prepared)
         {
             if (next == null || next.nbt == null)
@@ -49,8 +56,7 @@ public final class EditorCharacterMorphMerge
             if (next.frame < 0 || next.frame >= frames.tagCount())
             {
                 throw new IOException("Morph key at tick " + next.frame
-                        + " exceeds original record length " + frames.tagCount()
-                        + "; extending Record frames is not yet supported");
+                        + " exceeds original record length " + frames.tagCount());
             }
 
             byte type = next.nbt.getByte("Type");
@@ -62,50 +68,56 @@ public final class EditorCharacterMorphMerge
                 throw new IOException("Action type " + unsignedId
                         + " is not morph in this Record");
             }
+            if (!next.nbt.hasKey("Morph", 10))
+            {
+                throw new IOException("Missing Morph in action at tick " + next.frame);
+            }
 
             NBTTagCompound frame = frames.getCompoundTagAt(next.frame);
             if (frame.hasKey("Action") && !frame.hasKey("Action", 9))
             {
-                throw new IOException("Legacy Action tag at tick " + next.frame
-                        + " needs conversion before merging");
+                throw new IOException("Unexpected Action tag at tick " + next.frame);
             }
 
-            NBTTagList actions = frame.getTagList("Action", 10);
-            for (int i = 0; i < actions.tagCount(); i++)
+            NBTTagCompound previous =
+                    replacementByTick.put(next.frame, next.nbt.copy());
+            if (previous != null && !previous.equals(next.nbt))
             {
-                NBTTagCompound existing = actions.getCompoundTagAt(i);
-                int existingType = existing.getByte("Type") & 255;
-                String mapped = registry.getString(Integer.toString(existingType));
-                boolean isMorph = existingType == unsignedId || "morph".equals(mapped);
-                if (isMorph && !existing.equals(next.nbt))
-                {
-                    throw new IOException("Conflicting MorphAction at tick "
-                            + next.frame + "; original action preserved");
-                }
+                throw new IOException("Multiple exported MorphActions at tick "
+                        + next.frame);
             }
         }
 
-        for (EditorCharacterMorphExport.PreparedAction next : prepared)
+        /*
+         * Build each affected tick's Action list afresh. Original Morph
+         * actions on that tick are replaced by the new exported state,
+         * while equipment, hotbar and all other actions keep their order.
+         */
+        for (Map.Entry<Integer, NBTTagCompound> entry
+                : replacementByTick.entrySet())
         {
-            int id = next.nbt.getByte("Type") & 255;
-            registry.setString(Integer.toString(id), "morph");
+            NBTTagCompound frame = frames.getCompoundTagAt(entry.getKey());
+            NBTTagList existing = frame.getTagList("Action", 10);
+            NBTTagList rewritten = new NBTTagList();
+            byte exportedType = entry.getValue().getByte("Type");
 
-            NBTTagCompound frame = frames.getCompoundTagAt(next.frame);
-            NBTTagList actions = frame.getTagList("Action", 10);
-            boolean alreadyPresent = false;
-            for (int i = 0; i < actions.tagCount(); i++)
+            for (int i = 0; i < existing.tagCount(); i++)
             {
-                if (actions.getCompoundTagAt(i).equals(next.nbt))
+                NBTTagCompound action = existing.getCompoundTagAt(i);
+                byte existingType = action.getByte("Type");
+                boolean isMorph = existingType == exportedType
+                        || "morph".equals(registry.getString(
+                                Integer.toString(existingType & 255)));
+                if (!isMorph)
                 {
-                    alreadyPresent = true;
-                    break;
+                    rewritten.appendTag(action.copy());
                 }
             }
-            if (!alreadyPresent)
-            {
-                actions.appendTag(next.nbt.copy());
-                frame.setTag("Action", actions);
-            }
+
+            rewritten.appendTag(entry.getValue().copy());
+            frame.setTag("Action", rewritten);
+            registry.setString(
+                    Integer.toString(exportedType & 255), "morph");
         }
 
         result.setTag("Actions", registry);
