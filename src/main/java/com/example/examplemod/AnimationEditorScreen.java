@@ -953,6 +953,19 @@ public class AnimationEditorScreen extends GuiScreen
                 this.playbackController.getCurrentFrame()
         );
 
+        /*
+         * Apply Character Bones overrides to native Blockbuster morphs.
+         * The controller supports CustomMorph and ignores other model types.
+         */
+        if (actor.morph != null && actor.morph.get() != null)
+        {
+            CharacterBodyPartOverrideController.apply(
+                    actor.morph.get(),
+                    data.getCharacterTimeline(),
+                    this.playbackController.getCurrentFrame()
+            );
+        }
+
         this.characterAnimationSetupRuntimeController.apply(
                 data,
                 actor,
