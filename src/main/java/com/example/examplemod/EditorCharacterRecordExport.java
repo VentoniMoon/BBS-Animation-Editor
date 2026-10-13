@@ -89,6 +89,12 @@ public final class EditorCharacterRecordExport
                 actions = EditorEmoticonsPoseExport.prepare(
                         state, actorData, actions);
             }
+            else if (source != null && source.getClass().getName()
+                    .endsWith(".ChameleonMorph"))
+            {
+                actions = EditorChameleonPoseExport.prepare(
+                        state, actorData, actions);
+            }
             else
             {
                 actions = EditorBlockbusterPoseActions.prepare(
