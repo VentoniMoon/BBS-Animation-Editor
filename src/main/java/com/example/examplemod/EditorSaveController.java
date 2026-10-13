@@ -7,6 +7,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
 
 /**
  * Единая система сохранения редактора.
@@ -230,44 +234,19 @@ public class EditorSaveController
 
 
         /*
-         * -----------------------------------------------------
-         * 1. ORIGINAL BLOCKBUSTER SCENE
-         * -----------------------------------------------------
+         * Save editor keyframes FIRST. A failure to save original
+         * scene/records must never prevent editor-only Pose,
+         * Character and Body Parts changes from reaching disk.
          */
-
-        manager.save();
-
-
-        /*
-         * -----------------------------------------------------
-         * 2. BLOCKBUSTER RECORDS
-         * -----------------------------------------------------
-         *
-         * Используем BlockbusterRecordIO как единственную
-         * систему сериализации Record.
-         */
-
-        saveRecords();
-
-
-        /*
-         * -----------------------------------------------------
-         * 3. EDITOR DATA
-         * -----------------------------------------------------
-         *
-         * Character Timeline
-         * Pose / AnimationData
-         * Scene editor position
-         * и будущие editor-only данные.
-         */
-
         saveEditorData();
 
-
         /*
-         * Только после успешного завершения всех
-         * трёх операций считаем состояние сохранённым.
+         * The original scene/record save remains a separate step.
+         * If it fails, the user receives an error, but the editor
+         * keyframes have already been preserved.
          */
+        manager.save();
+        saveRecords();
 
         this.dirty = false;
     }
@@ -404,22 +383,47 @@ public class EditorSaveController
          * Записываем editor.dat.
          */
 
-        FileOutputStream output =
-                new FileOutputStream(
-                        file
-                );
-
+        File absolute = file.getAbsoluteFile();
+        Path temp = Files.createTempFile(
+                absolute.getParentFile().toPath(),
+                absolute.getName() + ".", ".tmp");
         try
         {
-            CompressedStreamTools
-                    .writeCompressed(
-                            root,
-                            output
-                    );
+            try (FileOutputStream output = new FileOutputStream(temp.toFile()))
+            {
+                CompressedStreamTools.writeCompressed(root, output);
+                output.getFD().sync();
+            }
+
+            NBTTagCompound verified;
+            try (FileInputStream input = new FileInputStream(temp.toFile()))
+            {
+                verified = CompressedStreamTools.readCompressed(input);
+            }
+
+            if (verified == null || !verified.equals(root))
+            {
+                throw new IOException("Editor NBT verification failed: " + absolute);
+            }
+
+            try
+            {
+                Files.move(temp, absolute.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            }
+            catch (AtomicMoveNotSupportedException unsupported)
+            {
+                Files.move(temp, absolute.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            System.out.println("[BBS Animation Editor] Saved editor keyframes: "
+                    + absolute.getAbsolutePath());
         }
         finally
         {
-            output.close();
+            Files.deleteIfExists(temp);
         }
     }
 
