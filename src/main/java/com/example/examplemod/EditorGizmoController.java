@@ -4117,10 +4117,21 @@ public class EditorGizmoController
              * the attachment and Body Part transforms below. This keeps the
              * displayed gizmo basis synchronized with the actual edited pose.
              */
-            float[][] evaluated = this.mode == Mode.ROTATION
-                    && isBlockbusterBodyPartTarget()
-                    ? getBlockbusterBodyPartRotationDisplayMatrix(bone, frame)
-                    : getBodyPartInternalRotationMatrix(bone, frame);
+            float[][] evaluated;
+            if (this.mode == Mode.ROTATION
+                    && isBlockbusterBodyPartTarget())
+            {
+                evaluated = getBlockbusterBodyPartRotationDisplayMatrix(bone, frame);
+            }
+            else if (this.mode == Mode.ROTATION
+                    && isChameleonBodyPartTarget())
+            {
+                evaluated = getChameleonBodyPartRotationDisplayMatrix(bone, frame);
+            }
+            else
+            {
+                evaluated = getBodyPartInternalRotationMatrix(bone, frame);
+            }
             if (evaluated != null)
             {
                 internalMatrix = evaluated;
@@ -4528,6 +4539,65 @@ public class EditorGizmoController
     }
 
     /**
+     * Chameleon child-bone rotation rings: compensate only the visual X/Z
+     * deltas, leaving the source rest pose and parent hierarchy unchanged.
+     * The key writeback is handled separately in applyBodyPartLocalRotationDelta.
+     */
+    private float[][] getChameleonBodyPartRotationDisplayMatrix(
+            AnimationBone bone, float frame)
+    {
+        if (bone == null)
+        {
+            return identityRotationMatrix();
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        float[][] rest = createRotationMatrix(
+                bone.getBaseRotationX(),
+                bone.getBaseRotationY(),
+                bone.getBaseRotationZ());
+        float[][] animated = createRotationMatrix(
+                bone.getBaseRotationX() + key.getRotationX(),
+                bone.getBaseRotationY() + key.getRotationY(),
+                bone.getBaseRotationZ() + key.getRotationZ());
+
+        float[][] restInverse = new float[3][3];
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                restInverse[row][column] = rest[column][row];
+            }
+        }
+
+        float[][] delta = multiplyMatrix(restInverse, animated);
+        float[] signs = {-1.0F, 1.0F, -1.0F};
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                delta[row][column] *= signs[row] * signs[column];
+            }
+        }
+
+        float[][] displayLocal = multiplyMatrix(rest, delta);
+        AnimationBone parent = bone.getParent();
+        if (parent == null)
+        {
+            return displayLocal;
+        }
+
+        float[][] parentActual = getBodyPartInternalRotationMatrix(parent, frame);
+        return parentActual == null
+                ? displayLocal : multiplyMatrix(parentActual, displayLocal);
+    }
+
+    /**
      * Blockbuster Body Parts rotation in the same LOCAL renderer basis used
      * by getBodyPartInternalRotationMatrix(). The rings are projected from
      * that matrix, so a rotation must post-multiply the starting bone matrix,
@@ -4657,8 +4727,16 @@ public class EditorGizmoController
          * the delta applied to the rendered bone: the current renderer-space
          * conversion produces the opposite bone rotation on all three axes.
          */
+        /*
+         * Only the Chameleon child-bone X/Z key convention is reversed
+         * relative to its projected rings. Keep its working Y untouched,
+         * as well as every other morph type.
+         */
+        boolean chameleonInternal = internalBone && isChameleonBodyPartTarget();
         double angle = Math.toRadians(
-                blockbuster && axisId == AXIS_Y
+                (blockbuster && axisId == AXIS_Y)
+                        || (chameleonInternal
+                            && (axisId == AXIS_X || axisId == AXIS_Z))
                         ? -amount
                         : amount
         );
@@ -4815,7 +4893,21 @@ public class EditorGizmoController
         }
         else if (isChameleonBodyPartTarget())
         {
+            /*
+             * Chameleon's translateBone() negates model-space X. Keep that
+             * conversion, but compensate the confirmed reversed rendered
+             * displacement along the displayed X/Z handles. Negating the
+             * entire projected vector preserves the same movement distance
+             * even when the bone or its attachment is rotated.
+             * Y and plane drags involving Y keep the existing convention.
+             */
             vx = -vx;
+            if (axisId == AXIS_X || axisId == AXIS_Z)
+            {
+                vx = -vx;
+                vy = -vy;
+                vz = -vz;
+            }
         }
 
         float[][] internal =
