@@ -38,7 +38,8 @@ public final class EditorMultiActorPreviewController
             EditorSceneViewport viewport,
             EditorSceneState scene,
             BlockbusterSceneActorData selected,
-            int frame)
+            int frame,
+            BodyPartsEditorController bodyPartsController)
     {
         if (!this.showAllActors || scene == null || viewport == null)
         {
@@ -101,6 +102,13 @@ public final class EditorMultiActorPreviewController
                     own.add(new AnimationBoneSnapshot(bone.getName(), parent, value));
                 }
             }
+
+            /*
+             * Each actor owns its Body Parts timeline. Do not switch
+             * the selection in the editor's shared BodyParts controller.
+             */
+            renderer.setPassiveBodyPartsModels(bodyPartsController == null
+                    ? null : bodyPartsController.getModelsForActor(data.getId()));
 
             try
             {

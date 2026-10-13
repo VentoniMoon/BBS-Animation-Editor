@@ -739,6 +739,13 @@ public class BlockbusterActorPreviewRenderer
         this.bodyPartsController = controller;
     }
 
+    private List<BodyPartModelData> passiveBodyPartsModels;
+
+    public void setPassiveBodyPartsModels(List<BodyPartModelData> models)
+    {
+        this.passiveBodyPartsModels = models;
+    }
+
     public AbstractMorph getPreparedBodyPartMorph(BodyPartModelData data)
     {
         return this.bodyPartsPreviewRenderer.getPreparedMorph(data);
@@ -1358,6 +1365,11 @@ public class BlockbusterActorPreviewRenderer
                     entityActor,
                     previewFrame
             );
+        }
+        else if (this.passiveBodyPartsModels != null)
+        {
+            this.bodyPartsPreviewRenderer.prepareModels(
+                    entityActor, previewFrame, this.passiveBodyPartsModels);
         }
 
         renderManager.renderEntity(
