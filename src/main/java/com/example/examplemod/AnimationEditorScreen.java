@@ -1978,6 +1978,26 @@ public class AnimationEditorScreen extends GuiScreen
 
         /*
          * =========================================================
+         * RECORD EXPORT: CLAPPERBOARD
+         * =========================================================
+         */
+        int exportX = modeX + EditorModeController.MODE_BUTTON_WIDTH + 6;
+        int exportY = 3;
+        boolean exportHovered = isRecordExportButtonHovered(
+                org.lwjgl.input.Mouse.getX() * width / mc.displayWidth,
+                height - org.lwjgl.input.Mouse.getY() * height / mc.displayHeight - 1);
+        drawToolbarButton(exportX, exportY, 25, TOP_BAR_HEIGHT - 6, exportHovered);
+
+        int ink = exportHovered ? getAccentBrightColor() : COLOR_TEXT;
+        /* Clapperboard body, top hinge and diagonal striped clapper. */
+        drawRect(exportX + 6, exportY + 9, exportX + 20, exportY + 16, ink);
+        drawRect(exportX + 8, exportY + 11, exportX + 18, exportY + 15, COLOR_PANEL_DARK);
+        drawRect(exportX + 6, exportY + 5, exportX + 20, exportY + 8, ink);
+        drawRect(exportX + 9, exportY + 5, exportX + 11, exportY + 8, COLOR_PANEL_DARK);
+        drawRect(exportX + 15, exportY + 5, exportX + 17, exportY + 8, COLOR_PANEL_DARK);
+
+        /*
+         * =========================================================
          * CURRENT FRAME
          * =========================================================
          */
@@ -1998,6 +2018,14 @@ public class AnimationEditorScreen extends GuiScreen
                 8,
                 COLOR_TEXT_SECONDARY
         );
+    }
+
+    public boolean isRecordExportButtonHovered(int mouseX, int mouseY)
+    {
+        int x = this.editorModeController.getButtonX(width)
+                + EditorModeController.MODE_BUTTON_WIDTH + 6;
+        return mouseX >= x && mouseX < x + 25
+                && mouseY >= 3 && mouseY < TOP_BAR_HEIGHT - 3;
     }
 
     private void drawToolbarButton(
