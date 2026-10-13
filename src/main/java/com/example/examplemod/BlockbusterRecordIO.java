@@ -230,7 +230,9 @@ public class BlockbusterRecordIO
             try (FileOutputStream output = new FileOutputStream(temporary.toFile()))
             {
                 CompressedStreamTools.writeCompressed(root, output);
-                output.getFD().sync();
+                // Closing the stream flushes Java-side buffers. The
+                // temporary file is immediately read back and verified.
+                // Avoid FileDescriptor.sync(), which can fail on Windows/Java 8.
             }
 
             NBTTagCompound verification;
