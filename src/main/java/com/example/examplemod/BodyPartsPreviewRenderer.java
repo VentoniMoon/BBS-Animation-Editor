@@ -881,13 +881,6 @@ public class BodyPartsPreviewRenderer
                 matchedBones++;
             }
 
-            System.out.println(
-                    "[BBS Animation Editor][BodyParts] Internal pose applied: model="
-                            + child.name + ", frame=" + frame
-                            + ", matchedBones=" + matchedBones
-                            + ", missingBones=" + missingBones
-            );
-
             child.customPose = pose;
             child.currentPose = "";
         }
