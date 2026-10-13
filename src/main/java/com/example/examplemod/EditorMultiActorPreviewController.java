@@ -1,5 +1,6 @@
 package com.example.examplemod;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,6 +50,14 @@ public final class EditorMultiActorPreviewController
 
         Set<String> active = new HashSet<String>();
 
+        /* Preserve the selected actor's editor pose throughout the scene pass. */
+        List<AnimationBoneSnapshot> selectedBlockbuster =
+                BlockbusterPreviewAnimationState.getSnapshots();
+        List<AnimationBoneSnapshot> selectedEmoticons =
+                EmoticonsPreviewAnimationState.getSnapshots();
+        int selectedBlockbusterFrame = BlockbusterPreviewAnimationState.getFrame();
+        int selectedEmoticonsFrame = EmoticonsPreviewAnimationState.getFrame();
+
         for (BlockbusterSceneActorData data : actors)
         {
             if (data == null || data.getId() == null) continue;
@@ -71,7 +80,41 @@ public final class EditorMultiActorPreviewController
                 renderers.put(data.getId(), renderer);
             }
 
-            viewport.drawAdditionalActor(mc, data, current, renderer);
+            /*
+             * Preview animation adapters use global per-render state.
+             * Supply snapshots belonging to THIS actor for the duration of
+             * its draw call; never leak them to another actor or the gizmo.
+             */
+            List<AnimationBoneSnapshot> own = new ArrayList<AnimationBoneSnapshot>();
+            SceneAnimationData animation = scene.getAnimationData();
+            ActorAnimationData actorAnimation =
+                    animation == null ? null : animation.getActor(data.getId());
+            if (actorAnimation != null)
+            {
+                for (AnimationBone bone : actorAnimation.getBones())
+                {
+                    if (bone == null) continue;
+                    AnimationTransform value = bone.getTransformAt(frame);
+                    if (value == null) continue;
+                    String parent = bone.getParent() == null ? null
+                            : bone.getParent().getName();
+                    own.add(new AnimationBoneSnapshot(bone.getName(), parent, value));
+                }
+            }
+
+            try
+            {
+                BlockbusterPreviewAnimationState.set(own, frame);
+                EmoticonsPreviewAnimationState.set(own, frame);
+                viewport.drawAdditionalActor(mc, data, current, renderer);
+            }
+            finally
+            {
+                BlockbusterPreviewAnimationState.set(
+                        selectedBlockbuster, selectedBlockbusterFrame);
+                EmoticonsPreviewAnimationState.set(
+                        selectedEmoticons, selectedEmoticonsFrame);
+            }
         }
 
         /* Discard stale actor state when a scene changes. */
