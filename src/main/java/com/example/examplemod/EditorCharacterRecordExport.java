@@ -71,8 +71,34 @@ public final class EditorCharacterRecordExport
          */
         if (hasPose || hasBodyParts)
         {
-            actions = EditorBlockbusterPoseActions.prepare(
-                    state, actorData, actions);
+            /*
+             * Dispatch by actual Metamorph type, not NBT name prefixes:
+             * Emoticons uses AnimatedMorph.Pose, while Blockbuster uses
+             * CustomMorph.CustomPose. Keep these formats independent.
+             */
+            net.minecraft.nbt.NBTTagCompound starting =
+                    actorData.getActor().getMorph();
+            mchorse.metamorph.api.morphs.AbstractMorph source =
+                    starting == null ? null
+                    : mchorse.metamorph.api.MorphManager.INSTANCE
+                            .morphFromNBT(starting.copy());
+
+            if (source instanceof
+                    mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+            {
+                if (hasBodyParts)
+                {
+                    throw new IOException(
+                            "Emoticons parent Body Parts export is not supported yet");
+                }
+                actions = EditorEmoticonsPoseExport.prepare(
+                        state, actorData, actions);
+            }
+            else
+            {
+                actions = EditorBlockbusterPoseActions.prepare(
+                        state, actorData, actions);
+            }
         }
 
         if (actions.isEmpty())
