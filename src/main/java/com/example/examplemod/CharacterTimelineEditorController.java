@@ -330,6 +330,7 @@ public class CharacterTimelineEditorController
             this.draggingKey = false;
             this.dragTrack = -1;
             this.dragKey = null;
+            this.copyCharacterKeyOnDrag = false;
 
             resetDoubleClickState();
             this.trackScroll = 0;
