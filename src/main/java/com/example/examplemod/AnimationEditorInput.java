@@ -276,6 +276,13 @@ public class AnimationEditorInput
             return;
         }
 
+        /* Dedicated one-click export (same verified path as Ctrl+Shift+E). */
+        if (this.screen.isRecordExportButtonHovered(mouseX, mouseY))
+        {
+            if (mouseButton == 0) exportRecord();
+            return;
+        }
+
         /*
          * =========================================================
          * THEME DROPDOWN
@@ -1227,6 +1234,42 @@ public class AnimationEditorInput
      * =========================================================
      */
 
+    private void exportRecord()
+    {
+        try
+        {
+            if (this.saveInputController == null
+                    || !this.saveInputController.save())
+            {
+                throw new IOException("Cannot export: editor project save failed");
+            }
+
+            java.io.File exported =
+                    EditorCharacterRecordExport.exportSelected(this.sceneState);
+            net.minecraft.client.Minecraft mc =
+                    net.minecraft.client.Minecraft.getMinecraft();
+            if (mc.player != null)
+            {
+                mc.player.sendMessage(new net.minecraft.util.text.TextComponentString(
+                        "[BBS Editor] Record saved: " + exported.getName()
+                        + " (records; backup in editor/record-backups)"));
+            }
+            System.out.println("[BBS Animation Editor] Record export: "
+                    + exported.getAbsolutePath());
+        }
+        catch (Exception error)
+        {
+            error.printStackTrace();
+            net.minecraft.client.Minecraft mc =
+                    net.minecraft.client.Minecraft.getMinecraft();
+            if (mc.player != null)
+            {
+                mc.player.sendMessage(new net.minecraft.util.text.TextComponentString(
+                        "[BBS Editor] Record export ERROR: " + error.getMessage()));
+            }
+        }
+    }
+
     public void keyTyped(
             char typedChar,
             int keyCode)
@@ -1237,8 +1280,8 @@ public class AnimationEditorInput
          * CHARACTER RECORD EXPORT (Ctrl + Shift + E)
          * =========================================================
          *
-         * Explicitly writes a separate test copy. Ctrl+S remains
-         * editor-only and original Blockbuster Records are untouched.
+         * Same action as the toolbar clapperboard. Ctrl+S remains
+         * editor-project-only; export replaces the native Record with backup.
          */
         if (keyCode == Keyboard.KEY_E
                 && (Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
@@ -1246,40 +1289,7 @@ public class AnimationEditorInput
                 && (Keyboard.isKeyDown(Keyboard.KEY_LSHIFT)
                 || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT)))
         {
-            try
-            {
-                /*
-                 * Both files must reflect the same in-memory animation.
-                 * Abort the export if saving the project failed.
-                 */
-                if (this.saveInputController == null
-                        || !this.saveInputController.save())
-                {
-                    throw new IOException("Cannot export: editor project save failed");
-                }
-
-                java.io.File exported =
-                        EditorCharacterRecordExport.exportSelected(this.sceneState);
-                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
-                if (mc.player != null)
-                {
-                    mc.player.sendMessage(new net.minecraft.util.text.TextComponentString(
-                            "[BBS Editor] Character export: " + exported.getName()
-                            + " (editor/exports)"));
-                }
-                System.out.println("[BBS Animation Editor] Character export: "
-                        + exported.getAbsolutePath());
-            }
-            catch (Exception error)
-            {
-                error.printStackTrace();
-                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
-                if (mc.player != null)
-                {
-                    mc.player.sendMessage(new net.minecraft.util.text.TextComponentString(
-                            "[BBS Editor] Character export ERROR: " + error.getMessage()));
-                }
-            }
+            exportRecord();
             return;
         }
 
