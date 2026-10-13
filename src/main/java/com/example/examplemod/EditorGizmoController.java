@@ -4117,7 +4117,10 @@ public class EditorGizmoController
              * the attachment and Body Part transforms below. This keeps the
              * displayed gizmo basis synchronized with the actual edited pose.
              */
-            float[][] evaluated = getBodyPartInternalRotationMatrix(bone, frame);
+            float[][] evaluated = this.mode == Mode.ROTATION
+                    && isBlockbusterBodyPartTarget()
+                    ? getBlockbusterBodyPartRotationDisplayMatrix(bone, frame)
+                    : getBodyPartInternalRotationMatrix(bone, frame);
             if (evaluated != null)
             {
                 internalMatrix = evaluated;
@@ -4449,6 +4452,79 @@ public class EditorGizmoController
         return parentWorld == null
                 ? local
                 : multiplyMatrix(parentWorld, local);
+    }
+
+    /**
+     * Rotation gizmo DISPLAY basis only, for internal Blockbuster Body Parts
+     * bones. The key writeback was confirmed correct for X/Y/Z, but X/Z
+     * rotation rings visually advance opposite to the actual animated limb.
+     *
+     * Preserve the imported rest orientation and the actual parent hierarchy.
+     * Conjugating only the selected bone's delta by a local 180-degree Y
+     * rotation reverses visual X/Z delta while leaving Y unchanged:
+     *
+     *     Ddisplay = S * (Rrest^-1 * Ranimated) * S
+     *     S = diag(-1, 1, -1)
+     *
+     * Unlike negating stored Euler channels, this also works after combined
+     * rotations and does not disturb a non-zero imported rest pose. Do not
+     * use this matrix for model pose writes, Position, Scale or other morphs.
+     */
+    private float[][] getBlockbusterBodyPartRotationDisplayMatrix(
+            AnimationBone bone, float frame)
+    {
+        if (bone == null)
+        {
+            return identityRotationMatrix();
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        float[][] rest = createRotationMatrix(
+                bone.getBaseRotationX(),
+                -bone.getBaseRotationY(),
+                -bone.getBaseRotationZ());
+        float[][] animated = createRotationMatrix(
+                bone.getBaseRotationX() + key.getRotationX(),
+                -(bone.getBaseRotationY() + key.getRotationY()),
+                -(bone.getBaseRotationZ() + key.getRotationZ()));
+
+        /* Rotation matrices are orthogonal, so inverse(rest) = transpose(rest). */
+        float[][] restInverse = new float[3][3];
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                restInverse[row][column] = rest[column][row];
+            }
+        }
+
+        float[][] delta = multiplyMatrix(restInverse, animated);
+        float[] signs = {-1.0F, 1.0F, -1.0F};
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                delta[row][column] *= signs[row] * signs[column];
+            }
+        }
+
+        float[][] displayLocal = multiplyMatrix(rest, delta);
+        AnimationBone parent = bone.getParent();
+        if (parent == null)
+        {
+            return displayLocal;
+        }
+
+        float[][] parentActual =
+                getBodyPartInternalRotationMatrix(parent, frame);
+        return parentActual == null
+                ? displayLocal
+                : multiplyMatrix(parentActual, displayLocal);
     }
 
     /**
