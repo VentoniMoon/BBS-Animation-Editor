@@ -100,6 +100,7 @@ public class EditorGizmoController
     private BodyPartModelData bodyPartTarget;
     private mchorse.metamorph.api.morphs.AbstractMorph bodyPartRuntimeMorph;
     private final Set<String> bodyPartMatrixDiagnosticKeys = new HashSet<String>();
+    private long lastBlockbusterRotationPoseDiagnosticMillis;
     private AnimationBone bodyPartAttachmentBone;
     private AnimationBone gizmoAttachmentBone;
     private AnimationTransform globalTransformTarget;
@@ -4122,6 +4123,8 @@ public class EditorGizmoController
             }
         }
 
+        diagnoseBlockbusterBodyPartRotationPose(bone, frame);
+
         float[][] worldMatrix = multiplyMatrix(
                 attachmentMatrix,
                 multiplyMatrix(
@@ -4157,6 +4160,120 @@ public class EditorGizmoController
          */
 
         return new double[][] {worldX, worldY, worldZ};
+    }
+
+    /**
+     * Compare the values used for the rotation gizmo with the ACTUAL
+     * CustomMorph pose passed to Blockbuster's preview renderer.
+     *
+     * The old native postRender() probe can observe a cached/rest pose, so
+     * it cannot prove that the animated CustomMorph is using the same
+     * rotation as the editor. Read customPose directly instead.
+     * Diagnostic only: never modify keys, bones, or renderer state.
+     */
+    private void diagnoseBlockbusterBodyPartRotationPose(
+            AnimationBone bone, int frame)
+    {
+        if (this.mode != Mode.ROTATION
+                || !isBodyPartInternalBoneTarget(bone)
+                || !isBlockbusterBodyPartTarget()
+                || !(this.bodyPartRuntimeMorph
+                        instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
+        {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - this.lastBlockbusterRotationPoseDiagnosticMillis < 900L)
+        {
+            return;
+        }
+        this.lastBlockbusterRotationPoseDiagnosticMillis = now;
+
+        mchorse.blockbuster_pack.morphs.CustomMorph morph =
+                (mchorse.blockbuster_pack.morphs.CustomMorph)
+                        this.bodyPartRuntimeMorph;
+
+        mchorse.blockbuster.api.ModelPose pose = morph.customPose;
+        if (pose == null || pose.limbs == null)
+        {
+            System.out.println(
+                    "[BBS RotationCheck] bone=" + bone.getName()
+                    + " frame=" + frame + " customPose=missing");
+            return;
+        }
+
+        mchorse.blockbuster.api.ModelTransform actual =
+                pose.limbs.get(bone.getName());
+        if (actual == null)
+        {
+            for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelTransform>
+                    entry : pose.limbs.entrySet())
+            {
+                if (entry.getKey() != null &&
+                        entry.getKey().equalsIgnoreCase(bone.getName()))
+                {
+                    actual = entry.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (actual == null || actual.rotate == null
+                || actual.rotate.length < 3)
+        {
+            System.out.println(
+                    "[BBS RotationCheck] bone=" + bone.getName()
+                    + " frame=" + frame + " rendered limb pose=missing");
+            return;
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        float expectedX = bone.getBaseRotationX() + key.getRotationX();
+        float expectedY = bone.getBaseRotationY() + key.getRotationY();
+        float expectedZ = bone.getBaseRotationZ() + key.getRotationZ();
+
+        float[][] expectedMatrix = createRotationMatrix(
+                expectedX, -expectedY, -expectedZ);
+        float[][] poseMatrix = createRotationMatrix(
+                actual.rotate[0], -actual.rotate[1], -actual.rotate[2]);
+
+        /*
+         * Compare the direction of each renderer-space local basis vector.
+         * A negative dot means a disagreement greater than 90 degrees.
+         * The raw Euler differences are also printed for small deviations.
+         */
+        double dotX = 0.0D;
+        double dotY = 0.0D;
+        double dotZ = 0.0D;
+        for (int row = 0; row < 3; row++)
+        {
+            dotX += expectedMatrix[row][0] * poseMatrix[row][0];
+            dotY += expectedMatrix[row][1] * poseMatrix[row][1];
+            dotZ += expectedMatrix[row][2] * poseMatrix[row][2];
+        }
+
+        System.out.println(
+                "[BBS RotationCheck] bone=" + bone.getName()
+                + " frame=" + frame
+                + " dragging=" + this.dragging
+                + " axis=" + this.activePart
+                + " key=(" + key.getRotationX() + ","
+                        + key.getRotationY() + ","
+                        + key.getRotationZ() + ")"
+                + " expected=(" + expectedX + ","
+                        + expectedY + "," + expectedZ + ")"
+                + " rendered=(" + actual.rotate[0] + ","
+                        + actual.rotate[1] + ","
+                        + actual.rotate[2] + ")"
+                + " axisDot=(" + dotX + ","
+                        + dotY + "," + dotZ + ")"
+        );
     }
 
     private float[][] identityRotationMatrix()
