@@ -4489,13 +4489,17 @@ public class EditorGizmoController
         );
 
         /*
-         * The Y ring is viewed through the child model's rotated root
-         * coordinate system. Its previous positive input mapping moved
-         * both bone and ring opposite the observed mouse travel; invert
-         * the ring's input orientation here, not the bone's stored Y sign.
-         * X/Z retain their already-correct projected ring direction.
+         * Body Parts / Blockbuster uses renderer-space angles (X, -Y, -Z),
+         * whereas the projected ring's signed mouse angle is measured in
+         * the editor's displayed basis. Runtime tests established that
+         * X/Z writeback rotated the model opposite to the ring; Y's older
+         * extra inversion made both model and ring move opposite the mouse.
+         *
+         * Convert the measured ring angle into the renderer-local delta
+         * here, without changing the ring geometry, hit testing, or the
+         * functioning Pose/Emoticons paths. Keep Euler conversion below.
          */
-        if (axisId == AXIS_Y)
+        if (axisId == AXIS_X || axisId == AXIS_Z)
         {
             angle = -angle;
         }
