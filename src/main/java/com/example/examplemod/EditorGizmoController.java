@@ -317,18 +317,24 @@ public class EditorGizmoController
         {
             this.rotationDragCenterX = center.x;
             this.rotationDragCenterY = center.y;
-            boolean blockbusterBodyPartRotation =
+            boolean accurateChildRingRotation =
                     isBodyPartInternalBoneTarget(bone)
-                            && isBlockbusterBodyPartTarget();
+                            && (isBlockbusterBodyPartTarget()
+                                || this.bodyPartRuntimeMorph
+                                instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph);
 
-            if (blockbusterBodyPartRotation)
+            if (accurateChildRingRotation)
             {
                 /*
-                 * Match the actual world-space 3D ring projected into the
-                 * viewport. The regular normalized screen-direction basis
-                 * treats perspective ellipses as circles and can disagree
-                 * with the rendered handle. Do not modify the ring axes:
-                 * only measure its true projected A/B vectors here.
+                 * The evaluated BOBJ basis of Emoticons limbs can tilt the
+                 * projected Z ring into a steep perspective ellipse (notably
+                 * low_left_arm, low_right_arm and low_leg_*). Interpreting
+                 * mouse motion through unit-length 2D axes loses the actual
+                 * ring projection and can reverse its apparent drag direction.
+                 *
+                 * Use the same 3D projected-radius basis already used for
+                 * Blockbuster. This changes only mouse-angle measurement,
+                 * never bone-specific signs, key writeback, or visual axes.
                  */
                 setBlockbusterBodyPartRotationDragBasis(
                         this.activePart,
