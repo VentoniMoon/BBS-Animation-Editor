@@ -521,6 +521,20 @@ public class EditorSaveController
                     this.state,
                     root
             );
+            int poseActors = 0;
+            int poseKeys = 0;
+            for (ActorAnimationData actor : this.state.getAnimationData().getActors().values())
+            {
+                if (actor == null) continue;
+                poseActors++;
+                for (AnimationBone bone : actor.getBones())
+                {
+                    if (bone != null) poseKeys += bone.getKeyframes().size();
+                }
+            }
+            System.out.println("[BBS Animation Editor] Loaded editor Pose: "
+                    + file.getAbsolutePath() + ", actors=" + poseActors
+                    + ", keyframes=" + poseKeys);
         }
         finally
         {
