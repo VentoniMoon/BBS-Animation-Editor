@@ -4230,27 +4230,15 @@ public class EditorGizmoController
     }
 
     /**
-     * Apply rotation about the currently displayed LOCAL axis. The selected
-     * bone's rotation is post-multiplied by the incremental local-axis
-     * rotation, then converted back to the key's Euler representation.
-     * This avoids treating a local ring as a world/Euler component handle.
-     */
-    /**
-     * Blockbuster child-bone rotation is a distinct coordinate adapter.
+     * Blockbuster Body Parts rotation in the same LOCAL renderer basis used
+     * by getBodyPartInternalRotationMatrix(). The rings are projected from
+     * that matrix, so a rotation must post-multiply the starting bone matrix,
+     * not increment an Euler component in isolation.
      *
-     * The visible rings and mouse input use the composed child-bone world
-     * basis (the same projected basis as Pose). Do not mirror ring axes or
-     * change the drag basis here: those now track the mouse correctly.
-     *
-     * The stored child-bone Euler channels are not expressed in that visual
-     * basis. The root transform of a Blockbuster child is rotated 180 degrees
-     * around Y; in addition, ModelCustomRenderer negates stored Y/Z angles.
-     * These conversions reverse the apparent X/Z channel direction relative
-     * to the projected ring, while Y remains aligned. Convert exactly once
-     * at the boundary between ring-space input and stored animation data.
-     *
-     * Unlike the previous matrix-delta/Euler-decomposition path, changing
-     * one channel preserves the other two channels and their authored keys.
+     * Renderer-local angles are (X, -Y, -Z); convert back to stored animation
+     * channels only after the composed local rotation is decomposed.
+     * Evaluate from drag-start values every frame to avoid accumulating
+     * floating-point drift or Euler decomposition errors.
      */
     private void applyBlockbusterBodyPartRotation(
             AnimationTransform transform,
@@ -4258,38 +4246,72 @@ public class EditorGizmoController
             double mouseX,
             double mouseY)
     {
-        if (transform == null || axisId < AXIS_X || axisId > AXIS_Z)
+        if (transform == null || this.activeBone == null
+                || axisId < AXIS_X || axisId > AXIS_Z)
         {
             return;
         }
 
-        float ringAngle = (float) accumulateRotationDragAngle(mouseX, mouseY);
-        float channelAngle = (axisId == AXIS_Y) ? ringAngle : -ringAngle;
+        float baseX = this.activeBone.getBaseRotationX();
+        float baseY = this.activeBone.getBaseRotationY();
+        float baseZ = this.activeBone.getBaseRotationZ();
+
+        float[][] start = createRotationMatrix(
+                baseX + this.dragStartRX,
+                -(baseY + this.dragStartRY),
+                -(baseZ + this.dragStartRZ)
+        );
+
+        double angle = Math.toRadians(
+                accumulateRotationDragAngle(mouseX, mouseY)
+        );
+
+        /*
+         * The Y ring is viewed through the child model's rotated root
+         * coordinate system. Its previous positive input mapping moved
+         * both bone and ring opposite the observed mouse travel; invert
+         * the ring's input orientation here, not the bone's stored Y sign.
+         * X/Z retain their already-correct projected ring direction.
+         */
+        if (axisId == AXIS_Y)
+        {
+            angle = -angle;
+        }
+
+        float cosine = (float) Math.cos(angle);
+        float sine = (float) Math.sin(angle);
+        float[][] delta = identityRotationMatrix();
 
         if (axisId == AXIS_X)
         {
-            transform.setRotation(
-                    this.dragStartRX + channelAngle,
-                    this.dragStartRY,
-                    this.dragStartRZ
-            );
+            delta[1][1] = cosine;
+            delta[1][2] = -sine;
+            delta[2][1] = sine;
+            delta[2][2] = cosine;
         }
         else if (axisId == AXIS_Y)
         {
-            transform.setRotation(
-                    this.dragStartRX,
-                    this.dragStartRY + channelAngle,
-                    this.dragStartRZ
-            );
+            delta[0][0] = cosine;
+            delta[0][2] = sine;
+            delta[2][0] = -sine;
+            delta[2][2] = cosine;
         }
         else
         {
-            transform.setRotation(
-                    this.dragStartRX,
-                    this.dragStartRY,
-                    this.dragStartRZ + channelAngle
-            );
+            delta[0][0] = cosine;
+            delta[0][1] = -sine;
+            delta[1][0] = sine;
+            delta[1][1] = cosine;
         }
+
+        float[][] composed = multiplyMatrix(start, delta);
+        float[] renderedEuler = rotationMatrixToEulerDegrees(composed);
+
+        transform.setRotation(
+                renderedEuler[0] - baseX,
+                -renderedEuler[1] - baseY,
+                -renderedEuler[2] - baseZ
+        );
     }
 
     private void applyBodyPartLocalRotationDelta(
