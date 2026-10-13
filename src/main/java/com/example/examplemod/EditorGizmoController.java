@@ -4132,7 +4132,33 @@ public class EditorGizmoController
                     && this.bodyPartRuntimeMorph
                     instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
             {
-                evaluated = getEmoticonsBodyPartRotationDisplayMatrix(bone, frame);
+                /*
+                 * Emoticons BOBJ computes the complete animated hierarchy
+                 * in BOBJBone.mat (including all parent bones and per-bone
+                 * rest transforms). The previous editor-only reconstruction
+                 * conjugated just the selected bone's delta and then combined
+                 * a differently evaluated parent hierarchy. That could work
+                 * for one limb but counter-rotate others.
+                 *
+                 * Use the evaluated CHILD armature basis for display, not a
+                 * manually mirrored keyframe matrix. The native probe starts
+                 * from identity and includes the same morph scale as the
+                 * position gizmo; normalize its columns to remove scale.
+                 */
+                double[][] nativeChildAxes = getBodyPartNativeLocalBoneAxes(bone);
+                if (nativeChildAxes != null)
+                {
+                    evaluated = new float[][]
+                    {
+                        {(float) nativeChildAxes[0][0], (float) nativeChildAxes[1][0], (float) nativeChildAxes[2][0]},
+                        {(float) nativeChildAxes[0][1], (float) nativeChildAxes[1][1], (float) nativeChildAxes[2][1]},
+                        {(float) nativeChildAxes[0][2], (float) nativeChildAxes[1][2], (float) nativeChildAxes[2][2]}
+                    };
+                }
+                else
+                {
+                    evaluated = getEmoticonsBodyPartRotationDisplayMatrix(bone, frame);
+                }
             }
             else
             {
