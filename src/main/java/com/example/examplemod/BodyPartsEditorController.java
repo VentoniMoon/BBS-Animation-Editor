@@ -49,6 +49,30 @@ public class BodyPartsEditorController
     public TransformPanel getTransformPanel() { return this.transformPanel; }
     public List<BodyPartModelData> getModels() { return this.models; }
 
+    /** Replace the saved attachment list after loading editor.dat. */
+    public void restoreSavedModels(List<BodyPartModelData> restored)
+    {
+        this.models.clear();
+        if (restored != null) this.models.addAll(restored);
+        this.importedRecordParts.clear();
+        this.importedActorSignature = "";
+        this.selectedAttachment = null;
+        this.selectedModel = null;
+        this.keyframeController.clearSelection();
+        int length = 1;
+        for (BodyPartModelData model : this.models)
+        {
+            length = Math.max(length, model.getEndFrame() + 1);
+        }
+        this.localTimeline.setLength(length);
+    }
+
+    public void resetForSceneLoad()
+    {
+        restoreSavedModels(null);
+    }
+
+
     /*
      * Embedded Metamorph Body Parts come from the original actor morph in
      * the Blockbuster scene. Keep them separate from manually added tracks
@@ -113,6 +137,25 @@ public class BodyPartsEditorController
                 }
 
                 AbstractMorph child = part.morph.get().copy();
+                /*
+                 * Existing attachments restored from editor.dat are already
+                 * the authoritative editor state. Do not append a second
+                 * imported track when Preview first renders after loading.
+                 */
+                boolean alreadyPresent = false;
+                for (BodyPartModelData existing : this.models)
+                {
+                    if (part.limb.equals(existing.getAttachmentBoneName())
+                            && existing.getBaseMorph() != null
+                            && child.name != null
+                            && child.name.equals(existing.getBaseMorph().name))
+                    {
+                        alreadyPresent = true;
+                        break;
+                    }
+                }
+                if (alreadyPresent) continue;
+
                 BodyPartModelData data = new BodyPartModelData(
                         child.name == null ? "" : child.name,
                         part.limb, null,
