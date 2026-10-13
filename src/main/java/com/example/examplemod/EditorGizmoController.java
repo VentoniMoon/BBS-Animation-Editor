@@ -4903,12 +4903,44 @@ public class EditorGizmoController
             diagnoseEmoticonsRotationZ(bone, amount);
         }
 
+        /*
+         * BOBJ can encode opposite rest orientations for neighboring
+         * bones. The observed lower arms and lower legs have rest +Z,
+         * whereas low_left_arm.end has rest -Z. The former need the
+         * opposite drag-to-key mapping from the latter.
+         *
+         * Derive this from the native relative rest matrix instead of
+         * hardcoding names; leave X/Y and all other morphs unchanged.
+         */
+        boolean invertEmoticonsZ = emoticonsInternal && axisId == AXIS_Z;
+        if (invertEmoticonsZ)
+        {
+            mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph morph =
+                    (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+                            this.bodyPartRuntimeMorph;
+            mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone nativeBone =
+                    EmoticonsModelAccess.findBone(morph, bone.getName());
+            if (nativeBone != null && nativeBone.relBoneMat != null)
+            {
+                /*
+                 * For an unambiguous positive rest Z, do not invert the
+                 * drag angle. Negative rest Z retains the previous mapping
+                 * which was confirmed working for end bones.
+                 */
+                float localRestZ = nativeBone.relBoneMat.m22;
+                if (localRestZ > 0.5F)
+                {
+                    invertEmoticonsZ = false;
+                }
+            }
+        }
+
         double angle = Math.toRadians(
                 (blockbuster && axisId == AXIS_Y)
                         || (chameleonInternal
                             && (axisId == AXIS_X || axisId == AXIS_Z))
-                        || (emoticonsInternal
-                            && (axisId == AXIS_Y || axisId == AXIS_Z))
+                        || (emoticonsInternal && axisId == AXIS_Y)
+                        || invertEmoticonsZ
                         ? -amount
                         : amount
         );
