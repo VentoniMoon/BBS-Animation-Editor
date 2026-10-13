@@ -334,11 +334,10 @@ public class EditorGizmoController
                  * same displayAxes here. The resulting angle is then converted
                  * back to the bone's rotation convention per axis below.
                  */
-                setBlockbusterBodyPartRotationDragBasis(
+                setRotationDragBasis(
                         this.activePart,
                         gizmoWorld,
                         displayAxes,
-                        gizmoSize,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center,
                         camera
@@ -555,40 +554,42 @@ public class EditorGizmoController
                  * equivalent to incrementing one stored Euler component when
                  * the bone already has combined rotations.
                  */
-                float displayedAngle = (float) getBlockbusterBodyPartRotationDragAngle(
-                        mouseX, mouseY
+                /*
+                 * Use the same rotation-channel editing convention as the
+                 * working Blockbuster Pose gizmo. The Body Parts attachment
+                 * hierarchy still supplies the displayed ring basis, but
+                 * the selected child bone's key is edited directly rather
+                 * than passing the angle through an additional local-matrix
+                 * conjugation and Euler decomposition.
+                 */
+                float amount = (float) getRotationDragAngle(
+                        this.activePart, mouseX, mouseY
                 );
 
-                /*
-                 * The drag basis now follows the visible ring, so X/Z angles
-                 * already include the display mirroring. Keep X's angle as-is
-                 * (its bone direction was correct before), and reverse only Z
-                 * to compensate for Blockbuster's Z-channel renderer sign.
-                 * Y is unchanged because both its ring and bone were correct.
-                 */
-                /*
-                 * Removing the former X/Z display-axis mirror reverses the
-                 * projected ring-angle basis for both X and Z. Preserve the
-                 * already-correct bone rotation direction by compensating
-                 * the input angle here, without changing the visual basis.
-                 * Y remains untouched.
-                 */
                 if (this.activePart == AXIS_X)
                 {
-                    displayedAngle = -displayedAngle;
+                    transform.setRotation(
+                            this.dragStartRX + amount,
+                            this.dragStartRY,
+                            this.dragStartRZ
+                    );
                 }
-                /* Z already had its own sign reversal; retain it. */
-                else if (this.activePart == AXIS_Z)
+                else if (this.activePart == AXIS_Y)
                 {
-                    displayedAngle = -displayedAngle;
+                    transform.setRotation(
+                            this.dragStartRX,
+                            this.dragStartRY + amount,
+                            this.dragStartRZ
+                    );
                 }
-
-                applyBodyPartLocalRotationDelta(
-                        transform,
-                        this.activeBone,
-                        this.activePart,
-                        displayedAngle
-                );
+                else
+                {
+                    transform.setRotation(
+                            this.dragStartRX,
+                            this.dragStartRY,
+                            this.dragStartRZ + amount
+                    );
+                }
             }
             else
             {
