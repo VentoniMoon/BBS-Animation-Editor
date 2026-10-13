@@ -130,6 +130,14 @@ public class EmoticonsModelAccess
     {
         List<BOBJBone> result =
                 new ArrayList<BOBJBone>();
+        /*
+         * Multiple AnimationMesh entries commonly reference the same
+         * armature. Enumerating each mesh's orderedBones verbatim made
+         * the editor show the entire skeleton repeatedly. Keep the first
+         * occurrence of each bone name, preserving the native bone order.
+         */
+        java.util.Set<String> seenBoneNames =
+                new java.util.HashSet<String>();
 
         List<BOBJArmature> armatures =
                 getArmatures(morph);
@@ -159,7 +167,8 @@ public class EmoticonsModelAccess
                         armature.orderedBones
                 )
                 {
-                    if (bone != null)
+                    if (bone != null && bone.name != null
+                            && seenBoneNames.add(bone.name))
                     {
                         result.add(bone);
                     }
@@ -172,7 +181,8 @@ public class EmoticonsModelAccess
                         armature.bones.values()
                 )
                 {
-                    if (bone != null)
+                    if (bone != null && bone.name != null
+                            && seenBoneNames.add(bone.name))
                     {
                         result.add(bone);
                     }
