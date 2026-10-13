@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.TreeMap;
 import mchorse.blockbuster.api.ModelPose;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
@@ -37,6 +39,31 @@ public final class EditorBlockbusterPoseActions
 
         Map<Integer, NBTTagCompound> morphChanges =
                 new TreeMap<Integer, NBTTagCompound>();
+
+        /*
+         * A Skin key stores a full morph snapshot. That snapshot may carry
+         * a previously baked CustomPose from the editor's Preview. Skin
+         * changes must not replace the current model's base pose.
+         */
+        Set<Integer> skinFrames = new HashSet<Integer>();
+        CharacterTimelineController timeline = actor.getCharacterTimeline();
+        if (timeline != null)
+        {
+            for (CharacterTrack track : timeline.getTracks())
+            {
+                if (track == null || !track.isMainTrack())
+                {
+                    continue;
+                }
+                for (CharacterKey key : track.getKeys())
+                {
+                    if (key != null && key.hasSkin())
+                    {
+                        skinFrames.add(key.getFrame());
+                    }
+                }
+            }
+        }
         byte type = 12;
         if (character != null)
         {
@@ -71,7 +98,31 @@ public final class EditorBlockbusterPoseActions
             NBTTagCompound next = morphChanges.get(sampled.getFrame());
             if (next != null)
             {
-                active = next.copy();
+                NBTTagCompound replacement = next.copy();
+
+                /*
+                 * Keep the preceding pristine base pose when the same
+                 * Blockbuster model merely changes its skin. Otherwise a
+                 * Skin snapshot containing an old animated pose becomes
+                 * a new base and the sampled Pose is added a second time.
+                 *
+                 * A real model change retains its own CustomPose.
+                 */
+                if (skinFrames.contains(sampled.getFrame())
+                        && active.getString("Name").equals(
+                                replacement.getString("Name")))
+                {
+                    if (active.hasKey("CustomPose", 10))
+                    {
+                        replacement.setTag("CustomPose",
+                                active.getCompoundTag("CustomPose").copy());
+                    }
+                    else
+                    {
+                        replacement.removeTag("CustomPose");
+                    }
+                }
+                active = replacement;
             }
 
             String name = active.getString("Name");
