@@ -1248,6 +1248,16 @@ public class AnimationEditorInput
         {
             try
             {
+                /*
+                 * Both files must reflect the same in-memory animation.
+                 * Abort the export if saving the project failed.
+                 */
+                if (this.saveInputController == null
+                        || !this.saveInputController.save())
+                {
+                    throw new IOException("Cannot export: editor project save failed");
+                }
+
                 java.io.File exported =
                         EditorCharacterRecordExport.exportSelected(this.sceneState);
                 net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
