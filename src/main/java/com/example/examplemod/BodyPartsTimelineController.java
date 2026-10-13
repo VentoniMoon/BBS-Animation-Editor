@@ -24,6 +24,62 @@ public class BodyPartsTimelineController
     private final EditorTimeline timeline;
 
     private int boneScroll;
+    private final java.util.Set<String> collapsedBones = new java.util.HashSet<String>();
+
+    private static class ActorRow
+    {
+        final int boneIndex;
+        final AnimationBone bone;
+        final BodyPartModelData model;
+
+        ActorRow(int boneIndex, AnimationBone bone, BodyPartModelData model)
+        {
+            this.boneIndex = boneIndex;
+            this.bone = bone;
+            this.model = model;
+        }
+    }
+
+    private java.util.List<ActorRow> actorRows()
+    {
+        java.util.List<ActorRow> rows = new java.util.ArrayList<ActorRow>();
+        java.util.List<AnimationBone> bones = controller.getActorBones();
+        for (int i = 0; i < bones.size(); i++)
+        {
+            AnimationBone bone = bones.get(i);
+            if (bone == null) continue;
+            rows.add(new ActorRow(i, bone, null));
+            if (!collapsedBones.contains(bone.getName()))
+            {
+                for (BodyPartModelData model : controller.getModels())
+                {
+                    if (model != null && bone.getName().equals(model.getAttachmentBoneName()))
+                    {
+                        rows.add(new ActorRow(i, bone, model));
+                    }
+                }
+            }
+        }
+        return rows;
+    }
+
+    private ActorRow actorRowAt(int mouseY, int tracksTop)
+    {
+        int row = boneScroll + (mouseY - tracksTop) / TRACK_HEIGHT;
+        java.util.List<ActorRow> rows = actorRows();
+        return row < 0 || row >= rows.size() ? null : rows.get(row);
+    }
+
+    private int modelCount(String name)
+    {
+        int count = 0;
+        for (BodyPartModelData model : controller.getModels())
+        {
+            if (model != null && name.equals(model.getAttachmentBoneName())) count++;
+        }
+        return count;
+    }
+
     private long lastClickTime;
     private int lastClickX = -1;
     private int lastClickY = -1;
@@ -243,231 +299,76 @@ public class BodyPartsTimelineController
 
     }
 
-    private void drawActorTimeline(
-            Minecraft mc,
-            int width,
-            int height,
-            int top,
-            int sceneLength)
+    private void drawActorTimeline(Minecraft mc, int width, int height, int top, int sceneLength)
     {
-        drawHeader(
-                mc,
-                width,
-                top,
-                "BODY PARTS",
-                false
-        );
-
-        drawRuler(
-                mc,
-                width,
-                top,
-                getMaximumFrame(sceneLength, null)
-        );
-
+        drawHeader(mc, width, top, "BODY PARTS", false);
+        drawRuler(mc, width, top, getMaximumFrame(sceneLength, null));
         int tracksTop = top + HEADER_HEIGHT;
+        java.util.List<ActorRow> rows = actorRows();
+        int visible = Math.max(0, (height - tracksTop) / TRACK_HEIGHT);
+        boneScroll = Math.max(0, Math.min(boneScroll, Math.max(0, rows.size() - visible)));
 
-        Gui.drawRect(
-                0,
-                tracksTop,
-                TIMELINE_START_X,
-                tracksTop + TRACK_HEIGHT,
-                headerLight()
-        );
-
-        mc.fontRenderer.drawString(
-                "ACTOR BONES",
-                10,
-                tracksTop + 6,
-                0xFF9DA4A9
-        );
-
-        int visible =
-                Math.max(
-                        0,
-                        (height - tracksTop) / TRACK_HEIGHT
-                );
-
-        int maxScroll =
-                Math.max(
-                        0,
-                        controller.getActorBones().size() - visible
-                );
-
-        boneScroll =
-                Math.max(
-                        0,
-                        Math.min(
-                                boneScroll,
-                                maxScroll
-                        )
-                );
-
-        for (int visibleIndex = 0;
-                visibleIndex < visible;
-                visibleIndex++)
+        for (int i = 0; i < visible && boneScroll + i < rows.size(); i++)
         {
-            int boneIndex =
-                    boneScroll + visibleIndex;
-
-            if (boneIndex >= controller.getActorBones().size())
-            {
-                break;
-            }
-
-            AnimationBone bone =
-                    controller.getActorBones().get(boneIndex);
-
-            if (bone == null)
-            {
-                continue;
-            }
-
-            int y =
-                    tracksTop +
-                    visibleIndex * TRACK_HEIGHT;
-
-            boolean selected =
-                    boneIndex ==
-                    controller.getSelectedActorBone();
-
-            drawTrackBackground(
-                    width,
-                    y,
-                    selected
-            );
-
+            ActorRow row = rows.get(boneScroll + i);
+            int y = tracksTop + i * TRACK_HEIGHT;
+            boolean selected = row.model == null
+                    ? row.boneIndex == controller.getSelectedActorBone()
+                    : row.model == controller.getSelectedAttachment();
+            drawTrackBackground(width, y, selected);
             if (selected)
             {
-                Gui.drawRect(
-                        0,
-                        y,
-                        3,
-                        y + TRACK_HEIGHT,
-                        EditorThemeManager.get().getAccent()
-                );
+                Gui.drawRect(0, y, 3, y + TRACK_HEIGHT,
+                        EditorThemeManager.get().getAccent());
             }
 
-            mc.fontRenderer.drawString(
-                    trim(
-                            mc,
-                            bone.getName(),
-                            TIMELINE_START_X - 14
-                    ),
-                    10,
-                    y + 6,
-                    selected
-                            ? EditorThemeManager.get().getAccentBright()
-                            : 0xFF9DA4A9
-            );
-
-            drawModelBarsForBone(
-                    mc,
-                    width,
-                    y,
-                    bone.getName()
-            );
+            if (row.model == null)
+            {
+                int count = modelCount(row.bone.getName());
+                if (count > 0)
+                {
+                    mc.fontRenderer.drawString(collapsedBones.contains(row.bone.getName())
+                            ? ">" : "v", 8, y + 6,
+                            EditorThemeManager.get().getAccentBright());
+                }
+                mc.fontRenderer.drawString(
+                        trim(mc, row.bone.getName() + (count > 0 ? " (" + count + ")" : ""),
+                                TIMELINE_START_X - 34),
+                        count > 0 ? 22 : 10, y + 6,
+                        selected ? EditorThemeManager.get().getAccentBright() : 0xFF9DA4A9);
+            }
+            else
+            {
+                BodyPartModelData model = row.model;
+                mc.fontRenderer.drawString(trim(mc,
+                        model.hasModel() ? model.getModelName() : "SELECT MODEL",
+                        TIMELINE_START_X - 34), 24, y + 6,
+                        selected ? EditorThemeManager.get().getAccentBright() : 0xFF9DA4A9);
+                drawActorModelBar(mc, width, y, model);
+            }
         }
     }
 
-    private void drawModelBarsForBone(
-            Minecraft mc,
-            int width,
-            int y,
-            String boneName)
+    private void drawActorModelBar(Minecraft mc, int width, int y, BodyPartModelData model)
     {
-        int stack = 0;
-
-        for (BodyPartModelData model :
-                controller.getModels())
-        {
-            if (model == null ||
-                    !boneName.equals(
-                            model.getAttachmentBoneName()))
-            {
-                continue;
-            }
-
-            int barY =
-                    y + 4 + stack * 12;
-
-            int left =
-                    timeline.getFrameX(
-                            model.getStartFrame(),
-                            TIMELINE_START_X
-                    );
-
-            int right =
-                    timeline.getFrameX(
-                            model.getEndFrame(),
-                            TIMELINE_START_X
-                    );
-
-            if (right < TIMELINE_START_X ||
-                    left > width)
-            {
-                stack++;
-                continue;
-            }
-
-            left =
-                    Math.max(
-                            TIMELINE_START_X,
-                            left
-                    );
-
-            right =
-                    Math.min(
-                            width,
-                            Math.max(left + 8, right)
-                    );
-
-            boolean selected =
-                    model == controller.getSelectedAttachment();
-
-            Gui.drawRect(
-                    left,
-                    barY,
-                    right,
-                    barY + 12,
-                    selected
-                            ? EditorThemeManager.get().getAccentBright()
-                            : EditorThemeManager.get().getAccent()
-            );
-
-            Gui.drawRect(
-                    left,
-                    barY,
-                    Math.min(right, left + 2),
-                    barY + 12,
-                    EditorThemeManager.get().getAccentBright()
-            );
-
-            Gui.drawRect(
-                    Math.max(left, right - 2),
-                    barY,
-                    right,
-                    barY + 12,
-                    EditorThemeManager.get().getAccentBright()
-            );
-
-            mc.fontRenderer.drawString(
-                    trim(
-                            mc,
-                            model.hasModel()
-                                    ? model.getModelName()
-                                    : "SELECT MODEL",
-                            Math.max(16, right - left - 8)
-                    ),
-                    left + 4,
-                    barY + 2,
-                    model.hasModel()
-                            ? 0xFF101010
-                            : 0xFFE0E3E5
-            );
-
-            stack++;
-        }
+        int left = timeline.getFrameX(model.getStartFrame(), TIMELINE_START_X);
+        int right = timeline.getFrameX(model.getEndFrame(), TIMELINE_START_X);
+        if (right < TIMELINE_START_X || left > width) return;
+        left = Math.max(TIMELINE_START_X, left);
+        right = Math.min(width, Math.max(left + 8, right));
+        int barY = y + 4;
+        boolean selected = model == controller.getSelectedAttachment();
+        Gui.drawRect(left, barY, right, barY + 12,
+                selected ? EditorThemeManager.get().getAccentBright()
+                        : EditorThemeManager.get().getAccent());
+        Gui.drawRect(left, barY, Math.min(right, left + 2), barY + 12,
+                EditorThemeManager.get().getAccentBright());
+        Gui.drawRect(Math.max(left, right - 2), barY, right, barY + 12,
+                EditorThemeManager.get().getAccentBright());
+        mc.fontRenderer.drawString(trim(mc,
+                model.hasModel() ? model.getModelName() : "SELECT MODEL",
+                Math.max(16, right - left - 8)), left + 4, barY + 2,
+                model.hasModel() ? 0xFF101010 : 0xFFE0E3E5);
     }
 
     private void drawModelBoneTimeline(
@@ -1074,23 +975,19 @@ public class BodyPartsTimelineController
             int tracksTop,
             int sceneLength)
     {
-        int visibleBone =
-                (mouseY - tracksTop) / TRACK_HEIGHT;
+        ActorRow row = actorRowAt(mouseY, tracksTop);
+        if (row == null) return true;
+        int boneIndex = row.boneIndex;
+        AnimationBone bone = row.bone;
 
-        int boneIndex =
-                boneScroll + visibleBone;
-
-        if (boneIndex < 0 ||
-                boneIndex >= controller.getActorBones().size())
+        if (mouseButton == 0 && row.model == null && mouseX >= 5
+                && mouseX <= 20 && modelCount(bone.getName()) > 0)
         {
-            return true;
-        }
-
-        AnimationBone bone =
-                controller.getActorBones().get(boneIndex);
-
-        if (bone == null)
-        {
+            if (!collapsedBones.add(bone.getName()))
+            {
+                collapsedBones.remove(bone.getName());
+            }
+            resetClickState();
             return true;
         }
 
@@ -1279,65 +1176,17 @@ public class BodyPartsTimelineController
     private AnimationKeyframe lastRightClickedKeyframe;
 
     private BodyPartModelData findAttachmentAt(
-            AnimationBone bone,
-            int boneIndex,
-            int mouseX,
-            int mouseY,
-            int tracksTop)
+            AnimationBone bone, int boneIndex, int mouseX, int mouseY, int tracksTop)
     {
-        if (bone == null)
-        {
-            return null;
-        }
-
-        int visibleBone =
-                boneIndex - boneScroll;
-
-        int barTop =
-                tracksTop +
-                visibleBone * TRACK_HEIGHT +
-                4;
-
-        int stack = 0;
-
-        for (BodyPartModelData item :
-                controller.getModels())
-        {
-            if (item == null ||
-                    !bone.getName().equals(
-                            item.getAttachmentBoneName()))
-            {
-                continue;
-            }
-
-            int left =
-                    timeline.getFrameX(
-                            item.getStartFrame(),
-                            TIMELINE_START_X
-                    );
-
-            int right =
-                    timeline.getFrameX(
-                            item.getEndFrame(),
-                            TIMELINE_START_X
-                    );
-
-            int currentTop =
-                    barTop +
-                    stack * 12;
-
-            if (mouseX >= left &&
-                    mouseX <= right &&
-                    mouseY >= currentTop &&
-                    mouseY <= currentTop + 12)
-            {
-                return item;
-            }
-
-            stack++;
-        }
-
-        return null;
+        ActorRow row = actorRowAt(mouseY, tracksTop);
+        if (row == null || row.model == null || row.boneIndex != boneIndex) return null;
+        BodyPartModelData model = row.model;
+        int left = timeline.getFrameX(model.getStartFrame(), TIMELINE_START_X);
+        int right = timeline.getFrameX(model.getEndFrame(), TIMELINE_START_X);
+        int barTop = tracksTop +
+                ((mouseY - tracksTop) / TRACK_HEIGHT) * TRACK_HEIGHT + 4;
+        return mouseX >= left && mouseX <= right && mouseY >= barTop
+                && mouseY <= barTop + 12 ? model : null;
     }
 
     private boolean mouseClickedModelTimeline(
@@ -1627,16 +1476,14 @@ public class BodyPartsTimelineController
                     getTimelineHeight() +
                     HEADER_HEIGHT;
 
-            int visibleBone =
-                    (mouseY - top) / TRACK_HEIGHT;
+            ActorRow hovered = actorRowAt(mouseY, top);
 
             if (mouseY != dragMouseY)
             {
                 dragMoved = true;
             }
 
-            int newBone =
-                    boneScroll + visibleBone;
+            int newBone = hovered == null ? -1 : hovered.boneIndex;
 
             if (newBone >= 0 &&
                     newBone < controller.getActorBones().size())
@@ -1751,7 +1598,7 @@ public class BodyPartsTimelineController
 
             int count =
                     model == null
-                            ? controller.getActorBones().size()
+                            ? actorRows().size()
                             : model.getBones().size();
 
             int maxScroll =
