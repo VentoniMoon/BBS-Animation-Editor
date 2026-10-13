@@ -566,7 +566,19 @@ public class EditorGizmoController
                  * to compensate for Blockbuster's Z-channel renderer sign.
                  * Y is unchanged because both its ring and bone were correct.
                  */
-                if (this.activePart == AXIS_Z)
+                /*
+                 * Removing the former X/Z display-axis mirror reverses the
+                 * projected ring-angle basis for both X and Z. Preserve the
+                 * already-correct bone rotation direction by compensating
+                 * the input angle here, without changing the visual basis.
+                 * Y remains untouched.
+                 */
+                if (this.activePart == AXIS_X)
+                {
+                    displayedAngle = -displayedAngle;
+                }
+                /* Z already had its own sign reversal; retain it. */
+                else if (this.activePart == AXIS_Z)
                 {
                     displayedAngle = -displayedAngle;
                 }
@@ -4595,46 +4607,16 @@ public class EditorGizmoController
     private double[][] getRotationDisplayAxes(double[][] axes, AnimationBone bone)
     {
         /*
-         * Blockbuster's stored rotation channels use the opposite handedness
-         * for the visible X/Z rotation rings. Mirror only the displayed ring
-         * basis for internal Blockbuster Body Parts bones. Keep the Y basis
-         * untouched, and leave position/scale gizmos plus all other adapters
-         * on their native basis.
+         * Rotation rings must follow the same evaluated bone basis as the
+         * rendered child model. The previous Blockbuster-only X/Z axis flip
+         * (a 180-degree Y rotation) made the visible gizmo counter-rotate
+         * around X and Z while the bone itself rotated correctly.
          *
-         * Return a copy: never mutate the renderer's evaluated world axes,
-         * which are also used by the bone rotation conversion.
+         * Keep the renderer-space basis intact for drawing and hit testing.
+         * The Blockbuster drag path compensates for the corresponding mouse
+         * angle handedness change before writing the bone rotation.
          */
-        if (axes == null || bone == null
-                || this.mode != Mode.ROTATION
-                || !isBodyPartInternalBoneTarget(bone)
-                || !isBlockbusterBodyPartTarget())
-        {
-            return axes;
-        }
-
-        double[][] display = new double[axes.length][];
-        for (int i = 0; i < axes.length; i++)
-        {
-            display[i] = axes[i] == null ? null : axes[i].clone();
-        }
-
-        if (display.length > AXIS_X && display[AXIS_X] != null)
-        {
-            for (int i = 0; i < display[AXIS_X].length; i++)
-            {
-                display[AXIS_X][i] = -display[AXIS_X][i];
-            }
-        }
-
-        if (display.length > AXIS_Z && display[AXIS_Z] != null)
-        {
-            for (int i = 0; i < display[AXIS_Z].length; i++)
-            {
-                display[AXIS_Z][i] = -display[AXIS_Z][i];
-            }
-        }
-
-        return display;
+        return axes;
     }
 
     private double[][] getGizmoWorldAxes(
