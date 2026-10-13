@@ -1480,7 +1480,9 @@ public class EditorTimelineController
                 this.keyframeController
                         .startKeyframeDragging(
                                 bone,
-                                clickedKeyframe
+                                clickedKeyframe,
+                                Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
+                                        || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL)
                         );
 
                 this.playbackController
