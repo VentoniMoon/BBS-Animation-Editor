@@ -4128,6 +4128,12 @@ public class EditorGizmoController
             {
                 evaluated = getChameleonBodyPartRotationDisplayMatrix(bone, frame);
             }
+            else if (this.mode == Mode.ROTATION
+                    && this.bodyPartRuntimeMorph
+                    instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+            {
+                evaluated = getEmoticonsBodyPartRotationDisplayMatrix(bone, frame);
+            }
             else
             {
                 evaluated = getBodyPartInternalRotationMatrix(bone, frame);
@@ -4595,6 +4601,70 @@ public class EditorGizmoController
         float[][] parentActual = getBodyPartInternalRotationMatrix(parent, frame);
         return parentActual == null
                 ? displayLocal : multiplyMatrix(parentActual, displayLocal);
+    }
+
+    /**
+     * The Emoticons child BOBJ bone is rendered with X rotation in the
+     * editor's visual convention, while its Y/Z stored rotation deltas are
+     * opposite the projected gizmo basis. Model key writeback is already
+     * correct: adjust ONLY the displayed incremental rotation. Conjugating
+     * the local animation delta with S=(1,-1,-1) keeps X as-is and reverses
+     * the visual response of Y and Z without mirroring the rest-pose pivot.
+     */
+    private float[][] getEmoticonsBodyPartRotationDisplayMatrix(
+            AnimationBone bone, float frame)
+    {
+        if (bone == null)
+        {
+            return identityRotationMatrix();
+        }
+
+        AnimationTransform key = bone.getTransformAt(frame);
+        if (key == null)
+        {
+            key = new AnimationTransform();
+        }
+
+        float[][] rest = createRotationMatrix(
+                bone.getBaseRotationX(),
+                bone.getBaseRotationY(),
+                bone.getBaseRotationZ());
+        float[][] animated = createRotationMatrix(
+                bone.getBaseRotationX() + key.getRotationX(),
+                bone.getBaseRotationY() + key.getRotationY(),
+                bone.getBaseRotationZ() + key.getRotationZ());
+
+        float[][] restInverse = new float[3][3];
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                restInverse[row][column] = rest[column][row];
+            }
+        }
+
+        float[][] delta = multiplyMatrix(restInverse, animated);
+        float[] signs = {1.0F, -1.0F, -1.0F};
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                delta[row][column] *= signs[row] * signs[column];
+            }
+        }
+
+        float[][] displayLocal = multiplyMatrix(rest, delta);
+        AnimationBone parent = bone.getParent();
+        if (parent == null)
+        {
+            return displayLocal;
+        }
+
+        float[][] parentActual =
+                getBodyPartInternalRotationMatrix(parent, frame);
+        return parentActual == null
+                ? displayLocal
+                : multiplyMatrix(parentActual, displayLocal);
     }
 
     /**
@@ -5819,7 +5889,9 @@ public class EditorGizmoController
                 GL11.glTranslatef(0.0F, -1.501F, 0.0F);
                 renderer.postRender(0.0625F);
             }
-            else if ((this.mode == Mode.POSITION || this.mode == Mode.ROTATION)
+            else if ((this.mode == Mode.POSITION
+                    || this.mode == Mode.ROTATION
+                    || this.mode == Mode.SCALE)
                     && this.bodyPartRuntimeMorph
                     instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
             {
