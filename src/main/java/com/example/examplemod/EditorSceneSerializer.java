@@ -753,7 +753,7 @@ public final class EditorSceneSerializer
      * =========================================================
      */
 
-    private static NBTTagList writeBones(
+    static NBTTagList writeBones(
             List<AnimationBone> bones)
     {
         NBTTagList list =
@@ -867,7 +867,7 @@ public final class EditorSceneSerializer
     }
 
 
-    private static void readBones(
+    static void readBones(
             List<AnimationBone> target,
             NBTTagCompound actorTag)
     {
