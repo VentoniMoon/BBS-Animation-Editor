@@ -10,7 +10,6 @@ public final class EditorPreviewAutoFocusController
     private boolean enabled = true;
     private Object previousKey;
     private String previousActor = "";
-    private boolean suppressFirstSelection = true;
 
     public boolean isEnabled()
     {
@@ -21,7 +20,6 @@ public final class EditorPreviewAutoFocusController
     {
         enabled = !enabled;
         previousKey = null;
-        suppressFirstSelection = true;
     }
 
     public void reset()
@@ -54,12 +52,6 @@ public final class EditorPreviewAutoFocusController
 
         previousKey = selectedKey;
         previousActor = actorId;
-
-        if (suppressFirstSelection)
-        {
-            suppressFirstSelection = false;
-            return;
-        }
 
         if (!enabled || playing || viewport == null || !actor.hasRecord())
         {
