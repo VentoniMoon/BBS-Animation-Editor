@@ -6179,10 +6179,35 @@ public class EditorGizmoController
         if (nativeChildMatrix != null && !blockbusterBodyPart)
         {
             pivot = new AnimationTransform();
-            pivot.setPosition(
-                    nativeChildMatrix[12] * 16.0F,
-                    nativeChildMatrix[13] * 16.0F,
-                    nativeChildMatrix[14] * 16.0F);
+
+            /*
+             * Chameleon postRender() supplies the unmodified native pivot,
+             * but the editor's Body Parts keys are evaluated separately.
+             * Preserve that exact native rest anchor and add the evaluated
+             * offset relative to the imported rest-pose hierarchy.
+             *
+             * Do not replace the native origin with AnimationBone local
+             * coordinates: those can differ due to Chameleon's own model
+             * hierarchy/centering. The delta also includes parent bone
+             * motion, so the gizmo follows the selected bone after edits.
+             */
+            float px = nativeChildMatrix[12] * 16.0F;
+            float py = nativeChildMatrix[13] * 16.0F;
+            float pz = nativeChildMatrix[14] * 16.0F;
+
+            if (chameleonTarget)
+            {
+                AnimationTransform evaluated = getChameleonWorldPivot(bone, frame);
+                AnimationTransform rest = getChameleonRestPivot(bone);
+                if (evaluated != null && rest != null)
+                {
+                    px += evaluated.getPositionX() - rest.getPositionX();
+                    py += evaluated.getPositionY() - rest.getPositionY();
+                    pz += evaluated.getPositionZ() - rest.getPositionZ();
+                }
+            }
+
+            pivot.setPosition(px, py, pz);
         }
         else
         {
@@ -6327,6 +6352,36 @@ public class EditorGizmoController
                 pivot,
                 recordFrame
         );
+    }
+
+    /**
+     * Imported Chameleon rest pivot in the same hierarchy coordinate space
+     * as getChameleonWorldPivot(), but without animation-key translations.
+     * Used only to compute the live offset from a native renderer anchor.
+     */
+    private AnimationTransform getChameleonRestPivot(AnimationBone bone)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+
+        AnimationTransform rest = new AnimationTransform();
+        rest.setPosition(
+                bone.getLocalX(), bone.getLocalY(), bone.getLocalZ());
+        rest.setRotation(
+                bone.getBaseRotationX(),
+                bone.getBaseRotationY(),
+                bone.getBaseRotationZ());
+
+        AnimationBone parent = bone.getParent();
+        if (parent == null)
+        {
+            return rest;
+        }
+
+        AnimationTransform parentRest = getChameleonRestPivot(parent);
+        return parentRest == null ? rest : parentRest.combine(rest);
     }
 
     /**
