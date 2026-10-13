@@ -1407,7 +1407,9 @@ public class BodyPartsTimelineController
                 controller.getKeyframeController()
                         .startKeyframeDragging(
                                 bone,
-                                key
+                                key,
+                                Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
+                                        || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL)
                         );
 
                 timeline.setTick(key.getFrame());
