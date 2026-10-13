@@ -1322,6 +1322,18 @@ public class BlockbusterActorPreviewRenderer
          * =====================================================
          */
 
+        /*
+         * Preview world and preceding actor passes can restore actual GL
+         * texture bindings via glPopAttrib without updating Minecraft's
+         * GlStateManager texture binding cache. Force a known texture
+         * binding on the default texture unit before the morph renderer
+         * selects its own atlas / skin.
+         */
+        GlStateManager.setActiveTexture(
+                net.minecraft.client.renderer.OpenGlHelper.defaultTexUnit
+        );
+        GlStateManager.bindTexture(0);
+
         GlStateManager.enableDepth();
 
         GlStateManager.depthFunc(
