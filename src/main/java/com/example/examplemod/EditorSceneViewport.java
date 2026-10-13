@@ -200,13 +200,7 @@ public class EditorSceneViewport
         );
 
 
-        /*
-         * =========================================================
-         * CLOUDS
-         * =========================================================
-         */
-
-        this.minecraftWorldPreview.renderClouds();
+        /* Clouds render only after actors, translucent world and weather. */
     }
 
 
@@ -454,6 +448,13 @@ public class EditorSceneViewport
                 mc
         );
 
+
+        /*
+         * Clouds are the final transparent world pass. Drawing them
+         * before actors left the cloud texture/state active at the start
+         * of the multi-actor render sequence.
+         */
+        this.minecraftWorldPreview.renderClouds();
 
         /*
          * =========================================================
