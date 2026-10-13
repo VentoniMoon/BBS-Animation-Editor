@@ -9,11 +9,12 @@ import net.minecraft.nbt.NBTTagCompound;
 
 /**
  * Stage 7: builds native Blockbuster MorphAction NBT from main Character
- * timeline keys. This is a pure preparation step: it does NOT alter the
+ * timeline Morph and Skin keys. This is a pure preparation step: it does NOT alter the
  * original record or write anything to disk.
  *
- * Pose, Body Parts, Skin and animation setup need their own morph baking
- * adapters before they can be exported.
+ * Skin keys already store complete appearance Morph NBT, as interpreted
+ * by CharacterStateResolver. Body Parts and animation setup require
+ * separate baking adapters.
  */
 public final class EditorCharacterMorphExport
 {
@@ -90,6 +91,9 @@ public final class EditorCharacterMorphExport
 
         TreeMap<Integer, NBTTagCompound> byFrame =
                 new TreeMap<Integer, NBTTagCompound>();
+        // On the same tick Skin takes precedence, like CharacterStateResolver.
+        TreeMap<Integer, Boolean> skinFrames =
+                new TreeMap<Integer, Boolean>();
 
         for (CharacterTrack track : timeline.getTracks())
         {
@@ -100,21 +104,32 @@ public final class EditorCharacterMorphExport
 
             for (CharacterKey key : track.getKeys())
             {
-                if (key == null || !key.hasMorph())
+                if (key == null || (!key.hasMorph() && !key.hasSkin()))
                 {
                     continue;
                 }
 
-                NBTTagCompound morph = key.getMorph();
-                if (morph.hasNoTags())
+                // CharacterStateResolver chooses Skin over Morph for a
+                // universal key containing both fields on the same tick.
+                boolean isSkin = key.hasSkin();
+                NBTTagCompound appearance = isSkin
+                        ? key.getSkin() : key.getMorph();
+                if (appearance == null || appearance.hasNoTags())
+                {
+                    continue;
+                }
+
+                int frame = key.getFrame();
+                if (!isSkin && Boolean.TRUE.equals(skinFrames.get(frame)))
                 {
                     continue;
                 }
 
                 NBTTagCompound action = new NBTTagCompound();
                 action.setByte("Type", morphId.byteValue());
-                action.setTag("Morph", morph.copy());
-                byFrame.put(key.getFrame(), action);
+                action.setTag("Morph", appearance.copy());
+                byFrame.put(frame, action);
+                skinFrames.put(frame, isSkin);
             }
         }
 
