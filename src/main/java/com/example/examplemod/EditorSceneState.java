@@ -28,6 +28,18 @@ public class EditorSceneState
      * - другие данные редактора.
      */
     private final EditorSaveController saveController;
+    private BodyPartsEditorController bodyPartsController;
+
+    public void setBodyPartsController(BodyPartsEditorController controller)
+    {
+        this.bodyPartsController = controller;
+    }
+
+    public BodyPartsEditorController getBodyPartsController()
+    {
+        return this.bodyPartsController;
+    }
+
 
 
     /*
@@ -303,6 +315,11 @@ public class EditorSceneState
          * BlockbusterSceneManager также загрузит
          * связанные Records.
          */
+        if (this.bodyPartsController != null)
+        {
+            this.bodyPartsController.resetForSceneLoad();
+        }
+
         this.sceneManager.load(
                 file
         );
