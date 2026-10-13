@@ -3,6 +3,8 @@ package com.example.examplemod;
 import org.lwjgl.input.Keyboard;
 
 import java.io.IOException;
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.text.TextComponentString;
 
 /**
  * Обработка клавиатурного ввода, связанного с сохранением редактора.
@@ -74,9 +76,10 @@ public class EditorSaveInputController
         try
         {
             this.saveController.save();
+            notifyPlayer("[BBS Editor] Scene, records and animation keys saved.");
             return true;
         }
-        catch (IOException e)
+        catch (Exception e)
         {
             /*
              * Пока у редактора нет отдельного status/error overlay.
@@ -85,8 +88,20 @@ public class EditorSaveInputController
              * она попадёт в консоль Minecraft/Forge.
              */
             e.printStackTrace();
+            notifyPlayer("[BBS Editor] Save ERROR: " + e.getMessage()
+                    + " (check latest.log; editor keys may already be saved)");
             return false;
         }
+    }
+
+    private static void notifyPlayer(String message)
+    {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft != null && minecraft.player != null)
+        {
+            minecraft.player.sendMessage(new TextComponentString(message));
+        }
+        System.out.println(message);
     }
 
     /*
