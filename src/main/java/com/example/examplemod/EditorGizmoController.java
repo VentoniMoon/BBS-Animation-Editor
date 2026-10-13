@@ -4954,7 +4954,21 @@ public class EditorGizmoController
             effectiveScale = 1.0D;
         }
 
-        double amount = worldDelta * 16.0D / effectiveScale;
+        /*
+         * Blockbuster and Chameleon bone offsets are measured in model
+         * pixels, requiring 16 pixels per world block. Emoticons BOBJ
+         * translation channels are already in model/world blocks:
+         * BOBJBone.applyTransformations() directly writes x/y/z into the
+         * translation matrix with no 1/16 conversion. Multiplying their
+         * drag by 16 makes even a short mouse movement throw the gizmo far
+         * past its intended screen distance. Do not change any non-Emoticons
+         * data adapter or rotation channel.
+         */
+        boolean emoticonsInternal = this.bodyPartTarget != null
+                && this.bodyPartRuntimeMorph
+                instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+        double amount = worldDelta * (emoticonsInternal ? 1.0D : 16.0D)
+                / effectiveScale;
 
         target[0] += vx * amount;
         target[1] += vy * amount;
