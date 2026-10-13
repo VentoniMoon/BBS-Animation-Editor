@@ -2760,7 +2760,8 @@ public class AnimationEditorScreen extends GuiScreen
          */
         this.multiActorPreview.drawBackgroundActors(
                 mc, this.sceneViewport, this.sceneState,
-                getSelectedActor(), this.playbackController.getCurrentFrame());
+                getSelectedActor(), this.playbackController.getCurrentFrame(),
+                this.bodyPartsController);
 
         this.sceneViewport.drawActor(
                 mc,
