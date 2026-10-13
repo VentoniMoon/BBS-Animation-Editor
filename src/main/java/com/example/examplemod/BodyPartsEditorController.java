@@ -357,6 +357,19 @@ public class BodyPartsEditorController
          */
         if (morph instanceof CustomMorph)
         {
+            /*
+             * Import the exact rest pose that BodyPartsPreviewRenderer uses.
+             * A selected CustomMorph may carry a customPose/currentPose with
+             * different bone rotations than the API model's standing pose.
+             * Reading limb metadata first discards those rest rotations and
+             * makes the gizmo orientation disagree with the rendered child.
+             */
+            result = createAnimationBonesFromCustomMorphModel((CustomMorph) morph);
+            if (!result.isEmpty())
+            {
+                return result;
+            }
+
             String name = morph.name == null ? "" : morph.name;
             String modelName = name.startsWith("blockbuster.")
                     ? name.substring("blockbuster.".length())
@@ -364,31 +377,26 @@ public class BodyPartsEditorController
 
             if (!modelName.isEmpty())
             {
-                BlockbusterModelAccess access =
-                        new BlockbusterModelAccess(null);
-
+                BlockbusterModelAccess access = new BlockbusterModelAccess(null);
                 if (access.loadModelByName(modelName))
                 {
-                    result = createAnimationBones(access.getLimbData());
+                    Object apiModel = access.getApiModel();
+                    if (apiModel instanceof mchorse.blockbuster.api.Model)
+                    {
+                        result = createAnimationBonesFromApiModel(
+                                (mchorse.blockbuster.api.Model) apiModel);
+                    }
+
+                    if (result.isEmpty())
+                    {
+                        result = createAnimationBones(access.getLimbData());
+                    }
 
                     if (!result.isEmpty())
                     {
                         return result;
                     }
                 }
-            }
-
-            /*
-             * The render-side ModelCustom cache is not populated for every
-             * valid CustomMorph at the moment the picker assigns it. The
-             * morph can still already hold Blockbuster's authoritative API
-             * Model, so use that skeleton directly before falling through to
-             * unrelated reflective morph APIs.
-             */
-            result = createAnimationBonesFromCustomMorphModel((CustomMorph) morph);
-            if (!result.isEmpty())
-            {
-                return result;
             }
         }
 
@@ -670,7 +678,15 @@ public class BodyPartsEditorController
         try
         {
             morph.updateModel();
-            result = createAnimationBonesFromApiModel(morph.model);
+            if (morph.model != null)
+            {
+                mchorse.blockbuster.api.ModelPose pose =
+                        morph.customPose != null
+                                ? morph.customPose
+                                : morph.model.getPose(morph.currentPose);
+
+                result = createAnimationBonesFromApiModel(morph.model, pose);
+            }
         }
         catch (Throwable error)
         {
@@ -691,6 +707,14 @@ public class BodyPartsEditorController
     private List<AnimationBone> createAnimationBonesFromApiModel(
             mchorse.blockbuster.api.Model model)
     {
+        return createAnimationBonesFromApiModel(
+                model, model == null ? null : model.getPose("standing"));
+    }
+
+    private List<AnimationBone> createAnimationBonesFromApiModel(
+            mchorse.blockbuster.api.Model model,
+            mchorse.blockbuster.api.ModelPose selectedPose)
+    {
         List<AnimationBone> result = new ArrayList<AnimationBone>();
 
         if (model == null || model.limbs == null || model.limbs.isEmpty())
@@ -698,7 +722,8 @@ public class BodyPartsEditorController
             return result;
         }
 
-        mchorse.blockbuster.api.ModelPose standing = model.getPose("standing");
+        mchorse.blockbuster.api.ModelPose standing =
+                selectedPose != null ? selectedPose : model.getPose("standing");
 
         for (java.util.Map.Entry<String, mchorse.blockbuster.api.ModelLimb> entry
                 : model.limbs.entrySet())
