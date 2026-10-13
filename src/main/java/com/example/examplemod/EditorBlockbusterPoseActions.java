@@ -100,9 +100,24 @@ public final class EditorBlockbusterPoseActions
             NBTTagCompound baked = EditorBlockbusterCustomMorphPose.build(
                     current, basePose, sampled);
 
+            /*
+             * Character Bones overrides are separate from Pose keys.
+             * Apply them to the baked CustomMorph, so fixed flags are
+             * serialized with each frame's final ModelProperties.
+             */
+            CustomMorph exportedMorph = new CustomMorph();
+            exportedMorph.fromNBT(baked.copy());
+            CharacterBodyPartOverrideController.apply(
+                    exportedMorph,
+                    actor.getCharacterTimeline(),
+                    sampled.getFrame()
+            );
+            NBTTagCompound finalMorph = new NBTTagCompound();
+            exportedMorph.toNBT(finalMorph);
+
             NBTTagCompound actionTag = new NBTTagCompound();
             actionTag.setByte("Type", type);
-            actionTag.setTag("Morph", baked);
+            actionTag.setTag("Morph", finalMorph);
 
             // PreparedAction construction is centralized in Character export.
             output.add(EditorCharacterMorphExport.prepared(
