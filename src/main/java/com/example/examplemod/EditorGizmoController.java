@@ -101,6 +101,7 @@ public class EditorGizmoController
     private mchorse.metamorph.api.morphs.AbstractMorph bodyPartRuntimeMorph;
     private final Set<String> bodyPartMatrixDiagnosticKeys = new HashSet<String>();
     private long lastBlockbusterRotationPoseDiagnosticMillis;
+    private long lastBlockbusterWorldAxesDiagnosticMillis;
     private AnimationBone bodyPartAttachmentBone;
     private AnimationBone gizmoAttachmentBone;
     private AnimationTransform globalTransformTarget;
@@ -4159,6 +4160,9 @@ public class EditorGizmoController
          * appear to run opposite to the drag.
          */
 
+        diagnoseBlockbusterWorldAxes(bone, frame,
+                new double[][] {worldX, worldY, worldZ});
+
         return new double[][] {worldX, worldY, worldZ};
     }
 
@@ -4171,6 +4175,112 @@ public class EditorGizmoController
      * rotation as the editor. Read customPose directly instead.
      * Diagnostic only: never modify keys, bones, or renderer state.
      */
+    /**
+     * Compare the drawn gizmo basis with the matrix actually cached by
+     * ModelCustomRenderer while rendering this child bone.
+     *
+     * Unlike postRender() from an isolated identity matrix, the cached
+     * worldTransformation includes the live render hierarchy (Body Part,
+     * child model root, parent limbs, and selected limb). This is READ-ONLY
+     * diagnostics, and only for the Blockbuster Body Parts rotation target.
+     */
+    private void diagnoseBlockbusterWorldAxes(
+            AnimationBone bone, int frame, double[][] gizmoAxes)
+    {
+        if (this.mode != Mode.ROTATION
+                || !isBodyPartInternalBoneTarget(bone)
+                || !isBlockbusterBodyPartTarget()
+                || !(this.bodyPartRuntimeMorph
+                     instanceof mchorse.blockbuster_pack.morphs.CustomMorph))
+        {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - this.lastBlockbusterWorldAxesDiagnosticMillis < 1000L)
+        {
+            return;
+        }
+        this.lastBlockbusterWorldAxesDiagnosticMillis = now;
+
+        try
+        {
+            mchorse.blockbuster_pack.morphs.CustomMorph morph =
+                    (mchorse.blockbuster_pack.morphs.CustomMorph)
+                            this.bodyPartRuntimeMorph;
+            mchorse.blockbuster.client.model.ModelCustom model =
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(morph.getKey());
+
+            if (model == null)
+            {
+                System.out.println("[BBS WorldAxes] model-cache missing: "
+                        + morph.getKey());
+                return;
+            }
+
+            mchorse.blockbuster.client.model.ModelCustomRenderer renderer =
+                    model.get(bone.getName());
+            if (renderer == null)
+            {
+                System.out.println("[BBS WorldAxes] renderer missing: "
+                        + bone.getName());
+                return;
+            }
+
+            javax.vecmath.Matrix4d world = renderer.getWorldTransformation();
+            double[][] actualAxes = new double[][]
+            {
+                {world.m00, world.m10, world.m20},
+                {world.m01, world.m11, world.m21},
+                {world.m02, world.m12, world.m22}
+            };
+
+            double[] matches = new double[3];
+            double[] lengths = new double[3];
+            for (int axis = 0; axis < 3; axis++)
+            {
+                double x = actualAxes[axis][0];
+                double y = actualAxes[axis][1];
+                double z = actualAxes[axis][2];
+                lengths[axis] = Math.sqrt(x * x + y * y + z * z);
+                if (lengths[axis] < 0.000001D)
+                {
+                    System.out.println("[BBS WorldAxes] zero cached axis: "
+                            + bone.getName() + " axis=" + axis);
+                    return;
+                }
+                for (int row = 0; row < 3; row++)
+                {
+                    actualAxes[axis][row] /= lengths[axis];
+                    matches[axis] += actualAxes[axis][row]
+                            * gizmoAxes[axis][row];
+                }
+            }
+
+            System.out.println("[BBS WorldAxes] bone=" + bone.getName()
+                    + " frame=" + frame
+                    + " dragging=" + this.dragging
+                    + " selectedAxis=" + this.activePart
+                    + " dotXYZ=(" + matches[0] + ","
+                            + matches[1] + "," + matches[2] + ")"
+                    + " scales=(" + lengths[0] + ","
+                            + lengths[1] + "," + lengths[2] + ")"
+                    + " gizmoX=" + java.util.Arrays.toString(gizmoAxes[0])
+                    + " actualX=" + java.util.Arrays.toString(actualAxes[0])
+                    + " gizmoY=" + java.util.Arrays.toString(gizmoAxes[1])
+                    + " actualY=" + java.util.Arrays.toString(actualAxes[1])
+                    + " gizmoZ=" + java.util.Arrays.toString(gizmoAxes[2])
+                    + " actualZ=" + java.util.Arrays.toString(actualAxes[2])
+            );
+        }
+        catch (Throwable error)
+        {
+            System.err.println("[BBS WorldAxes] failed: "
+                    + error.getClass().getName() + ": "
+                    + String.valueOf(error.getMessage()));
+        }
+    }
+
     private void diagnoseBlockbusterBodyPartRotationPose(
             AnimationBone bone, int frame)
     {
