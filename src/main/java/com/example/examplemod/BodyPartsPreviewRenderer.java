@@ -62,6 +62,18 @@ public class BodyPartsPreviewRenderer
             EntityActor actor,
             int frame)
     {
+        prepareModels(actor, frame, controller == null ? null : controller.getModels());
+    }
+
+    /**
+     * Prepare actor-specific attachments without switching the active
+     * editor selection or altering its controller.
+     */
+    public void prepareModels(
+            EntityActor actor,
+            int frame,
+            List<BodyPartModelData> models)
+    {
         if (actor == null)
         {
             return;
@@ -100,14 +112,6 @@ public class BodyPartsPreviewRenderer
          */
         manager.parts.clear();
         this.preparedMorphs.clear();
-
-        if (controller == null)
-        {
-            return;
-        }
-
-        List<BodyPartModelData> models =
-                controller.getModels();
 
         if (models == null || models.isEmpty())
         {
