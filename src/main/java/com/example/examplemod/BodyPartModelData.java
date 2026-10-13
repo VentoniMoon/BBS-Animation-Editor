@@ -118,6 +118,40 @@ public class BodyPartModelData
         this.morphKeys.put(frame, morph.toNBT());
     }
 
+    public Map<Integer, NBTTagCompound> getMorphKeysSnapshot()
+    {
+        return new TreeMap<Integer, NBTTagCompound>(this.morphKeys);
+    }
+
+    public void restoreMorphKeys(Map<Integer, NBTTagCompound> values)
+    {
+        this.morphKeys.clear();
+        if (values != null)
+        {
+            for (Map.Entry<Integer, NBTTagCompound> entry : values.entrySet())
+            {
+                if (entry.getKey() >= 0 && entry.getValue() != null)
+                {
+                    this.morphKeys.put(entry.getKey(), entry.getValue().copy());
+                }
+            }
+        }
+    }
+
+    public Map<Integer, String> getModelKeysSnapshot()
+    {
+        return new TreeMap<Integer, String>(this.modelKeys);
+    }
+
+    public void restoreModelKeys(Map<Integer, String> values)
+    {
+        this.modelKeys.clear();
+        if (values != null)
+        {
+            this.modelKeys.putAll(values);
+        }
+    }
+
     public boolean hasMorphKeyAt(int frame)
     {
         return this.morphKeys.containsKey(frame);
