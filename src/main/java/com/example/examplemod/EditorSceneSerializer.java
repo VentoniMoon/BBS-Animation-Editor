@@ -171,13 +171,9 @@ public final class EditorSceneSerializer
         );
 
 
-        /*
-         * В будущем здесь можно будет добавить:
-         *
-         * BodyParts
-         *
-         * но пока этот блок отсутствует.
-         */
+        /* Persist attached models and all Body Parts keys alongside Pose. */
+        scene.setTag("BodyParts",
+                BodyPartsPersistence.write(state.getBodyPartsController()));
 
 
         root.setTag(
@@ -347,20 +343,15 @@ public final class EditorSceneSerializer
 
 
         /*
-         * =====================================================
-         * BODY PARTS
-         * =====================================================
-         *
-         * Пока намеренно отсутствуют.
-         *
-         * Когда модель Body Parts будет готова,
-         * сюда добавится:
-         *
-         * readBodyParts(...)
-         *
-         * При этом старые editor.dat останутся
-         * полностью совместимыми.
+         * Old scenes without BodyParts remain compatible. The editor
+         * controller was cleared before loading this scene.
          */
+        if (scene.hasKey("BodyParts", 10))
+        {
+            BodyPartsPersistence.read(
+                    state.getBodyPartsController(),
+                    scene.getCompoundTag("BodyParts"));
+        }
     }
 
 
