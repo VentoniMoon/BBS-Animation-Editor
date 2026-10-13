@@ -436,6 +436,94 @@ public class CharacterAnimationSetupController
     /**
      * Apply the exact NBT format used by Emoticons ActionConfig.
      */
+    /**
+     * Bake Character Animation Setup into a native Emoticons UserData NBT.
+     * Keep the active appearance's original UserData as baseline and
+     * override only explicitly keyed fields, exactly as Preview does.
+     *
+     * This method works on a fresh export-only AnimatedMorph, never the
+     * actor's live Preview morph.
+     */
+    public static NBTTagCompound exportUserData(
+            BlockbusterSceneActorData actorData,
+            int frame,
+            AnimatedMorph animated)
+    {
+        NBTTagCompound baseline =
+                animated.userConfigData == null
+                        ? new NBTTagCompound()
+                        : animated.userConfigData.copy();
+
+        if (!hasEffectiveSetup(actorData, frame))
+        {
+            return baseline;
+        }
+
+        animated.initiateAnimator();
+        if (animated.animator == null)
+        {
+            return baseline;
+        }
+
+        animated.animator.fetchAnimation();
+        if (animated.animator.animation == null)
+        {
+            return baseline;
+        }
+
+        animated.animator.userConfig.copy(animated.animator.config.config);
+        animated.animator.userConfig.fromNBT(baseline);
+
+        NBTTagCompound output = baseline.copy();
+        NBTTagCompound actions =
+                animated.animator.userConfig.actions.toNBT(null);
+
+        if (actions == null)
+        {
+            actions = new NBTTagCompound();
+        }
+
+        for (String action : ACTIONS)
+        {
+            if (!hasEffectiveActionData(actorData, frame, action))
+            {
+                continue;
+            }
+
+            String actionKey = getActionKey(action);
+            ActionConfig config =
+                    animated.animator.userConfig.actions
+                            .getConfig(actionKey).clone();
+
+            String name = findLatestString(actorData, frame, actionKey, NAME_TAG);
+            Boolean clamp = findLatestBoolean(actorData, frame, actionKey, CLAMP_TAG);
+            Boolean reset = findLatestBoolean(actorData, frame, actionKey, RESET_TAG);
+            Float speed = findLatestFloat(actorData, frame, actionKey, SPEED_TAG);
+            Float fade = findLatestFloat(actorData, frame, actionKey, FADE_TAG);
+            Integer tick = findLatestInteger(actorData, frame, actionKey, TICK_TAG);
+
+            if (name != null) config.name = name;
+            if (clamp != null) config.clamp = clamp.booleanValue();
+            if (reset != null) config.reset = reset.booleanValue();
+            if (speed != null) config.speed = speed.floatValue();
+            if (fade != null) config.fade = fade.floatValue();
+            if (tick != null) config.tick = tick.intValue();
+
+            actions.setTag(actionKey, config.toNBT());
+        }
+
+        if (actions.hasNoTags())
+        {
+            output.removeTag(ACTIONS_TAG);
+        }
+        else
+        {
+            output.setTag(ACTIONS_TAG, actions);
+        }
+
+        return output;
+    }
+
     public static void applyToRuntime(
             BlockbusterSceneActorData actorData,
             EntityActor runtimeActor,
