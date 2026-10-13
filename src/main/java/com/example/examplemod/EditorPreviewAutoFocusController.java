@@ -26,7 +26,6 @@ public final class EditorPreviewAutoFocusController
     {
         previousKey = null;
         previousActor = "";
-        suppressFirstSelection = true;
     }
 
     public void update(
