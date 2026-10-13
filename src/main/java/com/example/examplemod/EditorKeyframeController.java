@@ -55,6 +55,8 @@ public class EditorKeyframeController
     private AnimationBone draggingKeyframeBone = null;
 
     private AnimationKeyframe draggingKeyframe = null;
+    private boolean copyKeyframeOnDrag;
+    private AnimationKeyframe sourceKeyframe;
 
     /*
      * =========================================================
@@ -400,6 +402,14 @@ public class EditorKeyframeController
             AnimationBone bone,
             AnimationKeyframe keyframe)
     {
+        startKeyframeDragging(bone, keyframe, false);
+    }
+
+    public void startKeyframeDragging(
+            AnimationBone bone,
+            AnimationKeyframe keyframe,
+            boolean copyOnDrag)
+    {
         if (
                 bone == null
                         ||
@@ -412,6 +422,8 @@ public class EditorKeyframeController
         }
 
         this.keyframeDragging = true;
+        this.copyKeyframeOnDrag = copyOnDrag;
+        this.sourceKeyframe = keyframe;
 
         this.draggingKeyframeBone =
                 bone;
@@ -450,6 +462,8 @@ public class EditorKeyframeController
         this.draggingKeyframeBone = null;
 
         this.draggingKeyframe = null;
+        this.copyKeyframeOnDrag = false;
+        this.sourceKeyframe = null;
     }
 
 
@@ -506,12 +520,20 @@ public class EditorKeyframeController
             return false;
         }
 
-        if (
-                keyframe.getFrame() ==
-                        newFrame
-        )
+        if (keyframe.getFrame() == newFrame)
         {
             return false;
+        }
+
+        if (this.copyKeyframeOnDrag)
+        {
+            AnimationKeyframe clone = duplicateKeyframe(this.sourceKeyframe, newFrame);
+            bone.getKeyframes().add(clone);
+            this.draggingKeyframe = clone;
+            this.selectedKeyframe = clone;
+            this.copyKeyframeOnDrag = false;
+            sortKeyframes(bone);
+            return true;
         }
 
         keyframe.setFrame(
@@ -529,6 +551,25 @@ public class EditorKeyframeController
         return true;
     }
 
+
+    private static AnimationKeyframe duplicateKeyframe(AnimationKeyframe source, int frame)
+    {
+        AnimationKeyframe copy = new AnimationKeyframe(frame);
+        AnimationTransform transform = source.getTransform();
+        copy.getTransform().setPosition(
+                transform.getPositionX(), transform.getPositionY(), transform.getPositionZ());
+        copy.getTransform().setRotation(
+                transform.getRotationX(), transform.getRotationY(), transform.getRotationZ());
+        copy.getTransform().setScale(
+                transform.getScaleX(), transform.getScaleY(), transform.getScaleZ());
+        copy.setInterpolation(source.getInterpolation());
+        copy.setEasing(source.getEasing());
+        copy.setRX(source.getRX());
+        copy.setRY(source.getRY());
+        copy.setLX(source.getLX());
+        copy.setLY(source.getLY());
+        return copy;
+    }
 
     /*
      * =========================================================
