@@ -5751,6 +5751,55 @@ public class EditorGizmoController
                 GL11.glTranslatef(0.0F, -1.501F, 0.0F);
                 renderer.postRender(0.0625F);
             }
+            else if (this.mode == Mode.POSITION
+                    && this.bodyPartRuntimeMorph
+                    instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+            {
+                /*
+                 * An attached Emoticons morph has its OWN BOBJ armature.
+                 * The parent's previewActor morph must not be consulted here.
+                 *
+                 * BOBJBone.mat is the fully evaluated internal bone matrix
+                 * (including imported pivot, ancestor transforms and current
+                 * AnimatedPose). AnimatorController.render() then applies
+                 * userConfig.scale and a root yaw of 360 degrees because
+                 * Metamorph BodyPart.render() temporarily sets the child's
+                 * renderYawOffset to zero. 360 degrees is identity.
+                 *
+                 * Unlike the Chameleon branch, the resulting matrix already
+                 * includes animation offsets: do not append a second key delta.
+                 */
+                mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph child =
+                        (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+                                this.bodyPartRuntimeMorph;
+                mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone sourceBone =
+                        EmoticonsModelAccess.findBone(child, bone.getName());
+
+                if (sourceBone == null || sourceBone.mat == null
+                        || child.animator == null || child.animator.userConfig == null)
+                {
+                    logBodyPartMatrixDiagnostic(
+                            bone, "Emoticons child BOBJ bone/matrix unavailable", null);
+                    return null;
+                }
+
+                float scale = child.animator.userConfig.scale;
+                javax.vecmath.Matrix4f childMatrix = sourceBone.mat;
+
+                /* Native Emoticons matrices are model-space block units. */
+                GL11.glScalef(scale, scale, scale);
+                FloatBuffer nativeBuffer = BufferUtils.createFloatBuffer(16);
+                float[] childMatrixColumnMajor = new float[]
+                {
+                    childMatrix.m00, childMatrix.m10, childMatrix.m20, childMatrix.m30,
+                    childMatrix.m01, childMatrix.m11, childMatrix.m21, childMatrix.m31,
+                    childMatrix.m02, childMatrix.m12, childMatrix.m22, childMatrix.m32,
+                    childMatrix.m03, childMatrix.m13, childMatrix.m23, childMatrix.m33
+                };
+                nativeBuffer.put(childMatrixColumnMajor);
+                nativeBuffer.flip();
+                GL11.glMultMatrix(nativeBuffer);
+            }
             else if (this.bodyPartRuntimeMorph.getClass().getName().endsWith(".ChameleonMorph"))
             {
                 Object morph = this.bodyPartRuntimeMorph;
@@ -6204,6 +6253,11 @@ public class EditorGizmoController
             float py = nativeChildMatrix[13] * 16.0F;
             float pz = nativeChildMatrix[14] * 16.0F;
 
+            /*
+             * Emoticons' native BOBJ matrix already contains the current pose
+             * and gives the selected CHILD bone pivot. Chameleon alone needs
+             * its separate animated-delta correction below.
+             */
             if (chameleonTarget)
             {
                 AnimationTransform evaluated = getChameleonWorldPivot(bone, frame);
