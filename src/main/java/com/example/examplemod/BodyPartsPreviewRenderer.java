@@ -138,6 +138,45 @@ public class BodyPartsPreviewRenderer
     }
 
     /**
+     * Export-only snapshot of the same genuine Metamorph BodyParts used by
+     * Preview. Never changes the source actor or the editor model tracks.
+     * A fresh renderer instance should be used by the exporter.
+     */
+    public net.minecraft.nbt.NBTTagList exportParts(
+            BodyPartsEditorController controller, int frame)
+    {
+        net.minecraft.nbt.NBTTagList result =
+                new net.minecraft.nbt.NBTTagList();
+        if (controller == null)
+        {
+            return result;
+        }
+
+        this.preparedMorphs.clear();
+        for (BodyPartModelData data : controller.getModels())
+        {
+            if (data == null || !data.hasModel()
+                    || frame < data.getStartFrame()
+                    || frame > data.getEndFrame())
+            {
+                continue;
+            }
+
+            BodyPart part = createBodyPart(data, frame);
+            if (part == null)
+            {
+                continue;
+            }
+            net.minecraft.nbt.NBTTagCompound tag =
+                    new net.minecraft.nbt.NBTTagCompound();
+            part.toNBT(tag);
+            result.appendTag(tag);
+        }
+
+        return result;
+    }
+
+    /**
      * Create one genuine Metamorph BodyPart.
      */
     private BodyPart createBodyPart(
