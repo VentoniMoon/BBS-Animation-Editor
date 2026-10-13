@@ -1234,6 +1234,47 @@ public class AnimationEditorInput
     {
         /*
          * =========================================================
+         * CHARACTER RECORD EXPORT (Ctrl + Shift + E)
+         * =========================================================
+         *
+         * Explicitly writes a separate test copy. Ctrl+S remains
+         * editor-only and original Blockbuster Records are untouched.
+         */
+        if (keyCode == Keyboard.KEY_E
+                && (Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
+                || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL))
+                && (Keyboard.isKeyDown(Keyboard.KEY_LSHIFT)
+                || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT)))
+        {
+            try
+            {
+                java.io.File exported =
+                        EditorCharacterRecordExport.exportSelected(this.sceneState);
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+                if (mc.player != null)
+                {
+                    mc.player.sendMessage(new net.minecraft.util.text.TextComponentString(
+                            "[BBS Editor] Character export: " + exported.getName()
+                            + " (editor/exports)"));
+                }
+                System.out.println("[BBS Animation Editor] Character export: "
+                        + exported.getAbsolutePath());
+            }
+            catch (Exception error)
+            {
+                error.printStackTrace();
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+                if (mc.player != null)
+                {
+                    mc.player.sendMessage(new net.minecraft.util.text.TextComponentString(
+                            "[BBS Editor] Character export ERROR: " + error.getMessage()));
+                }
+            }
+            return;
+        }
+
+        /*
+         * =========================================================
          * SAVE
          * =========================================================
          *
