@@ -1098,6 +1098,13 @@ public class BodyPartsTimelineController
                 return true;
             }
 
+            if (mouseX < TIMELINE_START_X)
+            {
+                /* Clicking the model label selects; only the bar drags. */
+                resetClickState();
+                return true;
+            }
+
             startAttachmentDrag(
                     hit,
                     mouseX,
@@ -1185,6 +1192,11 @@ public class BodyPartsTimelineController
         int right = timeline.getFrameX(model.getEndFrame(), TIMELINE_START_X);
         int barTop = tracksTop +
                 ((mouseY - tracksTop) / TRACK_HEIGHT) * TRACK_HEIGHT + 4;
+        /* The model name in the left column is selectable too. */
+        if (mouseX >= 22 && mouseX < TIMELINE_START_X)
+        {
+            return model;
+        }
         return mouseX >= left && mouseX <= right && mouseY >= barTop
                 && mouseY <= barTop + 12 ? model : null;
     }
