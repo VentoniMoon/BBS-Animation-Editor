@@ -4733,10 +4733,21 @@ public class EditorGizmoController
          * as well as every other morph type.
          */
         boolean chameleonInternal = internalBone && isChameleonBodyPartTarget();
+        boolean emoticonsInternal = internalBone
+                && this.bodyPartRuntimeMorph
+                instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+        /*
+         * In an attached Emoticons BOBJ armature, the rendered Y/Z rotations
+         * are opposite the projected ring drag direction, while X is already
+         * correct. Reverse only the editor-to-BOBJ drag delta for Y/Z.
+         * The rendered child pivot and Position key writeback stay unchanged.
+         */
         double angle = Math.toRadians(
                 (blockbuster && axisId == AXIS_Y)
                         || (chameleonInternal
                             && (axisId == AXIS_X || axisId == AXIS_Z))
+                        || (emoticonsInternal
+                            && (axisId == AXIS_Y || axisId == AXIS_Z))
                         ? -amount
                         : amount
         );
@@ -5808,7 +5819,7 @@ public class EditorGizmoController
                 GL11.glTranslatef(0.0F, -1.501F, 0.0F);
                 renderer.postRender(0.0625F);
             }
-            else if (this.mode == Mode.POSITION
+            else if ((this.mode == Mode.POSITION || this.mode == Mode.ROTATION)
                     && this.bodyPartRuntimeMorph
                     instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
             {
