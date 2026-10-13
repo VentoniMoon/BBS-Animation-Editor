@@ -262,6 +262,13 @@ public class EditorSceneState
 
         this.selectedActor =
                 selectedActor;
+
+        if (this.bodyPartsController != null)
+        {
+            BlockbusterSceneActorData actor = actors.get(selectedActor);
+            this.bodyPartsController.selectActor(
+                    actor == null ? "" : actor.getId());
+        }
     }
 
 

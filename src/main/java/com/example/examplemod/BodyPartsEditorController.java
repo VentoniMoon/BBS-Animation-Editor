@@ -2,6 +2,8 @@ package com.example.examplemod;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 import mchorse.metamorph.api.morphs.AbstractMorph;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
@@ -20,6 +22,98 @@ public class BodyPartsEditorController
 
     private final List<BodyPartModelData> models =
             new ArrayList<BodyPartModelData>();
+
+    /*
+     * Body Parts belong to an actor, not to the whole scene.
+     * Keep the visible list stable for the existing editor panels,
+     * but switch its content when a different actor is selected.
+     */
+    private final Map<String, List<BodyPartModelData>> modelsByActor =
+            new LinkedHashMap<String, List<BodyPartModelData>>();
+    private String activeActorId = "";
+
+    public void selectActor(String actorId)
+    {
+        String id = actorId == null ? "" : actorId;
+        if (id.equals(this.activeActorId))
+        {
+            return;
+        }
+
+        if (!this.activeActorId.isEmpty())
+        {
+            this.modelsByActor.put(this.activeActorId,
+                    new ArrayList<BodyPartModelData>(this.models));
+        }
+
+        this.models.clear();
+        List<BodyPartModelData> saved = this.modelsByActor.get(id);
+        if (saved != null)
+        {
+            this.models.addAll(saved);
+        }
+        this.activeActorId = id;
+        this.importedRecordParts.clear();
+        this.importedActorSignature = "";
+        this.selectedAttachment = null;
+        this.selectedModel = null;
+        this.selectedActorBone = -1;
+        this.keyframeController.clearSelection();
+        int length = 1;
+        for (BodyPartModelData model : this.models)
+        {
+            length = Math.max(length, model.getEndFrame() + 1);
+        }
+        this.localTimeline.setLength(length);
+    }
+
+    public Map<String, List<BodyPartModelData>> snapshotActorModels()
+    {
+        Map<String, List<BodyPartModelData>> result =
+                new LinkedHashMap<String, List<BodyPartModelData>>();
+        for (Map.Entry<String, List<BodyPartModelData>> entry
+                : this.modelsByActor.entrySet())
+        {
+            result.put(entry.getKey(),
+                    new ArrayList<BodyPartModelData>(entry.getValue()));
+        }
+        if (!this.activeActorId.isEmpty())
+        {
+            result.put(this.activeActorId,
+                    new ArrayList<BodyPartModelData>(this.models));
+        }
+        return result;
+    }
+
+    public void restoreActorModels(
+            Map<String, List<BodyPartModelData>> restored, String selectedActorId)
+    {
+        this.modelsByActor.clear();
+        if (restored != null)
+        {
+            for (Map.Entry<String, List<BodyPartModelData>> entry
+                    : restored.entrySet())
+            {
+                this.modelsByActor.put(entry.getKey(),
+                        new ArrayList<BodyPartModelData>(entry.getValue()));
+            }
+        }
+        this.activeActorId = "";
+        this.models.clear();
+        selectActor(selectedActorId);
+    }
+
+    public List<BodyPartModelData> getModelsForActor(String actorId)
+    {
+        if (actorId != null && actorId.equals(this.activeActorId))
+        {
+            return new ArrayList<BodyPartModelData>(this.models);
+        }
+        List<BodyPartModelData> saved = this.modelsByActor.get(actorId);
+        return saved == null
+                ? new ArrayList<BodyPartModelData>()
+                : new ArrayList<BodyPartModelData>(saved);
+    }
 
     private List<AnimationBone> actorBones =
             new ArrayList<AnimationBone>();
@@ -52,6 +146,8 @@ public class BodyPartsEditorController
     /** Replace the saved attachment list after loading editor.dat. */
     public void restoreSavedModels(List<BodyPartModelData> restored)
     {
+        this.modelsByActor.clear();
+        this.activeActorId = "";
         this.models.clear();
         if (restored != null) this.models.addAll(restored);
         this.importedRecordParts.clear();

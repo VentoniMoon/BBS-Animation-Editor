@@ -348,9 +348,24 @@ public final class EditorSceneSerializer
          */
         if (scene.hasKey("BodyParts", 10))
         {
+            /*
+             * Legacy BodyParts without ActorId belonged to the single
+             * global list. Attach them to the first scene actor as a
+             * deterministic migration rather than sharing across actors.
+             */
+            String legacyOwner = "";
+            if (state.getSelectedActorData() != null)
+            {
+                legacyOwner = state.getSelectedActorData().getId();
+            }
+            else if (!state.getActors().isEmpty())
+            {
+                legacyOwner = state.getActors().get(0).getId();
+            }
             BodyPartsPersistence.read(
                     state.getBodyPartsController(),
-                    scene.getCompoundTag("BodyParts"));
+                    scene.getCompoundTag("BodyParts"),
+                    legacyOwner);
         }
     }
 
