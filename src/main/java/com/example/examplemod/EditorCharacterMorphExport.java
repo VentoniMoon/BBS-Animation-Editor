@@ -34,6 +34,13 @@ public final class EditorCharacterMorphExport
         }
     }
 
+    /** Public immutable action factory for Pose/Character export coordination. */
+    public static PreparedAction prepared(int frame, NBTTagCompound nbt)
+    {
+        if (nbt == null) throw new IllegalArgumentException("Action NBT is null");
+        return new PreparedAction(frame, nbt);
+    }
+
     /**
      * Prepare MorphAction data without changing Record. Only the main
      * track is eligible: model/body-part tracks do not change the actor.
