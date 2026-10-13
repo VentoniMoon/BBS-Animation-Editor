@@ -4788,6 +4788,60 @@ public class EditorGizmoController
         );
     }
 
+    private long lastEmoticonsRotationZDiagnosticMillis;
+
+    /**
+     * Compare good and reversed Emoticons Z rotations using actual BOBJ
+     * armature geometry, without changing their existing key writeback.
+     * The child matrix contains the parent hierarchy and may have a
+     * different local handedness for arms/legs than for *.end bones.
+     */
+    private void diagnoseEmoticonsRotationZ(AnimationBone bone, float mouseAngle)
+    {
+        if (bone == null || !(this.bodyPartRuntimeMorph
+                instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph))
+        {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - this.lastEmoticonsRotationZDiagnosticMillis < 350L)
+        {
+            return;
+        }
+        this.lastEmoticonsRotationZDiagnosticMillis = now;
+
+        mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph morph =
+                (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+                        this.bodyPartRuntimeMorph;
+        mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone nativeBone =
+                EmoticonsModelAccess.findBone(morph, bone.getName());
+        if (nativeBone == null || nativeBone.mat == null
+                || nativeBone.relBoneMat == null)
+        {
+            return;
+        }
+
+        javax.vecmath.Matrix4f m = nativeBone.mat;
+        javax.vecmath.Matrix4f rel = nativeBone.relBoneMat;
+        float determinant =
+                m.m00 * (m.m11 * m.m22 - m.m12 * m.m21)
+                - m.m01 * (m.m10 * m.m22 - m.m12 * m.m20)
+                + m.m02 * (m.m10 * m.m21 - m.m11 * m.m20);
+
+        System.out.println("[BBS EmoticonsRotationZ] bone=" + bone.getName()
+                + " parent=" + (nativeBone.parentBone == null
+                        ? "<root>" : nativeBone.parentBone.name)
+                + " mouseAngle=" + mouseAngle
+                + " startZ=" + this.dragStartRZ
+                + " currentZ=" + (bone.getTransformAt(this.gizmoFrame) == null
+                        ? 0.0F : bone.getTransformAt(this.gizmoFrame).getRotationZ())
+                + " determinant=" + determinant
+                + " nativeZ=(" + m.m02 + "," + m.m12 + "," + m.m22 + ")"
+                + " relX=(" + rel.m00 + "," + rel.m10 + "," + rel.m20 + ")"
+                + " relY=(" + rel.m01 + "," + rel.m11 + "," + rel.m21 + ")"
+                + " relZ=(" + rel.m02 + "," + rel.m12 + "," + rel.m22 + ")");
+    }
+
     private void applyBodyPartLocalRotationDelta(
             AnimationTransform transform,
             AnimationBone bone,
@@ -4844,6 +4898,11 @@ public class EditorGizmoController
          * correct. Reverse only the editor-to-BOBJ drag delta for Y/Z.
          * The rendered child pivot and Position key writeback stay unchanged.
          */
+        if (emoticonsInternal && axisId == AXIS_Z)
+        {
+            diagnoseEmoticonsRotationZ(bone, amount);
+        }
+
         double angle = Math.toRadians(
                 (blockbuster && axisId == AXIS_Y)
                         || (chameleonInternal
