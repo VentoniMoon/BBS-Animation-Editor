@@ -277,7 +277,22 @@ public class BlockbusterRecord
                     }
                 }
 
-                record.actions.add(tickActions);
+                /*
+                 * ActionTimeline is sparse: its index in the NBT list
+                 * is NOT the frame number. Keep each action at the
+                 * original recorded tick.
+                 */
+                int actionFrame = tickNBT.hasKey("Frame", 3)
+                        ? tickNBT.getInteger("Frame")
+                        : i;
+
+                if (actionFrame < 0)
+                {
+                    continue;
+                }
+
+                record.ensureSize(actionFrame + 1);
+                record.actions.set(actionFrame, tickActions);
             }
 
             /*
