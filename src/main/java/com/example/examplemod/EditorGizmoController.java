@@ -542,54 +542,12 @@ public class EditorGizmoController
             if (isBodyPartInternalBoneTarget(this.activeBone)
                     && isBlockbusterBodyPartTarget())
             {
-                /*
-                 * Dedicated Blockbuster Body Parts rotation path:
-                 * measure the mouse angle in the actual projected ring basis,
-                 * then apply that angle in renderer-local rotation space.
-                 * Convert the resulting matrix back to animation channels
-                 * exactly once in applyBodyPartLocalRotationDelta().
-                 *
-                 * Do not use Pose's direct Euler-channel write here: a ring
-                 * follows the bone's composed local basis, which is not
-                 * equivalent to incrementing one stored Euler component when
-                 * the bone already has combined rotations.
-                 */
-                /*
-                 * Use the same rotation-channel editing convention as the
-                 * working Blockbuster Pose gizmo. The Body Parts attachment
-                 * hierarchy still supplies the displayed ring basis, but
-                 * the selected child bone's key is edited directly rather
-                 * than passing the angle through an additional local-matrix
-                 * conjugation and Euler decomposition.
-                 */
-                float amount = (float) getRotationDragAngle(
-                        this.activePart, mouseX, mouseY
+                applyBlockbusterBodyPartRotation(
+                        transform,
+                        this.activePart,
+                        mouseX,
+                        mouseY
                 );
-
-                if (this.activePart == AXIS_X)
-                {
-                    transform.setRotation(
-                            this.dragStartRX + amount,
-                            this.dragStartRY,
-                            this.dragStartRZ
-                    );
-                }
-                else if (this.activePart == AXIS_Y)
-                {
-                    transform.setRotation(
-                            this.dragStartRX,
-                            this.dragStartRY + amount,
-                            this.dragStartRZ
-                    );
-                }
-                else
-                {
-                    transform.setRotation(
-                            this.dragStartRX,
-                            this.dragStartRY,
-                            this.dragStartRZ + amount
-                    );
-                }
             }
             else
             {
@@ -4277,6 +4235,63 @@ public class EditorGizmoController
      * rotation, then converted back to the key's Euler representation.
      * This avoids treating a local ring as a world/Euler component handle.
      */
+    /**
+     * Blockbuster child-bone rotation is a distinct coordinate adapter.
+     *
+     * The visible rings and mouse input use the composed child-bone world
+     * basis (the same projected basis as Pose). Do not mirror ring axes or
+     * change the drag basis here: those now track the mouse correctly.
+     *
+     * The stored child-bone Euler channels are not expressed in that visual
+     * basis. The root transform of a Blockbuster child is rotated 180 degrees
+     * around Y; in addition, ModelCustomRenderer negates stored Y/Z angles.
+     * These conversions reverse the apparent X/Z channel direction relative
+     * to the projected ring, while Y remains aligned. Convert exactly once
+     * at the boundary between ring-space input and stored animation data.
+     *
+     * Unlike the previous matrix-delta/Euler-decomposition path, changing
+     * one channel preserves the other two channels and their authored keys.
+     */
+    private void applyBlockbusterBodyPartRotation(
+            AnimationTransform transform,
+            int axisId,
+            double mouseX,
+            double mouseY)
+    {
+        if (transform == null || axisId < AXIS_X || axisId > AXIS_Z)
+        {
+            return;
+        }
+
+        float ringAngle = (float) accumulateRotationDragAngle(mouseX, mouseY);
+        float channelAngle = (axisId == AXIS_Y) ? ringAngle : -ringAngle;
+
+        if (axisId == AXIS_X)
+        {
+            transform.setRotation(
+                    this.dragStartRX + channelAngle,
+                    this.dragStartRY,
+                    this.dragStartRZ
+            );
+        }
+        else if (axisId == AXIS_Y)
+        {
+            transform.setRotation(
+                    this.dragStartRX,
+                    this.dragStartRY + channelAngle,
+                    this.dragStartRZ
+            );
+        }
+        else
+        {
+            transform.setRotation(
+                    this.dragStartRX,
+                    this.dragStartRY,
+                    this.dragStartRZ + channelAngle
+            );
+        }
+    }
+
     private void applyBodyPartLocalRotationDelta(
             AnimationTransform transform,
             AnimationBone bone,
