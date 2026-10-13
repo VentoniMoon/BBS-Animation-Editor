@@ -12,7 +12,7 @@ import net.minecraft.util.text.TextComponentString;
  * Здесь намеренно нет GUI и отрисовки.
  *
  * Горячие клавиши:
- * - Ctrl + S — сохранить весь редактор.
+ * - Ctrl + S — сохранить редактируемые данные проекта в .editor.dat.
  *
  * Состояние dirty хранится в EditorSaveController.
  */
@@ -75,8 +75,8 @@ public class EditorSaveInputController
 
         try
         {
-            this.saveController.save();
-            notifyPlayer("[BBS Editor] Scene, records and animation keys saved.");
+            this.saveController.saveEditorDataOnly();
+            notifyPlayer("[BBS Editor] Animation project saved (.editor.dat). Records unchanged.");
             return true;
         }
         catch (Exception e)
@@ -89,7 +89,7 @@ public class EditorSaveInputController
              */
             e.printStackTrace();
             notifyPlayer("[BBS Editor] Save ERROR: " + e.getMessage()
-                    + " (check latest.log; editor keys may already be saved)");
+                    + " (check latest.log)");
             return false;
         }
     }
