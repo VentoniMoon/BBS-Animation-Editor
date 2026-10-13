@@ -153,13 +153,13 @@ public final class EditorEmoticonsPoseExport
                 transform.setFloat("SZ", (transform.hasKey("SZ", 99)
                         ? transform.getFloat("SZ") : 1F) * value.getScaleZ());
 
-                int state = CharacterBodyPartOverrideController.getEffectiveKeyState(
+                int boneState = CharacterBodyPartOverrideController.getEffectiveKeyState(
                         timeline, frame.getFrame(), bone.getKey());
-                if (state == CharacterBodyPartOverrideController.STATE_DISABLE)
+                if (boneState == CharacterBodyPartOverrideController.STATE_DISABLE)
                 {
                     transform.setBoolean("F", false);
                 }
-                else if (state == CharacterBodyPartOverrideController.STATE_ENABLE)
+                else if (boneState == CharacterBodyPartOverrideController.STATE_ENABLE)
                 {
                     transform.removeTag("F");
                 }
