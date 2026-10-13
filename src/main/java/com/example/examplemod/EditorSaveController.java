@@ -392,7 +392,10 @@ public class EditorSaveController
             try (FileOutputStream output = new FileOutputStream(temp.toFile()))
             {
                 CompressedStreamTools.writeCompressed(root, output);
-                output.getFD().sync();
+                // Closing the stream flushes Java-side buffers. The
+                // subsequent NBT read-back validates the saved bytes.
+                // FileDescriptor.sync() fails on some Windows/Java 8
+                // configurations even after a successful write.
             }
 
             NBTTagCompound verified;
