@@ -243,6 +243,12 @@ public class AnimationEditorInput
 
         this.transformDragging = false;
 
+        /* Stage 8 Preview visibility / camera toggles get first chance. */
+        if (this.screen.clickStage8PreviewButton(mouseX, mouseY, mouseButton))
+        {
+            return;
+        }
+
         /*
          * =========================================================
          * STAGE 5 - GIZMO

@@ -53,6 +53,12 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
+    private final EditorMultiActorPreviewController multiActorPreview =
+            new EditorMultiActorPreviewController();
+
+    private final EditorPreviewAutoFocusController previewAutoFocus =
+            new EditorPreviewAutoFocusController();
+
     private final EditorModeController editorModeController =
             new EditorModeController();
 
@@ -1484,6 +1490,8 @@ public class AnimationEditorScreen extends GuiScreen
 
     public void loadScene(int index)
     {
+        this.multiActorPreview.reset();
+        this.previewAutoFocus.reset();
         try
         {
             if (!this.sceneState.loadScene(index))
@@ -2734,6 +2742,8 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
+        updatePreviewAutoFocus();
+
         this.sceneViewport.draw(
                 mc,
                 this.recordController
@@ -2743,6 +2753,14 @@ public class AnimationEditorScreen extends GuiScreen
                 this.playbackController
                         .getCurrentFrame()
         );
+
+        /*
+         * Draw background actors first. Selected actor and gizmo remain
+         * on the exact pre-stage-8 path.
+         */
+        this.multiActorPreview.drawBackgroundActors(
+                mc, this.sceneViewport, this.sceneState,
+                getSelectedActor(), this.playbackController.getCurrentFrame());
 
         this.sceneViewport.drawActor(
                 mc,
@@ -2814,6 +2832,8 @@ public class AnimationEditorScreen extends GuiScreen
                 top,
                 bottom
         );
+
+        drawStage8PreviewButtons(previewRight, top);
 
         /*
          * ---------------------------------------------------------
@@ -2936,6 +2956,94 @@ public class AnimationEditorScreen extends GuiScreen
                 top + 10,
                 COLOR_TEXT_MUTED
         );
+    }
+
+    /**
+     * Two independent toggle buttons below the gizmo tools:
+     * group = render all actors; target = focus camera upon key selection.
+     */
+    private void drawStage8PreviewButtons(int right, int top)
+    {
+        int x = right - 36;
+        int y = top + 124;
+
+        drawToolbarButton(x, y, 26, 26, multiActorPreview.isShowAllActors());
+        drawCenteredString(fontRenderer, "ALL", x + 13, y + 9,
+                multiActorPreview.isShowAllActors()
+                        ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+
+        drawToolbarButton(x, y + 32, 26, 26, previewAutoFocus.isEnabled());
+        drawCenteredString(fontRenderer, "F", x + 13, y + 9 + 32,
+                previewAutoFocus.isEnabled()
+                        ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+    }
+
+    public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
+    {
+        if (this.sceneViewport == null || button != 0) return false;
+        int x = this.sceneViewport.getX() + this.sceneViewport.getWidth() - 36;
+        int y = this.sceneViewport.getY() + 124;
+        if (mouseX >= x && mouseX < x + 26)
+        {
+            if (mouseY >= y && mouseY < y + 26)
+            {
+                multiActorPreview.toggleShowAllActors();
+                return true;
+            }
+            if (mouseY >= y + 32 && mouseY < y + 58)
+            {
+                previewAutoFocus.toggle();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void updatePreviewAutoFocus()
+    {
+        if (this.sceneState == null || this.sceneViewport == null)
+        {
+            return;
+        }
+
+        Object key = null;
+        int frame = this.playbackController.getCurrentFrame();
+
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.POSE)
+        {
+            AnimationKeyframe selected = this.keyframeController.getSelectedKeyframe();
+            if (selected != null)
+            {
+                key = selected;
+                frame = selected.getFrame();
+            }
+        }
+        else if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
+        {
+            AnimationKeyframe selected = this.bodyPartsController
+                    .getKeyframeController().getSelectedKeyframe();
+            if (selected != null)
+            {
+                key = selected;
+                frame = selected.getFrame();
+            }
+        }
+        else if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CHARACTER)
+        {
+            CharacterKey selected =
+                    this.characterTimelineEditorController.getSelectedKey();
+            if (selected != null)
+            {
+                key = selected;
+                frame = selected.getFrame();
+            }
+        }
+
+        this.previewAutoFocus.update(this.sceneViewport, getSelectedActor(),
+                key, frame, this.playbackController.isPlaying());
     }
 
     private void drawPreviewControls(
