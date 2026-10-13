@@ -5708,6 +5708,49 @@ public class EditorGizmoController
                     + error.getClass().getName() + ": " + String.valueOf(error.getMessage())));
     }
 
+    private long lastEmoticonsChildPivotDiagnosticMillis;
+
+    private void diagnoseEmoticonsChildPivot(
+            AnimationBone bone,
+            mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone nativeBone,
+            float scale)
+    {
+        if (bone == null || nativeBone == null || nativeBone.mat == null
+                || this.mode != Mode.POSITION)
+        {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - this.lastEmoticonsChildPivotDiagnosticMillis < 750L)
+        {
+            return;
+        }
+        this.lastEmoticonsChildPivotDiagnosticMillis = now;
+
+        AnimationTransform key = bone.getTransformAt(this.gizmoFrame);
+        float kx = key == null ? 0.0F : key.getPositionX();
+        float ky = key == null ? 0.0F : key.getPositionY();
+        float kz = key == null ? 0.0F : key.getPositionZ();
+        javax.vecmath.Matrix4f matrix = nativeBone.mat;
+        javax.vecmath.Matrix4f rest = nativeBone.boneMat;
+
+        System.out.println("[BBS EmoticonsChildPivot] bone=" + bone.getName()
+                + " frame=" + this.gizmoFrame
+                + " key=(" + kx + "," + ky + "," + kz + ")"
+                + " native=(" + matrix.m03 + "," + matrix.m13
+                + "," + matrix.m23 + ")"
+                + " rest=("
+                + (rest == null ? "null" : Float.toString(rest.m03)) + ","
+                + (rest == null ? "null" : Float.toString(rest.m13)) + ","
+                + (rest == null ? "null" : Float.toString(rest.m23)) + ")"
+                + " childScale=" + scale
+                + " boneXYZ=(" + nativeBone.x + ","
+                + nativeBone.y + "," + nativeBone.z + ")"
+                + " parent=" + (nativeBone.parentBone == null
+                        ? "<root>" : nativeBone.parentBone.name));
+    }
+
     private float[] getBodyPartNativeLocalBoneMatrix(AnimationBone bone)
     {
         if (bone == null || this.bodyPartRuntimeMorph == null)
@@ -5785,6 +5828,13 @@ public class EditorGizmoController
 
                 float scale = child.animator.userConfig.scale;
                 javax.vecmath.Matrix4f childMatrix = sourceBone.mat;
+
+                /*
+                 * Compare native child translation against the selected
+                 * editor key and original BOBJ pivot. This probe deliberately
+                 * does not alter the successful model writeback or rotation.
+                 */
+                diagnoseEmoticonsChildPivot(bone, sourceBone, scale);
 
                 /* Native Emoticons matrices are model-space block units. */
                 GL11.glScalef(scale, scale, scale);
