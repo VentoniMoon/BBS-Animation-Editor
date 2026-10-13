@@ -144,6 +144,7 @@ public class BodyPartsPreviewRenderer
      */
     public net.minecraft.nbt.NBTTagList exportParts(
             BodyPartsEditorController controller, int frame)
+            throws java.io.IOException
     {
         net.minecraft.nbt.NBTTagList result =
                 new net.minecraft.nbt.NBTTagList();
@@ -165,8 +166,28 @@ public class BodyPartsPreviewRenderer
             BodyPart part = createBodyPart(data, frame);
             if (part == null)
             {
-                continue;
+                throw new java.io.IOException(
+                        "Unable to export attached BodyPart '"
+                        + data.getModelNameAt(frame) + "' on bone '"
+                        + data.getAttachmentBoneName() + "' at tick " + frame);
             }
+
+            /*
+             * Child pose snapshots also arrive every tick. Give nested
+             * Blockbuster morphs the same one-tick rendering transition
+             * as the actor's parent CustomMorph.
+             */
+            if (part.morph != null
+                    && part.morph.get() instanceof CustomMorph)
+            {
+                CustomMorph child = (CustomMorph) part.morph.get();
+                child.animation.duration = 1;
+                child.animation.animates = true;
+                child.animation.ignored = false;
+                child.animation.interp =
+                        mchorse.mclib.utils.Interpolation.LINEAR;
+            }
+
             net.minecraft.nbt.NBTTagCompound tag =
                     new net.minecraft.nbt.NBTTagCompound();
             part.toNBT(tag);
