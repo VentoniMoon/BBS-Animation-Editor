@@ -1100,8 +1100,12 @@ public class BodyPartsTimelineController
 
             if (mouseX < TIMELINE_START_X)
             {
-                /* Clicking the model label selects; only the bar drags. */
-                resetClickState();
+                /* Labels select and support the same double-click to edit. */
+                lastClickTime = now;
+                lastClickX = mouseX;
+                lastClickY = mouseY;
+                lastClickBone = boneIndex;
+                lastClickedAttachment = hit;
                 return true;
             }
 
