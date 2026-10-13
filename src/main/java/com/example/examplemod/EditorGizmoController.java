@@ -4126,6 +4126,53 @@ public class EditorGizmoController
 
         diagnoseBlockbusterBodyPartRotationPose(bone, frame);
 
+        /*
+         * Isolate Blockbuster Body Parts Rotation from cached camera-dependent
+         * worldTransformation. Evaluate the limb hierarchy using postRender()
+         * with identity modelview, including its CustomMorph root conversion.
+         * The source includes child scale/mirror already: do not double it.
+         */
+        if (this.mode == Mode.ROTATION
+                && this.bodyPartTarget != null
+                && bone != this.bodyPartAttachmentBone
+                && isBlockbusterBodyPartTarget())
+        {
+            float[] nativeMatrix = getBodyPartNativeLocalBoneMatrix(bone);
+            if (nativeMatrix != null)
+            {
+                float[][] localNative = new float[][]
+                {
+                    {nativeMatrix[0], nativeMatrix[4], nativeMatrix[8]},
+                    {nativeMatrix[1], nativeMatrix[5], nativeMatrix[9]},
+                    {nativeMatrix[2], nativeMatrix[6], nativeMatrix[10]}
+                };
+                float[][] composedNative = multiplyMatrix(attachmentMatrix,
+                        multiplyMatrix(globalRotation,
+                                multiplyMatrix(globalScale, localNative)));
+                double[][] nativeAxes = new double[3][3];
+                boolean usable = true;
+                for (int axis = 0; axis < 3; axis++)
+                {
+                    double nx = composedNative[0][axis];
+                    double ny = composedNative[1][axis];
+                    double nz = composedNative[2][axis];
+                    double length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+                    if (!isFinite(length) || length < 0.000001D)
+                    {
+                        usable = false;
+                        break;
+                    }
+                    nativeAxes[axis][0] = nx / length;
+                    nativeAxes[axis][1] = ny / length;
+                    nativeAxes[axis][2] = nz / length;
+                }
+                if (usable)
+                {
+                    return nativeAxes;
+                }
+            }
+        }
+
         float[][] worldMatrix = multiplyMatrix(
                 attachmentMatrix,
                 multiplyMatrix(
