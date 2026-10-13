@@ -7,6 +7,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
 
 public class BlockbusterRecordIO
 {
@@ -208,20 +212,65 @@ public class BlockbusterRecordIO
          * -----------------------------------------------------
          */
 
-        FileOutputStream output =
-                new FileOutputStream(file);
+        /*
+         * Never truncate the original recording before the replacement
+         * has been written and validated. Save a sibling temporary file
+         * first, then preserve the old record as a timestamped backup.
+         */
+        File absoluteFile = file.getAbsoluteFile();
+        File directory = absoluteFile.getParentFile();
+        Path destination = absoluteFile.toPath();
+        Path temporary = Files.createTempFile(
+                directory.toPath(), absoluteFile.getName() + ".", ".tmp");
+
+        boolean replaced = false;
 
         try
         {
-            CompressedStreamTools
-                    .writeCompressed(
-                            root,
-                            output
-                    );
+            try (FileOutputStream output = new FileOutputStream(temporary.toFile()))
+            {
+                CompressedStreamTools.writeCompressed(root, output);
+                output.getFD().sync();
+            }
+
+            NBTTagCompound verification;
+            try (FileInputStream input = new FileInputStream(temporary.toFile()))
+            {
+                verification = CompressedStreamTools.readCompressed(input);
+            }
+
+            if (verification == null || !verification.equals(root))
+            {
+                throw new IOException("Record NBT verification failed: " + absoluteFile);
+            }
+
+            if (Files.exists(destination))
+            {
+                Path backup = directory.toPath().resolve(
+                        absoluteFile.getName() + ".backup-" + System.currentTimeMillis());
+                Files.copy(destination, backup, StandardCopyOption.COPY_ATTRIBUTES);
+            }
+
+            try
+            {
+                Files.move(temporary, destination,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (AtomicMoveNotSupportedException e)
+            {
+                Files.move(temporary, destination,
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            replaced = true;
         }
         finally
         {
-            output.close();
+            if (!replaced)
+            {
+                Files.deleteIfExists(temporary);
+            }
         }
 
         System.out.println(
