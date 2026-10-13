@@ -127,6 +127,17 @@ public final class EditorEmoticonsPoseExport
             }
 
             NBTTagCompound result = active.copy();
+
+            /*
+             * Character Animation Setup lives in editor CharacterKeys,
+             * not in the morph snapshot. Bake its effective values into
+             * native Emoticons UserData for each exported Record tick.
+             * No runtime Preview animator or source morph is modified.
+             */
+            result.setTag("UserData",
+                    CharacterAnimationSetupController.exportUserData(
+                            actor, frame.getFrame(), (AnimatedMorph) loaded));
+
             NBTTagCompound pose = result.hasKey("Pose", 10)
                     ? result.getCompoundTag("Pose").copy()
                     : new NBTTagCompound();
