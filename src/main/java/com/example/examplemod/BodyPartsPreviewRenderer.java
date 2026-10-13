@@ -3,6 +3,7 @@ package com.example.examplemod;
 import java.util.List;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 import mchorse.blockbuster.api.Model;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
@@ -33,6 +34,17 @@ public class BodyPartsPreviewRenderer
     /* Runtime morphs used by the actual Metamorph body-part render pass. */
     private final Map<BodyPartModelData, AbstractMorph> preparedMorphs =
             new IdentityHashMap<BodyPartModelData, AbstractMorph>();
+
+    /*
+     * Preserve the unanimated pose of each runtime child morph. Some
+     * morph-backed Body Parts reuse the same CustomMorph across preview
+     * frames. Without this snapshot, child.customPose is already offset by
+     * the previous editor frame and the next frame adds the key a second
+     * time. The gizmo always evaluates base + current key, so the two
+     * would drift apart. Weak keys avoid retaining temporary child morphs.
+     */
+    private final Map<CustomMorph, mchorse.blockbuster.api.ModelPose> originalChildPoses =
+            new WeakHashMap<CustomMorph, mchorse.blockbuster.api.ModelPose>();
 
     public AbstractMorph getPreparedMorph(BodyPartModelData data)
     {
@@ -749,10 +761,23 @@ public class BodyPartsPreviewRenderer
             CustomMorph.ModelProperties pose =
                     new CustomMorph.ModelProperties();
 
-            mchorse.blockbuster.api.ModelPose sourcePose =
-                    child.customPose != null
-                            ? child.customPose
-                            : apiModel.getPose(child.currentPose);
+            mchorse.blockbuster.api.ModelPose sourcePose;
+            if (this.originalChildPoses.containsKey(child))
+            {
+                sourcePose = this.originalChildPoses.get(child);
+            }
+            else
+            {
+                sourcePose = child.customPose != null
+                        ? child.customPose
+                        : apiModel.getPose(child.currentPose);
+                /*
+                 * Cache before editor offsets are applied, including null.
+                 * The source pose is only read/copied below; the animated
+                 * result is a separate ModelProperties instance.
+                 */
+                this.originalChildPoses.put(child, sourcePose);
+            }
 
             if (sourcePose != null)
             {
