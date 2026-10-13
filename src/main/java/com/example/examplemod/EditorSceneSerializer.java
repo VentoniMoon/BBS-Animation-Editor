@@ -833,6 +833,11 @@ public final class EditorSceneSerializer
                     bone.getLocalZ()
             );
 
+            /* Preserve the imported rest-pose rotation as well as key deltas. */
+            tag.setFloat("BaseRX", bone.getBaseRotationX());
+            tag.setFloat("BaseRY", bone.getBaseRotationY());
+            tag.setFloat("BaseRZ", bone.getBaseRotationZ());
+
 
             /*
              * -------------------------------------------------
@@ -947,6 +952,12 @@ public final class EditorSceneSerializer
                     )
             );
 
+
+            /* Older editor.dat files did not contain rest rotations. */
+            bone.setBaseRotation(
+                    tag.getFloat("BaseRX"),
+                    tag.getFloat("BaseRY"),
+                    tag.getFloat("BaseRZ"));
 
             /*
              * Keyframes.
