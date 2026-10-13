@@ -5773,6 +5773,15 @@ public class EditorGizmoController
                 }
                 catch (Throwable ignored) {}
                 GL11.glScalef(scale, scale, scale);
+                /*
+                 * Metamorph BodyPart.render() temporarily forces the child's
+                 * renderYawOffset to zero. ChameleonMorph.render() then applies
+                 * -renderYawOffset + 180 degrees around Y before its bones.
+                 * Match that root transform when resolving the native pivot.
+                 * This reverses the rest X/Z anchor without altering the
+                 * already-working animation writeback.
+                 */
+                GL11.glRotatef(180.0F, 0.0F, 1.0F, 0.0F);
                 Object result = postRender.invoke(null, model, bone.getName());
                 if (result instanceof Boolean && !((Boolean) result).booleanValue())
                 {
@@ -6217,9 +6226,14 @@ public class EditorGizmoController
                     float dx = evaluated.getPositionX() - rest.getPositionX();
                     float dy = evaluated.getPositionY() - rest.getPositionY();
                     float dz = evaluated.getPositionZ() - rest.getPositionZ();
-                    px += 2.0F * dx;
+                    /*
+                     * With the missing ChameleonMorph root Y=180 transform
+                     * restored in the native matrix above, native X/Z now
+                     * advance with the bone. The old doubled corrections
+                     * would move the gizmo too far; keep only the existing
+                     * Y compensation, which was already correct.
+                     */
                     py += dy;
-                    pz += 2.0F * dz;
 
                     diagnoseChameleonBodyPartPivot(
                             bone, frame, nativeChildMatrix, dx, dy, dz,
