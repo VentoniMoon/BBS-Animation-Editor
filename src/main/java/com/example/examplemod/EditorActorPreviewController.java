@@ -136,7 +136,12 @@ public class EditorActorPreviewController
 
     public void clearBones()
     {
-        this.bones.clear();
+        /*
+         * The current list can be owned by ActorAnimationData.
+         * Clearing it in-place destroys that actor's keyframes.
+         * Detach the preview instead of mutating the saved data.
+         */
+        this.bones = new ArrayList<AnimationBone>();
     }
 
 
@@ -346,6 +351,17 @@ public class EditorActorPreviewController
         setBones(
                 data.getBones()
         );
+        int restoredKeys = 0;
+        for (AnimationBone bone : this.bones)
+        {
+            if (bone != null)
+            {
+                restoredKeys += bone.getKeyframes().size();
+            }
+        }
+        System.out.println("[BBS Animation Editor] Selected actor Pose: id="
+                + actorId + ", bones=" + this.bones.size()
+                + ", keyframes=" + restoredKeys);
 
         keyframeController
                 .setSelectedBoneIndex(
