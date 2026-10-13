@@ -139,6 +139,15 @@ public class BlockbusterActorPreviewRenderer
 
             if (morph != null)
             {
+                /*
+                 * Mirror CharacterStateResolver: attach the morph to the
+                 * runtime actor BEFORE creating its Emoticons animator.
+                 * Background actors previously did this in reverse order.
+                 */
+                entityActor.morph.setDirect(
+                        morph
+                );
+
                 if (EmoticonsActorPreviewRenderer
                         .isSupported(morph))
                 {
@@ -147,10 +156,6 @@ public class BlockbusterActorPreviewRenderer
                                     (AnimatedMorph) morph
                             );
                 }
-
-                entityActor.morph.setDirect(
-                        morph
-                );
 
                 this.loadedMorphSignature =
                         signature;
