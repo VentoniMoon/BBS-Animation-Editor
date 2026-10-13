@@ -207,6 +207,7 @@ public class CharacterTimelineEditorController
     private int dragTrack = -1;
 
     private CharacterKey dragKey = null;
+    private boolean copyCharacterKeyOnDrag = false;
 
     private boolean draggingBodyPart = false;
     private int dragBodyPartFrame = -1;
@@ -1760,6 +1761,9 @@ public class CharacterTimelineEditorController
                 this.draggingKey = true;
                 this.dragTrack = trackIndex;
                 this.dragKey = clickedKey;
+                this.copyCharacterKeyOnDrag =
+                        Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
+                        || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
 
                 resetDoubleClickState();
 
@@ -2040,6 +2044,28 @@ public class CharacterTimelineEditorController
             return true;
         }
 
+        if (this.copyCharacterKeyOnDrag)
+        {
+            if (frame == this.dragKey.getFrame())
+            {
+                return true;
+            }
+
+            /*
+             * Preserve the entire character state NBT (skin, morph,
+             * animation, action and bone flags), not just the key type.
+             * Create the copy only after movement so Ctrl+click is safe.
+             */
+            CharacterKey duplicate = CharacterKey.fromNBT(
+                    this.dragKey.toNBT().copy());
+            duplicate.setFrame(frame);
+            track.addKey(duplicate);
+            this.dragKey = duplicate;
+            this.selectedKey = duplicate;
+            this.copyCharacterKeyOnDrag = false;
+            return true;
+        }
+
         this.dragKey.setFrame(frame);
 
         track.sortKeys();
@@ -2067,6 +2093,7 @@ public class CharacterTimelineEditorController
         this.draggingKey = false;
         this.dragTrack = -1;
         this.dragKey = null;
+        this.copyCharacterKeyOnDrag = false;
     }
 
 
