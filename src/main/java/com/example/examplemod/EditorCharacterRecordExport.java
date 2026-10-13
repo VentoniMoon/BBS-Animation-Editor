@@ -40,9 +40,37 @@ public final class EditorCharacterRecordExport
 
         List<EditorCharacterMorphExport.PreparedAction> actions =
                 EditorCharacterMorphExport.prepare(actorData);
+        /*
+         * Pose export is opt-in through the same explicit shortcut.
+         * For native Blockbuster models the Pose action contains the
+         * active Character morph and the sampled bone transforms.
+         * No changes to the old Character-only path for other models.
+         */
+        ActorAnimationData pose = state.getAnimationData() == null
+                ? null : state.getAnimationData().getActor(actorData.getId());
+        boolean hasPose = false;
+        if (pose != null)
+        {
+            for (AnimationBone bone : pose.getBones())
+            {
+                if (bone != null && bone.getKeyframes() != null
+                        && !bone.getKeyframes().isEmpty())
+                {
+                    hasPose = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasPose)
+        {
+            actions = EditorBlockbusterPoseActions.prepare(
+                    state, actorData, actions);
+        }
+
         if (actions.isEmpty())
         {
-            throw new IOException("No exportable main-track Morph keys for this actor");
+            throw new IOException("No exportable Character or Pose keys for this actor");
         }
 
         NBTTagCompound originalNbt;
