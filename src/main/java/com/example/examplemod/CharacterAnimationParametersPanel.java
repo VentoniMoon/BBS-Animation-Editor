@@ -377,17 +377,26 @@ public class CharacterAnimationParametersPanel
         this.fieldSignature = signature;
         this.suppressFieldSync = true;
 
-        this.speedField.setText(
-                formatFloat(config.speed)
-        );
+        /*
+         * Do not overwrite the field being edited. Partial input such
+         * as an empty string, "-" or "0." is normal while typing.
+         * Otherwise each successful keystroke resets the signature,
+         * and the next draw replaces the user's text immediately.
+         */
+        if (!this.speedField.isFocused())
+        {
+            this.speedField.setText(formatFloat(config.speed));
+        }
 
-        this.fadeField.setText(
-                String.valueOf((int) config.fade)
-        );
+        if (!this.fadeField.isFocused())
+        {
+            this.fadeField.setText(String.valueOf((int) config.fade));
+        }
 
-        this.tickField.setText(
-                String.valueOf(config.tick)
-        );
+        if (!this.tickField.isFocused())
+        {
+            this.tickField.setText(String.valueOf(config.tick));
+        }
 
         this.suppressFieldSync = false;
     }
