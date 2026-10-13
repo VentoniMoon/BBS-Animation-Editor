@@ -139,12 +139,6 @@ public class AnimationEditorScreen extends GuiScreen
     private EditorSceneState sceneState;
     private EditorSceneViewport sceneViewport;
 
-    /*
-     * Session-only UI selection. Kept across Esc/reopening, without saving
-     * unsaved animations or mixing scenes from different worlds.
-     */
-    private static String lastOpenedScenePath = "";
-    private static String lastEditedActorId = "";
 
 
     /*
@@ -329,7 +323,7 @@ public class AnimationEditorScreen extends GuiScreen
             syncCharacterEditor();
 
             resetTimeline(1);
-            restoreLastEditorSelection();
+            EditorSessionSelection.restore(this, this.sceneState);
 
             return;
         }
@@ -379,65 +373,6 @@ public class AnimationEditorScreen extends GuiScreen
          */
 
         updateSceneViewportPosition();
-    }
-
-    /**
-     * Reopen the actor and scene that were selected before closing with Esc.
-     * The canonical file path prevents restoring into another world with
-     * a scene having the same name. No editor data is auto-saved here.
-     */
-    private void restoreLastEditorSelection()
-    {
-        if (this.sceneState == null || lastOpenedScenePath.isEmpty())
-        {
-            return;
-        }
-
-        List<File> available = this.sceneState.getSceneFiles();
-        for (int i = 0; i < available.size(); i++)
-        {
-            File file = available.get(i);
-            if (file == null || !file.getAbsolutePath().equals(lastOpenedScenePath))
-            {
-                continue;
-            }
-
-            loadScene(i);
-            if (this.sceneState.getSelectedScene() != i)
-            {
-                return;
-            }
-
-            List<BlockbusterSceneActorData> actors = getSceneActors();
-            for (int j = 0; j < actors.size(); j++)
-            {
-                BlockbusterSceneActorData actor = actors.get(j);
-                if (actor != null && lastEditedActorId.equals(actor.getId()))
-                {
-                    selectActor(j);
-                    break;
-                }
-            }
-            return;
-        }
-    }
-
-    private void rememberLastEditorSelection()
-    {
-        if (this.sceneState == null)
-        {
-            return;
-        }
-        int index = this.sceneState.getSelectedScene();
-        List<File> scenes = this.sceneState.getSceneFiles();
-        if (index < 0 || index >= scenes.size() || scenes.get(index) == null)
-        {
-            return;
-        }
-
-        lastOpenedScenePath = scenes.get(index).getAbsolutePath();
-        BlockbusterSceneActorData actor = this.sceneState.getSelectedActorData();
-        lastEditedActorId = actor == null ? "" : actor.getId();
     }
 
     /*
@@ -3471,7 +3406,7 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
-        rememberLastEditorSelection();
+        EditorSessionSelection.remember(this.sceneState);
 
         if (this.editorInput != null)
         {
