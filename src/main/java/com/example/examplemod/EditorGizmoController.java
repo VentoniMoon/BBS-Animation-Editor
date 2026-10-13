@@ -322,22 +322,17 @@ public class EditorGizmoController
             if (blockbusterBodyPartRotation)
             {
                 /*
-                 * Blockbuster Body Parts has its own rotation-ring mapping.
-                 * Use the actual projected ring radius, not normalized screen
-                 * directions: normalization turns a perspective ellipse into
-                 * an artificial circle and makes the mouse angle disagree
-                 * with the ring that is actually drawn.
+                 * Match the actual world-space 3D ring projected into the
+                 * viewport. The regular normalized screen-direction basis
+                 * treats perspective ellipses as circles and can disagree
+                 * with the rendered handle. Do not modify the ring axes:
+                 * only measure its true projected A/B vectors here.
                  */
-                /*
-                 * The mouse basis must match the actual visible ring geometry.
-                 * Blockbuster mirrors the displayed X/Z ring axes, so use the
-                 * same displayAxes here. The resulting angle is then converted
-                 * back to the bone's rotation convention per axis below.
-                 */
-                setRotationDragBasis(
+                setBlockbusterBodyPartRotationDragBasis(
                         this.activePart,
                         gizmoWorld,
                         displayAxes,
+                        gizmoSize,
                         viewportX, viewportY, viewportWidth, viewportHeight,
                         center,
                         camera
