@@ -24,10 +24,13 @@ public final class BodyPartsPersistence
         NBTTagList attachments = new NBTTagList();
         if (controller != null)
         {
-            for (BodyPartModelData model : controller.getModels())
+            for (Map.Entry<String, List<BodyPartModelData>> owner
+                    : controller.snapshotActorModels().entrySet())
+            for (BodyPartModelData model : owner.getValue())
             {
                 if (model == null) continue;
                 NBTTagCompound tag = new NBTTagCompound();
+                tag.setString("ActorId", owner.getKey());
                 tag.setString("Model", model.getModelName());
                 tag.setString("Attachment", model.getAttachmentBoneName());
                 tag.setInteger("Start", model.getStartFrame());
@@ -73,14 +76,16 @@ public final class BodyPartsPersistence
         return root;
     }
 
-    public static void read(BodyPartsEditorController controller, NBTTagCompound root)
+    public static void read(BodyPartsEditorController controller,
+            NBTTagCompound root, String selectedActorId)
     {
         if (controller == null || root == null || !root.hasKey("Attachments", 9))
         {
             return;
         }
 
-        List<BodyPartModelData> loaded = new ArrayList<BodyPartModelData>();
+        Map<String, List<BodyPartModelData>> loaded =
+                new java.util.LinkedHashMap<String, List<BodyPartModelData>>();
         NBTTagList attachments = root.getTagList("Attachments", 10);
         for (int i = 0; i < attachments.tagCount(); i++)
         {
@@ -165,10 +170,22 @@ public final class BodyPartsPersistence
                 }
             }
             model.restoreModelKeys(modelKeys);
-            loaded.add(model);
+            /*
+             * Older editor.dat attachments have no ActorId. Bind those
+             * legacy entries to the currently selected actor once rather
+             * than sharing them with every actor in the scene.
+             */
+            String owner = tag.hasKey("ActorId", 8)
+                    ? tag.getString("ActorId")
+                    : (selectedActorId == null ? "" : selectedActorId);
+            if (!loaded.containsKey(owner))
+            {
+                loaded.put(owner, new ArrayList<BodyPartModelData>());
+            }
+            loaded.get(owner).add(model);
         }
 
-        controller.restoreSavedModels(loaded);
+        controller.restoreActorModels(loaded, selectedActorId);
     }
 
     private static NBTTagCompound writeTransform(AnimationTransform value)
