@@ -37,7 +37,7 @@ public final class EditorEmoticonsPoseExport
         }
 
         List<EditorPoseExportSampler.SampledFrame> frames =
-                EditorPoseExportSampler.sampleSelected(state);
+                EditorPoseExportSampler.sampleSelected(state, true);
         Map<Integer, NBTTagCompound> changes =
                 new TreeMap<Integer, NBTTagCompound>();
         byte morphType = 12;
@@ -80,6 +80,16 @@ public final class EditorEmoticonsPoseExport
                 }
             }
         }
+
+        /*
+         * Body Parts use the exact attachment serializer already verified
+         * for Blockbuster models. The parent stays AnimatedMorph.
+         */
+        BodyPartsEditorController bodyParts = state.getBodyPartsController();
+        boolean exportBodyParts = bodyParts != null
+                && !bodyParts.getModels().isEmpty();
+        BodyPartsPreviewRenderer partsSerializer = exportBodyParts
+                ? new BodyPartsPreviewRenderer() : null;
 
         NBTTagCompound active = source.copy();
         List<EditorCharacterMorphExport.PreparedAction> output =
@@ -175,6 +185,17 @@ public final class EditorEmoticonsPoseExport
                     transform.removeTag("F");
                 }
                 pose.setTag(bone.getKey(), transform);
+            }
+
+            /*
+             * Overwrite attachments at every tick, including after the
+             * final active range. Otherwise the merged morph may retain
+             * its previous attachments indefinitely.
+             */
+            if (exportBodyParts)
+            {
+                result.setTag("BodyParts", partsSerializer.exportParts(
+                        bodyParts, frame.getFrame()));
             }
 
             result.setTag("Pose", pose);
