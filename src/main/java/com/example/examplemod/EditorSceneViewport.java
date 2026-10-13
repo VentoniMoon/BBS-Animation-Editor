@@ -372,6 +372,22 @@ public class EditorSceneViewport
     }
 
 
+    /**
+     * Render an unselected actor in the same world/camera pass.
+     * The selected actor's established renderer is intentionally untouched.
+     */
+    public void drawAdditionalActor(
+            Minecraft mc,
+            BlockbusterSceneActorData data,
+            BlockbusterRecordFrame frame,
+            BlockbusterActorPreviewRenderer renderer)
+    {
+        if (mc == null || renderer == null || frame == null) return;
+        renderer.drawActor(
+                mc, data, frame, this.camera,
+                this.x, this.y, this.width, this.height);
+    }
+
     private void renderWorldAfterActor()
     {
         if (this.worldAfterActorRendered)
