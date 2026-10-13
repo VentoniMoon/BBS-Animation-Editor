@@ -6410,10 +6410,20 @@ public class EditorGizmoController
         }
 
         AnimationTransform local = new AnimationTransform();
+        /*
+         * Body Parts uses an isolated native Chameleon postRender() matrix
+         * as its REST pivot, then adds the key displacement computed here.
+         * After the X/Z translation writeback correction, the animated bone
+         * advances with +keyX and -keyZ in this editor-side pivot space.
+         * The previous -keyX/+keyZ reconstruction made the position gizmo
+         * move opposite the correctly moving rendered bone.
+         *
+         * Do not modify the native/rest pivot, Y or rotation here.
+         */
         local.setPosition(
-                bone.getLocalX() - animation.getPositionX(),
+                bone.getLocalX() + animation.getPositionX(),
                 bone.getLocalY() + animation.getPositionY(),
-                bone.getLocalZ() + animation.getPositionZ()
+                bone.getLocalZ() - animation.getPositionZ()
         );
         local.setRotation(
                 bone.getBaseRotationX() + animation.getRotationX(),
