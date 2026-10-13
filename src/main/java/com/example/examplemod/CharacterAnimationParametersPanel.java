@@ -80,6 +80,16 @@ public class CharacterAnimationParametersPanel
 
         if (changed)
         {
+            /*
+             * A different key/action is a different edit target.
+             * Drop the old focus so the new key's saved values load.
+             */
+            if (this.speedField != null)
+            {
+                this.speedField.setFocused(false);
+                this.fadeField.setFocused(false);
+                this.tickField.setFocused(false);
+            }
             this.fieldSignature = "";
         }
 
