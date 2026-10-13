@@ -6201,9 +6201,29 @@ public class EditorGizmoController
                 AnimationTransform rest = getChameleonRestPivot(bone);
                 if (evaluated != null && rest != null)
                 {
-                    px += evaluated.getPositionX() - rest.getPositionX();
-                    py += evaluated.getPositionY() - rest.getPositionY();
-                    pz += evaluated.getPositionZ() - rest.getPositionZ();
+                    /*
+                     * ChameleonRenderer.postRender() already contains the
+                     * current ModelBone translation and the initial bone pivot.
+                     * In the Body Parts attachment basis the X/Z displacement
+                     * of that native position is mirrored relative to the
+                     * correctly moving rendered child. A single evaluated
+                     * X/Z delta cancels the native displacement (the reported
+                     * frozen gizmo). Add twice the desired delta to reflect
+                     * the live native displacement around its rest anchor.
+                     *
+                     * Y is already synchronized, so its established path
+                     * must not be modified.
+                     */
+                    float dx = evaluated.getPositionX() - rest.getPositionX();
+                    float dy = evaluated.getPositionY() - rest.getPositionY();
+                    float dz = evaluated.getPositionZ() - rest.getPositionZ();
+                    px += 2.0F * dx;
+                    py += dy;
+                    pz += 2.0F * dz;
+
+                    diagnoseChameleonBodyPartPivot(
+                            bone, frame, nativeChildMatrix, dx, dy, dz,
+                            px, py, pz);
                 }
             }
 
@@ -6352,6 +6372,37 @@ public class EditorGizmoController
                 pivot,
                 recordFrame
         );
+    }
+
+    private long lastChameleonBodyPartPivotDiagnosticMillis;
+
+    /**
+     * Diagnostic only. Distinguish a wrong native rest anchor (pivot offset
+     * even at zero key) from a wrong animated displacement (gizmo drift).
+     */
+    private void diagnoseChameleonBodyPartPivot(
+            AnimationBone bone, int frame, float[] nativeMatrix,
+            float dx, float dy, float dz,
+            float px, float py, float pz)
+    {
+        if (this.mode != Mode.POSITION || bone == null)
+        {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - this.lastChameleonBodyPartPivotDiagnosticMillis < 1000L)
+        {
+            return;
+        }
+        this.lastChameleonBodyPartPivotDiagnosticMillis = now;
+        System.out.println("[BBS ChameleonPivot] bone=" + bone.getName()
+                + " frame=" + frame
+                + " native=(" + nativeMatrix[12] * 16.0F + ","
+                + nativeMatrix[13] * 16.0F + ","
+                + nativeMatrix[14] * 16.0F + ")"
+                + " keyDelta=(" + dx + "," + dy + "," + dz + ")"
+                + " resolved=(" + px + "," + py + "," + pz + ")");
     }
 
     /**
