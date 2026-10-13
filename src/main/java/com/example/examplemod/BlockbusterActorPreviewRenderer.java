@@ -1111,6 +1111,20 @@ public class BlockbusterActorPreviewRenderer
         );
 
         /*
+         * applyAnimationPose replaces CustomMorph.customPose each frame.
+         * Therefore Character bone fixed flags must be applied AFTER it,
+         * immediately before rendering, not only in the UI state update.
+         */
+        if (entityActor.getMorph() instanceof CustomMorph)
+        {
+            CharacterBodyPartOverrideController.apply(
+                    entityActor.getMorph(),
+                    actorData.getCharacterTimeline(),
+                    previewFrame
+            );
+        }
+
+        /*
          * ChameleonMorph has its own ModelBone hierarchy and does not
          * use CustomMorph.customPose. Apply the same editor snapshots
          * directly to that hierarchy after the normal pose pass.
