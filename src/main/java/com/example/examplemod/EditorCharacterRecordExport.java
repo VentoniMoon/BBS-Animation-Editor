@@ -62,7 +62,14 @@ public final class EditorCharacterRecordExport
             }
         }
 
-        if (hasPose)
+        BodyPartsEditorController parts = state.getBodyPartsController();
+        boolean hasBodyParts = parts != null && !parts.getModels().isEmpty();
+
+        /*
+         * BodyParts may have independent tracks even when the actor has
+         * no Pose keyframes. Bake both through the same native morph path.
+         */
+        if (hasPose || hasBodyParts)
         {
             actions = EditorBlockbusterPoseActions.prepare(
                     state, actorData, actions);

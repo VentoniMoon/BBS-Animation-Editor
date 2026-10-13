@@ -28,8 +28,13 @@ public final class EditorBlockbusterPoseActions
     {
         List<EditorCharacterMorphExport.PreparedAction> output =
                 new ArrayList<EditorCharacterMorphExport.PreparedAction>();
+        /*
+         * BodyParts tracks may exist without any actor Pose keys.
+         * Sample an identity parent pose for those records so they can
+         * still be exported as genuine per-tick MorphActions.
+         */
         List<EditorPoseExportSampler.SampledFrame> frames =
-                EditorPoseExportSampler.sampleSelected(state);
+                EditorPoseExportSampler.sampleSelected(state, true);
 
         NBTTagCompound startingMorph = actor.getActor().getMorph();
         if (startingMorph == null || startingMorph.hasNoTags())
@@ -88,6 +93,17 @@ public final class EditorBlockbusterPoseActions
                 }
             }
         }
+
+        /*
+         * Build attached BodyParts with the same serialization path as
+         * Preview. The exporter owns this renderer; no runtime actor,
+         * framebuffer or editor Preview state is mutated.
+         */
+        BodyPartsEditorController bodyParts = state.getBodyPartsController();
+        boolean exportBodyParts = bodyParts != null
+                && !bodyParts.getModels().isEmpty();
+        BodyPartsPreviewRenderer partsSerializer = exportBodyParts
+                ? new BodyPartsPreviewRenderer() : null;
 
         NBTTagCompound active = startingMorph.copy();
         String lastSignature = "";
@@ -182,6 +198,19 @@ public final class EditorBlockbusterPoseActions
 
             NBTTagCompound finalMorph = new NBTTagCompound();
             exportedMorph.toNBT(finalMorph);
+
+            /*
+             * BodyParts are serialized as real Metamorph attachments.
+             * Replace the part list at every tick (including empty lists)
+             * so start/end ranges and model changes cannot leave stale
+             * attached morphs active after their timeline segment.
+             */
+            if (exportBodyParts)
+            {
+                finalMorph.setTag("BodyParts",
+                        partsSerializer.exportParts(
+                                bodyParts, sampled.getFrame()));
+            }
 
             NBTTagCompound actionTag = new NBTTagCompound();
             actionTag.setByte("Type", type);

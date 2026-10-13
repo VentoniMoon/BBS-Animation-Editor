@@ -138,6 +138,66 @@ public class BodyPartsPreviewRenderer
     }
 
     /**
+     * Export-only snapshot of the same genuine Metamorph BodyParts used by
+     * Preview. Never changes the source actor or the editor model tracks.
+     * A fresh renderer instance should be used by the exporter.
+     */
+    public net.minecraft.nbt.NBTTagList exportParts(
+            BodyPartsEditorController controller, int frame)
+            throws java.io.IOException
+    {
+        net.minecraft.nbt.NBTTagList result =
+                new net.minecraft.nbt.NBTTagList();
+        if (controller == null)
+        {
+            return result;
+        }
+
+        this.preparedMorphs.clear();
+        for (BodyPartModelData data : controller.getModels())
+        {
+            if (data == null || !data.hasModel()
+                    || frame < data.getStartFrame()
+                    || frame > data.getEndFrame())
+            {
+                continue;
+            }
+
+            BodyPart part = createBodyPart(data, frame);
+            if (part == null)
+            {
+                throw new java.io.IOException(
+                        "Unable to export attached BodyPart '"
+                        + data.getModelNameAt(frame) + "' on bone '"
+                        + data.getAttachmentBoneName() + "' at tick " + frame);
+            }
+
+            /*
+             * Child pose snapshots also arrive every tick. Give nested
+             * Blockbuster morphs the same one-tick rendering transition
+             * as the actor's parent CustomMorph.
+             */
+            if (part.morph != null
+                    && part.morph.get() instanceof CustomMorph)
+            {
+                CustomMorph child = (CustomMorph) part.morph.get();
+                child.animation.duration = 1;
+                child.animation.animates = true;
+                child.animation.ignored = false;
+                child.animation.interp =
+                        mchorse.mclib.utils.Interpolation.LINEAR;
+            }
+
+            net.minecraft.nbt.NBTTagCompound tag =
+                    new net.minecraft.nbt.NBTTagCompound();
+            part.toNBT(tag);
+            result.appendTag(tag);
+        }
+
+        return result;
+    }
+
+    /**
      * Create one genuine Metamorph BodyPart.
      */
     private BodyPart createBodyPart(

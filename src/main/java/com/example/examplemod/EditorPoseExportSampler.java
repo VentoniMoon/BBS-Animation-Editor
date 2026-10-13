@@ -46,6 +46,17 @@ public final class EditorPoseExportSampler
     public static List<SampledFrame> sampleSelected(EditorSceneState state)
             throws IOException
     {
+        return sampleSelected(state, false);
+    }
+
+    /**
+     * BodyParts-only exports need a neutral parent Pose sample per tick,
+     * without inventing editor Pose keys.
+     */
+    public static List<SampledFrame> sampleSelected(
+            EditorSceneState state, boolean allowEmpty)
+            throws IOException
+    {
         if (state == null || state.getSelectedActorData() == null)
         {
             throw new IOException("No actor selected for Pose export");
@@ -59,7 +70,7 @@ public final class EditorPoseExportSampler
 
         SceneAnimationData all = state.getAnimationData();
         ActorAnimationData animation = all == null ? null : all.getActor(actor.getId());
-        if (animation == null)
+        if (animation == null && !allowEmpty)
         {
             throw new IOException("Selected actor has no Pose animation");
         }
@@ -71,7 +82,9 @@ public final class EditorPoseExportSampler
         }
 
         List<AnimationBone> animated = new ArrayList<AnimationBone>();
-        for (AnimationBone bone : animation.getBones())
+        for (AnimationBone bone : animation == null
+                ? java.util.Collections.<AnimationBone>emptyList()
+                : animation.getBones())
         {
             if (bone == null || bone.getKeyframes() == null
                     || bone.getKeyframes().isEmpty())
@@ -89,7 +102,7 @@ public final class EditorPoseExportSampler
             }
             animated.add(bone);
         }
-        if (animated.isEmpty())
+        if (animated.isEmpty() && !allowEmpty)
         {
             throw new IOException("Selected actor has no Pose keyframes");
         }
