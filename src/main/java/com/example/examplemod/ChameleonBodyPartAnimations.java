@@ -152,29 +152,36 @@ public final class ChameleonBodyPartAnimations
         key.setData(data);
     }
 
+    /**
+     * A viseme is a held static pose. Blend immediately BEFORE the next key,
+     * as in a speech timeline, instead of changing the mouth after the sound.
+     */
     private static final int PHONEME_TRANSITION_FRAMES = 3;
 
-    private static CharacterKey previousKey(BodyPartModelData part, int frame)
+    private static CharacterKey nextKey(BodyPartModelData part, int frame)
     {
-        CharacterKey current = activeKey(part, frame);
-        if (current == null) return null;
-        CharacterKey prior = null;
+        CharacterKey next = null;
         for (CharacterTrack track : part.getCharacterTimeline().getTracks())
         {
             if (track == null) continue;
             for (CharacterKey key : track.getKeys())
             {
-                if (key == null || key.getFrame() >= current.getFrame()
+                if (key == null || key.getFrame() <= frame
                         || !key.getData().hasKey(KEY, 8)) continue;
-                if (prior == null || key.getFrame() > prior.getFrame()) prior = key;
+                if (next == null || key.getFrame() < next.getFrame()) next = key;
             }
         }
-        return prior;
+        return next;
     }
 
-    /** Build a native action morph. No key or source morph is mutated. */
+    private static boolean playMode(CharacterKey key)
+    {
+        return key != null && PLAY.equalsIgnoreCase(key.getData().getString(MODE_KEY));
+    }
+
+    /** Native Chameleon action parameters, detached from the source morph. */
     private static AbstractMorph withClip(AbstractMorph source, String clip,
-            boolean playing, int elapsed, boolean transitioning)
+            boolean playing, int elapsed, boolean transitioning, int duration)
     {
         NBTTagCompound tag = source.toNBT();
         NBTTagCompound actions = tag.hasKey("Actions", 10)
@@ -184,7 +191,7 @@ public final class ChameleonBodyPartAnimations
         config.setBoolean("Clamp", true);
         config.setFloat("Speed", playing || transitioning ? 1F : 0F);
         config.setInteger("Tick", playing && !transitioning ? elapsed : 0);
-        config.setInteger("Fade", transitioning ? PHONEME_TRANSITION_FRAMES : 0);
+        config.setInteger("Fade", transitioning ? duration : 0);
         actions.setTag("animation", config);
         tag.setTag("Actions", actions);
         tag.setBoolean("ActionPlayer", true);
@@ -193,10 +200,11 @@ public final class ChameleonBodyPartAnimations
         {
             NBTTagCompound transition = new NBTTagCompound();
             transition.setBoolean("Animates", true);
-            transition.setInteger("Duration", PHONEME_TRANSITION_FRAMES);
+            transition.setInteger("Duration", duration);
             tag.setTag("Transition", transition);
         }
-        return MorphManager.INSTANCE.morphFromNBT(tag);
+        AbstractMorph output = MorphManager.INSTANCE.morphFromNBT(tag);
+        return output == null ? source : output;
     }
 
     public static AbstractMorph apply(BodyPartModelData part, int frame, AbstractMorph morph)
@@ -204,33 +212,48 @@ public final class ChameleonBodyPartAnimations
         if (morph == null || !morph.getClass().getName().endsWith(".ChameleonMorph"))
             return morph;
 
-        CharacterKey key = activeKey(part, frame);
-        if (key == null) return morph;
-        String clip = key.getData().getString(KEY);
+        CharacterKey current = activeKey(part, frame);
+        if (current == null) return morph;
+        String clip = current.getData().getString(KEY);
         if (clip.isEmpty()) return morph;
 
         try
         {
-            int elapsed = Math.max(0, frame - key.getFrame());
-            CharacterKey prior = previousKey(part, frame);
-            boolean blending = prior != null && elapsed < PHONEME_TRANSITION_FRAMES
-                    && !clip.equals(prior.getData().getString(KEY));
-            boolean playing = isPlaying(part, frame);
-            AbstractMorph output = withClip(morph, clip, playing, elapsed, blending);
-            if (output == null) return morph;
+            CharacterKey next = nextKey(part, frame);
+            boolean playing = playMode(current);
+            boolean nextPlaying = playMode(next);
 
-            if (blending)
+            // Only static phonemes are blended. Full motion clips keep their
+            // native playback timing and start at their explicit key.
+            if (!playing && next != null && !nextPlaying)
             {
-                String oldClip = prior.getData().getString(KEY);
-                AbstractMorph previous = withClip(morph, oldClip, false, 0, false);
-                if (previous != null)
+                String target = next.getData().getString(KEY);
+                int available = next.getFrame() - current.getFrame();
+                int duration = Math.min(PHONEME_TRANSITION_FRAMES, available);
+                int start = next.getFrame() - duration;
+
+                if (duration > 0 && !clip.equals(target) && frame >= start)
                 {
-                    // ChameleonMorph.pause() captures the previous ActionPlayback.
-                    // Explicit timeline progress makes scrubbing deterministic.
-                    output.pause(previous, elapsed);
+                    float progress = (frame - start) / (float) duration;
+                    // Smoothstep-like sine easing, deterministic on scrubbing.
+                    float eased = (float) (0.5D - 0.5D * Math.cos(Math.PI * progress));
+                    int nativeDuration = 100;
+                    int nativeOffset = Math.max(0, Math.min(nativeDuration,
+                            Math.round(nativeDuration * eased)));
+
+                    AbstractMorph output = withClip(morph, target, false,
+                            0, true, nativeDuration);
+                    AbstractMorph previous = withClip(morph, clip, false,
+                            0, false, 0);
+                    // Chameleon's pause() captures the old ActionPlayback and
+                    // sets transition progress without adding Character keys.
+                    output.pause(previous, nativeOffset);
+                    return output;
                 }
             }
-            return output;
+
+            return withClip(morph, clip, playing,
+                    Math.max(0, frame - current.getFrame()), false, 0);
         }
         catch (Throwable error)
         {
