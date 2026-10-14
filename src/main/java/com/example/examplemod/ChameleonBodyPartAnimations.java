@@ -22,25 +22,61 @@ public final class ChameleonBodyPartAnimations
         return morph != null && morph.getClass().getName().endsWith(".ChameleonMorph");
     }
 
-    public static List<String> listAnimations()
+    /** Read animation identifiers from the selected Chameleon model, never the Lip Sync fixture. */
+    public static List<String> listAnimations(BodyPartModelData part, int frame)
     {
-        File file = LipSyncBoneBaker.animationFile();
-        ArrayList<String> names = new ArrayList<String>();
-        if (!file.isFile()) return names;
-        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
+        TreeSet<String> names = new TreeSet<String>(String.CASE_INSENSITIVE_ORDER);
+        if (!isChameleon(part, frame)) return new ArrayList<String>(names);
+
+        AbstractMorph morph = part.getMorphAt(frame);
+        String model = morph.name == null ? "" : morph.name;
+        if (model.startsWith("chameleon.")) model = model.substring("chameleon.".length());
+        model = model.replace('\\', '/');
+
+        File root = new File(Minecraft.getMinecraft().mcDataDir, "config/chameleon/models");
+        try
         {
-            JsonObject root = new JsonParser().parse(reader).getAsJsonObject();
-            JsonObject animations = root.getAsJsonObject("animations");
-            if (animations != null)
-                for (Map.Entry<String, JsonElement> e : animations.entrySet())
-                    names.add(e.getKey());
-            Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
+            File safeRoot = root.getCanonicalFile();
+            File folder = new File(safeRoot, model).getCanonicalFile();
+            if (!folder.toPath().startsWith(safeRoot.toPath()) || !folder.isDirectory())
+            {
+                System.err.println("[BBS Editor] Chameleon model folder not found: " + folder);
+                return new ArrayList<String>(names);
+            }
+
+            // Chameleon allows animation files in the model folder and in animations/.
+            readAnimationFiles(folder, names);
+            readAnimationFiles(new File(folder, "animations"), names);
         }
-        catch (Exception error)
+        catch (IOException error)
         {
-            System.err.println("[BBS Editor] Failed to list Chameleon animations: " + error);
+            System.err.println("[BBS Editor] Failed to locate Chameleon animations: " + error);
         }
-        return names;
+        return new ArrayList<String>(names);
+    }
+
+    private static void readAnimationFiles(File folder, Set<String> names)
+    {
+        File[] files = folder.listFiles();
+        if (files == null) return;
+        for (File file : files)
+        {
+            if (!file.isFile() || !file.getName().toLowerCase(Locale.ROOT).endsWith(".json")
+                    || file.getName().toLowerCase(Locale.ROOT).endsWith(".geo.json")) continue;
+            try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
+            {
+                JsonElement parsed = new JsonParser().parse(reader);
+                if (!parsed.isJsonObject()) continue;
+                JsonObject animations = parsed.getAsJsonObject().getAsJsonObject("animations");
+                if (animations == null) continue;
+                for (Map.Entry<String, JsonElement> entry : animations.entrySet())
+                    names.add(entry.getKey());
+            }
+            catch (Exception error)
+            {
+                System.err.println("[BBS Editor] Cannot read Chameleon animations from " + file + ": " + error);
+            }
+        }
     }
 
     public static void set(CharacterKey key, String animation)
