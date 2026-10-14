@@ -137,6 +137,11 @@ public final class LipSyncBoneBaker
                         : new JsonObject();
                 float[] pos = vector(data, "position", new float[]{0, 0, 0});
                 float[] scale = vector(data, "scale", new float[]{1, 1, 1});
+                // The supplied "closed" animation moves Inside but does not hide it.
+                // Unlike the original BBS renderer, Chameleon may render that plane
+                // ahead of Closed. Hide it (and its two child corners) in silence.
+                if (key.viseme == LipSyncViseme.IDLE && "Inside".equals(name))
+                    scale = new float[]{1, 0, 1};
                 AnimationBone bone = bones.get(name);
                 bone.addKeyframe(key.frame);
                 AnimationKeyframe bakedKey = bone.getKeyframeAt(key.frame);
