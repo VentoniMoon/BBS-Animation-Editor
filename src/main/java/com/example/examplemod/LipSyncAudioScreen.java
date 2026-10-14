@@ -16,6 +16,7 @@ public class LipSyncAudioScreen extends GuiScreen
     private final EditorWavAudioController audio;
     private final int initialFrame;
     private GuiTextField frame, idle, python;
+    private boolean boneMode;
     private volatile boolean running;
     private volatile List<EditorVoskRecognizer.Word> recognized;
     private volatile String failure;
@@ -53,6 +54,7 @@ public class LipSyncAudioScreen extends GuiScreen
         buttonList.clear();
         buttonList.add(new GuiButton(1, x, y + 139, 150, 20, "Analyze + Generate"));
         buttonList.add(new GuiButton(2, x + 160, y + 139, 150, 20, "Back"));
+        buttonList.add(new GuiButton(3, x, y + 201, 310, 20, "Output: TEXTURE (Skin keys)"));
     }
 
     @Override
@@ -81,6 +83,9 @@ public class LipSyncAudioScreen extends GuiScreen
     protected void actionPerformed(GuiButton button) throws IOException
     {
         if (button.id == 2) { mc.displayGuiScreen(parent); return; }
+        if (button.id == 3) { boneMode = !boneMode;
+            button.displayString = boneMode ? "Output: BONE (Mouth RIG)" : "Output: TEXTURE (Skin keys)";
+            return; }
         if (button.id != 1 || running) return;
         if (audio == null || !audio.isLoaded())
         {
@@ -143,9 +148,10 @@ public class LipSyncAudioScreen extends GuiScreen
             try
             {
                 int start = Integer.parseInt(frame.getText().trim());
-                int count = LipSyncTextureBaker.generateTimed(model,
-                        EditorVoskRecognizer.toVisemes(words, start),
-                        start, idle.getText());
+                List<LipSyncTimeline.Key> visemes = EditorVoskRecognizer.toVisemes(words, start);
+                int count = boneMode ? LipSyncBoneBaker.generate(model, visemes)
+                        : LipSyncTextureBaker.generateTimed(model, visemes,
+                                start, idle.getText());
                 parent.refreshCharacterState();
                 status = "Recognized " + words.size() + " words, created " + count + " keys";
                 statusColor = 0xFF66DD99;
