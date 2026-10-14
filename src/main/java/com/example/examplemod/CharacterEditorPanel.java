@@ -40,7 +40,8 @@ public class CharacterEditorPanel
         APPEARANCE,
         ANIMATION_SETUP,
         BODY_PART_OVERRIDES,
-        ANIMATION_PARAMETERS
+        ANIMATION_PARAMETERS,
+        LIP_SYNC
     }
 
     private Section openedSection =
@@ -786,15 +787,6 @@ public class CharacterEditorPanel
                 mouseY
         );
 
-        if (this.selectedBodyPartModel != null)
-        {
-            int lipX = this.x + this.width - 72;
-            int lipY = cursorY - 21;
-            drawButton(mc, "LIP SYNC", lipX, lipY, 64, 18,
-                    mouseX >= lipX && mouseX < lipX + 64 &&
-                    mouseY >= lipY && mouseY < lipY + 18);
-        }
-
         if (this.openedSection ==
                 Section.ANIMATION_PARAMETERS)
         {
@@ -806,6 +798,23 @@ public class CharacterEditorPanel
                     mouseX,
                     mouseY
             );
+        }
+
+        cursorY += this.openedSection == Section.ANIMATION_PARAMETERS
+                ? ANIMATION_PARAMETERS_CONTENT_GAP + CharacterAnimationParametersPanel.HEIGHT + 4
+                : 4;
+
+        cursorY = drawSection(mc, Section.LIP_SYNC, "LIP SYNC",
+                cursorY, mouseX, mouseY);
+        if (this.openedSection == Section.LIP_SYNC)
+        {
+            cursorY += 4;
+            boolean hasTarget = this.selectedBodyPartModel != null;
+            String label = hasTarget ? "GENERATE TEXT LIP SYNC" : "SELECT A BODY PART TRACK";
+            drawButton(mc, label, this.x + 9, cursorY,
+                    Math.max(40, this.width - 18), 20,
+                    hasTarget && mouseX >= this.x + 9 && mouseX < this.x + this.width - 9
+                    && mouseY >= cursorY && mouseY < cursorY + 20);
         }
 
         /*
@@ -2692,24 +2701,6 @@ public class CharacterEditorPanel
         currentY += 4;
 
         /*
-         * Text Lip Sync belongs to the selected Body Part only.
-         * The compact button occupies the right end of the settings header.
-         */
-        if (this.selectedBodyPartModel != null &&
-                mouseX >= this.x + this.width - 72 &&
-                mouseX < this.x + this.width - 8 &&
-                mouseY >= currentY + 3 &&
-                mouseY < currentY + 21 &&
-                Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
-        {
-            Minecraft mc = Minecraft.getMinecraft();
-            mc.displayGuiScreen(new LipSyncTextScreen(
-                    (AnimationEditorScreen) mc.currentScreen,
-                    this.selectedBodyPartModel, this.currentFrame));
-            return true;
-        }
-
-        /*
          * Actor Settings.
          */
 
@@ -2750,6 +2741,29 @@ public class CharacterEditorPanel
             {
                 return true;
             }
+        }
+
+        currentY += this.openedSection == Section.ANIMATION_PARAMETERS
+                ? SECTION_HEIGHT + ANIMATION_PARAMETERS_CONTENT_GAP
+                  + CharacterAnimationParametersPanel.HEIGHT + 4
+                : SECTION_HEIGHT + 4;
+        if (isInsideSection(currentY, mouseX, mouseY))
+        {
+            toggleSection(Section.LIP_SYNC);
+            return true;
+        }
+        if (this.openedSection == Section.LIP_SYNC &&
+                this.selectedBodyPartModel != null &&
+                mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
+                mouseY >= currentY + SECTION_HEIGHT + 4 &&
+                mouseY < currentY + SECTION_HEIGHT + 24 &&
+                Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
+        {
+            Minecraft mc = Minecraft.getMinecraft();
+            mc.displayGuiScreen(new LipSyncTextScreen(
+                    (AnimationEditorScreen) mc.currentScreen,
+                    this.selectedBodyPartModel, this.currentFrame));
+            return true;
         }
 
         return false;
