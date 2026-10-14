@@ -16,7 +16,7 @@ public final class LipSyncCharacterBaker
 
     private static String animationName(LipSyncViseme viseme)
     {
-        if (viseme == LipSyncViseme.IDLE) return "closed";
+        if (viseme == LipSyncViseme.IDLE) return "idle";
         if (viseme == LipSyncViseme.EE) return "e";
         return viseme.name().toLowerCase(Locale.ROOT);
     }
