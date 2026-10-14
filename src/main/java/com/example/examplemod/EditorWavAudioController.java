@@ -21,6 +21,46 @@ public final class EditorWavAudioController
 
     public synchronized File getLoadedFile() { return file; }
 
+    private File selectionFile()
+    {
+        return new File(net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
+                "config/bbs-editor/last-wav.txt");
+    }
+
+    /** Restore the editor's last selected WAV, including after reopening Minecraft. */
+    public synchronized void restoreLastLoaded()
+    {
+        if (isLoaded()) return;
+        File selection = selectionFile();
+        if (!selection.isFile()) return;
+        try
+        {
+            byte[] bytes = java.nio.file.Files.readAllBytes(selection.toPath());
+            File previous = new File(new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim());
+            if (previous.isFile()) load(previous);
+        }
+        catch (Exception e)
+        {
+            System.err.println("[BBS Editor] Could not restore WAV: " + e);
+        }
+    }
+
+    private void rememberLoaded(File selected)
+    {
+        try
+        {
+            File setting = selectionFile();
+            File folder = setting.getParentFile();
+            if (!folder.isDirectory() && !folder.mkdirs()) return;
+            java.nio.file.Files.write(setting.toPath(),
+                    selected.getAbsolutePath().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        catch (IOException e)
+        {
+            System.err.println("[BBS Editor] Could not remember WAV selection: " + e);
+        }
+    }
+
     public synchronized void load(File input) throws Exception
     {
         if (input == null || !input.isFile() ||
@@ -43,6 +83,7 @@ public final class EditorWavAudioController
             unload();
             clip = next;
             file = input;
+            rememberLoaded(input);
             lastFrame = -1;
             wasPlaying = false;
         }
