@@ -163,8 +163,18 @@ public final class ChameleonBodyPartAnimations
             NBTTagCompound tag = morph.toNBT();
             NBTTagCompound actions = tag.hasKey("Actions", 10)
                     ? tag.getCompoundTag("Actions").copy() : new NBTTagCompound();
-            actions.setString("animation", clip);
+            // Chameleon's animation action accepts an ActionConfig NBT compound.
+            // The native animator renders this action only with ActionPlayer enabled.
+            NBTTagCompound config = new NBTTagCompound();
+            config.setString("Name", clip);
+            boolean playing = isPlaying(part, frame);
+            config.setBoolean("Clamp", true);
+            config.setFloat("Speed", playing ? 1F : 0F);
+            config.setInteger("Tick", playing ? elapsedFrames(part, frame) : 0);
+            config.setInteger("Fade", 0);
+            actions.setTag("animation", config);
             tag.setTag("Actions", actions);
+            tag.setBoolean("ActionPlayer", true);
             AbstractMorph output = MorphManager.INSTANCE.morphFromNBT(tag);
             return output == null ? morph : output;
         }
