@@ -184,8 +184,13 @@ public final class ChameleonBodyPartAnimations
             boolean playing, int elapsed, boolean transitioning, int duration)
     {
         NBTTagCompound tag = source.toNBT();
-        NBTTagCompound actions = tag.hasKey("Actions", 10)
-                ? tag.getCompoundTag("Actions").copy() : new NBTTagCompound();
+        // Hold visemes must not inherit locomotion/idle or an earlier action
+        // from the selected morph. Those actions can overwrite mouth bones.
+        // Normal Play clips retain the original action configuration.
+        NBTTagCompound actions = !playing && !transitioning
+                ? new NBTTagCompound()
+                : (tag.hasKey("Actions", 10)
+                    ? tag.getCompoundTag("Actions").copy() : new NBTTagCompound());
         NBTTagCompound config = new NBTTagCompound();
         config.setString("Name", clip);
         config.setBoolean("Clamp", true);
@@ -195,6 +200,8 @@ public final class ChameleonBodyPartAnimations
         actions.setTag("animation", config);
         tag.setTag("Actions", actions);
         tag.setBoolean("ActionPlayer", true);
+        // A stale transition from the base morph can blend against an old pose.
+        if (!transitioning) tag.removeTag("Transition");
 
         if (transitioning)
         {
