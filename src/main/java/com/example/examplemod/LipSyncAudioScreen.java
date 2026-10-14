@@ -55,6 +55,7 @@ public class LipSyncAudioScreen extends GuiScreen
         buttonList.add(new GuiButton(1, x, y + 139, 150, 20, "Analyze + Generate"));
         buttonList.add(new GuiButton(2, x + 160, y + 139, 150, 20, "Back"));
         buttonList.add(new GuiButton(3, x, y + 201, 310, 20, "Output: TEXTURE (Skin keys)"));
+        buttonList.add(new GuiButton(4, x, y + 226, 310, 20, "Fix existing Bone keys: CONST"));
     }
 
     @Override
@@ -83,6 +84,23 @@ public class LipSyncAudioScreen extends GuiScreen
     protected void actionPerformed(GuiButton button) throws IOException
     {
         if (button.id == 2) { mc.displayGuiScreen(parent); return; }
+        if (button.id == 4)
+        {
+            if (running) return;
+            try
+            {
+                int updated = LipSyncBoneBaker.makeExistingKeysConstant(model);
+                parent.refreshCharacterState();
+                status = "Set CONST interpolation on " + updated + " bone keys";
+                statusColor = 0xFF66DD99;
+            }
+            catch (Exception e)
+            {
+                status = e.getMessage() == null ? "Could not update interpolation" : e.getMessage();
+                statusColor = 0xFFFF7777;
+            }
+            return;
+        }
         if (button.id == 3) { boneMode = !boneMode;
             button.displayString = boneMode ? "Output: BONE (Mouth RIG)" : "Output: TEXTURE (Skin keys)";
             return; }
