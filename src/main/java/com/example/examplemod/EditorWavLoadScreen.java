@@ -113,7 +113,12 @@ public class EditorWavLoadScreen extends GuiScreen
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks)
     {
-        drawDefaultBackground();
+        // Keep the editor scene, timeline and panels visible behind the dialog.
+        if (parent != null)
+            parent.drawScreen(mouseX, mouseY, partialTicks);
+        else
+            drawDefaultBackground();
+        drawRect(0, 0, width, height, 0x99000000);
         int left = width / 2 - 165;
         int top = height / 2 - 125;
         drawCenteredString(fontRenderer, "TIMELINE AUDIO - WAV LIBRARY",
