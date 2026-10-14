@@ -152,31 +152,85 @@ public final class ChameleonBodyPartAnimations
         key.setData(data);
     }
 
+    private static final int PHONEME_TRANSITION_FRAMES = 3;
+
+    private static CharacterKey previousKey(BodyPartModelData part, int frame)
+    {
+        CharacterKey current = activeKey(part, frame);
+        if (current == null) return null;
+        CharacterKey prior = null;
+        for (CharacterTrack track : part.getCharacterTimeline().getTracks())
+        {
+            if (track == null) continue;
+            for (CharacterKey key : track.getKeys())
+            {
+                if (key == null || key.getFrame() >= current.getFrame()
+                        || !key.getData().hasKey(KEY, 8)) continue;
+                if (prior == null || key.getFrame() > prior.getFrame()) prior = key;
+            }
+        }
+        return prior;
+    }
+
+    /** Build a native action morph. No key or source morph is mutated. */
+    private static AbstractMorph withClip(AbstractMorph source, String clip,
+            boolean playing, int elapsed, boolean transitioning)
+    {
+        NBTTagCompound tag = source.toNBT();
+        NBTTagCompound actions = tag.hasKey("Actions", 10)
+                ? tag.getCompoundTag("Actions").copy() : new NBTTagCompound();
+        NBTTagCompound config = new NBTTagCompound();
+        config.setString("Name", clip);
+        config.setBoolean("Clamp", true);
+        config.setFloat("Speed", playing || transitioning ? 1F : 0F);
+        config.setInteger("Tick", playing && !transitioning ? elapsed : 0);
+        config.setInteger("Fade", transitioning ? PHONEME_TRANSITION_FRAMES : 0);
+        actions.setTag("animation", config);
+        tag.setTag("Actions", actions);
+        tag.setBoolean("ActionPlayer", true);
+
+        if (transitioning)
+        {
+            NBTTagCompound transition = new NBTTagCompound();
+            transition.setBoolean("Animates", true);
+            transition.setInteger("Duration", PHONEME_TRANSITION_FRAMES);
+            tag.setTag("Transition", transition);
+        }
+        return MorphManager.INSTANCE.morphFromNBT(tag);
+    }
+
     public static AbstractMorph apply(BodyPartModelData part, int frame, AbstractMorph morph)
     {
         if (morph == null || !morph.getClass().getName().endsWith(".ChameleonMorph"))
             return morph;
-        String clip = get(part, frame);
+
+        CharacterKey key = activeKey(part, frame);
+        if (key == null) return morph;
+        String clip = key.getData().getString(KEY);
         if (clip.isEmpty()) return morph;
+
         try
         {
-            NBTTagCompound tag = morph.toNBT();
-            NBTTagCompound actions = tag.hasKey("Actions", 10)
-                    ? tag.getCompoundTag("Actions").copy() : new NBTTagCompound();
-            // Chameleon's animation action accepts an ActionConfig NBT compound.
-            // The native animator renders this action only with ActionPlayer enabled.
-            NBTTagCompound config = new NBTTagCompound();
-            config.setString("Name", clip);
+            int elapsed = Math.max(0, frame - key.getFrame());
+            CharacterKey prior = previousKey(part, frame);
+            boolean blending = prior != null && elapsed < PHONEME_TRANSITION_FRAMES
+                    && !clip.equals(prior.getData().getString(KEY));
             boolean playing = isPlaying(part, frame);
-            config.setBoolean("Clamp", true);
-            config.setFloat("Speed", playing ? 1F : 0F);
-            config.setInteger("Tick", playing ? elapsedFrames(part, frame) : 0);
-            config.setInteger("Fade", 0);
-            actions.setTag("animation", config);
-            tag.setTag("Actions", actions);
-            tag.setBoolean("ActionPlayer", true);
-            AbstractMorph output = MorphManager.INSTANCE.morphFromNBT(tag);
-            return output == null ? morph : output;
+            AbstractMorph output = withClip(morph, clip, playing, elapsed, blending);
+            if (output == null) return morph;
+
+            if (blending)
+            {
+                String oldClip = prior.getData().getString(KEY);
+                AbstractMorph previous = withClip(morph, oldClip, false, 0, false);
+                if (previous != null)
+                {
+                    // ChameleonMorph.pause() captures the previous ActionPlayback.
+                    // Explicit timeline progress makes scrubbing deterministic.
+                    output.pause(previous, elapsed);
+                }
+            }
+            return output;
         }
         catch (Throwable error)
         {
