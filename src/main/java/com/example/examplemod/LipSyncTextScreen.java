@@ -54,8 +54,8 @@ public class LipSyncTextScreen extends GuiScreen
             if (path != null) idle.setText(path);
         }
         buttonList.clear();
-        buttonList.add(new GuiButton(1, left, top + 155, 150, 20, "Generate"));
-        buttonList.add(new GuiButton(2, left + 160, top + 155, 150, 20, "Back"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(1, left, top + 155, 150, 20, "Generate"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(2, left + 160, top + 155, 150, 20, "Back"));
     }
 
     @Override
@@ -69,8 +69,8 @@ public class LipSyncTextScreen extends GuiScreen
         drawRect(0, 0, width, height, 0x99000000);
         int left = width / 2 - 155;
         int top = height / 2 - 105;
-        drawCenteredString(fontRenderer, "TEXT LIP SYNC - BODY PARTS", width / 2,
-                top + 5, 0xFFE2E5E7);
+        EditorLipSyncDialogStyle.panel(mc, left - 14, top - 29, 338, 240,
+                "TEXT TO KEYS", "Generate mouth keys from text");
         fontRenderer.drawString("Speech (RU / EN)", left, top + 26, 0xFFBFC6CC);
         fontRenderer.drawString("Start frame", left, top + 70, 0xFFBFC6CC);
         fontRenderer.drawString("Words per minute (20-600)", left + 110,
