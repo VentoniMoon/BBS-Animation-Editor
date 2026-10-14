@@ -60,7 +60,9 @@ public final class LipSyncBoneBaker
             if (!entry.getValue().isJsonObject()) continue;
             JsonObject pose = entry.getValue().getAsJsonObject();
             if (pose.has("bones"))
-                names.addAll(pose.getAsJsonObject("bones").keySet());
+                for (Map.Entry<String, JsonElement> boneEntry :
+                        pose.getAsJsonObject("bones").entrySet())
+                    names.add(boneEntry.getKey());
         }
         int modified = 0;
         for (AnimationBone bone : part.getBones())
