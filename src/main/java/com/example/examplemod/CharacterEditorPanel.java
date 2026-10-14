@@ -57,6 +57,8 @@ public class CharacterEditorPanel
     private int y;
     private int width;
     private int height;
+    private int sectionScrollOffset;
+    private int maxSectionScroll;
 
     /*
      * =========================================================
@@ -666,6 +668,19 @@ public class CharacterEditorPanel
                 "CHARACTER"
         );
 
+        // Keep the inspector header fixed; clip and scroll the sections below it.
+        net.minecraft.client.gui.ScaledResolution resolution =
+                new net.minecraft.client.gui.ScaledResolution(mc);
+        int scale = resolution.getScaleFactor();
+        int contentTop = this.y + 30;
+        int contentBottom = this.y + this.height;
+        org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL11.GL_SCISSOR_TEST);
+        org.lwjgl.opengl.GL11.glScissor(this.x * scale,
+                (resolution.getScaledHeight() - contentBottom) * scale,
+                this.width * scale,
+                Math.max(0, contentBottom - contentTop) * scale);
+        this.y -= this.sectionScrollOffset;
+
         int cursorY =
                 this.y + 30;
 
@@ -841,6 +856,15 @@ public class CharacterEditorPanel
          * The animation picker is a floating overlay. Draw it last
          * so lower Character sections can never cover it.
          */
+        // Calculate scroll range from actual laid-out section content.
+        int bottomOfSections = cursorY + (this.openedSection == Section.LIP_SYNC ? 50 : 0);
+        int originalY = this.y + this.sectionScrollOffset;
+        this.maxSectionScroll = Math.max(0,
+                bottomOfSections + this.sectionScrollOffset -
+                (originalY + this.height - 5));
+        this.y = originalY;
+        org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL11.GL_SCISSOR_TEST);
+
         this.animationSetupPanel.drawPopup(
                 mc,
                 mouseX,
@@ -2299,6 +2323,17 @@ public class CharacterEditorPanel
             int mouseY,
             int direction)
     {
+        if (mouseX < this.x || mouseX >= this.x + this.width ||
+                mouseY < this.y + 30 || mouseY >= this.y + this.height)
+            return false;
+        if (this.openedSection != Section.ANIMATION_SETUP)
+        {
+            this.sectionScrollOffset = Math.max(0, Math.min(this.maxSectionScroll,
+                    this.sectionScrollOffset + (direction < 0 ? 30 : -30)));
+            return true;
+        }
+        // Let the Animation Setup picker consume its own scroll first.
+
         /*
          * A floating animation picker must receive the wheel before
          * section-specific scrolling is considered. This keeps the
@@ -2550,6 +2585,24 @@ public class CharacterEditorPanel
      */
 
     public boolean mouseClicked(
+            int mouseX,
+            int mouseY,
+            int mouseButton)
+    {
+        if (mouseY < this.y + 30 || mouseY >= this.y + this.height)
+            return false;
+        this.y -= this.sectionScrollOffset;
+        try
+        {
+            return mouseClickedSections(mouseX, mouseY, mouseButton);
+        }
+        finally
+        {
+            this.y += this.sectionScrollOffset;
+        }
+    }
+
+    private boolean mouseClickedSections(
             int mouseX,
             int mouseY,
             int mouseButton)
