@@ -153,7 +153,9 @@ public class LipSyncAudioScreen extends GuiScreen
             try
             {
                 int start = Integer.parseInt(frame.getText().trim());
-                List<LipSyncTimeline.Key> visemes = EditorVoskRecognizer.toVisemes(words, start);
+                List<LipSyncTimeline.Key> visemes = boneMode
+                        ? EditorVoskRecognizer.toCharacterVisemes(words, start)
+                        : EditorVoskRecognizer.toVisemes(words, start);
                 int count = boneMode ? LipSyncCharacterBaker.generate(model, visemes)
                         : LipSyncTextureBaker.generateTimed(model, visemes,
                                 start, idle.getText());
