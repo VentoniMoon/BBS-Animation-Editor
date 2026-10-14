@@ -39,6 +39,45 @@ public final class LipSyncBoneBaker
         return all.getAsJsonObject(name);
     }
 
+    /** Explicit opt-in repair for previously generated LINEAR Mouth RIG keys. */
+    public static int makeExistingKeysConstant(BodyPartModelData part) throws IOException
+    {
+        if (part == null || !part.hasMorphModel())
+            throw new IllegalArgumentException("Select a Mouth RIG Body Part");
+        File file = animationFile();
+        if (!file.isFile())
+            throw new IOException("Missing config/bbs-editor/lipsync/model.animation.json");
+        JsonObject animations;
+        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
+        {
+            animations = new JsonParser().parse(reader).getAsJsonObject()
+                    .getAsJsonObject("animations");
+        }
+        if (animations == null) throw new IOException("Missing animations object in JSON");
+        Set<String> names = new HashSet<String>();
+        for (Map.Entry<String, JsonElement> entry : animations.entrySet())
+        {
+            if (!entry.getValue().isJsonObject()) continue;
+            JsonObject pose = entry.getValue().getAsJsonObject();
+            if (pose.has("bones"))
+                names.addAll(pose.getAsJsonObject("bones").keySet());
+        }
+        int modified = 0;
+        for (AnimationBone bone : part.getBones())
+        {
+            if (!names.contains(bone.getName())) continue;
+            for (AnimationKeyframe key : bone.getKeyframes())
+            {
+                if (key.getInterpolation() != mchorse.mclib.utils.keyframes.KeyframeInterpolation.CONST)
+                {
+                    key.setInterpolation(mchorse.mclib.utils.keyframes.KeyframeInterpolation.CONST);
+                    modified++;
+                }
+            }
+        }
+        return modified;
+    }
+
     public static int generate(BodyPartModelData part, List<LipSyncTimeline.Key> keys)
             throws IOException
     {
@@ -98,7 +137,9 @@ public final class LipSyncBoneBaker
                 float[] scale = vector(data, "scale", new float[]{1, 1, 1});
                 AnimationBone bone = bones.get(name);
                 bone.addKeyframe(key.frame);
-                AnimationTransform transform = bone.getKeyframeAt(key.frame).getTransform();
+                AnimationKeyframe bakedKey = bone.getKeyframeAt(key.frame);
+                bakedKey.setInterpolation(mchorse.mclib.utils.keyframes.KeyframeInterpolation.CONST);
+                AnimationTransform transform = bakedKey.getTransform();
                 transform.setPosition(pos[0], pos[1], pos[2]);
                 transform.setScale(scale[0], scale[1], scale[2]);
                 created++;
