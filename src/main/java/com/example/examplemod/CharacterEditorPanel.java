@@ -1305,7 +1305,7 @@ public class CharacterEditorPanel
     {
         if (this.selectedBodyPartModel != null)
         {
-            return this.selectedBodyPartModel.getOrCreateCharacterStateKey(
+            return this.selectedBodyPartModel.getCharacterStateKeyAt(
                     this.currentFrame
             );
         }
