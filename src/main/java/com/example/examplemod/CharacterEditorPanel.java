@@ -205,6 +205,13 @@ public class CharacterEditorPanel
     private CharacterKey selectedKey;
 
     private BodyPartModelData selectedBodyPartModel;
+    private EditorWavAudioController wavAudio;
+
+    public void setWavAudio(EditorWavAudioController audio)
+    {
+        this.wavAudio = audio;
+    }
+
 
     /**
      * Текущая позиция playhead.
@@ -815,6 +822,13 @@ public class CharacterEditorPanel
                     Math.max(40, this.width - 18), 20,
                     hasTarget && mouseX >= this.x + 9 && mouseX < this.x + this.width - 9
                     && mouseY >= cursorY && mouseY < cursorY + 20);
+            String wavLabel = this.wavAudio == null
+                    ? "LOAD WAV" : "LOAD WAV: " + this.wavAudio.getFileName();
+            drawButton(mc, wavLabel, this.x + 9, cursorY + 25,
+                    Math.max(40, this.width - 18), 20,
+                    mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
+                    mouseY >= cursorY + 25 && mouseY < cursorY + 45);
+
         }
 
         /*
@@ -2763,6 +2777,19 @@ public class CharacterEditorPanel
             mc.displayGuiScreen(new LipSyncTextScreen(
                     (AnimationEditorScreen) mc.currentScreen,
                     this.selectedBodyPartModel, this.currentFrame));
+            return true;
+        }
+
+        if (this.openedSection == Section.LIP_SYNC &&
+                this.wavAudio != null &&
+                mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
+                mouseY >= currentY + SECTION_HEIGHT + 29 &&
+                mouseY < currentY + SECTION_HEIGHT + 49 &&
+                Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
+        {
+            Minecraft mc = Minecraft.getMinecraft();
+            mc.displayGuiScreen(new EditorWavLoadScreen(
+                    (AnimationEditorScreen) mc.currentScreen, this.wavAudio));
             return true;
         }
 
