@@ -43,9 +43,9 @@ public class EditorWavLoadScreen extends GuiScreen
         int left = width / 2 - 165;
         int top = height / 2 - 125;
         buttonList.clear();
-        buttonList.add(new GuiButton(1, left, top + 224, 105, 20, "Refresh"));
-        buttonList.add(new GuiButton(2, left + 110, top + 224, 105, 20, "Load selected"));
-        buttonList.add(new GuiButton(3, left + 220, top + 224, 105, 20, "Back"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(1, left, top + 224, 105, 20, "Refresh"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(2, left + 110, top + 224, 105, 20, "Load selected"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(3, left + 220, top + 224, 105, 20, "Back"));
         refreshFiles();
     }
 
@@ -121,8 +121,8 @@ public class EditorWavLoadScreen extends GuiScreen
         drawRect(0, 0, width, height, 0x99000000);
         int left = width / 2 - 165;
         int top = height / 2 - 125;
-        drawCenteredString(fontRenderer, "TIMELINE AUDIO - WAV LIBRARY",
-                width / 2, top, 0xFFE2E5E7);
+        EditorLipSyncDialogStyle.panel(mc, left - 12, top - 34, 354, 299,
+                "WAV LIBRARY", "Select timeline audio");
         String folder = audioFolder.getAbsolutePath();
         fontRenderer.drawString(fontRenderer.trimStringToWidth(folder, 326),
                 left, top + 18, 0xFFAAAAAA);
