@@ -45,6 +45,10 @@ public final class EditorVoskRecognizer
             ProcessBuilder pb = new ProcessBuilder(
                     python == null || python.trim().isEmpty() ? "python" : python.trim(),
                     script.getAbsolutePath(), wav.getAbsolutePath(), model.getAbsolutePath());
+            // On Windows Python often uses cp1251 for redirected stdout.
+            // Vosk word text must always arrive as UTF-8, not mojibake.
+            pb.environment().put("PYTHONIOENCODING", "utf-8");
+            pb.environment().put("PYTHONUTF8", "1");
             pb.redirectErrorStream(true);
             Process process = pb.start();
             List<Word> words = new ArrayList<Word>();
@@ -113,6 +117,10 @@ public final class EditorVoskRecognizer
             previousEnd = end;
         }
         timeline.put(previousEnd + 1, LipSyncViseme.IDLE);
+        if (!words.isEmpty() && timeline.values().stream()
+                .noneMatch(v -> v != LipSyncViseme.IDLE))
+            throw new IllegalArgumentException(
+                    "No mouth visemes found in recognized words; check Russian UTF-8 output");
         ArrayList<LipSyncTimeline.Key> result = new ArrayList<LipSyncTimeline.Key>();
         LipSyncViseme previous = null;
         for (Map.Entry<Integer, LipSyncViseme> e : timeline.entrySet())
