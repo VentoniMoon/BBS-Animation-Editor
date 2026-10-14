@@ -196,6 +196,7 @@ public class AnimationEditorScreen extends GuiScreen
     public void initGui()
     {
         super.initGui();
+        this.wavAudio.restoreLastLoaded();
 
         /*
          * =========================================================
