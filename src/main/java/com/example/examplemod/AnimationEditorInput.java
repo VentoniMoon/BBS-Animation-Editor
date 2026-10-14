@@ -1252,6 +1252,10 @@ public class AnimationEditorInput
 
             java.io.File exported =
                     EditorCharacterRecordExport.exportSelected(this.sceneState);
+            // The native Blockbuster managers keep the old Record in memory
+            // even though its .dat has been atomically replaced.
+            EditorRecordCacheRefresh.afterExport(
+                    this.sceneState.getSelectedActorData().getId());
             net.minecraft.client.Minecraft mc =
                     net.minecraft.client.Minecraft.getMinecraft();
             if (mc.player != null)
