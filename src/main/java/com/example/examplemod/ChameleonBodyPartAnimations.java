@@ -226,67 +226,9 @@ public final class ChameleonBodyPartAnimations
 
         try
         {
-            CharacterKey next = nextKey(part, frame);
+            // Character phoneme keys use constant (stepped) interpolation.
+            // Hold the exact Chameleon clip until the next explicit key.
             boolean playing = playMode(current);
-            boolean nextPlaying = playMode(next);
-
-            // Only static phonemes are blended. Full motion clips keep their
-            // native playback timing and start at their explicit key.
-            if (!playing && next != null && !nextPlaying)
-            {
-                String target = next.getData().getString(KEY);
-                int available = next.getFrame() - current.getFrame();
-                // Reserve at least one full frame for the current static viseme.
-                // 3-frame gaps -> 2-frame transition; 4+ gaps -> at most 3.
-                // A 1-frame gap cannot contain an intermediate blend.
-                int duration = Math.min(PHONEME_TRANSITION_FRAMES,
-                        Math.max(0, available - 1));
-                int start = next.getFrame() - duration;
-
-                if (duration > 0 && !clip.equals(target) && frame >= start)
-                {
-                    // At the first transition frame, preserve the old pose
-                    // exactly. The native Chameleon fade can otherwise expose
-                    // the target pose immediately when its previous action
-                    // has not yet been initialized by the preview renderer.
-                    if (frame == start)
-                    {
-                        return withClip(morph, clip, false, 0, false, 0);
-                    }
-
-                    float progress = (frame - start) / (float) duration;
-                    // Smoothstep-like sine easing, deterministic on scrubbing.
-                    float eased = (float) (0.5D - 0.5D * Math.cos(Math.PI * progress));
-                    AbstractMorph direct = ChameleonVisemeBlender.blend(morph, clip, target, eased);
-                    if (direct != null) return direct;
-
-                    // Fallback for models containing dynamic Molang animation channels.
-                    int nativeDuration = 100;
-                    int nativeOffset = Math.max(0, Math.min(nativeDuration,
-                            Math.round(nativeDuration * eased)));
-
-                    AbstractMorph output = withClip(morph, target, false,
-                            0, true, nativeDuration);
-                    AbstractMorph previous = withClip(morph, clip, false,
-                            0, false, 0);
-                    // Chameleon's pause() captures the old ActionPlayback and
-                    // sets transition progress without adding Character keys.
-                    if (output != null && previous != null)
-                    {
-                        try
-                        {
-                            java.lang.reflect.Method pause = output.getClass()
-                                    .getMethod("pause", AbstractMorph.class, int.class);
-                            pause.invoke(output, previous, nativeOffset);
-                        }
-                        catch (ReflectiveOperationException error)
-                        {
-                            System.err.println("[BBS Editor] Cannot initialize Chameleon transition: " + error);
-                        }
-                    }
-                    return output;
-                }
-            }
 
             return withClip(morph, clip, playing,
                     Math.max(0, frame - current.getFrame()), false, 0);
