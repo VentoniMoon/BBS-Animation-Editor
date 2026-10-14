@@ -817,18 +817,23 @@ public class CharacterEditorPanel
         {
             cursorY += 4;
             boolean hasTarget = this.selectedBodyPartModel != null;
-            String label = hasTarget ? "GENERATE TEXT LIP SYNC" : "SELECT A BODY PART TRACK";
-            drawButton(mc, label, this.x + 9, cursorY,
-                    Math.max(40, this.width - 18), 20,
-                    hasTarget && mouseX >= this.x + 9 && mouseX < this.x + this.width - 9
+            int half = Math.max(30, (this.width - 22) / 2);
+            drawButton(mc, hasTarget ? "TEXT TO KEYS" : "SELECT PART",
+                    this.x + 9, cursorY, half, 20,
+                    hasTarget && mouseX >= this.x + 9 && mouseX < this.x + 9 + half
                     && mouseY >= cursorY && mouseY < cursorY + 20);
+            boolean ready = hasTarget && this.wavAudio != null && this.wavAudio.isLoaded();
+            drawButton(mc, ready ? "AUDIO TO KEYS" : "NO WAV / PART",
+                    this.x + 13 + half, cursorY, half, 20,
+                    ready && mouseX >= this.x + 13 + half &&
+                    mouseX < this.x + 13 + 2 * half &&
+                    mouseY >= cursorY && mouseY < cursorY + 20);
             String wavLabel = this.wavAudio == null
                     ? "LOAD WAV" : "LOAD WAV: " + this.wavAudio.getFileName();
             drawButton(mc, wavLabel, this.x + 9, cursorY + 25,
                     Math.max(40, this.width - 18), 20,
                     mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
                     mouseY >= cursorY + 25 && mouseY < cursorY + 45);
-
         }
 
         /*
@@ -2768,12 +2773,13 @@ public class CharacterEditorPanel
         }
         if (this.openedSection == Section.LIP_SYNC &&
                 this.selectedBodyPartModel != null &&
-                mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
+                mouseX >= this.x + 9 && mouseX < this.x + 9 + Math.max(30, (this.width - 22) / 2) &&
                 mouseY >= currentY + SECTION_HEIGHT + 4 &&
                 mouseY < currentY + SECTION_HEIGHT + 24 &&
                 Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
         {
             Minecraft mc = Minecraft.getMinecraft();
+            ((AnimationEditorScreen) mc.currentScreen).preserveAudioOnGuiTransition();
             mc.displayGuiScreen(new LipSyncTextScreen(
                     (AnimationEditorScreen) mc.currentScreen,
                     this.selectedBodyPartModel, this.currentFrame));
@@ -2788,8 +2794,26 @@ public class CharacterEditorPanel
                 Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
         {
             Minecraft mc = Minecraft.getMinecraft();
+            ((AnimationEditorScreen) mc.currentScreen).preserveAudioOnGuiTransition();
             mc.displayGuiScreen(new EditorWavLoadScreen(
                     (AnimationEditorScreen) mc.currentScreen, this.wavAudio));
+            return true;
+        }
+
+        if (this.openedSection == Section.LIP_SYNC &&
+                this.selectedBodyPartModel != null &&
+                this.wavAudio != null && this.wavAudio.isLoaded() &&
+                mouseX >= this.x + 13 + Math.max(30, (this.width - 22) / 2) &&
+                mouseX < this.x + 13 + 2 * Math.max(30, (this.width - 22) / 2) &&
+                mouseY >= currentY + SECTION_HEIGHT + 4 &&
+                mouseY < currentY + SECTION_HEIGHT + 24 &&
+                Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
+        {
+            Minecraft mc = Minecraft.getMinecraft();
+            AnimationEditorScreen editor = (AnimationEditorScreen) mc.currentScreen;
+            editor.preserveAudioOnGuiTransition();
+            mc.displayGuiScreen(new LipSyncAudioScreen(editor,
+                    this.selectedBodyPartModel, this.wavAudio, this.currentFrame));
             return true;
         }
 

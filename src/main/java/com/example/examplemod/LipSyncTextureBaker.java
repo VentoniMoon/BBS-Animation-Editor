@@ -87,6 +87,26 @@ public final class LipSyncTextureBaker
                 LipSyncTimeline.fromText(text, startFrame, wpm);
         if (sequence.isEmpty()) throw new IllegalArgumentException("Enter speech text");
 
+        return bake(model, sequence, startFrame, idleTexture);
+    }
+
+    public static int generateTimed(BodyPartModelData model,
+                                    List<LipSyncTimeline.Key> sequence,
+                                    int startFrame, String idleTexture)
+    {
+        if (sequence == null || sequence.isEmpty())
+            throw new IllegalArgumentException("No recognized speech");
+        if (model == null || !model.hasMorphModel())
+            throw new IllegalArgumentException("Choose a morph-backed Mouth Body Part");
+        return bake(model, sequence, startFrame, idleTexture);
+    }
+
+    private static int bake(BodyPartModelData model,
+                            List<LipSyncTimeline.Key> sequence,
+                            int startFrame, String idleTexture)
+    {
+        if (idleTexture == null || idleTexture.trim().isEmpty())
+            throw new IllegalArgumentException("Enter the idle texture path");
         AbstractMorph source = model.getMorphAt(startFrame);
         if (source == null) throw new IllegalArgumentException("Body Part has no source morph");
         NBTTagCompound template = source.toNBT();

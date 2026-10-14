@@ -95,6 +95,13 @@ public class AnimationEditorScreen extends GuiScreen
 
     private final EditorWavWaveform wavWaveform =
             new EditorWavWaveform();
+    private boolean keepAudioOnNextGuiClose;
+
+    public void preserveAudioOnGuiTransition()
+    {
+        this.keepAudioOnNextGuiClose = true;
+    }
+
 
     private final CharacterEditorController characterController =
             new CharacterEditorController(playbackController);
@@ -3598,7 +3605,9 @@ public class AnimationEditorScreen extends GuiScreen
         this.timelineController.mouseReleased();
 
         this.playbackController.pause();
-        this.wavAudio.unload();
+        if (!this.keepAudioOnNextGuiClose)
+            this.wavAudio.unload();
+        this.keepAudioOnNextGuiClose = false;
 
         BlockbusterPreviewAnimationState.clear();
         EmoticonsPreviewAnimationState.clear();
