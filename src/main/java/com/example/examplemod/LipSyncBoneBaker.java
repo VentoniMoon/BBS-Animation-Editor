@@ -83,6 +83,12 @@ public final class LipSyncBoneBaker
     public static int generate(BodyPartModelData part, List<LipSyncTimeline.Key> keys)
             throws IOException
     {
+        return generate(part, keys, false);
+    }
+
+    public static int generate(BodyPartModelData part, List<LipSyncTimeline.Key> keys,
+                               boolean smooth) throws IOException
+    {
         if (part == null || !part.hasMorphModel())
             throw new IllegalArgumentException("Select the Chameleon Mouth RIG Body Part");
         if (keys == null || keys.isEmpty())
@@ -145,7 +151,11 @@ public final class LipSyncBoneBaker
                 AnimationBone bone = bones.get(name);
                 bone.addKeyframe(key.frame);
                 AnimationKeyframe bakedKey = bone.getKeyframeAt(key.frame);
-                bakedKey.setInterpolation(mchorse.mclib.utils.keyframes.KeyframeInterpolation.CONST);
+                bakedKey.setInterpolation(smooth
+                        ? mchorse.mclib.utils.keyframes.KeyframeInterpolation.CUBIC
+                        : mchorse.mclib.utils.keyframes.KeyframeInterpolation.CONST);
+                if (smooth)
+                    bakedKey.setEasing(mchorse.mclib.utils.keyframes.KeyframeEasing.OUT);
                 AnimationTransform transform = bakedKey.getTransform();
                 transform.setPosition(pos[0], pos[1], pos[2]);
                 transform.setScale(scale[0], scale[1], scale[2]);

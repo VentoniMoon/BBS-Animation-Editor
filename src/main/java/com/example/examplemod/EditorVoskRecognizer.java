@@ -86,6 +86,61 @@ public final class EditorVoskRecognizer
         }
     }
 
+    /**
+     * Smooth pose timeline inspired by Wemppy's approach:
+     * hold closed with two IDLE anchors in long pauses. Unlike Skin mode,
+     * keep repeated IDLE keys because they control the interpolation interval.
+     */
+    public static List<LipSyncTimeline.Key> toSmoothBoneVisemes(List<Word> words, int offset)
+    {
+        TreeMap<Integer, LipSyncViseme> timeline = new TreeMap<Integer, LipSyncViseme>();
+        int startOffset = Math.max(0, offset);
+        timeline.put(startOffset, LipSyncViseme.IDLE);
+        int previousEnd = startOffset;
+        for (Word word : words)
+        {
+            int start = Math.max(startOffset, startOffset + Math.round(word.start * 20F));
+            int end = Math.max(start + 1, startOffset + Math.round(word.end * 20F));
+            // Two identical closed poses protect the middle of long silences.
+            // The second anchor is held close to the next spoken word.
+            if (start - previousEnd >= 5)
+            {
+                timeline.put(previousEnd + 2, LipSyncViseme.IDLE);
+                timeline.put(start - 2, LipSyncViseme.IDLE);
+            }
+            String letters = word.text.toLowerCase(Locale.ROOT);
+            float total = 0F;
+            for (int i = 0; i < letters.length(); i++)
+                if (LipSyncViseme.forLetter(letters.charAt(i)) != null)
+                    total += LipSyncViseme.weight(letters.charAt(i));
+            if (total <= 0F) continue;
+            float cursor = start;
+            for (int i = 0; i < letters.length(); i++)
+            {
+                char letter = letters.charAt(i);
+                LipSyncViseme viseme = LipSyncViseme.forLetter(letter);
+                if (viseme == null) continue;
+                int frame = Math.min(end - 1, Math.round(cursor));
+                timeline.put(frame, viseme);
+                cursor += (end - start) * LipSyncViseme.weight(letter) / total;
+            }
+            previousEnd = end;
+        }
+        // Return to the closed pose shortly after the last spoken word.
+        timeline.put(previousEnd + 2, LipSyncViseme.IDLE);
+        ArrayList<LipSyncTimeline.Key> keys = new ArrayList<LipSyncTimeline.Key>();
+        LipSyncViseme previous = null;
+        for (Map.Entry<Integer, LipSyncViseme> entry : timeline.entrySet())
+        {
+            // Consecutive silence anchors must be kept, while repeated
+            // speech shapes can be collapsed.
+            if (entry.getValue() == LipSyncViseme.IDLE || entry.getValue() != previous)
+                keys.add(new LipSyncTimeline.Key(entry.getKey(), entry.getValue()));
+            previous = entry.getValue();
+        }
+        return keys;
+    }
+
     public static List<LipSyncTimeline.Key> toVisemes(List<Word> words, int offset)
     {
         TreeMap<Integer, LipSyncViseme> timeline = new TreeMap<Integer, LipSyncViseme>();

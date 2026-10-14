@@ -17,6 +17,7 @@ public class LipSyncAudioScreen extends GuiScreen
     private final int initialFrame;
     private GuiTextField frame, idle, python;
     private boolean boneMode;
+    private boolean smoothBones = true;
     private volatile boolean running;
     private volatile List<EditorVoskRecognizer.Word> recognized;
     private volatile String failure;
@@ -56,6 +57,7 @@ public class LipSyncAudioScreen extends GuiScreen
         buttonList.add(new GuiButton(2, x + 160, y + 139, 150, 20, "Back"));
         buttonList.add(new GuiButton(3, x, y + 201, 310, 20, "Output: TEXTURE (Skin keys)"));
         buttonList.add(new GuiButton(4, x, y + 226, 310, 20, "Fix existing Bone keys: CONST"));
+        buttonList.add(new GuiButton(5, x, y + 251, 310, 20, "Bone interpolation: SMOOTH (Cubic Out)"));
     }
 
     @Override
@@ -84,6 +86,14 @@ public class LipSyncAudioScreen extends GuiScreen
     protected void actionPerformed(GuiButton button) throws IOException
     {
         if (button.id == 2) { mc.displayGuiScreen(parent); return; }
+        if (button.id == 5)
+        {
+            smoothBones = !smoothBones;
+            button.displayString = smoothBones
+                    ? "Bone interpolation: SMOOTH (Cubic Out)"
+                    : "Bone interpolation: CONST";
+            return;
+        }
         if (button.id == 4)
         {
             if (running) return;
@@ -166,8 +176,10 @@ public class LipSyncAudioScreen extends GuiScreen
             try
             {
                 int start = Integer.parseInt(frame.getText().trim());
-                List<LipSyncTimeline.Key> visemes = EditorVoskRecognizer.toVisemes(words, start);
-                int count = boneMode ? LipSyncBoneBaker.generate(model, visemes)
+                List<LipSyncTimeline.Key> visemes = boneMode && smoothBones
+                        ? EditorVoskRecognizer.toSmoothBoneVisemes(words, start)
+                        : EditorVoskRecognizer.toVisemes(words, start);
+                int count = boneMode ? LipSyncBoneBaker.generate(model, visemes, smoothBones)
                         : LipSyncTextureBaker.generateTimed(model, visemes,
                                 start, idle.getText());
                 parent.refreshCharacterState();
