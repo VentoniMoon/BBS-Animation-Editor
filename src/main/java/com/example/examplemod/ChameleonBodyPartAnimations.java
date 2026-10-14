@@ -13,6 +13,9 @@ import net.minecraft.nbt.NBTTagCompound;
 public final class ChameleonBodyPartAnimations
 {
     private static final String KEY = "ChameleonAnimation";
+    private static final String MODE_KEY = "ChameleonAnimationMode";
+    private static final String PLAY = "play";
+    private static final String HOLD = "hold";
     private ChameleonBodyPartAnimations() {}
 
     public static boolean isChameleon(BodyPartModelData part, int frame)
@@ -84,6 +87,7 @@ public final class ChameleonBodyPartAnimations
         if (key == null || animation == null || animation.trim().isEmpty()) return;
         NBTTagCompound data = key.getData();
         data.setString(KEY, animation.trim());
+        if (!data.hasKey(MODE_KEY, 8)) data.setString(MODE_KEY, HOLD);
         key.setData(data);
         key.setType(CharacterKey.Type.ANIMATION);
     }
@@ -109,6 +113,43 @@ public final class ChameleonBodyPartAnimations
             }
         }
         return current;
+    }
+
+    /** Resolve the last explicit animation key without creating timeline keys. */
+    public static CharacterKey activeKey(BodyPartModelData part, int frame)
+    {
+        if (part == null) return null;
+        CharacterKey latest = null;
+        for (CharacterTrack track : part.getCharacterTimeline().getTracks())
+        {
+            if (track == null) continue;
+            for (CharacterKey key : track.getKeys())
+            {
+                if (key == null || key.getFrame() > frame || !key.getData().hasKey(KEY, 8)) continue;
+                if (latest == null || key.getFrame() > latest.getFrame()) latest = key;
+            }
+        }
+        return latest;
+    }
+
+    public static int elapsedFrames(BodyPartModelData part, int frame)
+    {
+        CharacterKey key = activeKey(part, frame);
+        return key == null ? 0 : Math.max(0, frame - key.getFrame());
+    }
+
+    public static boolean isPlaying(BodyPartModelData part, int frame)
+    {
+        CharacterKey key = activeKey(part, frame);
+        return key != null && PLAY.equalsIgnoreCase(key.getData().getString(MODE_KEY));
+    }
+
+    public static void setPlaying(CharacterKey key, boolean playing)
+    {
+        if (key == null) return;
+        NBTTagCompound data = key.getData();
+        data.setString(MODE_KEY, playing ? PLAY : HOLD);
+        key.setData(data);
     }
 
     public static AbstractMorph apply(BodyPartModelData part, int frame, AbstractMorph morph)
