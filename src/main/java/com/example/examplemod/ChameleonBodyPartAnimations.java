@@ -247,7 +247,11 @@ public final class ChameleonBodyPartAnimations
                             0, false, 0);
                     // Chameleon's pause() captures the old ActionPlayback and
                     // sets transition progress without adding Character keys.
-                    output.pause(previous, nativeOffset);
+                    if (output instanceof mchorse.chameleon.metamorph.ChameleonMorph)
+                    {
+                        ((mchorse.chameleon.metamorph.ChameleonMorph) output)
+                                .pause(previous, nativeOffset);
+                    }
                     return output;
                 }
             }
