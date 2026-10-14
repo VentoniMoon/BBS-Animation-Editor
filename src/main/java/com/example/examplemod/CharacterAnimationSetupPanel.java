@@ -118,7 +118,7 @@ public class CharacterAnimationSetupPanel
             int mouseY)
     {
         if (this.selectedActor == null ||
-                this.selectedKey == null)
+                (this.selectedKey == null && !isChameleonPart()))
         {
             drawHint(
                     mc,
@@ -219,7 +219,7 @@ public class CharacterAnimationSetupPanel
             );
         }
 
-        if (mouseButton != 0 || this.selectedKey == null)
+        if (mouseButton != 0 || (this.selectedKey == null && !isChameleonPart()))
         {
             return false;
         }
@@ -249,7 +249,7 @@ public class CharacterAnimationSetupPanel
                 positionPopup();
 
                 if (isChameleonPart())
-                    this.pickerPopup.openAnimations(ChameleonBodyPartAnimations.listAnimations());
+                    this.pickerPopup.openAnimations(ChameleonBodyPartAnimations.listAnimations(this.selectedBodyPart, this.currentFrame));
                 else
                     this.pickerPopup.open(this.runtimeActor, this.selectedAction);
 
@@ -374,7 +374,7 @@ public class CharacterAnimationSetupPanel
 
     private void assignAnimation(String animation)
     {
-        if (this.selectedKey == null ||
+        if ((this.selectedKey == null && !isChameleonPart()) ||
                 animation == null ||
                 animation.isEmpty())
         {
