@@ -208,6 +208,7 @@ public class CharacterTimelineEditorController
 
     private CharacterKey dragKey = null;
     private boolean copyCharacterKeyOnDrag = false;
+    private boolean copyBodyPartKeyOnDrag = false;
 
     private boolean draggingBodyPart = false;
     private int dragBodyPartFrame = -1;
@@ -1720,6 +1721,9 @@ public class CharacterTimelineEditorController
                     this.draggingBodyPart = true;
                     this.dragBodyPartFrame = existingFrame;
                     this.dragBodyPartModel = bodyPart;
+                    this.copyBodyPartKeyOnDrag =
+                            Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)
+                            || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
 
                     resetDoubleClickState();
                     return true;
@@ -1998,6 +2002,33 @@ public class CharacterTimelineEditorController
                 frame = FIRST_FRAME;
             }
 
+            if (this.copyBodyPartKeyOnDrag)
+            {
+                if (frame == this.dragBodyPartFrame) return true;
+                if (findBodyPartKeyNearFrame(this.dragBodyPartModel, frame) == frame)
+                    return true;
+                BodyPartModelData part = this.dragBodyPartModel;
+                int sourceFrame = this.dragBodyPartFrame;
+                if (part.hasModelKeyAt(sourceFrame))
+                {
+                    String modelName = part.getModelKeysSnapshot().get(sourceFrame);
+                    if (modelName != null) part.setModelKey(frame, modelName);
+                }
+                // Preserve all Character key NBT (including ChameleonAnimation).
+                for (CharacterTrack partTrack : part.getCharacterTimeline().getTracks())
+                {
+                    CharacterKey original = partTrack.getKeyAtFrame(sourceFrame);
+                    if (original != null)
+                    {
+                        CharacterKey duplicate = original.copy();
+                        duplicate.setFrame(frame);
+                        partTrack.addKey(duplicate);
+                    }
+                }
+                this.dragBodyPartFrame = frame;
+                this.copyBodyPartKeyOnDrag = false;
+                return true;
+            }
             if (moveBodyPartKey(
                     this.dragBodyPartModel,
                     this.dragBodyPartFrame,
@@ -2095,6 +2126,7 @@ public class CharacterTimelineEditorController
         this.dragTrack = -1;
         this.dragKey = null;
         this.copyCharacterKeyOnDrag = false;
+        this.copyBodyPartKeyOnDrag = false;
     }
 
 
