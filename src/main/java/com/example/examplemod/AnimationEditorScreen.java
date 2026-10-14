@@ -90,6 +90,9 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorPlaybackController playbackController =
             new EditorPlaybackController(timeline);
 
+    private final EditorWavAudioController wavAudio =
+            new EditorWavAudioController();
+
     private final CharacterEditorController characterController =
             new CharacterEditorController(playbackController);
 
@@ -935,6 +938,7 @@ public class AnimationEditorScreen extends GuiScreen
         this.characterEditorPanel.setSelectedBodyPartModel(
                 this.characterTimelineEditorController.getSelectedBodyPartModel()
         );
+        this.characterEditorPanel.setWavAudio(this.wavAudio);
     }
 
     private void applyCharacterState()
@@ -3527,6 +3531,10 @@ public class AnimationEditorScreen extends GuiScreen
 
         this.timeline.update();
         this.playbackController.update();
+        this.wavAudio.update(
+                this.playbackController.getCurrentFrame(),
+                this.playbackController.isPlaying()
+        );
 
         BlockbusterPreviewAnimationState.setPlaying(
                 this.playbackController.isPlaying()
@@ -3571,6 +3579,7 @@ public class AnimationEditorScreen extends GuiScreen
         this.timelineController.mouseReleased();
 
         this.playbackController.pause();
+        this.wavAudio.unload();
 
         BlockbusterPreviewAnimationState.clear();
         EmoticonsPreviewAnimationState.clear();
