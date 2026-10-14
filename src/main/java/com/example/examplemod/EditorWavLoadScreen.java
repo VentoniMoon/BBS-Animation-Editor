@@ -1,20 +1,29 @@
 package com.example.examplemod;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
-import javax.swing.JFileChooser;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import java.util.Arrays;
+import java.util.Comparator;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiTextField;
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
 
-/** WAV import dialog. Supports a native file picker and manual file paths. */
+/**
+ * In-game WAV browser. Copy WAV files into <minecraft>/bbs-animation-editor/audio.
+ */
 public class EditorWavLoadScreen extends GuiScreen
 {
+    private static final int VISIBLE_ROWS = 8;
+    private static final int ROW_HEIGHT = 21;
+
     private final AnimationEditorScreen parent;
     private final EditorWavAudioController audio;
-    private GuiTextField path;
+    private final File audioFolder;
+    private File[] files = new File[0];
+    private int selectedIndex = -1;
+    private int scrollOffset;
     private String message = "";
     private int messageColor = 0xFFCCCCCC;
 
@@ -22,33 +31,90 @@ public class EditorWavLoadScreen extends GuiScreen
     {
         this.parent = parent;
         this.audio = audio;
+        this.audioFolder = new File(
+                net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
+                "bbs-animation-editor/audio");
     }
 
     @Override
     public void initGui()
     {
         Keyboard.enableRepeatEvents(true);
-        int x = width / 2 - 155;
-        int y = height / 2 - 65;
-        path = new GuiTextField(201, fontRenderer, x, y + 29, 310, 20);
-        path.setMaxStringLength(1024);
+        int left = width / 2 - 165;
+        int top = height / 2 - 125;
         buttonList.clear();
-        buttonList.add(new GuiButton(1, x, y + 58, 100, 20, "Browse WAV"));
-        buttonList.add(new GuiButton(2, x + 105, y + 58, 100, 20, "Load"));
-        buttonList.add(new GuiButton(3, x + 210, y + 58, 100, 20, "Back"));
+        buttonList.add(new GuiButton(1, left, top + 224, 105, 20, "Refresh"));
+        buttonList.add(new GuiButton(2, left + 110, top + 224, 105, 20, "Load selected"));
+        buttonList.add(new GuiButton(3, left + 220, top + 224, 105, 20, "Back"));
+        refreshFiles();
+    }
+
+    private void refreshFiles()
+    {
+        if (!audioFolder.isDirectory() && !audioFolder.mkdirs())
+        {
+            message = "Could not create audio folder";
+            messageColor = 0xFFFF7777;
+            files = new File[0];
+            selectedIndex = -1;
+            return;
+        }
+        File[] listed = audioFolder.listFiles(new FilenameFilter()
+        {
+            @Override
+            public boolean accept(File dir, String name)
+            {
+                return name.toLowerCase(java.util.Locale.ROOT).endsWith(".wav")
+                        && new File(dir, name).isFile();
+            }
+        });
+        files = listed == null ? new File[0] : listed;
+        Arrays.sort(files, new Comparator<File>()
+        {
+            @Override
+            public int compare(File a, File b)
+            {
+                return a.getName().compareToIgnoreCase(b.getName());
+            }
+        });
+        selectedIndex = files.length > 0 ? 0 : -1;
+        scrollOffset = 0;
+        message = files.length == 0 ? "Put WAV files in the audio folder, then Refresh"
+                : files.length + " WAV file(s) found";
+        messageColor = 0xFFCCCCCC;
     }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks)
     {
         drawDefaultBackground();
-        int x = width / 2 - 155;
-        int y = height / 2 - 65;
-        drawCenteredString(fontRenderer, "LOAD WAV - TIMELINE AUDIO",
-                width / 2, y, 0xFFE2E5E7);
-        fontRenderer.drawString("WAV file path", x, y + 17, 0xFFCCCCCC);
-        path.drawTextBox();
-        drawCenteredString(fontRenderer, message, width / 2, y + 90, messageColor);
+        int left = width / 2 - 165;
+        int top = height / 2 - 125;
+        drawCenteredString(fontRenderer, "TIMELINE AUDIO - WAV LIBRARY",
+                width / 2, top, 0xFFE2E5E7);
+        String folder = audioFolder.getAbsolutePath();
+        fontRenderer.drawString(fontRenderer.trimStringToWidth(folder, 326),
+                left, top + 18, 0xFFAAAAAA);
+        drawRect(left, top + 34, left + 330,
+                top + 34 + VISIBLE_ROWS * ROW_HEIGHT, 0xCC15191E);
+        for (int i = 0; i < VISIBLE_ROWS; i++)
+        {
+            int index = scrollOffset + i;
+            if (index >= files.length) break;
+            int y = top + 34 + i * ROW_HEIGHT;
+            boolean selected = index == selectedIndex;
+            boolean hovered = mouseX >= left && mouseX < left + 330 &&
+                    mouseY >= y && mouseY < y + ROW_HEIGHT;
+            if (selected || hovered)
+                drawRect(left + 2, y + 1, left + 328, y + ROW_HEIGHT - 1,
+                        selected ? 0xFF24526B : 0xFF30343A);
+            fontRenderer.drawString(
+                    fontRenderer.trimStringToWidth(files[index].getName(), 310),
+                    left + 9, y + 7, selected ? 0xFF8DDCFF : 0xFFE0E4E7);
+        }
+        drawCenteredString(fontRenderer,
+                fontRenderer.trimStringToWidth(message, 328),
+                width / 2, top + 207, messageColor);
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
@@ -61,27 +127,19 @@ public class EditorWavLoadScreen extends GuiScreen
         }
         else if (button.id == 1)
         {
-            try
-            {
-                JFileChooser chooser = new JFileChooser();
-                chooser.setFileFilter(new FileNameExtensionFilter("WAV audio", "wav"));
-                chooser.setAcceptAllFileFilterUsed(false);
-                if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION)
-                    path.setText(chooser.getSelectedFile().getAbsolutePath());
-            }
-            catch (Exception e)
-            {
-                message = "File picker unavailable; paste the path instead";
-                messageColor = 0xFFFF7777;
-            }
+            refreshFiles();
         }
         else if (button.id == 2)
         {
+            if (selectedIndex < 0 || selectedIndex >= files.length)
+            {
+                message = "Select a WAV file";
+                messageColor = 0xFFFF7777;
+                return;
+            }
             try
             {
-                audio.load(new File(path.getText().trim()));
-                message = "Loaded: " + audio.getFileName();
-                messageColor = 0xFF66DD99;
+                audio.load(files[selectedIndex]);
                 mc.displayGuiScreen(parent);
             }
             catch (Exception e)
@@ -96,13 +154,33 @@ public class EditorWavLoadScreen extends GuiScreen
     protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException
     {
         super.mouseClicked(mouseX, mouseY, button);
-        path.mouseClicked(mouseX, mouseY, button);
+        if (button != 0) return;
+        int left = width / 2 - 165;
+        int y = mouseY - (height / 2 - 125 + 34);
+        if (mouseX >= left && mouseX < left + 330 &&
+                y >= 0 && y < VISIBLE_ROWS * ROW_HEIGHT)
+        {
+            int index = scrollOffset + y / ROW_HEIGHT;
+            if (index < files.length) selectedIndex = index;
+        }
+    }
+
+    @Override
+    public void handleMouseInput() throws IOException
+    {
+        super.handleMouseInput();
+        int wheel = Mouse.getEventDWheel();
+        if (wheel != 0)
+        {
+            scrollOffset = Math.max(0, Math.min(
+                    Math.max(0, files.length - VISIBLE_ROWS),
+                    scrollOffset + (wheel < 0 ? 1 : -1)));
+        }
     }
 
     @Override
     protected void keyTyped(char character, int key) throws IOException
     {
-        if (path.textboxKeyTyped(character, key)) return;
         if (key == Keyboard.KEY_ESCAPE)
         {
             mc.displayGuiScreen(parent);
@@ -112,8 +190,8 @@ public class EditorWavLoadScreen extends GuiScreen
     }
 
     @Override
-    public void updateScreen() { path.updateCursorCounter(); }
-
-    @Override
-    public void onGuiClosed() { Keyboard.enableRepeatEvents(false); }
+    public void onGuiClosed()
+    {
+        Keyboard.enableRepeatEvents(false);
+    }
 }
