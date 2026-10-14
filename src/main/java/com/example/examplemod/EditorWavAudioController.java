@@ -19,6 +19,8 @@ public final class EditorWavAudioController
 
     public boolean isLoaded() { return clip != null; }
 
+    public synchronized File getLoadedFile() { return file; }
+
     public synchronized void load(File input) throws Exception
     {
         if (input == null || !input.isFile() ||
