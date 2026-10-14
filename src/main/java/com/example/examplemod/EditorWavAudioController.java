@@ -59,8 +59,9 @@ public final class EditorWavAudioController
     public synchronized void update(int frame, boolean playing)
     {
         if (clip == null) return;
-        int target = (int)Math.min(clip.getMicrosecondLength(),
-                Math.max(0L, (long)frame * 50000L));
+        long desired = Math.max(0L, (long)frame * 50000L);
+        long limited = Math.min(clip.getMicrosecondLength(), desired);
+        int target = (int)Math.min(Integer.MAX_VALUE, limited);
         int position = (int)Math.min(Integer.MAX_VALUE, clip.getMicrosecondPosition());
         if (target >= clip.getMicrosecondLength())
         {
