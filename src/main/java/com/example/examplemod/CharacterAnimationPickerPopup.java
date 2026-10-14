@@ -34,6 +34,7 @@ public class CharacterAnimationPickerPopup
     private final GuiTextField searchField;
 
     private EntityActor runtimeActor;
+    private List<String> externalAnimations;
     private List<String> animations =
             new ArrayList<String>();
     private List<String> filtered =
@@ -90,12 +91,25 @@ public class CharacterAnimationPickerPopup
             String action)
     {
         this.runtimeActor = runtimeActor;
+        this.externalAnimations = null;
         this.scrollOffset = 0;
         this.open = true;
 
         this.searchField.setText("");
         this.searchField.setFocused(true);
 
+        refreshList();
+        positionSearchField();
+    }
+
+    public void openAnimations(List<String> names)
+    {
+        this.runtimeActor = null;
+        this.externalAnimations = new ArrayList<String>(names);
+        this.scrollOffset = 0;
+        this.open = true;
+        this.searchField.setText("");
+        this.searchField.setFocused(true);
         refreshList();
         positionSearchField();
     }
@@ -391,11 +405,9 @@ public class CharacterAnimationPickerPopup
             return;
         }
 
-        this.animations =
-                CharacterAnimationSetupController
-                        .getAvailableAnimations(
-                                this.runtimeActor
-                        );
+        this.animations = this.externalAnimations != null
+                ? new ArrayList<String>(this.externalAnimations)
+                : CharacterAnimationSetupController.getAvailableAnimations(this.runtimeActor);
 
         String filter =
                 this.searchField.getText();
