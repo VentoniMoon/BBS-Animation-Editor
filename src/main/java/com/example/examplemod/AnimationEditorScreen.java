@@ -3186,7 +3186,7 @@ public class AnimationEditorScreen extends GuiScreen
     {
         if (!this.wavAudio.isLoaded()) return;
         int timelineTop = height - getBaseTimelineHeight();
-        this.wavWaveform.draw(width, timelineTop - EditorWavWaveform.HEIGHT,
+        this.wavWaveform.draw(width, timelineTop + 1,
                 LEFT_PANEL_WIDTH, this.timeline,
                 this.playbackController.getCurrentFrame());
     }
@@ -3268,8 +3268,7 @@ public class AnimationEditorScreen extends GuiScreen
 
     public int getTimelineHeight()
     {
-        return getBaseTimelineHeight()
-                + (this.wavAudio.isLoaded() ? EditorWavWaveform.HEIGHT : 0);
+        return getBaseTimelineHeight();
     }
 
     private int getBaseTimelineHeight()
