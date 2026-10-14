@@ -229,6 +229,16 @@ public class CharacterAnimationPickerPopup
             );
         }
 
+        if (this.filtered.isEmpty())
+        {
+            mc.fontRenderer.drawString(
+                    this.animations.isEmpty() ? "No animations found for this model" : "No matching animations",
+                    this.x + 5,
+                    listY + 6,
+                    COLOR_TEXT_SECONDARY
+            );
+        }
+
         drawScrollbar(
                 listY,
                 VISIBLE_ROWS * ROW_HEIGHT,
