@@ -247,10 +247,18 @@ public final class ChameleonBodyPartAnimations
                             0, false, 0);
                     // Chameleon's pause() captures the old ActionPlayback and
                     // sets transition progress without adding Character keys.
-                    if (output instanceof mchorse.chameleon.metamorph.ChameleonMorph)
+                    if (output != null && previous != null)
                     {
-                        ((mchorse.chameleon.metamorph.ChameleonMorph) output)
-                                .pause(previous, nativeOffset);
+                        try
+                        {
+                            java.lang.reflect.Method pause = output.getClass()
+                                    .getMethod("pause", AbstractMorph.class, int.class);
+                            pause.invoke(output, previous, nativeOffset);
+                        }
+                        catch (ReflectiveOperationException error)
+                        {
+                            System.err.println("[BBS Editor] Cannot initialize Chameleon transition: " + error);
+                        }
                     }
                     return output;
                 }
