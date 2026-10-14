@@ -1835,7 +1835,7 @@ public class CharacterTimelineEditorController
             }
 
             this.selectedKey = null;
-            this.selectedBodyPartModel = null;
+            this.selectedBodyPartModel = getBodyPartModel(track);
 
             this.timeline.setTick(
                     frame
