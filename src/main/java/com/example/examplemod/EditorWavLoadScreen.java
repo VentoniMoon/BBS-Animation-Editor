@@ -11,7 +11,7 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
 /**
- * In-game WAV browser. Copy WAV files into <minecraft>/bbs-animation-editor/audio.
+ * In-game WAV browser. Copy WAV files into <minecraft>/config/bbs-editor/audio.
  */
 public class EditorWavLoadScreen extends GuiScreen
 {
@@ -33,7 +33,7 @@ public class EditorWavLoadScreen extends GuiScreen
         this.audio = audio;
         this.audioFolder = new File(
                 net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
-                "bbs-animation-editor/audio");
+                "config/bbs-editor/audio");
     }
 
     @Override
@@ -58,6 +58,32 @@ public class EditorWavLoadScreen extends GuiScreen
             files = new File[0];
             selectedIndex = -1;
             return;
+        }
+        // Copy legacy WAVs once without overwriting existing files.
+        File legacy = new File(
+                net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
+                "bbs-animation-editor/audio");
+        if (legacy.isDirectory())
+        {
+            File[] oldFiles = legacy.listFiles();
+            if (oldFiles != null)
+            {
+                for (File oldFile : oldFiles)
+                {
+                    if (!oldFile.isFile() ||
+                            !oldFile.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".wav"))
+                        continue;
+                    File destination = new File(audioFolder, oldFile.getName());
+                    if (!destination.exists())
+                    {
+                        try
+                        {
+                            java.nio.file.Files.copy(oldFile.toPath(), destination.toPath());
+                        }
+                        catch (IOException ignored) {}
+                    }
+                }
+            }
         }
         File[] listed = audioFolder.listFiles(new FilenameFilter()
         {
