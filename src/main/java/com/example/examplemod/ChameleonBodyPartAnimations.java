@@ -234,6 +234,15 @@ public final class ChameleonBodyPartAnimations
 
                 if (duration > 0 && !clip.equals(target) && frame >= start)
                 {
+                    // At the first transition frame, preserve the old pose
+                    // exactly. The native Chameleon fade can otherwise expose
+                    // the target pose immediately when its previous action
+                    // has not yet been initialized by the preview renderer.
+                    if (frame == start)
+                    {
+                        return withClip(morph, clip, false, 0, false, 0);
+                    }
+
                     float progress = (frame - start) / (float) duration;
                     // Smoothstep-like sine easing, deterministic on scrubbing.
                     float eased = (float) (0.5D - 0.5D * Math.cos(Math.PI * progress));
