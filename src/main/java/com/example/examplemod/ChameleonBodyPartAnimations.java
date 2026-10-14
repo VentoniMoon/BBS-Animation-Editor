@@ -229,7 +229,11 @@ public final class ChameleonBodyPartAnimations
             {
                 String target = next.getData().getString(KEY);
                 int available = next.getFrame() - current.getFrame();
-                int duration = Math.min(PHONEME_TRANSITION_FRAMES, available);
+                // Reserve at least one full frame for the current static viseme.
+                // 3-frame gaps -> 2-frame transition; 4+ gaps -> at most 3.
+                // A 1-frame gap cannot contain an intermediate blend.
+                int duration = Math.min(PHONEME_TRANSITION_FRAMES,
+                        Math.max(0, available - 1));
                 int start = next.getFrame() - duration;
 
                 if (duration > 0 && !clip.equals(target) && frame >= start)
