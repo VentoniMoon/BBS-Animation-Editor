@@ -40,6 +40,7 @@ public class CharacterAnimationSetupPanel
     private String selectedAction = "Idle";
 
     private CharacterTimelineController selectedTimeline;
+    private BodyPartModelData selectedBodyPart;
 
     private final CharacterAnimationPickerPopup pickerPopup;
 
@@ -58,6 +59,16 @@ public class CharacterAnimationSetupPanel
                             }
                         }
                 );
+    }
+
+    public void setBodyPartModel(BodyPartModelData model)
+    {
+        this.selectedBodyPart = model;
+    }
+
+    private boolean isChameleonPart()
+    {
+        return ChameleonBodyPartAnimations.isChameleon(this.selectedBodyPart, this.currentFrame);
     }
 
     public void setBodyPartTimeline(CharacterTimelineController timeline)
@@ -119,7 +130,7 @@ public class CharacterAnimationSetupPanel
             return;
         }
 
-        if (getCurrentMorph() == null)
+        if (getCurrentMorph() == null && !isChameleonPart())
         {
             drawHint(
                     mc,
@@ -237,10 +248,10 @@ public class CharacterAnimationSetupPanel
 
                 positionPopup();
 
-                this.pickerPopup.open(
-                        this.runtimeActor,
-                        this.selectedAction
-                );
+                if (isChameleonPart())
+                    this.pickerPopup.openAnimations(ChameleonBodyPartAnimations.listAnimations());
+                else
+                    this.pickerPopup.open(this.runtimeActor, this.selectedAction);
 
                 return true;
             }
@@ -370,11 +381,16 @@ public class CharacterAnimationSetupPanel
             return;
         }
 
-        CharacterAnimationSetupController.assignAnimation(
-                this.selectedKey,
-                this.selectedAction,
-                animation
-        );
+        if (isChameleonPart())
+        {
+            CharacterKey key = this.selectedBodyPart.getOrCreateCharacterStateKey(this.currentFrame);
+            ChameleonBodyPartAnimations.set(key, animation);
+        }
+        else
+        {
+            CharacterAnimationSetupController.assignAnimation(
+                    this.selectedKey, this.selectedAction, animation);
+        }
     }
 
     private List<String> getActions()
@@ -382,12 +398,15 @@ public class CharacterAnimationSetupPanel
         List<String> actions =
                 new ArrayList<String>();
 
-        for (String action :
-                CharacterAnimationSetupController.ACTIONS)
+        if (isChameleonPart())
+        {
+            actions.add("Animation");
+            return actions;
+        }
+        for (String action : CharacterAnimationSetupController.ACTIONS)
         {
             actions.add(action);
         }
-
         return actions;
     }
 
@@ -476,19 +495,15 @@ public class CharacterAnimationSetupPanel
                         : COLOR_TEXT_SECONDARY
         );
 
-        String assigned =
-                CharacterAnimationSetupController.getAssignedAnimation(
-                        this.selectedActor,
-                        this.currentFrame,
-                        action
-                );
+        String assigned = isChameleonPart()
+                ? ChameleonBodyPartAnimations.get(this.selectedBodyPart, this.currentFrame)
+                : CharacterAnimationSetupController.getAssignedAnimation(
+                        this.selectedActor, this.currentFrame, action);
 
-        boolean explicit =
-                CharacterAnimationSetupController.hasEffectiveActionData(
-                        this.selectedActor,
-                        this.currentFrame,
-                        action
-                );
+        boolean explicit = isChameleonPart()
+                ? !assigned.isEmpty()
+                : CharacterAnimationSetupController.hasEffectiveActionData(
+                        this.selectedActor, this.currentFrame, action);
 
         String value =
                 explicit
