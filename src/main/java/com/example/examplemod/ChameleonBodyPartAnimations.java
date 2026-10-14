@@ -56,12 +56,21 @@ public final class ChameleonBodyPartAnimations
     {
         if (part == null) return "";
         String current = "";
-        for (CharacterKey key : part.getCharacterTimeline().getAllKeys())
+        int latest = -1;
+        for (CharacterTrack track : part.getCharacterTimeline().getTracks())
         {
-            if (key == null || key.getFrame() > frame) continue;
-            NBTTagCompound data = key.getData();
-            if (data.hasKey(KEY, 8))
-                current = data.getString(KEY);
+            if (track == null) continue;
+            for (CharacterKey key : track.getKeys())
+            {
+                if (key == null || key.getFrame() > frame || key.getFrame() < latest)
+                    continue;
+                NBTTagCompound data = key.getData();
+                if (data.hasKey(KEY, 8))
+                {
+                    current = data.getString(KEY);
+                    latest = key.getFrame();
+                }
+            }
         }
         return current;
     }
