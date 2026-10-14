@@ -828,6 +828,15 @@ public class CharacterEditorPanel
                     Math.max(40, this.width - 18), 20,
                     mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
                     mouseY >= cursorY + 25 && mouseY < cursorY + 45);
+            String audioLabel = hasTarget && this.wavAudio != null &&
+                    this.wavAudio.isLoaded() ? "AUDIO TO KEYS (VOSK)" :
+                    "LOAD WAV + SELECT MOUTH";
+            drawButton(mc, audioLabel, this.x + 9, cursorY + 50,
+                    Math.max(40, this.width - 18), 20,
+                    hasTarget && this.wavAudio != null && this.wavAudio.isLoaded()
+                    && mouseX >= this.x + 9 && mouseX < this.x + this.width - 9
+                    && mouseY >= cursorY + 50 && mouseY < cursorY + 70);
+
 
         }
 
@@ -2774,6 +2783,7 @@ public class CharacterEditorPanel
                 Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
         {
             Minecraft mc = Minecraft.getMinecraft();
+            ((AnimationEditorScreen) mc.currentScreen).preserveAudioOnGuiTransition();
             mc.displayGuiScreen(new LipSyncTextScreen(
                     (AnimationEditorScreen) mc.currentScreen,
                     this.selectedBodyPartModel, this.currentFrame));
@@ -2788,8 +2798,25 @@ public class CharacterEditorPanel
                 Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
         {
             Minecraft mc = Minecraft.getMinecraft();
+            ((AnimationEditorScreen) mc.currentScreen).preserveAudioOnGuiTransition();
             mc.displayGuiScreen(new EditorWavLoadScreen(
                     (AnimationEditorScreen) mc.currentScreen, this.wavAudio));
+            return true;
+        }
+
+        if (this.openedSection == Section.LIP_SYNC &&
+                this.selectedBodyPartModel != null &&
+                this.wavAudio != null && this.wavAudio.isLoaded() &&
+                mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
+                mouseY >= currentY + SECTION_HEIGHT + 54 &&
+                mouseY < currentY + SECTION_HEIGHT + 74 &&
+                Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
+        {
+            Minecraft mc = Minecraft.getMinecraft();
+            AnimationEditorScreen editor = (AnimationEditorScreen) mc.currentScreen;
+            editor.preserveAudioOnGuiTransition();
+            mc.displayGuiScreen(new LipSyncAudioScreen(editor,
+                    this.selectedBodyPartModel, this.wavAudio, this.currentFrame));
             return true;
         }
 
