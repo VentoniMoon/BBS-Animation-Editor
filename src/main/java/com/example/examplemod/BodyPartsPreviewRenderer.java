@@ -238,6 +238,7 @@ public class BodyPartsPreviewRenderer
 
             if (morph != null)
             {
+                morph = ChameleonBodyPartAnimations.apply(data, frame, morph);
                 return createMorphBodyPart(data, morph, frame);
             }
         }
