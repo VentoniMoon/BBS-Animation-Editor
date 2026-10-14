@@ -60,7 +60,12 @@ public class LipSyncAudioScreen extends GuiScreen
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks)
     {
-        drawDefaultBackground();
+        // Keep the editor scene, timeline and panels visible behind the dialog.
+        if (parent != null)
+            parent.drawScreen(mouseX, mouseY, partialTicks);
+        else
+            drawDefaultBackground();
+        drawRect(0, 0, width, height, 0x99000000);
         int x = width / 2 - 155, y = height / 2 - 100;
         drawCenteredString(fontRenderer, "AUDIO TO KEYS - VOSK (RU)", width / 2,
                 y + 3, 0xFFE2E5E7);
