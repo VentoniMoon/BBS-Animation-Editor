@@ -8,8 +8,8 @@ import java.io.IOException;
 /** Cached 20-Hz peak envelope, drawn with the editor's active theme and timeline coordinates. */
 public final class EditorWavWaveform
 {
-    public static final int HEIGHT = 54;
-    private static final int MAX_HALF_AMPLITUDE = 11;
+    public static final int HEIGHT = 18;
+    private static final int MAX_HALF_AMPLITUDE = 6;
     private File cachedFile;
     private float[] peaks = new float[0];
 
@@ -71,12 +71,10 @@ public final class EditorWavWaveform
 
     public void draw(int width, int top, int left, EditorTimeline timeline, int currentFrame)
     {
-        Gui.drawRect(0, top, width, top + HEIGHT, 0xFF102027);
-        Gui.drawRect(0, top, width, top + 1, EditorThemeManager.get().getAccent());
-        Gui.drawRect(left - 1, top + 1, left, top + HEIGHT, 0xFF304149);
+        // Render only over the top portion of the ruler, leaving its labels,
+        // the left track title, and the Preview completely untouched.
+        Gui.drawRect(left, top, width, top + HEIGHT, 0xFF102027);
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
-        mc.fontRenderer.drawString("AUDIO", 12, top + 9,
-                EditorThemeManager.get().getAccentBright());
         if (peaks.length == 0)
         {
             mc.fontRenderer.drawString("No waveform", left + 10, top + 21, 0xFF75818A);
