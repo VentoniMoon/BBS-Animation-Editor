@@ -141,6 +141,63 @@ public final class EditorVoskRecognizer
         return keys;
     }
 
+    /**
+     * Constant-step Character animation keys: open on each spoken phoneme and
+     * return to the invisible idle action two ticks after the end of a word,
+     * provided there is time before the next word. No duplicate hold anchors.
+     */
+    public static List<LipSyncTimeline.Key> toCharacterVisemes(List<Word> words, int offset)
+    {
+        TreeMap<Integer, LipSyncViseme> timeline = new TreeMap<Integer, LipSyncViseme>();
+        int base = Math.max(0, offset);
+        timeline.put(base, LipSyncViseme.IDLE);
+        int previousEnd = base;
+        boolean hadSpeech = false;
+
+        for (Word word : words)
+        {
+            int start = Math.max(base, base + Math.round(word.start * 20F));
+            int end = Math.max(start + 1, base + Math.round(word.end * 20F));
+            // There must be room for the idle key before the next word begins.
+            if (hadSpeech && start - previousEnd > 2)
+                timeline.put(previousEnd + 2, LipSyncViseme.IDLE);
+
+            String letters = word.text.toLowerCase(Locale.ROOT);
+            float total = 0F;
+            for (int i = 0; i < letters.length(); i++)
+                if (LipSyncViseme.forLetter(letters.charAt(i)) != null)
+                    total += LipSyncViseme.weight(letters.charAt(i));
+            if (total <= 0F) continue;
+
+            float cursor = start;
+            for (int i = 0; i < letters.length(); i++)
+            {
+                char letter = letters.charAt(i);
+                LipSyncViseme shape = LipSyncViseme.forLetter(letter);
+                if (shape == null) continue;
+                int at = Math.min(end - 1, Math.round(cursor));
+                timeline.put(at, shape);
+                cursor += (end - start) * LipSyncViseme.weight(letter) / total;
+            }
+            previousEnd = end;
+            hadSpeech = true;
+        }
+
+        if (!hadSpeech)
+            throw new IllegalArgumentException("No recognized mouth phonemes");
+        timeline.put(previousEnd + 2, LipSyncViseme.IDLE);
+
+        ArrayList<LipSyncTimeline.Key> keys = new ArrayList<LipSyncTimeline.Key>();
+        LipSyncViseme previous = null;
+        for (Map.Entry<Integer, LipSyncViseme> entry : timeline.entrySet())
+        {
+            if (entry.getValue() != previous)
+                keys.add(new LipSyncTimeline.Key(entry.getKey(), entry.getValue()));
+            previous = entry.getValue();
+        }
+        return keys;
+    }
+
     public static List<LipSyncTimeline.Key> toVisemes(List<Word> words, int offset)
     {
         TreeMap<Integer, LipSyncViseme> timeline = new TreeMap<Integer, LipSyncViseme>();
