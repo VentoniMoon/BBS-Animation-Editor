@@ -932,15 +932,9 @@ public class AnimationEditorScreen extends GuiScreen
                         .getSelectedKey()
         );
 
-        BodyPartModelData lipSyncTarget =
-                this.characterTimelineEditorController.getSelectedBodyPartModel();
-        if (lipSyncTarget == null)
-        {
-            // The Body Parts selection remains valid even when no Character key
-            // is selected. Preserve it when switching from Body Parts to Character.
-            lipSyncTarget = this.bodyPartsController.getSelectedModel();
-        }
-        this.characterEditorPanel.setSelectedBodyPartModel(lipSyncTarget);
+        this.characterEditorPanel.setSelectedBodyPartModel(
+                this.characterTimelineEditorController.getSelectedBodyPartModel()
+        );
     }
 
     private void applyCharacterState()
