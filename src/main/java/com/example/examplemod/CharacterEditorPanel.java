@@ -467,6 +467,7 @@ public class CharacterEditorPanel
                 model == null ? null : model.getCharacterTimeline();
 
         this.animationSetupPanel.setBodyPartTimeline(timeline);
+        this.animationSetupPanel.setBodyPartModel(model);
         this.animationParametersPanel.setBodyPartTimeline(timeline);
     }
 
