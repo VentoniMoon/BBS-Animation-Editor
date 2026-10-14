@@ -93,6 +93,9 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorWavAudioController wavAudio =
             new EditorWavAudioController();
 
+    private final EditorWavWaveform wavWaveform =
+            new EditorWavWaveform();
+
     private final CharacterEditorController characterController =
             new CharacterEditorController(playbackController);
 
@@ -1695,6 +1698,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         drawPreview(mouseX, mouseY);
         drawTimeline();
+        drawWavWaveform();
         drawInterpolationPanel(mouseX, mouseY);
 
         if (this.editorInput != null
@@ -3178,6 +3182,15 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
+    private void drawWavWaveform()
+    {
+        if (!this.wavAudio.isLoaded()) return;
+        int timelineTop = height - getBaseTimelineHeight();
+        this.wavWaveform.draw(width, timelineTop - EditorWavWaveform.HEIGHT,
+                LEFT_PANEL_WIDTH, this.timeline,
+                this.playbackController.getCurrentFrame());
+    }
+
     private void drawTimeline()
     {
         if (this.editorModeController.getMode()
@@ -3223,7 +3236,7 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         int timelineHeight =
-                getTimelineHeight();
+                getBaseTimelineHeight();
 
         int top =
                 height - timelineHeight;
@@ -3254,6 +3267,12 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
     public int getTimelineHeight()
+    {
+        return getBaseTimelineHeight()
+                + (this.wavAudio.isLoaded() ? EditorWavWaveform.HEIGHT : 0);
+    }
+
+    private int getBaseTimelineHeight()
     {
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
@@ -3531,6 +3550,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         this.timeline.update();
         this.playbackController.update();
+        this.wavWaveform.sync(this.wavAudio.getLoadedFile());
         this.wavAudio.update(
                 this.playbackController.getCurrentFrame(),
                 this.playbackController.isPlaying()
