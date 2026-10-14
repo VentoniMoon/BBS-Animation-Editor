@@ -52,9 +52,9 @@ public class LipSyncAudioScreen extends GuiScreen
             if (detected != null) idle.setText(detected);
         }
         buttonList.clear();
-        buttonList.add(new GuiButton(1, x, y + 139, 150, 20, "Analyze + Generate"));
-        buttonList.add(new GuiButton(2, x + 160, y + 139, 150, 20, "Back"));
-        buttonList.add(new GuiButton(3, x, y + 201, 310, 20, "Output: TEXTURE (Skin keys)"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(1, x, y + 139, 150, 20, "Analyze + Generate"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(2, x + 160, y + 139, 150, 20, "Back"));
+        buttonList.add(new EditorLipSyncDialogStyle.Button(3, x, y + 201, 310, 20, "Output: TEXTURE (Skin keys)"));
     }
 
     @Override
@@ -67,8 +67,8 @@ public class LipSyncAudioScreen extends GuiScreen
             drawDefaultBackground();
         drawRect(0, 0, width, height, 0x99000000);
         int x = width / 2 - 155, y = height / 2 - 100;
-        drawCenteredString(fontRenderer, "AUDIO TO KEYS - VOSK (RU)", width / 2,
-                y + 3, 0xFFE2E5E7);
+        EditorLipSyncDialogStyle.panel(mc, x - 14, y - 29, 338, 281,
+                "AUDIO TO KEYS", "VOSK / speech recognition");
         fontRenderer.drawString(audio == null ? "No audio" :
                 fontRenderer.trimStringToWidth(audio.getFileName(), 300),
                 x, y + 26, 0xFF9AB6C5);
