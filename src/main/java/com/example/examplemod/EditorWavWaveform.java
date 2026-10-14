@@ -9,6 +9,7 @@ import java.io.IOException;
 public final class EditorWavWaveform
 {
     public static final int HEIGHT = 54;
+    private static final int MAX_HALF_AMPLITUDE = 11;
     private File cachedFile;
     private float[] peaks = new float[0];
 
@@ -97,7 +98,11 @@ public final class EditorWavWaveform
                     Math.max(first, (int)Math.ceil(end) - 1));
             float peak = 0F;
             for (int f = first; f <= last; f++) peak = Math.max(peak, peaks[f]);
-            int extent = Math.round(peak * (HEIGHT / 2 - 6));
+            // Keep the waveform visually compact and strictly inside its own strip.
+            int extent = Math.max(0, Math.min(MAX_HALF_AMPLITUDE,
+                    Math.round(peak * MAX_HALF_AMPLITUDE)));
+            extent = Math.min(extent, Math.min(center - top - 3,
+                    top + HEIGHT - center - 4));
             if (extent > 0)
             {
                 Gui.drawRect(x, center - extent, x + 1, center + extent + 1,
