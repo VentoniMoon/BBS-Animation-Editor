@@ -246,6 +246,10 @@ public final class ChameleonBodyPartAnimations
                     float progress = (frame - start) / (float) duration;
                     // Smoothstep-like sine easing, deterministic on scrubbing.
                     float eased = (float) (0.5D - 0.5D * Math.cos(Math.PI * progress));
+                    AbstractMorph direct = ChameleonVisemeBlender.blend(morph, clip, target, eased);
+                    if (direct != null) return direct;
+
+                    // Fallback for models containing dynamic Molang animation channels.
                     int nativeDuration = 100;
                     int nativeOffset = Math.max(0, Math.min(nativeDuration,
                             Math.round(nativeDuration * eased)));
