@@ -786,6 +786,15 @@ public class CharacterEditorPanel
                 mouseY
         );
 
+        if (this.selectedBodyPartModel != null)
+        {
+            int lipX = this.x + this.width - 72;
+            int lipY = cursorY - 21;
+            drawButton(mc, "LIP SYNC", lipX, lipY, 64, 18,
+                    mouseX >= lipX && mouseX < lipX + 64 &&
+                    mouseY >= lipY && mouseY < lipY + 18);
+        }
+
         if (this.openedSection ==
                 Section.ANIMATION_PARAMETERS)
         {
@@ -2681,6 +2690,24 @@ public class CharacterEditorPanel
         }
 
         currentY += 4;
+
+        /*
+         * Text Lip Sync belongs to the selected Body Part only.
+         * The compact button occupies the right end of the settings header.
+         */
+        if (this.selectedBodyPartModel != null &&
+                mouseX >= this.x + this.width - 72 &&
+                mouseX < this.x + this.width - 8 &&
+                mouseY >= currentY + 3 &&
+                mouseY < currentY + 21 &&
+                Minecraft.getMinecraft().currentScreen instanceof AnimationEditorScreen)
+        {
+            Minecraft mc = Minecraft.getMinecraft();
+            mc.displayGuiScreen(new LipSyncTextScreen(
+                    (AnimationEditorScreen) mc.currentScreen,
+                    this.selectedBodyPartModel, this.currentFrame));
+            return true;
+        }
 
         /*
          * Actor Settings.
