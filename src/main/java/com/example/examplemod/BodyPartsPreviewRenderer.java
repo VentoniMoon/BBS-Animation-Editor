@@ -174,10 +174,36 @@ public class BodyPartsPreviewRenderer
                     for (int i = 1; i < simulated.length; i++)
                         if (simulated[i].sub(joints[i]).length() > 0.00001F)
                             advanced = true;
+
+                    /*
+                     * Physics follows actual WORLD positions but Chameleon
+                     * needs local bone rotations. Each bone aims its original
+                     * child-pivot direction toward the simulated direction.
+                     * Skip the last bone until its actual tip is available.
+                     * The editor's source animation keys remain unchanged.
+                     */
+                    for (int i = 0; i + 1 < chain.bones.size(); i++)
+                    {
+                        AnimationBone bone = chain.bones.get(i);
+                        float[] basis = world.getBoneWorldMatrix(bone.getName());
+                        if (basis == null) continue;
+                        BodyPartChainSolver.Vec3 restWorld =
+                                joints[i + 1].sub(joints[i]);
+                        BodyPartChainSolver.Vec3 solvedWorld =
+                                simulated[i + 1].sub(simulated[i]);
+                        BodyPartChainSolver.Vec3 restLocal =
+                                BodyPartPhysicsPoseAdapter.toLocalDirection(basis, restWorld);
+                        BodyPartChainSolver.Vec3 solvedLocal =
+                                BodyPartPhysicsPoseAdapter.toLocalDirection(basis, solvedWorld);
+                        float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
+                                restLocal, solvedLocal);
+                        BodyPartChameleonPhysicsPose.addLocalSwing(
+                                part.morph.get(), bone.getName(), swing);
+                    }
                 }
             }
             reportPhysicsBoneProbe(data, advanced
-                    ? "world strand solver advanced (preview pose unchanged)"
+                    ? "world strand solver advanced (experimental preview swing applied)"
                     : "world strand joint matrices valid: " + chains.size()
                       + " chains (solver initialized; preview pose unchanged)");
         }
