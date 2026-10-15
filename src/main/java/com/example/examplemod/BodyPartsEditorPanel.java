@@ -60,8 +60,18 @@ public class BodyPartsEditorPanel
         if (model != null && bone != null)
         {
             physicsPanel.setTarget(x + 5, y + 28,
-                    bone.getName(), model.getPhysicsSettings(bone.getName()));
+                    bone.getName(), model.getPhysicsSettings(bone.getName()),
+                    countChainBones(bone));
         }
+    }
+
+    private static int countChainBones(AnimationBone root)
+    {
+        if (root == null) return 0;
+        int count = 1;
+        for (AnimationBone child : root.getChildren())
+            count += countChainBones(child);
+        return count;
     }
 
     private boolean modelSectionOpen = true;
