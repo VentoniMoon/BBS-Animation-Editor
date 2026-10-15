@@ -1,6 +1,6 @@
 package com.example.examplemod;
 
-import java.util.IdentityHashMap;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -23,12 +23,12 @@ public final class BodyPartPhysicsPreviewSimulation
         }
     }
 
-    private final Map<BodyPartPhysicsChains.Chain, State> states =
-            new IdentityHashMap<BodyPartPhysicsChains.Chain, State>();
+    private final Map<String, State> states =
+            new HashMap<String, State>();
 
     public void clear() { states.clear(); }
 
-    public BodyPartChainSolver.Vec3[] sample(BodyPartPhysicsChains.Chain chain,
+    public BodyPartChainSolver.Vec3[] sample(String modelId, BodyPartPhysicsChains.Chain chain,
             int frame, BodyPartChainSolver.Vec3[] animatedWorld)
     {
         if (chain==null || animatedWorld==null || chain.settings==null ||
@@ -37,12 +37,13 @@ public final class BodyPartPhysicsPreviewSimulation
         int hash=31*(31*Float.floatToIntBits(settings.getGravity())
                 +Float.floatToIntBits(settings.getStiffness()))
                 +Float.floatToIntBits(settings.getDamping());
-        State state=states.get(chain);
+        String key=modelId+"/"+chain.root.getName();
+        State state=states.get(key);
         if (state==null || frame<=state.lastFrame || frame>state.lastFrame+1 ||
                 state.settingsHash!=hash)
         {
             state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
-            states.put(chain,state);
+            states.put(key,state);
         }
         else
         {
