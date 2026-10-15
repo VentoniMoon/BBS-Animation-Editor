@@ -337,7 +337,7 @@ public class BodyPartsPreviewRenderer
                 reportPhysicsMatrix(entry.getKey(),
                         "native parent attachment matrix captured ("
                         + entry.getValue().limb + ")");
-                probePhysicsBoneMatrices(entry.getKey(), entry.getValue(), nativeMatrix, frame);
+                probePhysicsBoneMatrices(entry.getKey(), entry.getValue(), nativeMatrix, null, frame);
             }
         }
         catch (Throwable error)
