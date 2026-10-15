@@ -24,20 +24,35 @@ public final class BodyPartPhysicsFrameState
         }
     }
 
+    /* Solver writes arrive after rendering. Visible poses are frozen at
+     * the beginning of a frame, so repeated draws can never alternate
+     * between pre-step and post-step rotations. */
     private final Map<BodyPartModelData, Sample> samples =
+            new IdentityHashMap<BodyPartModelData, Sample>();
+    private final Map<BodyPartModelData, Sample> visible =
             new IdentityHashMap<BodyPartModelData, Sample>();
     private int lastTimelineFrame = Integer.MIN_VALUE;
 
-    /**
-     * Called before preparing the morph. Discard physics from a different
-     * timeline traversal, but keep the last result for repeated renders
-     * of the same frame.
-     */
     public void beginFrame(int frame)
     {
-        if (lastTimelineFrame != Integer.MIN_VALUE &&
-                (frame < lastTimelineFrame || frame > lastTimelineFrame + 1))
+        if (frame == lastTimelineFrame) return;
+
+        boolean contiguous = lastTimelineFrame != Integer.MIN_VALUE &&
+                frame == lastTimelineFrame + 1;
+        visible.clear();
+        if (contiguous)
+        {
+            for (Map.Entry<BodyPartModelData, Sample> entry : samples.entrySet())
+            {
+                Sample previous = entry.getValue();
+                if (previous.frame == lastTimelineFrame)
+                    visible.put(entry.getKey(), previous);
+            }
+        }
+        else
+        {
             samples.clear();
+        }
         lastTimelineFrame = frame;
     }
 
@@ -54,22 +69,20 @@ public final class BodyPartPhysicsFrameState
     }
 
     /**
-     * Re-use the same physics pose on repeated renders. A sample calculated
-     * after frame N's render can first affect N+1. Skipped samples are not
-     * held for multiple frames (which previously created periodic snaps).
+     * Reads only the snapshot frozen when this timeline frame began.
+     * New physics samples are never exposed halfway through a render frame.
      */
     public float[] forRender(BodyPartModelData part, int frame)
     {
-        Sample sample = samples.get(part);
-        if (sample == null || frame < sample.frame ||
-                frame > sample.frame + 1)
-            return null;
-        return sample.swing.clone();
+        if (frame != lastTimelineFrame) return null;
+        Sample sample = visible.get(part);
+        return sample == null ? null : sample.swing.clone();
     }
 
     public void clear()
     {
         samples.clear();
+        visible.clear();
         lastTimelineFrame = Integer.MIN_VALUE;
     }
 }
