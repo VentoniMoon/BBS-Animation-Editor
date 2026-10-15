@@ -66,6 +66,8 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, String> physicsMatrixDiagnostics =
             new IdentityHashMap<BodyPartModelData, String>();
     private boolean recordingPhysicsMatrices;
+    private final BodyPartPhysicsPreviewSimulation livePhysics =
+            new BodyPartPhysicsPreviewSimulation();
 
     public float[] getPhysicsAttachmentMatrix(BodyPartModelData data)
     {
@@ -74,7 +76,7 @@ public class BodyPartsPreviewRenderer
     }
 
     private void capturePhysicsAttachmentMatrices(AbstractMorph parent,
-            EntityActor actor, Map<BodyPartModelData, BodyPart> parts)
+            EntityActor actor, int frame, Map<BodyPartModelData, BodyPart> parts)
     {
         if (recordingPhysicsMatrices || parts.isEmpty() || parent == null || actor == null)
             return;
@@ -102,7 +104,7 @@ public class BodyPartsPreviewRenderer
                 reportPhysicsMatrix(entry.getKey(),
                         "native parent attachment matrix captured ("
                         + entry.getValue().limb + ")");
-                probePhysicsBoneMatrices(entry.getKey(), entry.getValue(), nativeMatrix);
+                probePhysicsBoneMatrices(entry.getKey(), entry.getValue(), nativeMatrix, frame);
             }
         }
         catch (Throwable error)
@@ -119,7 +121,7 @@ public class BodyPartsPreviewRenderer
     }
 
     private void probePhysicsBoneMatrices(BodyPartModelData data, BodyPart part,
-            float[] parentMatrix)
+            float[] parentMatrix, int frame)
     {
         List<BodyPartPhysicsChains.Chain> chains = getPreviewPhysicsChains(data);
         if (chains.isEmpty() || part == null || part.morph == null)
@@ -138,9 +140,13 @@ public class BodyPartsPreviewRenderer
             float[] attached = BodyPartPhysicsAttachment.worldMatrix(parentMatrix, part);
             BodyPartPhysicsWorldPose.MatrixSource world =
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
+            boolean advanced = false;
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
+                BodyPartChainSolver.Vec3[] joints =
+                        new BodyPartChainSolver.Vec3[chain.bones.size()];
                 BodyPartChainSolver.Vec3 last = null;
+                int jointIndex = 0;
                 for (AnimationBone bone : chain.bones)
                 {
                     float[] matrix = world.getBoneWorldMatrix(bone.getName());
@@ -158,12 +164,22 @@ public class BodyPartsPreviewRenderer
                                 "zero-length world strand segment: " + bone.getName());
                         return;
                     }
+                    joints[jointIndex++] = current;
                     last = current;
                 }
+                BodyPartChainSolver.Vec3[] simulated =
+                        livePhysics.sample(data.getTimelineId(), chain, frame, joints);
+                if (simulated != null && frame > data.getStartFrame())
+                {
+                    for (int i = 1; i < simulated.length; i++)
+                        if (simulated[i].sub(joints[i]).length() > 0.00001F)
+                            advanced = true;
+                }
             }
-            reportPhysicsBoneProbe(data,
-                    "world strand joint matrices valid: " + chains.size()
-                    + " chains (solver not applied)");
+            reportPhysicsBoneProbe(data, advanced
+                    ? "world strand solver advanced (preview pose unchanged)"
+                    : "world strand joint matrices valid: " + chains.size()
+                      + " chains (solver initialized; preview pose unchanged)");
         }
         catch (RuntimeException error)
         {
@@ -348,7 +364,7 @@ public class BodyPartsPreviewRenderer
             this.preparingPreview = false;
         }
         if (!nativePhysicsParts.isEmpty())
-            capturePhysicsAttachmentMatrices(abstractMorph, actor, nativePhysicsParts);
+            capturePhysicsAttachmentMatrices(abstractMorph, actor, frame, nativePhysicsParts);
     }
 
     /**
