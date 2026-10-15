@@ -126,8 +126,11 @@ public class BodyPartsPreviewRenderer
                 vertices+=mesh.vertexCount();
                 triangles+=mesh.triangleCount();
             }
+            EmoticonsCollisionGeometryProvider.Bounds meshBounds =
+                    EmoticonsCollisionGeometryProvider.bounds(surfaces);
             String report="meshes="+surfaces.size()+", vertices="+vertices
-                    +", triangles="+triangles;
+                    +", triangles="+triangles
+                    +", meshLocalBounds="+(meshBounds==null?"missing":meshBounds.toString());
             if (!report.equals(lastEmoticonsGeometryReport))
             {
                 lastEmoticonsGeometryReport=report;
