@@ -69,6 +69,50 @@ public class BodyPartsPreviewRenderer
     private final BodyPartPhysicsPreviewSimulation livePhysics =
             new BodyPartPhysicsPreviewSimulation();
 
+    /** Native parent bone snapshot made AFTER the ordinary actor render. */
+    private final Map<BodyPartModelData, float[]> renderedAttachmentMatrices =
+            new IdentityHashMap<BodyPartModelData, float[]>();
+    private final Map<BodyPartModelData, Integer> renderedAttachmentFrames =
+            new IdentityHashMap<BodyPartModelData, Integer>();
+
+    public float[] getRenderedAttachmentMatrix(BodyPartModelData data, int frame)
+    {
+        Integer sampledFrame = renderedAttachmentFrames.get(data);
+        if (sampledFrame == null || sampledFrame.intValue() != frame)
+            return null;
+        float[] matrix = renderedAttachmentMatrices.get(data);
+        return matrix == null ? null : BodyPartPhysicsMatrixSpace.snapshot(matrix);
+    }
+
+    /**
+     * Call only AFTER RenderManager.renderEntity on the normal pass.
+     * Emoticons has evaluated its walking/running pose by this point.
+     * No extra render, GL matrix manipulation or changes to keys.
+     */
+    public void captureRenderedAttachmentMatrices(EntityActor actor, int frame)
+    {
+        if (actor == null || actor.getMorph() == null) return;
+        Object morph = actor.getMorph();
+        for (Map.Entry<BodyPartModelData, List<BodyPartPhysicsChains.Chain>> entry :
+                previewPhysicsChains.entrySet())
+        {
+            if (entry.getValue() == null || entry.getValue().isEmpty()) continue;
+            BodyPartModelData data = entry.getKey();
+            float[] matrix = BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
+                    morph, data.getAttachmentBoneName());
+            if (matrix == null)
+            {
+                renderedAttachmentMatrices.remove(data);
+                renderedAttachmentFrames.remove(data);
+                continue;
+            }
+            renderedAttachmentMatrices.put(data, matrix);
+            renderedAttachmentFrames.put(data, Integer.valueOf(frame));
+            reportPhysicsMatrix(data,
+                    "Emoticons attachment matrix sampled after render (frame=" + frame + ")");
+        }
+    }
+
     public float[] getPhysicsAttachmentMatrix(BodyPartModelData data)
     {
         float[] matrix = physicsAttachmentMatrices.get(data);
