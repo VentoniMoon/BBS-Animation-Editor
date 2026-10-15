@@ -175,6 +175,12 @@ public class BodyPartsPreviewRenderer
                             + "Body collision " + collisionStatus
                             + ", attachment=" + data.getAttachmentBoneName());
                 }
+                if ((frame == 0 || frame == 20 || frame == 60)
+                        && childPart.morph != null && childPart.morph.get() != null)
+                {
+                    diagnoseEmoticonsCollisionSpace(morph, data, childPart,
+                            matrix, torsoMatrix, frame);
+                }
                 probePhysicsBoneMatrices(data, childPart, matrix, torsoMatrix, frame);
             }
             if (!reportedPostRenderMatrices.containsKey(data))
@@ -184,6 +190,46 @@ public class BodyPartsPreviewRenderer
                         + "Emoticons attachment matrix captured after normal render "
                         + "(first frame=" + frame + "; subsequent frames silent)");
             }
+        }
+    }
+
+    /**
+     * Coordinate-space probe only. Mesh vertices are in the skinned mesh's
+     * frame; BOBJ bone matrices and attached Chameleon are sampled separately.
+     * We intentionally do not collide until that relationship is established.
+     */
+    private void diagnoseEmoticonsCollisionSpace(Object morph,
+            BodyPartModelData data, BodyPart childPart, float[] lowBody,
+            float[] torso, int frame)
+    {
+        try
+        {
+            BodyPartPhysicsWorldPose.MatrixSource local =
+                    BodyPartChameleonMatrixProbe.source(childPart.morph.get());
+            if (local == null) return;
+            float[] root = local.getBoneWorldMatrix("back_strand_1");
+            float[] last = local.getBoneWorldMatrix("back_strand_4");
+            if (root == null || last == null) return;
+            float[] attachment = BodyPartPhysicsAttachment.worldMatrix(lowBody, childPart);
+            BodyPartChainSolver.Vec3 rootPos = BodyPartPhysicsPoseAdapter.position(
+                    BodyPartPhysicsMatrixSpace.multiply(attachment, root));
+            BodyPartChainSolver.Vec3 lastPos = BodyPartPhysicsPoseAdapter.position(
+                    BodyPartPhysicsMatrixSpace.multiply(attachment, last));
+            BodyPartChainSolver.Vec3 lowPos = BodyPartPhysicsPoseAdapter.position(lowBody);
+            BodyPartChainSolver.Vec3 bodyPos = torso == null ? null :
+                    BodyPartPhysicsPoseAdapter.position(torso);
+            System.out.println("[BBS Animation Editor][Physics] COLLISION SPACE frame=" + frame
+                    + " low_body.native=(" + lowPos.x + "," + lowPos.y + "," + lowPos.z + ")"
+                    + " body.native=" + (bodyPos == null ? "missing" :
+                    "(" + bodyPos.x + "," + bodyPos.y + "," + bodyPos.z + ")")
+                    + " back_root.attached=(" + rootPos.x + "," + rootPos.y + "," + rootPos.z + ")"
+                    + " back_last.attached=(" + lastPos.x + "," + lastPos.y + "," + lastPos.z + ")"
+                    + " (bone-frame vs mesh-local bounds; transform unverified)");
+        }
+        catch (RuntimeException error)
+        {
+            System.out.println("[BBS Animation Editor][Physics] COLLISION SPACE unavailable: "
+                    + error.getClass().getSimpleName());
         }
     }
 
