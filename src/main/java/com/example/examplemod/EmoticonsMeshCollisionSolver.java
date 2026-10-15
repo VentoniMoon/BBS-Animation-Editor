@@ -1,0 +1,167 @@
+package com.example.examplemod;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Immutable, mesh-local broad phase and nearest-triangle query for an
+ * already-skinned Emoticons mesh. Never applies a correction across spaces.
+ * Rebuild only after the parent mesh has been updated for the current frame.
+ */
+public final class EmoticonsMeshCollisionSolver
+{
+    private static final float CELL=0.125F;
+    private static final int MAX_CELL_RANGE=8;
+    private final List<Triangle> triangles=new ArrayList<Triangle>();
+    private final Map<Long,List<Integer>> cells=new HashMap<Long,List<Integer>>();
+
+    private static final class Triangle
+    {
+        final BodyPartChainSolver.Vec3 a,b,c;
+        Triangle(BodyPartChainSolver.Vec3 a,BodyPartChainSolver.Vec3 b,
+                 BodyPartChainSolver.Vec3 c){this.a=a;this.b=b;this.c=c;}
+    }
+
+    public static final class Contact
+    {
+        public final BodyPartChainSolver.Vec3 nearest;
+        public final BodyPartChainSolver.Vec3 normal;
+        public final float distance;
+        public final int triangleIndex;
+        Contact(BodyPartChainSolver.Vec3 nearest,BodyPartChainSolver.Vec3 normal,
+                float distance,int triangleIndex)
+        {this.nearest=nearest;this.normal=normal;this.distance=distance;
+         this.triangleIndex=triangleIndex;}
+    }
+
+    public EmoticonsMeshCollisionSolver(
+            List<EmoticonsCollisionGeometryProvider.MeshSnapshot> meshes)
+    {
+        if(meshes==null)return;
+        for(EmoticonsCollisionGeometryProvider.MeshSnapshot mesh:meshes)
+        {
+            if(mesh==null)continue;
+            float[] v=mesh.vertices;int[] idx=mesh.triangles;
+            for(int i=0;i+2<idx.length;i+=3)
+            {
+                int ia=idx[i]*3,ib=idx[i+1]*3,ic=idx[i+2]*3;
+                if(ia<0||ib<0||ic<0||ia+2>=v.length||
+                        ib+2>=v.length||ic+2>=v.length)continue;
+                BodyPartChainSolver.Vec3 a=vec(v,ia),b=vec(v,ib),c=vec(v,ic);
+                BodyPartChainSolver.Vec3 n=cross(b.sub(a),c.sub(a));
+                if(n.length()<1.0E-9F)continue;
+                Triangle triangle=new Triangle(a,b,c);
+                int id=triangles.size();triangles.add(triangle);
+                float minX=Math.min(a.x,Math.min(b.x,c.x));
+                float minY=Math.min(a.y,Math.min(b.y,c.y));
+                float minZ=Math.min(a.z,Math.min(b.z,c.z));
+                float maxX=Math.max(a.x,Math.max(b.x,c.x));
+                float maxY=Math.max(a.y,Math.max(b.y,c.y));
+                float maxZ=Math.max(a.z,Math.max(b.z,c.z));
+                int x0=cell(minX),y0=cell(minY),z0=cell(minZ);
+                int x1=cell(maxX),y1=cell(maxY),z1=cell(maxZ);
+                // Very large decorative triangles should not exhaust the grid.
+                if((long)(x1-x0+1)*(y1-y0+1)*(z1-z0+1)>32768L)continue;
+                for(int x=x0;x<=x1;x++)for(int y=y0;y<=y1;y++)
+                    for(int z=z0;z<=z1;z++)
+                    {
+                        long key=key(x,y,z);
+                        List<Integer> ids=cells.get(key);
+                        if(ids==null){ids=new ArrayList<Integer>();cells.put(key,ids);}
+                        ids.add(id);
+                    }
+            }
+        }
+    }
+
+    public int triangleCount(){return triangles.size();}
+
+    /**
+     * Query only triangles within searchRadius of the point. The returned
+     * normal is oriented toward the query point; inside/outside is UNKNOWN.
+     */
+    public Contact nearest(BodyPartChainSolver.Vec3 point,float searchRadius)
+    {
+        if(point==null || !(searchRadius>0F) || !Float.isFinite(searchRadius))
+            return null;
+        int radius=Math.min(MAX_CELL_RANGE,(int)Math.ceil(searchRadius/CELL));
+        int cx=cell(point.x),cy=cell(point.y),cz=cell(point.z);
+        Set<Integer> candidates=new HashSet<Integer>();
+        for(int x=cx-radius;x<=cx+radius;x++)
+            for(int y=cy-radius;y<=cy+radius;y++)
+                for(int z=cz-radius;z<=cz+radius;z++)
+                {
+                    List<Integer> ids=cells.get(key(x,y,z));
+                    if(ids!=null)candidates.addAll(ids);
+                }
+        float best=searchRadius*searchRadius;Contact result=null;
+        for(Integer id:candidates)
+        {
+            Triangle t=triangles.get(id);
+            BodyPartChainSolver.Vec3 nearest=closest(point,t.a,t.b,t.c);
+            BodyPartChainSolver.Vec3 delta=point.sub(nearest);
+            float d2=dot(delta,delta);
+            if(d2<best)
+            {
+                float distance=(float)Math.sqrt(d2);
+                BodyPartChainSolver.Vec3 normal;
+                if(distance>1.0E-7F)normal=delta.scale(1F/distance);
+                else
+                {
+                    normal=cross(t.b.sub(t.a),t.c.sub(t.a));
+                    normal=normal.scale(1F/normal.length());
+                }
+                best=d2;result=new Contact(nearest,normal,distance,id);
+            }
+        }
+        return result;
+    }
+
+    private static BodyPartChainSolver.Vec3 closest(BodyPartChainSolver.Vec3 p,
+            BodyPartChainSolver.Vec3 a,BodyPartChainSolver.Vec3 b,
+            BodyPartChainSolver.Vec3 c)
+    {
+        BodyPartChainSolver.Vec3 ab=b.sub(a),ac=c.sub(a),ap=p.sub(a);
+        float d1=dot(ab,ap),d2=dot(ac,ap);
+        if(d1<=0F&&d2<=0F)return a;
+        BodyPartChainSolver.Vec3 bp=p.sub(b);
+        float d3=dot(ab,bp),d4=dot(ac,bp);
+        if(d3>=0F&&d4<=d3)return b;
+        float vc=d1*d4-d3*d2;
+        if(vc<=0F&&d1>=0F&&d3<=0F)
+            return a.add(ab.scale(d1/(d1-d3)));
+        BodyPartChainSolver.Vec3 cp=p.sub(c);
+        float d5=dot(ab,cp),d6=dot(ac,cp);
+        if(d6>=0F&&d5<=d6)return c;
+        float vb=d5*d2-d1*d6;
+        if(vb<=0F&&d2>=0F&&d6<=0F)
+            return a.add(ac.scale(d2/(d2-d6)));
+        float va=d3*d6-d5*d4;
+        if(va<=0F&&(d4-d3)>=0F&&(d5-d6)>=0F)
+            return b.add(c.sub(b).scale((d4-d3)/((d4-d3)+(d5-d6))));
+        float denom=va+vb+vc;
+        if(Math.abs(denom)<1E-12F)return a;
+        float inv=1F/denom,v=vb*inv,w=vc*inv;
+        return a.add(ab.scale(v)).add(ac.scale(w));
+    }
+
+    private static BodyPartChainSolver.Vec3 vec(float[] a,int i)
+    {return new BodyPartChainSolver.Vec3(a[i],a[i+1],a[i+2]);}
+    private static float dot(BodyPartChainSolver.Vec3 a,BodyPartChainSolver.Vec3 b)
+    {return a.x*b.x+a.y*b.y+a.z*b.z;}
+    private static BodyPartChainSolver.Vec3 cross(BodyPartChainSolver.Vec3 a,
+            BodyPartChainSolver.Vec3 b)
+    {return new BodyPartChainSolver.Vec3(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,
+            a.x*b.y-a.y*b.x);}
+    private static int cell(float x){return (int)Math.floor(x/CELL);}
+    private static long key(int x,int y,int z)
+    {
+        // Three signed, 21-bit cell indices packed into one spatial key.
+        return (((long)x&0x1fffffL)<<42)|(((long)y&0x1fffffL)<<21)
+                |((long)z&0x1fffffL);
+    }
+}
