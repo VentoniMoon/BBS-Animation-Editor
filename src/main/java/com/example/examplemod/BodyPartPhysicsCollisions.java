@@ -73,6 +73,32 @@ public final class BodyPartPhysicsCollisions
         return result;
     }
 
+    /**
+     * Resolve the interior of a strand segment as well as its endpoints.
+     * The midpoint is projected against the body capsule and its correction
+     * is distributed to both free joints. The root remains pinned.
+     * This is an approximate capsule/segment contact, not continuous CCD.
+     */
+    public static BodyPartChainSolver.Vec3[] resolveSegment(
+            BodyPartChainSolver.Vec3 start, BodyPartChainSolver.Vec3 end,
+            float strandRadius, List<Capsule> colliders, boolean pinStart)
+    {
+        if (start == null || end == null)
+            throw new IllegalArgumentException("Missing segment endpoint");
+        if (colliders == null || colliders.isEmpty())
+            return new BodyPartChainSolver.Vec3[] {start, end};
+        BodyPartChainSolver.Vec3 midpoint = start.add(end).scale(0.5F);
+        BodyPartChainSolver.Vec3 corrected = resolve(midpoint, strandRadius, colliders);
+        BodyPartChainSolver.Vec3 correction = corrected.sub(midpoint);
+        if (correction.length() < 0.000001F)
+            return new BodyPartChainSolver.Vec3[] {start, end};
+        if (pinStart)
+            return new BodyPartChainSolver.Vec3[] {start, end.add(correction.scale(2F))};
+        return new BodyPartChainSolver.Vec3[] {
+                start.add(correction), end.add(correction)
+        };
+    }
+
     private static float clamp(float n,float min,float max)
     {
         return Math.max(min,Math.min(max,n));
