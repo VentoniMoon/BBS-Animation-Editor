@@ -199,21 +199,20 @@ public class BodyPartsPreviewRenderer
                         float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
                                 restLocal, solvedLocal);
                         /*
-                         * Limited visual smoke test: only the first bone of
-                         * the LEFT strand, never descendants or other chains.
-                         * Rotation is composed against the copied morph pose.
-                         * Remaining skeleton is unchanged.
+                         * Root-only test revealed a wrong upward rotation and
+                         * jitter. Keep solver diagnostics but disable pose
+                         * mutation until we can compare native Chameleon
+                         * bone basis with solved world direction.
                          */
-                        if ("left_strand_1".equals(chain.root.getName()) &&
-                                i == 0 && frame > data.getStartFrame() &&
-                                BodyPartChameleonPhysicsPose.addLocalSwing(
-                                        part.morph.get(), bone.getName(), swing))
-                            appliedSwings++;
+                        if ("left_strand_1".equals(chain.root.getName()) && i == 0
+                                && (frame == 20 || frame == 60))
+                            reportPhysicsSwingProbe(data, frame, restWorld,
+                                    solvedWorld, swing);
                     }
                 }
             }
             reportPhysicsBoneProbe(data, advanced
-                    ? "world strand solver advanced; left-root experimental swings written="
+                    ? "world strand solver advanced; unstable visual swings disabled; writes="
                             + appliedSwings + " (visual result unverified)"
                     : "world strand joint matrices valid: " + chains.size()
                       + " chains (no visible physics delta yet)");
@@ -223,6 +222,23 @@ public class BodyPartsPreviewRenderer
             reportPhysicsBoneProbe(data, "world strand matrices invalid: "
                     + error.getClass().getSimpleName());
         }
+    }
+
+    private final Map<BodyPartModelData, String> physicsSwingDiagnostics =
+            new IdentityHashMap<BodyPartModelData, String>();
+
+    private void reportPhysicsSwingProbe(BodyPartModelData model, int frame,
+            BodyPartChainSolver.Vec3 original,
+            BodyPartChainSolver.Vec3 simulated, float[] swing)
+    {
+        String key = model.getTimelineId() + ":" + frame;
+        if (key.equals(physicsSwingDiagnostics.get(model))) return;
+        physicsSwingDiagnostics.put(model, key);
+        System.out.println("[BBS Animation Editor][Physics] LEFT ROOT frame=" + frame
+                + " restDir=(" + original.x + "," + original.y + "," + original.z + ")"
+                + " solvedDir=(" + simulated.x + "," + simulated.y + "," + simulated.z + ")"
+                + " localSwingAxis=(" + swing[0] + "," + swing[1] + "," + swing[2] + ")"
+                + " angleRad=" + swing[3] + " (render write disabled)");
     }
 
     private final Map<BodyPartModelData, String> physicsBoneProbeDiagnostics =
