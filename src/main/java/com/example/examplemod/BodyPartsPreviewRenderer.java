@@ -249,6 +249,44 @@ public class BodyPartsPreviewRenderer
                     distances.append("[rayHits=").append(parity.intersections)
                             .append(",odd=").append(parity.odd).append(']');
                 }
+                // Break down ambiguous multi-shell ray parity by source mesh.
+                // This is read-only: mesh-local coordinates are not yet
+                // certified against the attached child-bone space.
+                for (int meshIndex = 0; meshIndex < meshes.size(); meshIndex++)
+                {
+                    EmoticonsCollisionGeometryProvider.MeshSnapshot mesh =
+                            meshes.get(meshIndex);
+                    java.util.List<EmoticonsCollisionGeometryProvider.MeshSnapshot> one =
+                            java.util.Collections.singletonList(mesh);
+                    EmoticonsMeshCollisionSolver meshSurface =
+                            new EmoticonsMeshCollisionSolver(one);
+                    EmoticonsCollisionGeometryProvider.Bounds bounds =
+                            EmoticonsCollisionGeometryProvider.bounds(one);
+                    StringBuilder meshResults = new StringBuilder();
+                    for (int i = 1; i <= 4; i++)
+                    {
+                        float[] bone = local.getBoneWorldMatrix("back_strand_" + i);
+                        if (bone == null) continue;
+                        BodyPartChainSolver.Vec3 point =
+                                BodyPartPhysicsPoseAdapter.position(
+                                    BodyPartPhysicsMatrixSpace.multiply(attachment, bone));
+                        EmoticonsMeshCollisionSolver.Contact hit =
+                                meshSurface.nearest(point, 0.5F);
+                        EmoticonsMeshCollisionSolver.RayProbe ray =
+                                meshSurface.probeRayPositiveX(point);
+                        meshResults.append(" b").append(i).append(":dist=")
+                                .append(hit == null ? "none" : Float.toString(hit.distance))
+                                .append(",hits=").append(ray.intersections);
+                    }
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            + "MESH PART frame=" + frame
+                            + " index=" + meshIndex
+                            + " name=" + mesh.name
+                            + " triangles=" + meshSurface.triangleCount()
+                            + " bounds=" + (bounds == null ? "none" : bounds.toString())
+                            + meshResults.toString()
+                            + " (diagnostic only)");
+                }
                 System.out.println("[BBS Animation Editor][Physics] "
                         + "MESH CONTACT PROBE frame=" + frame
                         + " indexedTriangles=" + surface.triangleCount()
