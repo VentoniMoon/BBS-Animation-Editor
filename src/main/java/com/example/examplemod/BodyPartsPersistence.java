@@ -46,6 +46,7 @@ public final class BodyPartsPersistence
                 NBTTagCompound boneHolder = new NBTTagCompound();
                 boneHolder.setTag("Bones", EditorSceneSerializer.writeBones(model.getBones()));
                 tag.setTag("Skeleton", boneHolder);
+                tag.setTag("Physics", model.writePhysicsSettings());
                 tag.setTag("CharacterTimeline", model.getCharacterTimeline().toNBT());
 
                 NBTTagList morphKeys = new NBTTagList();
@@ -132,6 +133,7 @@ public final class BodyPartsPersistence
                 model.setModel(name, null, bones);
             }
             readTransform(model.getGlobalTransform(), tag.getCompoundTag("Global"));
+            model.readPhysicsSettings(tag.getTagList("Physics", 10));
 
             if (tag.hasKey("CharacterTimeline", 10))
             {
