@@ -199,21 +199,21 @@ public class BodyPartsPreviewRenderer
                         float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
                                 restLocal, solvedLocal);
                         /*
-                         * Emergency stability guard: a live Chameleon model can
-                         * be re-evaluated several times at the same timeline
-                         * frame. The first Euler swing adapter is not yet a
-                         * stable hierarchical rotation composer. Keep physics
-                         * calculation and diagnostics active but DO NOT mutate
-                         * the visible morph until the hierarchy is resolved.
+                         * Limited visual smoke test: only the first bone of
+                         * the LEFT strand, never descendants or other chains.
+                         * Rotation is composed against the copied morph pose.
+                         * Remaining skeleton is unchanged.
                          */
-                        if (false && BodyPartChameleonPhysicsPose.addLocalSwing(
-                                part.morph.get(), bone.getName(), swing))
+                        if ("left_strand_1".equals(chain.root.getName()) &&
+                                i == 0 && frame > data.getStartFrame() &&
+                                BodyPartChameleonPhysicsPose.addLocalSwing(
+                                        part.morph.get(), bone.getName(), swing))
                             appliedSwings++;
                     }
                 }
             }
             reportPhysicsBoneProbe(data, advanced
-                    ? "world strand solver advanced; visual swings disabled for stability; writes="
+                    ? "world strand solver advanced; left-root experimental swings written="
                             + appliedSwings + " (visual result unverified)"
                     : "world strand joint matrices valid: " + chains.size()
                       + " chains (no visible physics delta yet)");
