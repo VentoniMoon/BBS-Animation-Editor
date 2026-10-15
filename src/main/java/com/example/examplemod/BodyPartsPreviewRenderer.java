@@ -125,6 +125,7 @@ public class BodyPartsPreviewRenderer
             BodyPart childPart = renderedPhysicsParts.get(data);
             if (childPart != null)
             {
+                diagnoseVisualHairResult(data, childPart, frame);
                 // Evaluate world-chain directions from the currently rendered
                 // Emoticons basis. The write-back remains disabled until the
                 // local Chameleon rotation convention has been validated.
@@ -139,6 +140,55 @@ public class BodyPartsPreviewRenderer
             }
         }
     }
+
+    /**
+     * One-shot sanity check of the actual native Chameleon model pose after
+     * the ordinary render. A successful write to morph.pose is not proof
+     * that a bone was rotated during draw. No second render is invoked.
+     */
+    private void diagnoseVisualHairResult(BodyPartModelData data, BodyPart part, int frame)
+    {
+        if (frame != 20 && frame != 60) return;
+        if (part == null || part.morph == null || part.morph.get() == null) return;
+        String key = data.getTimelineId() + ":" + frame;
+        if (key.equals(lastVisualHairDiagnostic)) return;
+        try
+        {
+            Object morph = part.morph.get();
+            Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
+            Object nativeModel = chameleonModel.getClass().getField("model").get(chameleonModel);
+            Class<?> clazz = Class.forName("mchorse.chameleon.lib.data.model.Model");
+            Class<?> renderer = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
+            // Read only the current matrices; the caller has already rendered.
+            BodyPartPhysicsWorldPose.MatrixSource source =
+                    BodyPartChameleonMatrixProbe.source(morph);
+            if (source == null) return;
+            float[] root = source.getBoneWorldMatrix("left_strand_1");
+            float[] next = source.getBoneWorldMatrix("left_strand_2");
+            if (root == null || next == null) return;
+            float[] relative = BodyPartPhysicsMatrixSpace.multiply(
+                    BodyPartPhysicsAttachment.localMatrix(part), root);
+            float[] child = BodyPartPhysicsMatrixSpace.multiply(
+                    BodyPartPhysicsAttachment.localMatrix(part), next);
+            BodyPartChainSolver.Vec3 direction = BodyPartPhysicsPoseAdapter.position(child)
+                    .sub(BodyPartPhysicsPoseAdapter.position(relative));
+            lastVisualHairDiagnostic = key;
+            System.out.println("[BBS Animation Editor][Physics] VISUAL CHECK frame=" + frame
+                    + " partY=" + part.rotate.y
+                    + " chameleonRootToChild=(" + direction.x + "," + direction.y
+                    + "," + direction.z + ")"
+                    + " transitionActive=" + ((mchorse.chameleon.metamorph.ChameleonMorph)morph)
+                            .animation.isInProgress());
+        }
+        catch (Throwable error)
+        {
+            lastVisualHairDiagnostic = key;
+            System.out.println("[BBS Animation Editor][Physics] VISUAL CHECK unavailable: "
+                    + error.getClass().getSimpleName());
+        }
+    }
+
+    private String lastVisualHairDiagnostic = "";
 
     public float[] getPhysicsAttachmentMatrix(BodyPartModelData data)
     {
