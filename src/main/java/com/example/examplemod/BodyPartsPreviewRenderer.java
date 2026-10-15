@@ -110,10 +110,32 @@ public class BodyPartsPreviewRenderer
      * Emoticons has evaluated its walking/running pose by this point.
      * No extra render, GL matrix manipulation or changes to keys.
      */
+    private String lastEmoticonsGeometryReport = "";
+
     public void captureRenderedAttachmentMatrices(EntityActor actor, int frame)
     {
         if (actor == null || actor.getMorph() == null) return;
         Object morph = actor.getMorph();
+        if (frame == 0 || frame == 20)
+        {
+            java.util.List<EmoticonsCollisionGeometryProvider.MeshSnapshot> surfaces =
+                    EmoticonsCollisionGeometryProvider.snapshot(morph);
+            int vertices=0, triangles=0;
+            for (EmoticonsCollisionGeometryProvider.MeshSnapshot mesh : surfaces)
+            {
+                vertices+=mesh.vertexCount();
+                triangles+=mesh.triangleCount();
+            }
+            String report="meshes="+surfaces.size()+", vertices="+vertices
+                    +", triangles="+triangles;
+            if (!report.equals(lastEmoticonsGeometryReport))
+            {
+                lastEmoticonsGeometryReport=report;
+                System.out.println("[BBS Animation Editor][Physics] "
+                        + "Emoticons skinned collision geometry available: "+report
+                        + " (mesh-local snapshot, collision solver not yet connected)");
+            }
+        }
         for (Map.Entry<BodyPartModelData, List<BodyPartPhysicsChains.Chain>> entry :
                 previewPhysicsChains.entrySet())
         {
