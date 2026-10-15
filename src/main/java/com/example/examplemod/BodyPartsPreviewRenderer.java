@@ -68,6 +68,8 @@ public class BodyPartsPreviewRenderer
     private boolean recordingPhysicsMatrices;
     private final BodyPartPhysicsPreviewSimulation livePhysics =
             new BodyPartPhysicsPreviewSimulation();
+    private final Map<BodyPartModelData, String> reportedCollisionBone =
+            new IdentityHashMap<BodyPartModelData, String>();
 
     /** Native parent bone snapshot made AFTER the ordinary actor render. */
     private final Map<BodyPartModelData, float[]> renderedAttachmentMatrices =
@@ -132,7 +134,21 @@ public class BodyPartsPreviewRenderer
                 // Evaluate world-chain directions from the currently rendered
                 // Emoticons basis. The write-back remains disabled until the
                 // local Chameleon rotation convention has been validated.
-                probePhysicsBoneMatrices(data, childPart, matrix, frame);
+                String torsoName = BodyPartPhysicsTorsoLocator.findUpperTorsoName(morph);
+                float[] torsoMatrix = torsoName == null ? null :
+                        BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
+                                morph, torsoName);
+                String collisionStatus = torsoMatrix == null
+                        ? "upper torso unavailable (collisions skipped)"
+                        : "upper torso=" + torsoName;
+                if (!collisionStatus.equals(reportedCollisionBone.get(data)))
+                {
+                    reportedCollisionBone.put(data, collisionStatus);
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            + "Body collision " + collisionStatus
+                            + ", attachment=" + data.getAttachmentBoneName());
+                }
+                probePhysicsBoneMatrices(data, childPart, matrix, torsoMatrix, frame);
             }
             if (!reportedPostRenderMatrices.containsKey(data))
             {
@@ -338,7 +354,7 @@ public class BodyPartsPreviewRenderer
     }
 
     private void probePhysicsBoneMatrices(BodyPartModelData data, BodyPart part,
-            float[] parentMatrix, int frame)
+            float[] parentMatrix, float[] torsoMatrix, int frame)
     {
         List<BodyPartPhysicsChains.Chain> chains = getPreviewPhysicsChains(data);
         if (chains.isEmpty() || part == null || part.morph == null)
@@ -390,7 +406,7 @@ public class BodyPartsPreviewRenderer
                 // moving bone space; never use global/world-up assumptions.
                 java.util.List<BodyPartPhysicsCollisions.Capsule> colliders =
                         chain.settings.hasBodyCollisions()
-                        ? BodyPartPhysicsBodyCapsules.forTorso(parentMatrix)
+                        ? BodyPartPhysicsBodyCapsules.forTorso(torsoMatrix)
                         : java.util.Collections.<BodyPartPhysicsCollisions.Capsule>emptyList();
                 BodyPartChainSolver.Vec3[] simulated =
                         livePhysics.sample(data.getTimelineId(), chain, frame, joints, colliders);
