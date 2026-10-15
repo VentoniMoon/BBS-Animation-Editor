@@ -155,10 +155,6 @@ public class BodyPartsPreviewRenderer
         try
         {
             Object morph = part.morph.get();
-            Object chameleonModel = morph.getClass().getMethod("getModel").invoke(morph);
-            Object nativeModel = chameleonModel.getClass().getField("model").get(chameleonModel);
-            Class<?> clazz = Class.forName("mchorse.chameleon.lib.data.model.Model");
-            Class<?> renderer = Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer");
             // Read only the current matrices; the caller has already rendered.
             BodyPartPhysicsWorldPose.MatrixSource source =
                     BodyPartChameleonMatrixProbe.source(morph);
@@ -177,8 +173,7 @@ public class BodyPartsPreviewRenderer
                     + " partY=" + part.rotate.y
                     + " chameleonRootToChild=(" + direction.x + "," + direction.y
                     + "," + direction.z + ")"
-                    + " transitionActive=" + ((mchorse.chameleon.metamorph.ChameleonMorph)morph)
-                            .animation.isInProgress());
+                    + " transitionActive=" + chameleonTransitionActive(morph));
         }
         catch (Throwable error)
         {
@@ -186,6 +181,17 @@ public class BodyPartsPreviewRenderer
             System.out.println("[BBS Animation Editor][Physics] VISUAL CHECK unavailable: "
                     + error.getClass().getSimpleName());
         }
+    }
+
+    private static boolean chameleonTransitionActive(Object morph)
+    {
+        try
+        {
+            Object animation = morph.getClass().getField("animation").get(morph);
+            return ((Boolean) animation.getClass().getMethod("isInProgress")
+                    .invoke(animation)).booleanValue();
+        }
+        catch (Throwable ignored) { return false; }
     }
 
     private String lastVisualHairDiagnostic = "";
