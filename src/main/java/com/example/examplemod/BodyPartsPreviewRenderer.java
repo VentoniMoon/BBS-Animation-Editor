@@ -84,6 +84,12 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, Integer>();
     private final Map<BodyPartModelData, Boolean> visualProbeReported =
             new IdentityHashMap<BodyPartModelData, Boolean>();
+    /* Snapshot the clean Chameleon pose rotation before applying the probe.
+     * This stays separate from the modified preview morph. */
+    private final Map<BodyPartModelData, Float> leftRootBaseRotation =
+            new IdentityHashMap<BodyPartModelData, Float>();
+    private final Map<BodyPartModelData, Float> leftRootAppliedRotation =
+            new IdentityHashMap<BodyPartModelData, Float>();
 
     /* Actual child BodyParts from this preview pass, never re-rendered. */
     private final Map<BodyPartModelData, BodyPart> renderedPhysicsParts =
@@ -173,7 +179,10 @@ public class BodyPartsPreviewRenderer
                     + " partY=" + part.rotate.y
                     + " chameleonRootToChild=(" + direction.x + "," + direction.y
                     + "," + direction.z + ")"
-                    + " transitionActive=" + chameleonTransitionActive(morph));
+                    + " transitionActive=" + chameleonTransitionActive(morph)
+                    + " cleanPoseX=" + leftRootBaseRotation.get(data)
+                    + " physicsPoseX=" + leftRootAppliedRotation.get(data)
+                    + " currentPoseX=" + readChameleonPoseRotationX(morph, "left_strand_1"));
         }
         catch (Throwable error)
         {
@@ -181,6 +190,22 @@ public class BodyPartsPreviewRenderer
             System.out.println("[BBS Animation Editor][Physics] VISUAL CHECK unavailable: "
                     + error.getClass().getSimpleName());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Float readChameleonPoseRotationX(Object morph, String bone)
+    {
+        try
+        {
+            Object pose = morph.getClass().getField("pose").get(morph);
+            if (pose == null) return null;
+            Object bones = pose.getClass().getField("bones").get(pose);
+            if (!(bones instanceof Map)) return null;
+            Object transform = ((Map<?, ?>) bones).get(bone);
+            if (transform == null) return Float.valueOf(0F);
+            return Float.valueOf(transform.getClass().getField("rotateX").getFloat(transform));
+        }
+        catch (Throwable ignored) { return null; }
     }
 
     private static boolean chameleonTransitionActive(Object morph)
@@ -847,12 +872,20 @@ public class BodyPartsPreviewRenderer
         if (this.preparingPreview && !isEmoticonsAnimatedMorph(child)
                 && !(child instanceof CustomMorph))
         {
+            Float cleanRotation = readChameleonPoseRotationX(child, "left_strand_1");
+            if (cleanRotation != null)
+                leftRootBaseRotation.put(data, cleanRotation);
             Integer sampled = pendingLeftRootFrames.get(data);
             float[] swing = pendingLeftRootSwings.get(data);
             if (sampled != null && sampled.intValue() == frame - 1 && swing != null)
             {
                 boolean applied = BodyPartChameleonPhysicsPose.addLocalSwing(
                         child, "left_strand_1", swing);
+                if (applied)
+                {
+                    Float rotation = readChameleonPoseRotationX(child, "left_strand_1");
+                    if (rotation != null) leftRootAppliedRotation.put(data, rotation);
+                }
                 if (applied && !visualProbeReported.containsKey(data))
                 {
                     visualProbeReported.put(data, Boolean.TRUE);
