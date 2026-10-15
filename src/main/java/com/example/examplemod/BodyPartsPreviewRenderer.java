@@ -415,10 +415,9 @@ public class BodyPartsPreviewRenderer
                                 BodyPartPhysicsPoseAdapter.toLocalDirection(basis, solvedWorld);
                         float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
                                 restLocal, solvedLocal);
-                        if ("left_strand_1".equals(chain.root.getName()) && i == 0)
-                        {
-                            physicsFrames.accept(data, frame, swing);
-                        }
+                        // Every joint with a known child pivot has its own
+                        // local swing. The terminal tip is not guessed.
+                        physicsFrames.accept(data, frame, bone.getName(), swing);
                         /*
                          * Root-only test revealed a wrong upward rotation and
                          * jitter. Keep solver diagnostics but disable pose
@@ -433,7 +432,7 @@ public class BodyPartsPreviewRenderer
                 }
             }
             reportPhysicsBoneProbe(data, advanced
-                    ? "world strand solver advanced; only left-root diagnostic visual write enabled"
+                    ? "world strand solver advanced; multi-segment visual pose queued"
                     : "world strand joint matrices valid: " + chains.size()
                       + " chains (no visible physics delta yet)");
         }
@@ -946,25 +945,37 @@ public class BodyPartsPreviewRenderer
              * Reverse the test swing only on the left root, pending a full
              * handedness/basis correction across all chains.
              */
-            float[] swing = physicsFrames.forRender(data, frame);
-            if (swing != null)
+            Map<String, float[]> swings = physicsFrames.forRender(data, frame);
+            if (swings != null)
             {
-                float[] corrected = new float[] {
-                        swing[0], swing[1], swing[2], -swing[3]
-                };
-                boolean applied = BodyPartChameleonPhysicsPose.addLocalSwing(
-                        child, "left_strand_1", corrected);
-                if (applied)
+                int appliedCount = 0;
+                for (Map.Entry<String, float[]> entry : swings.entrySet())
                 {
-                    Float rotation = readChameleonPoseRotationX(child, "left_strand_1");
-                    if (rotation != null) leftRootAppliedRotation.put(data, rotation);
+                    float[] swing = entry.getValue();
+                    // Temporary handedness correction established with manual
+                    // X rotation test. A unified basis conversion is pending.
+                    float[] corrected = new float[] {
+                            swing[0], swing[1], swing[2], -swing[3]
+                    };
+                    if (BodyPartChameleonPhysicsPose.addLocalSwing(
+                            child, entry.getKey(), corrected))
+                    {
+                        appliedCount++;
+                        if ("left_strand_1".equals(entry.getKey()))
+                        {
+                            Float rotation = readChameleonPoseRotationX(
+                                    child, "left_strand_1");
+                            if (rotation != null)
+                                leftRootAppliedRotation.put(data, rotation);
+                        }
+                    }
                 }
-                if (applied && !visualProbeReported.containsKey(data))
+                if (appliedCount > 0 && !visualProbeReported.containsKey(data))
                 {
                     visualProbeReported.put(data, Boolean.TRUE);
                     System.out.println("[BBS Animation Editor][Physics] "
-                            + "LEFT ROOT solver swing enabled; sign reversed "
-                            + "for Y=180 orientation verification (other bones off)");
+                            + "multi-segment strand preview enabled: "
+                            + appliedCount + " bone rotations (terminal tips pending)");
                 }
             }
 
