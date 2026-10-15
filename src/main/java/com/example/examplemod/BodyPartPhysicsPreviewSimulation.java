@@ -29,7 +29,8 @@ public final class BodyPartPhysicsPreviewSimulation
     public void clear() { states.clear(); }
 
     public BodyPartChainSolver.Vec3[] sample(String modelId, BodyPartPhysicsChains.Chain chain,
-            int frame, BodyPartChainSolver.Vec3[] animatedWorld)
+            int frame, BodyPartChainSolver.Vec3[] animatedWorld,
+            java.util.List<BodyPartPhysicsCollisions.Capsule> colliders)
     {
         if (chain==null || animatedWorld==null || chain.settings==null ||
                 !chain.settings.isEnabled()) return null;
@@ -37,6 +38,7 @@ public final class BodyPartPhysicsPreviewSimulation
         int hash=31*(31*Float.floatToIntBits(settings.getGravity())
                 +Float.floatToIntBits(settings.getStiffness()))
                 +Float.floatToIntBits(settings.getDamping());
+        hash=31*hash+(settings.hasBodyCollisions()?1:0);
         String key=modelId+"/"+chain.root.getName();
         State state=states.get(key);
         /*
@@ -57,7 +59,8 @@ public final class BodyPartPhysicsPreviewSimulation
         else if (frame==state.lastFrame+1)
         {
             state.solver.step(animatedWorld,1F/20F,settings.getGravity(),
-                    settings.getStiffness(),settings.getDamping());
+                    settings.getStiffness(),settings.getDamping(),
+                    settings.hasBodyCollisions()?colliders:null,0.025F);
         }
         state.lastFrame=frame;
         BodyPartChainSolver.Vec3[] result =
