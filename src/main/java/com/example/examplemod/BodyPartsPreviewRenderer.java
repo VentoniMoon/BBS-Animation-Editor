@@ -102,6 +102,7 @@ public class BodyPartsPreviewRenderer
                 reportPhysicsMatrix(entry.getKey(),
                         "native parent attachment matrix captured ("
                         + entry.getValue().limb + ")");
+                probePhysicsBoneMatrices(entry.getKey(), entry.getValue(), nativeMatrix);
             }
         }
         catch (Throwable error)
@@ -114,6 +115,66 @@ public class BodyPartsPreviewRenderer
         finally
         {
             recordingPhysicsMatrices = false;
+        }
+    }
+
+    private void probePhysicsBoneMatrices(BodyPartModelData data, BodyPart part,
+            float[] parentMatrix)
+    {
+        List<BodyPartPhysicsChains.Chain> chains = getPreviewPhysicsChains(data);
+        if (chains.isEmpty() || part == null || part.morph == null)
+            return;
+        BodyPartPhysicsWorldPose.MatrixSource local =
+                BodyPartChameleonMatrixProbe.source(part.morph.get());
+        if (local == null)
+        {
+            reportPhysicsBoneProbe(data, "native Chameleon matrix provider unavailable");
+            return;
+        }
+
+        /*
+         * Metamorph's recorded matrix is the parent limb basis. Its
+         * BodyPart transform is applied afterwards. Do not confuse the
+         * recorded parent matrix with the finished child attachment.
+         * For now this verifies availability of native child matrices;
+         * physical results are NOT applied to the pose.
+         */
+        for (BodyPartPhysicsChains.Chain chain : chains)
+        {
+            for (AnimationBone bone : chain.bones)
+            {
+                float[] matrix = local.getBoneWorldMatrix(bone.getName());
+                if (matrix == null)
+                {
+                    reportPhysicsBoneProbe(data,
+                            "native Chameleon bone matrix missing: " + bone.getName());
+                    return;
+                }
+                try
+                {
+                    BodyPartPhysicsMatrixSpace.snapshot(matrix);
+                }
+                catch (IllegalArgumentException error)
+                {
+                    reportPhysicsBoneProbe(data,
+                            "invalid Chameleon bone matrix: " + bone.getName());
+                    return;
+                }
+            }
+        }
+        reportPhysicsBoneProbe(data, "native Chameleon bone matrices captured: "
+                + chains.size() + " chains");
+    }
+
+    private final Map<BodyPartModelData, String> physicsBoneProbeDiagnostics =
+            new IdentityHashMap<BodyPartModelData, String>();
+
+    private void reportPhysicsBoneProbe(BodyPartModelData data, String message)
+    {
+        if (!message.equals(physicsBoneProbeDiagnostics.get(data)))
+        {
+            physicsBoneProbeDiagnostics.put(data, message);
+            System.out.println("[BBS Animation Editor][Physics] " + message);
         }
     }
 
