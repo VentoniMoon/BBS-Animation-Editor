@@ -182,7 +182,8 @@ public class BodyPartsPreviewRenderer
                     + " transitionActive=" + chameleonTransitionActive(morph)
                     + " cleanPoseX=" + leftRootBaseRotation.get(data)
                     + " physicsPoseX=" + leftRootAppliedRotation.get(data)
-                    + " currentPoseX=" + readChameleonPoseRotationX(morph, "left_strand_1"));
+                    + " currentPoseX=" + readChameleonPoseRotationX(morph, "left_strand_1")
+                    + " nativeBone=" + describeChameleonNativeBone(morph, "left_strand_1"));
         }
         catch (Throwable error)
         {
@@ -190,6 +191,47 @@ public class BodyPartsPreviewRenderer
             System.out.println("[BBS Animation Editor][Physics] VISUAL CHECK unavailable: "
                     + error.getClass().getSimpleName());
         }
+    }
+
+    /** Read only the actual post-render bone state and attached geometry. */
+    private static String describeChameleonNativeBone(Object morph, String name)
+    {
+        try
+        {
+            Object wrapper = morph.getClass().getMethod("getModel").invoke(morph);
+            Object model = wrapper.getClass().getField("model").get(wrapper);
+            Object roots = model.getClass().getField("bones").get(model);
+            Object found = findChameleonNativeBone(roots, name);
+            if (found == null) return "missing";
+            Object transform = found.getClass().getField("current").get(found);
+            Object rotation = transform.getClass().getField("rotation").get(transform);
+            java.lang.reflect.Field x = rotation.getClass().getField("x");
+            java.lang.reflect.Field y = rotation.getClass().getField("y");
+            java.lang.reflect.Field z = rotation.getClass().getField("z");
+            Object cubes = found.getClass().getField("cubes").get(found);
+            Object children = found.getClass().getField("children").get(found);
+            return "rotationDeg=(" + x.getFloat(rotation) + ","
+                    + y.getFloat(rotation) + "," + z.getFloat(rotation)
+                    + ") cubes=" + ((java.util.List<?>) cubes).size()
+                    + " children=" + ((java.util.List<?>) children).size();
+        }
+        catch (Throwable error)
+        {
+            return "unavailable:" + error.getClass().getSimpleName();
+        }
+    }
+
+    private static Object findChameleonNativeBone(Object list, String name) throws Exception
+    {
+        if (!(list instanceof java.util.List)) return null;
+        for (Object bone : (java.util.List<?>) list)
+        {
+            if (name.equals(bone.getClass().getField("id").get(bone))) return bone;
+            Object child = findChameleonNativeBone(
+                    bone.getClass().getField("children").get(bone), name);
+            if (child != null) return child;
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")
