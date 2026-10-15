@@ -244,12 +244,16 @@ public class BodyPartsPreviewRenderer
                     distances.append(" back_strand_").append(i).append('=');
                     distances.append(contact == null ? "none-within-0.5" :
                             Float.toString(contact.distance));
+                    EmoticonsMeshCollisionSolver.RayProbe parity =
+                            surface.probeRayPositiveX(p);
+                    distances.append("[rayHits=").append(parity.intersections)
+                            .append(",odd=").append(parity.odd).append(']');
                 }
                 System.out.println("[BBS Animation Editor][Physics] "
                         + "MESH CONTACT PROBE frame=" + frame
                         + " indexedTriangles=" + surface.triangleCount()
                         + " distances(mesh-local assumed):" + distances.toString()
-                        + " (diagnostic only, no physical correction)");
+                        + " (ray parity is heuristic, not validated solid classification; no correction)");
             }
             collisionSpaceLoggedFrame.put(data, Integer.valueOf(frame));
             System.out.println("[BBS Animation Editor][Physics] COLLISION SPACE frame=" + frame
