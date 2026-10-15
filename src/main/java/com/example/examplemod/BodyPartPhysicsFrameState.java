@@ -1,6 +1,7 @@
 package com.example.examplemod;
 
 import java.util.IdentityHashMap;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -15,12 +16,11 @@ public final class BodyPartPhysicsFrameState
     private static final class Sample
     {
         int frame;
-        float[] swing;
+        Map<String, float[]> swings = new HashMap<String, float[]>();
 
-        Sample(int frame, float[] swing)
+        Sample(int frame)
         {
             this.frame = frame;
-            this.swing = swing.clone();
         }
     }
 
@@ -57,26 +57,35 @@ public final class BodyPartPhysicsFrameState
     }
 
     /** Called after the ordinary render and the solver's sequential step. */
-    public void accept(BodyPartModelData part, int frame, float[] localSwing)
+    public void accept(BodyPartModelData part, int frame, String bone, float[] localSwing)
     {
-        if (part == null || localSwing == null || localSwing.length != 4)
+        if (part == null || bone == null || localSwing == null || localSwing.length != 4)
             return;
         for (float v : localSwing)
             if (!Float.isFinite(v)) return;
         Sample existing = samples.get(part);
         if (existing != null && frame < existing.frame) return;
-        samples.put(part, new Sample(frame, localSwing));
+        if (existing == null || existing.frame != frame)
+        {
+            existing = new Sample(frame);
+            samples.put(part, existing);
+        }
+        existing.swings.put(bone, localSwing.clone());
     }
 
     /**
      * Reads only the snapshot frozen when this timeline frame began.
      * New physics samples are never exposed halfway through a render frame.
      */
-    public float[] forRender(BodyPartModelData part, int frame)
+    public Map<String, float[]> forRender(BodyPartModelData part, int frame)
     {
         if (frame != lastTimelineFrame) return null;
         Sample sample = visible.get(part);
-        return sample == null ? null : sample.swing.clone();
+        if (sample == null) return null;
+        Map<String, float[]> result = new HashMap<String, float[]>();
+        for (Map.Entry<String, float[]> entry : sample.swings.entrySet())
+            result.put(entry.getKey(), entry.getValue().clone());
+        return result;
     }
 
     public void clear()
