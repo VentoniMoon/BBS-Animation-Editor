@@ -1,7 +1,5 @@
 package com.example.examplemod;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -28,6 +26,8 @@ public final class BodyPartPhysicsFrameCache
     private final int firstFrame;
     private BodyPartChainSolver solver;
     private int lastFrame = -1;
+    private int settingsFingerprint;
+    private boolean fingerprintInitialized;
 
     public BodyPartPhysicsFrameCache(PoseSource source, int firstFrame)
     {
@@ -41,6 +41,7 @@ public final class BodyPartPhysicsFrameCache
         frames.clear();
         solver = null;
         lastFrame = -1;
+        fingerprintInitialized = false;
     }
 
     /**
@@ -49,12 +50,25 @@ public final class BodyPartPhysicsFrameCache
      */
     public BodyPartChainSolver.Vec3[] evaluate(int frame, BodyPartPhysicsSettings settings)
     {
-        if (frame < firstFrame || settings == null || !settings.isEnabled()) return null;
+        if (frame < firstFrame || settings == null || !settings.isEnabled())
+        {
+            if (fingerprintInitialized) invalidate();
+            return null;
+        }
+        int fingerprint = 31 * (31 * Float.floatToIntBits(settings.getGravity())
+                + Float.floatToIntBits(settings.getStiffness()))
+                + Float.floatToIntBits(settings.getDamping());
+        if (!fingerprintInitialized || fingerprint != settingsFingerprint)
+        {
+            invalidate();
+            settingsFingerprint = fingerprint;
+            fingerprintInitialized = true;
+        }
         if (frames.containsKey(frame)) return copy(frames.get(frame));
 
-        // Seeking to a frame older than the most recently calculated one can
-        // use its snapshot, or rebuild sequentially if not previously cached.
-        if (lastFrame > frame) invalidate();
+        // All earlier frames are cached during forward simulation.
+        // A cache miss before lastFrame indicates an invalid state.
+        if (lastFrame > frame) throw new IllegalStateException("Missing cached physics frame");
 
         if (solver == null)
         {
