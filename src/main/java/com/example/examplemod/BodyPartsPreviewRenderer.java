@@ -944,26 +944,35 @@ public class BodyPartsPreviewRenderer
             if (cleanRotation != null)
                 leftRootBaseRotation.put(data, cleanRotation);
             /*
-             * Temporary A/B isolation test: hold timeline at frame 20.
-             * Alternates clean 0-degree pose and -45-degree X every 2 seconds.
-             * No physics sample is applied and editor keys are not mutated.
+             * Controlled post-A/B test: use the actual physics swing again.
+             * The manual X=+45-degree test visibly lowered this Y=180-degree
+             * attachment, while the calculated negative X lifted it.
+             * Reverse the test swing only on the left root, pending a full
+             * handedness/basis correction across all chains.
              */
-            if (frame == 20)
+            Integer sampled = pendingLeftRootFrames.get(data);
+            float[] swing = pendingLeftRootSwings.get(data);
+            if (sampled != null && sampled.intValue() == frame - 1 && swing != null)
             {
-                boolean bState = (System.currentTimeMillis() / 2000L) % 2L == 1L;
-                float target = bState ? (float) (-Math.PI / 4.0) : 0F;
-                if (setChameleonPoseRotationX(child, "left_strand_1", target))
+                float[] corrected = new float[] {
+                        swing[0], swing[1], swing[2], -swing[3]
+                };
+                boolean applied = BodyPartChameleonPhysicsPose.addLocalSwing(
+                        child, "left_strand_1", corrected);
+                if (applied)
                 {
-                    leftRootAppliedRotation.put(data, Float.valueOf(target));
-                    String label = bState ? "B (-45 deg)" : "A (0 deg)";
-                    if (!label.equals(lastHairABLabel))
-                    {
-                        lastHairABLabel = label;
-                        System.out.println("[BBS Animation Editor][Physics] HAIR A/B frame=20 "
-                                + label + "; hold frame 20 to compare the geometry");
-                    }
+                    Float rotation = readChameleonPoseRotationX(child, "left_strand_1");
+                    if (rotation != null) leftRootAppliedRotation.put(data, rotation);
+                }
+                if (applied && !visualProbeReported.containsKey(data))
+                {
+                    visualProbeReported.put(data, Boolean.TRUE);
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            + "LEFT ROOT solver swing enabled; sign reversed "
+                            + "for Y=180 orientation verification (other bones off)");
                 }
             }
+
         }
 
         part.useTarget = true;
