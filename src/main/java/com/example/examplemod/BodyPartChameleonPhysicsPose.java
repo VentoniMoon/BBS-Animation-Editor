@@ -42,10 +42,10 @@ public final class BodyPartChameleonPhysicsPose
                 get(transform, "rotateY"),
                 get(transform, "rotateZ")
             };
-            float maxAngle = 0.35F;
+            float maxAngle = 0.12F;
             float[] limited = new float[] {swing[0], swing[1], swing[2],
                     Math.max(-maxAngle, Math.min(maxAngle, swing[3]))};
-            float[] composed = BodyPartPhysicsRotation.compose(original, limited);
+            float[] composed = BodyPartPhysicsRotation.composeInBoneSpace(original, limited);
             set(transform, "rotateX", composed[0]);
             set(transform, "rotateY", composed[1]);
             set(transform, "rotateZ", composed[2]);
