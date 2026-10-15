@@ -85,6 +85,8 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, Boolean>();
     /* Snapshot the clean Chameleon pose rotation before applying the probe.
      * This stays separate from the modified preview morph. */
+    private final Map<BodyPartModelData, Map<String, float[]>> previewEulerDeltas =
+            new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
     private final Map<BodyPartModelData, Float> leftRootBaseRotation =
             new IdentityHashMap<BodyPartModelData, Float>();
     private final Map<BodyPartModelData, Float> leftRootAppliedRotation =
@@ -274,6 +276,23 @@ public class BodyPartsPreviewRenderer
     }
 
     @SuppressWarnings("unchecked")
+    private static float[] readChameleonPoseEuler(Object morph, String bone)
+    {
+        try
+        {
+            Object pose=morph.getClass().getField("pose").get(morph);
+            Object transforms=pose.getClass().getField("bones").get(pose);
+            Object t=((Map<?, ?>)transforms).get(bone);
+            if(t==null) return new float[] {0F,0F,0F};
+            return new float[] {
+                    t.getClass().getField("rotateX").getFloat(t),
+                    t.getClass().getField("rotateY").getFloat(t),
+                    t.getClass().getField("rotateZ").getFloat(t)};
+        }
+        catch(Throwable error) {return null;}
+    }
+
+    @SuppressWarnings("unchecked")
     private static Float readChameleonPoseRotationX(Object morph, String bone)
     {
         try
@@ -367,6 +386,20 @@ public class BodyPartsPreviewRenderer
             return;
         }
 
+        /* Temporarily remove PREVIEW deltas from the native current
+         * transforms. The normal rendered pose is restored in finally. */
+        BodyPartChameleonCleanPose cleanScope;
+        try
+        {
+            cleanScope = BodyPartChameleonCleanPose.begin(
+                    part.morph.get(), previewEulerDeltas.get(data));
+        }
+        catch (RuntimeException error)
+        {
+            reportPhysicsBoneProbe(data, "clean physics pose unavailable: "
+                    + error.getClass().getSimpleName());
+            return;
+        }
         /* Metamorph records parent limb BEFORE its BodyPart transform. */
         try
         {
@@ -492,6 +525,10 @@ public class BodyPartsPreviewRenderer
         {
             reportPhysicsBoneProbe(data, "world strand matrices invalid: "
                     + error.getClass().getSimpleName());
+        }
+        finally
+        {
+            cleanScope.close();
         }
     }
 
@@ -654,6 +691,7 @@ public class BodyPartsPreviewRenderer
         physicsFrames.beginFrame(frame);
         manager.parts.clear();
         this.preparedMorphs.clear();
+        this.previewEulerDeltas.clear();
         this.previewPhysicsChains.clear();
         this.physicsAttachmentMatrices.clear();
         this.renderedPhysicsParts.clear();
@@ -1016,10 +1054,24 @@ public class BodyPartsPreviewRenderer
                     float[] corrected = new float[] {
                             swing[0], swing[1], swing[2], -swing[3]
                     };
+                    float[] before = readChameleonPoseEuler(child, entry.getKey());
                     if (BodyPartChameleonPhysicsPose.addLocalSwing(
                             child, entry.getKey(), corrected))
                     {
                         appliedCount++;
+                        float[] after = readChameleonPoseEuler(child, entry.getKey());
+                        if (before != null && after != null)
+                        {
+                            Map<String, float[]> offsets = previewEulerDeltas.get(data);
+                            if (offsets == null)
+                            {
+                                offsets = new java.util.HashMap<String, float[]>();
+                                previewEulerDeltas.put(data, offsets);
+                            }
+                            offsets.put(entry.getKey(), new float[] {
+                                    after[0] - before[0], after[1] - before[1],
+                                    after[2] - before[2]});
+                        }
                         if ("left_strand_1".equals(entry.getKey()))
                         {
                             Float rotation = readChameleonPoseRotationX(
