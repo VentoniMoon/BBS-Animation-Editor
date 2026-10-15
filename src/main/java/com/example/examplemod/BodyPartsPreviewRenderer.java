@@ -249,6 +249,40 @@ public class BodyPartsPreviewRenderer
                     distances.append("[rayHits=").append(parity.intersections)
                             .append(",odd=").append(parity.odd).append(']');
                 }
+                // Filter only the native 'body' mesh to a moving upper-torso
+                // height band. A candidate region, not confirmed collision.
+                if (bodyPos != null)
+                {
+                    EmoticonsCollisionGeometryProvider.MeshSnapshot torsoCandidates =
+                            EmoticonsTorsoGeometry.selectBodyTorso(
+                                    meshes, bodyPos.y, lowPos.y);
+                    if (torsoCandidates != null)
+                    {
+                        java.util.List<EmoticonsCollisionGeometryProvider.MeshSnapshot> subset =
+                                java.util.Collections.singletonList(torsoCandidates);
+                        EmoticonsMeshCollisionSolver torsoSurface =
+                                new EmoticonsMeshCollisionSolver(subset);
+                        StringBuilder measurements = new StringBuilder();
+                        for (int i = 1; i <= 4; i++)
+                        {
+                            float[] bone = local.getBoneWorldMatrix("back_strand_" + i);
+                            if (bone == null) continue;
+                            BodyPartChainSolver.Vec3 point =
+                                    BodyPartPhysicsPoseAdapter.position(
+                                        BodyPartPhysicsMatrixSpace.multiply(attachment, bone));
+                            EmoticonsMeshCollisionSolver.Contact hit =
+                                    torsoSurface.nearest(point, 0.5F);
+                            measurements.append(" b").append(i).append('=')
+                                    .append(hit == null ? "none" : Float.toString(hit.distance));
+                        }
+                        System.out.println("[BBS Animation Editor][Physics] "
+                                + "TORSO CANDIDATE frame=" + frame
+                                + " triangles=" + torsoSurface.triangleCount()
+                                + " boneY=(" + bodyPos.y + "," + lowPos.y + ")"
+                                + " distances:" + measurements.toString()
+                                + " (mesh-local assumed; diagnostic only)");
+                    }
+                }
                 // Break down ambiguous multi-shell ray parity by source mesh.
                 // This is read-only: mesh-local coordinates are not yet
                 // certified against the attached child-bone space.
