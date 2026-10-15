@@ -6,9 +6,8 @@ import java.util.Map;
 /**
  * Preview-only application of a small physical swing to Chameleon pose bones.
  * Chameleon AnimatedPoseTransform stores Euler radians. This first adapter
- * applies the local axis-angle's rotation vector as an additive Euler offset;
- * it is deliberately limited to small swings and may need exact quaternion
- * composition once the visible test establishes the renderer's rotation order.
+ * composes local swing matrices with existing Euler pose before extraction.
+ * The native Chameleon rotation order still needs validation before enabling.
  */
 public final class BodyPartChameleonPhysicsPose
 {
@@ -36,17 +35,36 @@ public final class BodyPartChameleonPhysicsPose
                 transform = clazz.getConstructor(String.class).newInstance(bone);
                 map.put(bone,transform);
             }
+            // Compose matrices against the clean keyframed pose. No
+            // axis-angle component is treated as an Euler angle.
+            float[] original = new float[] {
+                get(transform, "rotateX"),
+                get(transform, "rotateY"),
+                get(transform, "rotateZ")
+            };
             float maxAngle = 0.35F;
-            float angle = Math.max(-maxAngle, Math.min(maxAngle, swing[3]));
-            add(transform,"rotateX",swing[0]*angle);
-            add(transform,"rotateY",swing[1]*angle);
-            add(transform,"rotateZ",swing[2]*angle);
+            float[] limited = new float[] {swing[0], swing[1], swing[2],
+                    Math.max(-maxAngle, Math.min(maxAngle, swing[3]))};
+            float[] composed = BodyPartPhysicsRotation.compose(original, limited);
+            set(transform, "rotateX", composed[0]);
+            set(transform, "rotateY", composed[1]);
+            set(transform, "rotateZ", composed[2]);
             return true;
         }
         catch (Throwable ignored)
         {
             return false;
         }
+    }
+
+    private static float get(Object target, String field) throws Exception
+    {
+        return target.getClass().getField(field).getFloat(target);
+    }
+
+    private static void set(Object target, String field, float value) throws Exception
+    {
+        target.getClass().getField(field).setFloat(target, value);
     }
 
     private static void add(Object transform, String field, float amount)
