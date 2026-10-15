@@ -100,17 +100,57 @@ public final class BodyPartChainSolver
                 }
             }
             points[0]=animatedPose[0];
-            // Fixed root is never projected; only free particles collide.
+            // Alternate segment and particle contacts with distance constraints.
+            // A final length-only pass used to undo collision separation.
             if (colliders != null && !colliders.isEmpty())
+            {
+                for (int contactPass=0;contactPass<5;contactPass++)
+                {
+                    points[0]=animatedPose[0];
+                    for (int i=1;i<points.length;i++)
+                        points[i]=BodyPartPhysicsCollisions.resolve(
+                                points[i],strandRadius,colliders);
+
+                    for (int i=1;i<points.length;i++)
+                    {
+                        Vec3[] endpoints=BodyPartPhysicsCollisions.resolveSegment(
+                                points[i-1],points[i],strandRadius,colliders,i==1);
+                        if (i>1) points[i-1]=endpoints[0];
+                        points[i]=endpoints[1];
+                    }
+
+                    // Restore distances, then re-project contacts on the
+                    // following pass. Root is never moved by a constraint.
+                    points[0]=animatedPose[0];
+                    for (int i=1;i<points.length;i++)
+                    {
+                        Vec3 delta=points[i].sub(points[i-1]);
+                        float distance=delta.length();
+                        if (distance<0.000001F) continue;
+                        Vec3 direction=delta.scale(1F/distance);
+                        float difference=distance-segmentLengths[i-1];
+                        if (i==1)
+                            points[i]=points[i].sub(direction.scale(difference));
+                        else
+                        {
+                            points[i-1]=points[i-1].add(direction.scale(difference*0.5F));
+                            points[i]=points[i].sub(direction.scale(difference*0.5F));
+                        }
+                    }
+                }
+                // Finish with contact separation, not length-only projection.
+                // Severe overlaps with a pinned root can still be unsolvable.
+                points[0]=animatedPose[0];
                 for (int i=1;i<points.length;i++)
                     points[i]=BodyPartPhysicsCollisions.resolve(
                             points[i],strandRadius,colliders);
-            for (int i=1;i<points.length;i++)
-            {
-                Vec3 delta=points[i].sub(points[i-1]);
-                float distance=delta.length();
-                if (distance>0.000001F)
-                    points[i]=points[i-1].add(delta.scale(segmentLengths[i-1]/distance));
+                for (int i=1;i<points.length;i++)
+                {
+                    Vec3[] endpoints=BodyPartPhysicsCollisions.resolveSegment(
+                            points[i-1],points[i],strandRadius,colliders,i==1);
+                    if (i>1) points[i-1]=endpoints[0];
+                    points[i]=endpoints[1];
+                }
             }
         }
     }
