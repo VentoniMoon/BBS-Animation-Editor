@@ -132,38 +132,44 @@ public class BodyPartsPreviewRenderer
             return;
         }
 
-        /*
-         * Metamorph's recorded matrix is the parent limb basis. Its
-         * BodyPart transform is applied afterwards. Do not confuse the
-         * recorded parent matrix with the finished child attachment.
-         * For now this verifies availability of native child matrices;
-         * physical results are NOT applied to the pose.
-         */
-        for (BodyPartPhysicsChains.Chain chain : chains)
+        /* Metamorph records parent limb BEFORE its BodyPart transform. */
+        try
         {
-            for (AnimationBone bone : chain.bones)
+            float[] attached = BodyPartPhysicsAttachment.worldMatrix(parentMatrix, part);
+            BodyPartPhysicsWorldPose.MatrixSource world =
+                    BodyPartPhysicsWorldPose.worldSource(attached, local);
+            for (BodyPartPhysicsChains.Chain chain : chains)
             {
-                float[] matrix = local.getBoneWorldMatrix(bone.getName());
-                if (matrix == null)
+                BodyPartChainSolver.Vec3 last = null;
+                for (AnimationBone bone : chain.bones)
                 {
-                    reportPhysicsBoneProbe(data,
-                            "native Chameleon bone matrix missing: " + bone.getName());
-                    return;
-                }
-                try
-                {
-                    BodyPartPhysicsMatrixSpace.snapshot(matrix);
-                }
-                catch (IllegalArgumentException error)
-                {
-                    reportPhysicsBoneProbe(data,
-                            "invalid Chameleon bone matrix: " + bone.getName());
-                    return;
+                    float[] matrix = world.getBoneWorldMatrix(bone.getName());
+                    if (matrix == null)
+                    {
+                        reportPhysicsBoneProbe(data,
+                                "native Chameleon bone matrix missing: " + bone.getName());
+                        return;
+                    }
+                    BodyPartChainSolver.Vec3 current =
+                            BodyPartPhysicsPoseAdapter.position(matrix);
+                    if (last != null && current.sub(last).length() < 0.00001F)
+                    {
+                        reportPhysicsBoneProbe(data,
+                                "zero-length world strand segment: " + bone.getName());
+                        return;
+                    }
+                    last = current;
                 }
             }
+            reportPhysicsBoneProbe(data,
+                    "world strand joint matrices valid: " + chains.size()
+                    + " chains (solver not applied)");
         }
-        reportPhysicsBoneProbe(data, "native Chameleon bone matrices captured: "
-                + chains.size() + " chains");
+        catch (RuntimeException error)
+        {
+            reportPhysicsBoneProbe(data, "world strand matrices invalid: "
+                    + error.getClass().getSimpleName());
+        }
     }
 
     private final Map<BodyPartModelData, String> physicsBoneProbeDiagnostics =
