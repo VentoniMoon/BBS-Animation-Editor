@@ -378,6 +378,28 @@ public class BodyPartsPreviewRenderer
         this.previewPhysicsChains.clear();
         this.physicsAttachmentMatrices.clear();
 
+        /*
+         * Observe the native Emoticons limb basis without a second render.
+         * These are LAST-rendered matrices at this point, so use strictly
+         * for diagnostics until a render-pass synchronisation hook exists.
+         */
+        if (models != null)
+        {
+            for (BodyPartModelData candidate : models)
+            {
+                if (candidate == null || !candidate.hasModel()) continue;
+                if (candidate.getPhysicsSettings("left_strand_1") == null ||
+                        !candidate.getPhysicsSettings("left_strand_1").isEnabled())
+                    continue;
+                float[] observed = BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
+                        abstractMorph, candidate.getAttachmentBoneName());
+                String value = observed == null
+                        ? "Emoticons low_body passive matrix unavailable"
+                        : "Emoticons low_body passive matrix available (last rendered; not physics input)";
+                reportPhysicsMatrix(candidate, value);
+            }
+        }
+
         if (models == null || models.isEmpty())
         {
             return;
