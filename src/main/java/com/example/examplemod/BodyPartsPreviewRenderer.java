@@ -198,10 +198,15 @@ public class BodyPartsPreviewRenderer
      * frame; BOBJ bone matrices and attached Chameleon are sampled separately.
      * We intentionally do not collide until that relationship is established.
      */
+    private final Map<BodyPartModelData, Integer> collisionSpaceLoggedFrame =
+            new IdentityHashMap<BodyPartModelData, Integer>();
+
     private void diagnoseEmoticonsCollisionSpace(Object morph,
             BodyPartModelData data, BodyPart childPart, float[] lowBody,
             float[] torso, int frame)
     {
+        Integer previous = collisionSpaceLoggedFrame.get(data);
+        if (previous != null && previous.intValue() == frame) return;
         try
         {
             BodyPartPhysicsWorldPose.MatrixSource local =
@@ -218,6 +223,7 @@ public class BodyPartsPreviewRenderer
             BodyPartChainSolver.Vec3 lowPos = BodyPartPhysicsPoseAdapter.position(lowBody);
             BodyPartChainSolver.Vec3 bodyPos = torso == null ? null :
                     BodyPartPhysicsPoseAdapter.position(torso);
+            collisionSpaceLoggedFrame.put(data, Integer.valueOf(frame));
             System.out.println("[BBS Animation Editor][Physics] COLLISION SPACE frame=" + frame
                     + " low_body.native=(" + lowPos.x + "," + lowPos.y + "," + lowPos.z + ")"
                     + " body.native=" + (bodyPos == null ? "missing" :
