@@ -20,6 +20,30 @@ public final class BodyPartPhysicsWorldPose
     private BodyPartPhysicsWorldPose() {}
 
     /**
+     * Native Chameleon matrices are relative to the attached morph.
+     * Wrap them in the real, animated Metamorph attachment matrix before
+     * passing them to the solver. The attachment matrix must be captured
+     * from the rendering pass, not reconstructed using editor pivot values.
+     */
+    public static MatrixSource worldSource(final float[] worldFromAttachment,
+                                           final MatrixSource localSource)
+    {
+        if (localSource == null)
+            throw new IllegalArgumentException("Missing native local matrix provider");
+        final float[] attachment = BodyPartPhysicsMatrixSpace.snapshot(worldFromAttachment);
+        return new MatrixSource()
+        {
+            @Override
+            public float[] getBoneWorldMatrix(String boneName)
+            {
+                float[] local = localSource.getBoneWorldMatrix(boneName);
+                return local == null ? null :
+                        BodyPartPhysicsMatrixSpace.childWorld(attachment, local);
+            }
+        };
+    }
+
+    /**
      * A physical strand with N bones has N+1 particles: bone pivots plus
      * the tip of the final bone. Omitting the tip would leave the last
      * segment with no simulated direction.
