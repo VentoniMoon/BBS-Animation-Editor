@@ -76,6 +76,15 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, Integer>();
     private final Map<BodyPartModelData, Boolean> reportedPostRenderMatrices =
             new IdentityHashMap<BodyPartModelData, Boolean>();
+    /* One-frame-delayed, bounded visual probe; only the left root is enabled.
+     * Rebuilt from the clean keyed pose on each render, never accumulated. */
+    private final Map<BodyPartModelData, float[]> pendingLeftRootSwings =
+            new IdentityHashMap<BodyPartModelData, float[]>();
+    private final Map<BodyPartModelData, Integer> pendingLeftRootFrames =
+            new IdentityHashMap<BodyPartModelData, Integer>();
+    private final Map<BodyPartModelData, Boolean> visualProbeReported =
+            new IdentityHashMap<BodyPartModelData, Boolean>();
+
     /* Actual child BodyParts from this preview pass, never re-rendered. */
     private final Map<BodyPartModelData, BodyPart> renderedPhysicsParts =
             new IdentityHashMap<BodyPartModelData, BodyPart>();
@@ -260,6 +269,11 @@ public class BodyPartsPreviewRenderer
                                 BodyPartPhysicsPoseAdapter.toLocalDirection(basis, solvedWorld);
                         float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
                                 restLocal, solvedLocal);
+                        if ("left_strand_1".equals(chain.root.getName()) && i == 0)
+                        {
+                            pendingLeftRootSwings.put(data, swing);
+                            pendingLeftRootFrames.put(data, Integer.valueOf(frame));
+                        }
                         /*
                          * Root-only test revealed a wrong upward rotation and
                          * jitter. Keep solver diagnostics but disable pose
@@ -722,6 +736,26 @@ public class BodyPartsPreviewRenderer
          * default is false (DummyEntity), which is useful for the morph GUI
          * but is wrong for our live actor preview.
          */
+        // Visual probe uses the completed physics sample from the immediately
+        // preceding frame. A seek or pause never applies stale swings.
+        if (this.preparingPreview && !isEmoticonsAnimatedMorph(child)
+                && !(child instanceof CustomMorph))
+        {
+            Integer sampled = pendingLeftRootFrames.get(data);
+            float[] swing = pendingLeftRootSwings.get(data);
+            if (sampled != null && sampled.intValue() == frame - 1 && swing != null)
+            {
+                boolean applied = BodyPartChameleonPhysicsPose.addLocalSwing(
+                        child, "left_strand_1", swing);
+                if (applied && !visualProbeReported.containsKey(data))
+                {
+                    visualProbeReported.put(data, Boolean.TRUE);
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            + "LEFT ROOT visual probe active (one-frame delay, max 0.12 rad)");
+                }
+            }
+        }
+
         part.useTarget = true;
         part.enabled = true;
         part.animate = false;
