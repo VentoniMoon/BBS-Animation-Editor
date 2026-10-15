@@ -78,6 +78,51 @@ public final class EmoticonsMeshCollisionSolver
         }
     }
 
+    /**
+     * Ray parity diagnostics. UNKNOWN is expected with open, overlapping,
+     * duplicate or non-manifold Emoticons meshes. Never use this diagnostic
+     * as an authoritative solid-body test or apply forces from it.
+     */
+    public static final class RayProbe
+    {
+        public final int intersections;
+        public final boolean odd;
+        RayProbe(int intersections)
+        {this.intersections=intersections;this.odd=(intersections&1)!=0;}
+    }
+
+    public RayProbe probeRayPositiveX(BodyPartChainSolver.Vec3 point)
+    {
+        if(point==null)return new RayProbe(0);
+        // Mesh bounds are small in actor-local units. Full scan is deliberate
+        // for diagnostic frames only; no expensive repeated solver calls.
+        java.util.ArrayList<Float> hits=new java.util.ArrayList<Float>();
+        for(Triangle t:triangles)
+        {
+            BodyPartChainSolver.Vec3 ab=t.b.sub(t.a),ac=t.c.sub(t.a);
+            // Moller-Trumbore intersection for direction (1,0,0).
+            BodyPartChainSolver.Vec3 h=cross(
+                    new BodyPartChainSolver.Vec3(1F,0F,0F),ac);
+            float det=dot(ab,h);
+            if(Math.abs(det)<1E-8F)continue;
+            float inv=1F/det;
+            BodyPartChainSolver.Vec3 q=point.sub(t.a);
+            float u=inv*dot(q,h);
+            if(u<-1E-6F||u>1.000001F)continue;
+            BodyPartChainSolver.Vec3 v=cross(q,ab);
+            float w=inv*v.x;
+            if(w<-1E-6F||u+w>1.000001F)continue;
+            float distance=inv*dot(ac,v);
+            if(distance<=1E-5F)continue;
+            boolean duplicate=false;
+            for(Float old:hits)
+                if(Math.abs(old.floatValue()-distance)<1E-4F)
+                {duplicate=true;break;}
+            if(!duplicate)hits.add(Float.valueOf(distance));
+        }
+        return new RayProbe(hits.size());
+    }
+
     public int triangleCount(){return triangles.size();}
 
     /**
