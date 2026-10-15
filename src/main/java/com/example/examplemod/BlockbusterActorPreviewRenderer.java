@@ -1395,6 +1395,14 @@ public class BlockbusterActorPreviewRenderer
         );
 
         /*
+         * Snapshot native Emoticons animated limb transforms only AFTER the
+         * existing actor render. No second pass or visible duplicate.
+         * These frame-tagged snapshots are not fed into physics yet.
+         */
+        this.bodyPartsPreviewRenderer.captureRenderedAttachmentMatrices(
+                entityActor, previewFrame);
+
+        /*
          * =====================================================
          * LIGHTING
          * =====================================================
