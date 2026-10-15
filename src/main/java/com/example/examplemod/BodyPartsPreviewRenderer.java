@@ -416,8 +416,15 @@ public class BodyPartsPreviewRenderer
         {
             this.preparingPreview = false;
         }
-        if (!nativePhysicsParts.isEmpty())
-            capturePhysicsAttachmentMatrices(abstractMorph, actor, frame, nativePhysicsParts);
+        /*
+         * Disabled: BodyPart.recordMatrix() performs a second full parent
+         * render while previewing the actor. It is not an invisible matrix
+         * query; the extra render can duplicate the actor in the viewport.
+         * Restore normal preview first. Physics visual writes are already
+         * disabled until a safe attachment sampling hook is available.
+         */
+        // if (!nativePhysicsParts.isEmpty())
+        //     capturePhysicsAttachmentMatrices(abstractMorph, actor, frame, nativePhysicsParts);
     }
 
     /**
