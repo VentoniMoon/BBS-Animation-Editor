@@ -52,6 +52,13 @@ public final class BodyPartChainSolver
 
     public void step(Vec3[] animatedPose,float dt,float gravity,float stiffness,float damping)
     {
+        step(animatedPose, dt, gravity, stiffness, damping, null, 0F);
+    }
+
+    public void step(Vec3[] animatedPose,float dt,float gravity,float stiffness,
+            float damping, java.util.List<BodyPartPhysicsCollisions.Capsule> colliders,
+            float strandRadius)
+    {
         check(animatedPose);
         if (!(dt>0F) || dt>0.1F) throw new IllegalArgumentException("Invalid timestep");
         gravity=clamp(gravity,0F,2F);
@@ -93,6 +100,11 @@ public final class BodyPartChainSolver
                 }
             }
             points[0]=animatedPose[0];
+            // Fixed root is never projected; only free particles collide.
+            if (colliders != null && !colliders.isEmpty())
+                for (int i=1;i<points.length;i++)
+                    points[i]=BodyPartPhysicsCollisions.resolve(
+                            points[i],strandRadius,colliders);
             for (int i=1;i<points.length;i++)
             {
                 Vec3 delta=points[i].sub(points[i-1]);
