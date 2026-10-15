@@ -56,6 +56,76 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, String> reportedPhysicsChains =
             new IdentityHashMap<BodyPartModelData, String>();
 
+    /*
+     * Metamorph's BodyPart.recordMatrix() renders the parent with an identity
+     * model-view and stores each part's native parent-limb matrix in lastMatrix.
+     * This is a diagnostic snapshot, not an applied physics pose.
+     */
+    private final Map<BodyPartModelData, float[]> physicsAttachmentMatrices =
+            new IdentityHashMap<BodyPartModelData, float[]>();
+    private final Map<BodyPartModelData, String> physicsMatrixDiagnostics =
+            new IdentityHashMap<BodyPartModelData, String>();
+    private boolean recordingPhysicsMatrices;
+
+    public float[] getPhysicsAttachmentMatrix(BodyPartModelData data)
+    {
+        float[] matrix = physicsAttachmentMatrices.get(data);
+        return matrix == null ? null : BodyPartPhysicsMatrixSpace.snapshot(matrix);
+    }
+
+    private void capturePhysicsAttachmentMatrices(AbstractMorph parent,
+            EntityActor actor, Map<BodyPartModelData, BodyPart> parts)
+    {
+        if (recordingPhysicsMatrices || parts.isEmpty() || parent == null || actor == null)
+            return;
+        recordingPhysicsMatrices = true;
+        try
+        {
+            // Uses Metamorph's own bone attachment transform, including
+            // any animated parent anchor; never changes morph keyframes.
+            BodyPart.recordMatrix(parent, actor, 0F);
+            for (Map.Entry<BodyPartModelData, BodyPart> entry : parts.entrySet())
+            {
+                javax.vecmath.Matrix4f matrix = entry.getValue().lastMatrix;
+                if (matrix == null)
+                {
+                    reportPhysicsMatrix(entry.getKey(), "native attachment matrix missing");
+                    continue;
+                }
+                float[] nativeMatrix = new float[] {
+                    matrix.m00, matrix.m10, matrix.m20, matrix.m30,
+                    matrix.m01, matrix.m11, matrix.m21, matrix.m31,
+                    matrix.m02, matrix.m12, matrix.m22, matrix.m32,
+                    matrix.m03, matrix.m13, matrix.m23, matrix.m33
+                };
+                physicsAttachmentMatrices.put(entry.getKey(), nativeMatrix);
+                reportPhysicsMatrix(entry.getKey(),
+                        "native parent attachment matrix captured ("
+                        + entry.getValue().limb + ")");
+            }
+        }
+        catch (Throwable error)
+        {
+            // Native Metamorph versions may differ; keep normal Preview alive.
+            for (BodyPartModelData data : parts.keySet())
+                reportPhysicsMatrix(data, "native capture unavailable: "
+                        + error.getClass().getSimpleName());
+        }
+        finally
+        {
+            recordingPhysicsMatrices = false;
+        }
+    }
+
+    private void reportPhysicsMatrix(BodyPartModelData data, String message)
+    {
+        if (!message.equals(physicsMatrixDiagnostics.get(data)))
+        {
+            physicsMatrixDiagnostics.put(data, message);
+            System.out.println("[BBS Animation Editor][Physics] " + message);
+        }
+    }
+
     public List<BodyPartPhysicsChains.Chain> getPreviewPhysicsChains(BodyPartModelData data)
     {
         List<BodyPartPhysicsChains.Chain> chains = previewPhysicsChains.get(data);
@@ -170,6 +240,7 @@ public class BodyPartsPreviewRenderer
         manager.parts.clear();
         this.preparedMorphs.clear();
         this.previewPhysicsChains.clear();
+        this.physicsAttachmentMatrices.clear();
 
         if (models == null || models.isEmpty())
         {
@@ -177,6 +248,8 @@ public class BodyPartsPreviewRenderer
         }
 
         this.preparingPreview = true;
+        Map<BodyPartModelData, BodyPart> nativePhysicsParts =
+                new IdentityHashMap<BodyPartModelData, BodyPart>();
         try
         {
         for (BodyPartModelData data : models)
@@ -198,6 +271,8 @@ public class BodyPartsPreviewRenderer
             if (part != null)
             {
                 manager.parts.add(part);
+                if (!getPreviewPhysicsChains(data).isEmpty())
+                    nativePhysicsParts.put(data, part);
             }
         }
         }
@@ -205,6 +280,8 @@ public class BodyPartsPreviewRenderer
         {
             this.preparingPreview = false;
         }
+        if (!nativePhysicsParts.isEmpty())
+            capturePhysicsAttachmentMatrices(abstractMorph, actor, nativePhysicsParts);
     }
 
     /**
