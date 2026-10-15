@@ -951,8 +951,14 @@ public class BodyPartsPreviewRenderer
              */
             Integer sampled = pendingLeftRootFrames.get(data);
             float[] swing = pendingLeftRootSwings.get(data);
+            // The timeline may skip a displayed frame while the renderer runs
+            // multiple passes per tick. Hold the latest valid preview rotation
+            // for a bounded number of frames; do not alternate clean/physics
+            // poses when the next sequential solver sample is momentarily absent.
+            // A backward seek or a larger forward jump invalidates the hold.
             if (sampled != null && swing != null
-                    && (sampled.intValue() == frame - 1 || sampled.intValue() == frame))
+                    && frame >= sampled.intValue()
+                    && frame - sampled.intValue() <= 4)
             {
                 float[] corrected = new float[] {
                         swing[0], swing[1], swing[2], -swing[3]
