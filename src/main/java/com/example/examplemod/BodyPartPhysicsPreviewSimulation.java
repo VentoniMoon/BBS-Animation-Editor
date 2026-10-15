@@ -39,13 +39,13 @@ public final class BodyPartPhysicsPreviewSimulation
                 +Float.floatToIntBits(settings.getDamping());
         String key=modelId+"/"+chain.root.getName();
         State state=states.get(key);
-        if (state==null || frame<=state.lastFrame || frame>state.lastFrame+1 ||
+        if (state==null || frame<state.lastFrame || frame>state.lastFrame+1 ||
                 state.settingsHash!=hash)
         {
             state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
             states.put(key,state);
         }
-        else
+        else if (frame>state.lastFrame)
         {
             state.solver.step(animatedWorld,1F/20F,settings.getGravity(),
                     settings.getStiffness(),settings.getDamping());
