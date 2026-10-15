@@ -249,6 +249,15 @@ public class BodyPartsPreviewRenderer
                     distances.append("[rayHits=").append(parity.intersections)
                             .append(",odd=").append(parity.odd).append(']');
                 }
+                // Original BOBJ vertex influences, independent of skinned
+                // vertex position. Diagnostic only; no collision forces.
+                if (frame == 0)
+                {
+                    EmoticonsSkinCollisionGroups.Result groups =
+                            EmoticonsSkinCollisionGroups.analyze(morph, "body");
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            + "SKIN COLLISION GROUPS mesh=body " + groups);
+                }
                 // Filter only the native 'body' mesh to a moving upper-torso
                 // height band. A candidate region, not confirmed collision.
                 if (bodyPos != null)
