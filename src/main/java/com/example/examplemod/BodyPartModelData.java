@@ -21,6 +21,48 @@ public class BodyPartModelData
     /** Optional non-Blockbuster morph used by Chameleon and other Metamorph add-ons. */
     private AbstractMorph baseMorph;
 
+    /** Experimental per-bone chain settings; keyed by stable model bone name. */
+    private final java.util.Map<String, BodyPartPhysicsSettings> physicsSettings =
+            new java.util.LinkedHashMap<String, BodyPartPhysicsSettings>();
+
+    public BodyPartPhysicsSettings getPhysicsSettings(String boneName)
+    {
+        if (boneName == null || boneName.isEmpty()) return null;
+        BodyPartPhysicsSettings settings = this.physicsSettings.get(boneName);
+        if (settings == null)
+        {
+            settings = new BodyPartPhysicsSettings();
+            this.physicsSettings.put(boneName, settings);
+        }
+        return settings;
+    }
+
+    public net.minecraft.nbt.NBTTagList writePhysicsSettings()
+    {
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        for (java.util.Map.Entry<String, BodyPartPhysicsSettings> entry :
+                this.physicsSettings.entrySet())
+        {
+            net.minecraft.nbt.NBTTagCompound tag = entry.getValue().toNBT();
+            tag.setString("Bone", entry.getKey());
+            list.appendTag(tag);
+        }
+        return list;
+    }
+
+    public void readPhysicsSettings(net.minecraft.nbt.NBTTagList list)
+    {
+        this.physicsSettings.clear();
+        if (list == null) return;
+        for (int i = 0; i < list.tagCount(); i++)
+        {
+            net.minecraft.nbt.NBTTagCompound tag = list.getCompoundTagAt(i);
+            String bone = tag.getString("Bone");
+            if (!bone.isEmpty())
+                this.physicsSettings.put(bone, BodyPartPhysicsSettings.fromNBT(tag));
+        }
+    }
+
     /** Morph replacements made by the Character Timeline. */
     private final TreeMap<Integer, NBTTagCompound> morphKeys =
             new TreeMap<Integer, NBTTagCompound>();
