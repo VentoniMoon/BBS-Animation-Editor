@@ -408,8 +408,37 @@ public class BodyPartsPreviewRenderer
                         chain.settings.hasBodyCollisions()
                         ? BodyPartPhysicsBodyCapsules.forTorso(torsoMatrix)
                         : java.util.Collections.<BodyPartPhysicsCollisions.Capsule>emptyList();
+                if ("left_strand_1".equals(chain.root.getName()) &&
+                        joints.length > 1 && (frame == 20 || frame == 60))
+                {
+                    BodyPartChainSolver.Vec3 intended = expectedLeftDirection.get(data);
+                    Integer intendedFrame = expectedLeftFrame.get(data);
+                    if (intended != null && intendedFrame != null &&
+                            intendedFrame.intValue() == frame - 1)
+                    {
+                        BodyPartChainSolver.Vec3 actual = joints[1].sub(joints[0]);
+                        float lengthProduct = actual.length() * intended.length();
+                        if (lengthProduct > 1.0E-8F)
+                        {
+                            float cosine = (actual.x*intended.x + actual.y*intended.y
+                                    + actual.z*intended.z) / lengthProduct;
+                            cosine = Math.max(-1F, Math.min(1F, cosine));
+                            float errorDegrees = (float)Math.toDegrees(Math.acos(cosine));
+                            System.out.println("[BBS Animation Editor][Physics] "
+                                    + "RENDER/SOLVER direction comparison frame=" + frame
+                                    + " errorDegrees=" + errorDegrees
+                                    + " (moving actor may contribute to error)");
+                        }
+                    }
+                }
                 BodyPartChainSolver.Vec3[] simulated =
                         livePhysics.sample(data.getTimelineId(), chain, frame, joints, colliders);
+                if ("left_strand_1".equals(chain.root.getName()) &&
+                        simulated != null && simulated.length > 1)
+                {
+                    expectedLeftDirection.put(data, simulated[1].sub(simulated[0]));
+                    expectedLeftFrame.put(data, Integer.valueOf(frame));
+                }
                 if (simulated != null && frame > data.getStartFrame())
                 {
                     for (int i = 1; i < simulated.length; i++)
@@ -465,6 +494,13 @@ public class BodyPartsPreviewRenderer
                     + error.getClass().getSimpleName());
         }
     }
+
+    /* Diagnostics only: compare the intended physical segment with the
+     * rendered Chameleon segment on the next sequential preview frame. */
+    private final Map<BodyPartModelData, BodyPartChainSolver.Vec3> expectedLeftDirection =
+            new IdentityHashMap<BodyPartModelData, BodyPartChainSolver.Vec3>();
+    private final Map<BodyPartModelData, Integer> expectedLeftFrame =
+            new IdentityHashMap<BodyPartModelData, Integer>();
 
     private final Map<BodyPartModelData, String> physicsSwingDiagnostics =
             new IdentityHashMap<BodyPartModelData, String>();
