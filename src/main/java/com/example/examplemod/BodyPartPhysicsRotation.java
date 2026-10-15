@@ -68,6 +68,16 @@ public final class BodyPartPhysicsRotation
         return new float[]{x,y,z};
     }
 
+    /** Swing expressed in the already-rotated bone basis: Rnew = Rbase * Rswing. */
+    public static float[] composeInBoneSpace(float[] originalEuler, float[] localSwing)
+    {
+        if (originalEuler == null || originalEuler.length != 3)
+            throw new IllegalArgumentException("Need Euler XYZ");
+        return toEulerXYZ(multiply3(
+                eulerXYZ(originalEuler[0], originalEuler[1], originalEuler[2]),
+                axisAngle(localSwing)));
+    }
+
     /** Compose a swing relative to an existing Euler pose, not by adding
      * axis-angle components as Euler offsets.
      */
