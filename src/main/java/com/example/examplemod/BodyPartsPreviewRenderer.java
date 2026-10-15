@@ -76,6 +76,9 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, Integer>();
     private final Map<BodyPartModelData, Boolean> reportedPostRenderMatrices =
             new IdentityHashMap<BodyPartModelData, Boolean>();
+    /* Actual child BodyParts from this preview pass, never re-rendered. */
+    private final Map<BodyPartModelData, BodyPart> renderedPhysicsParts =
+            new IdentityHashMap<BodyPartModelData, BodyPart>();
 
     public float[] getRenderedAttachmentMatrix(BodyPartModelData data, int frame)
     {
@@ -110,6 +113,14 @@ public class BodyPartsPreviewRenderer
             }
             renderedAttachmentMatrices.put(data, matrix);
             renderedAttachmentFrames.put(data, Integer.valueOf(frame));
+            BodyPart childPart = renderedPhysicsParts.get(data);
+            if (childPart != null)
+            {
+                // Evaluate world-chain directions from the currently rendered
+                // Emoticons basis. The write-back remains disabled until the
+                // local Chameleon rotation convention has been validated.
+                probePhysicsBoneMatrices(data, childPart, matrix, frame);
+            }
             if (!reportedPostRenderMatrices.containsKey(data))
             {
                 reportedPostRenderMatrices.put(data, Boolean.TRUE);
@@ -428,6 +439,7 @@ public class BodyPartsPreviewRenderer
         this.preparedMorphs.clear();
         this.previewPhysicsChains.clear();
         this.physicsAttachmentMatrices.clear();
+        this.renderedPhysicsParts.clear();
 
         // Do not probe/log last-rendered matrices here: prepareModels()
         // runs on every draw BEFORE the actor's current render and therefore
@@ -462,7 +474,10 @@ public class BodyPartsPreviewRenderer
             {
                 manager.parts.add(part);
                 if (!getPreviewPhysicsChains(data).isEmpty())
+                {
                     nativePhysicsParts.put(data, part);
+                    renderedPhysicsParts.put(data, part);
+                }
             }
         }
         }
