@@ -198,14 +198,22 @@ public class BodyPartsPreviewRenderer
                                 BodyPartPhysicsPoseAdapter.toLocalDirection(basis, solvedWorld);
                         float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
                                 restLocal, solvedLocal);
-                        if (BodyPartChameleonPhysicsPose.addLocalSwing(
+                        /*
+                         * Emergency stability guard: a live Chameleon model can
+                         * be re-evaluated several times at the same timeline
+                         * frame. The first Euler swing adapter is not yet a
+                         * stable hierarchical rotation composer. Keep physics
+                         * calculation and diagnostics active but DO NOT mutate
+                         * the visible morph until the hierarchy is resolved.
+                         */
+                        if (false && BodyPartChameleonPhysicsPose.addLocalSwing(
                                 part.morph.get(), bone.getName(), swing))
                             appliedSwings++;
                     }
                 }
             }
             reportPhysicsBoneProbe(data, advanced
-                    ? "world strand solver advanced; Chameleon swings written="
+                    ? "world strand solver advanced; visual swings disabled for stability; writes="
                             + appliedSwings + " (visual result unverified)"
                     : "world strand joint matrices valid: " + chains.size()
                       + " chains (no visible physics delta yet)");
