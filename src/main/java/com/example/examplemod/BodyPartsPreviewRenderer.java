@@ -736,26 +736,6 @@ public class BodyPartsPreviewRenderer
          * default is false (DummyEntity), which is useful for the morph GUI
          * but is wrong for our live actor preview.
          */
-        // Visual probe uses the completed physics sample from the immediately
-        // preceding frame. A seek or pause never applies stale swings.
-        if (this.preparingPreview && !isEmoticonsAnimatedMorph(child)
-                && !(child instanceof CustomMorph))
-        {
-            Integer sampled = pendingLeftRootFrames.get(data);
-            float[] swing = pendingLeftRootSwings.get(data);
-            if (sampled != null && sampled.intValue() == frame - 1 && swing != null)
-            {
-                boolean applied = BodyPartChameleonPhysicsPose.addLocalSwing(
-                        child, "left_strand_1", swing);
-                if (applied && !visualProbeReported.containsKey(data))
-                {
-                    visualProbeReported.put(data, Boolean.TRUE);
-                    System.out.println("[BBS Animation Editor][Physics] "
-                            + "LEFT ROOT visual probe active (one-frame delay, max 0.12 rad)");
-                }
-            }
-        }
-
         part.useTarget = true;
         part.enabled = true;
         part.animate = false;
@@ -804,6 +784,26 @@ public class BodyPartsPreviewRenderer
         else
         {
             applyChameleonInternalBonePose(child, data, frame);
+        }
+
+        // Visual probe uses the completed physics sample from the immediately
+        // preceding frame. A seek or pause never applies stale swings.
+        if (this.preparingPreview && !isEmoticonsAnimatedMorph(child)
+                && !(child instanceof CustomMorph))
+        {
+            Integer sampled = pendingLeftRootFrames.get(data);
+            float[] swing = pendingLeftRootSwings.get(data);
+            if (sampled != null && sampled.intValue() == frame - 1 && swing != null)
+            {
+                boolean applied = BodyPartChameleonPhysicsPose.addLocalSwing(
+                        child, "left_strand_1", swing);
+                if (applied && !visualProbeReported.containsKey(data))
+                {
+                    visualProbeReported.put(data, Boolean.TRUE);
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            + "LEFT ROOT visual probe active (one-frame delay, max 0.12 rad)");
+                }
+            }
         }
 
         part.useTarget = true;
