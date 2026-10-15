@@ -141,6 +141,7 @@ public class BodyPartsPreviewRenderer
             BodyPartPhysicsWorldPose.MatrixSource world =
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
             boolean advanced = false;
+            int appliedSwings = 0;
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
                 BodyPartChainSolver.Vec3[] joints =
@@ -197,15 +198,17 @@ public class BodyPartsPreviewRenderer
                                 BodyPartPhysicsPoseAdapter.toLocalDirection(basis, solvedWorld);
                         float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
                                 restLocal, solvedLocal);
-                        BodyPartChameleonPhysicsPose.addLocalSwing(
-                                part.morph.get(), bone.getName(), swing);
+                        if (BodyPartChameleonPhysicsPose.addLocalSwing(
+                                part.morph.get(), bone.getName(), swing))
+                            appliedSwings++;
                     }
                 }
             }
             reportPhysicsBoneProbe(data, advanced
-                    ? "world strand solver advanced (experimental preview swing applied)"
+                    ? "world strand solver advanced; Chameleon swings written="
+                            + appliedSwings + " (visual result unverified)"
                     : "world strand joint matrices valid: " + chains.size()
-                      + " chains (solver initialized; preview pose unchanged)");
+                      + " chains (no visible physics delta yet)");
         }
         catch (RuntimeException error)
         {
