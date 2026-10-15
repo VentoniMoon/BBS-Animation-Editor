@@ -76,12 +76,9 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, Integer>();
     private final Map<BodyPartModelData, Boolean> reportedPostRenderMatrices =
             new IdentityHashMap<BodyPartModelData, Boolean>();
-    /* One-frame-delayed, bounded visual probe; only the left root is enabled.
-     * Rebuilt from the clean keyed pose on each render, never accumulated. */
-    private final Map<BodyPartModelData, float[]> pendingLeftRootSwings =
-            new IdentityHashMap<BodyPartModelData, float[]>();
-    private final Map<BodyPartModelData, Integer> pendingLeftRootFrames =
-            new IdentityHashMap<BodyPartModelData, Integer>();
+    /** Stable sampled pose shared by all render passes of a preview frame. */
+    private final BodyPartPhysicsFrameState physicsFrames =
+            new BodyPartPhysicsFrameState();
     private final Map<BodyPartModelData, Boolean> visualProbeReported =
             new IdentityHashMap<BodyPartModelData, Boolean>();
     /* Snapshot the clean Chameleon pose rotation before applying the probe.
@@ -420,8 +417,7 @@ public class BodyPartsPreviewRenderer
                                 restLocal, solvedLocal);
                         if ("left_strand_1".equals(chain.root.getName()) && i == 0)
                         {
-                            pendingLeftRootSwings.put(data, swing);
-                            pendingLeftRootFrames.put(data, Integer.valueOf(frame));
+                            physicsFrames.accept(data, frame, swing);
                         }
                         /*
                          * Root-only test revealed a wrong upward rotation and
@@ -597,6 +593,7 @@ public class BodyPartsPreviewRenderer
          * The editor is the source of truth for the current frame.
          * Do not leave body parts from a previous frame alive.
          */
+        physicsFrames.beginFrame(frame);
         manager.parts.clear();
         this.preparedMorphs.clear();
         this.previewPhysicsChains.clear();
@@ -949,16 +946,8 @@ public class BodyPartsPreviewRenderer
              * Reverse the test swing only on the left root, pending a full
              * handedness/basis correction across all chains.
              */
-            Integer sampled = pendingLeftRootFrames.get(data);
-            float[] swing = pendingLeftRootSwings.get(data);
-            // The timeline may skip a displayed frame while the renderer runs
-            // multiple passes per tick. Hold the latest valid preview rotation
-            // for a bounded number of frames; do not alternate clean/physics
-            // poses when the next sequential solver sample is momentarily absent.
-            // A backward seek or a larger forward jump invalidates the hold.
-            if (sampled != null && swing != null
-                    && frame >= sampled.intValue()
-                    && frame - sampled.intValue() <= 4)
+            float[] swing = physicsFrames.forRender(data, frame);
+            if (swing != null)
             {
                 float[] corrected = new float[] {
                         swing[0], swing[1], swing[2], -swing[3]
