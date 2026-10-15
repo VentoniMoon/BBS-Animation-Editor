@@ -45,15 +45,20 @@ public final class BodyPartPhysicsPreviewSimulation
          * evaluated rest pose rather than treating frame 40 as frame zero.
          * A moving parent will later require a historical pose source.
          */
-        if (state==null || frame<state.lastFrame || state.settingsHash!=hash)
+        // Never invent missing walking/running poses on a timeline seek.
+        // Only integrate a genuinely consecutive frame. On a seek we
+        // initialise from that frame's own rendered animation instead.
+        if (state==null || frame<state.lastFrame ||
+                frame>state.lastFrame+1 || state.settingsHash!=hash)
         {
-            state=new State(new BodyPartChainSolver(animatedWorld),0,hash);
+            state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
             states.put(key,state);
         }
-        int steps=Math.max(0,frame-state.lastFrame);
-        for (int tick=0;tick<steps;tick++)
+        else if (frame==state.lastFrame+1)
+        {
             state.solver.step(animatedWorld,1F/20F,settings.getGravity(),
                     settings.getStiffness(),settings.getDamping());
+        }
         state.lastFrame=frame;
         BodyPartChainSolver.Vec3[] result =
                 new BodyPartChainSolver.Vec3[state.solver.size()];
