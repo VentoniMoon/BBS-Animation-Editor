@@ -39,18 +39,22 @@ public final class BodyPartPhysicsPreviewSimulation
                 +Float.floatToIntBits(settings.getDamping());
         String key=modelId+"/"+chain.root.getName();
         State state=states.get(key);
-        if (state==null || frame<state.lastFrame || frame>state.lastFrame+1 ||
-                state.settingsHash!=hash)
+        /*
+         * Preview can jump directly from frame 0 to frame 40. For the
+         * static-pose test, advance all missing ticks using the currently
+         * evaluated rest pose rather than treating frame 40 as frame zero.
+         * A moving parent will later require a historical pose source.
+         */
+        if (state==null || frame<state.lastFrame || state.settingsHash!=hash)
         {
-            state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
+            state=new State(new BodyPartChainSolver(animatedWorld),0,hash);
             states.put(key,state);
         }
-        else if (frame>state.lastFrame)
-        {
+        int steps=Math.max(0,frame-state.lastFrame);
+        for (int tick=0;tick<steps;tick++)
             state.solver.step(animatedWorld,1F/20F,settings.getGravity(),
                     settings.getStiffness(),settings.getDamping());
-            state.lastFrame=frame;
-        }
+        state.lastFrame=frame;
         BodyPartChainSolver.Vec3[] result =
                 new BodyPartChainSolver.Vec3[state.solver.size()];
         for(int i=0;i<result.length;i++) result[i]=state.solver.getPoint(i);
