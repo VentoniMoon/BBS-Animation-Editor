@@ -385,8 +385,15 @@ public class BodyPartsPreviewRenderer
                     joints[jointIndex++] = current;
                     last = current;
                 }
+                // Parent matrix comes from the native Emoticons render of
+                // this frame. Build a conservative torso capsule in that
+                // moving bone space; never use global/world-up assumptions.
+                java.util.List<BodyPartPhysicsCollisions.Capsule> colliders =
+                        chain.settings.hasBodyCollisions()
+                        ? BodyPartPhysicsBodyCapsules.forTorso(parentMatrix)
+                        : java.util.Collections.<BodyPartPhysicsCollisions.Capsule>emptyList();
                 BodyPartChainSolver.Vec3[] simulated =
-                        livePhysics.sample(data.getTimelineId(), chain, frame, joints);
+                        livePhysics.sample(data.getTimelineId(), chain, frame, joints, colliders);
                 if (simulated != null && frame > data.getStartFrame())
                 {
                     for (int i = 1; i < simulated.length; i++)
