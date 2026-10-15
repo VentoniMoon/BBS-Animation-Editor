@@ -46,6 +46,63 @@ public class BodyPartsPreviewRenderer
     private final Map<CustomMorph, mchorse.blockbuster.api.ModelPose> originalChildPoses =
             new WeakHashMap<CustomMorph, mchorse.blockbuster.api.ModelPose>();
 
+    /* Runtime-only Chameleon chain registry. Physics is deliberately not
+     * applied until the actual attachment world matrices are available.
+     * Export never uses this registry.
+     */
+    private boolean preparingPreview;
+    private final Map<BodyPartModelData, List<BodyPartPhysicsChains.Chain>> previewPhysicsChains =
+            new IdentityHashMap<BodyPartModelData, List<BodyPartPhysicsChains.Chain>>();
+    private final Map<BodyPartModelData, String> reportedPhysicsChains =
+            new IdentityHashMap<BodyPartModelData, String>();
+
+    public List<BodyPartPhysicsChains.Chain> getPreviewPhysicsChains(BodyPartModelData data)
+    {
+        List<BodyPartPhysicsChains.Chain> chains = previewPhysicsChains.get(data);
+        return chains == null
+                ? java.util.Collections.<BodyPartPhysicsChains.Chain>emptyList()
+                : chains;
+    }
+
+    private void prepareChameleonPhysicsChains(BodyPartModelData data, AbstractMorph morph)
+    {
+        if (data == null || morph == null ||
+                !morph.getClass().getName().endsWith(".ChameleonMorph"))
+            return;
+
+        try
+        {
+            List<BodyPartPhysicsChains.Chain> chains = BodyPartPhysicsChains.collect(data);
+            previewPhysicsChains.put(data, chains);
+
+            StringBuilder signature = new StringBuilder();
+            for (BodyPartPhysicsChains.Chain chain : chains)
+            {
+                if (signature.length() > 0) signature.append(", ");
+                signature.append(chain.root.getName()).append("(")
+                        .append(chain.bones.size()).append(")");
+            }
+            String value = signature.toString();
+            if (!value.equals(reportedPhysicsChains.get(data)))
+            {
+                reportedPhysicsChains.put(data, value);
+                if (!value.isEmpty())
+                    System.out.println("[BBS Animation Editor][Physics] Chameleon preview chains: " + value
+                            + "; awaiting attachment world matrices");
+            }
+        }
+        catch (IllegalStateException error)
+        {
+            previewPhysicsChains.remove(data);
+            String value = "invalid: " + error.getMessage();
+            if (!value.equals(reportedPhysicsChains.get(data)))
+            {
+                reportedPhysicsChains.put(data, value);
+                System.err.println("[BBS Animation Editor][Physics] " + value);
+            }
+        }
+    }
+
     public AbstractMorph getPreparedMorph(BodyPartModelData data)
     {
         return data == null ? null : this.preparedMorphs.get(data);
@@ -112,12 +169,16 @@ public class BodyPartsPreviewRenderer
          */
         manager.parts.clear();
         this.preparedMorphs.clear();
+        this.previewPhysicsChains.clear();
 
         if (models == null || models.isEmpty())
         {
             return;
         }
 
+        this.preparingPreview = true;
+        try
+        {
         for (BodyPartModelData data : models)
         {
             if (data == null ||
@@ -138,6 +199,11 @@ public class BodyPartsPreviewRenderer
             {
                 manager.parts.add(part);
             }
+        }
+        }
+        finally
+        {
+            this.preparingPreview = false;
         }
     }
 
@@ -239,6 +305,11 @@ public class BodyPartsPreviewRenderer
             if (morph != null)
             {
                 morph = ChameleonBodyPartAnimations.apply(data, frame, morph);
+                // Preview-only registration; exportParts uses a different
+                // renderer instance and never calls prepareModels().
+                // No keys or morph rotations are modified here.
+                if (this.preparingPreview)
+                    prepareChameleonPhysicsChains(data, morph);
                 return createMorphBodyPart(data, morph, frame);
             }
         }
