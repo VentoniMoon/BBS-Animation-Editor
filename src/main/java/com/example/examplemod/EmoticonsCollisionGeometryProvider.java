@@ -25,6 +25,41 @@ public final class EmoticonsCollisionGeometryProvider
         public int triangleCount(){return triangles.length/3;}
     }
 
+    /** Coordinate diagnostics; values remain in Emoticons mesh-local units. */
+    public static final class Bounds
+    {
+        public final float minX,minY,minZ,maxX,maxY,maxZ;
+        public final int count;
+        Bounds(float a,float b,float c,float d,float e,float f,int n)
+        {minX=a;minY=b;minZ=c;maxX=d;maxY=e;maxZ=f;count=n;}
+        @Override public String toString()
+        {
+            return "min=("+minX+","+minY+","+minZ+") max=("
+                    +maxX+","+maxY+","+maxZ+") vertices="+count;
+        }
+    }
+
+    public static Bounds bounds(List<MeshSnapshot> meshes)
+    {
+        float minX=Float.POSITIVE_INFINITY,minY=Float.POSITIVE_INFINITY,minZ=Float.POSITIVE_INFINITY;
+        float maxX=Float.NEGATIVE_INFINITY,maxY=Float.NEGATIVE_INFINITY,maxZ=Float.NEGATIVE_INFINITY;
+        int n=0;
+        if(meshes!=null)
+            for(MeshSnapshot mesh:meshes)
+            {
+                if(mesh==null)continue;
+                for(int i=0;i+2<mesh.vertices.length;i+=3)
+                {
+                    float x=mesh.vertices[i],y=mesh.vertices[i+1],z=mesh.vertices[i+2];
+                    if(!Float.isFinite(x)||!Float.isFinite(y)||!Float.isFinite(z))continue;
+                    minX=Math.min(minX,x);minY=Math.min(minY,y);minZ=Math.min(minZ,z);
+                    maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);maxZ=Math.max(maxZ,z);
+                    n++;
+                }
+            }
+        return n==0?null:new Bounds(minX,minY,minZ,maxX,maxY,maxZ,n);
+    }
+
     private EmoticonsCollisionGeometryProvider() {}
 
     public static List<MeshSnapshot> snapshot(Object morph)
