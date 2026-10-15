@@ -223,6 +223,34 @@ public class BodyPartsPreviewRenderer
             BodyPartChainSolver.Vec3 lowPos = BodyPartPhysicsPoseAdapter.position(lowBody);
             BodyPartChainSolver.Vec3 bodyPos = torso == null ? null :
                     BodyPartPhysicsPoseAdapter.position(torso);
+            // Diagnostic assumption ONLY: BOBJ matrices and CPU-skinned mesh
+            // share the same actor/model-local origin. Confirm with contacts
+            // before allowing any collision forces to use this coordinate map.
+            if (frame == 0 || frame == 20 || frame == 60)
+            {
+                java.util.List<EmoticonsCollisionGeometryProvider.MeshSnapshot> meshes =
+                        EmoticonsCollisionGeometryProvider.snapshot(morph);
+                EmoticonsMeshCollisionSolver surface =
+                        new EmoticonsMeshCollisionSolver(meshes);
+                StringBuilder distances = new StringBuilder();
+                for (int i = 1; i <= 4; i++)
+                {
+                    float[] bone = local.getBoneWorldMatrix("back_strand_" + i);
+                    if (bone == null) continue;
+                    BodyPartChainSolver.Vec3 p = BodyPartPhysicsPoseAdapter.position(
+                            BodyPartPhysicsMatrixSpace.multiply(attachment, bone));
+                    EmoticonsMeshCollisionSolver.Contact contact =
+                            surface.nearest(p, 0.5F);
+                    distances.append(" back_strand_").append(i).append('=');
+                    distances.append(contact == null ? "none-within-0.5" :
+                            Float.toString(contact.distance));
+                }
+                System.out.println("[BBS Animation Editor][Physics] "
+                        + "MESH CONTACT PROBE frame=" + frame
+                        + " indexedTriangles=" + surface.triangleCount()
+                        + " distances(mesh-local assumed):" + distances.toString()
+                        + " (diagnostic only, no physical correction)");
+            }
             collisionSpaceLoggedFrame.put(data, Integer.valueOf(frame));
             System.out.println("[BBS Animation Editor][Physics] COLLISION SPACE frame=" + frame
                     + " low_body.native=(" + lowPos.x + "," + lowPos.y + "," + lowPos.z + ")"
