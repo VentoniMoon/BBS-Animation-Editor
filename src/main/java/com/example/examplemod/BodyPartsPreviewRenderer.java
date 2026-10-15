@@ -801,7 +801,7 @@ public class BodyPartsPreviewRenderer
                 {
                     visualProbeReported.put(data, Boolean.TRUE);
                     System.out.println("[BBS Animation Editor][Physics] "
-                            + "LEFT ROOT visual probe active (one-frame delay, max 0.12 rad)");
+                            + "LEFT ROOT visual probe active (one-frame delay, diagnostic max 0.45 rad)");
                 }
             }
         }
