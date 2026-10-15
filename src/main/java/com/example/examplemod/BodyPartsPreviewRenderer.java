@@ -193,6 +193,32 @@ public class BodyPartsPreviewRenderer
         }
     }
 
+    private String lastHairABLabel = "";
+
+    @SuppressWarnings("unchecked")
+    private static boolean setChameleonPoseRotationX(Object morph, String bone, float radians)
+    {
+        try
+        {
+            Object pose = morph.getClass().getField("pose").get(morph);
+            if (pose == null) return false;
+            Object raw = pose.getClass().getField("bones").get(pose);
+            if (!(raw instanceof Map)) return false;
+            Map<String, Object> bones = (Map<String, Object>) raw;
+            Object transform = bones.get(bone);
+            if (transform == null)
+            {
+                Class<?> type = Class.forName(
+                        "mchorse.chameleon.metamorph.pose.AnimatedPoseTransform");
+                transform = type.getConstructor(String.class).newInstance(bone);
+                bones.put(bone, transform);
+            }
+            transform.getClass().getField("rotateX").setFloat(transform, radians);
+            return true;
+        }
+        catch (Throwable ignored) { return false; }
+    }
+
     /** Read only the actual post-render bone state and attached geometry. */
     private static String describeChameleonNativeBone(Object morph, String name)
     {
@@ -917,22 +943,25 @@ public class BodyPartsPreviewRenderer
             Float cleanRotation = readChameleonPoseRotationX(child, "left_strand_1");
             if (cleanRotation != null)
                 leftRootBaseRotation.put(data, cleanRotation);
-            Integer sampled = pendingLeftRootFrames.get(data);
-            float[] swing = pendingLeftRootSwings.get(data);
-            if (sampled != null && sampled.intValue() == frame - 1 && swing != null)
+            /*
+             * Temporary A/B isolation test: hold timeline at frame 20.
+             * Alternates clean 0-degree pose and -45-degree X every 2 seconds.
+             * No physics sample is applied and editor keys are not mutated.
+             */
+            if (frame == 20)
             {
-                boolean applied = BodyPartChameleonPhysicsPose.addLocalSwing(
-                        child, "left_strand_1", swing);
-                if (applied)
+                boolean bState = (System.currentTimeMillis() / 2000L) % 2L == 1L;
+                float target = bState ? (float) (-Math.PI / 4.0) : 0F;
+                if (setChameleonPoseRotationX(child, "left_strand_1", target))
                 {
-                    Float rotation = readChameleonPoseRotationX(child, "left_strand_1");
-                    if (rotation != null) leftRootAppliedRotation.put(data, rotation);
-                }
-                if (applied && !visualProbeReported.containsKey(data))
-                {
-                    visualProbeReported.put(data, Boolean.TRUE);
-                    System.out.println("[BBS Animation Editor][Physics] "
-                            + "LEFT ROOT visual probe active (one-frame delay, diagnostic max 0.45 rad)");
+                    leftRootAppliedRotation.put(data, Float.valueOf(target));
+                    String label = bState ? "B (-45 deg)" : "A (0 deg)";
+                    if (!label.equals(lastHairABLabel))
+                    {
+                        lastHairABLabel = label;
+                        System.out.println("[BBS Animation Editor][Physics] HAIR A/B frame=20 "
+                                + label + "; hold frame 20 to compare the geometry");
+                    }
                 }
             }
         }
