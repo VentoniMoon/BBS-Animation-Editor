@@ -10,13 +10,15 @@ public final class BodyPartPhysicsPanel
     private int y;
     private String boneName = "";
     private BodyPartPhysicsSettings settings;
+    private int chainBones;
 
-    public void setTarget(int x, int y, String boneName, BodyPartPhysicsSettings settings)
+    public void setTarget(int x, int y, String boneName, BodyPartPhysicsSettings settings, int chainBones)
     {
         this.x = x;
         this.y = y;
         this.boneName = boneName == null ? "" : boneName;
         this.settings = settings;
+        this.chainBones = chainBones;
     }
 
     public void draw(Minecraft mc, int mouseX, int mouseY)
@@ -33,8 +35,8 @@ public final class BodyPartPhysicsPanel
         drawValue(mc, "Stiffness", settings.getStiffness(), 108);
         drawValue(mc, "Damping", settings.getDamping(), 139);
         drawToggle(mc, "Body collisions", settings.hasBodyCollisions(), 170);
-        mc.fontRenderer.drawString("Simulation: not connected", x + 9, y + 204, 0xFF999999);
-        mc.fontRenderer.drawString("Settings saved in editor.dat", x + 9, y + 218, 0xFF999999);
+        mc.fontRenderer.drawString("Chain bones: " + chainBones, x + 9, y + 196, 0xFFAAAAAA);
+        mc.fontRenderer.drawString("Solver: awaiting preview adapter", x + 9, y + 209, 0xFF999999);
     }
 
     private void drawValue(Minecraft mc, String title, float value, int lineY)
