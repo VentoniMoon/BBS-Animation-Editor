@@ -74,6 +74,8 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, float[]>();
     private final Map<BodyPartModelData, Integer> renderedAttachmentFrames =
             new IdentityHashMap<BodyPartModelData, Integer>();
+    private final Map<BodyPartModelData, Boolean> reportedPostRenderMatrices =
+            new IdentityHashMap<BodyPartModelData, Boolean>();
 
     public float[] getRenderedAttachmentMatrix(BodyPartModelData data, int frame)
     {
@@ -108,8 +110,13 @@ public class BodyPartsPreviewRenderer
             }
             renderedAttachmentMatrices.put(data, matrix);
             renderedAttachmentFrames.put(data, Integer.valueOf(frame));
-            reportPhysicsMatrix(data,
-                    "Emoticons attachment matrix sampled after render (frame=" + frame + ")");
+            if (!reportedPostRenderMatrices.containsKey(data))
+            {
+                reportedPostRenderMatrices.put(data, Boolean.TRUE);
+                System.out.println("[BBS Animation Editor][Physics] "
+                        + "Emoticons attachment matrix captured after normal render "
+                        + "(first frame=" + frame + "; subsequent frames silent)");
+            }
         }
     }
 
@@ -422,28 +429,9 @@ public class BodyPartsPreviewRenderer
         this.previewPhysicsChains.clear();
         this.physicsAttachmentMatrices.clear();
 
-        /*
-         * Observe the native Emoticons limb basis without a second render.
-         * These are LAST-rendered matrices at this point, so use strictly
-         * for diagnostics until a render-pass synchronisation hook exists.
-         */
-        if (models != null)
-        {
-            for (BodyPartModelData candidate : models)
-            {
-                if (candidate == null || !candidate.hasModel()) continue;
-                if (candidate.getPhysicsSettings("left_strand_1") == null ||
-                        !candidate.getPhysicsSettings("left_strand_1").isEnabled())
-                    continue;
-                float[] observed = BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
-                        abstractMorph, candidate.getAttachmentBoneName());
-                String value = observed == null
-                        ? "Emoticons low_body passive matrix unavailable"
-                        : "Emoticons low_body passive matrix available (last rendered; not physics input)";
-                reportPhysicsMatrix(candidate, value);
-            }
-        }
-
+        // Do not probe/log last-rendered matrices here: prepareModels()
+        // runs on every draw BEFORE the actor's current render and therefore
+        // the passive sample is stale and was spamming the log.
         if (models == null || models.isEmpty())
         {
             return;
