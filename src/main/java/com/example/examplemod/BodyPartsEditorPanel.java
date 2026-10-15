@@ -43,6 +43,27 @@ public class BodyPartsEditorPanel
 
     private AnimationValueControl activeGlobalControl;
 
+    private final BodyPartPhysicsPanel physicsPanel = new BodyPartPhysicsPanel();
+    private boolean physicsView;
+
+    private AnimationBone selectedInternalBone()
+    {
+        BodyPartModelData model = controller.getSelectedModel();
+        return model == null ? null :
+                model.getBone(controller.getKeyframeController().getSelectedBoneIndex());
+    }
+
+    private void configurePhysicsPanel()
+    {
+        BodyPartModelData model = controller.getSelectedModel();
+        AnimationBone bone = selectedInternalBone();
+        if (model != null && bone != null)
+        {
+            physicsPanel.setTarget(x + 5, y + 28,
+                    bone.getName(), model.getPhysicsSettings(bone.getName()));
+        }
+    }
+
     private boolean modelSectionOpen = true;
     private boolean globalSectionOpen = false;
     private int globalScroll = 0;
@@ -94,20 +115,32 @@ public class BodyPartsEditorPanel
         BodyPartModelData selectedModel = controller.getSelectedModel();
         if (selectedModel != null)
         {
-            /*
-             * When editing an individual Body Part key, give the
-             * transform panel the full upper area. The BODY PARTS
-             * header is no longer needed here and was wasting 25 px.
-             */
-            controller.getTransformPanel().setPosition(x + 5, y + 5);
-            controller.getTransformPanel().draw(
-                    mc,
-                    controller.getKeyframeController().getSelectedKeyframe(),
-                    controller.getKeyframeController().getSelectedKeyframe() == null
-                            ? null
-                            : controller.getKeyframeController().getSelectedKeyframe().getTransform(),
-                    controller.getTimeline().getTick()
-            );
+            /* Physics is isolated from the shared Pose TransformPanel. */
+            drawRect(mc, x + 5, y + 5, x + 91, y + 25,
+                    physicsView ? 0xFF343638 : 0xFF484C50);
+            drawRect(mc, x + 94, y + 5, x + 180, y + 25,
+                    physicsView ? 0xFF484C50 : 0xFF343638);
+            mc.fontRenderer.drawString("TRANSFORM", x + 13, y + 11, 0xFFFFFFFF);
+            mc.fontRenderer.drawString("PHYSICS", x + 112, y + 11, 0xFFFFFFFF);
+
+            if (physicsView)
+            {
+                configurePhysicsPanel();
+                if (selectedInternalBone() != null)
+                    physicsPanel.draw(mc, mouseX, mouseY);
+            }
+            else
+            {
+                controller.getTransformPanel().setPosition(x + 5, y + 28);
+                controller.getTransformPanel().draw(
+                        mc,
+                        controller.getKeyframeController().getSelectedKeyframe(),
+                        controller.getKeyframeController().getSelectedKeyframe() == null
+                                ? null
+                                : controller.getKeyframeController().getSelectedKeyframe().getTransform(),
+                        controller.getTimeline().getTick()
+                );
+            }
             return;
         }
 
@@ -486,6 +519,27 @@ public class BodyPartsEditorPanel
             int mouseY,
             int mouseButton)
     {
+        if (controller.getSelectedModel() != null)
+        {
+            if (mouseButton == 0 && mouseY >= y + 5 && mouseY < y + 25)
+            {
+                if (mouseX >= x + 5 && mouseX < x + 91)
+                {
+                    physicsView = false;
+                    return true;
+                }
+                if (mouseX >= x + 94 && mouseX < x + 180)
+                {
+                    physicsView = true;
+                    return true;
+                }
+            }
+            if (physicsView)
+            {
+                configurePhysicsPanel();
+                return physicsPanel.mouseClicked(mouseX, mouseY, mouseButton);
+            }
+        }
         if (controller.getSelectedModel() == null &&
                 mouseClickedGlobalTransform(
                         mouseX,
@@ -516,6 +570,7 @@ public class BodyPartsEditorPanel
             int mouseX,
             int mouseY)
     {
+        if (controller.getSelectedModel() != null && physicsView) return;
         if (controller.getSelectedModel() == null &&
                 activeGlobalControl != null)
         {
@@ -560,6 +615,7 @@ public class BodyPartsEditorPanel
             char typedChar,
             int keyCode)
     {
+        if (controller.getSelectedModel() != null && physicsView) return false;
         if (controller.getSelectedModel() == null &&
                 activeGlobalControl != null)
         {
