@@ -77,3 +77,58 @@ jobs:
           java -version
           java -ea -cp "${{ runner.temp }}/jolt-java8/classes" \
             com.github.stephengold.joltjni.Java8CleanerSmoke
+
+  windows-java8-native:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout editor branch
+        uses: actions/checkout@v4
+      - name: Checkout pinned JNI source
+        uses: actions/checkout@v4
+        with:
+          repository: stephengold/jolt-jni
+          ref: '6.0.0'
+          path: upstream-jolt
+          persist-credentials: false
+      - name: Java 21 compiler
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare and compile all production JNI classes for Java 8
+        shell: bash
+        run: |
+          python jolt-java8-port/tools/prepare_sources.py --upstream upstream-jolt --output java8-win
+          find java8-win/src -type f -name '*.java' | sort > java8-win/sources.txt
+          mkdir -p java8-win/classes
+          javac --release 8 -encoding UTF-8 -d java8-win/classes @java8-win/sources.txt
+      - name: Switch to the real Java 8 runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Compile Java 8 smoke tests and fetch Windows native library
+        shell: bash
+        run: |
+          javac -source 8 -target 8 -encoding UTF-8 -cp java8-win/classes -d java8-win/classes \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/Java8CleanerSmoke.java \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltNativeSmoke.java \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java
+          curl --fail --location --retry 3 \
+            'https://repo.maven.apache.org/maven2/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar' \
+            --output java8-win/native-jolt.jar
+          mkdir -p java8-win/native
+          (cd java8-win/native && jar xf ../native-jolt.jar)
+      - name: Run native physics on Java 8 for Windows
+        shell: bash
+        run: |
+          java -version
+          java -ea -cp java8-win/classes com.github.stephengold.joltjni.Java8CleanerSmoke
+          LIB="$(find java8-win/native -type f -iname '*joltjni.dll' -print -quit)"
+          test -n "$LIB"
+          WIN_LIB="$(cygpath -w "$PWD/$LIB")"
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.github.stephengold.joltjni.JoltNativeSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.github.stephengold.joltjni.JoltChainSmoke
