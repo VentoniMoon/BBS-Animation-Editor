@@ -138,8 +138,8 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         {
             // The front convention is expected to fail the target match;
             // assert a measurable deviation until production is fixed.
-            if (errorParent < 1.0)
-                throw new AssertionError("front production unexpectedly matched target");
+            assertError("front production parent mismatch", errorParent, 30);
+            assertError("front production child mismatch", errorChild, 61.31445);
         }
     }
 
