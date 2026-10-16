@@ -67,6 +67,19 @@ public final class BodyPartPhysicsPreviewSimulation
             int frame, BodyPartChainSolver.Vec3[] animatedWorld,
             java.util.List<BodyPartPhysicsCollisions.Capsule> colliders)
     {
+        return sample(modelId,chain,frame,animatedWorld,colliders,null);
+    }
+
+    /**
+     * Optional verified mesh-surface contact hook. Passing null preserves
+     * the existing visual physics until coordinate alignment is validated.
+     */
+    public BodyPartChainSolver.Vec3[] sample(String modelId,
+            BodyPartPhysicsChains.Chain chain, int frame,
+            BodyPartChainSolver.Vec3[] animatedWorld,
+            java.util.List<BodyPartPhysicsCollisions.Capsule> colliders,
+            BodyPartChainSolver.SurfaceConstraint surface)
+    {
         if (chain==null || animatedWorld==null || chain.settings==null ||
                 !chain.settings.isEnabled()) return null;
         BodyPartPhysicsSettings settings=chain.settings;
@@ -98,6 +111,8 @@ public final class BodyPartPhysicsPreviewSimulation
             state.solver.step(driven,1F/20F,settings.getGravity(),
                     settings.getStiffness(),settings.getDamping(),
                     settings.hasBodyCollisions()?colliders:null,0.025F);
+            if (surface != null && settings.hasBodyCollisions())
+                state.solver.constrainSurface(driven[0],surface,0.02F);
         }
         state.lastFrame=frame;
         BodyPartChainSolver.Vec3[] result =
