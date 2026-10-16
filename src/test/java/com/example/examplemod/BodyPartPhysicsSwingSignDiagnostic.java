@@ -4,7 +4,7 @@ package com.example.examplemod;
  * Standalone diagnostic, deliberately independent of Minecraft/Forge.
  *
  * Run with JDK 8:
- *   javac -d build/physics-test src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java src/main/java/com/example/examplemod/BodyPartChainSolver.java src/main/java/com/example/examplemod/BodyPartPhysicsPoseAdapter.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwing.java src/test/java/com/example/examplemod/BodyPartPhysicsSwingSignDiagnostic.java
+ *   javac -d build/physics-test src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java src/main/java/com/example/examplemod/BodyPartChainSolver.java src/main/java/com/example/examplemod/BodyPartPhysicsPoseAdapter.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwing.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwingCanonical.java src/test/java/com/example/examplemod/BodyPartPhysicsSwingSignDiagnostic.java
  *   java -cp build/physics-test com.example.examplemod.BodyPartPhysicsSwingSignDiagnostic
  *
  * This checks the sign contract between the world-space swing solver and
@@ -143,6 +143,45 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         }
     }
 
+
+    private static void testCanonicalHierarchy(float anchorYawDegrees)
+    {
+        float a = (float) Math.toRadians(15);
+        float b = (float) Math.toRadians(20);
+        float[] anchor = BodyPartPhysicsRotation.eulerXYZ(
+                0F, (float) Math.toRadians(anchorYawDegrees), 0F);
+        float[] rx = BodyPartPhysicsRotation.axisAngle(new float[] {1F,0F,0F,a});
+        float[] rz = BodyPartPhysicsRotation.axisAngle(new float[] {0F,0F,1F,b});
+        float[] restLocal = new float[] {0F,-1F,0F};
+        float[] restWorld = rotate(anchor, restLocal);
+        float[] targetOne = rotate(BodyPartPhysicsRotation.multiply3(anchor,rx),restLocal);
+        float[] targetTwo = rotate(BodyPartPhysicsRotation.multiply3(
+                BodyPartPhysicsRotation.multiply3(anchor,rx),rz),restLocal);
+        float[] matrix = new float[16];
+        matrix[15] = 1F;
+        for (int col=0;col<3;col++)
+            for (int row=0;row<3;row++)
+                matrix[col*4+row] = anchor[col*3+row];
+
+        BodyPartPhysicsHierarchySwingCanonical hierarchy =
+                new BodyPartPhysicsHierarchySwingCanonical();
+        BodyPartChainSolver.Vec3 rest = new BodyPartChainSolver.Vec3(
+                restWorld[0],restWorld[1],restWorld[2]);
+        float[] first = hierarchy.next(matrix,rest,new BodyPartChainSolver.Vec3(
+                targetOne[0],targetOne[1],targetOne[2]));
+        float[] second = hierarchy.next(matrix,rest,new BodyPartChainSolver.Vec3(
+                targetTwo[0],targetTwo[1],targetTwo[2]));
+        float[] actualFirst = BodyPartPhysicsRotation.multiply3(anchor,
+                BodyPartPhysicsRotation.axisAngle(first));
+        float[] actualSecond = BodyPartPhysicsRotation.multiply3(actualFirst,
+                BodyPartPhysicsRotation.axisAngle(second));
+        assertError("canonical parent yaw=" + anchorYawDegrees,
+                angularError(rotate(actualFirst,restLocal),targetOne),0);
+        assertError("canonical child yaw=" + anchorYawDegrees,
+                angularError(rotate(actualSecond,restLocal),targetTwo),0);
+        System.out.println("PASS canonical two-bone yaw=" + anchorYawDegrees);
+    }
+
     public static void main(String[] args)
     {
         float angle = (float) Math.toRadians(15);
@@ -167,6 +206,8 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         testTwoBoneHierarchy();
         testProductionHierarchy(true);
         testProductionHierarchy(false);
+        testCanonicalHierarchy(0F);
+        testCanonicalHierarchy(180F);
         System.out.println("NOTE: this is a sign-contract diagnostic, not an in-game render test");
     }
 }
