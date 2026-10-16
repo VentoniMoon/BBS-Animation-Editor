@@ -103,6 +103,10 @@ public final class BodyPartPhysicsPreviewSimulation
         {
             state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
             filterBoneMotion(state, animatedWorld); // initialize relative rest pose
+            // Seeking directly into a penetrated pose must still resolve
+            // contacts. Do not wait for the next consecutive frame.
+            if (surface != null && settings.hasBodyCollisions())
+                state.solver.constrainSurface(animatedWorld[0],surface,0.02F);
             states.put(key,state);
         }
         else if (frame==state.lastFrame+1)
