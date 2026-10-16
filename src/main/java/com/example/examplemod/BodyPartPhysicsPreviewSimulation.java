@@ -16,6 +16,7 @@ public final class BodyPartPhysicsPreviewSimulation
         int lastFrame;
         int settingsHash;
         BodyPartChainSolver.Vec3[] filteredRelative;
+        BodyPartChainSolver.Vec3[] lastAnimatedWorld;
         State(BodyPartChainSolver solver, int frame, int hash)
         {
             this.solver=solver;
@@ -56,6 +57,22 @@ public final class BodyPartPhysicsPreviewSimulation
             rest[i] = pose[0].add(state.filteredRelative[i]);
         }
         return rest;
+    }
+
+    private static BodyPartChainSolver.Vec3[] copyPose(
+            BodyPartChainSolver.Vec3[] pose)
+    {
+        return pose.clone(); // Vec3 is immutable
+    }
+
+    private static float maximumChange(BodyPartChainSolver.Vec3[] before,
+            BodyPartChainSolver.Vec3[] after)
+    {
+        if(before==null || before.length!=after.length)return Float.POSITIVE_INFINITY;
+        float max=0F;
+        for(int i=0;i<after.length;i++)
+            max=Math.max(max,before[i].sub(after[i]).length());
+        return max;
     }
 
     private final Map<String, State> states =
@@ -103,20 +120,34 @@ public final class BodyPartPhysicsPreviewSimulation
         {
             state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
             filterBoneMotion(state, animatedWorld); // initialize relative rest pose
+            state.lastAnimatedWorld=copyPose(animatedWorld);
             // Seeking directly into a penetrated pose must still resolve
             // contacts. Do not wait for the next consecutive frame.
             if (surface != null && settings.hasBodyCollisions())
                 state.solver.constrainSurface(animatedWorld[0],surface,0.02F);
             states.put(key,state);
         }
-        else if (frame==state.lastFrame+1)
+        else
         {
-            BodyPartChainSolver.Vec3[] driven = filterBoneMotion(state, animatedWorld);
-            state.solver.step(driven,1F/20F,settings.getGravity(),
-                    settings.getStiffness(),settings.getDamping(),
-                    settings.hasBodyCollisions()?colliders:null,0.025F);
-            if (surface != null && settings.hasBodyCollisions())
-                state.solver.constrainSurface(driven[0],surface,0.02F);
+            boolean nextFrame=frame==state.lastFrame+1;
+            // The editor can change a bone pose while remaining on the same
+            // timeline frame. Re-evaluate it rather than returning a stale
+            // cached solution. Small render noise is ignored.
+            boolean editedSameFrame=!nextFrame &&
+                    maximumChange(state.lastAnimatedWorld,animatedWorld)>0.001F;
+            if(nextFrame || editedSameFrame)
+            {
+                BodyPartChainSolver.Vec3[] oldDriven=state.lastAnimatedWorld;
+                BodyPartChainSolver.Vec3[] driven=filterBoneMotion(state,animatedWorld);
+                if(oldDriven!=null)
+                    state.solver.followAnimatedPose(oldDriven,driven);
+                state.solver.step(driven,1F/20F,settings.getGravity(),
+                        settings.getStiffness(),settings.getDamping(),
+                        settings.hasBodyCollisions()?colliders:null,0.025F);
+                if(surface!=null && settings.hasBodyCollisions())
+                    state.solver.constrainSurface(driven[0],surface,0.02F);
+                state.lastAnimatedWorld=copyPose(driven);
+            }
         }
         state.lastFrame=frame;
         BodyPartChainSolver.Vec3[] result =
