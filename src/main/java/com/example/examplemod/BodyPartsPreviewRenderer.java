@@ -994,9 +994,13 @@ public class BodyPartsPreviewRenderer
                                 torsoSurface,outward,0.012F,cubeReach);
                     }
                 }
+                // A constructed mesh constraint is not proof of contact.
+                // Count real projection attempts and non-zero corrections.
+                BodyPartPhysicsSurfaceProbe contactProbe = meshConstraint == null ? null
+                        : new BodyPartPhysicsSurfaceProbe(meshConstraint);
                 BodyPartChainSolver.Vec3[] simulated =
                         livePhysics.sample(data.getTimelineId(), chain, frame,
-                                joints, colliders, meshConstraint);
+                                joints, colliders, contactProbe);
                 editedPhysics |= livePhysics.wasEditedThisSample();
                 if ("back_strand_1".equals(chain.root.getName()) &&
                         (frame == 0 || frame == 20 || frame == 60) &&
@@ -1019,6 +1023,9 @@ public class BodyPartsPreviewRenderer
                             + " meshPassedToSolver=" + (meshConstraint != null &&
                                     chain.settings.hasBodyCollisions())
                             + " capsuleCount=" + (colliders == null ? 0 : colliders.size())
+                            + " meshProjectCalls=" + (contactProbe == null ? 0 : contactProbe.getCalls())
+                            + " meshCorrections=" + (contactProbe == null ? 0 : contactProbe.getCorrections())
+                            + " maxMeshCorrection=" + (contactProbe == null ? 0F : contactProbe.getLargestShift())
                             + " maxPoseDelta=" + largest);
                 }
                 if ("back_strand_1".equals(chain.root.getName()) &&
