@@ -4,7 +4,7 @@ package com.example.examplemod;
  * Standalone diagnostic, deliberately independent of Minecraft/Forge.
  *
  * Run with JDK 8:
- *   javac -d build/physics-test src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java src/test/java/com/example/examplemod/BodyPartPhysicsSwingSignDiagnostic.java
+ *   javac -d build/physics-test src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java src/main/java/com/example/examplemod/BodyPartChainSolver.java src/main/java/com/example/examplemod/BodyPartPhysicsPoseAdapter.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwing.java src/test/java/com/example/examplemod/BodyPartPhysicsSwingSignDiagnostic.java
  *   java -cp build/physics-test com.example.examplemod.BodyPartPhysicsSwingSignDiagnostic
  *
  * This checks the sign contract between the world-space swing solver and
@@ -87,6 +87,62 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         System.out.println("PASS: two-bone X/Z hierarchy, corrected parent basis, and inverted child");
     }
 
+
+    /** A real call to production HierarchySwing, using two original native-like bases. */
+    private static void testProductionHierarchy(boolean backConvention)
+    {
+        float a = (float) Math.toRadians(15);
+        float b = (float) Math.toRadians(20);
+        float[] anchor = BodyPartPhysicsRotation.eulerXYZ(0F, (float) Math.PI, 0F);
+        float[] rx = BodyPartPhysicsRotation.axisAngle(new float[] {1F, 0F, 0F, a});
+        float[] rz = BodyPartPhysicsRotation.axisAngle(new float[] {0F, 0F, 1F, b});
+        float[] down = new float[] {0F, -1F, 0F};
+        float[] targetParent = rotate(BodyPartPhysicsRotation.multiply3(anchor, rx), down);
+        float[] targetChild = rotate(BodyPartPhysicsRotation.multiply3(
+                BodyPartPhysicsRotation.multiply3(anchor, rx), rz), down);
+        float[] rest = rotate(anchor, down);
+
+        float[] base4 = new float[16];
+        base4[15] = 1F;
+        for (int c = 0; c < 3; c++)
+            for (int r = 0; r < 3; r++)
+                base4[c * 4 + r] = anchor[c * 3 + r];
+
+        BodyPartPhysicsHierarchySwing hierarchy =
+                new BodyPartPhysicsHierarchySwing(backConvention);
+        float[] one = hierarchy.next(base4,
+                new BodyPartChainSolver.Vec3(rest[0],rest[1],rest[2]),
+                new BodyPartChainSolver.Vec3(targetParent[0],targetParent[1],targetParent[2]));
+        float[] two = hierarchy.next(base4,
+                new BodyPartChainSolver.Vec3(rest[0],rest[1],rest[2]),
+                new BodyPartChainSolver.Vec3(targetChild[0],targetChild[1],targetChild[2]));
+
+        // This is the CURRENT production writer contract (not the proposed fix).
+        one[3] = -one[3];
+        two[3] = -two[3];
+        float[] renderedParent = BodyPartPhysicsRotation.multiply3(anchor,
+                BodyPartPhysicsRotation.axisAngle(one));
+        float[] renderedChild = BodyPartPhysicsRotation.multiply3(renderedParent,
+                BodyPartPhysicsRotation.axisAngle(two));
+        double errorParent = angularError(rotate(renderedParent, down), targetParent);
+        double errorChild = angularError(rotate(renderedChild, down), targetChild);
+        System.out.println((backConvention ? "back" : "front") +
+                " production hierarchy errors: parent=" + errorParent +
+                " deg, child=" + errorChild + " deg");
+        if (backConvention)
+        {
+            assertError("back production parent", errorParent, 0);
+            assertError("back production child", errorChild, 0);
+        }
+        else
+        {
+            // The front convention is expected to fail the target match;
+            // assert a measurable deviation until production is fixed.
+            if (errorParent < 1.0)
+                throw new AssertionError("front production unexpectedly matched target");
+        }
+    }
+
     public static void main(String[] args)
     {
         float angle = (float) Math.toRadians(15);
@@ -109,6 +165,8 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         System.out.println("PASS: +15 deg local X matches goal; -15 deg differs by 30 deg");
         System.out.println("PASS: current front/back sign conventions are opposite");
         testTwoBoneHierarchy();
+        testProductionHierarchy(true);
+        testProductionHierarchy(false);
         System.out.println("NOTE: this is a sign-contract diagnostic, not an in-game render test");
     }
 }
