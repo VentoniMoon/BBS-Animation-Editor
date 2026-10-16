@@ -255,6 +255,40 @@ public class BodyPartsPreviewRenderer
                         tracker.inspect(frame,joints,surface);
                 torsoTrackerSampledFrames.put(data, Integer.valueOf(frame));
                 if(frame==0 || frame==20 || frame==60)
+                {
+                    for (int cubeIndex=1;cubeIndex<=4;cubeIndex++)
+                    {
+                        String boneName="back_strand_"+cubeIndex;
+                        BodyPartChameleonCubeProbe.Cube cube =
+                                BodyPartChameleonCubeProbe.getReference(boneName);
+                        float[] boneMatrix=local.getBoneWorldMatrix(boneName);
+                        if(cube==null || boneMatrix==null)continue;
+                        float[] worldBone=BodyPartPhysicsMatrixSpace.multiply(
+                                attachment,boneMatrix);
+                        BodyPartChainSolver.Vec3[] corners=cube.corners(worldBone);
+                        int close=0,negative=0;
+                        float smallest=Float.POSITIVE_INFINITY;
+                        for(BodyPartChainSolver.Vec3 corner:corners)
+                        {
+                            EmoticonsMeshCollisionSolver.Contact contact=
+                                    surface.nearest(corner,0.18F);
+                            if(contact==null)continue;
+                            close++;
+                            smallest=Math.min(smallest,contact.distance);
+                            if(surface.windingSignedDistance(corner,contact)<-0.002F)
+                                negative++;
+                        }
+                        System.out.println("[BBS Animation Editor][Physics] "
+                                +"BACK CUBE CONTACT frame="+frame
+                                +" bone="+boneName
+                                +" cornersNear="+close+"/8"
+                                +" windingNegative="+negative
+                                +" nearestDistance="+
+                                        (close==0?"none":Float.toString(smallest))
+                                +" (reference geo only; orientation unverified)");
+                    }
+                }
+                if(frame==0 || frame==20 || frame==60)
                     System.out.println("[BBS Animation Editor][Physics] "
                             +"TORSO RECOVERY CANDIDATE frame="+frame
                             +" swept="+report.sweptCrossings
