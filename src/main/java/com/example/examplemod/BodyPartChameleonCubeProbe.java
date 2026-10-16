@@ -21,6 +21,37 @@ public final class BodyPartChameleonCubeProbe
             this.size=size;this.inflate=inflate;
         }
 
+        /**
+         * Collision witnesses on every cube face: four corners, four edge
+         * midpoints and face center. This catches a torso surface cutting
+         * through a wide face even if none of its eight corners is nearby.
+         * Unlike pivot-only collision, offsets stay anchored to the cube.
+         */
+        public BodyPartChainSolver.Vec3[] faceSamples(float[] worldBone)
+        {
+            BodyPartChainSolver.Vec3[] samples=new BodyPartChainSolver.Vec3[54];
+            int n=0;
+            for(int axis=0;axis<3;axis++)
+                for(int side=0;side<2;side++)
+                    for(int a=0;a<3;a++)
+                        for(int b=0;b<3;b++)
+                        {
+                            float[] factors=new float[]{.5F,.5F,.5F};
+                            factors[axis]=side;
+                            factors[(axis+1)%3]=a*.5F;
+                            factors[(axis+2)%3]=b*.5F;
+                            float x=(origin[0]-inflate+
+                                    factors[0]*(size[0]+2F*inflate)-pivot[0])/16F;
+                            float y=(origin[1]-inflate+
+                                    factors[1]*(size[1]+2F*inflate)-pivot[1])/16F;
+                            float z=(origin[2]-inflate+
+                                    factors[2]*(size[2]+2F*inflate)-pivot[2])/16F;
+                            samples[n++]=BodyPartPhysicsPoseAdapter.transformPoint(
+                                    worldBone,new BodyPartChainSolver.Vec3(x,y,z));
+                        }
+            return samples;
+        }
+
         /** World-space corners using the evaluated bone matrix and attachment. */
         public BodyPartChainSolver.Vec3[] corners(float[] worldBone)
         {
