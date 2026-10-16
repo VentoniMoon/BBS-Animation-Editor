@@ -166,6 +166,24 @@ public final class EmoticonsMeshCollisionSolver
         return result;
     }
 
+    /**
+     * Diagnostic signed distance along the nearest triangle's winding normal.
+     * Positive/negative describes triangle winding ONLY. It is not a
+     * confirmed inside/outside classification of the animated body.
+     */
+    public float windingSignedDistance(BodyPartChainSolver.Vec3 point, Contact contact)
+    {
+        if (point == null || contact == null ||
+                contact.triangleIndex < 0 || contact.triangleIndex >= triangles.size())
+            return Float.NaN;
+        Triangle t = triangles.get(contact.triangleIndex);
+        BodyPartChainSolver.Vec3 n = cross(t.b.sub(t.a), t.c.sub(t.a));
+        float length = n.length();
+        if (!(length > 1.0E-8F)) return Float.NaN;
+        BodyPartChainSolver.Vec3 delta = point.sub(contact.nearest);
+        return dot(delta, n) / length;
+    }
+
     private static BodyPartChainSolver.Vec3 closest(BodyPartChainSolver.Vec3 p,
             BodyPartChainSolver.Vec3 a,BodyPartChainSolver.Vec3 b,
             BodyPartChainSolver.Vec3 c)
