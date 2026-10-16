@@ -76,6 +76,10 @@ public final class BodyPartPhysicsPreviewSimulation
         return max;
     }
 
+    private boolean editedThisSample;
+
+    public boolean wasEditedThisSample() { return editedThisSample; }
+
     private final Map<String, State> states =
             new HashMap<String, State>();
 
@@ -98,6 +102,7 @@ public final class BodyPartPhysicsPreviewSimulation
             java.util.List<BodyPartPhysicsCollisions.Capsule> colliders,
             BodyPartChainSolver.SurfaceConstraint surface)
     {
+        editedThisSample=false;
         if (chain==null || animatedWorld==null || chain.settings==null ||
                 !chain.settings.isEnabled()) return null;
         BodyPartPhysicsSettings settings=chain.settings;
@@ -139,6 +144,7 @@ public final class BodyPartPhysicsPreviewSimulation
                     maximumChange(state.lastInputPose,animatedWorld)>0.001F;
             if(nextFrame || editedSameFrame)
             {
+                editedThisSample=editedSameFrame;
                 BodyPartChainSolver.Vec3[] oldDriven=state.lastAnimatedWorld;
                 BodyPartChainSolver.Vec3[] driven=filterBoneMotion(state,animatedWorld);
                 if(oldDriven!=null)
