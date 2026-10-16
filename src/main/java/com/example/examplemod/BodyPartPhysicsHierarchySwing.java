@@ -52,6 +52,10 @@ public final class BodyPartPhysicsHierarchySwing
                 BodyPartPhysicsPoseAdapter.toLocalDirection(
                         originalBoneWorld,correctedGoal);
         float[] swing=BodyPartPhysicsPoseAdapter.localSwing(rest,goal);
+        // Match BodyPartChameleonPhysicsPose's per-bone visual limit.
+        // Otherwise descendants are solved as though their parent received
+        // a rotation which the renderer silently clamps away.
+        swing[3]=Math.max(-0.45F,Math.min(0.45F,swing[3]));
 
         // Child world poses inherit this local rotation. Convert its axis into
         // ORIGINAL world space, then accumulate the actual world correction.
