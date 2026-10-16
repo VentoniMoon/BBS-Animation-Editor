@@ -317,6 +317,37 @@ public class BodyPartsPreviewRenderer
                                         .append(",tri=").append(hit.triangleIndex)
                                         .append(']');
                         }
+                        if (group == EmoticonsSkinCollisionGroups.Group.TORSO)
+                        {
+                            StringBuilder crossings = new StringBuilder();
+                            BodyPartChainSolver.Vec3 previousPoint = null;
+                            for (int boneNumber = 1; boneNumber <= 4; boneNumber++)
+                            {
+                                float[] bone = local.getBoneWorldMatrix(
+                                        "back_strand_" + boneNumber);
+                                if (bone == null) break;
+                                BodyPartChainSolver.Vec3 point =
+                                        BodyPartPhysicsPoseAdapter.position(
+                                                BodyPartPhysicsMatrixSpace.multiply(
+                                                        attachment, bone));
+                                if (previousPoint != null)
+                                {
+                                    EmoticonsMeshCollisionSolver.SegmentHit crossing =
+                                            filtered.intersectSegment(previousPoint, point);
+                                    crossings.append(" segment")
+                                            .append(boneNumber - 1).append('-')
+                                            .append(boneNumber).append('=');
+                                    if (crossing == null) crossings.append("none");
+                                    else crossings.append("t=").append(crossing.fraction)
+                                            .append(",tri=").append(crossing.triangleIndex);
+                                }
+                                previousPoint = point;
+                            }
+                            System.out.println("[BBS Animation Editor][Physics] "
+                                    + "TORSO SEGMENT CROSSINGS frame=" + frame
+                                    + crossings.toString()
+                                    + " (geometric only; no corrections)");
+                        }
                         System.out.println("[BBS Animation Editor][Physics] "
                                 + "GROUP CONTACT frame=" + frame
                                 + " group=" + group
