@@ -11,6 +11,17 @@ package com.example.examplemod;
 public final class BodyPartPhysicsHierarchySwing
 {
     private final float[] ancestorRotation = identity();
+    private final boolean physicalSign;
+
+    public BodyPartPhysicsHierarchySwing(boolean physicalSign)
+    {
+        this.physicalSign=physicalSign;
+    }
+
+    public BodyPartPhysicsHierarchySwing()
+    {
+        this(false);
+    }
 
     private static float[] identity()
     {
@@ -57,7 +68,8 @@ public final class BodyPartPhysicsHierarchySwing
         // a rotation which the renderer silently clamps away.
         swing[3]=Math.max(-0.45F,Math.min(0.45F,swing[3]));
 
-        // This is the *desired rendered* swing in world space.
+        // For back hair use the desired rendered swing in world space;
+        // other strands retain their established preview convention.
         // Accumulate it for descendants. The inverse adapter angle
         // returned below is negated back by the preview writer.
         // Convert the local axis into the original world basis first.
@@ -78,7 +90,7 @@ public final class BodyPartPhysicsHierarchySwing
         {
             float[] delta=BodyPartPhysicsRotation.axisAngle(new float[]{
                     worldAxis.x/axisLength,worldAxis.y/axisLength,
-                    worldAxis.z/axisLength,swing[3]});
+                    worldAxis.z/axisLength,physicalSign?swing[3]:-swing[3]});
             float[] accumulated=BodyPartPhysicsRotation.multiply3(
                     ancestorRotation,delta);
             System.arraycopy(accumulated,0,ancestorRotation,0,9);
@@ -88,6 +100,7 @@ public final class BodyPartPhysicsHierarchySwing
         // angle, so the ACTUALLY RENDERED rotation matches the physical
         // localSwing(rest, goal) calculated above. The ancestor matrix
         // already follows the rendered positive angle (see below).
-        return new float[]{swing[0],swing[1],swing[2],-swing[3]};
+        return new float[]{swing[0],swing[1],swing[2],
+                physicalSign?-swing[3]:swing[3]};
     }
 }
