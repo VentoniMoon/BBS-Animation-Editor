@@ -905,8 +905,21 @@ public class BodyPartsPreviewRenderer
                     if (Math.abs(facing) > 0.025F)
                     {
                         if (facing < 0F) outward=outward.scale(-1F);
+                        // Use the true cuboid extent behind each pivot.
+                        // The first/root joint stays fixed at the attachment;
+                        // only downstream chain particles are projected.
+                        float[] cubeReach=new float[chain.bones.size()];
+                        for(int boneIndex=1;boneIndex<chain.bones.size();boneIndex++)
+                        {
+                            String name=chain.bones.get(boneIndex).getName();
+                            BodyPartChameleonCubeProbe.Cube cube=
+                                    BodyPartChameleonCubeProbe.getReference(name);
+                            float[] boneWorld=world.getBoneWorldMatrix(name);
+                            if(cube!=null && boneWorld!=null)
+                                cubeReach[boneIndex]=cube.inwardReach(boneWorld,outward);
+                        }
                         meshConstraint=new BodyPartMeshSurfaceConstraint(
-                                torsoSurface,outward,0.025F);
+                                torsoSurface,outward,0.012F,cubeReach);
                     }
                 }
                 BodyPartChainSolver.Vec3[] simulated =
