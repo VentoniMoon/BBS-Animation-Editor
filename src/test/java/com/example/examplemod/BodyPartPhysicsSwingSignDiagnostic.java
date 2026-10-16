@@ -51,6 +51,42 @@ public final class BodyPartPhysicsSwingSignDiagnostic
                 new float[] {0F, -1F, 0F});
     }
 
+
+    /**
+     * Two linked bones: first rotates around X, second around Z.
+     * All matrices are column-major, as in BodyPartPhysicsRotation.
+     * The child correction must be evaluated in the corrected parent basis.
+     */
+    private static void testTwoBoneHierarchy()
+    {
+        float a = (float) Math.toRadians(15);
+        float b = (float) Math.toRadians(20);
+        float[] anchor = BodyPartPhysicsRotation.eulerXYZ(0F, (float) Math.PI, 0F);
+        float[] first = BodyPartPhysicsRotation.axisAngle(new float[] {1F, 0F, 0F, a});
+        float[] second = BodyPartPhysicsRotation.axisAngle(new float[] {0F, 0F, 1F, b});
+        float[] segment = new float[] {0F, -1F, 0F};
+
+        float[] parentWorld = BodyPartPhysicsRotation.multiply3(anchor, first);
+        float[] intendedChildWorld = BodyPartPhysicsRotation.multiply3(parentWorld, second);
+        float[] targetParent = rotate(parentWorld, segment);
+        float[] targetChild = rotate(intendedChildWorld, segment);
+
+        // Applying the child's swing AFTER its parent's swing matches both goals.
+        assertError("two-bone parent", angularError(rotate(parentWorld, segment),
+                targetParent), 0);
+        assertError("two-bone child", angularError(rotate(intendedChildWorld, segment),
+                targetChild), 0);
+
+        // Applying the opposite child swing does not. This reproduces the
+        // risk in the legacy single-inversion sign contract.
+        float[] wrongChild = BodyPartPhysicsRotation.multiply3(parentWorld,
+                BodyPartPhysicsRotation.axisAngle(new float[] {0F, 0F, 1F, -b}));
+        assertError("two-bone inverted child", angularError(rotate(wrongChild, segment),
+                targetChild), 40);
+
+        System.out.println("PASS: two-bone X/Z hierarchy, corrected parent basis, and inverted child");
+    }
+
     public static void main(String[] args)
     {
         float angle = (float) Math.toRadians(15);
@@ -72,6 +108,7 @@ public final class BodyPartPhysicsSwingSignDiagnostic
 
         System.out.println("PASS: +15 deg local X matches goal; -15 deg differs by 30 deg");
         System.out.println("PASS: current front/back sign conventions are opposite");
+        testTwoBoneHierarchy();
         System.out.println("NOTE: this is a sign-contract diagnostic, not an in-game render test");
     }
 }
