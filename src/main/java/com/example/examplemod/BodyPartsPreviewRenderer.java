@@ -1063,8 +1063,11 @@ public class BodyPartsPreviewRenderer
                      * Skip the last bone until its actual tip is available.
                      * The editor's source animation keys remain unchanged.
                      */
+                    // Back-chain uses the physical target direction, while
+                    // front strands preserve their already-tested convention.
                     BodyPartPhysicsHierarchySwing hierarchy =
-                            new BodyPartPhysicsHierarchySwing();
+                            new BodyPartPhysicsHierarchySwing(
+                                    "back_strand_1".equals(chain.root.getName()));
                     for (int i = 0; i + 1 < simulated.length; i++)
                     {
                         AnimationBone bone = chain.bones.get(i);
