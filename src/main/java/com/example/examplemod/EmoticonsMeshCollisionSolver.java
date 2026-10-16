@@ -184,6 +184,18 @@ public final class EmoticonsMeshCollisionSolver
         return dot(delta, n) / length;
     }
 
+    /** Winding normal of the actual contacted triangle; never assumed outward. */
+    public BodyPartChainSolver.Vec3 windingNormal(Contact contact)
+    {
+        if (contact == null || contact.triangleIndex < 0 ||
+                contact.triangleIndex >= triangles.size()) return null;
+        Triangle triangle = triangles.get(contact.triangleIndex);
+        BodyPartChainSolver.Vec3 n = cross(
+                triangle.b.sub(triangle.a), triangle.c.sub(triangle.a));
+        float length = n.length();
+        return length > 1.0E-8F ? n.scale(1F/length) : null;
+    }
+
     /** Segment/surface intersection in the same mesh-local coordinate frame.
      * This is a geometric hit only, not a reliable solid-body inside test.
      * The returned normal follows triangle winding, not an assumed outward side.
