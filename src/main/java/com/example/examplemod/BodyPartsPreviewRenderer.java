@@ -1014,8 +1014,11 @@ public class BodyPartsPreviewRenderer
                             + " meshAvailable=" + (torsoSurface != null)
                             + " sameFrame=" + (collisionFrame != null &&
                                     collisionFrame.intValue() == frame)
-                            + " constraintActive=" + (meshConstraint != null)
-                            + " enabled=" + chain.settings.hasBodyCollisions()
+                            + " constraintCreated=" + (meshConstraint != null)
+                            + " collisionEnabled=" + chain.settings.hasBodyCollisions()
+                            + " meshPassedToSolver=" + (meshConstraint != null &&
+                                    chain.settings.hasBodyCollisions())
+                            + " capsuleCount=" + (colliders == null ? 0 : colliders.size())
                             + " maxPoseDelta=" + largest);
                 }
                 if ("back_strand_1".equals(chain.root.getName()) &&
