@@ -80,6 +80,24 @@ public final class BodyPartPhysicsPreviewSimulation
 
     public boolean wasEditedThisSample() { return editedThisSample; }
 
+    /** A bounded catch-up on editor pose edits; never runs every draw. */
+    private static void advance(BodyPartChainSolver solver,
+            BodyPartChainSolver.Vec3[] pose,BodyPartPhysicsSettings settings,
+            java.util.List<BodyPartPhysicsCollisions.Capsule> colliders,
+            BodyPartChainSolver.SurfaceConstraint surface,
+            int steps,boolean freeHanging)
+    {
+        for(int n=0;n<steps;n++)
+        {
+            solver.step(pose,1F/20F,settings.getGravity(),
+                    settings.getStiffness(),settings.getDamping(),
+                    settings.hasBodyCollisions()?colliders:null,0.025F,
+                    freeHanging);
+            if(surface!=null && settings.hasBodyCollisions())
+                solver.constrainSurface(pose[0],surface,0.02F);
+        }
+    }
+
     private final Map<String, State> states =
             new HashMap<String, State>();
 
@@ -128,9 +146,14 @@ public final class BodyPartPhysicsPreviewSimulation
             filterBoneMotion(state, animatedWorld); // initialize relative rest pose
             state.lastAnimatedWorld=copyPose(animatedWorld);
             state.lastInputPose=copyPose(animatedWorld);
-            // Seeking directly into a penetrated pose must still resolve
-            // contacts. Do not wait for the next consecutive frame.
-            if (surface != null && settings.hasBodyCollisions())
+            // On a seek the input pose is current-frame only. For free
+            // hanging back hair, briefly settle against world gravity so the
+            // first displayed frame does not inherit the body's angle.
+            boolean freeHanging="back_strand_1".equals(chain.root.getName());
+            if(freeHanging)
+                advance(state.solver,animatedWorld,settings,colliders,surface,
+                        6,true);
+            else if(surface!=null && settings.hasBodyCollisions())
                 state.solver.constrainSurface(animatedWorld[0],surface,0.02F);
             states.put(key,state);
         }
@@ -149,11 +172,9 @@ public final class BodyPartPhysicsPreviewSimulation
                 BodyPartChainSolver.Vec3[] driven=filterBoneMotion(state,animatedWorld);
                 if(oldDriven!=null)
                     state.solver.followAnimatedPose(oldDriven,driven);
-                state.solver.step(driven,1F/20F,settings.getGravity(),
-                        settings.getStiffness(),settings.getDamping(),
-                        settings.hasBodyCollisions()?colliders:null,0.025F);
-                if(surface!=null && settings.hasBodyCollisions())
-                    state.solver.constrainSurface(driven[0],surface,0.02F);
+                boolean freeHanging="back_strand_1".equals(chain.root.getName());
+                advance(state.solver,driven,settings,colliders,surface,
+                        editedSameFrame && freeHanging ? 6 : 1,freeHanging);
                 state.lastAnimatedWorld=copyPose(driven);
                 state.lastInputPose=copyPose(animatedWorld);
             }
