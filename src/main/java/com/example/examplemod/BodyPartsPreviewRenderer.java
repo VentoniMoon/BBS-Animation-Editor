@@ -199,6 +199,10 @@ public class BodyPartsPreviewRenderer
     /** Avoid rebuilding the skinned torso mesh repeatedly for the same frame. */
     private final Map<BodyPartModelData, Integer> torsoTrackerSampledFrames =
             new IdentityHashMap<BodyPartModelData, Integer>();
+    private final Map<BodyPartModelData, EmoticonsMeshCollisionSolver> torsoCollisionMeshes =
+            new IdentityHashMap<BodyPartModelData, EmoticonsMeshCollisionSolver>();
+    private final Map<BodyPartModelData, Integer> torsoCollisionMeshFrames =
+            new IdentityHashMap<BodyPartModelData, Integer>();
 
     /**
      * Read-only simulation of candidate torso contact correction.
@@ -245,6 +249,8 @@ public class BodyPartsPreviewRenderer
                     tracker=new BodyPartMeshContactTracker();
                     torsoTrackers.put(data,tracker);
                 }
+                torsoCollisionMeshes.put(data,surface);
+                torsoCollisionMeshFrames.put(data,Integer.valueOf(frame));
                 BodyPartMeshContactTracker.Result report =
                         tracker.inspect(frame,joints,surface);
                 torsoTrackerSampledFrames.put(data, Integer.valueOf(frame));
@@ -828,8 +834,37 @@ public class BodyPartsPreviewRenderer
                         }
                     }
                 }
+                // Use a mesh only when sampled from this very rendered frame.
+                // The back-facing torso direction comes from the animated
+                // torso's Z basis, oriented towards the hair attachment.
+                BodyPartChainSolver.SurfaceConstraint meshConstraint = null;
+                Integer collisionFrame = torsoCollisionMeshFrames.get(data);
+                EmoticonsMeshCollisionSolver torsoSurface =
+                        torsoCollisionMeshes.get(data);
+                if ("back_strand_1".equals(chain.root.getName()) &&
+                        chain.settings.hasBodyCollisions() && torsoMatrix != null &&
+                        collisionFrame != null && collisionFrame.intValue() == frame &&
+                        torsoSurface != null)
+                {
+                    BodyPartChainSolver.Vec3 torsoOrigin =
+                            BodyPartPhysicsPoseAdapter.position(torsoMatrix);
+                    BodyPartChainSolver.Vec3 outward =
+                            new BodyPartChainSolver.Vec3(
+                                    torsoMatrix[8],torsoMatrix[9],torsoMatrix[10]);
+                    float facing = joints[0].sub(torsoOrigin).x*outward.x
+                            + joints[0].sub(torsoOrigin).y*outward.y
+                            + joints[0].sub(torsoOrigin).z*outward.z;
+                    // Ambiguous body orientation must not generate forces.
+                    if (Math.abs(facing) > 0.025F)
+                    {
+                        if (facing < 0F) outward=outward.scale(-1F);
+                        meshConstraint=new BodyPartMeshSurfaceConstraint(
+                                torsoSurface,outward,0.025F);
+                    }
+                }
                 BodyPartChainSolver.Vec3[] simulated =
-                        livePhysics.sample(data.getTimelineId(), chain, frame, joints, colliders);
+                        livePhysics.sample(data.getTimelineId(), chain, frame,
+                                joints, colliders, meshConstraint);
                 if ("left_strand_1".equals(chain.root.getName()) &&
                         simulated != null && simulated.length > 1)
                 {
