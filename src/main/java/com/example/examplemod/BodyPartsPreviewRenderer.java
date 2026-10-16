@@ -181,6 +181,7 @@ public class BodyPartsPreviewRenderer
                     diagnoseEmoticonsCollisionSpace(morph, data, childPart,
                             matrix, torsoMatrix, frame);
                 }
+                inspectTorsoRecoveryCandidate(morph, data, childPart, matrix, frame);
                 probePhysicsBoneMatrices(data, childPart, matrix, torsoMatrix, frame);
             }
             if (!reportedPostRenderMatrices.containsKey(data))
@@ -190,6 +191,73 @@ public class BodyPartsPreviewRenderer
                         + "Emoticons attachment matrix captured after normal render "
                         + "(first frame=" + frame + "; subsequent frames silent)");
             }
+        }
+    }
+
+    private final Map<BodyPartModelData, BodyPartMeshContactTracker> torsoTrackers =
+            new IdentityHashMap<BodyPartModelData, BodyPartMeshContactTracker>();
+
+    /**
+     * Read-only simulation of candidate torso contact correction.
+     * Does not alter Chameleon bones, timeline or position solver state.
+     * Rebuilds from the current CPU-skinned Emoticons body every frame.
+     */
+    private void inspectTorsoRecoveryCandidate(Object morph,
+            BodyPartModelData data, BodyPart part, float[] lowBody, int frame)
+    {
+        if (part == null || part.morph == null || part.morph.get() == null)
+            return;
+        try
+        {
+            BodyPartPhysicsWorldPose.MatrixSource local =
+                    BodyPartChameleonMatrixProbe.source(part.morph.get());
+            if (local == null) return;
+            BodyPartChainSolver.Vec3[] joints=new BodyPartChainSolver.Vec3[4];
+            float[] attachment=BodyPartPhysicsAttachment.worldMatrix(lowBody,part);
+            for (int i=0;i<4;i++)
+            {
+                float[] bone=local.getBoneWorldMatrix("back_strand_"+(i+1));
+                if(bone==null)return;
+                joints[i]=BodyPartPhysicsPoseAdapter.position(
+                        BodyPartPhysicsMatrixSpace.multiply(attachment,bone));
+            }
+            for (EmoticonsCollisionGeometryProvider.MeshSnapshot mesh :
+                    EmoticonsCollisionGeometryProvider.snapshot(morph))
+            {
+                if(!"body".equals(mesh.name))continue;
+                EmoticonsCollisionGeometryProvider.MeshSnapshot region =
+                        EmoticonsSkinCollisionGroups.select(morph,mesh,
+                                java.util.EnumSet.of(
+                                        EmoticonsSkinCollisionGroups.Group.TORSO));
+                if(region==null || region.triangleCount()==0)return;
+                EmoticonsMeshCollisionSolver surface =
+                        new EmoticonsMeshCollisionSolver(
+                                java.util.Collections.singletonList(region));
+                BodyPartMeshContactTracker tracker=torsoTrackers.get(data);
+                if(tracker==null)
+                {
+                    tracker=new BodyPartMeshContactTracker();
+                    torsoTrackers.put(data,tracker);
+                }
+                BodyPartMeshContactTracker.Result report =
+                        tracker.inspect(frame,joints,surface);
+                if(frame==0 || frame==20 || frame==60)
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            +"TORSO RECOVERY CANDIDATE frame="+frame
+                            +" swept="+report.sweptCrossings
+                            +" segmentCrossings="+report.staticCrossings
+                            +" suggestedParticles="+report.recoveryCandidates
+                            +" maxShift="+report.largestCorrection
+                            +" (diagnostic only; winding side not verified)");
+                break;
+            }
+        }
+        catch(RuntimeException error)
+        {
+            if(frame==0 || frame==20 || frame==60)
+                System.out.println("[BBS Animation Editor][Physics] "
+                        +"TORSO RECOVERY CANDIDATE unavailable: "
+                        +error.getClass().getSimpleName());
         }
     }
 
