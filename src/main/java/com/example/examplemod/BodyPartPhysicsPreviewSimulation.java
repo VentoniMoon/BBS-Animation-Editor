@@ -30,6 +30,12 @@ public final class BodyPartPhysicsPreviewSimulation
     // excite a strand. Translation of its root is never filtered.
     private static final float REST_DEAD_ZONE = 0.006F;
     private static final float REST_FOLLOW = 0.65F;
+    /**
+     * Temporary controlled A/B experiment: disable BOTH capsule and mesh
+     * contacts for the back strand only. All gravity/stiffness settings stay
+     * unchanged. Set false after comparing free-hang behavior.
+     */
+    private static final boolean DIAG_BACK_WITHOUT_COLLISIONS = true;
 
     private static BodyPartChainSolver.Vec3[] filterBoneMotion(
             State state, BodyPartChainSolver.Vec3[] pose)
@@ -124,6 +130,13 @@ public final class BodyPartPhysicsPreviewSimulation
         if (chain==null || animatedWorld==null || chain.settings==null ||
                 !chain.settings.isEnabled()) return null;
         BodyPartPhysicsSettings settings=chain.settings;
+        boolean collisionBypass = DIAG_BACK_WITHOUT_COLLISIONS &&
+                "back_strand_1".equals(chain.root.getName());
+        if(collisionBypass)
+        {
+            colliders=null;
+            surface=null;
+        }
         int hash=31*(31*Float.floatToIntBits(settings.getGravity())
                 +Float.floatToIntBits(settings.getStiffness()))
                 +Float.floatToIntBits(settings.getDamping());
