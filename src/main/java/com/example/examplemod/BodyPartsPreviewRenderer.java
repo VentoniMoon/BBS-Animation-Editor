@@ -260,7 +260,10 @@ public class BodyPartsPreviewRenderer
                 BodyPartMeshContactTracker.Result report =
                         tracker.inspect(frame,joints,surface);
                 torsoTrackerSampledFrames.put(data, Integer.valueOf(frame));
-                if(frame==0 || frame==20 || frame==60)
+                // These native matrices reflect the pose actually rendered
+                // in the preview, including previously applied physics.
+                // Sample early frames to locate immediate cube penetration.
+                if(frame<=5 || frame==20 || frame==60)
                 {
                     for (int cubeIndex=1;cubeIndex<=4;cubeIndex++)
                     {
@@ -299,6 +302,9 @@ public class BodyPartsPreviewRenderer
                                 +" windingNegative="+negative
                                 +" initialWindingNegative="+
                                         (initial==null?"unknown":initial.toString())
+                                +" negativeDelta="+
+                                        (initial==null?"unknown":
+                                                Integer.toString(negative-initial.intValue()))
                                 +" nearestDistance="+
                                         (close==0?"none":Float.toString(smallest))
                                 +" (reference geo; signs are not solid classification)");
