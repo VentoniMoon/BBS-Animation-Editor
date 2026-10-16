@@ -74,6 +74,24 @@ jobs:
           test -s "$OUT/native-jolt.jar"
           (cd "$OUT/native" && jar xf "$OUT/native-jolt.jar")
           find "$OUT/native" -type f -name '*.so' -print
+      - name: Assemble Java 8 JAR with Windows and Linux native Jolt
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
+            if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
+              "$base/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
+              --output "$OUT/windows-jolt.jar"; then
+              break
+            fi
+          done
+          test -s "$OUT/windows-jolt.jar"
+          mkdir -p "$OUT/native-win"
+          (cd "$OUT/native-win" && jar xf "$OUT/windows-jolt.jar")
+          test -f "$OUT/native/linux/x86-64/com/github/stephengold/libjoltjni.so"
+          test -f "$OUT/native-win/windows/x86-64/com/github/stephengold/joltjni.dll"
+          cp "$OUT/jolt-jni-6.0.0-java8.jar" "$OUT/jolt-jni-6.0.0-java8-bundled.jar"
+          jar uf "$OUT/jolt-jni-6.0.0-java8-bundled.jar" \
+            -C "$OUT/native" linux -C "$OUT/native-win" windows
       - name: Test native Jolt JNI using actual Java 8
         run: |
           OUT="${{ runner.temp }}/jolt-java8"
@@ -107,6 +125,8 @@ jobs:
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp "$OUT/classes:$OUT/native-jolt.jar" \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp "$OUT/jolt-jni-6.0.0-java8-bundled.jar:$OUT/classes" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke missing
       - name: Smoke test on actual Java 8 VM
@@ -129,6 +149,7 @@ jobs:
           name: jolt-java8-experimental-jars
           path: |
             ${{ runner.temp }}/jolt-java8/jolt-jni-6.0.0-java8.jar
+            ${{ runner.temp }}/jolt-java8/jolt-jni-6.0.0-java8-bundled.jar
             ${{ runner.temp }}/jolt-java8/jolt-hair-prototype-java8.jar
             ${{ runner.temp }}/jolt-java8/UPSTREAM-LICENSE.txt
 
