@@ -1057,6 +1057,8 @@ public class BodyPartsPreviewRenderer
                      * Skip the last bone until its actual tip is available.
                      * The editor's source animation keys remain unchanged.
                      */
+                    BodyPartPhysicsHierarchySwing hierarchy =
+                            new BodyPartPhysicsHierarchySwing();
                     for (int i = 0; i + 1 < simulated.length; i++)
                     {
                         AnimationBone bone = chain.bones.get(i);
@@ -1066,12 +1068,10 @@ public class BodyPartsPreviewRenderer
                                 joints[i + 1].sub(joints[i]);
                         BodyPartChainSolver.Vec3 solvedWorld =
                                 simulated[i + 1].sub(simulated[i]);
-                        BodyPartChainSolver.Vec3 restLocal =
-                                BodyPartPhysicsPoseAdapter.toLocalDirection(basis, restWorld);
-                        BodyPartChainSolver.Vec3 solvedLocal =
-                                BodyPartPhysicsPoseAdapter.toLocalDirection(basis, solvedWorld);
-                        float[] swing = BodyPartPhysicsPoseAdapter.localSwing(
-                                restLocal, solvedLocal);
+                        // In Chameleon, each parent rotation propagates
+                        // through the entire child chain. Compute the child's
+                        // local goal AFTER all previous ancestor corrections.
+                        float[] swing = hierarchy.next(basis,restWorld,solvedWorld);
                         // Every joint with a known child pivot has its own
                         // local swing. The terminal tip is not guessed.
                         physicsFrames.accept(data, frame, bone.getName(), swing);
