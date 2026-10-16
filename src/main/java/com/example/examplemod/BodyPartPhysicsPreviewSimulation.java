@@ -17,6 +17,7 @@ public final class BodyPartPhysicsPreviewSimulation
         int settingsHash;
         BodyPartChainSolver.Vec3[] filteredRelative;
         BodyPartChainSolver.Vec3[] lastAnimatedWorld;
+        BodyPartChainSolver.Vec3[] lastInputPose;
         State(BodyPartChainSolver solver, int frame, int hash)
         {
             this.solver=solver;
@@ -121,6 +122,7 @@ public final class BodyPartPhysicsPreviewSimulation
             state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
             filterBoneMotion(state, animatedWorld); // initialize relative rest pose
             state.lastAnimatedWorld=copyPose(animatedWorld);
+            state.lastInputPose=copyPose(animatedWorld);
             // Seeking directly into a penetrated pose must still resolve
             // contacts. Do not wait for the next consecutive frame.
             if (surface != null && settings.hasBodyCollisions())
@@ -134,7 +136,7 @@ public final class BodyPartPhysicsPreviewSimulation
             // timeline frame. Re-evaluate it rather than returning a stale
             // cached solution. Small render noise is ignored.
             boolean editedSameFrame=!nextFrame &&
-                    maximumChange(state.lastAnimatedWorld,animatedWorld)>0.001F;
+                    maximumChange(state.lastInputPose,animatedWorld)>0.001F;
             if(nextFrame || editedSameFrame)
             {
                 BodyPartChainSolver.Vec3[] oldDriven=state.lastAnimatedWorld;
@@ -147,6 +149,7 @@ public final class BodyPartPhysicsPreviewSimulation
                 if(surface!=null && settings.hasBodyCollisions())
                     state.solver.constrainSurface(driven[0],surface,0.02F);
                 state.lastAnimatedWorld=copyPose(driven);
+                state.lastInputPose=copyPose(animatedWorld);
             }
         }
         state.lastFrame=frame;
