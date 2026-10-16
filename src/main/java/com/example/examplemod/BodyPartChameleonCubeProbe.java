@@ -70,6 +70,15 @@ public final class BodyPartChameleonCubeProbe
             return Math.min(0.15F,maximum);
         }
 
+        /** Center of the free bottom face, relative to this bone's pivot. */
+        public BodyPartChainSolver.Vec3 terminalTipLocal()
+        {
+            return new BodyPartChainSolver.Vec3(
+                    (origin[0]+size[0]*0.5F-pivot[0])/16F,
+                    (origin[1]-inflate-pivot[1])/16F,
+                    (origin[2]+size[2]*0.5F-pivot[2])/16F);
+        }
+
         /** World-space corners using the evaluated bone matrix and attachment. */
         public BodyPartChainSolver.Vec3[] corners(float[] worldBone)
         {
