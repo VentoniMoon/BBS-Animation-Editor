@@ -277,6 +277,50 @@ public class BodyPartsPreviewRenderer
                     }
 
                 }
+                // Actual skin-weight-selected geometry contact queries.
+                // Read-only until the mesh-local/strand coordinate transform
+                // and outward directions are independently verified.
+                for (EmoticonsCollisionGeometryProvider.MeshSnapshot mesh : meshes)
+                {
+                    if (!"body".equals(mesh.name)) continue;
+                    for (EmoticonsSkinCollisionGroups.Group group :
+                            new EmoticonsSkinCollisionGroups.Group[] {
+                                    EmoticonsSkinCollisionGroups.Group.TORSO,
+                                    EmoticonsSkinCollisionGroups.Group.LEFT_ARM,
+                                    EmoticonsSkinCollisionGroups.Group.RIGHT_ARM })
+                    {
+                        EmoticonsCollisionGeometryProvider.MeshSnapshot region =
+                                EmoticonsSkinCollisionGroups.select(
+                                        morph, mesh, java.util.EnumSet.of(group));
+                        if (region == null) continue;
+                        EmoticonsMeshCollisionSolver filtered =
+                                new EmoticonsMeshCollisionSolver(
+                                        java.util.Collections.singletonList(region));
+                        StringBuilder contacts = new StringBuilder();
+                        for (int boneNumber = 1; boneNumber <= 4; boneNumber++)
+                        {
+                            float[] bone = local.getBoneWorldMatrix(
+                                    "back_strand_" + boneNumber);
+                            if (bone == null) continue;
+                            BodyPartChainSolver.Vec3 point =
+                                    BodyPartPhysicsPoseAdapter.position(
+                                            BodyPartPhysicsMatrixSpace.multiply(
+                                                    attachment, bone));
+                            EmoticonsMeshCollisionSolver.Contact hit =
+                                    filtered.nearest(point, 0.5F);
+                            contacts.append(" b").append(boneNumber).append('=')
+                                    .append(hit == null ? "none" :
+                                            Float.toString(hit.distance));
+                        }
+                        System.out.println("[BBS Animation Editor][Physics] "
+                                + "GROUP CONTACT frame=" + frame
+                                + " group=" + group
+                                + " triangles=" + filtered.triangleCount()
+                                + " distances:" + contacts
+                                + " (mesh-local alignment unverified; no forces)");
+                    }
+                    break;
+                }
                 // Filter only the native 'body' mesh to a moving upper-torso
                 // height band. A candidate region, not confirmed collision.
                 if (bodyPos != null)
