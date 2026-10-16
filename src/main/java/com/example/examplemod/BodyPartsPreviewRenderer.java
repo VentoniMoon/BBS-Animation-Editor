@@ -827,8 +827,12 @@ public class BodyPartsPreviewRenderer
             int appliedSwings = 0;
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
+                AnimationBone finalBone = chain.bones.get(chain.bones.size()-1);
+                BodyPartChameleonCubeProbe.Cube finalCube =
+                        BodyPartChameleonCubeProbe.getReference(finalBone.getName());
+                boolean hasTip=finalCube!=null;
                 BodyPartChainSolver.Vec3[] joints =
-                        new BodyPartChainSolver.Vec3[chain.bones.size()];
+                        new BodyPartChainSolver.Vec3[chain.bones.size()+(hasTip?1:0)];
                 BodyPartChainSolver.Vec3 last = null;
                 int jointIndex = 0;
                 for (AnimationBone bone : chain.bones)
@@ -850,6 +854,21 @@ public class BodyPartsPreviewRenderer
                     }
                     joints[jointIndex++] = current;
                     last = current;
+                }
+                // The last cube must have its own simulated direction.
+                // Previously it had no child pivot, so it was never rotated.
+                if(hasTip)
+                {
+                    float[] terminalMatrix=world.getBoneWorldMatrix(finalBone.getName());
+                    BodyPartChainSolver.Vec3 tip=
+                            BodyPartPhysicsPoseAdapter.transformPoint(
+                                    terminalMatrix,finalCube.terminalTipLocal());
+                    if(tip.sub(last).length()<0.00001F)
+                    {
+                        reportPhysicsBoneProbe(data,"zero-length terminal hair tip");
+                        return;
+                    }
+                    joints[jointIndex]=tip;
                 }
                 // Parent matrix comes from the native Emoticons render of
                 // this frame. Build a conservative torso capsule in that
@@ -908,7 +927,7 @@ public class BodyPartsPreviewRenderer
                         // Use the true cuboid extent behind each pivot.
                         // The first/root joint stays fixed at the attachment;
                         // only downstream chain particles are projected.
-                        float[] cubeReach=new float[chain.bones.size()];
+                        float[] cubeReach=new float[joints.length];
                         for(int boneIndex=1;boneIndex<chain.bones.size();boneIndex++)
                         {
                             String name=chain.bones.get(boneIndex).getName();
@@ -917,6 +936,20 @@ public class BodyPartsPreviewRenderer
                             float[] boneWorld=world.getBoneWorldMatrix(name);
                             if(cube!=null && boneWorld!=null)
                                 cubeReach[boneIndex]=cube.inwardReach(boneWorld,outward);
+                        }
+                        if(hasTip)
+                        {
+                            float[] terminalWorld=world.getBoneWorldMatrix(finalBone.getName());
+                            BodyPartChainSolver.Vec3 tip=joints[joints.length-1];
+                            float reach=0F;
+                            for(BodyPartChainSolver.Vec3 corner:finalCube.corners(terminalWorld))
+                            {
+                                BodyPartChainSolver.Vec3 delta=tip.sub(corner);
+                                float amount=delta.x*outward.x+delta.y*outward.y+
+                                        delta.z*outward.z;
+                                reach=Math.max(reach,amount);
+                            }
+                            cubeReach[joints.length-1]=Math.min(0.15F,reach);
                         }
                         meshConstraint=new BodyPartMeshSurfaceConstraint(
                                 torsoSurface,outward,0.012F,cubeReach);
@@ -994,7 +1027,7 @@ public class BodyPartsPreviewRenderer
                      * Skip the last bone until its actual tip is available.
                      * The editor's source animation keys remain unchanged.
                      */
-                    for (int i = 0; i + 1 < chain.bones.size(); i++)
+                    for (int i = 0; i + 1 < simulated.length; i++)
                     {
                         AnimationBone bone = chain.bones.get(i);
                         float[] basis = world.getBoneWorldMatrix(bone.getName());
