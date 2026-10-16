@@ -90,6 +90,19 @@ public final class BodyPartChainSolver
             float damping, java.util.List<BodyPartPhysicsCollisions.Capsule> colliders,
             float strandRadius)
     {
+        step(animatedPose,dt,gravity,stiffness,damping,colliders,
+                strandRadius,false);
+    }
+
+    /**
+     * Free-hanging strands: stiffness smooths local bends rather than pulling
+     * particles back to body-rotated animation targets. Other callers retain
+     * their original pose-following behavior.
+     */
+    public void step(Vec3[] animatedPose,float dt,float gravity,float stiffness,
+            float damping, java.util.List<BodyPartPhysicsCollisions.Capsule> colliders,
+            float strandRadius,boolean freeHanging)
+    {
         check(animatedPose);
         if (!(dt>0F) || dt>0.1F) throw new IllegalArgumentException("Invalid timestep");
         gravity=clamp(gravity,0F,2F);
@@ -105,7 +118,21 @@ public final class BodyPartChainSolver
                 Vec3 velocity=current.sub(previous[i]).scale(1F-damping);
                 previous[i]=current;
                 points[i]=current.add(velocity).add(new Vec3(0F,-9.81F*gravity*h*h,0F));
-                points[i]=points[i].add(animatedPose[i].sub(points[i]).scale(stiffness*0.1F));
+                if(!freeHanging)
+                    points[i]=points[i].add(animatedPose[i].sub(points[i]).scale(stiffness*0.1F));
+            }
+            if(freeHanging && points.length>2 && stiffness>0F)
+            {
+                // Smooth sharp internal kinks without restoring the torso's
+                // animated orientation. The root remains pinned.
+                Vec3[] smoothed=points.clone();
+                for(int i=1;i+1<points.length;i++)
+                {
+                    Vec3 midpoint=points[i-1].add(points[i+1]).scale(0.5F);
+                    smoothed[i]=points[i].add(midpoint.sub(points[i])
+                            .scale(stiffness*0.04F));
+                }
+                for(int i=1;i+1<points.length;i++)points[i]=smoothed[i];
             }
             for (int iteration=0;iteration<8;iteration++)
             {
