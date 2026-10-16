@@ -102,6 +102,94 @@ public final class EmoticonsSkinCollisionGroups
         return new Result(counts,total,unweighted);
     }
 
+    /**
+     * Produces a filtered subset of an already-skinned geometry snapshot.
+     * Only indices are filtered; vertex positions stay unchanged, so the
+     * physics solver can read the real deformed triangles. This method does
+     * NOT convert them to world coordinates.
+     *
+     * Fails closed on unmatched source/snapshot topology.
+     */
+    public static EmoticonsCollisionGeometryProvider.MeshSnapshot select(
+            Object morph,
+            EmoticonsCollisionGeometryProvider.MeshSnapshot snapshot,
+            java.util.Set<Group> allowed)
+    {
+        if (!(morph instanceof AnimatedMorph) || snapshot == null ||
+                allowed == null || allowed.isEmpty()) return null;
+        for (AnimationMesh mesh :
+                EmoticonsModelAccess.getMeshes((AnimatedMorph)morph))
+        {
+            if (mesh == null || mesh.data == null ||
+                    !snapshot.name.equals(mesh.name)) continue;
+            int[] indices = mesh.data.indexData;
+            int[] bones = mesh.data.boneIndexData;
+            float[] weights = mesh.data.weightData;
+            BOBJArmature armature = mesh.getArmature();
+            if (indices == null || bones == null || weights == null ||
+                    armature == null || armature.orderedBones == null ||
+                    snapshot.triangles.length != indices.length ||
+                    snapshot.vertices.length % 3 != 0 ||
+                    weights.length != bones.length ||
+                    weights.length != (long)(snapshot.vertices.length / 3) * 4)
+                return null;
+            for (int i = 0; i < indices.length; i++)
+                if (indices[i] != snapshot.triangles[i]) return null;
+            Map<Integer,Group> byBone = new LinkedHashMap<Integer,Group>();
+            for (BOBJBone bone : armature.orderedBones)
+                if (bone != null)
+                    byBone.put(Integer.valueOf(bone.index), classify(bone.name));
+
+            List<Integer> result = new ArrayList<Integer>();
+            for (int t = 0; t + 2 < indices.length; t += 3)
+            {
+                java.util.EnumMap<Group,Float> contributions =
+                        new java.util.EnumMap<Group,Float>(Group.class);
+                float totalWeight = 0F;
+                for (int j = 0; j < 3; j++)
+                {
+                    int vertex = indices[t+j];
+                    if (vertex < 0 || vertex >= snapshot.vertices.length/3)
+                        return null;
+                    int offset = vertex * 4;
+                    for (int slot = 0; slot < 4; slot++)
+                    {
+                        float w = weights[offset+slot];
+                        if (!Float.isFinite(w) || w <= 0F) continue;
+                        Group g = byBone.get(Integer.valueOf(bones[offset+slot]));
+                        if (g == null) g = Group.OTHER;
+                        Float old = contributions.get(g);
+                        contributions.put(g, Float.valueOf(
+                                (old == null ? 0F : old.floatValue()) + w));
+                        totalWeight += w;
+                    }
+                }
+                boolean include = false;
+                if (totalWeight <= 0F) include = allowed.contains(Group.OTHER);
+                else for (Map.Entry<Group,Float> c : contributions.entrySet())
+                    if (allowed.contains(c.getKey()) &&
+                            c.getValue().floatValue() >= totalWeight * 0.15F)
+                    {
+                        include = true;
+                        break;
+                    }
+                if (include)
+                {
+                    result.add(Integer.valueOf(indices[t]));
+                    result.add(Integer.valueOf(indices[t+1]));
+                    result.add(Integer.valueOf(indices[t+2]));
+                }
+            }
+            int[] triangleIndices = new int[result.size()];
+            for (int i = 0; i < triangleIndices.length; i++)
+                triangleIndices[i] = result.get(i).intValue();
+            return new EmoticonsCollisionGeometryProvider.MeshSnapshot(
+                    snapshot.name + "_collision_groups",
+                    snapshot.vertices, triangleIndices);
+        }
+        return null;
+    }
+
     private static void increment(Map<Group,Integer> counts,Group group)
     {counts.put(group,Integer.valueOf(counts.get(group).intValue()+1));}
 
