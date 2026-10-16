@@ -15,12 +15,47 @@ public final class BodyPartPhysicsPreviewSimulation
         BodyPartChainSolver solver;
         int lastFrame;
         int settingsHash;
+        BodyPartChainSolver.Vec3[] filteredRelative;
         State(BodyPartChainSolver solver, int frame, int hash)
         {
             this.solver=solver;
             this.lastFrame=frame;
             this.settingsHash=hash;
         }
+    }
+
+    // In blocks: breathing-sized bone deformation should not continually
+    // excite a strand. Translation of its root is never filtered.
+    private static final float REST_DEAD_ZONE = 0.006F;
+    private static final float REST_FOLLOW = 0.65F;
+
+    private static BodyPartChainSolver.Vec3[] filterBoneMotion(
+            State state, BodyPartChainSolver.Vec3[] pose)
+    {
+        BodyPartChainSolver.Vec3[] rest = new BodyPartChainSolver.Vec3[pose.length];
+        rest[0] = pose[0];
+        if (state.filteredRelative == null || state.filteredRelative.length != pose.length)
+        {
+            state.filteredRelative = new BodyPartChainSolver.Vec3[pose.length];
+            for (int i = 1; i < pose.length; i++)
+                state.filteredRelative[i] = pose[i].sub(pose[0]);
+        }
+        for (int i = 1; i < pose.length; i++)
+        {
+            BodyPartChainSolver.Vec3 wanted = pose[i].sub(pose[0]);
+            BodyPartChainSolver.Vec3 previous = state.filteredRelative[i];
+            BodyPartChainSolver.Vec3 delta = wanted.sub(previous);
+            float distance = delta.length();
+            if (distance > REST_DEAD_ZONE)
+            {
+                // Larger pose changes follow promptly; small changes within
+                // the dead zone do not drive repeated physics impulses.
+                float alpha = distance > 0.06F ? 1F : REST_FOLLOW;
+                state.filteredRelative[i] = previous.add(delta.scale(alpha));
+            }
+            rest[i] = pose[0].add(state.filteredRelative[i]);
+        }
+        return rest;
     }
 
     private final Map<String, State> states =
@@ -54,11 +89,13 @@ public final class BodyPartPhysicsPreviewSimulation
                 frame>state.lastFrame+1 || state.settingsHash!=hash)
         {
             state=new State(new BodyPartChainSolver(animatedWorld),frame,hash);
+            filterBoneMotion(state, animatedWorld); // initialize relative rest pose
             states.put(key,state);
         }
         else if (frame==state.lastFrame+1)
         {
-            state.solver.step(animatedWorld,1F/20F,settings.getGravity(),
+            BodyPartChainSolver.Vec3[] driven = filterBoneMotion(state, animatedWorld);
+            state.solver.step(driven,1F/20F,settings.getGravity(),
                     settings.getStiffness(),settings.getDamping(),
                     settings.hasBodyCollisions()?colliders:null,0.025F);
         }
