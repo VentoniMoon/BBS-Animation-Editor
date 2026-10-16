@@ -105,6 +105,10 @@ jobs:
             com.example.examplemod.physics.JoltAnchorRotationSmoke
           java -ea -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp "$OUT/classes:$OUT/native-jolt.jar" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke missing
       - name: Smoke test on actual Java 8 VM
         run: |
           java -version
@@ -192,3 +196,7 @@ jobs:
             com.example.examplemod.physics.JoltAnchorRotationSmoke
           java -ea -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp 'java8-win/classes;java8-win/native-jolt.jar' \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp java8-win/classes \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke missing
