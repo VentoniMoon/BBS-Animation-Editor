@@ -94,10 +94,13 @@ jobs:
         run: |
           OUT="${{ runner.temp }}/jolt-java8"
           javac -source 8 -target 8 -cp "$OUT/classes" -d "$OUT/classes" \
-            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java
           LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltHairChainSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltAnchorRotationSmoke
       - name: Smoke test on actual Java 8 VM
         run: |
           java -version
@@ -153,7 +156,8 @@ jobs:
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltNativeSmoke.java \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java \
-            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java
           for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
             if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
               "$base/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
@@ -179,3 +183,5 @@ jobs:
             com.github.stephengold.joltjni.JoltChainSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltHairChainSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltAnchorRotationSmoke
