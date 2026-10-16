@@ -36,6 +36,10 @@ jobs:
           find "$OUT/src" jolt-java8-port/src/main/java/com/example/examplemod/physics -type f -name '*.java' | sort > "$OUT/sources.txt"
           mkdir -p "$OUT/classes"
           javac --release 8 -encoding UTF-8 -d "$OUT/classes" @"$OUT/sources.txt"
+          # Package before compiling test classes; upstream MIT notice retained.
+          jar cf "$OUT/jolt-jni-6.0.0-java8.jar" -C "$OUT/classes" com/github/stephengold/joltjni
+          jar uf "$OUT/jolt-jni-6.0.0-java8.jar" -C "$OUT" UPSTREAM-LICENSE.txt
+          jar cf "$OUT/jolt-hair-prototype-java8.jar" -C "$OUT/classes" com/example/examplemod/physics
           javac --release 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/Java8CleanerSmoke.java
       - name: Execute Java 8 cleanup smoke test
@@ -86,6 +90,15 @@ jobs:
           java -version
           java -ea -cp "${{ runner.temp }}/jolt-java8/classes" \
             com.github.stephengold.joltjni.Java8CleanerSmoke
+
+      - name: Upload experimental Java 8 JNI and hair prototype jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: jolt-java8-experimental-jars
+          path: |
+            ${{ runner.temp }}/jolt-java8/jolt-jni-6.0.0-java8.jar
+            ${{ runner.temp }}/jolt-java8/jolt-hair-prototype-java8.jar
+            ${{ runner.temp }}/jolt-java8/UPSTREAM-LICENSE.txt
 
   windows-java8-native:
     runs-on: windows-latest
