@@ -866,13 +866,16 @@ public class BodyPartsPreviewRenderer
                         livePhysics.sample(data.getTimelineId(), chain, frame,
                                 joints, colliders, meshConstraint);
                 if ("back_strand_1".equals(chain.root.getName()) &&
-                        (frame == 0 || frame == 20 || frame == 60))
+                        (frame == 0 || frame == 20 || frame == 60) &&
+                        (backSolverLoggedFrame.get(data) == null ||
+                         backSolverLoggedFrame.get(data).intValue() != frame))
                 {
                     float largest = 0F;
                     if (simulated != null)
                         for (int i = 1; i < simulated.length; i++)
                             largest = Math.max(largest,
                                     simulated[i].sub(joints[i]).length());
+                    backSolverLoggedFrame.put(data, Integer.valueOf(frame));
                     System.out.println("[BBS Animation Editor][Physics] "
                             + "BACK MESH SOLVER frame=" + frame
                             + " meshAvailable=" + (torsoSurface != null)
@@ -881,6 +884,36 @@ public class BodyPartsPreviewRenderer
                             + " constraintActive=" + (meshConstraint != null)
                             + " enabled=" + chain.settings.hasBodyCollisions()
                             + " maxPoseDelta=" + largest);
+                }
+                if ("back_strand_1".equals(chain.root.getName()) &&
+                        joints.length > 1)
+                {
+                    Integer lastFrame = expectedBackFrame.get(data);
+                    BodyPartChainSolver.Vec3 intended = expectedBackDirection.get(data);
+                    if ((frame == 20 || frame == 60) && lastFrame != null &&
+                            lastFrame.intValue() == frame-1 && intended != null)
+                    {
+                        BodyPartChainSolver.Vec3 nativeDirection =
+                                joints[1].sub(joints[0]);
+                        float divisor = nativeDirection.length()*intended.length();
+                        if (divisor > 1.0E-7F)
+                        {
+                            float cosine=(nativeDirection.x*intended.x+
+                                    nativeDirection.y*intended.y+
+                                    nativeDirection.z*intended.z)/divisor;
+                            cosine=Math.max(-1F,Math.min(1F,cosine));
+                            System.out.println("[BBS Animation Editor][Physics] "
+                                    +"BACK RENDER/SOLVER frame="+frame
+                                    +" previousSolverVsCurrentNativeDegrees="
+                                    +Math.toDegrees(Math.acos(cosine))
+                                    +" (native next-frame pose; actor motion may contribute)");
+                        }
+                    }
+                    if (simulated != null && simulated.length > 1)
+                    {
+                        expectedBackDirection.put(data,simulated[1].sub(simulated[0]));
+                        expectedBackFrame.put(data,Integer.valueOf(frame));
+                    }
                 }
                 if ("left_strand_1".equals(chain.root.getName()) &&
                         simulated != null && simulated.length > 1)
@@ -953,6 +986,12 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, BodyPartChainSolver.Vec3> expectedLeftDirection =
             new IdentityHashMap<BodyPartModelData, BodyPartChainSolver.Vec3>();
     private final Map<BodyPartModelData, Integer> expectedLeftFrame =
+            new IdentityHashMap<BodyPartModelData, Integer>();
+    private final Map<BodyPartModelData, BodyPartChainSolver.Vec3> expectedBackDirection =
+            new IdentityHashMap<BodyPartModelData, BodyPartChainSolver.Vec3>();
+    private final Map<BodyPartModelData, Integer> expectedBackFrame =
+            new IdentityHashMap<BodyPartModelData, Integer>();
+    private final Map<BodyPartModelData, Integer> backSolverLoggedFrame =
             new IdentityHashMap<BodyPartModelData, Integer>();
 
     private final Map<BodyPartModelData, String> physicsSwingDiagnostics =
