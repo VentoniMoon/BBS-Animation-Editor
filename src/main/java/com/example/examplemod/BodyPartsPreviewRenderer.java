@@ -311,6 +311,11 @@ public class BodyPartsPreviewRenderer
                             contacts.append(" b").append(boneNumber).append('=')
                                     .append(hit == null ? "none" :
                                             Float.toString(hit.distance));
+                            if (hit != null)
+                                contacts.append("[windingSigned=")
+                                        .append(filtered.windingSignedDistance(point, hit))
+                                        .append(",tri=").append(hit.triangleIndex)
+                                        .append(']');
                         }
                         System.out.println("[BBS Animation Editor][Physics] "
                                 + "GROUP CONTACT frame=" + frame
