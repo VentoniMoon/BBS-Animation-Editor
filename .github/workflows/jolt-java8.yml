@@ -123,7 +123,8 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 -cp java8-win/classes -d java8-win/classes \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/Java8CleanerSmoke.java \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltNativeSmoke.java \
-            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java
           curl --fail --location --retry 3 \
             'https://repo.maven.apache.org/maven2/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar' \
             --output java8-win/native-jolt.jar
