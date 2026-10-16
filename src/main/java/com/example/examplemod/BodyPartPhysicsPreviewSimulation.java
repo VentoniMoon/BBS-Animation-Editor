@@ -30,6 +30,10 @@ public final class BodyPartPhysicsPreviewSimulation
     // excite a strand. Translation of its root is never filtered.
     private static final float REST_DEAD_ZONE = 0.006F;
     private static final float REST_FOLLOW = 0.65F;
+    // Back hair has no animated-pose attraction. A few ticks from a heavily
+    // bent seek pose are insufficient to establish world-down equilibrium.
+    private static final int BACK_SEEK_SETTLE_STEPS = 24;
+    private static final int BACK_EDIT_SETTLE_STEPS = 18;
     /**
      * Temporary controlled A/B experiment: disable BOTH capsule and mesh
      * contacts for the back strand only. All gravity/stiffness settings stay
@@ -165,7 +169,7 @@ public final class BodyPartPhysicsPreviewSimulation
             boolean freeHanging="back_strand_1".equals(chain.root.getName());
             if(freeHanging)
                 advance(state.solver,animatedWorld,settings,colliders,surface,
-                        6,true);
+                        BACK_SEEK_SETTLE_STEPS,true);
             else if(surface!=null && settings.hasBodyCollisions())
                 state.solver.constrainSurface(animatedWorld[0],surface,0.02F);
             states.put(key,state);
@@ -187,7 +191,8 @@ public final class BodyPartPhysicsPreviewSimulation
                     state.solver.followAnimatedPose(oldDriven,driven);
                 boolean freeHanging="back_strand_1".equals(chain.root.getName());
                 advance(state.solver,driven,settings,colliders,surface,
-                        editedSameFrame && freeHanging ? 6 : 1,freeHanging);
+                        editedSameFrame && freeHanging ?
+                                BACK_EDIT_SETTLE_STEPS : 1,freeHanging);
                 state.lastAnimatedWorld=copyPose(driven);
                 state.lastInputPose=copyPose(animatedWorld);
             }
