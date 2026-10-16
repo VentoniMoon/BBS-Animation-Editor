@@ -42,7 +42,7 @@ public final class BodyPartChameleonPhysicsPose
                 get(transform, "rotateY"),
                 get(transform, "rotateZ")
             };
-            float maxAngle = 0.45F; // diagnostic only: clearly visible single-root rotation
+            float maxAngle = 1.20F; // hair needs to bend well past 25.8 degrees
             float[] limited = new float[] {swing[0], swing[1], swing[2],
                     Math.max(-maxAngle, Math.min(maxAngle, swing[3]))};
             float[] composed = BodyPartPhysicsRotation.composeInBoneSpace(original, limited);
