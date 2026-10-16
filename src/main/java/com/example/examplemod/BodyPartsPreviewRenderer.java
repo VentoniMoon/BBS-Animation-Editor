@@ -257,6 +257,25 @@ public class BodyPartsPreviewRenderer
                             EmoticonsSkinCollisionGroups.analyze(morph, "body");
                     System.out.println("[BBS Animation Editor][Physics] "
                             + "SKIN COLLISION GROUPS mesh=body " + groups);
+                    for (EmoticonsCollisionGeometryProvider.MeshSnapshot mesh : meshes)
+                    {
+                        if (!"body".equals(mesh.name)) continue;
+                        for (EmoticonsSkinCollisionGroups.Group group :
+                                EmoticonsSkinCollisionGroups.Group.values())
+                        {
+                            EmoticonsCollisionGeometryProvider.MeshSnapshot region =
+                                    EmoticonsSkinCollisionGroups.select(
+                                            morph, mesh,
+                                            java.util.EnumSet.of(group));
+                            System.out.println("[BBS Animation Editor][Physics] "
+                                    + "SKIN GROUP REGION name=" + group
+                                    + " triangles=" + (region == null ?
+                                            "unavailable" : Integer.toString(region.triangleCount()))
+                                    + " (diagnostic only)");
+                        }
+                        break;
+                    }
+
                 }
                 // Filter only the native 'body' mesh to a moving upper-torso
                 // height band. A candidate region, not confirmed collision.
