@@ -7,11 +7,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class JoltOwnerLifecycleSmoke {
     private JoltOwnerLifecycleSmoke() { }
 
+    // A Runnable created inside the owner's constructor can implicitly capture
+    // FakeOwner.this on javac 8 and permanently prevent phantom reachability.
+    // The cleanup action MUST be non-capturing with respect to the owner.
+    private static final class CounterAction implements Runnable {
+        private final AtomicInteger calls;
+        CounterAction(AtomicInteger calls) { this.calls = calls; }
+        @Override public void run() { calls.incrementAndGet(); }
+    }
+
     private static final class FakeOwner extends JoltPhysicsObject {
-        FakeOwner(final AtomicInteger calls) {
-            setVirtualAddress(12345L, new Runnable() {
-                @Override public void run() { calls.incrementAndGet(); }
-            });
+        FakeOwner(AtomicInteger calls) {
+            setVirtualAddress(12345L, new CounterAction(calls));
         }
     }
 
