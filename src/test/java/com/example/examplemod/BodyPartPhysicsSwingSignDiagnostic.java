@@ -189,9 +189,9 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         float[] anchor = BodyPartPhysicsRotation.eulerXYZ(0F,(float)Math.PI,0F);
         float[] rootRest = new float[] {0F,-3F,0.58F}; // back_1 -> back_2
         float[] childRest = new float[] {0F,-3F,0F};   // back_2 -> back_3
-        float rootAngle = (float)Math.toRadians(overLimit ? 40 : 15);
+        float rootAngle = (float)Math.toRadians(overLimit ? 90 : 15);
         float childAngle = (float)Math.toRadians(12);
-        float limit = 0.45F;
+        float limit = 1.20F;
         float[] rootTarget = rotate(BodyPartPhysicsRotation.multiply3(anchor,
                 BodyPartPhysicsRotation.axisAngle(new float[]{1F,0F,0F,rootAngle})),rootRest);
         float[] childTarget = rotate(BodyPartPhysicsRotation.multiply3(
@@ -228,7 +228,7 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         }
         else
         {
-            // A 40-degree requested bend minus the 0.45-rad per-joint cap
+            // A 90-degree requested bend minus the 1.20-rad per-joint cap
             // leaves ~14.2169 degrees of error at the ROOT segment.
             // The following joint may compensate for that error and still
             // hit its own direction target; do not require its error to grow.
