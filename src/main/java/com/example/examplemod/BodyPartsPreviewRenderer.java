@@ -1551,10 +1551,15 @@ public class BodyPartsPreviewRenderer
                 for (Map.Entry<String, float[]> entry : swings.entrySet())
                 {
                     float[] swing = entry.getValue();
-                    // Temporary handedness correction established with manual
-                    // X rotation test. A unified basis conversion is pending.
+                    // The historical inverted swing was established only
+                    // for the LEFT root's Y=180 attachment. Do not extend
+                    // that unverified sign convention to the BACK chain:
+                    // its solver already computes directions in the
+                    // rendered bone basis. This is an isolated A/B change.
+                    boolean backStrand = entry.getKey().startsWith("back_strand_");
                     float[] corrected = new float[] {
-                            swing[0], swing[1], swing[2], -swing[3]
+                            swing[0], swing[1], swing[2],
+                            backStrand ? swing[3] : -swing[3]
                     };
                     float[] before = readChameleonPoseEuler(child, entry.getKey());
                     if (BodyPartChameleonPhysicsPose.addLocalSwing(
