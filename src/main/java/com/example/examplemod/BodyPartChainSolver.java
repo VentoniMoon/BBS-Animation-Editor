@@ -38,6 +38,54 @@ public final class BodyPartChainSolver
         }
     }
 
+    /**
+     * Carry the entire simulated strand when its animated parent rotates.
+     * Rotate both current and previous particles so this does not inject
+     * a fictitious velocity. Gravity remains world-down on the next step.
+     */
+    public void followAnimatedPose(Vec3[] from, Vec3[] to)
+    {
+        check(from);
+        check(to);
+        Vec3 oldDirection=from[1].sub(from[0]);
+        Vec3 newDirection=to[1].sub(to[0]);
+        float oldLen=oldDirection.length(),newLen=newDirection.length();
+        if(oldLen<1E-6F || newLen<1E-6F)return;
+        Vec3 a=oldDirection.scale(1F/oldLen);
+        Vec3 b=newDirection.scale(1F/newLen);
+        Vec3 cross=new Vec3(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,
+                a.x*b.y-a.y*b.x);
+        float sine=cross.length();
+        float cosine=Math.max(-1F,Math.min(1F,a.x*b.x+a.y*b.y+a.z*b.z));
+        if(sine<1E-6F && cosine<0F)
+        {
+            Vec3 reference=Math.abs(a.x)<0.9F ? new Vec3(1F,0F,0F) :
+                    new Vec3(0F,1F,0F);
+            cross=new Vec3(a.y*reference.z-a.z*reference.y,
+                    a.z*reference.x-a.x*reference.z,
+                    a.x*reference.y-a.y*reference.x);
+            sine=cross.length();
+        }
+        float angle=(float)Math.atan2(sine,cosine);
+        Vec3 axis=sine>1E-6F ? cross.scale(1F/sine) : new Vec3(1F,0F,0F);
+        for(int i=0;i<points.length;i++)
+        {
+            points[i]=rotateOffset(points[i].sub(from[0]),axis,angle).add(to[0]);
+            previous[i]=rotateOffset(previous[i].sub(from[0]),axis,angle).add(to[0]);
+        }
+        points[0]=previous[0]=to[0];
+    }
+
+    private static Vec3 rotateOffset(Vec3 v, Vec3 n, float angle)
+    {
+        if(Math.abs(angle)<1E-7F)return v;
+        float c=(float)Math.cos(angle),s=(float)Math.sin(angle);
+        Vec3 cross=new Vec3(n.y*v.z-n.z*v.y,n.z*v.x-n.x*v.z,
+                n.x*v.y-n.y*v.x);
+        float dot=n.x*v.x+n.y*v.y+n.z*v.z;
+        return v.scale(c).add(cross.scale(s)).add(n.scale(dot*(1F-c)));
+    }
+
     public void reset(Vec3[] pose)
     {
         check(pose);
