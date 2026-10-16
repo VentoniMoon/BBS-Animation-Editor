@@ -184,6 +184,64 @@ public final class EmoticonsMeshCollisionSolver
         return dot(delta, n) / length;
     }
 
+    /** Segment/surface intersection in the same mesh-local coordinate frame.
+     * This is a geometric hit only, not a reliable solid-body inside test.
+     * The returned normal follows triangle winding, not an assumed outward side.
+     */
+    public static final class SegmentHit
+    {
+        public final float fraction;
+        public final BodyPartChainSolver.Vec3 position;
+        public final BodyPartChainSolver.Vec3 windingNormal;
+        public final int triangleIndex;
+        SegmentHit(float fraction, BodyPartChainSolver.Vec3 position,
+                BodyPartChainSolver.Vec3 windingNormal, int triangleIndex)
+        {
+            this.fraction=fraction;
+            this.position=position;
+            this.windingNormal=windingNormal;
+            this.triangleIndex=triangleIndex;
+        }
+    }
+
+    public SegmentHit intersectSegment(BodyPartChainSolver.Vec3 start,
+            BodyPartChainSolver.Vec3 end)
+    {
+        if (start == null || end == null) return null;
+        BodyPartChainSolver.Vec3 dir=end.sub(start);
+        if (dir.length() < 1.0E-7F) return null;
+        float bestFraction=Float.POSITIVE_INFINITY;
+        SegmentHit best=null;
+        // Diagnostic calls are limited to a few bones on selected frames.
+        // Full scan avoids missing long segments with a point-based grid.
+        for (int id=0; id<triangles.size(); id++)
+        {
+            Triangle triangle=triangles.get(id);
+            BodyPartChainSolver.Vec3 edge1=triangle.b.sub(triangle.a);
+            BodyPartChainSolver.Vec3 edge2=triangle.c.sub(triangle.a);
+            BodyPartChainSolver.Vec3 p=cross(dir, edge2);
+            float determinant=dot(edge1,p);
+            if (Math.abs(determinant)<1.0E-8F) continue;
+            float inv=1F/determinant;
+            BodyPartChainSolver.Vec3 t=start.sub(triangle.a);
+            float u=dot(t,p)*inv;
+            if (u<-1.0E-6F || u>1.000001F) continue;
+            BodyPartChainSolver.Vec3 q=cross(t,edge1);
+            float v=dot(dir,q)*inv;
+            if (v<-1.0E-6F || u+v>1.000001F) continue;
+            float fraction=dot(edge2,q)*inv;
+            if (fraction<=1.0E-5F || fraction>=1F-1.0E-5F ||
+                    fraction>=bestFraction) continue;
+            BodyPartChainSolver.Vec3 normal=cross(edge1,edge2);
+            float length=normal.length();
+            if (length<1.0E-8F)continue;
+            bestFraction=fraction;
+            best=new SegmentHit(fraction,start.add(dir.scale(fraction)),
+                    normal.scale(1F/length),id);
+        }
+        return best;
+    }
+
     private static BodyPartChainSolver.Vec3 closest(BodyPartChainSolver.Vec3 p,
             BodyPartChainSolver.Vec3 a,BodyPartChainSolver.Vec3 b,
             BodyPartChainSolver.Vec3 c)
