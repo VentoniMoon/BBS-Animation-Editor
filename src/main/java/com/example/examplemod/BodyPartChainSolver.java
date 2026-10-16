@@ -155,6 +155,65 @@ public final class BodyPartChainSolver
         }
     }
 
+    /**
+     * Optional collision position constraint, called after regular Verlet
+     * integration. The projection must use the solver's world coordinate
+     * space and a verified outward surface direction.
+     */
+    public interface SurfaceConstraint
+    {
+        /** Return a corrected point (or the input unchanged). Never null. */
+        Vec3 project(Vec3 point, int particleIndex);
+    }
+
+    /**
+     * Bounded collision correction followed by distance restoration.
+     * The root is pinned and never projected. The caller supplies a verified
+     * collision surface; this method does not guess mesh orientation.
+     */
+    public void constrainSurface(Vec3 root, SurfaceConstraint constraint,
+            float maximumParticleShift)
+    {
+        if (root == null || constraint == null || !(maximumParticleShift > 0F))
+            return;
+        float maxShift=Math.min(0.025F,maximumParticleShift);
+        points[0]=previous[0]=root;
+        // Alternate projection and constraints rather than allowing the final
+        // length pass to re-insert every strand point through the skin.
+        for(int pass=0;pass<4;pass++)
+        {
+            for(int i=1;i<points.length;i++)
+            {
+                Vec3 wanted=constraint.project(points[i],i);
+                if(wanted==null)continue;
+                Vec3 displacement=wanted.sub(points[i]);
+                float distance=displacement.length();
+                if(!Float.isFinite(distance) || distance<1.0E-7F)continue;
+                if(distance>maxShift)displacement=displacement.scale(maxShift/distance);
+                points[i]=points[i].add(displacement);
+                // Do not turn collision recovery into a large artificial
+                // Verlet kick in the next animation frame.
+                previous[i]=previous[i].add(displacement);
+            }
+            points[0]=root;
+            for(int i=1;i<points.length;i++)
+            {
+                Vec3 delta=points[i].sub(points[i-1]);
+                float distance=delta.length();
+                if(distance<1.0E-7F)continue;
+                float error=distance-segmentLengths[i-1];
+                Vec3 correction=delta.scale(error/distance);
+                if(i==1)points[i]=points[i].sub(correction);
+                else
+                {
+                    points[i-1]=points[i-1].add(correction.scale(0.5F));
+                    points[i]=points[i].sub(correction.scale(0.5F));
+                }
+            }
+        }
+        points[0]=previous[0]=root;
+    }
+
     private static float clamp(float x,float low,float high)
     { return Float.isNaN(x)?low:Math.max(low,Math.min(high,x)); }
 
