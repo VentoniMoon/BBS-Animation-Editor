@@ -95,12 +95,16 @@ jobs:
           OUT="${{ runner.temp }}/jolt-java8"
           javac -source 8 -target 8 -cp "$OUT/classes" -d "$OUT/classes" \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java \
-            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java
           LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltHairChainSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
       - name: Smoke test on actual Java 8 VM
         run: |
           java -version
@@ -185,3 +189,5 @@ jobs:
             com.example.examplemod.physics.JoltHairChainSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
