@@ -199,6 +199,9 @@ public class BodyPartsPreviewRenderer
     /** Avoid rebuilding the skinned torso mesh repeatedly for the same frame. */
     private final Map<BodyPartModelData, Integer> torsoTrackerSampledFrames =
             new IdentityHashMap<BodyPartModelData, Integer>();
+    /** Per-cube starting penetration metric, for comparison only. */
+    private final Map<BodyPartModelData, Map<String, Integer>> cubeBaselineNegative =
+            new IdentityHashMap<BodyPartModelData, Map<String, Integer>>();
     private final Map<BodyPartModelData, EmoticonsMeshCollisionSolver> torsoCollisionMeshes =
             new IdentityHashMap<BodyPartModelData, EmoticonsMeshCollisionSolver>();
     private final Map<BodyPartModelData, Integer> torsoCollisionMeshFrames =
@@ -265,27 +268,37 @@ public class BodyPartsPreviewRenderer
                         if(cube==null || boneMatrix==null)continue;
                         float[] worldBone=BodyPartPhysicsMatrixSpace.multiply(
                                 attachment,boneMatrix);
-                        BodyPartChainSolver.Vec3[] corners=cube.corners(worldBone);
+                        BodyPartChainSolver.Vec3[] samples=cube.faceSamples(worldBone);
                         int close=0,negative=0;
                         float smallest=Float.POSITIVE_INFINITY;
-                        for(BodyPartChainSolver.Vec3 corner:corners)
+                        for(BodyPartChainSolver.Vec3 sample:samples)
                         {
                             EmoticonsMeshCollisionSolver.Contact contact=
-                                    surface.nearest(corner,0.18F);
+                                    surface.nearest(sample,0.18F);
                             if(contact==null)continue;
                             close++;
                             smallest=Math.min(smallest,contact.distance);
-                            if(surface.windingSignedDistance(corner,contact)<-0.002F)
+                            if(surface.windingSignedDistance(sample,contact)<-0.002F)
                                 negative++;
                         }
+                        Map<String,Integer> baseline=cubeBaselineNegative.get(data);
+                        if(baseline==null)
+                        {
+                            baseline=new java.util.HashMap<String,Integer>();
+                            cubeBaselineNegative.put(data,baseline);
+                        }
+                        if(frame==0)baseline.put(boneName,Integer.valueOf(negative));
+                        Integer initial=baseline.get(boneName);
                         System.out.println("[BBS Animation Editor][Physics] "
                                 +"BACK CUBE CONTACT frame="+frame
                                 +" bone="+boneName
-                                +" cornersNear="+close+"/8"
+                                +" faceSamplesNear="+close+"/"+samples.length
                                 +" windingNegative="+negative
+                                +" initialWindingNegative="+
+                                        (initial==null?"unknown":initial.toString())
                                 +" nearestDistance="+
                                         (close==0?"none":Float.toString(smallest))
-                                +" (reference geo only; orientation unverified)");
+                                +" (reference geo; signs are not solid classification)");
                     }
                 }
                 if(frame==0 || frame==20 || frame==60)
