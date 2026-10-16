@@ -1556,10 +1556,11 @@ public class BodyPartsPreviewRenderer
                     // that unverified sign convention to the BACK chain:
                     // its solver already computes directions in the
                     // rendered bone basis. This is an isolated A/B change.
-                    boolean backStrand = entry.getKey().startsWith("back_strand_");
+                    // Chameleon local swing is opposite to the world-space
+                    // swing angle produced by our solver. Apply the same
+                    // conversion to all strands, including the back chain.
                     float[] corrected = new float[] {
-                            swing[0], swing[1], swing[2],
-                            backStrand ? swing[3] : -swing[3]
+                            swing[0], swing[1], swing[2], -swing[3]
                     };
                     float[] before = readChameleonPoseEuler(child, entry.getKey());
                     if (BodyPartChameleonPhysicsPose.addLocalSwing(
