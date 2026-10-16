@@ -57,10 +57,9 @@ public final class BodyPartPhysicsHierarchySwing
         // a rotation which the renderer silently clamps away.
         swing[3]=Math.max(-0.45F,Math.min(0.45F,swing[3]));
 
-        // The Chameleon pose bridge applies NEGATIVE swing angle (see
-        // BodyPartsPreviewRenderer). Propagate that same rendered sign to
-        // descendants; using the raw positive angle here causes immediate
-        // solver/render divergence for the second and subsequent bones.
+        // This is the *desired rendered* swing in world space.
+        // Accumulate it for descendants. The inverse adapter angle
+        // returned below is negated back by the preview writer.
         // Convert the local axis into the original world basis first.
         BodyPartChainSolver.Vec3 localAxis=new BodyPartChainSolver.Vec3(
                 swing[0],swing[1],swing[2]);
@@ -79,11 +78,16 @@ public final class BodyPartPhysicsHierarchySwing
         {
             float[] delta=BodyPartPhysicsRotation.axisAngle(new float[]{
                     worldAxis.x/axisLength,worldAxis.y/axisLength,
-                    worldAxis.z/axisLength,-swing[3]});
+                    worldAxis.z/axisLength,swing[3]});
             float[] accumulated=BodyPartPhysicsRotation.multiply3(
                     ancestorRotation,delta);
             System.arraycopy(accumulated,0,ancestorRotation,0,9);
         }
-        return swing;
+        // The preview writer converts the adapter swing by negating its
+        // angle before applying it to Chameleon. Return the inverse adapter
+        // angle, so the ACTUALLY RENDERED rotation matches the physical
+        // localSwing(rest, goal) calculated above. The ancestor matrix
+        // already follows the rendered positive angle (see below).
+        return new float[]{swing[0],swing[1],swing[2],-swing[3]};
     }
 }
