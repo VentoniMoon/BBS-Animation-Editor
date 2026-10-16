@@ -64,6 +64,8 @@ public final class JoltHairChain implements AutoCloseable {
                 EMotionType.Kinematic, 0);
         this.pin = bodies.createBody(pinSpec);
         bodies.addBody(pin.getId(), EActivation.Activate);
+        pinSpec.close();
+        pinShape.close();
         float radius = Math.min(0.045F, linkLength * 0.3F);
         CapsuleShape shape = new CapsuleShape(
                 Math.max(0.005F, linkLength * 0.5F - radius), radius);
@@ -79,6 +81,7 @@ public final class JoltHairChain implements AutoCloseable {
             spec.setGravityFactor(1F);
             Body body = bodies.createBody(spec);
             bodies.addBody(body.getId(), EActivation.Activate);
+            spec.close();
             links[i] = body;
 
             RVec3 pivot = new RVec3(0D, startY - i * linkLength, 0D);
@@ -99,9 +102,11 @@ public final class JoltHairChain implements AutoCloseable {
                     (SwingTwistConstraint)jointSpec.create(previous, body);
             world.addConstraint(constraint);
             joints[i] = constraint;
+            jointSpec.close();
             tuneSpring(constraint, stiffness, damping, falloff, i, count);
             previous = body;
         }
+        shape.close();
     }
 
     /** Advance exactly one Minecraft animation tick at a fixed 60Hz substep. */
@@ -170,6 +175,22 @@ public final class JoltHairChain implements AutoCloseable {
     @Override public void close() {
         if (closed) return;
         closed = true;
+        // Explicitly release native scene-owned objects before world teardown.
+        // A Body returned by BodyInterface is borrowed from the PhysicsSystem.
+        for (SwingTwistConstraint joint : joints) {
+            if (joint != null) {
+                world.removeConstraint(joint);
+                joint.close();
+            }
+        }
+        for (Body link : links) {
+            if (link != null) {
+                bodies.removeBody(link.getId());
+                bodies.destroyBody(link.getId());
+            }
+        }
+        bodies.removeBody(pin.getId());
+        bodies.destroyBody(pin.getId());
         world.close();
         jobs.close();
         allocator.close();
