@@ -182,6 +182,60 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         System.out.println("PASS canonical two-bone yaw=" + anchorYawDegrees);
     }
 
+
+    /** Real back-hair pivots (Blockbench pixels, converted to directions). */
+    private static void testHorsBackHair(boolean overLimit)
+    {
+        float[] anchor = BodyPartPhysicsRotation.eulerXYZ(0F,(float)Math.PI,0F);
+        float[] rootRest = new float[] {0F,-3F,0.58F}; // back_1 -> back_2
+        float[] childRest = new float[] {0F,-3F,0F};   // back_2 -> back_3
+        float rootAngle = (float)Math.toRadians(overLimit ? 40 : 15);
+        float childAngle = (float)Math.toRadians(12);
+        float limit = 0.45F;
+        float[] rootTarget = rotate(BodyPartPhysicsRotation.multiply3(anchor,
+                BodyPartPhysicsRotation.axisAngle(new float[]{1F,0F,0F,rootAngle})),rootRest);
+        float[] childTarget = rotate(BodyPartPhysicsRotation.multiply3(
+                BodyPartPhysicsRotation.multiply3(anchor,
+                        BodyPartPhysicsRotation.axisAngle(new float[]{1F,0F,0F,rootAngle})),
+                BodyPartPhysicsRotation.axisAngle(new float[]{0F,0F,1F,childAngle})),childRest);
+        float[] matrix = new float[16];
+        matrix[15] = 1F;
+        for(int col=0;col<3;col++)
+            for(int row=0;row<3;row++)
+                matrix[col*4+row] = anchor[col*3+row];
+        BodyPartPhysicsHierarchySwingCanonical solver =
+                new BodyPartPhysicsHierarchySwingCanonical();
+        float[] rootWorld = rotate(anchor,rootRest);
+        float[] childWorld = rotate(anchor,childRest);
+        float[] first=solver.next(matrix,new BodyPartChainSolver.Vec3(
+                rootWorld[0],rootWorld[1],rootWorld[2]),new BodyPartChainSolver.Vec3(
+                rootTarget[0],rootTarget[1],rootTarget[2]));
+        float[] second=solver.next(matrix,new BodyPartChainSolver.Vec3(
+                childWorld[0],childWorld[1],childWorld[2]),new BodyPartChainSolver.Vec3(
+                childTarget[0],childTarget[1],childTarget[2]));
+        float[] actualRootMatrix = BodyPartPhysicsRotation.multiply3(
+                anchor,BodyPartPhysicsRotation.axisAngle(first));
+        float[] actualChildMatrix = BodyPartPhysicsRotation.multiply3(
+                actualRootMatrix,BodyPartPhysicsRotation.axisAngle(second));
+        double rootError=angularError(rotate(actualRootMatrix,rootRest),rootTarget);
+        double childError=angularError(rotate(actualChildMatrix,childRest),childTarget);
+        System.out.println("Hors back-hair overLimit="+overLimit+
+                " rootError="+rootError+" childError="+childError);
+        if(!overLimit)
+        {
+            assertError("Hors root under limit",rootError,0);
+            assertError("Hors child under limit",childError,0);
+        }
+        else
+        {
+            double expectedMin=Math.toDegrees(rootAngle-limit)-1;
+            if(rootError<expectedMin || rootError>Math.toDegrees(rootAngle)+1)
+                throw new AssertionError("Limit did not cap root error as expected: "+rootError);
+            if(Math.abs(first[3])>limit+0.00001F || Math.abs(second[3])>limit+0.00001F)
+                throw new AssertionError("Swing exceeded visual angle limit");
+        }
+    }
+
     public static void main(String[] args)
     {
         float angle = (float) Math.toRadians(15);
@@ -208,6 +262,8 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         testProductionHierarchy(false);
         testCanonicalHierarchy(0F);
         testCanonicalHierarchy(180F);
+        testHorsBackHair(false);
+        testHorsBackHair(true);
         System.out.println("NOTE: this is a sign-contract diagnostic, not an in-game render test");
     }
 }
