@@ -88,6 +88,23 @@ public final class BodyPartPhysicsFrameState
         return result;
     }
 
+    /**
+     * A paused editor may change its source bone pose without advancing time.
+     * Publish the completed physics sample for the NEXT render pass of this
+     * same frame. Call only after the solver has finished all chain bones.
+     * This is never used during ordinary sequential playback.
+     */
+    public void publishEditedFrame(BodyPartModelData part, int frame)
+    {
+        if(part==null || frame!=lastTimelineFrame)return;
+        Sample sample=samples.get(part);
+        if(sample==null || sample.frame!=frame)return;
+        Sample snapshot=new Sample(frame);
+        for(Map.Entry<String,float[]> entry:sample.swings.entrySet())
+            snapshot.swings.put(entry.getKey(),entry.getValue().clone());
+        visible.put(part,snapshot);
+    }
+
     public void clear()
     {
         samples.clear();
