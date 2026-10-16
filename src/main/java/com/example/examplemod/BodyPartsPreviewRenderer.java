@@ -50,6 +50,8 @@ public class BodyPartsPreviewRenderer
      * applied until the actual attachment world matrices are available.
      * Export never uses this registry.
      */
+    /** Experimental in-game A/B switch; set false to restore legacy signs. */
+    private static final boolean USE_CANONICAL_PHYSICS_SWING = true;
     private boolean preparingPreview;
     private final Map<BodyPartModelData, List<BodyPartPhysicsChains.Chain>> previewPhysicsChains =
             new IdentityHashMap<BodyPartModelData, List<BodyPartPhysicsChains.Chain>>();
@@ -1065,11 +1067,16 @@ public class BodyPartsPreviewRenderer
                      * Skip the last bone until its actual tip is available.
                      * The editor's source animation keys remain unchanged.
                      */
-                    // Back-chain uses the physical target direction, while
-                    // front strands preserve their already-tested convention.
-                    BodyPartPhysicsHierarchySwing hierarchy =
-                            new BodyPartPhysicsHierarchySwing(
-                                    "back_strand_1".equals(chain.root.getName()));
+                    // Canonical mode has one consistent local swing convention
+                    // across left, right and back strands. Legacy mode remains
+                    // available for regression comparisons.
+                    BodyPartPhysicsHierarchySwingCanonical canonical =
+                            USE_CANONICAL_PHYSICS_SWING
+                                    ? new BodyPartPhysicsHierarchySwingCanonical() : null;
+                    BodyPartPhysicsHierarchySwing legacy =
+                            USE_CANONICAL_PHYSICS_SWING ? null
+                                    : new BodyPartPhysicsHierarchySwing(
+                                            "back_strand_1".equals(chain.root.getName()));
                     for (int i = 0; i + 1 < simulated.length; i++)
                     {
                         AnimationBone bone = chain.bones.get(i);
@@ -1082,7 +1089,9 @@ public class BodyPartsPreviewRenderer
                         // In Chameleon, each parent rotation propagates
                         // through the entire child chain. Compute the child's
                         // local goal AFTER all previous ancestor corrections.
-                        float[] swing = hierarchy.next(basis,restWorld,solvedWorld);
+                        float[] swing = USE_CANONICAL_PHYSICS_SWING
+                                ? canonical.next(basis, restWorld, solvedWorld)
+                                : legacy.next(basis, restWorld, solvedWorld);
                         // Every joint with a known child pivot has its own
                         // local swing. The terminal tip is not guessed.
                         physicsFrames.accept(data, frame, bone.getName(), swing);
@@ -1651,8 +1660,11 @@ public class BodyPartsPreviewRenderer
                     // Chameleon local swing is opposite to the world-space
                     // swing angle produced by our solver. Apply the same
                     // conversion to all strands, including the back chain.
+                    // Canonical next() returns the actual local angle.
+                    // The legacy writer historically inverted it here.
                     float[] corrected = new float[] {
-                            swing[0], swing[1], swing[2], -swing[3]
+                            swing[0], swing[1], swing[2],
+                            USE_CANONICAL_PHYSICS_SWING ? swing[3] : -swing[3]
                     };
                     float[] before = readChameleonPoseEuler(child, entry.getKey());
                     if (BodyPartChameleonPhysicsPose.addLocalSwing(
