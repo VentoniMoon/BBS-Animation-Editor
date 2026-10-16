@@ -52,6 +52,24 @@ public final class BodyPartChameleonCubeProbe
             return samples;
         }
 
+        /** Furthest portion of the cuboid behind its joint, along the
+         * outward skin normal, in world blocks (not Blockbench pixels). */
+        public float inwardReach(float[] worldBone,
+                BodyPartChainSolver.Vec3 outward)
+        {
+            BodyPartChainSolver.Vec3 pivotWorld=
+                    BodyPartPhysicsPoseAdapter.position(worldBone);
+            float maximum=0F;
+            for(BodyPartChainSolver.Vec3 corner:corners(worldBone))
+            {
+                BodyPartChainSolver.Vec3 offset=pivotWorld.sub(corner);
+                float inward=offset.x*outward.x+offset.y*outward.y+
+                        offset.z*outward.z;
+                if(inward>maximum)maximum=inward;
+            }
+            return Math.min(0.15F,maximum);
+        }
+
         /** World-space corners using the evaluated bone matrix and attachment. */
         public BodyPartChainSolver.Vec3[] corners(float[] worldBone)
         {
