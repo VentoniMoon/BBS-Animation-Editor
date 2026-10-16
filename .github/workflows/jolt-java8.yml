@@ -64,6 +64,14 @@ jobs:
           test -n "$LIB"
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.github.stephengold.joltjni.JoltNativeSmoke
+      - name: Compile and run SwingTwist chain on Java 8
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          javac -source 8 -target 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java
+          LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.github.stephengold.joltjni.JoltChainSmoke
       - name: Smoke test on actual Java 8 VM
         run: |
           java -version
