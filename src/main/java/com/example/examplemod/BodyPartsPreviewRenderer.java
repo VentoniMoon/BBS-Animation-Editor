@@ -994,6 +994,16 @@ public class BodyPartsPreviewRenderer
                                 torsoSurface,outward,0.012F,cubeReach);
                     }
                 }
+                // Prefer the animated body mesh when its orientation was verified
+                // for this exact frame. Do not run a second, oversized capsule
+                // against the same strand: it can create invisible blocking.
+                // Keep the capsule as a fallback if no usable mesh constraint
+                // was produced (or for other chain types without mesh support).
+                final String collisionMode = !chain.settings.hasBodyCollisions()
+                        ? "disabled" : meshConstraint != null ? "mesh" :
+                        !colliders.isEmpty() ? "capsule-fallback" : "none";
+                if (meshConstraint != null)
+                    colliders = java.util.Collections.<BodyPartPhysicsCollisions.Capsule>emptyList();
                 // A constructed mesh constraint is not proof of contact.
                 // Count real projection attempts and non-zero corrections.
                 BodyPartPhysicsSurfaceProbe contactProbe = meshConstraint == null ? null
@@ -1022,6 +1032,7 @@ public class BodyPartsPreviewRenderer
                             + " collisionEnabled=" + chain.settings.hasBodyCollisions()
                             + " meshPassedToSolver=" + (meshConstraint != null &&
                                     chain.settings.hasBodyCollisions())
+                            + " collisionMode=" + collisionMode
                             + " capsuleCount=" + (colliders == null ? 0 : colliders.size())
                             + " meshProjectCalls=" + (contactProbe == null ? 0 : contactProbe.getCalls())
                             + " meshCorrections=" + (contactProbe == null ? 0 : contactProbe.getCorrections())
