@@ -69,12 +69,16 @@ runs native physics tests on Ubuntu and Windows.
 
 On a passing run, artifact `jolt-java8-experimental-jars` contains:
 - `jolt-jni-6.0.0-java8.jar`: Java 8 classes rebuilt from upstream + cleaner.
+- `jolt-jni-6.0.0-java8-bundled.jar`: the rebuilt Java 8 classes **plus original Windows x64 DLL and Linux x64 SO** from the pinned ReleaseSp artifacts. Resource extraction from this single JAR is verified on both platforms.
 - `jolt-hair-prototype-java8.jar`: independent four-link chain implementation.
 - `UPSTREAM-LICENSE.txt`: upstream MIT license.
 
-These are **experimental class-only JARs**. The original platform-specific
-ReleaseSp native library must still be loaded (via `System.load` or the future
-legacy Forge bootstrap). Do **not** drop these into the editor's mods folder.
+The standalone JNI/prototype JARs are **experimental**; `jolt-jni-6.0.0-java8.jar`
+is class-only and requires a matching platform native library. The `bundled`
+variant embeds the verified Windows/Linux ReleaseSp binaries and is directly
+supported by `JoltJava8Bootstrap`. **None are Forge mods**: they are development
+libraries, and placing them alone into `mods/` does not integrate the engine.
+The future Forge mod build must carry these resources on its classpath.
 
 ## Quaternion bone-pose bridge
 
@@ -109,8 +113,9 @@ configured file. Otherwise it looks for the 6.0.0 native binary as a
 classpath resource, extracts it into `config/bbs-editor/jolt-natives`
 using a content-hashed filename, then starts Jolt. Windows/Linux x64 are
 supported; unsupported systems return `false` without crashing startup.
-The native-JAR resource extraction path and intentional missing-file
-fallback are exercised by the Java 8 CI tests. **Extraction inside the
+The native-resource extraction path (including the single bundled Java 8
+JAR), and intentional missing-file fallback, are exercised on real Java 8
+under both Windows and Linux in CI. **Extraction inside the
 actual Forge LaunchClassLoader has not yet been tested.** A native
 process abort is not recoverable by Java exception handling.
 
