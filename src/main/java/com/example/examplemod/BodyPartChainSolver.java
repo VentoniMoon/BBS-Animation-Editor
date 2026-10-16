@@ -180,7 +180,7 @@ public final class BodyPartChainSolver
         points[0]=previous[0]=root;
         // Alternate projection and constraints rather than allowing the final
         // length pass to re-insert every strand point through the skin.
-        for(int pass=0;pass<4;pass++)
+        for(int pass=0;pass<7;pass++)
         {
             for(int i=1;i<points.length;i++)
             {
@@ -210,6 +210,20 @@ public final class BodyPartChainSolver
                     points[i]=points[i].sub(correction.scale(0.5F));
                 }
             }
+        }
+        // The last distance pass can pull particles back into the torso.
+        // End on a contact projection while preserving the pinned root.
+        for(int i=1;i<points.length;i++)
+        {
+            Vec3 wanted=constraint.project(points[i],i);
+            if(wanted==null)continue;
+            Vec3 displacement=wanted.sub(points[i]);
+            float distance=displacement.length();
+            if(!Float.isFinite(distance) || distance<1.0E-7F)continue;
+            if(distance>maxShift)
+                displacement=displacement.scale(maxShift/distance);
+            points[i]=points[i].add(displacement);
+            previous[i]=previous[i].add(displacement);
         }
         points[0]=previous[0]=root;
     }
