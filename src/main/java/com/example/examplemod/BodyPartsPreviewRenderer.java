@@ -865,6 +865,23 @@ public class BodyPartsPreviewRenderer
                 BodyPartChainSolver.Vec3[] simulated =
                         livePhysics.sample(data.getTimelineId(), chain, frame,
                                 joints, colliders, meshConstraint);
+                if ("back_strand_1".equals(chain.root.getName()) &&
+                        (frame == 0 || frame == 20 || frame == 60))
+                {
+                    float largest = 0F;
+                    if (simulated != null)
+                        for (int i = 1; i < simulated.length; i++)
+                            largest = Math.max(largest,
+                                    simulated[i].sub(joints[i]).length());
+                    System.out.println("[BBS Animation Editor][Physics] "
+                            + "BACK MESH SOLVER frame=" + frame
+                            + " meshAvailable=" + (torsoSurface != null)
+                            + " sameFrame=" + (collisionFrame != null &&
+                                    collisionFrame.intValue() == frame)
+                            + " constraintActive=" + (meshConstraint != null)
+                            + " enabled=" + chain.settings.hasBodyCollisions()
+                            + " maxPoseDelta=" + largest);
+                }
                 if ("left_strand_1".equals(chain.root.getName()) &&
                         simulated != null && simulated.length > 1)
                 {
