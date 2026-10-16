@@ -206,6 +206,9 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, EmoticonsMeshCollisionSolver>();
     private final Map<BodyPartModelData, Integer> torsoCollisionMeshFrames =
             new IdentityHashMap<BodyPartModelData, Integer>();
+    /** Stable torso-side choice from the real hair volumes, not root pivot. */
+    private final Map<BodyPartModelData, Float> backHairOutwardSigns =
+            new IdentityHashMap<BodyPartModelData, Float>();
 
     /**
      * Read-only simulation of candidate torso contact correction.
@@ -917,13 +920,40 @@ public class BodyPartsPreviewRenderer
                     BodyPartChainSolver.Vec3 outward =
                             new BodyPartChainSolver.Vec3(
                                     torsoMatrix[8],torsoMatrix[9],torsoMatrix[10]);
-                    float facing = joints[0].sub(torsoOrigin).x*outward.x
-                            + joints[0].sub(torsoOrigin).y*outward.y
-                            + joints[0].sub(torsoOrigin).z*outward.z;
-                    // Ambiguous body orientation must not generate forces.
-                    if (Math.abs(facing) > 0.025F)
+                    // A root pivot is close to the torso CENTER and is not
+                    // a reliable indication of which side the actual hair is
+                    // on. The cube volumes provide a much better reference.
+                    float volumeFacing=0F;
+                    int volumeSamples=0;
+                    for(AnimationBone bone:chain.bones)
                     {
-                        if (facing < 0F) outward=outward.scale(-1F);
+                        BodyPartChameleonCubeProbe.Cube cube =
+                                BodyPartChameleonCubeProbe.getReference(bone.getName());
+                        float[] boneWorld=world.getBoneWorldMatrix(bone.getName());
+                        if(cube==null || boneWorld==null)continue;
+                        for(BodyPartChainSolver.Vec3 corner:cube.corners(boneWorld))
+                        {
+                            BodyPartChainSolver.Vec3 delta=corner.sub(torsoOrigin);
+                            volumeFacing+=delta.x*outward.x+
+                                    delta.y*outward.y+delta.z*outward.z;
+                            volumeSamples++;
+                        }
+                    }
+                    float facing=volumeSamples==0 ? 0F :
+                            volumeFacing/volumeSamples;
+                    Float remembered=backHairOutwardSigns.get(data);
+                    // Re-acquire orientation at the animation start, but
+                    // keep the side stable while walking/bending. A single
+                    // transient near-zero frame must never flip the force.
+                    if(frame==0)remembered=null;
+                    if(Math.abs(facing)>0.012F && remembered==null)
+                    {
+                        remembered=Float.valueOf(facing<0F?-1F:1F);
+                        backHairOutwardSigns.put(data,remembered);
+                    }
+                    if(remembered!=null)
+                    {
+                        outward=outward.scale(remembered.floatValue());
                         // Use the true cuboid extent behind each pivot.
                         // The first/root joint stays fixed at the attachment;
                         // only downstream chain particles are projected.
