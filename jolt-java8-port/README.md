@@ -1,48 +1,93 @@
-# Jolt JNI 6.0.0 → Java 8 compatibility experiment
+# Jolt Physics 6.0.0 on Java 8 — BBS Animation Editor experiment
 
-**Status: partial implementation, NOT verified as a working Jolt engine.** The existing Minecraft / Forge editor remains unchanged.
+**Status:** the complete upstream Java bindings compile with Java 8 bytecode; the original
+native Jolt 6.0.0 ReleaseSp DLL/SO **runs on real Java 8** on **Windows x64 and Linux x64**.
+Native physics worlds, SwingTwist pendulums, and a four-segment hair-chain prototype are
+tested in CI. **This is NOT yet connected to Minecraft, Chameleon, or the editor renderer.**
 
-Upstream pinned dependencies:
-- [stephengold/jolt-jni tag 6.0.0](https://github.com/stephengold/jolt-jni/tree/6.0.0), MIT license.
-- [Wemppy4/bbs-physics-engine](https://github.com/Wemppy4/bbs-physics-engine), `BoneChainRig` and `PhysicsJoints`.
+Branches: `feature/jolt-java8-port`. The editor's `main` is intentionally untouched.
 
-## Confirmed compatibility obstacle
+## Original sources and licensing
 
-Upstream `build.gradle` sets `options.release = 11`; its `JoltPhysicsObject` relies on `java.lang.ref.Cleaner`, introduced in Java 9. Existing released binaries cannot run on a Java 8 VM.
+- [Jolt JNI 6.0.0](https://github.com/stephengold/jolt-jni/tree/6.0.0)
+  by Stephen Gold, MIT license. The build stages the **exact pinned upstream tag**
+  (601 Java sources, including JPMS descriptor), patches two Java 11-only features,
+  and produces 600 compilable Java 8 source files after replacing the descriptor.
+  The upstream MIT license is copied into the generated output and packaged JAR.
+- [Wemppy / bbs-physics-engine](https://github.com/Wemppy4/bbs-physics-engine).
+  The standalone `JoltHairChain` takes its general physics design from
+  `BoneChainRig`, `ChainRig`, and `PhysicsJoints` (MIT).
+  It is **not** a drop-in copy of the Fabric/BBS 1.20 implementation.
 
-## Current component
+## Java 8 compatibility changes
 
-`Java8Cleaner.java` implements the narrow `Cleaner.create()` / `register(referent, action)` API using a Java 8 `PhantomReference` queue and a daemon. It deliberately delegates atomic exactly-once freeing to the original `JoltPhysicsObject.executeCleanup` routine. **Do not use until native lifetime tests pass.** A cleanup action must not capture its referent.
+Upstream `build.gradle` specifies `options.release = 11`.
+The upstream `JoltPhysicsObject` uses `java.lang.ref.Cleaner` (Java 9+).
+`tools/prepare_sources.py` stages the upstream source and changes precisely:
 
-Adapt upstream `JoltPhysicsObject.java` in the experimental source copy only:
+- Remove `module-info.java` (JPMS is unsupported in Java 8).
+- Replace `Cleaner` with `Java8Cleaner` (phantom references and a daemon).
+- Retain all existing JNI method signatures, classes, and `JoltPhysicsObject` cleanup logic.
 
-```diff
-- import java.lang.ref.Cleaner;
-+ // Java8Cleaner resides in this package.
-- private static Cleaner cleaner;
-+ private static Java8Cleaner cleaner;
-- cleaner = Cleaner.create();
-+ cleaner = Java8Cleaner.create();
-```
+The cleaner retains cleanup references until the referent dies and never retains the
+referent itself. A cleanup Runnable must **never capture the object being cleaned**.
+The regression `JoltOwnerLifecycleSmoke` verifies explicit `close()` twice and the
+garbage-collection path invoke each freeing action only once.
 
-`cleaner.register(this, new CleanerRunnable(...))` remains unchanged.
+## Standalone physics proof of concept
 
-Compile standalone checker without native libraries using JDK 8 `javac`, or JDK 11+ `javac --release 8`:
+`src/main/java/com/example/examplemod/physics/JoltHairChain.java`:
 
-```sh
-javac --release 8 -d out src/main/java/com/github/stephengold/joltjni/Java8Cleaner.java src/test/java/com/github/stephengold/joltjni/Java8CleanerSmoke.java
-java -cp out com.github.stephengold.joltjni.Java8CleanerSmoke
-```
+- One non-colliding kinematic attachment body and 1–64 dynamic capsule segments.
+- Actual Jolt `SwingTwistConstraint` joints, with motor springs when stiffness > 0.
+- Rest length fixed in physical space, authored orientation is not derived from Euler.
+- Root-to-tip spring falloff; independent linear/angular damping.
+- Fixed tick of 50ms with three substeps (~60Hz), matching Wemppy's timing.
+- Read-back of each native segment's actual position and quaternion.
+- `moveAnchor(x, y, z, qx, qy, qz, qw)` for animated parental transforms.
+- Explicit body and constraint destruction when closing the simulation.
+- **No body collisions yet.** This is intentional: isolate chain stability first.
 
-On JDK 8, remove `--release 8`.
+Tests:
+- `Java8CleanerSmoke` — automatic cleanup on actual Java 8.
+- `JoltOwnerLifecycleSmoke` — no double-free on manual close / GC.
+- `JoltNativeSmoke` — loads original ReleaseSp and registers physical types.
+- `JoltChainSmoke` — free swinging segment attached via SwingTwist.
+- `JoltHairChainSmoke` — 4-link strand swings with moving anchor, then relaxes.
+- `JoltAnchorRotationSmoke` — checks continuous anchor X movement across 55–70°.
 
-## Still to do before any editor integration
+## Reproduce the build and download experimental JARs
 
-1. Materialize upstream Java sources **at tag 6.0.0**, retaining upstream copyright/license.
-2. Compile **all production JNI bindings** with `--release 8`; patch other newer-language constructs/API as detected, do not silently alter JNI native signatures.
-3. Verify native Jolt library version and ABI against rebuilt classes for Linux/Windows.
-4. Run native smoke tests for allocation, `close()`, GC cleanup race, spring joint, stepping and teardown on real Java 8.
-5. Port Wemppy's `BoneChainRig` to the legacy Chameleon bone API and validate matrices/render pose. Keep this behind an opt-in engine switch.
-6. Prove playback determinism and baking to `.dat` before enabling by default.
+[CI: Jolt JNI Java 8 compatibility](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
 
-Do not merge this branch on the basis of Java compilation alone. The native tests are required.
+The GitHub Actions workflow checks out upstream `6.0.0` and runs
+`tools/prepare_sources.py`, compiles all production files with
+`javac --release 8`, switches to the Temurin Java 8 runtime, then
+runs native physics tests on Ubuntu and Windows.
+
+On a passing run, artifact `jolt-java8-experimental-jars` contains:
+- `jolt-jni-6.0.0-java8.jar`: Java 8 classes rebuilt from upstream + cleaner.
+- `jolt-hair-prototype-java8.jar`: independent four-link chain implementation.
+- `UPSTREAM-LICENSE.txt`: upstream MIT license.
+
+These are **experimental class-only JARs**. The original platform-specific
+ReleaseSp native library must still be loaded (via `System.load` or the future
+legacy Forge bootstrap). Do **not** drop these into the editor's mods folder.
+
+## Remaining before a Forge 1.12.2 integration
+
+1. Port the native-library bootstrap from Wemppy's `JoltNatives`, with safe
+   platform extraction, version hash, errors reported without crashing Minecraft.
+2. Create a Chameleon bone adapter. The adapter must match render-space bone
+   matrices and drive/read each *bone quaternion* rather than re-infer angles
+   from particle line segments.
+3. Represent user-authored Chameleon geometry as physical bodies and optional
+   explicitly marked colliders; never force oversized hidden contact capsules.
+4. Build one preview scene world per timeline context, handle seeks/resets, and
+   verify deterministic playback/baking to Blockbuster `.dat`.
+5. Test Horst's three strands on the Emoticons `low_body` bone, including the
+   known discontinuity when root/anchor X passes **60 degrees**.
+6. Verify native lifecycle under open/close/reopen, repeated actor selection,
+   JVM shutdown, and multiple models before enabling by default.
+
+**Do not merge this branch into main until the in-game tests are complete.**
