@@ -56,6 +56,7 @@ Tests:
 - `JoltHairChainSmoke` — 4-link strand swings with moving anchor, then relaxes.
 - `JoltAnchorRotationSmoke` — checks continuous anchor X movement across 55–70°.
 - `JoltJava8BootstrapSmoke` — fail-closed process-level JNI init from configured native file.
+- `JoltBoneQuaternionMapperSmoke` — Jolt body world quaternion to local Chameleon quaternion with anchor Y=180°, X=50–75°, tested for continuity.
 
 ## Reproduce the build and download experimental JARs
 
@@ -75,6 +76,21 @@ These are **experimental class-only JARs**. The original platform-specific
 ReleaseSp native library must still be loaded (via `System.load` or the future
 legacy Forge bootstrap). Do **not** drop these into the editor's mods folder.
 
+## Quaternion bone-pose bridge
+
+`JoltBoneQuaternionMapper` implements the coordinate-space identity
+
+```text
+targetBoneLocal = inverse(parentWorld) * simulatedBodyWorld * bodyToBoneRestCorrection
+bodyToBoneRestCorrection = inverse(bodyRestWorld) * boneRestWorld
+```
+
+The data stays as quaternions (x, y, z, w) through the physics adapter,
+avoiding intermediate Euler decomposition and its wraparound. A continuity
+helper keeps adjacent frames on the same quaternion hemisphere.
+**The legacy Chameleon render-space conversion and final Euler application
+remain to be validated in Minecraft.**
+
 ## Optional native library bootstrap
 
 `src/main/java/com/example/examplemod/physics/JoltJava8Bootstrap.java`
@@ -93,8 +109,10 @@ configured file. Otherwise it looks for the 6.0.0 native binary as a
 classpath resource, extracts it into `config/bbs-editor/jolt-natives`
 using a content-hashed filename, then starts Jolt. Windows/Linux x64 are
 supported; unsupported systems return `false` without crashing startup.
-**Embedded-resource extraction inside the actual Forge classloader has
-not yet been tested.** Nor is an unexpected native process abort recoverable.
+The native-JAR resource extraction path and intentional missing-file
+fallback are exercised by the Java 8 CI tests. **Extraction inside the
+actual Forge LaunchClassLoader has not yet been tested.** A native
+process abort is not recoverable by Java exception handling.
 
 ## Remaining before a Forge 1.12.2 integration
 
