@@ -25,6 +25,10 @@ def main():
     if dst.exists():
         shutil.rmtree(str(dst))
     shutil.copytree(str(src), str(dst))
+    # JPMS module descriptors appeared in Java 9; Java 8 ignores this metadata.
+    module_info = dst / "module-info.java"
+    if module_info.is_file():
+        module_info.unlink()
 
     target = dst / "com/github/stephengold/joltjni/JoltPhysicsObject.java"
     data = target.read_text(encoding="utf-8")
