@@ -4,7 +4,7 @@ package com.example.examplemod;
  * Standalone diagnostic, deliberately independent of Minecraft/Forge.
  *
  * Run with JDK 8:
- *   javac -d build/physics-test src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java src/main/java/com/example/examplemod/BodyPartChainSolver.java src/main/java/com/example/examplemod/BodyPartPhysicsPoseAdapter.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwing.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwingCanonical.java src/test/java/com/example/examplemod/BodyPartPhysicsSwingSignDiagnostic.java
+ *   javac -d build/physics-test src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java src/main/java/com/example/examplemod/BodyPartChainSolver.java src/main/java/com/example/examplemod/BodyPartPhysicsCollisions.java src/main/java/com/example/examplemod/BodyPartPhysicsPoseAdapter.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwing.java src/main/java/com/example/examplemod/BodyPartPhysicsHierarchySwingCanonical.java src/test/java/com/example/examplemod/BodyPartPhysicsSwingSignDiagnostic.java
  *   java -cp build/physics-test com.example.examplemod.BodyPartPhysicsSwingSignDiagnostic
  *
  * This checks the sign contract between the world-space swing solver and
