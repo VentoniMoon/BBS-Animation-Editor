@@ -228,9 +228,13 @@ public final class BodyPartPhysicsSwingSignDiagnostic
         }
         else
         {
-            double expectedMin=Math.toDegrees(rootAngle-limit)-1;
-            if(rootError<expectedMin || rootError>Math.toDegrees(rootAngle)+1)
-                throw new AssertionError("Limit did not cap root error as expected: "+rootError);
+            // A 40-degree requested bend minus the 0.45-rad per-joint cap
+            // leaves ~14.2169 degrees of error at the ROOT segment.
+            // The following joint may compensate for that error and still
+            // hit its own direction target; do not require its error to grow.
+            assertError("Hors root expected clamp residual", rootError,
+                    Math.toDegrees(rootAngle-limit));
+            assertError("Hors child compensates capped parent",childError,0);
             if(Math.abs(first[3])>limit+0.00001F || Math.abs(second[3])>limit+0.00001F)
                 throw new AssertionError("Swing exceeded visual angle limit");
         }
