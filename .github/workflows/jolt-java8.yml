@@ -1,0 +1,50 @@
+name: Jolt JNI Java 8 compatibility
+on:
+  push:
+    branches: [feature/jolt-java8-port]
+    paths:
+      - 'jolt-java8-port/**'
+      - '.github/workflows/jolt-java8.yml'
+  workflow_dispatch:
+
+jobs:
+  java8-bindings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout editor branch
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream JNI source
+        uses: actions/checkout@v4
+        with:
+          repository: stephengold/jolt-jni
+          ref: '6.0.0'
+          path: upstream-jolt
+          persist-credentials: false
+      - name: Compile with Java 8 bytecode target
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare compatibility source tree
+        run: |
+          python3 jolt-java8-port/tools/prepare_sources.py \
+            --upstream upstream-jolt --output "${{ runner.temp }}/jolt-java8"
+      - name: Compile ALL production bindings with --release 8
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          find "$OUT/src" -type f -name '*.java' | sort > "$OUT/sources.txt"
+          mkdir -p "$OUT/classes"
+          javac --release 8 -encoding UTF-8 -d "$OUT/classes" @"$OUT/sources.txt"
+          javac --release 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/Java8CleanerSmoke.java
+      - name: Execute Java 8 cleanup smoke test
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Smoke test on actual Java 8 VM
+        run: |
+          java -version
+          java -ea -cp "${{ runner.temp }}/jolt-java8/classes" \
+            com.github.stephengold.joltjni.Java8CleanerSmoke
