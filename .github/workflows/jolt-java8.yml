@@ -53,13 +53,25 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 -cp "${{ runner.temp }}/jolt-java8/classes" \
             -d "${{ runner.temp }}/jolt-java8/classes" \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltNativeSmoke.java
+      - name: Cache the pinned native Jolt Linux library
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/jolt-java8/native-jolt.jar
+          key: jolt-java8-6.0.0-linux64-releasesp
       - name: Download matching native Jolt 6.0.0 (Linux x86-64 ReleaseSp)
         run: |
           OUT="${{ runner.temp }}/jolt-java8"
           mkdir -p "$OUT/native"
-          curl --fail --location --retry 3 \
-            'https://repo.maven.apache.org/maven2/com/github/stephengold/jolt-jni-Linux64/6.0.0/jolt-jni-Linux64-6.0.0-ReleaseSp.jar' \
-            --output "$OUT/native-jolt.jar"
+          if [ ! -s "$OUT/native-jolt.jar" ]; then
+            for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
+              if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
+                "$base/com/github/stephengold/jolt-jni-Linux64/6.0.0/jolt-jni-Linux64-6.0.0-ReleaseSp.jar" \
+                --output "$OUT/native-jolt.jar"; then
+                break
+              fi
+            done
+          fi
+          test -s "$OUT/native-jolt.jar"
           (cd "$OUT/native" && jar xf "$OUT/native-jolt.jar")
           find "$OUT/native" -type f -name '*.so' -print
       - name: Test native Jolt JNI using actual Java 8
@@ -142,9 +154,14 @@ jobs:
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java
-          curl --fail --location --retry 3 \
-            'https://repo.maven.apache.org/maven2/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar' \
-            --output java8-win/native-jolt.jar
+          for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
+            if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
+              "$base/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
+              --output java8-win/native-jolt.jar; then
+              break
+            fi
+          done
+          test -s java8-win/native-jolt.jar
           mkdir -p java8-win/native
           (cd java8-win/native && jar xf ../native-jolt.jar)
       - name: Run native physics on Java 8 for Windows
