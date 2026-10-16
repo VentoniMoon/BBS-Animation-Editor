@@ -196,6 +196,9 @@ public class BodyPartsPreviewRenderer
 
     private final Map<BodyPartModelData, BodyPartMeshContactTracker> torsoTrackers =
             new IdentityHashMap<BodyPartModelData, BodyPartMeshContactTracker>();
+    /** Avoid rebuilding the skinned torso mesh repeatedly for the same frame. */
+    private final Map<BodyPartModelData, Integer> torsoTrackerSampledFrames =
+            new IdentityHashMap<BodyPartModelData, Integer>();
 
     /**
      * Read-only simulation of candidate torso contact correction.
@@ -206,6 +209,9 @@ public class BodyPartsPreviewRenderer
             BodyPartModelData data, BodyPart part, float[] lowBody, int frame)
     {
         if (part == null || part.morph == null || part.morph.get() == null)
+            return;
+        Integer sampledFrame = torsoTrackerSampledFrames.get(data);
+        if (sampledFrame != null && sampledFrame.intValue() == frame)
             return;
         try
         {
@@ -241,6 +247,7 @@ public class BodyPartsPreviewRenderer
                 }
                 BodyPartMeshContactTracker.Result report =
                         tracker.inspect(frame,joints,surface);
+                torsoTrackerSampledFrames.put(data, Integer.valueOf(frame));
                 if(frame==0 || frame==20 || frame==60)
                     System.out.println("[BBS Animation Editor][Physics] "
                             +"TORSO RECOVERY CANDIDATE frame="+frame
