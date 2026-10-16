@@ -55,6 +55,7 @@ Tests:
 - `JoltChainSmoke` — free swinging segment attached via SwingTwist.
 - `JoltHairChainSmoke` — 4-link strand swings with moving anchor, then relaxes.
 - `JoltAnchorRotationSmoke` — checks continuous anchor X movement across 55–70°.
+- `JoltJava8BootstrapSmoke` — fail-closed process-level JNI init from configured native file.
 
 ## Reproduce the build and download experimental JARs
 
@@ -74,10 +75,31 @@ These are **experimental class-only JARs**. The original platform-specific
 ReleaseSp native library must still be loaded (via `System.load` or the future
 legacy Forge bootstrap). Do **not** drop these into the editor's mods folder.
 
+## Optional native library bootstrap
+
+`src/main/java/com/example/examplemod/physics/JoltJava8Bootstrap.java`
+provides a Java 8 startup entry point:
+
+```java
+if (JoltJava8Bootstrap.available(minecraft.mcDataDir)) {
+    // Jolt has been loaded and its factory/types initialized.
+} else {
+    // Continue using the legacy animation physics.
+}
+```
+
+With `-Dbbs.editor.jolt.native=C:\\path\\to\\joltjni.dll` it loads a
+configured file. Otherwise it looks for the 6.0.0 native binary as a
+classpath resource, extracts it into `config/bbs-editor/jolt-natives`
+using a content-hashed filename, then starts Jolt. Windows/Linux x64 are
+supported; unsupported systems return `false` without crashing startup.
+**Embedded-resource extraction inside the actual Forge classloader has
+not yet been tested.** Nor is an unexpected native process abort recoverable.
+
 ## Remaining before a Forge 1.12.2 integration
 
-1. Port the native-library bootstrap from Wemppy's `JoltNatives`, with safe
-   platform extraction, version hash, errors reported without crashing Minecraft.
+1. Package the original native libraries as resources in the Forge mod
+   and test the optional bootstrap under the real LaunchClassLoader.
 2. Create a Chameleon bone adapter. The adapter must match render-space bone
    matrices and drive/read each *bone quaternion* rather than re-infer angles
    from particle line segments.
