@@ -34,12 +34,7 @@ public final class BodyPartPhysicsPreviewSimulation
     // bent seek pose are insufficient to establish world-down equilibrium.
     private static final int BACK_SEEK_SETTLE_STEPS = 24;
     private static final int BACK_EDIT_SETTLE_STEPS = 18;
-    /**
-     * Temporary controlled A/B experiment: disable BOTH capsule and mesh
-     * contacts for the back strand only. All gravity/stiffness settings stay
-     * unchanged. Set false after comparing free-hang behavior.
-     */
-    private static final boolean DIAG_BACK_WITHOUT_COLLISIONS = true;
+    /** Back-strand contacts are now governed exclusively by settings. */
 
     private static BodyPartChainSolver.Vec3[] filterBoneMotion(
             State state, BodyPartChainSolver.Vec3[] pose)
@@ -134,13 +129,9 @@ public final class BodyPartPhysicsPreviewSimulation
         if (chain==null || animatedWorld==null || chain.settings==null ||
                 !chain.settings.isEnabled()) return null;
         BodyPartPhysicsSettings settings=chain.settings;
-        boolean collisionBypass = DIAG_BACK_WITHOUT_COLLISIONS &&
-                "back_strand_1".equals(chain.root.getName());
-        if(collisionBypass)
-        {
-            colliders=null;
-            surface=null;
-        }
+        // Do not silently discard the caller's collision constraints.
+        // The previous experimental bypass disabled ALL back-strand
+        // collisions even when the UI setting and mesh diagnostics were true.
         int hash=31*(31*Float.floatToIntBits(settings.getGravity())
                 +Float.floatToIntBits(settings.getStiffness()))
                 +Float.floatToIntBits(settings.getDamping());
