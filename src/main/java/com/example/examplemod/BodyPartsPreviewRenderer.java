@@ -833,6 +833,7 @@ public class BodyPartsPreviewRenderer
             BodyPartPhysicsWorldPose.MatrixSource world =
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
             boolean advanced = false;
+            boolean editedPhysics = false;
             int appliedSwings = 0;
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
@@ -994,6 +995,7 @@ public class BodyPartsPreviewRenderer
                 BodyPartChainSolver.Vec3[] simulated =
                         livePhysics.sample(data.getTimelineId(), chain, frame,
                                 joints, colliders, meshConstraint);
+                editedPhysics |= livePhysics.wasEditedThisSample();
                 if ("back_strand_1".equals(chain.root.getName()) &&
                         (frame == 0 || frame == 20 || frame == 60) &&
                         (backSolverLoggedFrame.get(data) == null ||
@@ -1097,6 +1099,11 @@ public class BodyPartsPreviewRenderer
                     }
                 }
             }
+            // Physics writes happen AFTER normal rendering. On a paused
+            // frame, an actual bone edit may publish the completed result
+            // for the NEXT draw without waiting for the timeline to advance.
+            if (editedPhysics)
+                physicsFrames.publishEditedFrame(data,frame);
             reportPhysicsBoneProbe(data, advanced
                     ? "world strand solver advanced; multi-segment visual pose queued"
                     : "world strand joint matrices valid: " + chains.size()
