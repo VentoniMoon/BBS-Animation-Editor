@@ -23,7 +23,7 @@ public final class BodyPartPhysicsHierarchySwingCanonical
         BodyPartChainSolver.Vec3 goal =
                 BodyPartPhysicsPoseAdapter.toLocalDirection(originalBoneWorld, correctedGoal);
         float[] swing = BodyPartPhysicsPoseAdapter.localSwing(rest, goal);
-        swing[3] = Math.max(-0.45F, Math.min(0.45F, swing[3]));
+        swing[3] = Math.max(-1.20F, Math.min(1.20F, swing[3]));
 
         float x = originalBoneWorld[0] * swing[0] + originalBoneWorld[4] * swing[1] + originalBoneWorld[8] * swing[2];
         float y = originalBoneWorld[1] * swing[0] + originalBoneWorld[5] * swing[1] + originalBoneWorld[9] * swing[2];
