@@ -35,6 +35,8 @@ public class EditorSceneViewport
     private boolean weatherRendered;
     /** Frame sampled by the actor before the final preview FBO overlay. */
     private int lastJoltOverlayFrame = -1;
+    private double joltActorX, joltActorY, joltActorZ;
+    private boolean hasJoltActorOrigin;
 
 
     public EditorSceneViewport()
@@ -127,6 +129,7 @@ public class EditorSceneViewport
             int currentFrame)
     {
         this.lastJoltOverlayFrame = currentFrame;
+        this.hasJoltActorOrigin = false;
         if (mc == null)
         {
             return;
@@ -338,6 +341,11 @@ public class EditorSceneViewport
         }
 
 
+        this.joltActorX = frame.getX();
+        this.joltActorY = frame.getY();
+        this.joltActorZ = frame.getZ();
+        this.hasJoltActorOrigin = true;
+
         /*
          * =========================================================
          * ACTOR
@@ -494,13 +502,14 @@ public class EditorSceneViewport
          * physics, change animation, or modify the Preview framebuffer.
          */
         if(BodyPartJoltPreviewAdapter.drawContactsRequested()
-                && this.lastJoltOverlayFrame>=0)
+                && this.lastJoltOverlayFrame>=0 && this.hasJoltActorOrigin)
         {
             JoltContactOverlaySnapshot shapes =
                     this.actorPreviewRenderer.snapshotJoltContactShapes(
                             this.lastJoltOverlayFrame);
             JoltContactGuiOverlay.draw(Minecraft.getMinecraft(),this.camera,
-                    this.x,this.y,this.width,this.height,shapes);
+                    this.x,this.y,this.width,this.height,shapes,
+                    this.joltActorX,this.joltActorY,this.joltActorZ);
         }
     }
 
