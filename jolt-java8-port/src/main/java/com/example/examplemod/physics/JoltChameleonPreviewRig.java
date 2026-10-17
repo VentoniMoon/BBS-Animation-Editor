@@ -73,6 +73,15 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         chain.setGravity(multiplier);
     }
 
+    /** Optional actual-Jolt contact against a fitted Emoticons torso proxy. */
+    public void setTorsoCollider(float[] a,float[] b,float radius) {
+        chain.setTorsoCollider(a,b,radius);
+    }
+
+    public boolean hasTorsoCollider() {
+        return chain.hasTorsoCollider();
+    }
+
     /**
      * On a seek or a stationary pose edit, resolve free-hanging gravity at the
      * CURRENT anchor pose before publishing an initial preview. This does not

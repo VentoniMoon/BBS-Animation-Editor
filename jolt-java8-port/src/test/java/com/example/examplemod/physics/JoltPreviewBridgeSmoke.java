@@ -71,6 +71,26 @@ public final class JoltPreviewBridgeSmoke {
             if(changed==null || changed.size()!=bones.length ||
                     !bridge.wasRecreatedThisSample())
                 throw new AssertionError("Paused child bone edit kept stale Jolt scene");
+            if (BodyPartJoltPreviewAdapter.torsoContactsRequested()) {
+                // Exercise the SAME reflective optional method the renderer
+                // will invoke for skin-mesh-fitted torso contacts.
+                float[] torsoLow={4F,4.0F,-2F};
+                float[] torsoHigh={4F,4.6F,-2F};
+                Map<String,float[]> torsoFrame=bridge.sample(
+                        data,"hair/torso",bones,0,world,tip,
+                        matrix(3F,5F,-2F),0.15F,0.3F,1F,
+                        torsoLow,torsoHigh,0.15F);
+                if(torsoFrame==null || torsoFrame.size()!=bones.length ||
+                        !bridge.wasRecreatedThisSample())
+                    throw new AssertionError("Optional fitted torso rig unavailable");
+                torsoLow[0]+=0.01F;torsoHigh[0]+=0.01F;
+                torsoFrame=bridge.sample(data,"hair/torso",bones,1,world,tip,
+                        matrix(3F,5F,-2F),0.15F,0.3F,1F,
+                        torsoLow,torsoHigh,0.15F);
+                if(torsoFrame==null || torsoFrame.size()!=bones.length ||
+                        bridge.wasRecreatedThisSample())
+                    throw new AssertionError("Kinematic contact update restarted live rig");
+            }
             System.out.println("Forge-style reflection preview bridge: PASS");
         } finally {
             bridge.clear();

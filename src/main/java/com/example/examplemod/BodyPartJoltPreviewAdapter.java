@@ -26,6 +26,9 @@ public final class BodyPartJoltPreviewAdapter {
             Boolean.getBoolean("bbs.editor.physics.jolt.preview");
     private static final boolean RAW_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
+    /** Opt-in only; no collisions are added to existing default Jolt. */
+    private static final boolean TORSO_CONTACTS =
+            Boolean.getBoolean("bbs.editor.physics.jolt.torsoContacts");
     private static final String RIG =
             "com.example.examplemod.physics.JoltChameleonPreviewRig";
     private boolean attempted;
@@ -36,6 +39,8 @@ public final class BodyPartJoltPreviewAdapter {
     private Method advance;
     private Method settle;
     private Method localSwings;
+    private Method setTorsoCollider;
+    private boolean torsoWarning;
     /** Optional prototype API: old downloaded JARs must still work. */
     private Method nativeDirections;
     private boolean nativeDirectionWarning;
@@ -50,13 +55,17 @@ public final class BodyPartJoltPreviewAdapter {
         float[] lastParent;
         float[][] lastBones;
         float[] lastTip;
+        final boolean torsoEnabled;
+        float[] lastTorsoA,lastTorsoB;
+        float torsoRadius;
         Map<String, float[]> sample=Collections.emptyMap();
         Map<String, float[]> raw=Collections.emptyMap();
 
         State(AutoCloseable rig, String[] bones, int frame,
                 float stiffness, float damping, float gravity,
                 float[] root, float[] parent, float[][] boneWorld,
-                float[] terminalTip) {
+                float[] terminalTip,float[] torsoA,float[] torsoB,
+                float radius) {
             this.rig=rig;
             this.bones=bones.clone();
             this.frame=frame;
@@ -67,12 +76,20 @@ public final class BodyPartJoltPreviewAdapter {
             this.lastParent=parent.clone();
             this.lastBones=copyMatrices(boneWorld);
             this.lastTip=terminalTip.clone();
+            this.torsoEnabled=torsoA!=null && torsoB!=null;
+            this.lastTorsoA=torsoA==null?null:torsoA.clone();
+            this.lastTorsoB=torsoB==null?null:torsoB.clone();
+            this.torsoRadius=radius;
         }
     }
 
     private final Map<String, State> scenes = new HashMap<String, State>();
 
     public static boolean isRequested() { return REQUESTED; }
+
+    public static boolean torsoContactsRequested() {
+        return REQUESTED && TORSO_CONTACTS;
+    }
 
     /** A scene was newly initialized and can publish a settled paused pose. */
     public boolean wasRecreatedThisSample() { return recreatedLastSample; }
@@ -97,6 +114,19 @@ public final class BodyPartJoltPreviewAdapter {
                 settle=klass.getMethod("settle",int.class);
                 localSwings=klass.getMethod("localBoneSwings",
                         float[][].class,float[].class);
+                if(TORSO_CONTACTS) {
+                    try {
+                        setTorsoCollider=klass.getMethod("setTorsoCollider",
+                                float[].class,float[].class,float.class);
+                    } catch(NoSuchMethodException missing) {
+                        if(!torsoWarning) {
+                            torsoWarning=true;
+                            System.err.println("[BBS Editor][Jolt][Torso] "
+                                    + "Installed experimental JAR lacks torso collider API. "
+                                    + "Contacts disabled; update Jolt prototype from GitHub Actions.");
+                        }
+                    }
+                }
                 if(RAW_DIAGNOSTIC) {
                     try {
                         nativeDirections=klass.getMethod("rawPhysicalWorldDirections");
@@ -132,6 +162,20 @@ public final class BodyPartJoltPreviewAdapter {
             String[] boneNames, int frame, float[][] cleanBoneWorld,
             float[] terminalTipWorld, float[] cleanParentWorld,
             float stiffness, float damping, float gravity) {
+        return sample(gameDir,modelId,boneNames,frame,cleanBoneWorld,
+                terminalTipWorld,cleanParentWorld,stiffness,damping,gravity,
+                null,null,0F);
+    }
+
+    /**
+     * Optional torso contact input from a native Emoticons render frame.
+     * Omitting or rejecting a mesh fit keeps the old free-hanging Jolt rig.
+     */
+    public Map<String, float[]> sample(File gameDir, String modelId,
+            String[] boneNames, int frame, float[][] cleanBoneWorld,
+            float[] terminalTipWorld, float[] cleanParentWorld,
+            float stiffness, float damping, float gravity,
+            float[] torsoA,float[] torsoB,float torsoRadius) {
         recreatedLastSample=false;
         if(!initialize(gameDir))return null;
         if(modelId==null || boneNames==null || cleanBoneWorld==null ||
@@ -142,18 +186,27 @@ public final class BodyPartJoltPreviewAdapter {
         String id=modelId;
         float[] root=new float[] {cleanBoneWorld[0][12],
                 cleanBoneWorld[0][13],cleanBoneWorld[0][14]};
+        boolean useTorso=TORSO_CONTACTS && setTorsoCollider!=null &&
+                torsoA!=null && torsoB!=null &&
+                Float.isFinite(torsoRadius) && torsoRadius>=0.04F;
         State state=scenes.get(id);
         boolean recreate=state==null || frame<state.frame ||
                 frame>state.frame+1 ||
                 !Arrays.equals(state.bones,boneNames) ||
                 state.stiffness!=stiffness || state.damping!=damping ||
-                state.gravity!=gravity;
+                state.gravity!=gravity ||
+                state.torsoEnabled!=useTorso ||
+                (useTorso && (Math.abs(state.torsoRadius-torsoRadius)>0.025F ||
+                  Math.abs(distance(state.lastTorsoA,state.lastTorsoB)-
+                           distance(torsoA,torsoB))>0.065F));
         // Editor can re-evaluate a paused frame after numerical bone edits.
         if(!recreate && frame==state.frame &&
                 (!closeEnough(root,state.lastRoot) ||
                  !closeEnough(cleanParentWorld,state.lastParent) ||
                  !sameMatrices(cleanBoneWorld,state.lastBones) ||
-                 !closeEnough(terminalTipWorld,state.lastTip)))recreate=true;
+                 !closeEnough(terminalTipWorld,state.lastTip) ||
+                 (useTorso && (!closeEnough(torsoA,state.lastTorsoA) ||
+                               !closeEnough(torsoB,state.lastTorsoB)))))recreate=true;
         if(recreate) {
             dispose(id);
             try {
@@ -164,12 +217,15 @@ public final class BodyPartJoltPreviewAdapter {
                 AutoCloseable scene=(AutoCloseable)instance;
                 try {
                     setGravity.invoke(instance,gravity);
+                    if(useTorso)
+                        setTorsoCollider.invoke(instance,torsoA,torsoB,torsoRadius);
                     // The source frame may be a static pose or direct seek.
                     // Relax only once on reset; never simulate every render.
                     settle.invoke(instance,24);
                     state=new State(scene,boneNames,frame,stiffness,damping,
                             gravity,root,cleanParentWorld,cleanBoneWorld,
-                            terminalTipWorld);
+                            terminalTipWorld,useTorso?torsoA:null,
+                            useTorso?torsoB:null,useTorso?torsoRadius:0F);
                     state.sample=collect(scene,boneNames,cleanBoneWorld,cleanParentWorld);
                     state.raw=collectNativeDirections(scene,boneNames);
                     scenes.put(id,state);
@@ -187,6 +243,8 @@ public final class BodyPartJoltPreviewAdapter {
         if(frame==state.frame)
             return copy(state.sample);
         try {
+            if(useTorso)
+                setTorsoCollider.invoke(state.rig,torsoA,torsoB,torsoRadius);
             advance.invoke(state.rig,frame,root,cleanParentWorld);
             Map<String,float[]> result=collect(state.rig,boneNames,
                     cleanBoneWorld,cleanParentWorld);
@@ -197,6 +255,11 @@ public final class BodyPartJoltPreviewAdapter {
             state.lastParent=cleanParentWorld.clone();
             state.lastBones=copyMatrices(cleanBoneWorld);
             state.lastTip=terminalTipWorld.clone();
+            if(useTorso) {
+                state.lastTorsoA=torsoA.clone();
+                state.lastTorsoB=torsoB.clone();
+                state.torsoRadius=torsoRadius;
+            }
             return result;
         } catch(Throwable error) {
             dispose(id);
@@ -267,6 +330,13 @@ public final class BodyPartJoltPreviewAdapter {
             result.put(names[i],swings[i].clone());
         }
         return result;
+    }
+
+    private static float distance(float[] a,float[] b) {
+        if(a==null||b==null||a.length!=3||b.length!=3)
+            return Float.NaN;
+        float x=a[0]-b[0],y=a[1]-b[1],z=a[2]-b[2];
+        return (float)Math.sqrt(x*x+y*y+z*z);
     }
 
     private static float[][] copyMatrices(float[][] source) {
