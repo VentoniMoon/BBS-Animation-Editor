@@ -152,7 +152,7 @@ restoring torque. Do **not** tune three axes at once.
 To inspect the log from the project root:
 
 ```powershell
-Select-String -Path ".\\run\\logs\\latest.log" -Pattern "Jolt\\]\\[Compare|Jolt\\]\\[Raw"
+Select-String -Path '.\run\logs\latest.log' -SimpleMatch '[Jolt][Compare]','[Jolt][Raw]'
 ```
 
 Neither diagnostic writes keys or changes exported `.dat`. There are
