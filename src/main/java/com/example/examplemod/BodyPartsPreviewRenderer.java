@@ -146,6 +146,19 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionBoxes =
             new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
     private int attachedCollisionFrame = -1;
+
+    /* Emoticons provides model-local bone transforms. The renderer then
+     * rotates/translates the complete actor. Both physical chains AND their
+     * passive contacts must share the same actor-world frame, or hair responds
+     * to bone rotations but not to the character walking through the world.
+     * This is sampled only after the normal actor draw. */
+    private float[] joltActorWorldFrame;
+    private int joltActorWorldFrameTick = -1;
+
+    private float[] actorFrameFor(int frame)
+    {
+        return joltActorWorldFrameTick==frame ? joltActorWorldFrame : null;
+    }
     private final Map<String,Integer> lastSingleBoneGeometryFrame =
             new java.util.HashMap<String,Integer>();
     private final Map<BodyPartModelData,String> reportedCollisionCaptures =
@@ -180,6 +193,14 @@ public class BodyPartsPreviewRenderer
     {
         if (actor == null || actor.getMorph() == null) return;
         Object morph = actor.getMorph();
+        float partial = BlockbusterPreviewAnimationState.isPlaying()
+                ? net.minecraft.client.Minecraft.getMinecraft().getRenderPartialTicks()
+                : 0F;
+        float yaw = actor.prevRenderYawOffset +
+                (actor.renderYawOffset - actor.prevRenderYawOffset)*partial;
+        joltActorWorldFrame=BodyPartJoltActorSpace.worldFromActor(
+                actor.posX,actor.posY,actor.posZ,yaw);
+        joltActorWorldFrameTick=frame;
         if (frame == 0 || frame == 20)
         {
             java.util.List<EmoticonsCollisionGeometryProvider.MeshSnapshot> surfaces =
@@ -343,6 +364,9 @@ public class BodyPartsPreviewRenderer
                             child,previewEulerDeltas.get(data)))
             {
                 float[] attached=worldFromRenderedChameleonChild(parent,part);
+                float[] actorFrame=actorFrameFor(frame);
+                if(actorFrame!=null)
+                    attached=BodyPartJoltActorSpace.matrix(actorFrame,attached);
                 BodyPartPhysicsWorldPose.MatrixSource world=
                         BodyPartPhysicsWorldPose.worldSource(attached,local);
                 java.util.Set<String> driven=new java.util.HashSet<String>();
@@ -1410,6 +1434,9 @@ public class BodyPartsPreviewRenderer
         try
         {
             float[] attached = worldFromRenderedChameleonChild(parentMatrix,part);
+            float[] actorWorld=actorFrameFor(frame);
+            if(actorWorld!=null)
+                attached=BodyPartJoltActorSpace.matrix(actorWorld,attached);
             BodyPartPhysicsWorldPose.MatrixSource world =
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
             boolean advanced = false;
@@ -1540,6 +1567,20 @@ public class BodyPartsPreviewRenderer
                                     contactFrame!=null &&
                                     contactFrame.intValue()==frame
                                     ? joltMultiTorsoFits.get(data):null;
+                            float[] colliderA=contact==null?null:contact.a;
+                            float[] colliderB=contact==null?null:contact.b;
+                            BodyPartJoltMultiTorsoFit.Segments nativeSegments=segments;
+                            if(actorWorld!=null)
+                            {
+                                if(colliderA!=null)
+                                    colliderA=BodyPartJoltActorSpace.point(
+                                            actorWorld,colliderA);
+                                if(colliderB!=null)
+                                    colliderB=BodyPartJoltActorSpace.point(
+                                            actorWorld,colliderB);
+                                nativeSegments=BodyPartJoltMultiTorsoFit.world(
+                                        segments,actorWorld);
+                            }
                             Map<String, float[]> physical = joltPreview.sample(
                                     net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
                                     stateId, names, frame, nativeWorld, terminal,
@@ -1547,12 +1588,12 @@ public class BodyPartsPreviewRenderer
                                     chain.settings.getDamping(),
                                     chain.settings.getGravity(),
                                     !chain.settings.hasBodyCollisions() || contact==null
-                                            ?null:contact.a,
+                                            ?null:colliderA,
                                     !chain.settings.hasBodyCollisions() || contact==null
-                                            ?null:contact.b,
+                                            ?null:colliderB,
                                     !chain.settings.hasBodyCollisions() || contact==null
                                             ?0F:contact.radius,
-                                    chain.settings.hasBodyCollisions()?segments:null,
+                                    chain.settings.hasBodyCollisions()?nativeSegments:null,
                                     chain.settings.hasBodyCollisions()
                                             ?passiveCollisionBoxes(data,frame):null);
                             if (physical != null)
@@ -2846,6 +2887,8 @@ public class BodyPartsPreviewRenderer
     public void clear()
     {
         joltPreview.clear();
+        joltActorWorldFrame=null;
+        joltActorWorldFrameTick=-1;
         reportedJoltPreview.clear();
         joltTorsoFits.clear();
         joltMultiTorsoFits.clear();
