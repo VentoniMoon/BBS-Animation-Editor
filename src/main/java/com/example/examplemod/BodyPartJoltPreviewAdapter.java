@@ -32,7 +32,9 @@ public final class BodyPartJoltPreviewAdapter {
     private Method create;
     private Method setGravity;
     private Method advance;
+    private Method settle;
     private Method localSwings;
+    private boolean recreatedLastSample;
 
     private static final class State {
         final AutoCloseable rig;
@@ -41,11 +43,14 @@ public final class BodyPartJoltPreviewAdapter {
         int frame;
         float[] lastRoot;
         float[] lastParent;
+        float[][] lastBones;
+        float[] lastTip;
         Map<String, float[]> sample=Collections.emptyMap();
 
         State(AutoCloseable rig, String[] bones, int frame,
                 float stiffness, float damping, float gravity,
-                float[] root, float[] parent) {
+                float[] root, float[] parent, float[][] boneWorld,
+                float[] terminalTip) {
             this.rig=rig;
             this.bones=bones.clone();
             this.frame=frame;
@@ -54,12 +59,17 @@ public final class BodyPartJoltPreviewAdapter {
             this.gravity=gravity;
             this.lastRoot=root.clone();
             this.lastParent=parent.clone();
+            this.lastBones=copyMatrices(boneWorld);
+            this.lastTip=terminalTip.clone();
         }
     }
 
     private final Map<String, State> scenes = new HashMap<String, State>();
 
     public static boolean isRequested() { return REQUESTED; }
+
+    /** A scene was newly initialized and can publish a settled paused pose. */
+    public boolean wasRecreatedThisSample() { return recreatedLastSample; }
 
     private boolean initialize(File gameDir) {
         if(!REQUESTED)return false;
@@ -78,6 +88,7 @@ public final class BodyPartJoltPreviewAdapter {
                 setGravity=klass.getMethod("setGravity",float.class);
                 advance=klass.getMethod("advance",int.class,
                         float[].class,float[].class);
+                settle=klass.getMethod("settle",int.class);
                 localSwings=klass.getMethod("localBoneSwings",
                         float[][].class,float[].class);
             }
@@ -94,17 +105,20 @@ public final class BodyPartJoltPreviewAdapter {
 
     /**
      * Null means Jolt unavailable (caller should use legacy solver).
-     * An empty map is a valid Jolt scene initialization/reset frame.
+     * An initialized or reset scene returns its bounded gravity-settled pose.
      * A nonempty map is one preview-only swing per native model bone.
      */
     public Map<String, float[]> sample(File gameDir, String modelId,
             String[] boneNames, int frame, float[][] cleanBoneWorld,
             float[] terminalTipWorld, float[] cleanParentWorld,
             float stiffness, float damping, float gravity) {
+        recreatedLastSample=false;
         if(!initialize(gameDir))return null;
         if(modelId==null || boneNames==null || cleanBoneWorld==null ||
                 boneNames.length!=cleanBoneWorld.length ||
-                boneNames.length<2 || cleanParentWorld==null)return null;
+                boneNames.length<2 || cleanParentWorld==null ||
+                cleanBoneWorld[0]==null || cleanBoneWorld[0].length!=16 ||
+                terminalTipWorld==null || terminalTipWorld.length!=3)return null;
         String id=modelId;
         float[] root=new float[] {cleanBoneWorld[0][12],
                 cleanBoneWorld[0][13],cleanBoneWorld[0][14]};
@@ -117,7 +131,9 @@ public final class BodyPartJoltPreviewAdapter {
         // Editor can re-evaluate a paused frame after numerical bone edits.
         if(!recreate && frame==state.frame &&
                 (!closeEnough(root,state.lastRoot) ||
-                 !closeEnough(cleanParentWorld,state.lastParent)))recreate=true;
+                 !closeEnough(cleanParentWorld,state.lastParent) ||
+                 !sameMatrices(cleanBoneWorld,state.lastBones) ||
+                 !closeEnough(terminalTipWorld,state.lastTip)))recreate=true;
         if(recreate) {
             dispose(id);
             try {
@@ -128,10 +144,16 @@ public final class BodyPartJoltPreviewAdapter {
                 AutoCloseable scene=(AutoCloseable)instance;
                 try {
                     setGravity.invoke(instance,gravity);
+                    // The source frame may be a static pose or direct seek.
+                    // Relax only once on reset; never simulate every render.
+                    settle.invoke(instance,24);
                     state=new State(scene,boneNames,frame,stiffness,damping,
-                            gravity,root,cleanParentWorld);
+                            gravity,root,cleanParentWorld,cleanBoneWorld,
+                            terminalTipWorld);
+                    state.sample=collect(scene,boneNames,cleanBoneWorld,cleanParentWorld);
                     scenes.put(id,state);
-                    return Collections.emptyMap();
+                    recreatedLastSample=true;
+                    return copy(state.sample);
                 } catch(Throwable failure) {
                     scene.close();
                     throw failure;
@@ -145,29 +167,51 @@ public final class BodyPartJoltPreviewAdapter {
             return copy(state.sample);
         try {
             advance.invoke(state.rig,frame,root,cleanParentWorld);
-            Object output=localSwings.invoke(state.rig,cleanBoneWorld,cleanParentWorld);
-            float[][] swings=(float[][])output;
-            if(swings.length!=boneNames.length)
-                throw new IllegalStateException("Wrong Jolt pose bone count");
-            Map<String,float[]> result=new LinkedHashMap<String,float[]>();
-            for(int i=0;i<swings.length;i++) {
-                if(swings[i]==null || swings[i].length!=4)
-                    throw new IllegalStateException("Invalid Jolt swing");
-                for(float value:swings[i])
-                    if(!Float.isFinite(value))
-                        throw new IllegalStateException("Non-finite Jolt swing");
-                result.put(boneNames[i],swings[i].clone());
-            }
+            Map<String,float[]> result=collect(state.rig,boneNames,
+                    cleanBoneWorld,cleanParentWorld);
             state.sample=copy(result);
             state.frame=frame;
             state.lastRoot=root;
             state.lastParent=cleanParentWorld.clone();
+            state.lastBones=copyMatrices(cleanBoneWorld);
+            state.lastTip=terminalTipWorld.clone();
             return result;
         } catch(Throwable error) {
             dispose(id);
             report(id,error);
             return null;
         }
+    }
+
+    private Map<String,float[]> collect(AutoCloseable rig, String[] names,
+            float[][] cleanBones, float[] parentWorld) throws Exception {
+        float[][] swings=(float[][])localSwings.invoke(rig,cleanBones,parentWorld);
+        if(swings==null || swings.length!=names.length)
+            throw new IllegalStateException("Wrong Jolt pose bone count");
+        Map<String,float[]> result=new LinkedHashMap<String,float[]>();
+        for(int i=0;i<swings.length;i++) {
+            if(swings[i]==null || swings[i].length!=4)
+                throw new IllegalStateException("Invalid Jolt swing");
+            for(float value:swings[i])
+                if(!Float.isFinite(value))
+                    throw new IllegalStateException("Non-finite Jolt swing");
+            result.put(names[i],swings[i].clone());
+        }
+        return result;
+    }
+
+    private static float[][] copyMatrices(float[][] source) {
+        float[][] out=new float[source.length][];
+        for(int i=0;i<source.length;i++)
+            out[i]=source[i]==null?null:source[i].clone();
+        return out;
+    }
+
+    private static boolean sameMatrices(float[][] x, float[][] y) {
+        if(x==null || y==null || x.length!=y.length)return false;
+        for(int i=0;i<x.length;i++)
+            if(!closeEnough(x[i],y[i]))return false;
+        return true;
     }
 
     private static boolean closeEnough(float[] x, float[] y) {
