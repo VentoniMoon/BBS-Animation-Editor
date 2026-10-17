@@ -1584,7 +1584,9 @@ public class BodyPartsPreviewRenderer
                                             + "Native quaternion preview active: " + stateId
                                             + " (childRenderSpace="
                                             + (JOLT_EXACT_CHILD_SPACE ? "scale+Y180" : "legacyNoChildYaw")
-                                            + ", body collisions and export not enabled)");
+                                            + ", requestedBodyCollisions="+chain.settings.hasBodyCollisions()
+                                            + ", nativeContacts="+BodyPartJoltPreviewAdapter.torsoContactsRequested()
+                                            + ", export not enabled)");
                                 for (Map.Entry<String, float[]> swing : physical.entrySet())
                                 {
                                     physicsFrames.accept(data, frame,
