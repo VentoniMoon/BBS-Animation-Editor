@@ -47,11 +47,20 @@ public final class JoltChameleonRenderSpaceSmoke
         rx[6]=(float)Math.sin(angle);
         rx[9]=-(float)Math.sin(angle);
         rx[10]=(float)Math.cos(angle);
-        float[] rest={0F,-0.75F,0.66F};
-        float wrongY=transformDirection(rx,rest)[1];
+        // These are already *world-space* numbers from the 80-degree
+        // diagnostic, so first undo the parent rotation before applying
+        // the missing inner yaw (world correction = P * Ry180 * P^-1).
+        float[] loggedWorld={0F,-0.75F,0.66F};
+        float[] inverseRx=BodyPartPhysicsMatrixSpace.identity();
+        inverseRx[5]=(float)Math.cos(angle);
+        inverseRx[6]=-(float)Math.sin(angle);
+        inverseRx[9]=(float)Math.sin(angle);
+        inverseRx[10]=(float)Math.cos(angle);
+        float[] local=transformDirection(inverseRx,loggedWorld);
+        float wrongY=transformDirection(rx,local)[1];
         float actualY=transformDirection(
-                BodyPartChameleonChildRenderSpace.withChildRender(rx,1F),rest)[1];
-        if(!(wrongY < -0.7F && actualY > 0.5F))
+                BodyPartChameleonChildRenderSpace.withChildRender(rx,1F),local)[1];
+        if(!(wrongY < -0.7F && actualY > 0.8F))
             throw new AssertionError("Missing yaw flip not reproduced: "+
                     wrongY+" -> "+actualY);
         System.out.println("Chameleon Y180 on X80: old Y="+wrongY+
