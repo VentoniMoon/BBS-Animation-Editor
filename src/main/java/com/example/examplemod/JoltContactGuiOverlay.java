@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 
 /**
@@ -58,11 +59,13 @@ public final class JoltContactGuiOverlay
 
         int mode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
         int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        int activeTexture=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         int segmentCount=0,visibleBodies=0;
         try
         {
             GL20.glUseProgram(0);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
             GL11.glViewport(0,0,mc.displayWidth,mc.displayHeight);
             GL11.glEnable(GL11.GL_SCISSOR_TEST);
             GL11.glScissor(viewportX,viewportY,viewportW,viewportH);
@@ -136,6 +139,7 @@ public final class JoltContactGuiOverlay
         {
             GL20.glUseProgram(program);
             GL11.glPopAttrib();
+            GL13.glActiveTexture(activeTexture);
             GL11.glMatrixMode(mode);
         }
 
