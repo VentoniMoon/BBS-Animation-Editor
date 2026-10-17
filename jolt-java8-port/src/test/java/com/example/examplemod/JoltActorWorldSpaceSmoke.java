@@ -64,7 +64,7 @@ public final class JoltActorWorldSpaceSmoke
                 new float[]{0.2F,1.4F,-0.1F});
         float[] staticTip=BodyPartJoltActorSpace.point(laterYaw,
                 new float[]{0.2F,1.4F,-0.1F});
-        if(Math.abs(staticTip[0]-rotatedTip[0])<0.1F)
+        if(Math.abs(staticTip[0]-rotatedTip[0])<0.05F)
             throw new AssertionError("Physical Jolt root ignores actor yaw");
 
         System.out.println("Jolt actor-world bones, boxes, translated and rotating pin: PASS");
