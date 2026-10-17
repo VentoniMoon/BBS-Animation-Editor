@@ -105,9 +105,27 @@ public final class JoltMultiTorsoFitSmoke
         BodyPartJoltTorsoFit.Fit original=
                 BodyPartJoltTorsoFit.fit(a,b,xyz,indices);
         if(original==null)throw new AssertionError("Valid extended skinned torso");
-        BodyPartJoltMultiTorsoFit.Segments fit=
+        BodyPartJoltMultiTorsoFit.Segments conservative=
                 BodyPartJoltMultiTorsoFit.fit(original,xyz,indices);
-        if(fit==null)throw new AssertionError("Extended torso fit missing");
+        if(conservative==null)
+            throw new AssertionError("Conservative torso fit missing");
+        if(Math.abs(conservative.a[0][1]-a[1])>0.001F ||
+                Math.abs(conservative.b[2][1]-b[1])>0.001F)
+            throw new AssertionError("Extended fit must default OFF");
+        String property="bbs.editor.physics.jolt.extendedTorsoFit";
+        String previous=System.getProperty(property);
+        BodyPartJoltMultiTorsoFit.Segments fit;
+        try
+        {
+            System.setProperty(property,"true");
+            fit=BodyPartJoltMultiTorsoFit.fit(original,xyz,indices);
+        }
+        finally
+        {
+            if(previous==null)System.clearProperty(property);
+            else System.setProperty(property,previous);
+        }
+        if(fit==null)throw new AssertionError("Opt-in extended torso fit missing");
         // The fit must reach toward the actual chest/shoulders, not
         // remain three overlapping spheres between two lower pivots.
         if(!(fit.a[0][1]>a[1]+0.05F &&
