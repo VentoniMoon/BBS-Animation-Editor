@@ -32,6 +32,12 @@ public final class JoltContactGuiOverlay
     private static final int SIDES=14;
     private static final int CAP_STEPS=4;
     private static String lastReport="";
+    /** Optional visual-only filter. Never removes a Jolt collider.
+     *  Example: -Dbbs.editor.physics.jolt.overlayBoxModel=boobs
+     */
+    private static final String BOX_MODEL_FILTER=
+            System.getProperty("bbs.editor.physics.jolt.overlayBoxModel","")
+                    .trim().toLowerCase(java.util.Locale.ROOT);
 
     private JoltContactGuiOverlay() {}
 
@@ -73,7 +79,7 @@ public final class JoltContactGuiOverlay
         int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         int activeTexture=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
-        int segmentCount=0,visibleBodies=0;
+        int segmentCount=0,visibleBodies=0,drawnBoxes=0;
         try
         {
             GL20.glUseProgram(0);
@@ -120,10 +126,15 @@ public final class JoltContactGuiOverlay
                     // independently rotated cubes within one Chameleon bone.
                     for(JoltContactOverlaySnapshot.Box box:snapshot.boxes)
                     {
+                        if(!boxModelShown(box))continue;
                         int before=segmentCount;
                         segmentCount+=drawBox(buf,box,camera,x,y,width,height,
                                 actorX,actorY,actorZ);
-                        if(segmentCount>before)visibleBodies++;
+                        if(segmentCount>before)
+                        {
+                            visibleBodies++;
+                            drawnBoxes++;
+                        }
                     }
                     tess.draw();
 
@@ -135,8 +146,10 @@ public final class JoltContactGuiOverlay
                     int labelX=x+9,labelY=y+12;
                     String title="JOLT  torso "+snapshot.torsoCount+
                             "   hair "+snapshot.hairCount+
-                            "   extras "+snapshot.boxCount+
+                            "   extras "+drawnBoxes+"/"+snapshot.boxCount+
                             "   visible "+visibleBodies;
+                    if(!BOX_MODEL_FILTER.isEmpty())
+                        title+=" ["+BOX_MODEL_FILTER+"]";
                     if(!shapes.isEmpty() && visibleBodies==0)
                         title+="  [outside camera]";
                     Gui.drawRect(labelX-4,labelY-4,
@@ -144,6 +157,28 @@ public final class JoltContactGuiOverlay
                             labelY+mc.fontRenderer.FONT_HEIGHT+4,0xA9001016);
                     mc.fontRenderer.drawStringWithShadow(title,
                             labelX,labelY,0xFFBDF8C6);
+                    // In filtered mode put provenance directly onto the
+                    // cube. The boxes are GUI-projected; depth is deliberately
+                    // disabled, so this is not an occlusion test.
+                    if(!BOX_MODEL_FILTER.isEmpty())
+                    {
+                        int number=0;
+                        for(JoltContactOverlaySnapshot.Box box:snapshot.boxes)
+                        {
+                            if(!boxModelShown(box))continue;
+                            number++;
+                            float[] center=project(box.pose[0]+actorX,
+                                    box.pose[1]+actorY,box.pose[2]+actorZ,
+                                    camera,x,y,width,height);
+                            if(center!=null && center[0]>=x &&
+                                    center[0]<=x+width &&
+                                    center[1]>=y+30 && center[1]<=y+height)
+                                mc.fontRenderer.drawStringWithShadow(
+                                        box.source+" #"+number,
+                                        (int)center[0]+3,(int)center[1]-8,
+                                        0xFFFFD66B);
+                        }
+                    }
                 }
                 finally
                 {
@@ -167,6 +202,7 @@ public final class JoltContactGuiOverlay
 
         String report="frame="+snapshot.frame+" torso="+snapshot.torsoCount+
                 " hair="+snapshot.hairCount+" boxes="+snapshot.boxCount+
+                " boxesShown="+drawnBoxes+" filter="+BOX_MODEL_FILTER+
                 " projectedShapes="+visibleBodies+
                 " projectedLines="+segmentCount+" camera=("+camera.getCameraX()+
                 ","+camera.getCameraY()+","+camera.getCameraZ()+")"+
@@ -174,13 +210,21 @@ public final class JoltContactGuiOverlay
         // Avoid one-line-per-render logs; report changes to topology or
         // visibility category, not exact subpixel/camera differences.
         String status=snapshot.torsoCount+":"+snapshot.hairCount+
-                ":"+snapshot.boxCount+
+                ":"+snapshot.boxCount+":"+drawnBoxes+":"+BOX_MODEL_FILTER+
                 ":"+(visibleBodies>0?"on-screen":"off-screen")+
                 ":"+(segmentCount>0?"drawn":"no-lines");
         if(!status.equals(lastReport))
         {
             lastReport=status;
             System.out.println("[BBS Animation Editor][Jolt][GUIOverlay] "+report);
+            for(JoltContactOverlaySnapshot.Box box:snapshot.boxes)
+                System.out.println("[BBS Animation Editor][Jolt][ExtraBox] "+
+                        "source="+box.source+" center=("+
+                        box.pose[0]+","+box.pose[1]+","+box.pose[2]+
+                        ") quaternion=("+
+                        box.pose[3]+","+box.pose[4]+","+
+                        box.pose[5]+","+box.pose[6]+") half=("+
+                        box.pose[7]+","+box.pose[8]+","+box.pose[9]+")");
             if(visibleBodies==0 && !snapshot.shapes.isEmpty())
             {
                 JoltContactOverlaySnapshot.Shape first=snapshot.shapes.get(0);
@@ -192,6 +236,13 @@ public final class JoltContactGuiOverlay
                         " (check native Jolt vs actor-world origin)");
             }
         }
+    }
+
+    private static boolean boxModelShown(JoltContactOverlaySnapshot.Box box)
+    {
+        return BOX_MODEL_FILTER.isEmpty() ||
+                box.source.toLowerCase(java.util.Locale.ROOT)
+                        .contains(BOX_MODEL_FILTER);
     }
 
     /** Emit actual capsule rings and longitudinal arcs as thick GUI quads. */
