@@ -80,9 +80,13 @@ public final class EditorEmoticonsRecordPlayback
             BlockbusterRecordFrame current=record.getFrame(tick);
             if(current==null)continue;
             installRecordState(entity,previous,current,tick);
-            // AnimatedMorph.update() drives its native Animator.update()
-            // and ActionPlayback.update(), not just its render pose.
-            morph.update(entity);
+            // The GUI may pause the AnimatedMorph while scrubbing. Its
+            // updateAnimator() intentionally skips native Animator.update()
+            // when morph.isPaused(), so calling morph.update(entity) here
+            // would leave walking/jump actions frozen again.
+            // Drive the native ActionPlayback clock explicitly using the
+            // recorded entity state, regardless of timeline play/pause.
+            morph.animator.update(entity);
             previous=current;
         }
 
