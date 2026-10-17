@@ -110,6 +110,9 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, Integer>();
     private final Map<BodyPartModelData, Map<String, String>> lastJoltDirectionReports =
             new IdentityHashMap<BodyPartModelData, Map<String, String>>();
+    /** Log no more than once per second per strand, even during playback. */
+    private final Map<BodyPartModelData, Map<String, Long>> lastJoltDirectionTimes =
+            new IdentityHashMap<BodyPartModelData, Map<String, Long>>();
     private final Map<BodyPartModelData, Float> leftRootBaseRotation =
             new IdentityHashMap<BodyPartModelData, Float>();
     private final Map<BodyPartModelData, Float> leftRootAppliedRotation =
@@ -649,6 +652,13 @@ public class BodyPartsPreviewRenderer
                 previous = new java.util.HashMap<String, String>();
                 lastJoltDirectionReports.put(data, previous);
             }
+            Map<String, Long> lastTimes = lastJoltDirectionTimes.get(data);
+            if (lastTimes == null)
+            {
+                lastTimes = new java.util.HashMap<String, Long>();
+                lastJoltDirectionTimes.put(data, lastTimes);
+            }
+            long now = System.currentTimeMillis();
             for (BodyPartPhysicsChains.Chain chain : getPreviewPhysicsChains(data))
             {
                 // Root and interior links have an ACTUAL next pivot.
@@ -665,16 +675,19 @@ public class BodyPartsPreviewRenderer
                     float[] actual = BodyPartJoltPoseDiagnostic.direction(current, child);
                     float error = BodyPartJoltPoseDiagnostic.errorDegrees(wanted, actual);
                     String report = String.format(java.util.Locale.ROOT,
-                            "frame=%d bone=%s expectedY=%.2f renderedY=%.2f errorDeg=%.1f",
-                            frame, bone, wanted[1], actual[1], error);
-                    // At rest one report is enough. Log again if the
-                    // comparison or frame genuinely changes.
-                    if (!report.equals(previous.get(bone)))
+                            "frame=%d bone=%s intended=(%.2f,%.2f,%.2f) "
+                                    + "rendered=(%.2f,%.2f,%.2f) errorDeg=%.1f",
+                            frame, bone, wanted[0], wanted[1], wanted[2],
+                            actual[0], actual[1], actual[2], error);
+                    Long lastTime = lastTimes.get(bone);
+                    if (!report.equals(previous.get(bone)) &&
+                            (lastTime == null || now - lastTime.longValue() >= 1000L))
                     {
                         previous.put(bone, report);
+                        lastTimes.put(bone, Long.valueOf(now));
                         System.out.println("[BBS Animation Editor][Jolt][Compare] "
                                 + (error >= 10F ? "MISMATCH " : "aligned ")
-                                + report + " (angles measured from rendered pivots)");
+                                + report + " (world-space segment direction)");
                     }
                 }
             }
@@ -2542,6 +2555,7 @@ public class BodyPartsPreviewRenderer
         joltAppliedDirections.clear();
         joltAppliedFrames.clear();
         lastJoltDirectionReports.clear();
+        lastJoltDirectionTimes.clear();
         physicsFrames.clear();
         /*
          * There is no renderer-owned LayerRenderer anymore.
