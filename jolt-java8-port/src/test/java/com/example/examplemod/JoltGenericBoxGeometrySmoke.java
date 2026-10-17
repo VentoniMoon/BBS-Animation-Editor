@@ -65,8 +65,8 @@ public final class JoltGenericBoxGeometrySmoke
         float[] worldPart=BodyPartPhysicsMatrixSpace.identity();
         // R_y(180 degrees) * R_x(-83.23 degrees), column-major.
         worldPart[0]=-1F;
-        worldPart[5]=cx;worldPart[6]=sx;
-        worldPart[9]=sx;worldPart[10]=-cx;
+        worldPart[5]=cx;worldPart[6]=-sx;
+        worldPart[9]=-sx;worldPart[10]=-cx;
         worldPart[12]=2.2F;worldPart[13]=1.4F;worldPart[14]=-1.3F;
 
         float[] boneMatrix=worldPart.clone();
