@@ -36,7 +36,11 @@ public final class BodyPartPhysicsPanel
         drawValue(mc, "Damping", settings.getDamping(), 139);
         drawToggle(mc, "Body collisions", settings.hasBodyCollisions(), 170);
         mc.fontRenderer.drawString("Chain bones: " + chainBones, x + 9, y + 196, 0xFFAAAAAA);
-        mc.fontRenderer.drawString("Solver: awaiting preview adapter", x + 9, y + 209, 0xFF999999);
+        if (BodyPartJoltPreviewAdapter.isRequested())
+            drawToggle(mc, "Show Jolt colliders",
+                    BodyPartJoltPreviewAdapter.drawContactsRequested(), 211);
+        else
+            mc.fontRenderer.drawString("Solver: Verlet preview", x + 9, y + 209, 0xFF999999);
     }
 
     private void drawValue(Minecraft mc, String title, float value, int lineY)
@@ -81,6 +85,9 @@ public final class BodyPartPhysicsPanel
         else if (row >= 135 && row <= 155) change(mouseX, 2);
         else if (row >= 167 && row <= 185 && mouseX >= x + 140)
             settings.setBodyCollisions(!settings.hasBodyCollisions());
+        else if (row >= 208 && row <= 226 && mouseX >= x + 140 &&
+                BodyPartJoltPreviewAdapter.isRequested())
+            BodyPartJoltPreviewAdapter.toggleDrawContacts();
         return true;
     }
 
