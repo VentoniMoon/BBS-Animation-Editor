@@ -26,6 +26,13 @@ public final class JoltHairChain implements AutoCloseable {
             "bbs.editor.physics.jolt.bendDegrees";
 
     private final ObjectLayerPairFilterTable pairFilter;
+    /**
+     * Wemppy's bone-chain principle: the pin and root segment are attached
+     * to their own animated collider and must not be expelled by it.
+     * Keep that exclusion local to this rig; downstream hair still touches
+     * the torso. Stored for the lifetime of all native bodies.
+     */
+    private final GroupFilterTable contactGroups;
     private final BroadPhaseLayerInterfaceTable broadLayers;
     private final ObjectVsBroadPhaseLayerFilterTable broadFilter;
     private final PhysicsSystem world;
@@ -123,6 +130,9 @@ public final class JoltHairChain implements AutoCloseable {
         // Jolt's table defaults to NO collisions. Separate torso/body
         // contacts from hair/hair: adjacent hair bones should not collide
         // against each other or the pinned kinematic root.
+        // Subgroup 0=pin, 1..N=dynamic hair, N+1..N+3=torso shapes.
+        // There is one physical world per chain, so group id 0 is local.
+        this.contactGroups=new GroupFilterTable(count+4);
         this.pairFilter=new ObjectLayerPairFilterTable(2);
         pairFilter.enableCollision(0,1);
         this.broadLayers=new BroadPhaseLayerInterfaceTable(2,2);
@@ -146,6 +156,7 @@ public final class JoltHairChain implements AutoCloseable {
                 new Quat(rotations[0][0],rotations[0][1],
                         rotations[0][2],rotations[0][3]),
                 EMotionType.Kinematic,0);
+        pinSpec.setCollisionGroup(new CollisionGroup(contactGroups,0,0));
         this.pin=bodies.createBody(pinSpec);
         bodies.addBody(pin.getId(),EActivation.Activate);
         pinSpec.close();
@@ -169,6 +180,7 @@ public final class JoltHairChain implements AutoCloseable {
             spec.setLinearDamping(dampingRate);
             spec.setAngularDamping(dampingRate);
             spec.setGravityFactor(1F);
+            spec.setCollisionGroup(new CollisionGroup(contactGroups,0,i+1));
             Body body=bodies.createBody(spec);
             bodies.addBody(body.getId(),EActivation.Activate);
             spec.close();
@@ -228,6 +240,9 @@ public final class JoltHairChain implements AutoCloseable {
         Quat orientation=new Quat(quaternion[0],quaternion[1],
                 quaternion[2],quaternion[3]);
         if(torsoCollider==null) {
+            // The first link shares its root with the animated body.
+            // Other dynamic links remain collidable with the torso.
+            excuseRootContact(0);
             // Caps at both ends round the torso instead of terminating in
             // artificial sharp contact planes. This is a fitted proxy, NOT
             // a replacement for the skin mesh.
@@ -235,6 +250,8 @@ public final class JoltHairChain implements AutoCloseable {
             CapsuleShape shape=new CapsuleShape(halfCylinder,radius);
             BodyCreationSettings settings=new BodyCreationSettings(
                     shape,center,orientation,EMotionType.Kinematic,1);
+            settings.setCollisionGroup(new CollisionGroup(
+                    contactGroups,0,links.length+1));
             Body created=null;
             try {
                 created=bodies.createBody(settings);
@@ -304,6 +321,9 @@ public final class JoltHairChain implements AutoCloseable {
         }
         if(torsoSegments==null)
         {
+            // No contact against the attached pin/root; downstream links
+            // still contact every fitted torso zone.
+            for(int zone=0;zone<3;zone++)excuseRootContact(zone);
             // Create all 3 only AFTER validating every input. Bodies share
             // layer 1 and do not collide against other layer-1 bodies.
             Body[] created=new Body[3];
@@ -317,6 +337,8 @@ public final class JoltHairChain implements AutoCloseable {
                     BodyCreationSettings settings=new BodyCreationSettings(
                             shape,centers[i],orientations[i],
                             EMotionType.Kinematic,1);
+                    settings.setCollisionGroup(new CollisionGroup(
+                            contactGroups,0,links.length+1+i));
                     try
                     {
                         created[i]=bodies.createBody(settings);
@@ -356,6 +378,14 @@ public final class JoltHairChain implements AutoCloseable {
                 bodies.moveKinematic(torsoSegments[i].getId(),
                         centers[i],orientations[i],TICK);
         }
+    }
+
+    /** A strand root is jointed into this animated body, not a free impact. */
+    private void excuseRootContact(int zone)
+    {
+        int body=links.length+1+zone;
+        contactGroups.disableCollision(0,body);
+        contactGroups.disableCollision(1,body);
     }
 
     public boolean hasTorsoSegments()
@@ -588,5 +618,6 @@ public final class JoltHairChain implements AutoCloseable {
         broadFilter.close();
         broadLayers.close();
         pairFilter.close();
+        contactGroups.close();
     }
 }
