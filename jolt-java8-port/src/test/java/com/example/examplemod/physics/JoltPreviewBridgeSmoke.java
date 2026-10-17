@@ -12,6 +12,16 @@ public final class JoltPreviewBridgeSmoke {
         return new float[] {-1F,0F,0F,0F,0F,1F,0F,0F,
                 0F,0F,-1F,0F,x,y,z,1F};
     }
+    private static boolean sameSample(Map<String,float[]> a,Map<String,float[]> b) {
+        if(a==null || b==null || a.size()!=b.size())return false;
+        for(String name:a.keySet()) {
+            float[] x=a.get(name),y=b.get(name);
+            if(x==null || y==null || x.length!=y.length)return false;
+            for(int i=0;i<x.length;i++)
+                if(Float.floatToIntBits(x[i])!=Float.floatToIntBits(y[i]))return false;
+        }
+        return true;
+    }
     public static void main(String[] args) {
         if(!BodyPartJoltPreviewAdapter.isRequested())
             throw new AssertionError("Missing opt-in Java property");
@@ -62,15 +72,35 @@ public final class JoltPreviewBridgeSmoke {
             if(seek==null || seek.size()!=bones.length ||
                     !bridge.wasRecreatedThisSample())
                 throw new AssertionError("Seek must rebuild a settled Jolt world");
-            // Editing a *child* bone on a paused frame must also rebuild;
-            // checking only root and parent would keep the stale hair rig.
-            world[2]=world[2].clone();
-            world[2][12]+=0.03F;
+            // The editor can render ~200 times while the timeline is at
+            // a single frame. Render interpolation or physics-feedback must
+            // NEVER reinitialize a rig on those draws, even if clean matrices
+            // shift around within the same nominal frame.
+            float[][] noisy=world.clone();
+            noisy[2]=noisy[2].clone();
+            noisy[2][12]+=0.12F;
+            noisy[0]=noisy[0].clone();
+            noisy[0][13]+=0.06F;
+            float[] noisyTip=tip.clone();
+            noisyTip[2]+=0.18F;
+            for(int draw=0;draw<200;draw++) {
+                Map<String,float[]> repeatedPose=bridge.sample(data,"hair/back",
+                        bones,12,noisy,noisyTip,matrix(3F,5F,-2F),
+                        0.15F,0.3F,1F);
+                if(bridge.wasRecreatedThisSample())
+                    throw new AssertionError("Render feedback reset same-frame Jolt rig");
+                if(!sameSample(repeatedPose,seek))
+                    throw new AssertionError("Render feedback altered frozen physics sample");
+            }
+            // A committed transform/key edit can explicitly invalidate the
+            // cached physical scene. Scene render must not infer this from
+            // noisy Chameleon matrices.
+            bridge.invalidate("hair/back");
             Map<String,float[]> changed=bridge.sample(data,"hair/back",bones,
-                    12,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
+                    12,noisy,noisyTip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
             if(changed==null || changed.size()!=bones.length ||
                     !bridge.wasRecreatedThisSample())
-                throw new AssertionError("Paused child bone edit kept stale Jolt scene");
+                throw new AssertionError("Explicit key edit failed to invalidate rig");
             if (BodyPartJoltPreviewAdapter.torsoContactsRequested()) {
                 // Exercise the SAME reflective optional method the renderer
                 // will invoke for skin-mesh-fitted torso contacts.
