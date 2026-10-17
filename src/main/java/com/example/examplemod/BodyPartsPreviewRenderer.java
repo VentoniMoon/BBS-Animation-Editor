@@ -404,6 +404,28 @@ public class BodyPartsPreviewRenderer
                 combined.toArray(new float[combined.size()][]);
     }
 
+    /** Stable per-box provenance for exactly the same ordering as
+     *  passiveCollisionBoxes() forwards to Jolt. This is debug metadata
+     *  only and never changes native collision groups or dynamics.
+     */
+    private java.util.List<String> passiveCollisionSources(int frame)
+    {
+        java.util.List<String> result=new java.util.ArrayList<String>();
+        if(frame!=attachedCollisionFrame)return result;
+        for(BodyPartModelData data:collisionPartOrder)
+        {
+            java.util.List<float[]> forms=attachedCollisionBoxes.get(data);
+            if(forms==null)continue;
+            String model=data.getModelNameAt(frame);
+            if(model==null || model.isEmpty())model=data.getModelName();
+            if(model==null || model.isEmpty())model="unknown";
+            for(int i=0;i<forms.size() &&
+                    result.size()<BodyPartChameleonCollisionBoxes.MAX_BOXES;i++)
+                result.add(model);
+        }
+        return result;
+    }
+
     /**
      * Only snapshots of INSTALLED native collision bodies at the requested
      * animation frame. No GL calls are made here: the caller draws the
@@ -417,6 +439,8 @@ public class BodyPartsPreviewRenderer
         java.util.List<JoltContactOverlaySnapshot.Box> boxes =
                 new java.util.ArrayList<JoltContactOverlaySnapshot.Box>();
         int activeScenes=0;
+        boolean anyBoxesAdded=false;
+        java.util.List<String> boxOwners=passiveCollisionSources(frame);
         if(!BodyPartJoltPreviewAdapter.drawContactsRequested())
             return new JoltContactOverlaySnapshot(frame,0,shapes);
 
@@ -427,7 +451,6 @@ public class BodyPartsPreviewRenderer
             if(entry.getValue()==null || entry.getValue().isEmpty())
                 continue;
             int mode=0;
-            boolean addedBoxes=false;
             for(BodyPartPhysicsChains.Chain chain:entry.getValue())
             {
                 String id=data.getTimelineId()+"/"+chain.root.getName();
@@ -436,18 +459,21 @@ public class BodyPartsPreviewRenderer
                 float[][] segments=joltPreview.hairSegmentsFor(id,frame);
                 if(segments==null)continue;
                 activeScenes++;
-                if(!addedBoxes)
+                if(!anyBoxesAdded)
                 {
                     float[][] installed=joltPreview.additionalBoxesFor(id,frame);
                     if(installed!=null)
                     {
-                        for(float[] candidate:installed)
+                        for(int index=0;index<installed.length;index++)
                             try
                             {
-                                boxes.add(new JoltContactOverlaySnapshot.Box(candidate));
+                                String owner=index<boxOwners.size()
+                                        ?boxOwners.get(index):"unknown";
+                                boxes.add(new JoltContactOverlaySnapshot.Box(
+                                        installed[index],owner));
                             }
                             catch(IllegalArgumentException ignored) {}
-                        addedBoxes=true;
+                        anyBoxesAdded=true;
                     }
                 }
                 for(float[] link:segments)
