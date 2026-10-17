@@ -52,26 +52,21 @@ public final class BodyPartPhysicsChains
             List<AnimationBone> children=bone.getChildren();
             if(children!=null && children.size()>1)
             {
-                // The selected bone is a SHARED anchor with several distinct
-                // strands (often on head hairstyles). It stays animated:
-                // each child independently starts a Jolt chain and inherits
-                // the selected parent's settings. No bone is simulated twice.
+                // A shared anchor can hold multi-bone strands or single
+                // articulated cubes with a real geometric terminal tip.
+                // The selected anchor stays animated, not a physical link.
                 int previousCount=result.size();
                 for(AnimationBone child:children)
                 {
-                    // Decorative single-bone attachments (ears, ribbons,
-                    // ornaments) are not dynamic strands. A shared head
-                    // anchor must not fail merely because one sibling has
-                    // no joint to simulate.
-                    if(child==null || child.getChildren()==null ||
-                            child.getChildren().isEmpty())
-                        continue;
+                    if(child==null)continue;
+                    // Check usable terminal geometry later, after the
+                    // actual Chameleon cube has been decoded and rendered.
                     appendLinearChain(child,settings,used,result);
                 }
                 if(result.size()==previousCount)
                     throw new IllegalStateException(
                             "Shared physics anchor "+bone.getName()+
-                            " has no child chains with at least two bones");
+                            " has no physical child bones");
             }
             else
             {
@@ -114,9 +109,9 @@ public final class BodyPartPhysicsChains
                         "; select independent branch roots instead");
             current=children.get(0);
         }
-        if(chain.size()<2)
+        if(chain.isEmpty())
             throw new IllegalStateException(
-                    "Physics strand "+start.getName()+" requires at least two bones");
+                    "Physics strand "+start.getName()+" has no bones");
         for(AnimationBone bone:chain)used.put(bone,Boolean.TRUE);
         result.add(new Chain(start,chain,settings));
     }
