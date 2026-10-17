@@ -155,6 +155,13 @@ public class BodyPartsPreviewRenderer
     private float[] joltActorWorldFrame;
     private int joltActorWorldFrameTick = -1;
 
+    /** Compare actual actor-world clearances of mirrored front strands.
+     *  Off by default; entirely read-only and source-model agnostic. */
+    private static final boolean JOLT_CONTACT_PROBE=
+            Boolean.getBoolean("bbs.editor.physics.jolt.contactProbe");
+    private final Map<String,Integer> lastContactProbeFrame=
+            new java.util.HashMap<String,Integer>();
+
     private float[] actorFrameFor(int frame)
     {
         return joltActorWorldFrameTick==frame ? joltActorWorldFrame : null;
@@ -1533,6 +1540,45 @@ public class BodyPartsPreviewRenderer
                                 " cubeCount="+tipGeometry.cubeCount);
                     }
                 }
+                if(JOLT_CONTACT_PROBE && frame%5==0)
+                {
+                    String sourceId=data.getTimelineId()+"/"+chain.root.getName();
+                    Integer previous=lastContactProbeFrame.get(sourceId);
+                    if(previous==null || previous.intValue()!=frame)
+                    {
+                        lastContactProbeFrame.put(sourceId,Integer.valueOf(frame));
+                        float[][] contacts=passiveCollisionBoxes(data,frame);
+                        if(contacts!=null && contacts.length>0)
+                        {
+                            float[] point={joints[0].x,joints[0].y,joints[0].z};
+                            float[] center={
+                                    (joints[0].x+joints[1].x)*0.5F,
+                                    (joints[0].y+joints[1].y)*0.5F,
+                                    (joints[0].z+joints[1].z)*0.5F};
+                            float[] tail={joints[jointIndex].x,
+                                    joints[jointIndex].y,joints[jointIndex].z};
+                            BodyPartJoltContactProbe.Nearest rootGap=
+                                    BodyPartJoltContactProbe.nearest(point,contacts);
+                            BodyPartJoltContactProbe.Nearest linkGap=
+                                    BodyPartJoltContactProbe.nearest(center,contacts);
+                            BodyPartJoltContactProbe.Nearest tailGap=
+                                    BodyPartJoltContactProbe.nearest(tail,contacts);
+                            java.util.List<String> owners=passiveCollisionSources(frame);
+                            String closest=linkGap.index<0 ||
+                                    linkGap.index>=owners.size()?"unknown":
+                                    owners.get(linkGap.index);
+                            System.out.println(
+                                    "[BBS Animation Editor][Jolt][ContactProbe] "+
+                                    "frame="+frame+" strand="+sourceId+
+                                    " contactSource="+closest+
+                                    " boxes="+contacts.length+
+                                    " rootClearance="+rootGap.clearance+
+                                    " firstLinkClearance="+linkGap.clearance+
+                                    " terminalClearance="+tailGap.clearance+
+                                    " (negative=inside OBB; NOT a contact impulse)");
+                        }
+                    }
+                }
                 /*
                  * Optional real Jolt physical chain: drive it with the CLEAN
                  * native-world Chameleon pose and convert its quaternion
@@ -2903,6 +2949,7 @@ public class BodyPartsPreviewRenderer
         joltPreview.clear();
         joltActorWorldFrame=null;
         joltActorWorldFrameTick=-1;
+        lastContactProbeFrame.clear();
         reportedJoltPreview.clear();
         joltTorsoFits.clear();
         joltMultiTorsoFits.clear();
