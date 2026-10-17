@@ -249,24 +249,25 @@ exception. Turn off the opt-in flag to return to the old solver.
 - Curved, non-uniform strands are supported and the native tests now use
   actual pivot/tip measurements of all three Horst hair chains. Degenerate
   or mirrored bone transforms still reject cleanly and fall back. The
-  ***in-game* Horst model has not yet been tested**.
+  in-game Horst model now loads Jolt natively; its tilted-pose
+  orientation is still being investigated.
 - No rigid-body collision shapes assigned to the torso yet. This isolates
   gravity and the 60-degree artifact from mesh penetration.
-- The older Chameleon pose writer still converts local axis-angle to Euler
-  for legacy 1.12.2, and clamps to 1.20 radians; exact Chameleon render
-  handedness and posed bone matrices require a visual Minecraft run.
+- The Chameleon pose writer still converts local axis-angle to Euler.
+  Legacy Verlet swings clamp to 1.20 radians while native Jolt swings
+  can reach PI; in-game rotation validation is in progress.
 - Timeline seeks and parameter changes recreate the native rig. The
   existing `BlockbusterActorPreviewRenderer.clear()` calls
   `BodyPartsPreviewRenderer.clear()`, which now disposes Jolt scenes.
-- The optional Gradle shaded-JAR path has not been built under real Forge:
-  the repository does not include the user's runtime Blockbuster/Metamorph
-  dependencies on GitHub Actions. Compile and in-game test on the user's
-  local Forge workspace are still required.
+- The opt-in development Forge client has now run the native physics.
+  GitHub Actions still cannot build a full Forge mod because the repository
+  does not include the user's local Blockbuster/Metamorph dependencies.
+  A release-ready shaded Forge JAR is not yet verified.
 
 ## Remaining before a Forge 1.12.2 integration
 
-1. Verify the experimental shaded Forge build with the local 1.12.2
-   runtime JAR dependencies, then test loading through LaunchClassLoader.
+1. Verify the shaded release Forge JAR independently of the development
+   `runClient` classpath (the latter successfully loaded Jolt in-game).
 2. Validate the Chameleon preview bridge on the actual Horst model, including
    in-game quaternion/Euler orientation and transform units. The adapter must match render-space bone
    matrices and drive/read each *bone quaternion* rather than re-infer angles
