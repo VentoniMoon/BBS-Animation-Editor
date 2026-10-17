@@ -40,7 +40,7 @@ public final class BodyPartPhysicsPanel
             drawToggle(mc, "Show Jolt colliders",
                     BodyPartJoltPreviewAdapter.drawContactsRequested(), 211);
         else
-            mc.fontRenderer.drawString("Solver: Verlet preview", x + 9, y + 209, 0xFF999999);
+            mc.fontRenderer.drawString("Solver: Jolt disabled", x + 9, y + 209, 0xFF999999);
     }
 
     private void drawValue(Minecraft mc, String title, float value, int lineY)
