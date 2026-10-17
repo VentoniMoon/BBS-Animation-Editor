@@ -38,6 +38,10 @@ public final class JoltContactGuiOverlay
     private static final String BOX_MODEL_FILTER=
             System.getProperty("bbs.editor.physics.jolt.overlayBoxModel","")
                     .trim().toLowerCase(java.util.Locale.ROOT);
+    /** Example: -Dbbs.editor.physics.jolt.overlayChain=left_strand_1 */
+    private static final String CHAIN_FILTER=
+            System.getProperty("bbs.editor.physics.jolt.overlayChain","")
+                    .trim().toLowerCase(java.util.Locale.ROOT);
 
     private JoltContactGuiOverlay() {}
 
@@ -117,6 +121,7 @@ public final class JoltContactGuiOverlay
                     List<JoltContactOverlaySnapshot.Shape> shapes=snapshot.shapes;
                     for(int i=0;i<shapes.size();i++)
                     {
+                        if(!chainShown(shapes.get(i)))continue;
                         int before=segmentCount;
                         segmentCount+=drawCapsule(buf,shapes.get(i),camera,
                                 x,y,width,height,actorX,actorY,actorZ);
@@ -149,7 +154,9 @@ public final class JoltContactGuiOverlay
                             "   extras "+drawnBoxes+"/"+snapshot.boxCount+
                             "   visible "+visibleBodies;
                     if(!BOX_MODEL_FILTER.isEmpty())
-                        title+=" ["+BOX_MODEL_FILTER+"]";
+                        title+=" [model:"+BOX_MODEL_FILTER+"]";
+                    if(!CHAIN_FILTER.isEmpty())
+                        title+=" [chain:"+CHAIN_FILTER+"]";
                     if(!shapes.isEmpty() && visibleBodies==0)
                         title+="  [outside camera]";
                     Gui.drawRect(labelX-4,labelY-4,
@@ -203,6 +210,7 @@ public final class JoltContactGuiOverlay
         String report="frame="+snapshot.frame+" torso="+snapshot.torsoCount+
                 " hair="+snapshot.hairCount+" boxes="+snapshot.boxCount+
                 " boxesShown="+drawnBoxes+" filter="+BOX_MODEL_FILTER+
+                " chain="+CHAIN_FILTER+
                 " projectedShapes="+visibleBodies+
                 " projectedLines="+segmentCount+" camera=("+camera.getCameraX()+
                 ","+camera.getCameraY()+","+camera.getCameraZ()+")"+
@@ -211,6 +219,7 @@ public final class JoltContactGuiOverlay
         // visibility category, not exact subpixel/camera differences.
         String status=snapshot.torsoCount+":"+snapshot.hairCount+
                 ":"+snapshot.boxCount+":"+drawnBoxes+":"+BOX_MODEL_FILTER+
+                ":"+CHAIN_FILTER+
                 ":"+(visibleBodies>0?"on-screen":"off-screen")+
                 ":"+(segmentCount>0?"drawn":"no-lines");
         if(!status.equals(lastReport))
@@ -236,6 +245,16 @@ public final class JoltContactGuiOverlay
                         " (check native Jolt vs actor-world origin)");
             }
         }
+    }
+
+    private static boolean chainShown(JoltContactOverlaySnapshot.Shape shape)
+    {
+        // The selected hair plus its passive collider environment, without
+        // masking a Jolt body in the simulation itself.
+        return CHAIN_FILTER.isEmpty() ||
+                shape.kind==JoltContactOverlaySnapshot.Kind.TORSO ||
+                shape.source.toLowerCase(java.util.Locale.ROOT)
+                        .contains(CHAIN_FILTER);
     }
 
     private static boolean boxModelShown(JoltContactOverlaySnapshot.Box box)
