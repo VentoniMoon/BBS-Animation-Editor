@@ -1,3 +1,8 @@
+package com.example.examplemod;
+
+import mchorse.blockbuster.common.entity.EntityActor;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+
 public final class EditorAnimatorMorphController
 {
     final String name;
