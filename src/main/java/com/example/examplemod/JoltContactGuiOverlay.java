@@ -248,7 +248,38 @@ public final class JoltContactGuiOverlay
                     lines++;
             }
         }
+        // Three short torso contacts overlap like spheres. Draw the exact
+        // fitted centerline and both landmarks so the axis is distinguishable
+        // from the spherical surface. These are the same A/B values passed to
+        // native Jolt: this does NOT alter the underlying physical collider.
+        if(shape.kind==JoltContactOverlaySnapshot.Kind.TORSO)
+        {
+            float[] endA=project(a[0]+actorX,a[1]+actorY,a[2]+actorZ,
+                    camera,x,y,width,height);
+            float[] endB=project(b[0]+actorX,b[1]+actorY,b[2]+actorZ,
+                    camera,x,y,width,height);
+            if(emitLine(buf,endA,endB,0xFFE25D,255,3.2F,
+                    x,y,width,height))lines++;
+            lines+=drawPivotCross(buf,endA,0xFFF9BA,x,y,width,height);
+            lines+=drawPivotCross(buf,endB,0xFFF9BA,x,y,width,height);
+        }
         return lines;
+    }
+
+    /** Marks one fitted collider endpoint in the post-FBO GUI pass. */
+    private static int drawPivotCross(BufferBuilder buf,float[] point,
+            int rgb,int x,int y,int width,int height)
+    {
+        if(point==null)return 0;
+        float radius=3.5F;
+        float[] left={point[0]-radius,point[1]};
+        float[] right={point[0]+radius,point[1]};
+        float[] top={point[0],point[1]-radius};
+        float[] bottom={point[0],point[1]+radius};
+        int count=0;
+        if(emitLine(buf,left,right,rgb,255,2F,x,y,width,height))count++;
+        if(emitLine(buf,top,bottom,rgb,255,2F,x,y,width,height))count++;
+        return count;
     }
 
     private static boolean emitLine(BufferBuilder buf,float[] a,float[] b,
