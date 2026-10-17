@@ -18,9 +18,51 @@ This repo targets Forge **Minecraft 1.12.2 / Java 8**, not the upstream Fabric J
 3. The kinematic torso bodies already follow Emoticons animation via `setTorsoSegments` and `moveKinematic`; the Chameleon Y180 transform fix remains untouched.
 4. Native and Java8 geometry checks run via `.github/workflows/jolt-java8.yml` on `main`.
 
+## Generic attached Chameleon collision implementation (October 17)
+
+The initial hair prototype was dependent on fixed hair.geo names such as
+left_strand_3 or back_strand_4. This has been removed from the live terminal-tip
+path. The last bone's tip is measured from the actual decoded Chameleon
+quad vertices and cube-local pivot/rotation. The user must still explicitly
+enable the relevant physics chain, and the final bone must contain valid
+geometry.
+
+New generic attached model collision path:
+
+1. BodyPartChameleonCollisionBoxes collects any passive cube on any bone in
+   any added Chameleon model. It excludes animated physics-chain bones to avoid
+   creating competing static/dynamic owners.
+2. BodyPartJoltBoxGeometry converts decoded Chameleon quads, both cube-level
+   pivot/rotation and bone/BodyPart transforms, into one true oriented box.
+   It rejects mirrored/sheared and degenerate transforms rather than guessing.
+3. After the parent Emoticons and BodyParts are rendered normally,
+   BodyPartsPreviewRenderer snapshots all available attached Chameleon parts.
+   The collision geometry of OTHER attached parts is supplied to each active
+   physics chain. Each chain's Body collisions switch controls both these
+   boxes and the existing torso proxies.
+4. JoltHairChain.setAdditionalBoxes uses up to 32 kinematic BoxShape bodies.
+   Shapes are created once and moved via moveKinematic at each adjacent tick.
+   On topology changes the preview rig is recreated, not silently reused.
+5. The accepted native scene exposes these boxes to the GUI overlay, drawn
+   as orange wireframe cuboids, and the HUD reports extras N.
+6. Java8 native smoke and pure geometry tests cover the supplied rotated,
+   two-cube chest model, attached-box contacts, and root hair inertia/recovery.
+
+Currently supported: Chameleon collision-only BodyParts attached to an
+Emoticons actor, with optional Jolt hair chains on separate Chameleon parts.
+Support for collision mark-up on each bone, alternative actor morph types,
+Chameleon chain branching, texture-alpha/triangle collision, multi-actor
+contact worlds, and a fully seek-stable inertia/bake cache remains future work.
+
+The existing Jolt root uses moveKinematic and dynamic swing/twist bodies with
+spring motors. Consequently it physically exhibits lag and recovery on
+adjacent animation ticks without a fake visual rotation. On non-adjacent seeks
+the rig is recreated and settled; faithful inertial scrubbing will need a
+persistent sequential physics cache.
+
 ## Boundaries of this stage
 
-- This is **not** Wemppy's entire Collision tab: the editor does not yet provide arbitrary per-bone manual primitive markup, texture-alpha shapes, shoulder/head markup, or saved presets.
+- This is **not** Wemppy's entire Collision tab: the editor now infers Chameleon cube boxes for passive added parts but still lacks per-bone editable collision markup, texture-alpha shapes, and saved presets.
 - Our three fitted Emoticons capsules are conservative proxy shapes, **not** triangle-mesh Jolt collisions or a pixel-accurate skin.
 - The first link exclusion is a conservative attachment policy; a future per-bone collision group can excuse only the exact source bone and retain other nearby surfaces.
 - The revised native `JoltHairChain` requires a fresh `jolt-hair-prototype-java8.jar`. Updating Java classes in the Forge editor alone cannot change code inside the already-built JAR.
