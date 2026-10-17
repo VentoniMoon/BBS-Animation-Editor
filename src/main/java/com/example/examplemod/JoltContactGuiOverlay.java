@@ -47,6 +47,18 @@ public final class JoltContactGuiOverlay
     public static void draw(Minecraft mc,EditorCamera camera,
             int x,int y,int width,int height,JoltContactOverlaySnapshot snapshot)
     {
+        draw(mc,camera,x,y,width,height,snapshot,0D,0D,0D);
+    }
+
+    /**
+     * Native contact scenes are actor-origin-relative. Only translate their
+     * read-only debug drawing into the preview's actual world coordinates.
+     * Never move physical Jolt bodies or alter actor transforms here.
+     */
+    public static void draw(Minecraft mc,EditorCamera camera,
+            int x,int y,int width,int height,JoltContactOverlaySnapshot snapshot,
+            double actorX,double actorY,double actorZ)
+    {
         if(mc==null || camera==null || snapshot==null ||
                 width<=0 || height<=0)return;
         ScaledResolution res=new ScaledResolution(mc);
@@ -101,7 +113,7 @@ public final class JoltContactGuiOverlay
                     {
                         int before=segmentCount;
                         segmentCount+=drawCapsule(buf,shapes.get(i),camera,
-                                x,y,width,height);
+                                x,y,width,height,actorX,actorY,actorZ);
                         if(segmentCount>before)visibleBodies++;
                     }
                     tess.draw();
@@ -146,7 +158,8 @@ public final class JoltContactGuiOverlay
         String report="frame="+snapshot.frame+" torso="+snapshot.torsoCount+
                 " hair="+snapshot.hairCount+" projectedShapes="+visibleBodies+
                 " projectedLines="+segmentCount+" camera=("+camera.getCameraX()+
-                ","+camera.getCameraY()+","+camera.getCameraZ()+")";
+                ","+camera.getCameraY()+","+camera.getCameraZ()+")"+
+                " actorOrigin=("+actorX+","+actorY+","+actorZ+")";
         // Avoid one-line-per-render logs; report changes to topology or
         // visibility category, not exact subpixel/camera differences.
         String status=snapshot.torsoCount+":"+snapshot.hairCount+
@@ -172,7 +185,8 @@ public final class JoltContactGuiOverlay
     /** Emit actual capsule rings and longitudinal arcs as thick GUI quads. */
     private static int drawCapsule(BufferBuilder buf,
             JoltContactOverlaySnapshot.Shape shape,EditorCamera camera,
-            int x,int y,int width,int height)
+            int x,int y,int width,int height,
+            double actorX,double actorY,double actorZ)
     {
         float[] a=shape.a,b=shape.b;
         double dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
@@ -187,9 +201,9 @@ public final class JoltContactGuiOverlay
         ux/=un;uy/=un;uz/=un;
         double vx=ny*uz-nz*uy,vy=nz*ux-nx*uz,
                 vz=nx*uy-ny*ux;
-        double cx=(a[0]+b[0])*0.5D;
-        double cy=(a[1]+b[1])*0.5D;
-        double cz=(a[2]+b[2])*0.5D;
+        double cx=(a[0]+b[0])*0.5D+actorX;
+        double cy=(a[1]+b[1])*0.5D+actorY;
+        double cz=(a[2]+b[2])*0.5D+actorZ;
         double half=Math.max(0.005D,length*0.5D-shape.radius);
 
         float[][][] ring=new float[2*(CAP_STEPS+1)][SIDES][];
