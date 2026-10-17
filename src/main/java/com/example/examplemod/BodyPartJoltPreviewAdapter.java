@@ -123,6 +123,14 @@ public final class BodyPartJoltPreviewAdapter {
         if(REQUESTED) drawContacts=!drawContacts;
     }
 
+    /** Clear one scene after an explicit keyframe / source transform edit.
+     *  Never call this from rendering; it would destroy fixed-step inertia.
+     */
+    public void invalidate(String modelId)
+    {
+        if(modelId!=null)dispose(modelId);
+    }
+
     /** A scene was newly initialized and can publish a settled paused pose. */
     public boolean wasRecreatedThisSample() { return recreatedLastSample; }
 
@@ -283,6 +291,33 @@ public final class BodyPartJoltPreviewAdapter {
                 attachedBoxes.length>0;
         float[][] boxes=useAdditional?copyMatrices(attachedBoxes):null;
         State state=scenes.get(id);
+        // A render pass is not a physics tick. A paused timeline can draw
+        // dozens of times with slightly different Chameleon partial-tick
+        // matrices, or with the previously published physics pose. Those
+        // matrices MUST NOT reset the native simulation at the same timeline
+        // frame. The old pose-comparison branch rebuilt each hair rig
+        // hundreds of times per second (observed 192 times at frame 22).
+        //
+        // Only a real change to chain settings / collision topology forces
+        // a rebuild while paused. Geometry and source transforms are sampled
+        // again on the next timeline frame, which is the canonical 20 Hz
+        // physics clock. Explicit same-frame key editing is a separate
+        // invalidate operation, not inferred from transient render matrices.
+        if(state!=null && frame==state.frame &&
+                Arrays.equals(state.bones,boneNames) &&
+                state.stiffness==stiffness && state.damping==damping &&
+                state.gravity==gravity &&
+                state.torsoEnabled==useTorso &&
+                state.compoundEnabled==useCompound &&
+                (useAdditional==(state.lastAdditionalBoxes!=null)) &&
+                (!useAdditional ||
+                        sameBoxGeometry(boxes,state.lastAdditionalBoxes)) &&
+                (!useTorso ||
+                        Math.abs(state.torsoRadius-torsoRadius)<=0.025F) &&
+                (!useCompound ||
+                        !compoundShapeChanged(state.lastMultiA,state.lastMultiB,
+                                state.lastMultiR,compoundA,compoundB,compoundR)))
+            return copy(state.sample);
         boolean recreate=state==null || frame<state.frame ||
                 frame>state.frame+1 ||
                 !Arrays.equals(state.bones,boneNames) ||
@@ -298,18 +333,11 @@ public final class BodyPartJoltPreviewAdapter {
                 (useCompound && compoundShapeChanged(
                         state.lastMultiA,state.lastMultiB,state.lastMultiR,
                         compoundA,compoundB,compoundR));
-        // Editor can re-evaluate a paused frame after numerical bone edits.
-        if(!recreate && frame==state.frame &&
-                (!closeEnough(root,state.lastRoot) ||
-                 !closeEnough(cleanParentWorld,state.lastParent) ||
-                 !sameMatrices(cleanBoneWorld,state.lastBones) ||
-                 !closeEnough(terminalTipWorld,state.lastTip) ||
-                 (useTorso && (!closeEnough(torsoA,state.lastTorsoA) ||
-                               !closeEnough(torsoB,state.lastTorsoB))) ||
-                 (useCompound && (!sameMatrices(compoundA,state.lastMultiA) ||
-                                  !sameMatrices(compoundB,state.lastMultiB))) ||
-                 (useAdditional && !sameMatrices(boxes,state.lastAdditionalBoxes))
-                 ))recreate=true;
+        // Source-pose comparisons on a paused frame are deliberately
+        // disabled: they compare live render/partial-tick matrices with an
+        // earlier clean frame and can mistake applied physics for user edits.
+        // Rebuilds for actual static key changes must be explicitly
+        // invalidated by the editor, or reached via timeline seek.
         if(recreate) {
             dispose(id);
             try {
