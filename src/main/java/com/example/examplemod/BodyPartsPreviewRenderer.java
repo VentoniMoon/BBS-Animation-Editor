@@ -146,6 +146,8 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionBoxes =
             new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
     private int attachedCollisionFrame = -1;
+    private final Map<String,Integer> lastSingleBoneGeometryFrame =
+            new java.util.HashMap<String,Integer>();
     private final Map<BodyPartModelData,String> reportedCollisionCaptures =
             new IdentityHashMap<BodyPartModelData,String>();
     /** Real Emoticons skinned mesh fit for this exact rendered frame. */
@@ -1470,6 +1472,30 @@ public class BodyPartsPreviewRenderer
                             "No valid Chameleon rendered-cube tip for "
                             +finalBone.getName()+" (requires a terminal cube)");
                     continue;
+                }
+                // A one-bone hairstyle has only one physical link, not a
+                // full head-shaped collider. Record its actual attachment
+                // pivot, tip and decoded geometry bounds before changing
+                // the orientation algorithm. Log at most once per timeline
+                // frame to avoid thousands of duplicate render messages.
+                if(chain.bones.size()==1 && tipGeometry!=null)
+                {
+                    String key=data.getTimelineId()+"/"+finalBone.getName();
+                    Integer previousFrame=lastSingleBoneGeometryFrame.get(key);
+                    if(previousFrame==null || previousFrame.intValue()!=frame)
+                    {
+                        lastSingleBoneGeometryFrame.put(key,Integer.valueOf(frame));
+                        System.out.println("[BBS Animation Editor][Jolt][OneBoneGeometry] "+
+                                key+" frame="+frame+
+                                " pivot=["+last.x+","+last.y+","+last.z+"]"+
+                                " tip=["+joints[jointIndex].x+","+
+                                    joints[jointIndex].y+","+
+                                    joints[jointIndex].z+"]"+
+                                " cubeWorldY=["+
+                                    tipGeometry.measurement.minWorldY+","+
+                                    tipGeometry.measurement.maxWorldY+"]"+
+                                " cubeCount="+tipGeometry.cubeCount);
+                    }
                 }
                 /*
                  * Optional real Jolt physical chain: drive it with the CLEAN
