@@ -121,6 +121,7 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltPreviewBridgeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHorstHairFixtureSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java
           LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
@@ -134,6 +135,8 @@ jobs:
             com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
           java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltPreviewBridgeSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltHorstHairFixtureSmoke
           java -ea -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp "$OUT/classes:$OUT/native-jolt.jar" \
@@ -211,7 +214,8 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
-            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltPreviewBridgeSmoke.java
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltPreviewBridgeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHorstHairFixtureSmoke.java
           for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
             if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
               "$base/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
@@ -246,6 +250,8 @@ jobs:
             com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
           java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltPreviewBridgeSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltHorstHairFixtureSmoke
           java -ea -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp 'java8-win/classes;java8-win/native-jolt.jar' \
