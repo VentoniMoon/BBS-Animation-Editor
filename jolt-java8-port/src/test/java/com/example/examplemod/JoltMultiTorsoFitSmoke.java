@@ -69,9 +69,58 @@ public final class JoltMultiTorsoFitSmoke
                 "/"+compound.radius[2]+": PASS");
     }
 
+    /**
+     * An animated torso can extend above low_body/upper-body pivot marks.
+     * Its collision must follow actual skinned region rather than ending
+     * at the short pivot span, while staying on the same rotated axis.
+     */
+    private static void runExtended()
+    {
+        float[] a={0F,1.125F,0F},b={0F,0.750F,0F};
+        List<Float> vertices=new ArrayList<Float>();
+        List<Integer> faces=new ArrayList<Integer>();
+        final int rings=28,steps=24;
+        for(int j=0;j<rings;j++)
+            for(int k=0;k<steps;k++)
+            {
+                float t=-0.60F+2.05F*j/(rings-1F);
+                float angle=(float)(2D*Math.PI*k/steps);
+                float radius=0.18F;
+                vertices.add(radius*(float)Math.cos(angle));
+                vertices.add(a[1]+t*(b[1]-a[1]));
+                vertices.add(radius*(float)Math.sin(angle));
+            }
+        for(int j=0;j<rings-1;j++)
+            for(int k=0;k<steps;k++)
+            {
+                int v=j*steps+k;
+                faces.add(v);
+                faces.add((j+1)*steps+k);
+                faces.add(j*steps+(k+1)%steps);
+            }
+        float[] xyz=new float[vertices.size()];
+        int[] indices=new int[faces.size()];
+        for(int i=0;i<xyz.length;i++)xyz[i]=vertices.get(i);
+        for(int i=0;i<indices.length;i++)indices[i]=faces.get(i);
+        BodyPartJoltTorsoFit.Fit original=
+                BodyPartJoltTorsoFit.fit(a,b,xyz,indices);
+        if(original==null)throw new AssertionError("Valid extended skinned torso");
+        BodyPartJoltMultiTorsoFit.Segments fit=
+                BodyPartJoltMultiTorsoFit.fit(original,xyz,indices);
+        if(fit==null)throw new AssertionError("Extended torso fit missing");
+        // The fit must reach toward the actual chest/shoulders, not
+        // remain three overlapping spheres between two lower pivots.
+        if(!(fit.a[0][1]>a[1]+0.05F &&
+                fit.b[2][1]<b[1]-0.05F))
+            throw new AssertionError("Native torso contacts failed to expand "+
+                    fit.a[0][1]+" -> "+fit.b[2][1]);
+        System.out.println("Skinned extents beyond torso bone pivots: PASS");
+    }
+
     public static void main(String[] args)
     {
         run(0F);
         run(80F);
+        runExtended();
     }
 }
