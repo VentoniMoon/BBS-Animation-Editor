@@ -66,6 +66,28 @@ public final class JoltChameleonRenderSpaceSmoke
         System.out.println("Chameleon Y180 on X80: old Y="+wrongY+
                 ", actual Y="+actualY+"; false down-vector diagnosis detected");
 
+        // Real editor case: on Key 20 the actor's X rotation was -96.51.
+        // Rotating ABOUT X moves the vertical torso axis toward Z. This
+        // is geometrically correct, not an X/Z axis swap in the collision fit.
+        float radians=(float)Math.toRadians(-96.51D);
+        float[] tilted=BodyPartPhysicsMatrixSpace.identity();
+        tilted[5]=(float)Math.cos(radians);
+        tilted[6]=(float)Math.sin(radians);
+        tilted[9]=-(float)Math.sin(radians);
+        tilted[10]=(float)Math.cos(radians);
+        float[] torsoAxis=transformDirection(tilted,new float[]{0F,-0.375F,0F});
+        near("X rotation preserves torso-axis X",torsoAxis[0],0F,1E-5F);
+        if(Math.abs(torsoAxis[2])<0.30F)
+            throw new AssertionError("X rotation must move torso axis toward Z");
+
+        // Missing Chameleon Y180 can invert visible Y when the parent tilts.
+        float[] visual=BodyPartChameleonChildRenderSpace.withChildRender(tilted,1F);
+        float[] withYaw=transformDirection(visual,new float[]{0F,-1F,0.5F});
+        float[] withoutYaw=transformDirection(tilted,new float[]{0F,-1F,0.5F});
+        if(!(withYaw[1]*withoutYaw[1]<0F))
+            throw new AssertionError("Child Y180 gravity visual inversion not reproduced");
+        System.out.println("X=-96.51 torso axis and nested Chameleon orientation: PASS");
+
         try {
             BodyPartChameleonChildRenderSpace.withChildRender(identity,-1F);
             throw new AssertionError("Negative scale unexpectedly accepted");
