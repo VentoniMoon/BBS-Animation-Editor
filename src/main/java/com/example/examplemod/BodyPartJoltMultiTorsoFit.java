@@ -41,6 +41,22 @@ public final class BodyPartJoltMultiTorsoFit
         public float[] radii() { return radius.clone(); }
     }
 
+    /** Same three measured shapes expressed in actor WORLD space.
+     * Native Emoticons mesh fit itself remains model-local and unchanged.
+     */
+    public static Segments world(Segments local,float[] worldFromActor)
+    {
+        if(local==null)return null;
+        float[][] a=local.starts(),b=local.ends();
+        for(int i=0;i<a.length;i++)
+        {
+            a[i]=BodyPartJoltActorSpace.point(worldFromActor,a[i]);
+            b[i]=BodyPartJoltActorSpace.point(worldFromActor,b[i]);
+        }
+        return new Segments(a,b,local.radii(),local.witnesses,
+                local.medianSurfaceDistance);
+    }
+
     /**
      * Input vertices are already CPU-skinned, filtered by torso weights,
      * and share the native Emoticons bone frame. The base fit is required:
