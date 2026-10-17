@@ -38,7 +38,7 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
     public static JoltChameleonPreviewRig create(int frame, float[][] boneWorld,
             float[] terminalTipWorld, float[] parentWorld,
             float stiffness, float damping, float falloff) {
-        if (boneWorld == null || boneWorld.length < 2 ||
+        if (boneWorld == null || boneWorld.length < 1 ||
                 terminalTipWorld == null || terminalTipWorld.length != 3)
             throw new IllegalArgumentException("Missing bone world poses / terminal tip");
         int count = boneWorld.length;
