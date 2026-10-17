@@ -94,6 +94,22 @@ public class BodyPartsPreviewRenderer
      * This stays separate from the modified preview morph. */
     private final Map<BodyPartModelData, Map<String, float[]>> previewEulerDeltas =
             new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
+
+    /** Compare Jolt's intended direction with Chameleon's ACTUAL rendered pivots. */
+    private static final boolean JOLT_DIRECTION_DIAGNOSTIC =
+            Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
+    /** Sample generated AFTER a render; available for the next draw of that frame. */
+    private final Map<BodyPartModelData, Map<String, float[]>> joltSampleDirections =
+            new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
+    private final Map<BodyPartModelData, Integer> joltSampleFrames =
+            new IdentityHashMap<BodyPartModelData, Integer>();
+    /** Precisely the physical sample applied to the child being drawn now. */
+    private final Map<BodyPartModelData, Map<String, float[]>> joltAppliedDirections =
+            new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
+    private final Map<BodyPartModelData, Integer> joltAppliedFrames =
+            new IdentityHashMap<BodyPartModelData, Integer>();
+    private final Map<BodyPartModelData, Map<String, String>> lastJoltDirectionReports =
+            new IdentityHashMap<BodyPartModelData, Map<String, String>>();
     private final Map<BodyPartModelData, Float> leftRootBaseRotation =
             new IdentityHashMap<BodyPartModelData, Float>();
     private final Map<BodyPartModelData, Float> leftRootAppliedRotation =
@@ -165,6 +181,7 @@ public class BodyPartsPreviewRenderer
             if (childPart != null)
             {
                 diagnoseVisualHairResult(data, childPart, frame);
+                diagnoseJoltRenderedDirections(data, childPart, matrix, frame);
                 // Evaluate world-chain directions from the currently rendered
                 // Emoticons basis. The write-back remains disabled until the
                 // local Chameleon rotation convention has been validated.
@@ -600,6 +617,75 @@ public class BodyPartsPreviewRenderer
      * the ordinary render. A successful write to morph.pose is not proof
      * that a bone was rotated during draw. No second render is invoked.
      */
+    /**
+     * The only trustworthy A/B boundary: measure native Chameleon pivots
+     * AFTER its normal render, and compare with the physical direction that
+     * produced the Jolt axis-angle applied to THIS SAME frame. Never infer an
+     * axis sign from a screenshot or change the simulated pose here.
+     */
+    private void diagnoseJoltRenderedDirections(BodyPartModelData data,
+            BodyPart part, float[] lowBodyWorld, int frame)
+    {
+        if (!JOLT_DIRECTION_DIAGNOSTIC || part == null || part.morph == null ||
+                part.morph.get() == null || lowBodyWorld == null)
+            return;
+        Integer sampledFrame = joltAppliedFrames.get(data);
+        Map<String, float[]> expected = joltAppliedDirections.get(data);
+        if (sampledFrame == null || sampledFrame.intValue() != frame ||
+                expected == null || expected.isEmpty())
+            return;
+        try
+        {
+            BodyPartPhysicsWorldPose.MatrixSource local =
+                    BodyPartChameleonMatrixProbe.source(part.morph.get());
+            if (local == null) return;
+            float[] attachment =
+                    BodyPartPhysicsAttachment.worldMatrix(lowBodyWorld, part);
+            BodyPartPhysicsWorldPose.MatrixSource visual =
+                    BodyPartPhysicsWorldPose.worldSource(attachment, local);
+            Map<String, String> previous = lastJoltDirectionReports.get(data);
+            if (previous == null)
+            {
+                previous = new java.util.HashMap<String, String>();
+                lastJoltDirectionReports.put(data, previous);
+            }
+            for (BodyPartPhysicsChains.Chain chain : getPreviewPhysicsChains(data))
+            {
+                // Root and interior links have an ACTUAL next pivot.
+                // Never invent a leaf end point in the diagnostic.
+                for (int i = 0; i + 1 < chain.bones.size(); i++)
+                {
+                    String bone = chain.bones.get(i).getName();
+                    String next = chain.bones.get(i + 1).getName();
+                    float[] wanted = expected.get(bone);
+                    if (wanted == null) continue;
+                    float[] current = visual.getBoneWorldMatrix(bone);
+                    float[] child = visual.getBoneWorldMatrix(next);
+                    if (current == null || child == null) continue;
+                    float[] actual = BodyPartJoltPoseDiagnostic.direction(current, child);
+                    float error = BodyPartJoltPoseDiagnostic.errorDegrees(wanted, actual);
+                    String report = String.format(java.util.Locale.ROOT,
+                            "frame=%d bone=%s expectedY=%.2f renderedY=%.2f errorDeg=%.1f",
+                            frame, bone, wanted[1], actual[1], error);
+                    // At rest one report is enough. Log again if the
+                    // comparison or frame genuinely changes.
+                    if (!report.equals(previous.get(bone)))
+                    {
+                        previous.put(bone, report);
+                        System.out.println("[BBS Animation Editor][Jolt][Compare] "
+                                + (error >= 10F ? "MISMATCH " : "aligned ")
+                                + report + " (angles measured from rendered pivots)");
+                    }
+                }
+            }
+        }
+        catch (RuntimeException error)
+        {
+            System.err.println("[BBS Animation Editor][Jolt][Compare] "
+                    + "Post-render direction comparison unavailable: " + error);
+        }
+    }
+
     private void diagnoseVisualHairResult(BodyPartModelData data, BodyPart part, int frame)
     {
         if (frame != 20 && frame != 60) return;
@@ -930,6 +1016,34 @@ public class BodyPartsPreviewRenderer
                                     chain.settings.getGravity());
                             if (physical != null)
                             {
+                                if (JOLT_DIRECTION_DIAGNOSTIC)
+                                {
+                                    try
+                                    {
+                                        Map<String, float[]> predicted =
+                                                BodyPartJoltPoseDiagnostic.expectedDirections(
+                                                        names, nativeWorld, terminal, physical);
+                                        Integer previousFrame = joltSampleFrames.get(data);
+                                        if (previousFrame == null || previousFrame.intValue() != frame)
+                                        {
+                                            joltSampleDirections.remove(data);
+                                            joltSampleFrames.put(data, Integer.valueOf(frame));
+                                        }
+                                        Map<String, float[]> stored = joltSampleDirections.get(data);
+                                        if (stored == null)
+                                        {
+                                            stored = new java.util.LinkedHashMap<String, float[]>();
+                                            joltSampleDirections.put(data, stored);
+                                        }
+                                        stored.putAll(predicted);
+                                    }
+                                    catch (RuntimeException error)
+                                    {
+                                        System.err.println("[BBS Animation Editor][Jolt][Compare] "
+                                                + "Cannot predict direction for " + stateId
+                                                + ": " + error.getMessage());
+                                    }
+                                }
                                 initializedJolt |= joltPreview.wasRecreatedThisSample();
                                 if (reportedJoltPreview.add(stateId))
                                     System.out.println("[BBS Animation Editor][Jolt] "
@@ -1383,6 +1497,8 @@ public class BodyPartsPreviewRenderer
         manager.parts.clear();
         this.preparedMorphs.clear();
         this.previewEulerDeltas.clear();
+        this.joltAppliedDirections.clear();
+        this.joltAppliedFrames.clear();
         this.previewPhysicsChains.clear();
         this.physicsAttachmentMatrices.clear();
         this.renderedPhysicsParts.clear();
@@ -1760,6 +1876,24 @@ public class BodyPartsPreviewRenderer
                     if (BodyPartChameleonPhysicsPose.addLocalSwing(
                             child, entry.getKey(), corrected, angleLimit))
                     {
+                        if (JOLT_DIRECTION_DIAGNOSTIC &&
+                                physicsFrames.isJoltForRender(data, frame, entry.getKey()))
+                        {
+                            Integer predictedFrame = joltSampleFrames.get(data);
+                            Map<String, float[]> predictions = joltSampleDirections.get(data);
+                            if (predictedFrame != null && predictedFrame.intValue() == frame &&
+                                    predictions != null && predictions.containsKey(entry.getKey()))
+                            {
+                                Map<String, float[]> applied = joltAppliedDirections.get(data);
+                                if (applied == null)
+                                {
+                                    applied = new java.util.LinkedHashMap<String, float[]>();
+                                    joltAppliedDirections.put(data, applied);
+                                }
+                                applied.put(entry.getKey(), predictions.get(entry.getKey()).clone());
+                                joltAppliedFrames.put(data, Integer.valueOf(frame));
+                            }
+                        }
                         appliedCount++;
                         float[] after = readChameleonPoseEuler(child, entry.getKey());
                         if (before != null && after != null)
@@ -2403,6 +2537,11 @@ public class BodyPartsPreviewRenderer
     {
         joltPreview.clear();
         reportedJoltPreview.clear();
+        joltSampleDirections.clear();
+        joltSampleFrames.clear();
+        joltAppliedDirections.clear();
+        joltAppliedFrames.clear();
+        lastJoltDirectionReports.clear();
         physicsFrames.clear();
         /*
          * There is no renderer-owned LayerRenderer anymore.
