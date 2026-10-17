@@ -211,7 +211,10 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltBoxGeometry.java \
+            jolt-java8-port/test-stubs/java/com/example/examplemod/BodyPartPhysicsWorldPose.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonCollisionBoxes.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltGenericBoxGeometrySmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonColliderCaptureSmoke.java \
             src/main/java/com/example/examplemod/EditorCamera.java \
             src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
@@ -231,6 +234,7 @@ jobs:
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltTorsoFitSmoke
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltMultiTorsoFitSmoke
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltGenericBoxGeometrySmoke
+          java -ea -cp "$OUT/classes" com.example.examplemod.JoltChameleonColliderCaptureSmoke
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltContactGuiProjectionSmoke
       - name: Upload experimental Java 8 JNI and hair prototype jars
         uses: actions/upload-artifact@v4
@@ -333,7 +337,10 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltBoxGeometry.java \
+            jolt-java8-port/test-stubs/java/com/example/examplemod/BodyPartPhysicsWorldPose.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonCollisionBoxes.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltGenericBoxGeometrySmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonColliderCaptureSmoke.java \
             src/main/java/com/example/examplemod/EditorCamera.java \
             src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
@@ -353,6 +360,7 @@ jobs:
           java -ea -cp java8-win/classes com.example.examplemod.JoltTorsoFitSmoke
           java -ea -cp java8-win/classes com.example.examplemod.JoltMultiTorsoFitSmoke
           java -ea -cp java8-win/classes com.example.examplemod.JoltGenericBoxGeometrySmoke
+          java -ea -cp java8-win/classes com.example.examplemod.JoltChameleonColliderCaptureSmoke
           java -ea -cp java8-win/classes com.example.examplemod.JoltContactGuiProjectionSmoke
       - name: Run native physics on Java 8 for Windows
         shell: bash
