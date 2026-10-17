@@ -382,6 +382,8 @@ public class BodyPartsPreviewRenderer
     {
         java.util.List<JoltContactOverlaySnapshot.Shape> shapes =
                 new java.util.ArrayList<JoltContactOverlaySnapshot.Shape>();
+        java.util.List<JoltContactOverlaySnapshot.Box> boxes =
+                new java.util.ArrayList<JoltContactOverlaySnapshot.Box>();
         int activeScenes=0;
         if(!BodyPartJoltPreviewAdapter.drawContactsRequested())
             return new JoltContactOverlaySnapshot(frame,0,shapes);
@@ -393,6 +395,7 @@ public class BodyPartsPreviewRenderer
             if(entry.getValue()==null || entry.getValue().isEmpty())
                 continue;
             int mode=0;
+            boolean addedBoxes=false;
             for(BodyPartPhysicsChains.Chain chain:entry.getValue())
             {
                 String id=data.getTimelineId()+"/"+chain.root.getName();
@@ -401,6 +404,20 @@ public class BodyPartsPreviewRenderer
                 float[][] segments=joltPreview.hairSegmentsFor(id,frame);
                 if(segments==null)continue;
                 activeScenes++;
+                if(!addedBoxes)
+                {
+                    float[][] installed=joltPreview.additionalBoxesFor(id,frame);
+                    if(installed!=null)
+                    {
+                        for(float[] candidate:installed)
+                            try
+                            {
+                                boxes.add(new JoltContactOverlaySnapshot.Box(candidate));
+                            }
+                            catch(IllegalArgumentException ignored) {}
+                        addedBoxes=true;
+                    }
+                }
                 for(float[] link:segments)
                 {
                     if(link==null || link.length!=7)continue;
@@ -454,7 +471,7 @@ public class BodyPartsPreviewRenderer
                     catch(IllegalArgumentException ignored) {}
             }
         }
-        return new JoltContactOverlaySnapshot(frame,activeScenes,shapes);
+        return new JoltContactOverlaySnapshot(frame,activeScenes,shapes,boxes);
     }
 
     /**
