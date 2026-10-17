@@ -57,6 +57,39 @@ dependencies {
     compile fg.deobf('blank:aperture-1.8.2:1.12.2')
 }
 
+/*
+ * Native Jolt is an opt-in EXPERIMENTAL preview for Java 8.
+ *
+ * Obtain the two JARs from the jolt-java8-experimental-jars GitHub Actions
+ * artifact and put them in libs/. Without -PenableJoltExperimental the
+ * existing editor builds exactly as before, with no Jolt dependency.
+ *
+ * The native DLL/SO is already embedded as a classpath resource inside the
+ * bundled JNI JAR. Repackage the content into our Forge mod, not as extra
+ * "mods" JARs: Jolt's own JAR has no Forge @Mod entrypoint.
+ */
+if (project.hasProperty('enableJoltExperimental')) {
+    def joltJava8 = file('libs/jolt-jni-6.0.0-java8-bundled.jar')
+    def joltPrototype = file('libs/jolt-hair-prototype-java8.jar')
+    if (!joltJava8.isFile() || !joltPrototype.isFile()) {
+        throw new GradleException('Experimental Jolt artifacts missing. ' +
+                'Place jolt-jni-6.0.0-java8-bundled.jar and ' +
+                'jolt-hair-prototype-java8.jar in libs/ before building.')
+    }
+    dependencies {
+        compile files(joltJava8)
+        compile files(joltPrototype)
+    }
+    jar {
+        from(zipTree(joltJava8)) {
+            exclude 'META-INF/**'
+        }
+        from(zipTree(joltPrototype)) {
+            exclude 'META-INF/**'
+        }
+    }
+}
+
 jar {
     manifest {
         attributes([
