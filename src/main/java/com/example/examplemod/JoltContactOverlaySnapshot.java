@@ -43,8 +43,15 @@ public final class JoltContactOverlaySnapshot
     {
         /** World xyz, quaternion xyzw, positive half xyz. */
         public final float[] pose;
+        /** Source BodyPart model name; used only for debugging. */
+        public final String source;
 
         public Box(float[] input)
+        {
+            this(input,"unknown");
+        }
+
+        public Box(float[] input,String source)
         {
             if(input==null || input.length!=10)
                 throw new IllegalArgumentException("Expected 10-float Jolt box");
@@ -59,6 +66,7 @@ public final class JoltContactOverlaySnapshot
             if(Math.abs(q-1F)>0.02F)
                 throw new IllegalArgumentException("Invalid Jolt box quaternion");
             this.pose=input.clone();
+            this.source=source==null?"unknown":source;
         }
     }
 
@@ -99,7 +107,7 @@ public final class JoltContactOverlaySnapshot
         for(Box box:boxItems)
         {
             if(box==null)throw new IllegalArgumentException("Null Jolt box");
-            boxCopy.add(new Box(box.pose));
+            boxCopy.add(new Box(box.pose,box.source));
         }
         this.boxCount=boxCopy.size();
         this.boxes=Collections.unmodifiableList(boxCopy);
