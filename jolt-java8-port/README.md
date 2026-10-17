@@ -160,6 +160,73 @@ still no body collisions in the Jolt path. The real in-game bend result
 has not been verified; Linux and Windows native Java 8 tests exercise
 the new API and opt-in cone.
 
+### Actual Chameleon cuboid-vs-pivot check (2026-10-17)
+
+The follow-up *in-game* tilt at X=80° confirmed after the frozen pose
+refreshed:
+
+```text
+back_strand_1: raw=(0.00,-0.75,0.66)
+intended=(0.00,-0.75,0.66)
+rendered=(0.00,-0.75,0.66)
+bridgeDeg=0 errorDeg=0 parentChangeDeg=0
+```
+
+The physical link and rendered **bone pivot chain** agree, but the user
+still observes the *visible hair cuboids* extending upward. Moreover,
+setting Stiffness=0 did not obviously fix that visual discrepancy.
+This is not evidence for swapping X/Y/Z signs or reversing gravity.
+
+The original Horst reference cube itself extends downward from
+`back_strand_1` pivot Y=12 to its cube Y≈9.08; therefore an
+**intrinsically reversed source Blockbench cuboid is not established**.
+
+New opt-in `[Jolt][Cube]` records are generated alongside the existing
+`[Jolt][Compare]` records whenever `diagnostic=true`:
+
+```text
+[Jolt][Cube] CUBE_ALIGNED frame=20 bone=back_strand_1
+ source=ActualChameleonQuads cubes=1 vertices=24
+ cubeDown=(...) pivotNext=(...) cubePivotDeg=...
+ pivotTipDeg=... cubeNativeDeg=... cubeCenterY=...
+ cubeTipY=... pivotTipDeltaY=... cubeBoundsY=[...]
+```
+
+This **does not infer rendered geometry from bone pivots**. Instead,
+the diagnostic interrogates the actual loaded Chameleon
+`ModelBone.cubes[].quads[].vertices[].position`, already parsed with
+the Chameleon JSON-X mirroring, and applies the exact independent
+cube pivot+rotation from `ChameleonCubeRenderer` before multiplying
+by the actual native bone world matrix after render.
+
+`cubePivotDeg > 90` is labeled `CUBE_REVERSED`; it means the
+**geometric downward cube axis** disagrees with the actual next-bone
+pivot direction. `cubeNativeDeg` compares the cube's visible axis
+to the native physical rigid-body direction. `cubeBoundsY` and
+`pivotTipDeltaY` reveal whether the actual lower face is below the
+bone's pivot in world Y. When the Chameleon cube API cannot be read,
+`source=HorstReferenceUnverified` explicitly labels the less
+reliable Blockbench-geometry fallback; **do not treat it as a visual
+measurement**.
+
+The diagnostic handles real cube rotations and Chameleon's
+import-time X flip, does not modify physics or record data, and
+is exercised under Java 8 on Windows and Linux with stand-in
+Chameleon model objects including an independently rotated cube.
+No updated native/prototype JAR is required for these editor-only
+source additions, provided the existing JAR already supplies
+`rawPhysicalWorldDirections()`.
+
+Read relevant log lines with:
+
+```powershell
+Select-String -Path '.\\run\\logs\\latest.log' -SimpleMatch '[Jolt][Cube]','[Jolt][Compare]'
+```
+
+This is a **diagnostic**, not a proven fix for the visible inversion.
+Do not alter quaternion signs, model axes or collision geometry
+until a real game log differentiates the sources.
+
 ## Reproduce the build and download experimental JARs
 
 [CI: Jolt JNI Java 8 compatibility](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
