@@ -130,6 +130,36 @@ under both Windows and Linux in CI. **Extraction inside the
 actual Forge LaunchClassLoader has not yet been tested.** A native
 process abort is not recoverable by Java exception handling.
 
+## Seek / paused edit / Jolt rotation behavior
+
+The opt-in renderer now tracks the origin of each frozen bone swing. Native
+Jolt swings are allowed the full shortest-arc angle up to PI; the historical
+Verlet output still obeys its 1.20-radian (~68.8°) cap. This is important
+around the problematic `anchor X ≈ 60°` region.
+
+When a Jolt scene is created by a seek or on a paused bone edit, it runs **24
+fixed physics steps** with the current kinematic anchor, then caches and
+publishes the gravity-settled pose. Rendering the same frame again uses the
+same output, without stepping physics repeatedly. Changing any clean child
+bone matrix or terminal tip while paused now invalidates the cached rig and
+initializes a new one. The `JoltPreviewBridgeSmoke` and
+`NativePreviewAngleSmoke` tests cover these paths on Java 8.
+
+This is **not** a full simulation of the intervening animated parent frames
+on a timeline seek. Reproducible final baking will require replay from a
+defined initial frame using the correct historical parent poses.
+
+## Body collision status
+
+`EmoticonsCollisionGeometryProvider.snapshot()` returns CPU-skinned vertices
+in **mesh-local** coordinates. `JoltChameleonPreviewRig` consumes bone
+transforms in **world** coordinates. These cannot be combined until we have
+verified the correct mesh-to-world transform and triangle winding in an
+actual Minecraft 1.12.2 preview. For safety, Jolt currently applies no
+collisions with the torso, rather than inventing an invisible capsule.
+This prevents the old collider from forcing hair upwards but also means
+hair may penetrate the body until collision-space tests pass.
+
 ## Experimental Forge Body Parts integration (opt-in only)
 
 The normal editor now includes `BodyPartJoltPreviewAdapter`, and
@@ -139,8 +169,17 @@ enabled**. This preview does not save or bake Jolt values into records and
 does not yet collide with the Emoticons torso.
 
 On the [Jolt JNI Java 8 workflow](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
-download the **jolt-java8-experimental-jars** artifact from a successful
-run and place these two files in the editor project's `libs/` directory:
+download the **jolt-java8-experimental-jars** ZIP artifact from a successful
+run. For Windows, install it automatically with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File jolt-java8-port/tools/prepare-windows-test.ps1 -ArtifactZip "C:\\Downloads\\jolt-java8-experimental-jars.zip" -Build
+```
+
+The script validates Java class entries and the Windows DLL before copying
+the required JARs. To install without immediately building, omit `-Build`.
+Alternatively extract and put these two files in the editor project's
+`libs/` directory:
 
 - `jolt-jni-6.0.0-java8-bundled.jar`
 - `jolt-hair-prototype-java8.jar`
