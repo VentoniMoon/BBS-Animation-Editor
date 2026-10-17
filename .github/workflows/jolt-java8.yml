@@ -145,7 +145,7 @@ jobs:
             com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
-          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
+          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltPreviewBridgeSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltHorstHairFixtureSmoke
@@ -331,7 +331,7 @@ jobs:
             com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
-          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
+          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltPreviewBridgeSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltHorstHairFixtureSmoke
