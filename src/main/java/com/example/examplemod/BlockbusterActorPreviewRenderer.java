@@ -751,6 +751,12 @@ public class BlockbusterActorPreviewRenderer
         return this.bodyPartsPreviewRenderer.getPreparedMorph(data);
     }
 
+    /** Pass-through to the passive physics overlay; no second actor render. */
+    public void drawJoltColliderOverlay(int frame)
+    {
+        this.bodyPartsPreviewRenderer.drawJoltColliderOverlay(frame);
+    }
+
     /*
      * =========================================================
      * DRAW ACTOR
@@ -1401,13 +1407,6 @@ public class BlockbusterActorPreviewRenderer
          */
         this.bodyPartsPreviewRenderer.captureRenderedAttachmentMatrices(
                 entityActor, previewFrame);
-
-        /*
-         * Opt-in native Jolt contact wireframes, AFTER the actor is rendered
-         * but BEFORE restoring this viewport's 3D camera matrices. All
-         * geometry is read-only; body physics is not re-simulated.
-         */
-        this.bodyPartsPreviewRenderer.drawJoltColliderOverlay(previewFrame);
 
         /*
          * =====================================================
