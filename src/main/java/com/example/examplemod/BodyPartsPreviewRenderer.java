@@ -530,6 +530,9 @@ public class BodyPartsPreviewRenderer
                         joltMultiTorsoFits.get(data);
                 if(multi!=null)
                 {
+                    float[] actorWorld=actorFrameFor(frame);
+                    if(actorWorld!=null)
+                        multi=BodyPartJoltMultiTorsoFit.world(multi,actorWorld);
                     float[][] starts=multi.starts(),ends=multi.ends();
                     float[] radii=multi.radii();
                     for(int i=0;i<radii.length;i++)
@@ -548,14 +551,20 @@ public class BodyPartsPreviewRenderer
                 if(single!=null)
                     try
                     {
+                        float[] actorWorld=actorFrameFor(frame);
+                        float[] a=actorWorld==null?single.a:
+                                BodyPartJoltActorSpace.point(actorWorld,single.a);
+                        float[] b=actorWorld==null?single.b:
+                                BodyPartJoltActorSpace.point(actorWorld,single.b);
                         shapes.add(new JoltContactOverlaySnapshot.Shape(
                                 JoltContactOverlaySnapshot.Kind.TORSO,
-                                single.a,single.b,single.radius));
+                                a,b,single.radius));
                     }
                     catch(IllegalArgumentException ignored) {}
             }
         }
-        return new JoltContactOverlaySnapshot(frame,activeScenes,shapes,boxes);
+        return new JoltContactOverlaySnapshot(frame,activeScenes,shapes,boxes,
+                actorFrameFor(frame)!=null);
     }
 
     /**
