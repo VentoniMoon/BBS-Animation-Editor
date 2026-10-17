@@ -29,6 +29,10 @@ public final class BodyPartJoltPreviewAdapter {
     /** Opt-in only; no collisions are added to existing default Jolt. */
     private static final boolean TORSO_CONTACTS =
             Boolean.getBoolean("bbs.editor.physics.jolt.torsoContacts");
+    private static final boolean COMPOUND_TORSO =
+            Boolean.getBoolean("bbs.editor.physics.jolt.compoundTorso");
+    private static volatile boolean drawContacts =
+            Boolean.getBoolean("bbs.editor.physics.jolt.drawColliders");
     private static final String RIG =
             "com.example.examplemod.physics.JoltChameleonPreviewRig";
     private boolean attempted;
@@ -40,6 +44,8 @@ public final class BodyPartJoltPreviewAdapter {
     private Method settle;
     private Method localSwings;
     private Method setTorsoCollider;
+    private Method setTorsoSegments;
+    private Method nativeHairSegments;
     private boolean torsoWarning;
     /** Optional prototype API: old downloaded JARs must still work. */
     private Method nativeDirections;
@@ -58,6 +64,10 @@ public final class BodyPartJoltPreviewAdapter {
         final boolean torsoEnabled;
         float[] lastTorsoA,lastTorsoB;
         float torsoRadius;
+        final boolean compoundEnabled;
+        float[][] lastMultiA,lastMultiB;
+        float[] lastMultiR;
+        float[][] rawHairBodies;
         Map<String, float[]> sample=Collections.emptyMap();
         Map<String, float[]> raw=Collections.emptyMap();
 
@@ -65,7 +75,7 @@ public final class BodyPartJoltPreviewAdapter {
                 float stiffness, float damping, float gravity,
                 float[] root, float[] parent, float[][] boneWorld,
                 float[] terminalTip,float[] torsoA,float[] torsoB,
-                float radius) {
+                float radius,BodyPartJoltMultiTorsoFit.Segments multi) {
             this.rig=rig;
             this.bones=bones.clone();
             this.frame=frame;
@@ -80,6 +90,10 @@ public final class BodyPartJoltPreviewAdapter {
             this.lastTorsoA=torsoA==null?null:torsoA.clone();
             this.lastTorsoB=torsoB==null?null:torsoB.clone();
             this.torsoRadius=radius;
+            this.compoundEnabled=multi!=null;
+            this.lastMultiA=multi==null?null:multi.starts();
+            this.lastMultiB=multi==null?null:multi.ends();
+            this.lastMultiR=multi==null?null:multi.radii();
         }
     }
 
@@ -89,6 +103,19 @@ public final class BodyPartJoltPreviewAdapter {
 
     public static boolean torsoContactsRequested() {
         return REQUESTED && TORSO_CONTACTS;
+    }
+
+    public static boolean compoundTorsoRequested() {
+        return REQUESTED && TORSO_CONTACTS && COMPOUND_TORSO;
+    }
+
+    public static boolean drawContactsRequested() {
+        return REQUESTED && drawContacts;
+    }
+
+    /** UI-only toggle; native physics and collision enablement are unaffected. */
+    public static void toggleDrawContacts() {
+        if(REQUESTED) drawContacts=!drawContacts;
     }
 
     /** A scene was newly initialized and can publish a settled paused pose. */
@@ -127,6 +154,24 @@ public final class BodyPartJoltPreviewAdapter {
                         }
                     }
                 }
+                if(compoundTorsoRequested()) {
+                    try {
+                        setTorsoSegments=klass.getMethod("setTorsoSegments",
+                                float[][].class,float[][].class,float[].class);
+                    } catch(NoSuchMethodException older) {
+                        System.err.println("[BBS Editor][Jolt][Compound] "
+                                + "Updated Jolt prototype needed; using single fitted torso");
+                    }
+                }
+                try {
+                    nativeHairSegments=klass.getMethod("nativeHairSegments");
+                } catch(NoSuchMethodException older) {
+                    // Drawing can be switched ON later in the inspector.
+                    // Older physics prototype works without this debug API.
+                    if(drawContacts)
+                        System.err.println("[BBS Editor][Jolt][Overlay] "
+                                + "Updated Jolt prototype needed for native hair segment overlay");
+                }
                 if(RAW_DIAGNOSTIC) {
                     try {
                         nativeDirections=klass.getMethod("rawPhysicalWorldDirections");
@@ -164,7 +209,7 @@ public final class BodyPartJoltPreviewAdapter {
             float stiffness, float damping, float gravity) {
         return sample(gameDir,modelId,boneNames,frame,cleanBoneWorld,
                 terminalTipWorld,cleanParentWorld,stiffness,damping,gravity,
-                null,null,0F);
+                null,null,0F,null);
     }
 
     /**
@@ -176,6 +221,17 @@ public final class BodyPartJoltPreviewAdapter {
             float[] terminalTipWorld, float[] cleanParentWorld,
             float stiffness, float damping, float gravity,
             float[] torsoA,float[] torsoB,float torsoRadius) {
+        return sample(gameDir,modelId,boneNames,frame,cleanBoneWorld,
+                terminalTipWorld,cleanParentWorld,stiffness,damping,gravity,
+                torsoA,torsoB,torsoRadius,null);
+    }
+
+    public Map<String, float[]> sample(File gameDir, String modelId,
+            String[] boneNames, int frame, float[][] cleanBoneWorld,
+            float[] terminalTipWorld, float[] cleanParentWorld,
+            float stiffness, float damping, float gravity,
+            float[] torsoA,float[] torsoB,float torsoRadius,
+            BodyPartJoltMultiTorsoFit.Segments compound) {
         recreatedLastSample=false;
         if(!initialize(gameDir))return null;
         if(modelId==null || boneNames==null || cleanBoneWorld==null ||
@@ -186,9 +242,16 @@ public final class BodyPartJoltPreviewAdapter {
         String id=modelId;
         float[] root=new float[] {cleanBoneWorld[0][12],
                 cleanBoneWorld[0][13],cleanBoneWorld[0][14]};
-        boolean useTorso=TORSO_CONTACTS && setTorsoCollider!=null &&
+        boolean useCompound=compoundTorsoRequested() &&
+                setTorsoSegments!=null && compound!=null &&
+                compound.count()==BodyPartJoltMultiTorsoFit.COUNT;
+        boolean useTorso=!useCompound && TORSO_CONTACTS &&
+                setTorsoCollider!=null &&
                 torsoA!=null && torsoB!=null &&
                 Float.isFinite(torsoRadius) && torsoRadius>=0.04F;
+        float[][] compoundA=useCompound?compound.starts():null;
+        float[][] compoundB=useCompound?compound.ends():null;
+        float[] compoundR=useCompound?compound.radii():null;
         State state=scenes.get(id);
         boolean recreate=state==null || frame<state.frame ||
                 frame>state.frame+1 ||
@@ -196,9 +259,13 @@ public final class BodyPartJoltPreviewAdapter {
                 state.stiffness!=stiffness || state.damping!=damping ||
                 state.gravity!=gravity ||
                 state.torsoEnabled!=useTorso ||
+                state.compoundEnabled!=useCompound ||
                 (useTorso && (Math.abs(state.torsoRadius-torsoRadius)>0.025F ||
                   Math.abs(distance(state.lastTorsoA,state.lastTorsoB)-
-                           distance(torsoA,torsoB))>0.065F));
+                           distance(torsoA,torsoB))>0.065F)) ||
+                (useCompound && compoundShapeChanged(
+                        state.lastMultiA,state.lastMultiB,state.lastMultiR,
+                        compoundA,compoundB,compoundR));
         // Editor can re-evaluate a paused frame after numerical bone edits.
         if(!recreate && frame==state.frame &&
                 (!closeEnough(root,state.lastRoot) ||
@@ -206,7 +273,9 @@ public final class BodyPartJoltPreviewAdapter {
                  !sameMatrices(cleanBoneWorld,state.lastBones) ||
                  !closeEnough(terminalTipWorld,state.lastTip) ||
                  (useTorso && (!closeEnough(torsoA,state.lastTorsoA) ||
-                               !closeEnough(torsoB,state.lastTorsoB)))))recreate=true;
+                               !closeEnough(torsoB,state.lastTorsoB))) ||
+                 (useCompound && (!sameMatrices(compoundA,state.lastMultiA) ||
+                                  !sameMatrices(compoundB,state.lastMultiB)))))recreate=true;
         if(recreate) {
             dispose(id);
             try {
@@ -219,15 +288,20 @@ public final class BodyPartJoltPreviewAdapter {
                     setGravity.invoke(instance,gravity);
                     if(useTorso)
                         setTorsoCollider.invoke(instance,torsoA,torsoB,torsoRadius);
+                    if(useCompound)
+                        setTorsoSegments.invoke(instance,(Object)compoundA,
+                                (Object)compoundB,(Object)compoundR);
                     // The source frame may be a static pose or direct seek.
                     // Relax only once on reset; never simulate every render.
                     settle.invoke(instance,24);
                     state=new State(scene,boneNames,frame,stiffness,damping,
                             gravity,root,cleanParentWorld,cleanBoneWorld,
                             terminalTipWorld,useTorso?torsoA:null,
-                            useTorso?torsoB:null,useTorso?torsoRadius:0F);
+                            useTorso?torsoB:null,useTorso?torsoRadius:0F,
+                            useCompound?compound:null);
                     state.sample=collect(scene,boneNames,cleanBoneWorld,cleanParentWorld);
                     state.raw=collectNativeDirections(scene,boneNames);
+                    state.rawHairBodies=collectHairSegments(scene,boneNames);
                     scenes.put(id,state);
                     recreatedLastSample=true;
                     return copy(state.sample);
@@ -245,11 +319,15 @@ public final class BodyPartJoltPreviewAdapter {
         try {
             if(useTorso)
                 setTorsoCollider.invoke(state.rig,torsoA,torsoB,torsoRadius);
+            if(useCompound)
+                setTorsoSegments.invoke(state.rig,(Object)compoundA,
+                        (Object)compoundB,(Object)compoundR);
             advance.invoke(state.rig,frame,root,cleanParentWorld);
             Map<String,float[]> result=collect(state.rig,boneNames,
                     cleanBoneWorld,cleanParentWorld);
             state.sample=copy(result);
             state.raw=collectNativeDirections(state.rig,boneNames);
+            state.rawHairBodies=collectHairSegments(state.rig,boneNames);
             state.frame=frame;
             state.lastRoot=root;
             state.lastParent=cleanParentWorld.clone();
@@ -259,6 +337,11 @@ public final class BodyPartJoltPreviewAdapter {
                 state.lastTorsoA=torsoA.clone();
                 state.lastTorsoB=torsoB.clone();
                 state.torsoRadius=torsoRadius;
+            }
+            if(useCompound) {
+                state.lastMultiA=copyMatrices(compoundA);
+                state.lastMultiB=copyMatrices(compoundB);
+                state.lastMultiR=compoundR.clone();
             }
             return result;
         } catch(Throwable error) {
@@ -279,6 +362,50 @@ public final class BodyPartJoltPreviewAdapter {
         if(state==null || state.frame!=frame || state.raw==null)
             return Collections.emptyMap();
         return copy(state.raw);
+    }
+
+    /**
+     * Actual live Jolt body endpoints captured on the latest requested
+     * animation frame, never extrapolated from an uncorrected Chameleon pose.
+     */
+    public float[][] hairSegmentsFor(String modelId,int frame) {
+        if(!drawContactsRequested() || modelId==null)return null;
+        State state=scenes.get(modelId);
+        if(state==null||state.frame!=frame)return null;
+        if(state.rawHairBodies==null)
+            state.rawHairBodies=collectHairSegments(state.rig,state.bones);
+        return state.rawHairBodies==null?null:copyMatrices(state.rawHairBodies);
+    }
+
+    private float[][] collectHairSegments(AutoCloseable rig,String[] bones) {
+        if(!drawContacts || nativeHairSegments==null)return null;
+        try {
+            float[][] sample=(float[][])nativeHairSegments.invoke(rig);
+            if(sample==null||sample.length!=bones.length)return null;
+            for(float[] segment:sample) {
+                if(segment==null||segment.length!=7)return null;
+                for(float value:segment)if(!Float.isFinite(value))return null;
+                if(!(segment[6]>0F && segment[6]<=0.1F))return null;
+            }
+            return copyMatrices(sample);
+        } catch(Throwable error) {
+            System.err.println("[BBS Editor][Jolt][Overlay] Native hair endpoints unavailable: "+error);
+            return null;
+        }
+    }
+
+    private static boolean compoundShapeChanged(
+            float[][] oldA,float[][] oldB,float[] oldRadius,
+            float[][] newA,float[][] newB,float[] newRadius) {
+        if(oldA==null||oldB==null||oldRadius==null||
+                newA==null||newB==null||newRadius==null||
+                oldRadius.length!=newRadius.length)return true;
+        for(int i=0;i<newRadius.length;i++) {
+            if(Math.abs(oldRadius[i]-newRadius[i])>0.022F ||
+                    Math.abs(distance(oldA[i],oldB[i])-
+                             distance(newA[i],newB[i]))>0.05F)return true;
+        }
+        return false;
     }
 
     private Map<String,float[]> collectNativeDirections(

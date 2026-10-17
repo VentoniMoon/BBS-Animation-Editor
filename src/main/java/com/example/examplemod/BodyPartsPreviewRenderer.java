@@ -140,6 +140,8 @@ public class BodyPartsPreviewRenderer
     /** Real Emoticons skinned mesh fit for this exact rendered frame. */
     private final Map<BodyPartModelData, BodyPartJoltTorsoFit.Fit> joltTorsoFits =
             new IdentityHashMap<BodyPartModelData, BodyPartJoltTorsoFit.Fit>();
+    private final Map<BodyPartModelData, BodyPartJoltMultiTorsoFit.Segments> joltMultiTorsoFits =
+            new IdentityHashMap<BodyPartModelData, BodyPartJoltMultiTorsoFit.Segments>();
     private final Map<BodyPartModelData, Integer> joltTorsoFitFrames =
             new IdentityHashMap<BodyPartModelData, Integer>();
     private final Map<BodyPartModelData, String> reportedJoltTorsoFit =
@@ -205,16 +207,23 @@ public class BodyPartsPreviewRenderer
             renderedAttachmentFrames.put(data, Integer.valueOf(frame));
             if (BodyPartJoltPreviewAdapter.torsoContactsRequested())
             {
-                BodyPartJoltTorsoFit.Fit torsoFit =
+                JoltTorsoSkinFit fitted =
                         fitNativeJoltTorso(morph, matrix);
+                BodyPartJoltTorsoFit.Fit torsoFit =
+                        fitted==null?null:fitted.single;
+                BodyPartJoltMultiTorsoFit.Segments multi =
+                        fitted==null?null:fitted.compound;
                 if (torsoFit != null)
                 {
                     joltTorsoFits.put(data,torsoFit);
                     joltTorsoFitFrames.put(data,Integer.valueOf(frame));
+                    if(multi!=null)joltMultiTorsoFits.put(data,multi);
+                    else joltMultiTorsoFits.remove(data);
                 }
                 else
                 {
                     joltTorsoFits.remove(data);
+                    joltMultiTorsoFits.remove(data);
                     joltTorsoFitFrames.remove(data);
                 }
                 String outcome = torsoFit == null
@@ -222,9 +231,13 @@ public class BodyPartsPreviewRenderer
                                 + "contacts OFF, no guessed capsule)"
                         : String.format(java.util.Locale.ROOT,
                                 "fitted radius=%.3f blocks, points=%d/%d "
-                                + "(proxy, not triangle-mesh collision)",
+                                + "segments=%s (proxy, not triangle-mesh collision)",
                                 torsoFit.radius,torsoFit.usableVertices,
-                                torsoFit.observedVertices);
+                                torsoFit.observedVertices,
+                                multi==null?"single-only":
+                                        String.format(java.util.Locale.ROOT,
+                                            "(%.3f,%.3f,%.3f)",
+                                            multi.radius[0],multi.radius[1],multi.radius[2]));
                 // A stable status indicator, no per-frame logging storms.
                 String prior=reportedJoltTorsoFit.get(data);
                 boolean wasReady=prior != null && prior.startsWith("fitted");
@@ -278,12 +291,70 @@ public class BodyPartsPreviewRenderer
     }
 
     /**
+     * Debug overlay after the normal actor pass, while the established
+     * camera projection and world MODELVIEW are still active. Uses the
+     * EXACT fitted capsule dimensions passed to the native Jolt scene,
+     * plus actual native dynamic-body endpoints from that same frame.
+     *
+     * Only diagnostic: never writes keys, actor transforms or GL camera.
+     */
+    public void drawJoltColliderOverlay(int frame)
+    {
+        if(!BodyPartJoltPreviewAdapter.drawContactsRequested())return;
+        for(Map.Entry<BodyPartModelData,List<BodyPartPhysicsChains.Chain>> entry:
+                previewPhysicsChains.entrySet())
+        {
+            BodyPartModelData data=entry.getKey();
+            if(entry.getValue()==null || entry.getValue().isEmpty())continue;
+            Integer fitFrame=joltTorsoFitFrames.get(data);
+            if(fitFrame!=null && fitFrame.intValue()==frame)
+            {
+                BodyPartJoltMultiTorsoFit.Segments compound =
+                        BodyPartJoltPreviewAdapter.compoundTorsoRequested()
+                        ? joltMultiTorsoFits.get(data) : null;
+                if(compound!=null)
+                {
+                    JoltContactWireframe.drawTorsoSegments(
+                            compound.starts(),compound.ends(),compound.radii());
+                }
+                else
+                {
+                    BodyPartJoltTorsoFit.Fit single=joltTorsoFits.get(data);
+                    if(single!=null)
+                        JoltContactWireframe.drawTorsoSegments(
+                                new float[][] {single.a},new float[][] {single.b},
+                                new float[] {single.radius});
+                }
+            }
+            for(BodyPartPhysicsChains.Chain chain:entry.getValue())
+            {
+                String id=data.getTimelineId()+"/"+chain.root.getName();
+                float[][] nativeSegments=joltPreview.hairSegmentsFor(id,frame);
+                if(nativeSegments!=null)
+                    JoltContactWireframe.drawHairSegments(nativeSegments);
+            }
+        }
+    }
+
+    /**
      * The ONLY source of kinematic Jolt torso contacts: an independently
      * rendered Emoticons bone axis and the CPU-skinned, torso-weight-selected
      * mesh from that same normal render. A failed fit disables contacts.
      * Do not substitute BodyPartPhysicsBodyCapsules' old guessed 0.18 radius.
      */
-    private static BodyPartJoltTorsoFit.Fit fitNativeJoltTorso(
+    private static final class JoltTorsoSkinFit
+    {
+        final BodyPartJoltTorsoFit.Fit single;
+        final BodyPartJoltMultiTorsoFit.Segments compound;
+        JoltTorsoSkinFit(BodyPartJoltTorsoFit.Fit single,
+                BodyPartJoltMultiTorsoFit.Segments compound)
+        {
+            this.single=single;
+            this.compound=compound;
+        }
+    }
+
+    private static JoltTorsoSkinFit fitNativeJoltTorso(
             Object emoticonsMorph,float[] lowBodyMatrix)
     {
         if(lowBodyMatrix==null)return null;
@@ -304,8 +375,15 @@ public class BodyPartsPreviewRenderer
                             java.util.EnumSet.of(
                                     EmoticonsSkinCollisionGroups.Group.TORSO));
             if(region==null || region.triangleCount()<5)continue;
-            return BodyPartJoltTorsoFit.fit(a,b,
-                    region.vertices,region.triangles);
+            BodyPartJoltTorsoFit.Fit base =
+                    BodyPartJoltTorsoFit.fit(a,b,region.vertices,region.triangles);
+            if(base==null)return null;
+            BodyPartJoltMultiTorsoFit.Segments compound =
+                    BodyPartJoltPreviewAdapter.compoundTorsoRequested()
+                    ? BodyPartJoltMultiTorsoFit.fit(base,
+                            region.vertices,region.triangles)
+                    : null;
+            return new JoltTorsoSkinFit(base,compound);
         }
         return null;
     }
@@ -1224,6 +1302,10 @@ public class BodyPartsPreviewRenderer
                                     contactFrame!=null &&
                                     contactFrame.intValue()==frame
                                     ? joltTorsoFits.get(data):null;
+                            BodyPartJoltMultiTorsoFit.Segments segments =
+                                    contactFrame!=null &&
+                                    contactFrame.intValue()==frame
+                                    ? joltMultiTorsoFits.get(data):null;
                             Map<String, float[]> physical = joltPreview.sample(
                                     net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
                                     stateId, names, frame, nativeWorld, terminal,
@@ -1232,7 +1314,8 @@ public class BodyPartsPreviewRenderer
                                     chain.settings.getGravity(),
                                     contact==null?null:contact.a,
                                     contact==null?null:contact.b,
-                                    contact==null?0F:contact.radius);
+                                    contact==null?0F:contact.radius,
+                                    segments);
                             if (physical != null)
                             {
                                 if (JOLT_DIRECTION_DIAGNOSTIC)
@@ -2794,6 +2877,7 @@ public class BodyPartsPreviewRenderer
         joltPreview.clear();
         reportedJoltPreview.clear();
         joltTorsoFits.clear();
+        joltMultiTorsoFits.clear();
         joltTorsoFitFrames.clear();
         reportedJoltTorsoFit.clear();
         joltSampleDirections.clear();
