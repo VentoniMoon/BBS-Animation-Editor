@@ -104,6 +104,41 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         lastFrame=frame;
     }
 
+    /**
+     * Diagnostic: the physical segment direction read DIRECTLY from Jolt's
+     * rigid-body quaternion (local cylinder -Y axis), in world coordinates.
+     *
+     * Deliberately bypasses the body-to-bone rest correction, Chameleon
+     * hierarchy, axis-angle bridge and Euler pose writer. Comparing this
+     * value with the rendered direction identifies which stage flips a
+     * strand. No physics state is modified by this read.
+     */
+    public float[][] rawPhysicalWorldDirections() {
+        float[][] result=new float[chain.size()][3];
+        for (int i=0; i<result.length; i++) {
+            Quat body=chain.rotation(i);
+            float[] q=JoltBoneQuaternionMapper.normalized(new float[] {
+                    body.getX(),body.getY(),body.getZ(),body.getW()
+            });
+            float x=q[0], y=q[1], z=q[2], w=q[3];
+            // The Jolt capsule's local long axis was authored as -Y.
+            // This is the negative second column of R(q), not a guessed
+            // Chameleon rotation sign or a rest-pose Euler channel.
+            result[i][0]=-2F*(x*y-z*w);
+            result[i][1]=-1F+2F*(x*x+z*z);
+            result[i][2]=-2F*(y*z+x*w);
+            float length=(float)Math.sqrt(
+                    result[i][0]*result[i][0]+
+                    result[i][1]*result[i][1]+
+                    result[i][2]*result[i][2]);
+            if (!(length > 1E-6F) || !Float.isFinite(length))
+                throw new IllegalStateException("Invalid native Jolt segment direction");
+            for (int component=0; component<3; component++)
+                result[i][component]/=length;
+        }
+        return result;
+    }
+
     /** Returns one LOCAL quaternion per bone; no Euler decomposition. */
     public float[][] localBoneRotations() {
         float[][] result = new float[corrections.length][];
