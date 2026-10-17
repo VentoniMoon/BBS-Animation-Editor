@@ -71,6 +71,9 @@ public final class JoltContactOverlaySnapshot
     }
 
     public final int frame;
+    /** True if native contact coordinates already include the actor's
+     *  translation and render Y yaw; the GUI must not add it again. */
+    public final boolean worldSpace;
     public final int activeScenes;
     public final int torsoCount;
     public final int hairCount;
@@ -86,6 +89,12 @@ public final class JoltContactOverlaySnapshot
     public JoltContactOverlaySnapshot(int frame,int activeScenes,List<Shape> items,
             List<Box> boxItems)
     {
+        this(frame,activeScenes,items,boxItems,false);
+    }
+
+    public JoltContactOverlaySnapshot(int frame,int activeScenes,List<Shape> items,
+            List<Box> boxItems,boolean worldSpace)
+    {
         if(activeScenes<0 || items==null || boxItems==null)
             throw new IllegalArgumentException("Invalid Jolt overlay snapshot");
         List<Shape> copy=new ArrayList<Shape>(items.size());
@@ -99,6 +108,7 @@ public final class JoltContactOverlaySnapshot
             else torso++;
         }
         this.frame=frame;
+        this.worldSpace=worldSpace;
         this.activeScenes=activeScenes;
         this.torsoCount=torso;
         this.hairCount=hair;
