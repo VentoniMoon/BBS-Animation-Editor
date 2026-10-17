@@ -34,7 +34,8 @@ public class BlockbusterActorPreviewRenderer
 
     private int lastPreviewFrame = -1;
 
-    private int lastEmoticonsUpdateFrame = -1;
+    private final EditorEmoticonsRecordPlayback emoticonsRecordPlayback =
+            new EditorEmoticonsRecordPlayback();
 
     private final BodyPartsPreviewRenderer bodyPartsPreviewRenderer =
             new BodyPartsPreviewRenderer();
@@ -77,7 +78,7 @@ public class BlockbusterActorPreviewRenderer
             this.hasPreviousPosition = false;
 
             this.lastPreviewFrame = -1;
-            this.lastEmoticonsUpdateFrame = -1;
+            this.emoticonsRecordPlayback.reset();
         }
 
         return this.actor;
@@ -168,7 +169,7 @@ public class BlockbusterActorPreviewRenderer
 
                 this.lastPreviewFrame = -1;
 
-                this.lastEmoticonsUpdateFrame = -1;
+                this.emoticonsRecordPlayback.reset();
             }
         }
         catch (Exception exception)
@@ -668,47 +669,33 @@ public class BlockbusterActorPreviewRenderer
      * =========================================================
      */
 
+    /**
+     * A manual timeline step is a simulation tick, even while paused.
+     * The native Emoticons Animator relies on historic record states for
+     * walking phase, action blending and jump transitions; on a backward or
+     * nonadjacent seek the bridge replays those states deterministically.
+     */
     private void updateEmoticonsAnimation(
             EntityActor entityActor,
+            BlockbusterSceneActorData actorData,
             int previewFrame)
     {
-        if (entityActor == null)
+        if(entityActor==null || actorData==null)return;
+        AbstractMorph morph=entityActor.getMorph();
+        if(!(morph instanceof AnimatedMorph))return;
+        BlockbusterRecord record=actorData.getRecord();
+        if(record==null)
         {
+            // Do not attempt to time-replay an actor with no recording.
+            // The ordinary preview can still tick it during playback.
+            if(BlockbusterPreviewAnimationState.isPlaying())
+                EmoticonsActorPreviewRenderer.updateMorph(
+                        (AnimatedMorph)morph,entityActor);
             return;
         }
-
-        if (!BlockbusterPreviewAnimationState.isPlaying())
-        {
-            return;
-        }
-
-        AbstractMorph currentMorph =
-                entityActor.getMorph();
-
-        if (!(currentMorph instanceof AnimatedMorph))
-        {
-            return;
-        }
-
-        if (this.lastEmoticonsUpdateFrame ==
-                previewFrame)
-        {
-            return;
-        }
-
-        AnimatedMorph animatedMorph =
-                (AnimatedMorph) currentMorph;
-
-        EmoticonsActorPreviewRenderer
-                .updateMorph(
-                        animatedMorph,
-                        entityActor
-                );
-
-        this.lastEmoticonsUpdateFrame =
-                previewFrame;
+        this.emoticonsRecordPlayback.update(
+                entityActor,(AnimatedMorph)morph,record,previewFrame);
     }
-
 
     /*
      * =========================================================
@@ -830,7 +817,7 @@ public class BlockbusterActorPreviewRenderer
         {
             this.hasPreviousPosition = false;
             this.lastPreviewFrame = -1;
-            this.lastEmoticonsUpdateFrame = -1;
+            this.emoticonsRecordPlayback.reset();
 
             AbstractMorph morph =
                     entityActor.getMorph();
@@ -963,11 +950,11 @@ public class BlockbusterActorPreviewRenderer
          * =====================================================
          */
 
-        updateMovementState(
-                entityActor,
-                frame,
-                previewFrame
-        );
+        // Emoticons locomotion is reconstructed by its own deterministic
+        // Record playback clock below. Its native Animator must not inherit
+        // an accumulated limbSwing from whichever frame the user last saw.
+        if(!(entityActor.getMorph() instanceof AnimatedMorph))
+            updateMovementState(entityActor,frame,previewFrame);
 
         /*
          * При паузе полностью фиксируем интенсивность
@@ -1162,6 +1149,7 @@ public class BlockbusterActorPreviewRenderer
 
         updateEmoticonsAnimation(
                 entityActor,
+                actorData,
                 previewFrame
         );
 
@@ -1512,7 +1500,7 @@ public class BlockbusterActorPreviewRenderer
 
         this.lastPreviewFrame = -1;
 
-        this.lastEmoticonsUpdateFrame = -1;
+        this.emoticonsRecordPlayback.reset();
 
         this.bodyPartsPreviewRenderer.clear();
 
