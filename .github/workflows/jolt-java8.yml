@@ -1,7 +1,7 @@
 name: Jolt JNI Java 8 compatibility
 on:
   push:
-    branches: [feature/jolt-java8-port]
+    branches: [feature/jolt-java8-port, feature/jolt-cube-geometry-check]
     paths:
       - 'jolt-java8-port/**'
       - '.github/workflows/jolt-java8.yml'
@@ -10,6 +10,7 @@ on:
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java'
       - 'src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltPoseDiagnostic.java'
+      - 'src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java'
       - 'build.gradle'
   workflow_dispatch:
@@ -175,10 +176,13 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
             src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
             src/main/java/com/example/examplemod/BodyPartJoltPoseDiagnostic.java \
+            src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltCubeGeometrySmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltRenderedDirectionSmoke.java
           java -ea -cp "$OUT/classes" com.example.examplemod.NativePreviewAngleSmoke
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltRenderedDirectionSmoke
+          java -ea -cp "$OUT/classes" com.example.examplemod.JoltCubeGeometrySmoke
       - name: Upload experimental Java 8 JNI and hair prototype jars
         uses: actions/upload-artifact@v4
         with:
@@ -268,10 +272,13 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
             src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
             src/main/java/com/example/examplemod/BodyPartJoltPoseDiagnostic.java \
+            src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltCubeGeometrySmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltRenderedDirectionSmoke.java
           java -ea -cp java8-win/classes com.example.examplemod.NativePreviewAngleSmoke
           java -ea -cp java8-win/classes com.example.examplemod.JoltRenderedDirectionSmoke
+          java -ea -cp java8-win/classes com.example.examplemod.JoltCubeGeometrySmoke
       - name: Run native physics on Java 8 for Windows
         shell: bash
         run: |
