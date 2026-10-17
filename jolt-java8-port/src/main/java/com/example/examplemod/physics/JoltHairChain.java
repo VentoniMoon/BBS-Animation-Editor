@@ -13,7 +13,10 @@ import com.github.stephengold.joltjni.enumerate.EMotorState;
  * The root follows a kinematic body; each link is a real dynamic rigid body
  * with orientation and a SwingTwist cone joint. No guessed Euler rotations.
  *
- * Inspired by Wemppy BBS Physics Engine's BoneChainRig/PhysicsJoints (MIT).
+ * Independently implements published rigid-chain concepts analogous to
+ * Wemppy BBS Physics Engine's BoneChainRig/PhysicsJoints.
+ * Upstream bbs-physics-engine does not declare a repository license; no
+ * upstream implementation was copied into this Java 8 prototype.
  */
 public final class JoltHairChain implements AutoCloseable {
     public static final float TICK = 1F / 20F;
