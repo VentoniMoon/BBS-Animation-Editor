@@ -203,7 +203,6 @@ public class BodyPartsPreviewRenderer
             }
             renderedAttachmentMatrices.put(data, matrix);
             renderedAttachmentFrames.put(data, Integer.valueOf(frame));
-            BodyPart childPart = renderedPhysicsParts.get(data);
             if (BodyPartJoltPreviewAdapter.torsoContactsRequested())
             {
                 BodyPartJoltTorsoFit.Fit torsoFit =
