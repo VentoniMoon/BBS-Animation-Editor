@@ -31,7 +31,7 @@ public final class BodyPartJoltPreviewAdapter {
             Boolean.getBoolean("bbs.editor.physics.jolt.torsoContacts");
     private static final boolean COMPOUND_TORSO =
             Boolean.getBoolean("bbs.editor.physics.jolt.compoundTorso");
-    private static final boolean DRAW_CONTACTS =
+    private static volatile boolean drawContacts =
             Boolean.getBoolean("bbs.editor.physics.jolt.drawColliders");
     private static final String RIG =
             "com.example.examplemod.physics.JoltChameleonPreviewRig";
@@ -110,7 +110,12 @@ public final class BodyPartJoltPreviewAdapter {
     }
 
     public static boolean drawContactsRequested() {
-        return REQUESTED && DRAW_CONTACTS;
+        return REQUESTED && drawContacts;
+    }
+
+    /** UI-only toggle; native physics and collision enablement are unaffected. */
+    public static void toggleDrawContacts() {
+        if(REQUESTED) drawContacts=!drawContacts;
     }
 
     /** A scene was newly initialized and can publish a settled paused pose. */
@@ -158,13 +163,14 @@ public final class BodyPartJoltPreviewAdapter {
                                 + "Updated Jolt prototype needed; using single fitted torso");
                     }
                 }
-                if(DRAW_CONTACTS) {
-                    try {
-                        nativeHairSegments=klass.getMethod("nativeHairSegments");
-                    } catch(NoSuchMethodException older) {
+                try {
+                    nativeHairSegments=klass.getMethod("nativeHairSegments");
+                } catch(NoSuchMethodException older) {
+                    // Drawing can be switched ON later in the inspector.
+                    // Older physics prototype works without this debug API.
+                    if(drawContacts)
                         System.err.println("[BBS Editor][Jolt][Overlay] "
                                 + "Updated Jolt prototype needed for native hair segment overlay");
-                    }
                 }
                 if(RAW_DIAGNOSTIC) {
                     try {
@@ -365,12 +371,14 @@ public final class BodyPartJoltPreviewAdapter {
     public float[][] hairSegmentsFor(String modelId,int frame) {
         if(!drawContactsRequested() || modelId==null)return null;
         State state=scenes.get(modelId);
-        if(state==null||state.frame!=frame||state.rawHairBodies==null)return null;
-        return copyMatrices(state.rawHairBodies);
+        if(state==null||state.frame!=frame)return null;
+        if(state.rawHairBodies==null)
+            state.rawHairBodies=collectHairSegments(state.rig,state.bones);
+        return state.rawHairBodies==null?null:copyMatrices(state.rawHairBodies);
     }
 
     private float[][] collectHairSegments(AutoCloseable rig,String[] bones) {
-        if(!DRAW_CONTACTS || nativeHairSegments==null)return null;
+        if(!drawContacts || nativeHairSegments==null)return null;
         try {
             float[][] sample=(float[][])nativeHairSegments.invoke(rig);
             if(sample==null||sample.length!=bones.length)return null;
