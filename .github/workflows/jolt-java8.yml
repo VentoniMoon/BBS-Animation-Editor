@@ -116,6 +116,8 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java
           LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
@@ -124,6 +126,8 @@ jobs:
             com.example.examplemod.physics.JoltAnchorRotationSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
           java -ea -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp "$OUT/classes:$OUT/native-jolt.jar" \
@@ -229,6 +233,8 @@ jobs:
             com.example.examplemod.physics.JoltAnchorRotationSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
           java -ea -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp 'java8-win/classes;java8-win/native-jolt.jar' \
