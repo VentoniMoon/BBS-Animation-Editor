@@ -88,6 +88,15 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         chain.setTorsoSegments(starts,ends,radii);
     }
 
+    /**
+     * Generic kinematic colliders from added Chameleon BodyParts.
+     * World transforms are measured from actual decoded rotated cubes.
+     */
+    public void setAdditionalBoxes(float[][] worldBoxes)
+    {
+        chain.setAdditionalBoxes(worldBoxes);
+    }
+
     /** Diagnostic only: actual native dynamic-body endpoints and contact radii. */
     public float[][] nativeHairSegments()
     {
