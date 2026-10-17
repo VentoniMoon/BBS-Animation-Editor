@@ -376,7 +376,7 @@ jobs:
             com.example.examplemod.physics.JoltMultiTorsoNativeSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltAttachedBoxNativeSmoke
-          java -ea -Djolt.native.path="$LIB" -cp java8-win/classes \
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltHairInertiaSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltAnchorRotationSmoke
