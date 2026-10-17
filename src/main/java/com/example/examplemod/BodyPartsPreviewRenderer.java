@@ -146,6 +146,8 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionBoxes =
             new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
     private int attachedCollisionFrame = -1;
+    private final Map<BodyPartModelData,String> reportedCollisionCaptures =
+            new IdentityHashMap<BodyPartModelData,String>();
     /** Real Emoticons skinned mesh fit for this exact rendered frame. */
     private final Map<BodyPartModelData, BodyPartJoltTorsoFit.Fit> joltTorsoFits =
             new IdentityHashMap<BodyPartModelData, BodyPartJoltTorsoFit.Fit>();
@@ -320,11 +322,20 @@ public class BodyPartsPreviewRenderer
                 continue;
             float[] parent=BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
                     actorMorph,data.getAttachmentBoneName());
-            if(parent==null)continue;
+            if(parent==null)
+            {
+                reportColliderCapture(data,"missing parent bone matrix: "+
+                        data.getAttachmentBoneName());
+                continue;
+            }
             Object child=part.morph.get();
             BodyPartPhysicsWorldPose.MatrixSource local=
                     BodyPartChameleonMatrixProbe.source(child);
-            if(local==null)continue;
+            if(local==null)
+            {
+                reportColliderCapture(data,"no Chameleon post-render matrix source");
+                continue;
+            }
             try(BodyPartChameleonCleanPose clean=
                     BodyPartChameleonCleanPose.begin(
                             child,previewEulerDeltas.get(data)))
@@ -336,16 +347,32 @@ public class BodyPartsPreviewRenderer
                 for(BodyPartPhysicsChains.Chain chain:getPreviewPhysicsChains(data))
                     for(AnimationBone bone:chain.bones)
                         driven.add(bone.getName());
-                java.util.List<float[]> boxes=
-                        BodyPartChameleonCollisionBoxes.collect(child,world,driven);
-                if(!boxes.isEmpty())
-                    attachedCollisionBoxes.put(data,boxes);
+                BodyPartChameleonCollisionBoxes.Capture captured=
+                        BodyPartChameleonCollisionBoxes.capture(child,world,driven);
+                if(!captured.boxes.isEmpty())
+                    attachedCollisionBoxes.put(data,captured.boxes);
+                reportColliderCapture(data,"attached cubes="+captured.boxes.size()+
+                        " visitedBones="+captured.visitedBones+
+                        " candidateCubes="+captured.visitedCubes+
+                        " rejected="+captured.rejectedCubes+
+                        " simulatedBonesExcluded="+driven.size()+
+                        (captured.error==null?"":" error="+captured.error));
             }
             catch(RuntimeException error)
             {
-                reportPhysicsBoneProbe(data,"Additional Chameleon collider skipped: "
+                reportColliderCapture(data,"collider capture failed: "
                         +error.getClass().getSimpleName());
             }
+        }
+    }
+
+    private void reportColliderCapture(BodyPartModelData data,String message)
+    {
+        if(!message.equals(reportedCollisionCaptures.get(data)))
+        {
+            reportedCollisionCaptures.put(data,message);
+            System.out.println("[BBS Animation Editor][Jolt][BodyPartBoxes] "
+                    +data.getModelName()+" "+message);
         }
     }
 
