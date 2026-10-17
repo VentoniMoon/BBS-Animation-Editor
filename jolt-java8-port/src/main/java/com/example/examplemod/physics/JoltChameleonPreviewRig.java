@@ -89,6 +89,10 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         return new JoltChameleonPreviewRig(chain,corrections,parentRest,frame);
     }
 
+    public void setGravity(float multiplier) {
+        chain.setGravity(multiplier);
+    }
+
     /** Only adjacent timeline frames are valid; caller must recreate on seek. */
     public void advance(int frame, float[] rootWorldPosition,
             float[] currentParentWorldMatrix) {
