@@ -22,8 +22,16 @@ public final class JoltContactOverlaySnapshot
         public final float[] a;
         public final float[] b;
         public final float radius;
+        /** Source physics chain or torso marker, for debug isolation. */
+        public final String source;
 
         public Shape(Kind kind, float[] a, float[] b, float radius)
+        {
+            this(kind,a,b,radius,"unknown");
+        }
+
+        public Shape(Kind kind, float[] a, float[] b, float radius,
+                String source)
         {
             if(kind==null || !isValid(a) || !isValid(b) ||
                     !Float.isFinite(radius) || radius<=0F || radius>0.5F)
@@ -35,6 +43,7 @@ public final class JoltContactOverlaySnapshot
             this.a=a.clone();
             this.b=b.clone();
             this.radius=radius;
+            this.source=source==null?"unknown":source;
         }
     }
 
@@ -103,7 +112,7 @@ public final class JoltContactOverlaySnapshot
         {
             if(item==null)
                 throw new IllegalArgumentException("Null native Jolt shape");
-            copy.add(new Shape(item.kind,item.a,item.b,item.radius));
+            copy.add(new Shape(item.kind,item.a,item.b,item.radius,item.source));
             if(item.kind==Kind.HAIR)hair++;
             else torso++;
         }
