@@ -69,6 +69,16 @@ public final class BodyPartJoltMultiTorsoFit
         if(!Float.isFinite(axisSq) || axisSq<0.0125F || axisSq>1F)
             return null;
 
+        // The original three-zone pivot fit is conservative. The extended
+        // projection may pick off-axis blended skin vertices (shoulders/arms)
+        // and stretch torso contacts beyond the actual actor silhouette.
+        // Until native render-space correspondence is validated against the
+        // visible mesh, keep this enlargement explicitly opt-in.
+        Segments baseSegments=fitZones(base,vertices,indices,0F,1F);
+        if(baseSegments==null ||
+                !Boolean.getBoolean("bbs.editor.physics.jolt.extendedTorsoFit"))
+            return baseSegments;
+
         float[] projected=new float[Math.min(vertices.length/3,indices.length)];
         boolean[] seen=new boolean[vertices.length/3];
         int count=0;
@@ -93,8 +103,7 @@ public final class BodyPartJoltMultiTorsoFit
                     radial<=0.45F)
                 projected[count++]=t;
         }
-        Segments baseSegments=fitZones(base,vertices,indices,0F,1F);
-        if(baseSegments==null || count<36)return baseSegments;
+        if(count<36)return baseSegments;
 
         Arrays.sort(projected,0,count);
         float low=Math.min(0F,projected[(count-1)/10]);
