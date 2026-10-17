@@ -19,7 +19,8 @@ import java.util.Map;
  * classpath. The experimental module is intentionally not a Forge mod.
  *
  * This bridge owns its native preview scenes and never exports keyframes.
- * Collisions are not supported by the first Jolt Chameleon preview.
+ * Collision sources include native Emoticons torso proxies and oriented
+ * Chameleon cuboids from other attached BodyParts.
  */
 public final class BodyPartJoltPreviewAdapter {
     private static final boolean REQUESTED =
@@ -205,13 +206,13 @@ public final class BodyPartJoltPreviewAdapter {
         }
         if(!available && !diagnosticLogged) {
             diagnosticLogged=true;
-            System.err.println("[BBS Editor][Jolt] Falling back to legacy physics");
+            System.err.println("[BBS Editor][Jolt] Preview unavailable (legacy solver disabled)");
         }
         return available;
     }
 
     /**
-     * Null means Jolt unavailable (caller should use legacy solver).
+     * Null means Jolt unavailable; the old legacy preview is not re-enabled.
      * An initialized or reset scene returns its bounded gravity-settled pose.
      * A nonempty map is one preview-only swing per native model bone.
      */
@@ -575,7 +576,7 @@ public final class BodyPartJoltPreviewAdapter {
     private void report(String id, Throwable failure) {
         Throwable cause=failure.getCause()==null?failure:failure.getCause();
         System.err.println("[BBS Editor][Jolt] Scene '"+id+
-                "' unsupported/failed; using legacy solver: "+cause);
+                "' unsupported/failed; no preview physics fallback: "+cause);
     }
 
     private void dispose(String id) {
