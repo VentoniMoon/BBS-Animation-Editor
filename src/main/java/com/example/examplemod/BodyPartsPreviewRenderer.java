@@ -1687,9 +1687,14 @@ public class BodyPartsPreviewRenderer
             // Physics writes happen AFTER normal rendering. On a paused
             // frame, an actual bone edit may publish the completed result
             // for the NEXT draw without waiting for the timeline to advance.
-            // A paused or seeked Jolt scene was gravity-settled at its current
-            // pose: show that frozen pose on the next draw of the same frame.
-            if (initializedJolt)
+            // A paused or seeked Jolt scene uses the actual completed sample
+            // at that frame on its next draw. Previously the editor showed
+            // the preceding frame's physical swing after a manual tick and
+            // only published once upon scene initialization, exaggerating
+            // consecutive-frame jitter. Playback still freezes the sample
+            // for the entire render frame; no mid-draw reentrant stepping.
+            if (initializedJolt ||
+                    (advanced && !BlockbusterPreviewAnimationState.isPlaying()))
                 physicsFrames.publishEditedFrame(data,frame);
             reportPhysicsBoneProbe(data, advanced
                     ? "Jolt native preview advanced; multi-segment visual pose queued"
