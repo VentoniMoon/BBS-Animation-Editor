@@ -103,11 +103,21 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
     private final Map<BodyPartModelData, Integer> joltSampleFrames =
             new IdentityHashMap<BodyPartModelData, Integer>();
+    /** Actual native Jolt link directions, not derived from Chameleon poses. */
+    private final Map<BodyPartModelData, Map<String, float[]>> joltSampleNativeDirections =
+            new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
+    /** Emoticons parent frame when the physics sample was generated. */
+    private final Map<BodyPartModelData, float[]> joltSampleParentMatrices =
+            new IdentityHashMap<BodyPartModelData, float[]>();
     /** Precisely the physical sample applied to the child being drawn now. */
     private final Map<BodyPartModelData, Map<String, float[]>> joltAppliedDirections =
             new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
     private final Map<BodyPartModelData, Integer> joltAppliedFrames =
             new IdentityHashMap<BodyPartModelData, Integer>();
+    private final Map<BodyPartModelData, Map<String, float[]>> joltAppliedNativeDirections =
+            new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
+    private final Map<BodyPartModelData, float[]> joltAppliedParentMatrices =
+            new IdentityHashMap<BodyPartModelData, float[]>();
     private final Map<BodyPartModelData, Map<String, String>> lastJoltDirectionReports =
             new IdentityHashMap<BodyPartModelData, Map<String, String>>();
     /** Log no more than once per second per strand, even during playback. */
@@ -659,6 +669,11 @@ public class BodyPartsPreviewRenderer
                 lastJoltDirectionTimes.put(data, lastTimes);
             }
             long now = System.currentTimeMillis();
+            Map<String, float[]> nativeVectors = joltAppliedNativeDirections.get(data);
+            float[] sourceParent = joltAppliedParentMatrices.get(data);
+            float sourceShift = sourceParent == null ? Float.NaN :
+                    BodyPartJoltPoseDiagnostic.parentRotationChangeDegrees(
+                            sourceParent, lowBodyWorld);
             for (BodyPartPhysicsChains.Chain chain : getPreviewPhysicsChains(data))
             {
                 // Root and interior links have an ACTUAL next pivot.
@@ -674,11 +689,30 @@ public class BodyPartsPreviewRenderer
                     if (current == null || child == null) continue;
                     float[] actual = BodyPartJoltPoseDiagnostic.direction(current, child);
                     float error = BodyPartJoltPoseDiagnostic.errorDegrees(wanted, actual);
+                    float[] raw = nativeVectors == null ? null : nativeVectors.get(bone);
+                    float bridgeError = raw == null ? Float.NaN :
+                            BodyPartJoltPoseDiagnostic.errorDegrees(raw, wanted);
+                    // If the parent has been edited on a PAUSED timeline
+                    // frame, the frozen Jolt pose still belongs to the old
+                    // parent for this draw. Do not classify that transient
+                    // as a bad Chameleon writeback.
+                    String cause = Float.isFinite(sourceShift) && sourceShift >= 1F
+                            ? "SOURCE_CHANGED" : Float.isFinite(bridgeError) &&
+                            bridgeError >= 10F ? "BRIDGE_MISMATCH" :
+                            error >= 10F ? "WRITEBACK_MISMATCH" :
+                            raw != null && raw[1] > 0.2F ? "NATIVE_UP" : "aligned";
                     String report = String.format(java.util.Locale.ROOT,
-                            "frame=%d bone=%s intended=(%.2f,%.2f,%.2f) "
-                                    + "rendered=(%.2f,%.2f,%.2f) errorDeg=%.1f",
-                            frame, bone, wanted[0], wanted[1], wanted[2],
-                            actual[0], actual[1], actual[2], error);
+                            "frame=%d bone=%s raw=%s intended=(%.2f,%.2f,%.2f) "
+                                    + "rendered=(%.2f,%.2f,%.2f) bridgeDeg=%.1f "
+                                    + "errorDeg=%.1f parentChangeDeg=%.1f",
+                            frame, bone,
+                            raw == null ? "unavailable" :
+                                    String.format(java.util.Locale.ROOT,
+                                            "(%.2f,%.2f,%.2f)",
+                                            raw[0],raw[1],raw[2]),
+                            wanted[0],wanted[1],wanted[2],
+                            actual[0],actual[1],actual[2],
+                            bridgeError,error,sourceShift);
                     Long lastTime = lastTimes.get(bone);
                     if (!report.equals(previous.get(bone)) &&
                             (lastTime == null || now - lastTime.longValue() >= 1000L))
@@ -686,8 +720,7 @@ public class BodyPartsPreviewRenderer
                         previous.put(bone, report);
                         lastTimes.put(bone, Long.valueOf(now));
                         System.out.println("[BBS Animation Editor][Jolt][Compare] "
-                                + (error >= 10F ? "MISMATCH " : "aligned ")
-                                + report + " (world-space segment direction)");
+                                + cause + " " + report + " (world-space segment direction)");
                     }
                 }
             }
@@ -1040,6 +1073,8 @@ public class BodyPartsPreviewRenderer
                                         if (previousFrame == null || previousFrame.intValue() != frame)
                                         {
                                             joltSampleDirections.remove(data);
+                                            joltSampleNativeDirections.remove(data);
+                                            joltSampleParentMatrices.remove(data);
                                             joltSampleFrames.put(data, Integer.valueOf(frame));
                                         }
                                         Map<String, float[]> stored = joltSampleDirections.get(data);
@@ -1049,6 +1084,23 @@ public class BodyPartsPreviewRenderer
                                             joltSampleDirections.put(data, stored);
                                         }
                                         stored.putAll(predicted);
+                                        // Save exactly the attachment frame
+                                        // supplied to the rigid-body solver.
+                                        joltSampleParentMatrices.put(data,
+                                                parentMatrix.clone());
+                                        Map<String, float[]> raw =
+                                                joltPreview.rawDirectionsFor(stateId, frame);
+                                        if (!raw.isEmpty())
+                                        {
+                                            Map<String, float[]> direct =
+                                                    joltSampleNativeDirections.get(data);
+                                            if (direct == null)
+                                            {
+                                                direct = new java.util.LinkedHashMap<String, float[]>();
+                                                joltSampleNativeDirections.put(data, direct);
+                                            }
+                                            direct.putAll(raw);
+                                        }
                                     }
                                     catch (RuntimeException error)
                                     {
@@ -1512,6 +1564,8 @@ public class BodyPartsPreviewRenderer
         this.previewEulerDeltas.clear();
         this.joltAppliedDirections.clear();
         this.joltAppliedFrames.clear();
+        this.joltAppliedNativeDirections.clear();
+        this.joltAppliedParentMatrices.clear();
         this.previewPhysicsChains.clear();
         this.physicsAttachmentMatrices.clear();
         this.renderedPhysicsParts.clear();
@@ -1905,6 +1959,20 @@ public class BodyPartsPreviewRenderer
                                 }
                                 applied.put(entry.getKey(), predictions.get(entry.getKey()).clone());
                                 joltAppliedFrames.put(data, Integer.valueOf(frame));
+                                float[] parentSample = joltSampleParentMatrices.get(data);
+                                if (parentSample != null)
+                                    joltAppliedParentMatrices.put(data, parentSample.clone());
+                                Map<String, float[]> direct = joltSampleNativeDirections.get(data);
+                                if (direct != null && direct.containsKey(entry.getKey()))
+                                {
+                                    Map<String, float[]> used = joltAppliedNativeDirections.get(data);
+                                    if (used == null)
+                                    {
+                                        used = new java.util.LinkedHashMap<String, float[]>();
+                                        joltAppliedNativeDirections.put(data, used);
+                                    }
+                                    used.put(entry.getKey(), direct.get(entry.getKey()).clone());
+                                }
                             }
                         }
                         appliedCount++;
@@ -2552,8 +2620,12 @@ public class BodyPartsPreviewRenderer
         reportedJoltPreview.clear();
         joltSampleDirections.clear();
         joltSampleFrames.clear();
+        joltSampleNativeDirections.clear();
+        joltSampleParentMatrices.clear();
         joltAppliedDirections.clear();
         joltAppliedFrames.clear();
+        joltAppliedNativeDirections.clear();
+        joltAppliedParentMatrices.clear();
         lastJoltDirectionReports.clear();
         lastJoltDirectionTimes.clear();
         physicsFrames.clear();

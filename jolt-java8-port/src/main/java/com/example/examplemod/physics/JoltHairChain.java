@@ -18,6 +18,12 @@ import com.github.stephengold.joltjni.enumerate.EMotorState;
 public final class JoltHairChain implements AutoCloseable {
     public static final float TICK = 1F / 20F;
     public static final int SUBSTEPS = 3;
+    /**
+     * Opt-in test parameter only. Wemppy exposes bend as a chain setting;
+     * ours remains 80 degrees unless explicitly configured at launch.
+     */
+    public static final String BEND_DEGREES_PROPERTY =
+            "bbs.editor.physics.jolt.bendDegrees";
 
     private final ObjectLayerPairFilterTable pairFilter;
     private final BroadPhaseLayerInterfaceTable broadLayers;
@@ -67,6 +73,9 @@ public final class JoltHairChain implements AutoCloseable {
         if (!Float.isFinite(stiffness) || !Float.isFinite(damping) ||
                 !Float.isFinite(falloff))
             throw new IllegalArgumentException("Invalid strand settings");
+        // Validate BEFORE native world allocation. Bad JVM properties must
+        // never leak a half-initialized physics scene.
+        float allowedSwingRadians=allowedSwingRadians();
         int count=originalPivots.length-1;
         float[][] points=new float[count+1][3];
         for(int i=0;i<points.length;i++) {
@@ -161,7 +170,7 @@ public final class JoltHairChain implements AutoCloseable {
                     direction[0],direction[1],direction[2]));
             jointSpec.setPlaneAxis1(new Vec3(plane[0],plane[1],plane[2]));
             jointSpec.setPlaneAxis2(new Vec3(plane[0],plane[1],plane[2]));
-            float swingAngle=(float)Math.toRadians(80D);
+            float swingAngle=allowedSwingRadians;
             jointSpec.setNormalHalfConeAngle(swingAngle);
             jointSpec.setPlaneHalfConeAngle(swingAngle);
             float twistAngle=(float)Math.toRadians(45D);
@@ -289,6 +298,23 @@ public final class JoltHairChain implements AutoCloseable {
         swing.getSpringSettings().setDamping(ratio);
         twist.getSpringSettings().setFrequency(hz);
         twist.getSpringSettings().setDamping(ratio);
+    }
+
+    private static float allowedSwingRadians() {
+        String text=System.getProperty(BEND_DEGREES_PROPERTY);
+        if(text==null || text.trim().isEmpty())
+            return (float)Math.toRadians(80D);
+        final float degrees;
+        try {
+            degrees=Float.parseFloat(text.trim());
+        } catch(NumberFormatException error) {
+            throw new IllegalArgumentException(
+                    "Invalid Jolt hair bend degrees: "+text,error);
+        }
+        if(!Float.isFinite(degrees) || degrees<10F || degrees>175F)
+            throw new IllegalArgumentException(
+                    "Jolt hair bend degrees must be between 10 and 175: "+text);
+        return (float)Math.toRadians(degrees);
     }
 
     private static float dampingPerSecond(float knob) {

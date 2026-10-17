@@ -60,6 +60,8 @@ public final class JoltHorstHairFixtureSmoke {
                 pivots,sourceTip,anchor,0.15F,0.30F,0.60F);
         try {
             float[] first=JoltChameleonPreviewRig.position(pivots[0]);
+            if(rig.rawPhysicalWorldDirections().length!=pivots.length)
+                throw new AssertionError(name+" missing native body directions");
             for(int i=1;i<=150;i++) {
                 rig.advance(i,first,anchor);
                 float[][] swings=rig.localBoneSwings(pivots,anchor);
@@ -79,6 +81,14 @@ public final class JoltHorstHairFixtureSmoke {
                 rig.advance(++frame,JoltChameleonPreviewRig.position(turned[0]),
                         turnedParent);
                 float[][] solved=rig.localBoneSwings(turned,turnedParent);
+                float[][] raw=rig.rawPhysicalWorldDirections();
+                for(float[] direction:raw) {
+                    float length=(float)Math.sqrt(
+                            direction[0]*direction[0]+direction[1]*direction[1]+
+                            direction[2]*direction[2]);
+                    if(Math.abs(length-1F)>0.001F)
+                        throw new AssertionError(name+" native direction nonunit at X="+x);
+                }
                 if(solved.length!=pivots.length)
                     throw new AssertionError("Lost segment at X="+x);
                 float[] current=rig.lastBodyPosition();

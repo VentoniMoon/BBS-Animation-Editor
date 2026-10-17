@@ -24,6 +24,8 @@ import java.util.Map;
 public final class BodyPartJoltPreviewAdapter {
     private static final boolean REQUESTED =
             Boolean.getBoolean("bbs.editor.physics.jolt.preview");
+    private static final boolean RAW_DIAGNOSTIC =
+            Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
     private static final String RIG =
             "com.example.examplemod.physics.JoltChameleonPreviewRig";
     private boolean attempted;
@@ -34,6 +36,9 @@ public final class BodyPartJoltPreviewAdapter {
     private Method advance;
     private Method settle;
     private Method localSwings;
+    /** Optional prototype API: old downloaded JARs must still work. */
+    private Method nativeDirections;
+    private boolean nativeDirectionWarning;
     private boolean recreatedLastSample;
 
     private static final class State {
@@ -46,6 +51,7 @@ public final class BodyPartJoltPreviewAdapter {
         float[][] lastBones;
         float[] lastTip;
         Map<String, float[]> sample=Collections.emptyMap();
+        Map<String, float[]> raw=Collections.emptyMap();
 
         State(AutoCloseable rig, String[] bones, int frame,
                 float stiffness, float damping, float gravity,
@@ -91,6 +97,20 @@ public final class BodyPartJoltPreviewAdapter {
                 settle=klass.getMethod("settle",int.class);
                 localSwings=klass.getMethod("localBoneSwings",
                         float[][].class,float[].class);
+                if(RAW_DIAGNOSTIC) {
+                    try {
+                        nativeDirections=klass.getMethod("rawPhysicalWorldDirections");
+                    } catch(NoSuchMethodException oldPrototype) {
+                        // Do not disable working physics because a diagnostic
+                        // was added after the user's local JAR was downloaded.
+                        if(!nativeDirectionWarning) {
+                            nativeDirectionWarning=true;
+                            System.err.println("[BBS Editor][Jolt][Raw] "
+                                    + "Installed prototype JAR lacks raw direction API; "
+                                    + "download a newer CI artifact for native-vs-Euler comparison");
+                        }
+                    }
+                }
             }
         } catch(Throwable error) {
             available=false;
@@ -151,6 +171,7 @@ public final class BodyPartJoltPreviewAdapter {
                             gravity,root,cleanParentWorld,cleanBoneWorld,
                             terminalTipWorld);
                     state.sample=collect(scene,boneNames,cleanBoneWorld,cleanParentWorld);
+                    state.raw=collectNativeDirections(scene,boneNames);
                     scenes.put(id,state);
                     recreatedLastSample=true;
                     return copy(state.sample);
@@ -170,6 +191,7 @@ public final class BodyPartJoltPreviewAdapter {
             Map<String,float[]> result=collect(state.rig,boneNames,
                     cleanBoneWorld,cleanParentWorld);
             state.sample=copy(result);
+            state.raw=collectNativeDirections(state.rig,boneNames);
             state.frame=frame;
             state.lastRoot=root;
             state.lastParent=cleanParentWorld.clone();
@@ -180,6 +202,53 @@ public final class BodyPartJoltPreviewAdapter {
             dispose(id);
             report(id,error);
             return null;
+        }
+    }
+
+    /**
+     * Raw rigid-body directions for the EXACT scene sample returned by
+     * sample(). If the installed prototype predates this optional API,
+     * returns an empty map and keeps the main preview working.
+     */
+    public Map<String,float[]> rawDirectionsFor(String modelId, int frame) {
+        if(!RAW_DIAGNOSTIC || modelId==null)return Collections.emptyMap();
+        State state=scenes.get(modelId);
+        if(state==null || state.frame!=frame || state.raw==null)
+            return Collections.emptyMap();
+        return copy(state.raw);
+    }
+
+    private Map<String,float[]> collectNativeDirections(
+            AutoCloseable rig, String[] names) {
+        if(!RAW_DIAGNOSTIC || nativeDirections==null)
+            return Collections.emptyMap();
+        try {
+            float[][] raw=(float[][])nativeDirections.invoke(rig);
+            if(raw==null || raw.length!=names.length)
+                throw new IllegalArgumentException("Wrong native Jolt segment count");
+            Map<String,float[]> result=new LinkedHashMap<String,float[]>();
+            for(int i=0;i<raw.length;i++) {
+                if(raw[i]==null || raw[i].length!=3)
+                    throw new IllegalArgumentException("Wrong native direction size");
+                float norm=0F;
+                for(float component:raw[i]) {
+                    if(!Float.isFinite(component))
+                        throw new IllegalArgumentException("Non-finite native direction");
+                    norm+=component*component;
+                }
+                if(norm<0.98F || norm>1.02F)
+                    throw new IllegalArgumentException("Unnormalized native direction");
+                result.put(names[i],raw[i].clone());
+            }
+            return result;
+        } catch(Throwable error) {
+            // Diagnostics can fail independently of a healthy physics scene.
+            if(!nativeDirectionWarning) {
+                nativeDirectionWarning=true;
+                System.err.println("[BBS Editor][Jolt][Raw] "
+                        + "Native direction probe unavailable, physics unchanged: "+error);
+            }
+            return Collections.emptyMap();
         }
     }
 

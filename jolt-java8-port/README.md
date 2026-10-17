@@ -71,47 +71,94 @@ Tests:
 
 ## Minecraft 1.12.2 tilt diagnosis (2026-10-17)
 
-The user's Forge development client confirmed native Jolt Physics 6.0.0
-loading and `Native quaternion preview active` for `left_strand_1`,
-`right_strand_1`, and `back_strand_1`. Images at X=0/45/55/60/65/80°
-show upward/inverted-looking strands under tilt.
+The Forge 1.12.2 dev client has loaded native Jolt Physics 6.0.0 and
+all three Horst chains (`left_strand_1`, `right_strand_1`,
+`back_strand_1`). In the user's real X-tilt test, the first diagnostic
+reported **all seven** tested links diverging by precisely the parent
+pose change: **55°, 5°, 5°, 15° and then 100°**, while the timeline
+frame remained 20. On each *subsequent* render, these differences
+returned to ~0°. This is strong evidence of a **one-render stale
+parent/physics sample** when editing a paused pose; it is not evidence
+of seven independent Chameleon sign errors.
 
-For a **read-only** comparison of intended vs visually rendered bone
-directions, add a second CLIENT JVM argument next to `preview=true`:
+However, after the final large rotation, `back_strand_1` was reported
+as *both* intended and rendered pointing upward with zero error. The
+original diagnostic compared only two values **downstream** of the
+quaternion bridge, and could not distinguish a genuine native Jolt
+upward link from a quaternion-to-bone rest-correction error.
+
+### Direct native rigid-body test (newer JAR required)
+
+The second-generation diagnostic reads the **raw Jolt rigid-body
+quaternion**, rotates its physical capsule's local `-Y` axis to world
+coordinates, then compares it independently with the quaternion-bridge
+prediction and the actual post-render Chameleon next-bone pivot.
+
+In client JVM arguments keep:
 
 ```text
+-Dbbs.editor.physics.jolt.preview=true
 -Dbbs.editor.physics.jolt.diagnostic=true
 ```
 
-The diagnostic derives each simulated segment direction from the
-**Jolt-returned local axis-angle** and the clean native Chameleon bone
-matrices (including physically corrected ancestors). After the normal
-render it measures the true next-bone pivot direction. Only the current,
-actually applied Jolt sample is compared:
+The logger writes a `[BBS Animation Editor][Jolt][Compare]` record per
+bone (at most once per second) containing:
 
 ```text
-[BBS Animation Editor][Jolt][Compare] MISMATCH frame=... bone=... intended=(x,y,z) rendered=(x,y,z) errorDeg=...
+SOURCE_CHANGED frame=20 bone=back_strand_1 raw=(...) intended=(...) rendered=(...) bridgeDeg=... errorDeg=... parentChangeDeg=...
 ```
 
-Output is limited to one line per bone per second; `MISMATCH` means
-at least 10° difference. The diagnostic changes no physics, keyframes,
-mesh contacts, interpolation, or .dat output. Filter the client log
-with this PowerShell command:
+- `SOURCE_CHANGED`: the actual Emoticons parent bone has changed since
+  the frozen Jolt sample was generated. **Ignore that draw's
+  physics/render angular mismatch**; the subsequent settled render
+  contains the new physical sample. No hardcoded axis sign is changed.
+- `BRIDGE_MISMATCH`: raw native Jolt segment and the expected
+  post-quaternion-bridge segment differ by 10° or more *without* an
+  intervening detected parent edit.
+- `WRITEBACK_MISMATCH`: bridge predicts one direction but the actual
+  Chameleon segment differs by at least 10°, *without* a detected parent edit.
+- `NATIVE_UP`: the raw Jolt segment itself points substantially upward;
+  the issue is upstream of the Chameleon renderer, e.g. motor target,
+  gravity or the joint swing-cone limit.
+- `aligned`: all comparisons are consistent. In an old prototype JAR,
+  `raw=unavailable` makes this status weaker: redownload the artifact.
+
+**A newer `jolt-hair-prototype-java8.jar` is required for raw physics
+read-back.** An older installed prototype continues functioning, but
+logs an explanatory `[Jolt][Raw]` warning and cannot perform this
+native-specific comparison.
+
+The experimental Jolt joint has a fixed default 80° cone half-angle.
+Unlike the configurable `bend` in Wemppy's
+[BoneChainRig](https://github.com/Wemppy4/bbs-physics-engine/blob/master/src/client/java/wemppy/bbs_physics/client/scene/BoneChainRig.java),
+a strongly rotated attachment can constrain a segment so it cannot
+hang vertically. The new **opt-in** A/B parameter:
+
+```text
+-Dbbs.editor.physics.jolt.bendDegrees=170
+```
+
+widens the allowed swing. This is not enabled by default and does not
+change the old 80° behavior for existing users. Allowed range: 10–175°;
+invalid values fail the experimental scene safely, rather than partially
+allocating JNI resources.
+
+Suggested A/B: hold frame 20; test X=0/55/60/65/80°; inspect the
+**second** diagnostic entry after each pose change. Compare default
+80° against opt-in 170° while keeping the same stiffness, damping and
+gravity. A separate zero-stiffness run can distinguish spring-motor
+restoring torque. Do **not** tune three axes at once.
+
+To inspect the log from the project root:
 
 ```powershell
-Select-String -Path ".\\run\\logs\\latest.log" -Pattern "Jolt\\]\\[Compare"
+Select-String -Path '.\run\logs\latest.log' -SimpleMatch '[Jolt][Compare]','[Jolt][Raw]'
 ```
 
-If `intended` points down (negative Y) while `rendered` points up,
-investigate the Chameleon Euler writer. If both are upward, inspect the
-Jolt rest target and springs. The intended direction is derived from
-local swings, NOT measured from raw Jolt body endpoints; this does not
-yet fully exonerate the earlier native quaternion mapping.
-
-The Java 8 `JoltRenderedDirectionSmoke` test covers X=0/45/55/60/65/80°
-at attachment Y=0° and Y=180°. These new diagnostic classes are in
-the **editor source**; the existing two preinstalled Jolt library JARs
-do **not** need to be redownloaded.
+Neither diagnostic writes keys or changes exported `.dat`. There are
+still no body collisions in the Jolt path. The real in-game bend result
+has not been verified; Linux and Windows native Java 8 tests exercise
+the new API and opt-in cone.
 
 ## Reproduce the build and download experimental JARs
 
