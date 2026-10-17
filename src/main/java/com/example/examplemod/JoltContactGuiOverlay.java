@@ -225,10 +225,12 @@ public final class JoltContactGuiOverlay
             {
                 float[] current=ring[step][i];
                 float[] around=ring[step][(i+1)%SIDES];
-                if(emitLine(buf,current,around,rgb,220,1.7F))
+                if(emitLine(buf,current,around,rgb,220,1.7F,
+                        x,y,width,height))
                     lines++;
                 if(step+1<ring.length &&
-                        emitLine(buf,current,ring[step+1][i],rgb,180,1.25F))
+                        emitLine(buf,current,ring[step+1][i],rgb,180,1.25F,
+                                x,y,width,height))
                     lines++;
             }
         }
@@ -236,9 +238,15 @@ public final class JoltContactGuiOverlay
     }
 
     private static boolean emitLine(BufferBuilder buf,float[] a,float[] b,
-            int rgb,int alpha,float thickness)
+            int rgb,int alpha,float thickness,
+            int x,int y,int width,int height)
     {
         if(a==null||b==null)return false;
+        // A physical shape outside the camera MUST NOT be counted as
+        // actually visible just because 2D vertices were submitted.
+        if(Math.max(a[0],b[0])<x || Math.min(a[0],b[0])>x+width ||
+                Math.max(a[1],b[1])<y || Math.min(a[1],b[1])>y+height)
+            return false;
         float dx=b[0]-a[0],dy=b[1]-a[1];
         float len=(float)Math.sqrt(dx*dx+dy*dy);
         if(len<0.1F || len>2000F)return false;
