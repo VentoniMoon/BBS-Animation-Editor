@@ -262,7 +262,7 @@ public final class BodyPartJoltPreviewAdapter {
         if(!initialize(gameDir))return null;
         if(modelId==null || boneNames==null || cleanBoneWorld==null ||
                 boneNames.length!=cleanBoneWorld.length ||
-                boneNames.length<2 || cleanParentWorld==null ||
+                boneNames.length<1 || cleanParentWorld==null ||
                 cleanBoneWorld[0]==null || cleanBoneWorld[0].length!=16 ||
                 terminalTipWorld==null || terminalTipWorld.length!=3)return null;
         String id=modelId;
