@@ -24,9 +24,9 @@ public final class JoltActorWorldSpaceSmoke
         // Emoticons rotates the model by (360-renderYawOffset).
         float[] rotated=BodyPartJoltActorSpace.worldFromActor(10,64,-5,90);
         nearVec(BodyPartJoltActorSpace.point(rotated,new float[]{1,2,3}),
-                new float[]{7,66,-6},"yaw -90/translation");
+                new float[]{7,66,-4},"yaw -90/translation");
         nearVec(BodyPartJoltActorSpace.point(rotated,new float[]{-1,2,3}),
-                new float[]{7,66,-4},"mirrored strand roots");
+                new float[]{7,66,-6},"mirrored strand roots");
 
         float[] pivot=BodyPartPhysicsMatrixSpace.identity();
         pivot[12]=1F;pivot[13]=2F;pivot[14]=3F;
