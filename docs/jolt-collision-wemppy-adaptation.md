@@ -37,9 +37,12 @@ New generic attached model collision path:
    It rejects mirrored/sheared and degenerate transforms rather than guessing.
 3. After the parent Emoticons and BodyParts are rendered normally,
    BodyPartsPreviewRenderer snapshots all available attached Chameleon parts.
-   The collision geometry of OTHER attached parts is supplied to each active
-   physics chain. Each chain's Body collisions switch controls both these
-   boxes and the existing torso proxies.
+   Passive cubes are supplied to active physics chains, **including passive
+   head/scalp cubes belonging to the same attached model as the hair**.
+   Driven hair bones are excluded from passive shapes; the pin and first
+   physical link are exempted from those contacts to prevent root explosions.
+   Each chain's Body collisions switch controls both these boxes and
+   the existing torso proxies.
 4. JoltHairChain.setAdditionalBoxes uses up to 32 kinematic BoxShape bodies.
    Shapes are created once and moved via moveKinematic at each adjacent tick.
    On topology changes the preview rig is recreated, not silently reused.
@@ -74,3 +77,24 @@ persistent sequential physics cache.
 3. Refresh Gradle in IntelliJ and run the existing `runClient` with `-Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.physics.jolt.compoundTorso=true -Dbbs.editor.physics.jolt.drawColliders=true`.
 4. Check unrotated frame 0, inclined frame 20 and a moving torso. The 3 green collision proxies must track the actor; hair strands should fall with world gravity and should no longer be pushed away at their attachments. Inspect side/rear views for shoulder penetration.
 5. If contact behavior changes unexpectedly, compare Jolt console diagnostics and visualize centerline/pivot markers. Do not compensate by flipping axis signs or reversing gravity.
+
+## Diagnostics for a live editor test
+
+- Open a parent Emoticons actor with any physical Chameleon hair chain and an
+  optional additional Chameleon chest model (e.g. the provided two-cube
+  rotated `boobs.geo.json`).
+- Enable Jolt preview, torso contacts and collider drawing, refresh the Java 8
+  prototype JAR from a successful latest GitHub Actions artifact.
+- In the console, inspect `[Jolt][BodyPartBoxes]`: it reports the count of
+  recognized passive cube colliders, candidates, rejected cubes, and errors
+  such as a missing parent bone matrix.
+- In the GUI, inspect `extras N` and the amber box outlines. `extras 0`
+  means the Chameleon candidate cubes were not installed in that native
+  sample; inspect the diagnostic before altering physics signs.
+- Verify both model arrangements: separate front-hair + chest BodyParts, and
+  hair chains on a Chameleon head model containing passive scalp cubes.
+- Playing frames in order provides Jolt inertia and damped recovery. Arbitrary
+  seeks still restart/settle the rig; deterministic seek/replay and baking need
+  a sequential frame cache before being called production-ready.
+- The CI covers pure Java geometry and native Java 8 contact/inertia tests,
+  **not** compilation of the whole Forge editor or a Minecraft render test.
