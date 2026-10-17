@@ -24,39 +24,75 @@ public final class BodyPartChameleonCollisionBoxes
     private BodyPartChameleonCollisionBoxes() {}
     public static final int MAX_BOXES=32;
 
+    /** Read-only capture metrics for diagnostics in the Physics inspector. */
+    public static final class Capture
+    {
+        public final List<float[]> boxes;
+        public final int visitedBones, visitedCubes, rejectedCubes;
+        public final String error;
+
+        private Capture(List<float[]> boxes,int bones,int cubes,int rejected,String error)
+        {
+            this.boxes=Collections.unmodifiableList(boxes);
+            this.visitedBones=bones;
+            this.visitedCubes=cubes;
+            this.rejectedCubes=rejected;
+            this.error=error;
+        }
+    }
+
+    private static final class Counter
+    {
+        int bones,cubes,rejected;
+    }
+
     public static List<float[]> collect(Object chameleonMorph,
+            BodyPartPhysicsWorldPose.MatrixSource world,
+            Set<String> simulatedBones)
+    {
+        return capture(chameleonMorph,world,simulatedBones).boxes;
+    }
+
+    public static Capture capture(Object chameleonMorph,
             BodyPartPhysicsWorldPose.MatrixSource world,
             Set<String> simulatedBones)
     {
         if(chameleonMorph==null || world==null ||
                 !chameleonMorph.getClass().getName().endsWith(".ChameleonMorph"))
-            return Collections.emptyList();
+            return new Capture(Collections.<float[]>emptyList(),0,0,0,
+                    "Chameleon model/matrices unavailable");
+        Counter counter=new Counter();
+        List<float[]> result=new ArrayList<float[]>();
         try
         {
             Object wrapper=chameleonMorph.getClass().getMethod("getModel").invoke(chameleonMorph);
             Object model=field(wrapper,"model");
             Object roots=field(model,"bones");
-            if(!(roots instanceof List))return Collections.emptyList();
-            List<float[]> result=new ArrayList<float[]>();
+            if(!(roots instanceof List))
+                return new Capture(result,0,0,0,"Chameleon root bones unavailable");
             walk((List<?>)roots,world,simulatedBones,result,
-                    new IdentityHashMap<Object,Boolean>());
-            return result;
+                    new IdentityHashMap<Object,Boolean>(),counter);
+            return new Capture(result,counter.bones,counter.cubes,counter.rejected,null);
         }
         catch(ReflectiveOperationException error)
         {
-            return Collections.emptyList();
+            // Keep successfully captured siblings; one unsupported bone
+            // must not erase all other colliders in this attached model.
+            return new Capture(result,counter.bones,counter.cubes,counter.rejected,
+                    error.getClass().getSimpleName()+": "+error.getMessage());
         }
     }
 
     private static void walk(List<?> bones,
             BodyPartPhysicsWorldPose.MatrixSource world,
             Set<String> simulated, List<float[]> result,
-            IdentityHashMap<Object,Boolean> visited)
+            IdentityHashMap<Object,Boolean> visited,Counter counter)
             throws ReflectiveOperationException
     {
         for(Object bone:bones)
         {
             if(bone==null || visited.put(bone,Boolean.TRUE)!=null)continue;
+            counter.bones++;
             String id=String.valueOf(field(bone,"id"));
             if(simulated==null || !simulated.contains(id))
             {
@@ -69,24 +105,38 @@ public final class BodyPartChameleonCollisionBoxes
                     if(raw instanceof List)
                         for(Object cube:(List<?>)raw)
                         {
-                            if(result.size()>=MAX_BOXES)return;
                             if(cube==null)continue;
+                            counter.cubes++;
+                            if(result.size()>=MAX_BOXES)
+                            {
+                                counter.rejected++;
+                                continue;
+                            }
                             try
                             {
                                 float[] fitted=fitOne(cube,matrix,bonePivot);
                                 if(fitted!=null)result.add(fitted);
+                                else counter.rejected++;
+                            }
+                            catch(ReflectiveOperationException ignored)
+                            {
+                                // Some Chameleon versions contain extra
+                                // non-standard cube types. Skip ONLY that
+                                // primitive and retain its valid siblings.
+                                counter.rejected++;
                             }
                             catch(IllegalArgumentException ignored)
                             {
-                                // Invalid, sheared or degenerate primitives
-                                // must not add false physical contacts.
+                                // Reject degenerate, mirrored or sheared
+                                // primitives without losing other shapes.
+                                counter.rejected++;
                             }
                         }
                 }
             }
             Object children=field(bone,"children");
             if(children instanceof List)
-                walk((List<?>)children,world,simulated,result,visited);
+                walk((List<?>)children,world,simulated,result,visited,counter);
             if(result.size()>=MAX_BOXES)return;
         }
     }
