@@ -5,9 +5,9 @@ native Jolt 6.0.0 ReleaseSp DLL/SO **runs on real Java 8** on **Windows x64 and 
 Native physics worlds, SwingTwist joints, curved and nonuniform chains and a
 reflection-only preview adapter are tested on real Java 8 in CI. The opt-in
 bridge has been wired into the actual Body Parts renderer source, but **the
-Forge mod has NOT yet been compiled and visually tested inside Minecraft.**
+Forge development client has now been compiled and launched with all three native Jolt hair chains (2026-10-17); the inclined-pose visual result remains under investigation.**
 
-Branches: `feature/jolt-java8-port`. The editor's `main` is intentionally untouched.
+Branches: `main` contains the opt-in Jolt integration; `feature/jolt-java8-port` carries new experiments. The old main is preserved in `backup/main-pre-jolt-20261017`.
 
 ## Original sources and licensing
 
@@ -69,6 +69,50 @@ Tests:
   supplied hair model, including real unequal lengths, with each chain
   rotated through anchor X=0°→80°→0° (no large physical jumps).
 
+## Minecraft 1.12.2 tilt diagnosis (2026-10-17)
+
+The user's Forge development client confirmed native Jolt Physics 6.0.0
+loading and `Native quaternion preview active` for `left_strand_1`,
+`right_strand_1`, and `back_strand_1`. Images at X=0/45/55/60/65/80°
+show upward/inverted-looking strands under tilt.
+
+For a **read-only** comparison of intended vs visually rendered bone
+directions, add a second CLIENT JVM argument next to `preview=true`:
+
+```text
+-Dbbs.editor.physics.jolt.diagnostic=true
+```
+
+The diagnostic derives each simulated segment direction from the
+**Jolt-returned local axis-angle** and the clean native Chameleon bone
+matrices (including physically corrected ancestors). After the normal
+render it measures the true next-bone pivot direction. Only the current,
+actually applied Jolt sample is compared:
+
+```text
+[BBS Animation Editor][Jolt][Compare] MISMATCH frame=... bone=... intended=(x,y,z) rendered=(x,y,z) errorDeg=...
+```
+
+Output is limited to one line per bone per second; `MISMATCH` means
+at least 10° difference. The diagnostic changes no physics, keyframes,
+mesh contacts, interpolation, or .dat output. Filter the client log
+with this PowerShell command:
+
+```powershell
+Select-String -Path ".\\run\\logs\\latest.log" -Pattern "Jolt\\]\\[Compare"
+```
+
+If `intended` points down (negative Y) while `rendered` points up,
+investigate the Chameleon Euler writer. If both are upward, inspect the
+Jolt rest target and springs. The intended direction is derived from
+local swings, NOT measured from raw Jolt body endpoints; this does not
+yet fully exonerate the earlier native quaternion mapping.
+
+The Java 8 `JoltRenderedDirectionSmoke` test covers X=0/45/55/60/65/80°
+at attachment Y=0° and Y=180°. These new diagnostic classes are in
+the **editor source**; the existing two preinstalled Jolt library JARs
+do **not** need to be redownloaded.
+
 ## Reproduce the build and download experimental JARs
 
 [CI: Jolt JNI Java 8 compatibility](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
@@ -126,8 +170,7 @@ using a content-hashed filename, then starts Jolt. Windows/Linux x64 are
 supported; unsupported systems return `false` without crashing startup.
 The native-resource extraction path (including the single bundled Java 8
 JAR), and intentional missing-file fallback, are exercised on real Java 8
-under both Windows and Linux in CI. **Extraction inside the
-actual Forge LaunchClassLoader has not yet been tested.** A native
+under both Windows and Linux in CI. **Native extraction in the Forge development client was confirmed in-game on 2026-10-17.** A native
 process abort is not recoverable by Java exception handling.
 
 ## Seek / paused edit / Jolt rotation behavior
@@ -206,24 +249,25 @@ exception. Turn off the opt-in flag to return to the old solver.
 - Curved, non-uniform strands are supported and the native tests now use
   actual pivot/tip measurements of all three Horst hair chains. Degenerate
   or mirrored bone transforms still reject cleanly and fall back. The
-  ***in-game* Horst model has not yet been tested**.
+  in-game Horst model now loads Jolt natively; its tilted-pose
+  orientation is still being investigated.
 - No rigid-body collision shapes assigned to the torso yet. This isolates
   gravity and the 60-degree artifact from mesh penetration.
-- The older Chameleon pose writer still converts local axis-angle to Euler
-  for legacy 1.12.2, and clamps to 1.20 radians; exact Chameleon render
-  handedness and posed bone matrices require a visual Minecraft run.
+- The Chameleon pose writer still converts local axis-angle to Euler.
+  Legacy Verlet swings clamp to 1.20 radians while native Jolt swings
+  can reach PI; in-game rotation validation is in progress.
 - Timeline seeks and parameter changes recreate the native rig. The
   existing `BlockbusterActorPreviewRenderer.clear()` calls
   `BodyPartsPreviewRenderer.clear()`, which now disposes Jolt scenes.
-- The optional Gradle shaded-JAR path has not been built under real Forge:
-  the repository does not include the user's runtime Blockbuster/Metamorph
-  dependencies on GitHub Actions. Compile and in-game test on the user's
-  local Forge workspace are still required.
+- The opt-in development Forge client has now run the native physics.
+  GitHub Actions still cannot build a full Forge mod because the repository
+  does not include the user's local Blockbuster/Metamorph dependencies.
+  A release-ready shaded Forge JAR is not yet verified.
 
 ## Remaining before a Forge 1.12.2 integration
 
-1. Verify the experimental shaded Forge build with the local 1.12.2
-   runtime JAR dependencies, then test loading through LaunchClassLoader.
+1. Verify the shaded release Forge JAR independently of the development
+   `runClient` classpath (the latter successfully loaded Jolt in-game).
 2. Validate the Chameleon preview bridge on the actual Horst model, including
    in-game quaternion/Euler orientation and transform units. The adapter must match render-space bone
    matrices and drive/read each *bone quaternion* rather than re-infer angles
@@ -237,4 +281,4 @@ exception. Turn off the opt-in flag to return to the old solver.
 6. Verify native lifecycle under open/close/reopen, repeated actor selection,
    JVM shutdown, and multiple models before enabling by default.
 
-**Do not merge this branch into main until the in-game tests are complete.**
+**Do not enable this experimental mode by default until in-game behavior is corrected.**
