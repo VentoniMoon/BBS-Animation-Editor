@@ -119,11 +119,62 @@ under both Windows and Linux in CI. **Extraction inside the
 actual Forge LaunchClassLoader has not yet been tested.** A native
 process abort is not recoverable by Java exception handling.
 
+## Experimental Forge Body Parts integration (opt-in only)
+
+The normal editor now includes `BodyPartJoltPreviewAdapter`, and
+`BodyPartsPreviewRenderer` can route a physical Chameleon strand through
+the native Jolt rig instead of the legacy Verlet solver **only when explicitly
+enabled**. This preview does not save or bake Jolt values into records and
+does not yet collide with the Emoticons torso.
+
+On the [Jolt JNI Java 8 workflow](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
+download the **jolt-java8-experimental-jars** artifact from a successful
+run and place these two files in the editor project's `libs/` directory:
+
+- `jolt-jni-6.0.0-java8-bundled.jar`
+- `jolt-hair-prototype-java8.jar`
+
+Build the experimental mod (the vanilla build stays unchanged):
+
+```powershell
+.\\gradlew.bat clean build -PenableJoltExperimental
+```
+
+Launch the Minecraft 1.12.2 development JVM with:
+
+```text
+-Dbbs.editor.physics.jolt.preview=true
+```
+
+The renderer uses **real native clean Chameleon 4x4 world matrices** and
+returns one preview-only bone-axis-angle correction per simulated bone.
+When the Jolt bundle is missing, or a strand is currently unsupported,
+it logs the reason and falls back to legacy physics without a fatal
+exception. Turn off the opt-in flag to return to the old solver.
+
+**Prototype limitations:**
+- Only simple approximately straight, equal-segment-length strands.
+  Broken, short, curved, non-uniform or mirrored chains reject cleanly and
+  continue on the legacy solver. Real Horst hair compatibility is not yet
+  confirmed.
+- No rigid-body collision shapes assigned to the torso yet. This isolates
+  gravity and the 60-degree artifact from mesh penetration.
+- The older Chameleon pose writer still converts local axis-angle to Euler
+  for legacy 1.12.2, and clamps to 1.20 radians; exact Chameleon render
+  handedness and posed bone matrices require a visual Minecraft run.
+- Timeline seeks and parameter changes recreate the native rig. A scene
+  needs to call `BodyPartsPreviewRenderer.clear()` on final teardown.
+- The optional Gradle shaded-JAR path has not been built under real Forge:
+  the repository does not include the user's runtime Blockbuster/Metamorph
+  dependencies on GitHub Actions. Compile and in-game test on the user's
+  local Forge workspace are still required.
+
 ## Remaining before a Forge 1.12.2 integration
 
-1. Package the original native libraries as resources in the Forge mod
-   and test the optional bootstrap under the real LaunchClassLoader.
-2. Create a Chameleon bone adapter. The adapter must match render-space bone
+1. Verify the experimental shaded Forge build with the local 1.12.2
+   runtime JAR dependencies, then test loading through LaunchClassLoader.
+2. Validate the Chameleon preview bridge on the actual Horst model, including
+   in-game quaternion/Euler orientation and transform units. The adapter must match render-space bone
    matrices and drive/read each *bone quaternion* rather than re-infer angles
    from particle line segments.
 3. Represent user-authored Chameleon geometry as physical bodies and optional
