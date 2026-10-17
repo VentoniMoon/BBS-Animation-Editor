@@ -534,6 +534,7 @@ public final class BodyPartJoltPreviewAdapter {
     }
 
     private static float[][] copyMatrices(float[][] source) {
+        if(source==null)return null;
         float[][] out=new float[source.length][];
         for(int i=0;i<source.length;i++)
             out[i]=source[i]==null?null:source[i].clone();
