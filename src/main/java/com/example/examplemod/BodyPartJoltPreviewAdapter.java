@@ -45,6 +45,7 @@ public final class BodyPartJoltPreviewAdapter {
     private Method localSwings;
     private Method setTorsoCollider;
     private Method setTorsoSegments;
+    private Method setAdditionalBoxes;
     private Method nativeHairSegments;
     private boolean torsoWarning;
     /** Optional prototype API: old downloaded JARs must still work. */
@@ -67,6 +68,7 @@ public final class BodyPartJoltPreviewAdapter {
         final boolean compoundEnabled;
         float[][] lastMultiA,lastMultiB;
         float[] lastMultiR;
+        float[][] lastAdditionalBoxes;
         float[][] rawHairBodies;
         Map<String, float[]> sample=Collections.emptyMap();
         Map<String, float[]> raw=Collections.emptyMap();
@@ -75,7 +77,8 @@ public final class BodyPartJoltPreviewAdapter {
                 float stiffness, float damping, float gravity,
                 float[] root, float[] parent, float[][] boneWorld,
                 float[] terminalTip,float[] torsoA,float[] torsoB,
-                float radius,BodyPartJoltMultiTorsoFit.Segments multi) {
+                float radius,BodyPartJoltMultiTorsoFit.Segments multi,
+                float[][] attachedBoxes) {
             this.rig=rig;
             this.bones=bones.clone();
             this.frame=frame;
@@ -94,6 +97,7 @@ public final class BodyPartJoltPreviewAdapter {
             this.lastMultiA=multi==null?null:multi.starts();
             this.lastMultiB=multi==null?null:multi.ends();
             this.lastMultiR=multi==null?null:multi.radii();
+            this.lastAdditionalBoxes=copyMatrices(attachedBoxes);
         }
     }
 
@@ -164,6 +168,14 @@ public final class BodyPartJoltPreviewAdapter {
                     }
                 }
                 try {
+                    setAdditionalBoxes=klass.getMethod("setAdditionalBoxes",
+                            float[][].class);
+                } catch(NoSuchMethodException older) {
+                    System.err.println("[BBS Editor][Jolt][BodyParts] "
+                            + "Installed experimental JAR predates general collision boxes. "
+                            + "Download the new Jolt artifact to enable attached-part contacts.");
+                }
+                try {
                     nativeHairSegments=klass.getMethod("nativeHairSegments");
                 } catch(NoSuchMethodException older) {
                     // Drawing can be switched ON later in the inspector.
@@ -232,6 +244,19 @@ public final class BodyPartJoltPreviewAdapter {
             float stiffness, float damping, float gravity,
             float[] torsoA,float[] torsoB,float torsoRadius,
             BodyPartJoltMultiTorsoFit.Segments compound) {
+        return sample(gameDir,modelId,boneNames,frame,cleanBoneWorld,
+                terminalTipWorld,cleanParentWorld,stiffness,damping,gravity,
+                torsoA,torsoB,torsoRadius,compound,null);
+    }
+
+    /** All additional collision boxes come from other animated BodyParts. */
+    public Map<String, float[]> sample(File gameDir, String modelId,
+            String[] boneNames, int frame, float[][] cleanBoneWorld,
+            float[] terminalTipWorld, float[] cleanParentWorld,
+            float stiffness, float damping, float gravity,
+            float[] torsoA,float[] torsoB,float torsoRadius,
+            BodyPartJoltMultiTorsoFit.Segments compound,
+            float[][] attachedBoxes) {
         recreatedLastSample=false;
         if(!initialize(gameDir))return null;
         if(modelId==null || boneNames==null || cleanBoneWorld==null ||
@@ -252,6 +277,10 @@ public final class BodyPartJoltPreviewAdapter {
         float[][] compoundA=useCompound?compound.starts():null;
         float[][] compoundB=useCompound?compound.ends():null;
         float[] compoundR=useCompound?compound.radii():null;
+        boolean useAdditional=setAdditionalBoxes!=null &&
+                TORSO_CONTACTS && attachedBoxes!=null &&
+                attachedBoxes.length>0;
+        float[][] boxes=useAdditional?copyMatrices(attachedBoxes):null;
         State state=scenes.get(id);
         boolean recreate=state==null || frame<state.frame ||
                 frame>state.frame+1 ||
@@ -260,6 +289,8 @@ public final class BodyPartJoltPreviewAdapter {
                 state.gravity!=gravity ||
                 state.torsoEnabled!=useTorso ||
                 state.compoundEnabled!=useCompound ||
+                (useAdditional != (state.lastAdditionalBoxes!=null)) ||
+                (useAdditional && !sameBoxGeometry(boxes,state.lastAdditionalBoxes)) ||
                 (useTorso && (Math.abs(state.torsoRadius-torsoRadius)>0.025F ||
                   Math.abs(distance(state.lastTorsoA,state.lastTorsoB)-
                            distance(torsoA,torsoB))>0.065F)) ||
@@ -275,7 +306,9 @@ public final class BodyPartJoltPreviewAdapter {
                  (useTorso && (!closeEnough(torsoA,state.lastTorsoA) ||
                                !closeEnough(torsoB,state.lastTorsoB))) ||
                  (useCompound && (!sameMatrices(compoundA,state.lastMultiA) ||
-                                  !sameMatrices(compoundB,state.lastMultiB)))))recreate=true;
+                                  !sameMatrices(compoundB,state.lastMultiB))) ||
+                 (useAdditional && !sameMatrices(boxes,state.lastAdditionalBoxes))
+                 ))recreate=true;
         if(recreate) {
             dispose(id);
             try {
@@ -291,6 +324,8 @@ public final class BodyPartJoltPreviewAdapter {
                     if(useCompound)
                         setTorsoSegments.invoke(instance,(Object)compoundA,
                                 (Object)compoundB,(Object)compoundR);
+                    if(useAdditional)
+                        setAdditionalBoxes.invoke(instance,(Object)boxes);
                     // The source frame may be a static pose or direct seek.
                     // Relax only once on reset; never simulate every render.
                     settle.invoke(instance,24);
@@ -298,7 +333,7 @@ public final class BodyPartJoltPreviewAdapter {
                             gravity,root,cleanParentWorld,cleanBoneWorld,
                             terminalTipWorld,useTorso?torsoA:null,
                             useTorso?torsoB:null,useTorso?torsoRadius:0F,
-                            useCompound?compound:null);
+                            useCompound?compound:null,boxes);
                     state.sample=collect(scene,boneNames,cleanBoneWorld,cleanParentWorld);
                     state.raw=collectNativeDirections(scene,boneNames);
                     state.rawHairBodies=collectHairSegments(scene,boneNames);
@@ -322,6 +357,8 @@ public final class BodyPartJoltPreviewAdapter {
             if(useCompound)
                 setTorsoSegments.invoke(state.rig,(Object)compoundA,
                         (Object)compoundB,(Object)compoundR);
+            if(useAdditional)
+                setAdditionalBoxes.invoke(state.rig,(Object)boxes);
             advance.invoke(state.rig,frame,root,cleanParentWorld);
             Map<String,float[]> result=collect(state.rig,boneNames,
                     cleanBoneWorld,cleanParentWorld);
@@ -343,6 +380,7 @@ public final class BodyPartJoltPreviewAdapter {
                 state.lastMultiB=copyMatrices(compoundB);
                 state.lastMultiR=compoundR.clone();
             }
+            state.lastAdditionalBoxes=copyMatrices(boxes);
             return result;
         } catch(Throwable error) {
             dispose(id);
@@ -404,6 +442,23 @@ public final class BodyPartJoltPreviewAdapter {
             System.err.println("[BBS Editor][Jolt][Overlay] Native hair endpoints unavailable: "+error);
             return null;
         }
+    }
+
+    /** Only a change in count or dimensions recreates Jolt geometry.
+     *  Pose changes are handled by moveKinematic each adjacent frame. */
+    private static boolean sameBoxGeometry(float[][] now,float[][] old)
+    {
+        if(now==null || old==null)return now==old;
+        if(now.length!=old.length)return false;
+        for(int i=0;i<now.length;i++)
+        {
+            if(now[i]==null || old[i]==null ||
+                    now[i].length!=10 || old[i].length!=10)return false;
+            for(int axis=7;axis<10;axis++)
+                if(Math.abs(now[i][axis]-old[i][axis])>0.02F)
+                    return false;
+        }
+        return true;
     }
 
     private static boolean compoundShapeChanged(
