@@ -95,11 +95,16 @@ public class BodyPartsPreviewRenderer
     private static final boolean JOLT_DIRECTION_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
     /**
-     * Enable accurate ChameleonMorph.render() outer scale/Y180 transform
-     * only in the experimental Jolt route. Compare on/off in-game first.
+     * Jolt needs the same child render space as visible Chameleon geometry:
+     * ChameleonMorph.render() applies scale and Y=180 after the BodyPart.
+     * Omitting Y180 lets native gravity point down while rendered hair goes up
+     * as the parent is tilted around X.
+     *
+     * Keep an explicit false override for regression diagnostics.
      */
     private static final boolean JOLT_EXACT_CHILD_SPACE =
-            Boolean.getBoolean("bbs.editor.physics.jolt.exactChildSpace");
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.exactChildSpace", "true"));
     /** Sample generated AFTER a render; available for the next draw of that frame. */
     private final Map<BodyPartModelData, Map<String, float[]>> joltSampleDirections =
             new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
