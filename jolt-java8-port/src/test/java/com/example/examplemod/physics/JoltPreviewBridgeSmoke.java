@@ -30,6 +30,17 @@ public final class JoltPreviewBridgeSmoke {
             if(first==null || first.size()!=bones.length ||
                     !bridge.wasRecreatedThisSample())
                 throw new AssertionError("Jolt first frame must return settled bone rotations");
+            if(Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic")) {
+                Map<String,float[]> direct=bridge.rawDirectionsFor("hair/back",0);
+                if(direct.size()!=bones.length)
+                    throw new AssertionError("Native body direction API did not return every bone");
+                for(float[] direction:direct.values()) {
+                    float norm=direction[0]*direction[0]+
+                            direction[1]*direction[1]+direction[2]*direction[2];
+                    if(Math.abs(norm-1F)>0.001F)
+                        throw new AssertionError("Invalid native Jolt direction");
+                }
+            }
             for(int tick=1;tick<=50;tick++) {
                 Map<String,float[]> result=bridge.sample(data,"hair/back",bones,
                         tick,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
