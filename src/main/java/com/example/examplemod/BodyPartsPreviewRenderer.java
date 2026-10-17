@@ -290,49 +290,78 @@ public class BodyPartsPreviewRenderer
         }
     }
 
+    private String lastJoltOverlayReport = "";
+
     /**
-     * Debug overlay after the normal actor pass, while the established
-     * camera projection and world MODELVIEW are still active. Uses the
-     * EXACT fitted capsule dimensions passed to the native Jolt scene,
-     * plus actual native dynamic-body endpoints from that same frame.
+     * Diagnostic ONLY. The owner invokes this from the same framebuffer
+     * and camera pass as EditorGizmoController.draw3D(), not from
+     * RenderManager.renderEntity(): OptiFine may leave an active shader or
+     * other state that hides immediate-mode debug lines in the actor pass.
      *
-     * Only diagnostic: never writes keys, actor transforms or GL camera.
+     * Draw only shapes that the live Jolt scene actually INSTALLED at this
+     * frame. A candidate skin fit does not prove the native collider exists.
      */
     public void drawJoltColliderOverlay(int frame)
     {
         if(!BodyPartJoltPreviewAdapter.drawContactsRequested())return;
+        int bodiesDrawn=0,linksDrawn=0,scenes=0;
         for(Map.Entry<BodyPartModelData,List<BodyPartPhysicsChains.Chain>> entry:
                 previewPhysicsChains.entrySet())
         {
             BodyPartModelData data=entry.getKey();
             if(entry.getValue()==null || entry.getValue().isEmpty())continue;
+            int contactMode=0;
+            for(BodyPartPhysicsChains.Chain chain:entry.getValue())
+            {
+                String id=data.getTimelineId()+"/"+chain.root.getName();
+                int mode=joltPreview.contactModeFor(id,frame);
+                contactMode=Math.max(contactMode,mode);
+                float[][] nativeSegments=joltPreview.hairSegmentsFor(id,frame);
+                if(nativeSegments!=null)
+                {
+                    JoltContactWireframe.drawHairSegments(nativeSegments);
+                    linksDrawn+=nativeSegments.length;
+                    scenes++;
+                }
+            }
             Integer fitFrame=joltTorsoFitFrames.get(data);
-            if(fitFrame!=null && fitFrame.intValue()==frame)
+            if(contactMode==0 || fitFrame==null ||
+                    fitFrame.intValue()!=frame)continue;
+
+            if(contactMode==3)
             {
                 BodyPartJoltMultiTorsoFit.Segments compound =
-                        BodyPartJoltPreviewAdapter.compoundTorsoRequested()
-                        ? joltMultiTorsoFits.get(data) : null;
+                        joltMultiTorsoFits.get(data);
                 if(compound!=null)
                 {
                     JoltContactWireframe.drawTorsoSegments(
                             compound.starts(),compound.ends(),compound.radii());
-                }
-                else
-                {
-                    BodyPartJoltTorsoFit.Fit single=joltTorsoFits.get(data);
-                    if(single!=null)
-                        JoltContactWireframe.drawTorsoSegments(
-                                new float[][] {single.a},new float[][] {single.b},
-                                new float[] {single.radius});
+                    bodiesDrawn+=compound.count();
                 }
             }
-            for(BodyPartPhysicsChains.Chain chain:entry.getValue())
+            else if(contactMode==1)
             {
-                String id=data.getTimelineId()+"/"+chain.root.getName();
-                float[][] nativeSegments=joltPreview.hairSegmentsFor(id,frame);
-                if(nativeSegments!=null)
-                    JoltContactWireframe.drawHairSegments(nativeSegments);
+                BodyPartJoltTorsoFit.Fit single=joltTorsoFits.get(data);
+                if(single!=null)
+                {
+                    JoltContactWireframe.drawTorsoSegments(
+                            new float[][]{single.a},new float[][]{single.b},
+                            new float[]{single.radius});
+                    bodiesDrawn++;
+                }
             }
+        }
+        String report="nativeHairSegments="+linksDrawn+
+                " actualTorsoCapsules="+bodiesDrawn+
+                " activeJoltScenes="+scenes;
+        // Prove the overlay was invoked without filling the game log
+        // with an identical message every render frame.
+        if(!report.equals(lastJoltOverlayReport))
+        {
+            lastJoltOverlayReport=report;
+            System.out.println("[BBS Animation Editor][Jolt][Overlay] "
+                    +report+" frame="+frame+
+                    " (wireframes in gizmo camera pass, not actor shader pass)");
         }
     }
 
@@ -2880,6 +2909,7 @@ public class BodyPartsPreviewRenderer
         joltMultiTorsoFits.clear();
         joltTorsoFitFrames.clear();
         reportedJoltTorsoFit.clear();
+        lastJoltOverlayReport = "";
         joltSampleDirections.clear();
         joltSampleFrames.clear();
         joltSampleNativeDirections.clear();
