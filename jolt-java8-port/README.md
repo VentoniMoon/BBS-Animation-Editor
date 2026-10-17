@@ -160,6 +160,62 @@ still no body collisions in the Jolt path. The real in-game bend result
 has not been verified; Linux and Windows native Java 8 tests exercise
 the new API and opt-in cone.
 
+### Missing nested ChameleonMorph render-space transform (2026-10-17)
+
+The original **Metamorph MorphBodyPart.render** zeros the actor's
+`renderYawOffset` before calling a child morph. Then
+**ChameleonMorph.render** applies its own `getScale(partialTicks)`
+and **Y=180° rotation**. However, the editor's
+`BodyPartChameleonMatrixProbe` calls
+`ChameleonRenderer.postRender()` from GL identity, so its matrix does
+**not** contain either outer child-morph transform.
+
+The editor previously composed only
+`EmoticonsBone * BodyPart(T,R,S) * ChameleonBone`, omitting:
+
+```text
+worldFromCube = EmoticonsBone
+              * MetamorphBodyPart(T,R,S)
+              * ChameleonMorphScale
+              * ChameleonMorphYaw180
+              * ChameleonBone
+              * CubePivotRotation
+```
+
+This can explain why the old logs reported `raw/intended/rendered`
+agreement while the real on-screen hair pointed up. Crucially,
+`raw/intended/rendered` were ALL measured in a *shared incomplete*
+world transform.
+
+For the optional native Jolt preview ONLY, the new experimental
+**corrected world-space transform** is available with:
+
+```text
+-Dbbs.editor.physics.jolt.exactChildSpace=true
+```
+
+Keep `preview=true` and `diagnostic=true` as before. The new branch
+reconstructs the actual nested morph scale and Y=180 transform both
+when sampling Jolt's clean bone poses and when checking the post-render
+pivots and loaded cube geometry. The existing Verlet solver, keyframe
+writer, body collision system and saved records are unchanged.
+**This remains opt-in until the user's full Forge in-game A/B test.**
+
+The isolated Java 8 smoke test recreates the old X=80° mismatch:
+a physical world vector matching the user's earlier log
+`(0,-0.75,+0.66)` can become substantially **upward** after correctly
+applying the parent-conjugated missing 180° child morph yaw. Thus
+merely observing `rawY<0` in the *old* incomplete coordinate system
+was not evidence that the visible cuboid was below its pivot.
+
+For a controlled comparison, repeat the same paused X=80° scene
+with `Stiffness=0`, first with `exactChildSpace` absent (legacy)
+and then present (corrected). The native JNI JARs are unchanged;
+**only `git pull origin main` and a fresh `runClient` are required**
+once these changes are merged. Compare `[Jolt][Compare]`,
+`[Jolt][Cube]`, and the screenshot. This does not yet prove the
+visual problem fixed; the game trial decides.
+
 ### Actual Chameleon cuboid-vs-pivot check (2026-10-17)
 
 The follow-up *in-game* tilt at X=80° confirmed after the frozen pose
