@@ -723,23 +723,26 @@ public class BodyPartsPreviewRenderer
                                 + cause + " " + report + " (world-space segment direction)");
 
                         /*
-                         * Horst-specific, read-only reference geometry. A
-                         * correct pivot-to-child vector is NOT automatically
-                         * proof that its rendered cube extends downward.
-                         * Measure reference cuboid direction, center and
-                         * actual lower face in the SAME post-render world
-                         * bone matrix as the next pivot. Do not change pose.
+                         * Probe the ACTUAL decoded Chameleon quads, after
+                         * ModelParser mirrored their X coordinates and after
+                         * each cube's own pivot/rotation. The old static
+                         * Horst reference is only a labeled fallback.
                          */
-                        BodyPartChameleonCubeProbe.Cube cube =
+                        BodyPartChameleonCubeProbe.Cube reference =
                                 BodyPartChameleonCubeProbe.getReference(bone);
-                        if (cube != null)
+                        try
                         {
-                            try
+                            BodyPartChameleonRenderedCubeProbe.Result loaded =
+                                    BodyPartChameleonRenderedCubeProbe.inspect(
+                                            part.morph.get(),bone,current);
+                            BodyPartJoltCubeGeometry.Measurement geometry = loaded != null
+                                    ? loaded.measurement : reference != null
+                                    ? BodyPartJoltCubeGeometry.measure(current,
+                                            reference.pivot,reference.origin,
+                                            reference.size,reference.inflate)
+                                    : null;
+                            if (geometry != null)
                             {
-                                BodyPartJoltCubeGeometry.Measurement geometry =
-                                        BodyPartJoltCubeGeometry.measure(
-                                                current,cube.pivot,cube.origin,
-                                                cube.size,cube.inflate);
                                 float cubeVsPivot =
                                         BodyPartJoltCubeGeometry.alignmentDegrees(
                                                 geometry.cubeDown,actual);
@@ -753,16 +756,20 @@ public class BodyPartsPreviewRenderer
                                         && sourceShift >= 1F ? "SOURCE_CHANGED"
                                         : cubeVsPivot > 90F ? "CUBE_REVERSED"
                                         : "CUBE_ALIGNED";
+                                String source = loaded == null
+                                        ? "HorstReferenceUnverified" : "ActualChameleonQuads";
+                                int cubes = loaded == null ? 1 : loaded.cubeCount;
+                                int vertices = loaded == null ? 0 : loaded.vertexCount;
                                 System.out.println(String.format(java.util.Locale.ROOT,
                                         "[BBS Animation Editor][Jolt][Cube] %s "
-                                        + "frame=%d bone=%s cubeDown=(%.2f,%.2f,%.2f) "
+                                        + "frame=%d bone=%s source=%s cubes=%d vertices=%d "
+                                        + "cubeDown=(%.2f,%.2f,%.2f) "
                                         + "pivotNext=(%.2f,%.2f,%.2f) "
                                         + "cubePivotDeg=%.1f pivotTipDeg=%.1f "
                                         + "cubeNativeDeg=%.1f cubeCenterY=%.3f "
                                         + "cubeTipY=%.3f pivotTipDeltaY=%.3f "
-                                        + "cubeBoundsY=[%.3f,%.3f] "
-                                        + "referenceGeometry=true cubeLocalRotation=notMeasured",
-                                        classification,frame,bone,
+                                        + "cubeBoundsY=[%.3f,%.3f]",
+                                        classification,frame,bone,source,cubes,vertices,
                                         geometry.cubeDown[0],geometry.cubeDown[1],
                                         geometry.cubeDown[2],
                                         actual[0],actual[1],actual[2],
@@ -772,12 +779,12 @@ public class BodyPartsPreviewRenderer
                                         geometry.pivotToTipWorldY,
                                         geometry.minWorldY,geometry.maxWorldY));
                             }
-                            catch (RuntimeException geometryError)
-                            {
-                                System.err.println("[BBS Animation Editor][Jolt][Cube] "
-                                        + "Reference measurement unavailable for " + bone
-                                        + ": " + geometryError.getMessage());
-                            }
+                        }
+                        catch (RuntimeException geometryError)
+                        {
+                            System.err.println("[BBS Animation Editor][Jolt][Cube] "
+                                    + "Measurement unavailable for " + bone
+                                    + ": " + geometryError.getMessage());
                         }
                     }
                 }
