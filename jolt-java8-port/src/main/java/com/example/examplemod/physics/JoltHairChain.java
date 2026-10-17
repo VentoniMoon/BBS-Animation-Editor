@@ -150,6 +150,13 @@ public final class JoltHairChain implements AutoCloseable {
         shape.close();
     }
 
+    public void setGravity(float multiplier) {
+        requireOpen();
+        if (!Float.isFinite(multiplier) || multiplier < 0F || multiplier > 2F)
+            throw new IllegalArgumentException("Invalid gravity multiplier");
+        world.setGravity(0F, -9.81F * multiplier, 0F);
+    }
+
     /** Advance exactly one Minecraft animation tick at a fixed 60Hz substep. */
     public void step() {
         requireOpen();
