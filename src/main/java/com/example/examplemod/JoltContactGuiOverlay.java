@@ -116,6 +116,15 @@ public final class JoltContactGuiOverlay
                                 x,y,width,height,actorX,actorY,actorZ);
                         if(segmentCount>before)visibleBodies++;
                     }
+                    // Native kinematic boxes of additional BodyParts, including
+                    // independently rotated cubes within one Chameleon bone.
+                    for(JoltContactOverlaySnapshot.Box box:snapshot.boxes)
+                    {
+                        int before=segmentCount;
+                        segmentCount+=drawBox(buf,box,camera,x,y,width,height,
+                                actorX,actorY,actorZ);
+                        if(segmentCount>before)visibleBodies++;
+                    }
                     tess.draw();
 
                     GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -126,6 +135,7 @@ public final class JoltContactGuiOverlay
                     int labelX=x+9,labelY=y+12;
                     String title="JOLT  torso "+snapshot.torsoCount+
                             "   hair "+snapshot.hairCount+
+                            "   extras "+snapshot.boxCount+
                             "   visible "+visibleBodies;
                     if(!shapes.isEmpty() && visibleBodies==0)
                         title+="  [outside camera]";
@@ -156,13 +166,15 @@ public final class JoltContactGuiOverlay
         }
 
         String report="frame="+snapshot.frame+" torso="+snapshot.torsoCount+
-                " hair="+snapshot.hairCount+" projectedShapes="+visibleBodies+
+                " hair="+snapshot.hairCount+" boxes="+snapshot.boxCount+
+                " projectedShapes="+visibleBodies+
                 " projectedLines="+segmentCount+" camera=("+camera.getCameraX()+
                 ","+camera.getCameraY()+","+camera.getCameraZ()+")"+
                 " actorOrigin=("+actorX+","+actorY+","+actorZ+")";
         // Avoid one-line-per-render logs; report changes to topology or
         // visibility category, not exact subpixel/camera differences.
         String status=snapshot.torsoCount+":"+snapshot.hairCount+
+                ":"+snapshot.boxCount+
                 ":"+(visibleBodies>0?"on-screen":"off-screen")+
                 ":"+(segmentCount>0?"drawn":"no-lines");
         if(!status.equals(lastReport))
@@ -263,6 +275,43 @@ public final class JoltContactGuiOverlay
             lines+=drawPivotCross(buf,endA,0xFFF9BA,x,y,width,height);
             lines+=drawPivotCross(buf,endB,0xFFF9BA,x,y,width,height);
         }
+        return lines;
+    }
+
+    /**
+     * Draw the eight world corners and 12 edges of the actual oriented box
+     * sent to Jolt. Same actor-local scene translation as hair/torso shapes.
+     * Amber lines distinguish passive attached cubes from green body capsules.
+     */
+    private static int drawBox(BufferBuilder buf,JoltContactOverlaySnapshot.Box box,
+            EditorCamera camera,int x,int y,int width,int height,
+            double actorX,double actorY,double actorZ)
+    {
+        float[] p=box.pose;
+        float qx=p[3],qy=p[4],qz=p[5],qw=p[6];
+        float xx=qx*qx,yy=qy*qy,zz=qz*qz;
+        float xy=qx*qy,xz=qx*qz,yz=qy*qz;
+        float wx=qw*qx,wy=qw*qy,wz=qw*qz;
+        double[] rx={1D-2D*(yy+zz),2D*(xy+wz),2D*(xz-wy)};
+        double[] ry={2D*(xy-wz),1D-2D*(xx+zz),2D*(yz+wx)};
+        double[] rz={2D*(xz+wy),2D*(yz-wx),1D-2D*(xx+yy)};
+        float[][] corners=new float[8][];
+        for(int i=0;i<8;i++)
+        {
+            double a=((i&1)==0?-1D:1D)*p[7];
+            double b=((i&2)==0?-1D:1D)*p[8];
+            double c=((i&4)==0?-1D:1D)*p[9];
+            corners[i]=project(
+                    p[0]+actorX+rx[0]*a+ry[0]*b+rz[0]*c,
+                    p[1]+actorY+rx[1]*a+ry[1]*b+rz[1]*c,
+                    p[2]+actorZ+rx[2]*a+ry[2]*b+rz[2]*c,
+                    camera,x,y,width,height);
+        }
+        int lines=0;
+        for(int i=0;i<8;i++)
+            for(int bit=1;bit<=4;bit*=2)
+                if((i&bit)==0 && emitLine(buf,corners[i],corners[i|bit],
+                        0xFFD66B,225,1.6F,x,y,width,height))lines++;
         return lines;
     }
 
