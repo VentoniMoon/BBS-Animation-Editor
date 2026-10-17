@@ -70,6 +70,11 @@ public class BodyPartsPreviewRenderer
     private boolean recordingPhysicsMatrices;
     private final BodyPartPhysicsPreviewSimulation livePhysics =
             new BodyPartPhysicsPreviewSimulation();
+    /** Optional reflection-only Java 8 Jolt preview; disabled by default. */
+    private final BodyPartJoltPreviewAdapter joltPreview =
+            new BodyPartJoltPreviewAdapter();
+    private final java.util.Set<String> reportedJoltPreview =
+            new java.util.HashSet<String>();
     private final Map<BodyPartModelData, String> reportedCollisionBone =
             new IdentityHashMap<BodyPartModelData, String>();
 
@@ -881,6 +886,64 @@ public class BodyPartsPreviewRenderer
                         return;
                     }
                     joints[jointIndex]=tip;
+                }
+                /*
+                 * Optional real Jolt physical chain: drive it with the CLEAN
+                 * native-world Chameleon pose and convert its quaternion
+                 * rotations to preview-only bone swings. This branch bypasses
+                 * the experimental Verlet/capsule/mesh solver completely.
+                 * Keep the feature off until it is tested in Forge 1.12.2.
+                 */
+                if (BodyPartJoltPreviewAdapter.isRequested() && hasTip)
+                {
+                    AnimationBone parent = chain.root.getParent();
+                    float[] parentWorld = parent == null ? attached :
+                            world.getBoneWorldMatrix(parent.getName());
+                    if (parentWorld != null)
+                    {
+                        int boneCount = chain.bones.size();
+                        String[] names = new String[boneCount];
+                        float[][] nativeWorld = new float[boneCount][];
+                        boolean complete = true;
+                        for (int k = 0; k < boneCount; k++)
+                        {
+                            names[k] = chain.bones.get(k).getName();
+                            nativeWorld[k] = world.getBoneWorldMatrix(names[k]);
+                            if (nativeWorld[k] == null)
+                            {
+                                complete = false;
+                                break;
+                            }
+                        }
+                        if (complete)
+                        {
+                            BodyPartChainSolver.Vec3 tip = joints[joints.length - 1];
+                            float[] terminal = {tip.x, tip.y, tip.z};
+                            String stateId = data.getTimelineId() + "/" +
+                                    chain.root.getName();
+                            Map<String, float[]> physical = joltPreview.sample(
+                                    net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
+                                    stateId, names, frame, nativeWorld, terminal,
+                                    parentWorld, chain.settings.getStiffness(),
+                                    chain.settings.getDamping(),
+                                    chain.settings.getGravity());
+                            if (physical != null)
+                            {
+                                if (reportedJoltPreview.add(stateId))
+                                    System.out.println("[BBS Animation Editor][Jolt] "
+                                            + "Native quaternion preview active: " + stateId
+                                            + " (body collisions and export not enabled)");
+                                for (Map.Entry<String, float[]> swing : physical.entrySet())
+                                {
+                                    physicsFrames.accept(data, frame,
+                                            swing.getKey(), swing.getValue());
+                                    advanced = true;
+                                }
+                                // Never combine two competing solvers for one hair strand.
+                                continue;
+                            }
+                        }
+                    }
                 }
                 // Parent matrix comes from the native Emoticons render of
                 // this frame. Build a conservative torso capsule in that
@@ -2332,6 +2395,9 @@ public class BodyPartsPreviewRenderer
 
     public void clear()
     {
+        joltPreview.clear();
+        reportedJoltPreview.clear();
+        physicsFrames.clear();
         /*
          * There is no renderer-owned LayerRenderer anymore.
          * Body parts live inside the actor's CustomMorph and are rebuilt
