@@ -841,6 +841,7 @@ public class BodyPartsPreviewRenderer
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
             boolean advanced = false;
             boolean editedPhysics = false;
+            boolean initializedJolt = false;
             int appliedSwings = 0;
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
@@ -929,6 +930,7 @@ public class BodyPartsPreviewRenderer
                                     chain.settings.getGravity());
                             if (physical != null)
                             {
+                                initializedJolt |= joltPreview.wasRecreatedThisSample();
                                 if (reportedJoltPreview.add(stateId))
                                     System.out.println("[BBS Animation Editor][Jolt] "
                                             + "Native quaternion preview active: " + stateId
@@ -1195,7 +1197,9 @@ public class BodyPartsPreviewRenderer
             // Physics writes happen AFTER normal rendering. On a paused
             // frame, an actual bone edit may publish the completed result
             // for the NEXT draw without waiting for the timeline to advance.
-            if (editedPhysics)
+            // A paused or seeked Jolt scene was gravity-settled at its current
+            // pose: show that frozen pose on the next draw of the same frame.
+            if (editedPhysics || initializedJolt)
                 physicsFrames.publishEditedFrame(data,frame);
             reportPhysicsBoneProbe(data, advanced
                     ? "world strand solver advanced; multi-segment visual pose queued"
