@@ -58,8 +58,8 @@ public final class BodyPartPhysicsWorldPose
         if (chain == null || source == null || finalTipLocalPoint == null)
             throw new IllegalArgumentException("Missing strand pose input");
         List<AnimationBone> bones = chain.bones;
-        if (bones.size() < 2)
-            throw new IllegalArgumentException("Strand needs two or more bones");
+        if (bones.isEmpty())
+            throw new IllegalArgumentException("Strand needs at least one bone");
 
         BodyPartChainSolver.Vec3[] joints =
                 new BodyPartChainSolver.Vec3[bones.size() + 1];
