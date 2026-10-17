@@ -366,6 +366,79 @@ collision forces move a hair link away from a moving kinematic torso
 body. Full Forge/Emoticons in-game collisions **have not yet been
 verified by the user**.
 
+## Jolt three-zone torso + native collider wireframes (2026-10-17)
+
+After in-game testing, the original Jolt single-torso mode was confirmed
+with `[Jolt][Torso] fitted radius=0.203 blocks, points=1440/4224`.
+It reduced braid penetration, but an over-the-shoulder screenshot
+showed gaps where the single capsule cannot follow the Emoticons
+torso's variable width. There is no evidence that changing gravity,
+Chameleon axes or Jolt rotation signs would solve this *contact-shape*
+problem.
+
+This follow-up adds **three independent fitted zones** along the
+animated `low_body` -> upper-torso bone axis. Each zone's radius is
+measured from the same torso-weight-selected, CPU-skinned Emoticons
+triangles. Bounds and skinned-vertex witness counts reject invalid
+geometry; sections overlap to reduce seams. The native Jolt world
+creates three distinct kinematic CapsuleShape bodies, with hair
+contacts only against the torso layer.
+
+It is **not** an exact collision mesh, nor does it add separate
+shoulders/neck/head shapes yet. Wide hair cubes can still intersect
+even when thin physical links are excluded from the colliders.
+
+### Experiment with three zones
+
+Keep the proven old properties, plus:
+
+```groovy
+jvmArg '-Dbbs.editor.physics.jolt.preview=true'
+jvmArg '-Dbbs.editor.physics.jolt.exactChildSpace=true'
+jvmArg '-Dbbs.editor.physics.jolt.torsoContacts=true'
+jvmArg '-Dbbs.editor.physics.jolt.compoundTorso=true'
+```
+
+If the new fitting fails or the downloaded prototype JAR is outdated,
+the adapter uses the original **single-torso capsule** instead. Removing
+the `compoundTorso` flag restores the already tested contact path.
+
+For an interactive wireframe switch, open an enabled chain in the
+**Body Parts > Physics** inspector and click **Show Jolt colliders**.
+You can also start with the wireframes already visible by adding:
+
+```groovy
+jvmArg '-Dbbs.editor.physics.jolt.drawColliders=true'
+```
+
+The overlay appears in the existing 3D actor Preview after the
+normal actor render, using the same world-space coordinates as Jolt.
+Green/yellow wireframes are kinematic torso capsule shapes; magenta
+wireframes use *actual* Jolt rigid-body centers, quaternions and
+physical segment radii, not the model's bone pivots. Display toggling
+does not rebuild a physics scene or change the animation record.
+
+When a compound mesh fit is unavailable, `[Jolt][Torso]` logs
+`segments=single-only`; if valid, it logs all three radii.
+
+### Runtime limitations and A/B tests
+
+- Test upright, side view, top view, X=80°, torso Y rotations,
+  idle/walk transition, and frame seeking. Repeat each test with the
+  `compoundTorso` flag OFF and ON.
+- The physics chain's capsule radius is independent of the visible
+  block-model hair cube width: a realistic full solid-cuboid collision
+  is not yet implemented.
+- This is a first in-game trial for the compound feature; the
+  standalone Windows/Linux Java 8 JNI and skinned-fit regressions do
+  not verify rendering under OptiFine or Forge 1.12.2.
+- No physics bake or `.dat` export changes.
+- A **new** `jolt-hair-prototype-java8.jar` must be downloaded from
+  the passing GitHub Actions run because the experimental physics
+  module gained `setTorsoSegments` and `nativeHairSegments`.
+- `main` before the change is preserved at
+  `backup/main-before-multicollider-debug-20261017`.
+
 ## Reproduce the build and download experimental JARs
 
 [CI: Jolt JNI Java 8 compatibility](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
