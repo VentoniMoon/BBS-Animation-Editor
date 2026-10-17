@@ -468,29 +468,6 @@ public class EditorSceneViewport
         this.endWorldRender();
 
         /*
-         * The old collider debug was drawn inside RenderManager's actor
-         * pass and then covered by late world/cloud rendering and shader
-         * state. Draw AFTER all world/actor/cloud passes but BEFORE the
-         * Preview framebuffer is copied to the GUI. Reconstruct the SAME
-         * perspective and camera as the established visible gizmo.
-         */
-        if (BodyPartJoltPreviewAdapter.drawContactsRequested()
-                && this.lastJoltOverlayFrame >= 0)
-        {
-            final int frame = this.lastJoltOverlayFrame;
-            JoltContactOverlayPass.render(mc,this.camera,
-                    this.x,this.y,this.width,this.height,
-                    new Runnable()
-                    {
-                        @Override public void run()
-                        {
-                            actorPreviewRenderer.drawJoltColliderOverlay(frame);
-                        }
-                    });
-        }
-
-
-        /*
          * =========================================================
          * END PREVIEW FBO
          * ========================================================= */
@@ -507,6 +484,24 @@ public class EditorSceneViewport
                 this.width,
                 this.height
         );
+
+        /*
+         * The working gizmo already draws successfully in regular GUI
+         * space. The old Jolt glBegin wireframes were added to the Preview
+         * FBO yet never became visible despite native bodies existing.
+         * Draw *after* the FBO-to-GUI blit, using gizmo-matched CPU camera
+         * projection and Minecraft's GUI tessellation. This does not tick
+         * physics, change animation, or modify the Preview framebuffer.
+         */
+        if(BodyPartJoltPreviewAdapter.drawContactsRequested()
+                && this.lastJoltOverlayFrame>=0)
+        {
+            JoltContactOverlaySnapshot shapes =
+                    this.actorPreviewRenderer.snapshotJoltContactShapes(
+                            this.lastJoltOverlayFrame);
+            JoltContactGuiOverlay.draw(Minecraft.getMinecraft(),this.camera,
+                    this.x,this.y,this.width,this.height,shapes);
+        }
     }
 
 

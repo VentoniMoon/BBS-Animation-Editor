@@ -290,79 +290,89 @@ public class BodyPartsPreviewRenderer
         }
     }
 
-    private String lastJoltOverlayReport = "";
-
     /**
-     * Diagnostic ONLY. The owner invokes this from the same framebuffer
-     * and camera pass as EditorGizmoController.draw3D(), not from
-     * RenderManager.renderEntity(): OptiFine may leave an active shader or
-     * other state that hides immediate-mode debug lines in the actor pass.
-     *
-     * Draw only shapes that the live Jolt scene actually INSTALLED at this
-     * frame. A candidate skin fit does not prove the native collider exists.
+     * Only snapshots of INSTALLED native collision bodies at the requested
+     * animation frame. No GL calls are made here: the caller draws the
+     * projected capsules in normal Minecraft GUI space AFTER blitting the
+     * completed Preview FBO, just as the working screen-space gizmo does.
      */
-    public void drawJoltColliderOverlay(int frame)
+    public JoltContactOverlaySnapshot snapshotJoltContactShapes(int frame)
     {
-        if(!BodyPartJoltPreviewAdapter.drawContactsRequested())return;
-        int bodiesDrawn=0,linksDrawn=0,scenes=0;
+        java.util.List<JoltContactOverlaySnapshot.Shape> shapes =
+                new java.util.ArrayList<JoltContactOverlaySnapshot.Shape>();
+        int activeScenes=0;
+        if(!BodyPartJoltPreviewAdapter.drawContactsRequested())
+            return new JoltContactOverlaySnapshot(frame,0,shapes);
+
         for(Map.Entry<BodyPartModelData,List<BodyPartPhysicsChains.Chain>> entry:
                 previewPhysicsChains.entrySet())
         {
             BodyPartModelData data=entry.getKey();
-            if(entry.getValue()==null || entry.getValue().isEmpty())continue;
-            int contactMode=0;
+            if(entry.getValue()==null || entry.getValue().isEmpty())
+                continue;
+            int mode=0;
             for(BodyPartPhysicsChains.Chain chain:entry.getValue())
             {
                 String id=data.getTimelineId()+"/"+chain.root.getName();
-                int mode=joltPreview.contactModeFor(id,frame);
-                contactMode=Math.max(contactMode,mode);
-                float[][] nativeSegments=joltPreview.hairSegmentsFor(id,frame);
-                if(nativeSegments!=null)
+                int sceneMode=joltPreview.contactModeFor(id,frame);
+                mode=Math.max(mode,sceneMode);
+                float[][] segments=joltPreview.hairSegmentsFor(id,frame);
+                if(segments==null)continue;
+                activeScenes++;
+                for(float[] link:segments)
                 {
-                    JoltContactWireframe.drawHairSegments(nativeSegments);
-                    linksDrawn+=nativeSegments.length;
-                    scenes++;
+                    if(link==null || link.length!=7)continue;
+                    try
+                    {
+                        shapes.add(new JoltContactOverlaySnapshot.Shape(
+                                JoltContactOverlaySnapshot.Kind.HAIR,
+                                new float[] {link[0],link[1],link[2]},
+                                new float[] {link[3],link[4],link[5]},
+                                link[6]));
+                    }
+                    catch(IllegalArgumentException ignored)
+                    {
+                        // Never draw a fabricated physical link.
+                    }
                 }
             }
-            Integer fitFrame=joltTorsoFitFrames.get(data);
-            if(contactMode==0 || fitFrame==null ||
-                    fitFrame.intValue()!=frame)continue;
 
-            if(contactMode==3)
+            Integer capturedFrame=joltTorsoFitFrames.get(data);
+            if(mode==0 || capturedFrame==null ||
+                    capturedFrame.intValue()!=frame)
+                continue;
+            if(mode==3)
             {
-                BodyPartJoltMultiTorsoFit.Segments compound =
+                BodyPartJoltMultiTorsoFit.Segments multi =
                         joltMultiTorsoFits.get(data);
-                if(compound!=null)
+                if(multi!=null)
                 {
-                    JoltContactWireframe.drawTorsoSegments(
-                            compound.starts(),compound.ends(),compound.radii());
-                    bodiesDrawn+=compound.count();
+                    float[][] starts=multi.starts(),ends=multi.ends();
+                    float[] radii=multi.radii();
+                    for(int i=0;i<radii.length;i++)
+                        try
+                        {
+                            shapes.add(new JoltContactOverlaySnapshot.Shape(
+                                    JoltContactOverlaySnapshot.Kind.TORSO,
+                                    starts[i],ends[i],radii[i]));
+                        }
+                        catch(IllegalArgumentException ignored) {}
                 }
             }
-            else if(contactMode==1)
+            else if(mode==1)
             {
                 BodyPartJoltTorsoFit.Fit single=joltTorsoFits.get(data);
                 if(single!=null)
-                {
-                    JoltContactWireframe.drawTorsoSegments(
-                            new float[][]{single.a},new float[][]{single.b},
-                            new float[]{single.radius});
-                    bodiesDrawn++;
-                }
+                    try
+                    {
+                        shapes.add(new JoltContactOverlaySnapshot.Shape(
+                                JoltContactOverlaySnapshot.Kind.TORSO,
+                                single.a,single.b,single.radius));
+                    }
+                    catch(IllegalArgumentException ignored) {}
             }
         }
-        String report="nativeHairSegments="+linksDrawn+
-                " actualTorsoCapsules="+bodiesDrawn+
-                " activeJoltScenes="+scenes;
-        // Prove the overlay was invoked without filling the game log
-        // with an identical message every render frame.
-        if(!report.equals(lastJoltOverlayReport))
-        {
-            lastJoltOverlayReport=report;
-            System.out.println("[BBS Animation Editor][Jolt][Overlay] "
-                    +report+" frame="+frame+
-                    " (wireframes in gizmo camera pass, not actor shader pass)");
-        }
+        return new JoltContactOverlaySnapshot(frame,activeScenes,shapes);
     }
 
     /**
@@ -2909,7 +2919,7 @@ public class BodyPartsPreviewRenderer
         joltMultiTorsoFits.clear();
         joltTorsoFitFrames.clear();
         reportedJoltTorsoFit.clear();
-        lastJoltOverlayReport = "";
+
         joltSampleDirections.clear();
         joltSampleFrames.clear();
         joltSampleNativeDirections.clear();

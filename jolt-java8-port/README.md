@@ -500,6 +500,57 @@ This patch is **editor-only**; the preceding Jolt JNI and native
 prototype JARs from the last passing run can be reused. Real Forge +
 OptiFine visual rendering still needs a user screenshot to confirm.
 
+## GUI-safe collider visualization (2026-10-17)
+
+User's real Forge 1.12.2 run confirmed:
+`[Jolt][Overlay] nativeHairSegments=10 actualTorsoCapsules=3
+activeJoltScenes=3`, yet no collision lines were visible in the
+editor. That proves the shapes are available but **does not prove**
+they made it into the visible framebuffer. Drawing GL11 wireframes
+inside the actor pass AND after the world pass both failed visually.
+
+The current experiment removes the FBO wireframe rendering entirely.
+After `PreviewShaderBridge.renderPreviewTexture()` copies the finished
+Preview to Minecraft's main GUI framebuffer, we:
+
+1. Copy only **live installed Jolt body** endpoints, physical radii,
+   and skinned torso proxy shapes into an immutable snapshot.
+2. Project each 3D capsule with exactly the same perspective math as
+   `EditorGizmoController.project()` (60° FOV, actual editor camera,
+   viewport dimensions). This math is independently tested in Java 8.
+3. Draw green torso / magenta hair wireframe capsules using
+   Minecraft's **GUI Tessellator POSITION_COLOR quads**, not
+   `GL11.glBegin(GL_LINES)`, after the FBO image is already on-screen.
+   Clipping is restricted to the Preview rectangle.
+4. Always display a small `JOLT torso N hair N visible N` legend in
+   the Preview whenever `drawColliders=true`.
+
+This is diagnostic-only: no collision, gravity, stiffness, bone
+transform, keyframe, or export behavior changes. No replacement native
+JARs are necessary if the previous compound-contact artifact is
+installed. Enable with the existing client flag:
+
+```groovy
+jvmArg '-Dbbs.editor.physics.jolt.drawColliders=true'
+```
+
+Or use the `Body Parts > Physics > Show Jolt colliders` switch.
+
+The new report is tagged `[Jolt][GUIOverlay]` rather than the older
+`[Jolt][Overlay]`. If the Preview label says
+`visible 0 [outside camera]` but the counts are nonzero, that
+isolates a **Jolt/actor-world coordinate-space mismatch**, and the
+log gives the camera position and first native capsule endpoints.
+It is NOT evidence that native collisions failed.
+
+```powershell
+Select-String -Path '.\\run\\logs\\latest.log' -SimpleMatch '[Jolt][GUIOverlay]'
+```
+
+Standalone Windows/Linux Java 8 checks cover projection and snapshot
+immutability. The final GUI rendering path still needs a real Forge
+1.12.2 + OptiFine screenshot before claiming the lines are visible.
+
 ## Reproduce the build and download experimental JARs
 
 [CI: Jolt JNI Java 8 compatibility](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
