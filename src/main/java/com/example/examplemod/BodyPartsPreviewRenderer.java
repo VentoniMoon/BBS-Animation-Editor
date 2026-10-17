@@ -349,16 +349,21 @@ public class BodyPartsPreviewRenderer
         }
     }
 
-    /** Other attached models can collide with a chain, but never its own
-     *  actively simulated cubes. Model order is stable across render frames.
+    /**
+     * Every passive Chameleon cube can collide with an active hair chain,
+     * including the static head/scalp in that SAME attached model. The
+     * capture phase already excludes ALL driven physics bones of each part,
+     * so no dynamic hair cube is also created as a kinematic collider.
+     *
+     * The first native hair link is excluded from passive body contacts
+     * (same policy as torso) to avoid root self-penetration impulses.
      */
-    private float[][] otherAttachedCollisionBoxes(BodyPartModelData owner,int frame)
+    private float[][] passiveCollisionBoxes(BodyPartModelData owner,int frame)
     {
         if(frame!=attachedCollisionFrame)return null;
         java.util.List<float[]> combined=new java.util.ArrayList<float[]>();
         for(BodyPartModelData data:collisionPartOrder)
         {
-            if(data==owner)continue;
             java.util.List<float[]> source=attachedCollisionBoxes.get(data);
             if(source==null)continue;
             for(float[] box:source)
@@ -1470,7 +1475,7 @@ public class BodyPartsPreviewRenderer
                                             ?0F:contact.radius,
                                     chain.settings.hasBodyCollisions()?segments:null,
                                     chain.settings.hasBodyCollisions()
-                                            ?otherAttachedCollisionBoxes(data,frame):null);
+                                            ?passiveCollisionBoxes(data,frame):null);
                             if (physical != null)
                             {
                                 if (JOLT_DIRECTION_DIAGNOSTIC)
