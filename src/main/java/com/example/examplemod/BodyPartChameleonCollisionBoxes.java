@@ -57,8 +57,11 @@ public final class BodyPartChameleonCollisionBoxes
             BodyPartPhysicsWorldPose.MatrixSource world,
             Set<String> simulatedBones)
     {
-        if(chameleonMorph==null || world==null ||
-                !chameleonMorph.getClass().getName().endsWith(".ChameleonMorph"))
+        // Detect the decoded cube API structurally rather than matching
+        // a class-name suffix. Test doubles, subclasses and compatible
+        // Chameleon wrappers should resolve through getModel(); unsupported
+        // morphs fail cleanly on reflection and contribute zero boxes.
+        if(chameleonMorph==null || world==null)
             return new Capture(Collections.<float[]>emptyList(),0,0,0,
                     "Chameleon model/matrices unavailable");
         Counter counter=new Counter();
