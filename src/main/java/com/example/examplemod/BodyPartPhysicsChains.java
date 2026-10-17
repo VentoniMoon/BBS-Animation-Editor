@@ -49,36 +49,61 @@ public final class BodyPartPhysicsChains
             BodyPartPhysicsSettings settings = model.getPhysicsSettings(bone.getName());
             if (settings == null || !settings.isEnabled()) continue;
 
-            ArrayList<AnimationBone> chain = new ArrayList<AnimationBone>();
-            AnimationBone current = bone;
-            Map<AnimationBone, Boolean> visited =
-                    new IdentityHashMap<AnimationBone, Boolean>();
-
-            while (current != null)
+            List<AnimationBone> children=bone.getChildren();
+            if(children!=null && children.size()>1)
             {
-                if (visited.put(current, Boolean.TRUE) != null)
-                    throw new IllegalStateException("Cycle in physics chain: " + bone.getName());
-                if (used.containsKey(current))
-                    throw new IllegalStateException("Overlapping physics chains at " + current.getName());
-
-                chain.add(current);
-                List<AnimationBone> children = current.getChildren();
-                if (children == null || children.isEmpty()) break;
-                if (children.size() != 1)
-                    throw new IllegalStateException(
-                            "Physics root " + bone.getName() + " branches at " + current.getName()
-                            + "; select each strand's own root");
-                current = children.get(0);
+                // The selected bone is a SHARED anchor with several distinct
+                // strands (often on head hairstyles). It stays animated:
+                // each child independently starts a Jolt chain and inherits
+                // the selected parent's settings. No bone is simulated twice.
+                for(AnimationBone child:children)
+                    appendLinearChain(child,settings,used,result);
             }
-
-            if (chain.size() < 2)
-                throw new IllegalStateException(
-                        "Physics chain " + bone.getName() + " has fewer than two joints");
-
-            for (AnimationBone joint : chain) used.put(joint, Boolean.TRUE);
-            result.add(new Chain(bone, chain, settings));
+            else
+            {
+                appendLinearChain(bone,settings,used,result);
+            }
         }
 
         return result;
+    }
+
+    /**
+     * Traverse any linear strand, independent of its bone names or source
+     * geo filename. Shared anchors split above; a fork AFTER the selected
+     * root would duplicate a dynamic joint and is explicitly rejected.
+     */
+    private static void appendLinearChain(AnimationBone start,
+            BodyPartPhysicsSettings settings,
+            Map<AnimationBone, Boolean> used,List<Chain> result)
+    {
+        if(start==null)
+            throw new IllegalStateException("Missing physics strand root");
+        ArrayList<AnimationBone> chain=new ArrayList<AnimationBone>();
+        Map<AnimationBone,Boolean> visited=
+                new IdentityHashMap<AnimationBone,Boolean>();
+        AnimationBone current=start;
+        while(current!=null)
+        {
+            if(visited.put(current,Boolean.TRUE)!=null)
+                throw new IllegalStateException("Cycle in chain: "+start.getName());
+            if(used.containsKey(current))
+                throw new IllegalStateException(
+                        "Overlapping physical strands at "+current.getName());
+            chain.add(current);
+            List<AnimationBone> children=current.getChildren();
+            if(children==null || children.isEmpty())break;
+            if(children.size()!=1)
+                throw new IllegalStateException(
+                        "Physics strand "+start.getName()+
+                        " forks at "+current.getName()+
+                        "; select independent branch roots instead");
+            current=children.get(0);
+        }
+        if(chain.size()<2)
+            throw new IllegalStateException(
+                    "Physics strand "+start.getName()+" requires at least two bones");
+        for(AnimationBone bone:chain)used.put(bone,Boolean.TRUE);
+        result.add(new Chain(start,chain,settings));
     }
 }
