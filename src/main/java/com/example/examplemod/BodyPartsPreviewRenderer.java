@@ -936,7 +936,7 @@ public class BodyPartsPreviewRenderer
                                 for (Map.Entry<String, float[]> swing : physical.entrySet())
                                 {
                                     physicsFrames.accept(data, frame,
-                                            swing.getKey(), swing.getValue());
+                                            swing.getKey(), swing.getValue(), true);
                                     advanced = true;
                                 }
                                 // Never combine two competing solvers for one hair strand.
@@ -1751,8 +1751,10 @@ public class BodyPartsPreviewRenderer
                             USE_CANONICAL_PHYSICS_SWING ? swing[3] : -swing[3]
                     };
                     float[] before = readChameleonPoseEuler(child, entry.getKey());
+                    float angleLimit = physicsFrames.isJoltForRender(
+                            data, frame, entry.getKey()) ? (float)Math.PI : 1.20F;
                     if (BodyPartChameleonPhysicsPose.addLocalSwing(
-                            child, entry.getKey(), corrected))
+                            child, entry.getKey(), corrected, angleLimit))
                     {
                         appliedCount++;
                         float[] after = readChameleonPoseEuler(child, entry.getKey());
