@@ -1462,12 +1462,15 @@ public class BodyPartsPreviewRenderer
                                     parentWorld, chain.settings.getStiffness(),
                                     chain.settings.getDamping(),
                                     chain.settings.getGravity(),
-                                    contact==null?null:contact.a,
-                                    contact==null?null:contact.b,
-                                    contact==null?0F:contact.radius,
-                                    segments,
+                                    !chain.settings.hasBodyCollisions() || contact==null
+                                            ?null:contact.a,
+                                    !chain.settings.hasBodyCollisions() || contact==null
+                                            ?null:contact.b,
+                                    !chain.settings.hasBodyCollisions() || contact==null
+                                            ?0F:contact.radius,
+                                    chain.settings.hasBodyCollisions()?segments:null,
                                     chain.settings.hasBodyCollisions()
-                                        ?otherAttachedCollisionBoxes(data,frame):null);
+                                            ?otherAttachedCollisionBoxes(data,frame):null);
                             if (physical != null)
                             {
                                 if (JOLT_DIRECTION_DIAGNOSTIC)
