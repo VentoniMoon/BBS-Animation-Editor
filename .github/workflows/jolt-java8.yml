@@ -184,6 +184,7 @@ jobs:
             ${{ runner.temp }}/jolt-java8/UPSTREAM-LICENSE.txt
 
   windows-java8-native:
+    needs: java8-bindings
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -196,6 +197,19 @@ jobs:
           ref: '6.0.0'
           path: upstream-jolt
           persist-credentials: false
+      - name: Validate Windows experimental JAR installer against actual artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jolt-java8-experimental-jars
+          path: ${{ runner.temp }}/jolt-artifacts
+      - name: Verify Windows installer checks the bundled Jolt artifacts
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'jolt-experimental.zip'
+          Compress-Archive -Path (Join-Path $env:RUNNER_TEMP 'jolt-artifacts/*') -DestinationPath $zip -Force
+          & ./jolt-java8-port/tools/prepare-windows-test.ps1 -ArtifactZip $zip
+          if (!(Test-Path libs/jolt-jni-6.0.0-java8-bundled.jar)) { throw 'Missing installed JNI jar' }
+          if (!(Test-Path libs/jolt-hair-prototype-java8.jar)) { throw 'Missing installed prototype jar' }
       - name: Java 21 compiler
         uses: actions/setup-java@v4
         with:
