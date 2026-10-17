@@ -34,34 +34,13 @@ public final class JoltContactGuiOverlay
 
     private JoltContactGuiOverlay() {}
 
-    /** Pure Java 8 perspective projection matching the editor gizmo. */
+    /** Exact perspective math shared with the editor gizmo (Java 8 tested). */
     public static float[] project(double x,double y,double z,
             EditorCamera camera,int viewportX,int viewportY,
             int viewportWidth,int viewportHeight)
     {
-        if(camera==null || viewportWidth<=0 || viewportHeight<=0)
-            return null;
-        double dx=x-camera.getCameraX();
-        double dy=y-camera.getCameraY();
-        double dz=z-camera.getCameraZ();
-        double yaw=Math.toRadians(camera.getYaw());
-        double pitch=Math.toRadians(camera.getPitch());
-
-        double cy=Math.cos(yaw),sy=Math.sin(yaw);
-        double cameraX=cy*dx-sy*dz;
-        double cameraZ=sy*dx+cy*dz;
-        double cp=Math.cos(pitch),sp=Math.sin(pitch);
-        double cameraY=cp*dy+sp*cameraZ;
-        cameraZ=-sp*dy+cp*cameraZ;
-        if(!Double.isFinite(cameraZ) || cameraZ>=-0.05D)
-            return null;
-        double focal=viewportHeight/(2D*Math.tan(Math.toRadians(60D)/2D));
-        double sx=viewportX+viewportWidth/2D+cameraX*focal/-cameraZ;
-        double syScreen=viewportY+viewportHeight/2D-cameraY*focal/-cameraZ;
-        if(!Double.isFinite(sx) || !Double.isFinite(syScreen) ||
-                Math.abs(sx)>1E7D || Math.abs(syScreen)>1E7D)
-            return null;
-        return new float[] {(float)sx,(float)syScreen};
+        return JoltContactScreenProjection.project(x,y,z,camera,
+                viewportX,viewportY,viewportWidth,viewportHeight);
     }
 
     public static void draw(Minecraft mc,EditorCamera camera,
