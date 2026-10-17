@@ -138,6 +138,14 @@ public class BodyPartsPreviewRenderer
     /* Actual child BodyParts from this preview pass, never re-rendered. */
     private final Map<BodyPartModelData, BodyPart> renderedPhysicsParts =
             new IdentityHashMap<BodyPartModelData, BodyPart>();
+    /** All attached parts, including passive Chameleon collision-only forms. */
+    private final Map<BodyPartModelData, BodyPart> renderedCollisionParts =
+            new IdentityHashMap<BodyPartModelData, BodyPart>();
+    private final java.util.List<BodyPartModelData> collisionPartOrder =
+            new java.util.ArrayList<BodyPartModelData>();
+    private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionBoxes =
+            new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
+    private int attachedCollisionFrame = -1;
     /** Real Emoticons skinned mesh fit for this exact rendered frame. */
     private final Map<BodyPartModelData, BodyPartJoltTorsoFit.Fit> joltTorsoFits =
             new IdentityHashMap<BodyPartModelData, BodyPartJoltTorsoFit.Fit>();
@@ -191,6 +199,7 @@ public class BodyPartsPreviewRenderer
                         + " (mesh-local snapshot, collision solver not yet connected)");
             }
         }
+        captureAttachedChameleonColliders(morph,frame);
         for (Map.Entry<BodyPartModelData, List<BodyPartPhysicsChains.Chain>> entry :
                 previewPhysicsChains.entrySet())
         {
@@ -289,6 +298,78 @@ public class BodyPartsPreviewRenderer
                         + "(first frame=" + frame + "; subsequent frames silent)");
             }
         }
+    }
+
+    /**
+     * From a completed normal actor render, collect decoded cube colliders
+     * from ALL added Chameleon parts, even those with no physics of their
+     * own. This works for arbitrary static/animated attachments, including
+     * a two-cube rotated chest model. No second actor render is initiated.
+     * The physics system never collides a dynamic strand with itself.
+     */
+    private void captureAttachedChameleonColliders(Object actorMorph,int frame)
+    {
+        attachedCollisionBoxes.clear();
+        attachedCollisionFrame=frame;
+        if(!BodyPartJoltPreviewAdapter.torsoContactsRequested())return;
+        for(BodyPartModelData data:collisionPartOrder)
+        {
+            BodyPart part=renderedCollisionParts.get(data);
+            if(part==null || part.morph==null || part.morph.get()==null ||
+                    !part.morph.get().getClass().getName().endsWith(".ChameleonMorph"))
+                continue;
+            float[] parent=BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
+                    actorMorph,data.getAttachmentBoneName());
+            if(parent==null)continue;
+            Object child=part.morph.get();
+            BodyPartPhysicsWorldPose.MatrixSource local=
+                    BodyPartChameleonMatrixProbe.source(child);
+            if(local==null)continue;
+            try(BodyPartChameleonCleanPose clean=
+                    BodyPartChameleonCleanPose.begin(
+                            child,previewEulerDeltas.get(data)))
+            {
+                float[] attached=worldFromRenderedChameleonChild(parent,part);
+                BodyPartPhysicsWorldPose.MatrixSource world=
+                        BodyPartPhysicsWorldPose.worldSource(attached,local);
+                java.util.Set<String> driven=new java.util.HashSet<String>();
+                for(BodyPartPhysicsChains.Chain chain:getPreviewPhysicsChains(data))
+                    for(AnimationBone bone:chain.bones)
+                        driven.add(bone.getName());
+                java.util.List<float[]> boxes=
+                        BodyPartChameleonCollisionBoxes.collect(child,world,driven);
+                if(!boxes.isEmpty())
+                    attachedCollisionBoxes.put(data,boxes);
+            }
+            catch(RuntimeException error)
+            {
+                reportPhysicsBoneProbe(data,"Additional Chameleon collider skipped: "
+                        +error.getClass().getSimpleName());
+            }
+        }
+    }
+
+    /** Other attached models can collide with a chain, but never its own
+     *  actively simulated cubes. Model order is stable across render frames.
+     */
+    private float[][] otherAttachedCollisionBoxes(BodyPartModelData owner,int frame)
+    {
+        if(frame!=attachedCollisionFrame)return null;
+        java.util.List<float[]> combined=new java.util.ArrayList<float[]>();
+        for(BodyPartModelData data:collisionPartOrder)
+        {
+            if(data==owner)continue;
+            java.util.List<float[]> source=attachedCollisionBoxes.get(data);
+            if(source==null)continue;
+            for(float[] box:source)
+            {
+                if(combined.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)
+                    break;
+                combined.add(box.clone());
+            }
+        }
+        return combined.isEmpty()?null:
+                combined.toArray(new float[combined.size()][]);
     }
 
     /**
@@ -1367,7 +1448,9 @@ public class BodyPartsPreviewRenderer
                                     contact==null?null:contact.a,
                                     contact==null?null:contact.b,
                                     contact==null?0F:contact.radius,
-                                    segments);
+                                    segments,
+                                    chain.settings.hasBodyCollisions()
+                                        ?otherAttachedCollisionBoxes(data,frame):null);
                             if (physical != null)
                             {
                                 if (JOLT_DIRECTION_DIAGNOSTIC)
@@ -1611,6 +1694,10 @@ public class BodyPartsPreviewRenderer
         this.previewPhysicsChains.clear();
         this.physicsAttachmentMatrices.clear();
         this.renderedPhysicsParts.clear();
+        this.renderedCollisionParts.clear();
+        this.collisionPartOrder.clear();
+        this.attachedCollisionBoxes.clear();
+        this.attachedCollisionFrame=-1;
 
         // Do not probe/log last-rendered matrices here: prepareModels()
         // runs on every draw BEFORE the actor's current render and therefore
@@ -1644,6 +1731,8 @@ public class BodyPartsPreviewRenderer
             if (part != null)
             {
                 manager.parts.add(part);
+                this.renderedCollisionParts.put(data,part);
+                this.collisionPartOrder.add(data);
                 if (!getPreviewPhysicsChains(data).isEmpty())
                 {
                     nativePhysicsParts.put(data, part);
