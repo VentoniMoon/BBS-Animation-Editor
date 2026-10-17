@@ -1,0 +1,55 @@
+package com.example.examplemod.physics;
+
+import java.io.File;
+import java.util.Map;
+import com.example.examplemod.BodyPartJoltPreviewAdapter;
+
+/** Simulates the same opt-in reflection calls used by BodyPartsPreviewRenderer. */
+public final class JoltPreviewBridgeSmoke {
+    private JoltPreviewBridgeSmoke() { }
+    private static float[] matrix(float x,float y,float z) {
+        // Column-major 180 degrees around Chameleon Y.
+        return new float[] {-1F,0F,0F,0F,0F,1F,0F,0F,
+                0F,0F,-1F,0F,x,y,z,1F};
+    }
+    public static void main(String[] args) {
+        if(!BodyPartJoltPreviewAdapter.isRequested())
+            throw new AssertionError("Missing opt-in Java property");
+        File data = new File(".");
+        String[] bones={"back_strand_1","back_strand_2",
+                "back_strand_3","back_strand_4"};
+        float[][] world=new float[bones.length][];
+        float dy=-0.125F,dz=0.21650635F;
+        for(int i=0;i<world.length;i++)
+            world[i]=matrix(3F,5F+i*dy,-2F+i*dz);
+        float[] tip={3F,5F+4F*dy,-2F+4F*dz};
+        BodyPartJoltPreviewAdapter bridge=new BodyPartJoltPreviewAdapter();
+        try {
+            Map<String,float[]> first=bridge.sample(data,"hair/back",bones,0,
+                    world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1.0F);
+            if(first==null || !first.isEmpty())
+                throw new AssertionError("Jolt scene must initialize on first tick");
+            for(int tick=1;tick<=50;tick++) {
+                Map<String,float[]> result=bridge.sample(data,"hair/back",bones,
+                        tick,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
+                if(result==null || result.size()!=4)
+                    throw new AssertionError("No physical preview swing at frame "+tick);
+                for(float[] swing:result.values())
+                    for(float value:swing)if(!Float.isFinite(value))
+                        throw new AssertionError("Non-finite visual pose");
+            }
+            Map<String,float[]> repeated=bridge.sample(data,"hair/back",bones,
+                    50,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
+            if(repeated==null || repeated.size()!=4)
+                throw new AssertionError("Repeated render must reuse snapshot");
+            // Reversing timeline must reset the native world safely.
+            Map<String,float[]> seek=bridge.sample(data,"hair/back",bones,
+                    12,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
+            if(seek==null || !seek.isEmpty())
+                throw new AssertionError("Seek must reset Jolt world");
+            System.out.println("Forge-style reflection preview bridge: PASS");
+        } finally {
+            bridge.clear();
+        }
+    }
+}
