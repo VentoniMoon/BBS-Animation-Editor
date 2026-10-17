@@ -73,6 +73,18 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         chain.setGravity(multiplier);
     }
 
+    /**
+     * On a seek or a stationary pose edit, resolve free-hanging gravity at the
+     * CURRENT anchor pose before publishing an initial preview. This does not
+     * change the timeline frame and never writes animation keyframes.
+     * Repeated draws reuse the cached output; they do not re-run these ticks.
+     */
+    public void settle(int ticks) {
+        if (ticks < 0 || ticks > 120)
+            throw new IllegalArgumentException("Invalid bounded settle duration");
+        for (int i = 0; i < ticks; i++) chain.step();
+    }
+
     /** Only adjacent timeline frames are valid; caller must recreate on seek. */
     public void advance(int frame, float[] rootWorldPosition,
             float[] currentParentWorldMatrix) {
