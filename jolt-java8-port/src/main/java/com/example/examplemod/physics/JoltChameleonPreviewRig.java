@@ -128,6 +128,46 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         return result;
     }
 
+    /**
+     * Preview compatibility bridge: map the NEW Jolt physical local bone
+     * quaternions back to additive local axis-angle deltas for the existing
+     * Chameleon pose writer. No Euler decompositions occur in the solver.
+     *
+     * This is a transition adapter, not the ultimate direct-quaternion
+     * Chameleon renderer. Never feed it already physics-modified matrices.
+     */
+    public float[][] localBoneSwings(float[][] cleanBoneWorld,
+            float[] cleanParentWorld) {
+        if (cleanBoneWorld == null || cleanBoneWorld.length != corrections.length)
+            throw new IllegalArgumentException("Clean pose bone count mismatch");
+        float[][] physical = localBoneRotations();
+        float[][] swings = new float[physical.length][4];
+        float[] parent = rotation(cleanParentWorld);
+        for (int i=0; i<physical.length; i++) {
+            float[] currentWorld = rotation(cleanBoneWorld[i]);
+            float[] animatedLocal = JoltBoneQuaternionMapper.multiply(
+                    JoltBoneQuaternionMapper.inverse(parent), currentWorld);
+            // Current visual bone rotation followed by this delta equals
+            // the physically solved local rotation.
+            float[] delta = JoltBoneQuaternionMapper.multiply(
+                    JoltBoneQuaternionMapper.inverse(animatedLocal),physical[i]);
+            if (delta[3] < 0F) {
+                for (int c=0;c<4;c++) delta[c]=-delta[c];
+            }
+            float norm=(float)Math.sqrt(delta[0]*delta[0]+
+                    delta[1]*delta[1]+delta[2]*delta[2]);
+            if(norm<1E-7F) {
+                swings[i]=new float[] {1F,0F,0F,0F};
+            } else {
+                float angle=2F*(float)Math.atan2(norm,delta[3]);
+                swings[i]=new float[] {delta[0]/norm,delta[1]/norm,
+                        delta[2]/norm,angle};
+            }
+            parent=currentWorld;
+        }
+        return swings;
+    }
+
     public static float[] position(float[] m) {
         validateMatrix(m);
         return new float[] {m[12],m[13],m[14]};
