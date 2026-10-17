@@ -50,8 +50,6 @@ public class BodyPartsPreviewRenderer
      * applied until the actual attachment world matrices are available.
      * Export never uses this registry.
      */
-    /** Experimental in-game A/B switch; set false to restore legacy signs. */
-    private static final boolean USE_CANONICAL_PHYSICS_SWING = true;
     private boolean preparingPreview;
     private final Map<BodyPartModelData, List<BodyPartPhysicsChains.Chain>> previewPhysicsChains =
             new IdentityHashMap<BodyPartModelData, List<BodyPartPhysicsChains.Chain>>();
@@ -68,8 +66,6 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, String> physicsMatrixDiagnostics =
             new IdentityHashMap<BodyPartModelData, String>();
     private boolean recordingPhysicsMatrices;
-    private final BodyPartPhysicsPreviewSimulation livePhysics =
-            new BodyPartPhysicsPreviewSimulation();
     /** Optional reflection-only Java 8 Jolt preview; disabled by default. */
     private final BodyPartJoltPreviewAdapter joltPreview =
             new BodyPartJoltPreviewAdapter();
@@ -1254,9 +1250,7 @@ public class BodyPartsPreviewRenderer
             BodyPartPhysicsWorldPose.MatrixSource world =
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
             boolean advanced = false;
-            boolean editedPhysics = false;
             boolean initializedJolt = false;
-            int appliedSwings = 0;
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
                 AnimationBone finalBone = chain.bones.get(chain.bones.size()-1);
@@ -1423,263 +1417,25 @@ public class BodyPartsPreviewRenderer
                         }
                     }
                 }
-                // Parent matrix comes from the native Emoticons render of
-                // this frame. Build a conservative torso capsule in that
-                // moving bone space; never use global/world-up assumptions.
-                java.util.List<BodyPartPhysicsCollisions.Capsule> colliders =
-                        chain.settings.hasBodyCollisions()
-                        ? BodyPartPhysicsBodyCapsules.forTorso(torsoMatrix)
-                        : java.util.Collections.<BodyPartPhysicsCollisions.Capsule>emptyList();
-                if ("left_strand_1".equals(chain.root.getName()) &&
-                        joints.length > 1 && (frame == 20 || frame == 60))
-                {
-                    BodyPartChainSolver.Vec3 intended = expectedLeftDirection.get(data);
-                    Integer intendedFrame = expectedLeftFrame.get(data);
-                    if (intended != null && intendedFrame != null &&
-                            intendedFrame.intValue() == frame - 1)
-                    {
-                        BodyPartChainSolver.Vec3 actual = joints[1].sub(joints[0]);
-                        float lengthProduct = actual.length() * intended.length();
-                        if (lengthProduct > 1.0E-8F)
-                        {
-                            float cosine = (actual.x*intended.x + actual.y*intended.y
-                                    + actual.z*intended.z) / lengthProduct;
-                            cosine = Math.max(-1F, Math.min(1F, cosine));
-                            float errorDegrees = (float)Math.toDegrees(Math.acos(cosine));
-                            System.out.println("[BBS Animation Editor][Physics] "
-                                    + "RENDER/SOLVER direction comparison frame=" + frame
-                                    + " errorDegrees=" + errorDegrees
-                                    + " (moving actor may contribute to error)");
-                        }
-                    }
-                }
-                // Use a mesh only when sampled from this very rendered frame.
-                // The back-facing torso direction comes from the animated
-                // torso's Z basis, oriented towards the hair attachment.
-                BodyPartChainSolver.SurfaceConstraint meshConstraint = null;
-                Integer collisionFrame = torsoCollisionMeshFrames.get(data);
-                EmoticonsMeshCollisionSolver torsoSurface =
-                        torsoCollisionMeshes.get(data);
-                if ("back_strand_1".equals(chain.root.getName()) &&
-                        chain.settings.hasBodyCollisions() && torsoMatrix != null &&
-                        collisionFrame != null && collisionFrame.intValue() == frame &&
-                        torsoSurface != null)
-                {
-                    BodyPartChainSolver.Vec3 torsoOrigin =
-                            BodyPartPhysicsPoseAdapter.position(torsoMatrix);
-                    BodyPartChainSolver.Vec3 outward =
-                            new BodyPartChainSolver.Vec3(
-                                    torsoMatrix[8],torsoMatrix[9],torsoMatrix[10]);
-                    // A root pivot is close to the torso CENTER and is not
-                    // a reliable indication of which side the actual hair is
-                    // on. The cube volumes provide a much better reference.
-                    float volumeFacing=0F;
-                    int volumeSamples=0;
-                    for(AnimationBone bone:chain.bones)
-                    {
-                        BodyPartChameleonCubeProbe.Cube cube =
-                                BodyPartChameleonCubeProbe.getReference(bone.getName());
-                        float[] boneWorld=world.getBoneWorldMatrix(bone.getName());
-                        if(cube==null || boneWorld==null)continue;
-                        for(BodyPartChainSolver.Vec3 corner:cube.corners(boneWorld))
-                        {
-                            BodyPartChainSolver.Vec3 delta=corner.sub(torsoOrigin);
-                            volumeFacing+=delta.x*outward.x+
-                                    delta.y*outward.y+delta.z*outward.z;
-                            volumeSamples++;
-                        }
-                    }
-                    float facing=volumeSamples==0 ? 0F :
-                            volumeFacing/volumeSamples;
-                    Float remembered=backHairOutwardSigns.get(data);
-                    // Re-acquire orientation at the animation start, but
-                    // keep the side stable while walking/bending. A single
-                    // transient near-zero frame must never flip the force.
-                    if(frame==0)remembered=null;
-                    if(Math.abs(facing)>0.012F && remembered==null)
-                    {
-                        remembered=Float.valueOf(facing<0F?-1F:1F);
-                        backHairOutwardSigns.put(data,remembered);
-                    }
-                    if(remembered!=null)
-                    {
-                        outward=outward.scale(remembered.floatValue());
-                        // Use the true cuboid extent behind each pivot.
-                        // The first/root joint stays fixed at the attachment;
-                        // only downstream chain particles are projected.
-                        float[] cubeReach=new float[joints.length];
-                        for(int boneIndex=1;boneIndex<chain.bones.size();boneIndex++)
-                        {
-                            String name=chain.bones.get(boneIndex).getName();
-                            BodyPartChameleonCubeProbe.Cube cube=
-                                    BodyPartChameleonCubeProbe.getReference(name);
-                            float[] boneWorld=world.getBoneWorldMatrix(name);
-                            if(cube!=null && boneWorld!=null)
-                                cubeReach[boneIndex]=cube.inwardReach(boneWorld,outward);
-                        }
-                        if(hasTip)
-                        {
-                            float[] terminalWorld=world.getBoneWorldMatrix(finalBone.getName());
-                            BodyPartChainSolver.Vec3 tip=joints[joints.length-1];
-                            float reach=0F;
-                            for(BodyPartChainSolver.Vec3 corner:finalCube.corners(terminalWorld))
-                            {
-                                BodyPartChainSolver.Vec3 delta=tip.sub(corner);
-                                float amount=delta.x*outward.x+delta.y*outward.y+
-                                        delta.z*outward.z;
-                                reach=Math.max(reach,amount);
-                            }
-                            cubeReach[joints.length-1]=Math.min(0.15F,reach);
-                        }
-                        meshConstraint=new BodyPartMeshSurfaceConstraint(
-                                torsoSurface,outward,0.012F,cubeReach);
-                    }
-                }
-                // Prefer the animated body mesh when its orientation was verified
-                // for this exact frame. Do not run a second, oversized capsule
-                // against the same strand: it can create invisible blocking.
-                // Keep the capsule as a fallback if no usable mesh constraint
-                // was produced (or for other chain types without mesh support).
-                final String collisionMode = !chain.settings.hasBodyCollisions()
-                        ? "disabled" : meshConstraint != null ? "mesh" :
-                        !colliders.isEmpty() ? "capsule-fallback" : "none";
-                if (meshConstraint != null)
-                    colliders = java.util.Collections.<BodyPartPhysicsCollisions.Capsule>emptyList();
-                // A constructed mesh constraint is not proof of contact.
-                // Count real projection attempts and non-zero corrections.
-                BodyPartPhysicsSurfaceProbe contactProbe = meshConstraint == null ? null
-                        : new BodyPartPhysicsSurfaceProbe(meshConstraint);
-                BodyPartChainSolver.Vec3[] simulated =
-                        livePhysics.sample(data.getTimelineId(), chain, frame,
-                                joints, colliders, contactProbe);
-                editedPhysics |= livePhysics.wasEditedThisSample();
-                if ("back_strand_1".equals(chain.root.getName()) &&
-                        (frame == 0 || frame == 20 || frame == 60) &&
-                        (backSolverLoggedFrame.get(data) == null ||
-                         backSolverLoggedFrame.get(data).intValue() != frame))
-                {
-                    float largest = 0F;
-                    if (simulated != null)
-                        for (int i = 1; i < simulated.length; i++)
-                            largest = Math.max(largest,
-                                    simulated[i].sub(joints[i]).length());
-                    backSolverLoggedFrame.put(data, Integer.valueOf(frame));
-                    System.out.println("[BBS Animation Editor][Physics] "
-                            + "BACK MESH SOLVER frame=" + frame
-                            + " meshAvailable=" + (torsoSurface != null)
-                            + " sameFrame=" + (collisionFrame != null &&
-                                    collisionFrame.intValue() == frame)
-                            + " constraintCreated=" + (meshConstraint != null)
-                            + " collisionEnabled=" + chain.settings.hasBodyCollisions()
-                            + " meshPassedToSolver=" + (meshConstraint != null &&
-                                    chain.settings.hasBodyCollisions())
-                            + " collisionMode=" + collisionMode
-                            + " capsuleCount=" + (colliders == null ? 0 : colliders.size())
-                            + " meshProjectCalls=" + (contactProbe == null ? 0 : contactProbe.getCalls())
-                            + " meshCorrections=" + (contactProbe == null ? 0 : contactProbe.getCorrections())
-                            + " maxMeshCorrection=" + (contactProbe == null ? 0F : contactProbe.getLargestShift())
-                            + " maxPoseDelta=" + largest);
-                }
-                if ("back_strand_1".equals(chain.root.getName()) &&
-                        joints.length > 1)
-                {
-                    Integer lastFrame = expectedBackFrame.get(data);
-                    BodyPartChainSolver.Vec3 intended = expectedBackDirection.get(data);
-                    if ((frame == 20 || frame == 60) && lastFrame != null &&
-                            lastFrame.intValue() == frame-1 && intended != null)
-                    {
-                        BodyPartChainSolver.Vec3 nativeDirection =
-                                joints[1].sub(joints[0]);
-                        float divisor = nativeDirection.length()*intended.length();
-                        if (divisor > 1.0E-7F)
-                        {
-                            float cosine=(nativeDirection.x*intended.x+
-                                    nativeDirection.y*intended.y+
-                                    nativeDirection.z*intended.z)/divisor;
-                            cosine=Math.max(-1F,Math.min(1F,cosine));
-                            System.out.println("[BBS Animation Editor][Physics] "
-                                    +"BACK RENDER/SOLVER frame="+frame
-                                    +" previousSolverVsCurrentNativeDegrees="
-                                    +Math.toDegrees(Math.acos(cosine))
-                                    +" (native next-frame pose; actor motion may contribute)");
-                        }
-                    }
-                    if (simulated != null && simulated.length > 1)
-                    {
-                        expectedBackDirection.put(data,simulated[1].sub(simulated[0]));
-                        expectedBackFrame.put(data,Integer.valueOf(frame));
-                    }
-                }
-                if ("left_strand_1".equals(chain.root.getName()) &&
-                        simulated != null && simulated.length > 1)
-                {
-                    expectedLeftDirection.put(data, simulated[1].sub(simulated[0]));
-                    expectedLeftFrame.put(data, Integer.valueOf(frame));
-                }
-                if (simulated != null && frame > data.getStartFrame())
-                {
-                    for (int i = 1; i < simulated.length; i++)
-                        if (simulated[i].sub(joints[i]).length() > 0.00001F)
-                            advanced = true;
+                // Jolt is the only physics solver for preview hair.
+                // Missing JNI, invalid matrices, or a rejected native sample
+                // must not silently run the former Verlet/mesh fallback.
+                if (BodyPartJoltPreviewAdapter.isRequested())
+                    reportPhysicsBoneProbe(data,
+                            "Jolt sample unavailable for " + chain.root.getName()
+                            + " (legacy solver disabled)");
 
-                    /*
-                     * Physics follows actual WORLD positions but Chameleon
-                     * needs local bone rotations. Each bone aims its original
-                     * child-pivot direction toward the simulated direction.
-                     * Skip the last bone until its actual tip is available.
-                     * The editor's source animation keys remain unchanged.
-                     */
-                    // Canonical mode has one consistent local swing convention
-                    // across left, right and back strands. Legacy mode remains
-                    // available for regression comparisons.
-                    BodyPartPhysicsHierarchySwingCanonical canonical =
-                            USE_CANONICAL_PHYSICS_SWING
-                                    ? new BodyPartPhysicsHierarchySwingCanonical() : null;
-                    BodyPartPhysicsHierarchySwing legacy =
-                            USE_CANONICAL_PHYSICS_SWING ? null
-                                    : new BodyPartPhysicsHierarchySwing(
-                                            "back_strand_1".equals(chain.root.getName()));
-                    for (int i = 0; i + 1 < simulated.length; i++)
-                    {
-                        AnimationBone bone = chain.bones.get(i);
-                        float[] basis = world.getBoneWorldMatrix(bone.getName());
-                        if (basis == null) continue;
-                        BodyPartChainSolver.Vec3 restWorld =
-                                joints[i + 1].sub(joints[i]);
-                        BodyPartChainSolver.Vec3 solvedWorld =
-                                simulated[i + 1].sub(simulated[i]);
-                        // In Chameleon, each parent rotation propagates
-                        // through the entire child chain. Compute the child's
-                        // local goal AFTER all previous ancestor corrections.
-                        float[] swing = USE_CANONICAL_PHYSICS_SWING
-                                ? canonical.next(basis, restWorld, solvedWorld)
-                                : legacy.next(basis, restWorld, solvedWorld);
-                        // Every joint with a known child pivot has its own
-                        // local swing. The terminal tip is not guessed.
-                        physicsFrames.accept(data, frame, bone.getName(), swing);
-                        /*
-                         * Root-only test revealed a wrong upward rotation and
-                         * jitter. Keep solver diagnostics but disable pose
-                         * mutation until we can compare native Chameleon
-                         * bone basis with solved world direction.
-                         */
-                        if ("left_strand_1".equals(chain.root.getName()) && i == 0
-                                && (frame == 20 || frame == 60))
-                            reportPhysicsSwingProbe(data, frame, restWorld,
-                                    solvedWorld, swing);
-                    }
-                }
             }
             // Physics writes happen AFTER normal rendering. On a paused
             // frame, an actual bone edit may publish the completed result
             // for the NEXT draw without waiting for the timeline to advance.
             // A paused or seeked Jolt scene was gravity-settled at its current
             // pose: show that frozen pose on the next draw of the same frame.
-            if (editedPhysics || initializedJolt)
+            if (initializedJolt)
                 physicsFrames.publishEditedFrame(data,frame);
             reportPhysicsBoneProbe(data, advanced
-                    ? "world strand solver advanced; multi-segment visual pose queued"
-                    : "world strand joint matrices valid: " + chains.size()
+                    ? "Jolt native preview advanced; multi-segment visual pose queued"
+                    : "Jolt preview bone matrices valid: " + chains.size()
                       + " chains (no visible physics delta yet)");
         }
         catch (RuntimeException error)
@@ -1691,36 +1447,6 @@ public class BodyPartsPreviewRenderer
         {
             cleanScope.close();
         }
-    }
-
-    /* Diagnostics only: compare the intended physical segment with the
-     * rendered Chameleon segment on the next sequential preview frame. */
-    private final Map<BodyPartModelData, BodyPartChainSolver.Vec3> expectedLeftDirection =
-            new IdentityHashMap<BodyPartModelData, BodyPartChainSolver.Vec3>();
-    private final Map<BodyPartModelData, Integer> expectedLeftFrame =
-            new IdentityHashMap<BodyPartModelData, Integer>();
-    private final Map<BodyPartModelData, BodyPartChainSolver.Vec3> expectedBackDirection =
-            new IdentityHashMap<BodyPartModelData, BodyPartChainSolver.Vec3>();
-    private final Map<BodyPartModelData, Integer> expectedBackFrame =
-            new IdentityHashMap<BodyPartModelData, Integer>();
-    private final Map<BodyPartModelData, Integer> backSolverLoggedFrame =
-            new IdentityHashMap<BodyPartModelData, Integer>();
-
-    private final Map<BodyPartModelData, String> physicsSwingDiagnostics =
-            new IdentityHashMap<BodyPartModelData, String>();
-
-    private void reportPhysicsSwingProbe(BodyPartModelData model, int frame,
-            BodyPartChainSolver.Vec3 original,
-            BodyPartChainSolver.Vec3 simulated, float[] swing)
-    {
-        String key = model.getTimelineId() + ":" + frame;
-        if (key.equals(physicsSwingDiagnostics.get(model))) return;
-        physicsSwingDiagnostics.put(model, key);
-        System.out.println("[BBS Animation Editor][Physics] LEFT ROOT frame=" + frame
-                + " restDir=(" + original.x + "," + original.y + "," + original.z + ")"
-                + " solvedDir=(" + simulated.x + "," + simulated.y + "," + simulated.z + ")"
-                + " localSwingAxis=(" + swing[0] + "," + swing[1] + "," + swing[2] + ")"
-                + " angleRad=" + swing[3] + " (render write disabled)");
     }
 
     private final Map<BodyPartModelData, String> physicsBoneProbeDiagnostics =
