@@ -98,3 +98,36 @@ persistent sequential physics cache.
   a sequential frame cache before being called production-ready.
 - The CI covers pure Java geometry and native Java 8 contact/inertia tests,
   **not** compilation of the whole Forge editor or a Minecraft render test.
+
+## Diagnosing visually rotated extra BodyPart boxes
+
+The GUI's orange outline was initially drawn for **all** accepted passive
+Chameleon cubes. Because its debug pass disables depth testing, boxes behind
+the actor can appear through the head/chest; these are not necessarily the
+colliders of the inspected model. It also repeated identical passive boxes
+for each hair-owning BodyPart in a multi-chain scene.
+
+The box conversion has a Java8 regression comparing all eight Jolt OBB
+corners with the actual Chameleon stack order
+`T(cubePivot) * Rz * Ry * Rx * T(-cubePivot)` under a rotated parent
+(`X=-83.23°`) and nested `Y=180°`. Do **not** blindly rotate all boxes
+by 90 degrees. A mismatch in the Forge client must be attributed to a
+specific source cube/attachment/render state.
+
+To isolate just the two-cube chest model without changing **any native
+collision behavior**, append to IntelliJ runClient VM options:
+
+`-Dbbs.editor.physics.jolt.overlayBoxModel=boobs`
+
+The GUI HUD now reports `extras shown/total [boobs]` and labels projected
+box centers by source model. The console prints
+`[BBS Animation Editor][Jolt][ExtraBox]` for each native box (model name,
+center, quaternion, half dimensions). This lets us check whether the apparent
+90° rotation comes from the chest's cube-local transform, from a different
+model's shapes, or from attachment/world-space matrices. Remove the property
+to show all boxes again. This option **filters display only**, not physics.
+
+Compare frames 0 and 20 from the same back/side camera angles. For unresolved
+misalignment supply `[Jolt][BodyPartBoxes]`, `[Jolt][ExtraBox]` and
+`[Jolt][GUIOverlay]` lines; screenshot alone does not establish a quaternion
+error. The current UI overlay intentionally has no per-pixel depth test.
