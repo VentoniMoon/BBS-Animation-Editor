@@ -368,6 +368,18 @@ public final class BodyPartJoltPreviewAdapter {
      * Actual live Jolt body endpoints captured on the latest requested
      * animation frame, never extrapolated from an uncorrected Chameleon pose.
      */
+    /**
+     * Actual collision mode instantiated on this SAME native scene sample,
+     * not merely a candidate fitted shape from the CPU skinned mesh.
+     * 0=none, 1=one torso capsule, 3=three torso capsules.
+     */
+    public int contactModeFor(String modelId,int frame) {
+        if(modelId==null)return 0;
+        State state=scenes.get(modelId);
+        if(state==null || state.frame!=frame)return 0;
+        return state.compoundEnabled?3:state.torsoEnabled?1:0;
+    }
+
     public float[][] hairSegmentsFor(String modelId,int frame) {
         if(!drawContactsRequested() || modelId==null)return null;
         State state=scenes.get(modelId);
