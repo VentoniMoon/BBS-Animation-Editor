@@ -21,6 +21,7 @@ on:
       - 'src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java'
+      - 'src/main/java/com/example/examplemod/BodyPartJoltContactProbe.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java'
       - 'src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java'
       - 'src/main/java/com/example/examplemod/EditorEmoticonsRecordPlayback.java'
@@ -86,8 +87,11 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java \
             src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java \
-            jolt-java8-port/src/test/java/com/example/examplemod/JoltActorWorldSpaceSmoke.java
+            src/main/java/com/example/examplemod/BodyPartJoltContactProbe.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltActorWorldSpaceSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltContactClearanceSmoke.java
           java -ea -cp "$OUT" com.example.examplemod.JoltActorWorldSpaceSmoke
+          java -ea -cp "$OUT" com.example.examplemod.JoltContactClearanceSmoke
       - name: Verify Emoticons Record scrubbing and jump on Java 8
         run: |
           OUT="${{ runner.temp }}/emoticons-record-smoke"
