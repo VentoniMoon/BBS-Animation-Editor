@@ -115,12 +115,15 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java
           LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltHairChainSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
           java -ea -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp "$OUT/classes:$OUT/native-jolt.jar" \
@@ -141,7 +144,8 @@ jobs:
         run: |
           OUT="${{ runner.temp }}/jolt-java8"
           javac -source 8 -target 8 -cp "$OUT/classes" -d "$OUT/classes" \
-            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java
           java -ea -cp "$OUT/classes" com.example.examplemod.physics.JoltBoneQuaternionMapperSmoke
       - name: Upload experimental Java 8 JNI and hair prototype jars
         uses: actions/upload-artifact@v4
@@ -223,6 +227,8 @@ jobs:
             com.example.examplemod.physics.JoltHairChainSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
           java -ea -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltJava8BootstrapSmoke
           java -ea -cp 'java8-win/classes;java8-win/native-jolt.jar' \
