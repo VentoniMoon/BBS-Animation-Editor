@@ -55,6 +55,12 @@ The debug snapshot declares `worldSpace`, so the GUI does not apply actor
 translation a second time. This is an architectural correction, not
 an X/Z or gravity sign inversion.
 
+A separate real-JNI test `JoltActorTravelInertiaSmoke` has also
+passed on **Linux and Windows Java 8**: translating the shared kinematic
+anchor causes an actual dynamic hair rigid body to respond, then continue
+following over subsequent ticks. This complements the pure matrix tests,
+but still needs a Forge Preview screenshot/clip to verify rendering parity.
+
 The existing 20 Hz Jolt substep behavior, constraints, rest corrections,
 root-contact exclusions, and `BodyPartChameleonChildRenderSpace` Y180
 configuration were **not changed**.
@@ -68,6 +74,15 @@ animated root pose and first/second segment position, one long strand may
 already be closer to or inside a chest box at frame 0 while the other is
 outside. Jolt should not be coerced into equal impulses unless their
 *actual geometry* and world poses agree.
+
+An additional real-JNI regression
+`JoltMirroredFrontHairNativeSmoke` constructs *two independent Jolt
+worlds* for exactly mirrored left/right roots in front of the same pair of
+symmetric overlapping chest boxes. The test passes on **Linux and Windows,
+Java 8**, confirming that Jolt itself produces matching mirrored responses
+under matching initial poses and geometry. This does **not** prove that the
+actual Chameleon model's left/right source pivots, scales and cube contacts
+are symmetric; compare those with the `ContactProbe` live logs.
 
 A pure Java8 `BodyPartJoltContactProbe` computes signed clearance from
 a point to an oriented box in the same actor-world coordinates.
