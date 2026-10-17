@@ -1,0 +1,271 @@
+package com.example.examplemod;
+
+import java.util.List;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
+
+/**
+ * The reliable GUI-pass alternative to glBegin-based Jolt wireframes.
+ *
+ * The Preview has ALREADY been copied from the Preview FBO to Minecraft's
+ * ordinary GUI framebuffer. Project native-world Jolt capsules with EXACTLY
+ * the orbit-camera mathematics used by EditorGizmoController.project() and
+ * draw thick, coloured 2D line quads via Minecraft's normal Tessellator.
+ *
+ * The previous path logged "10 hair/3 torso" but could disappear in the
+ * Preview FBO/OptiFine framebuffer pipeline. This draws after the copy,
+ * like EditorGizmoController's working GUI operations; no shader, actor,
+ * animation, camera or collision state is modified.
+ */
+public final class JoltContactGuiOverlay
+{
+    private static final int SIDES=14;
+    private static final int CAP_STEPS=4;
+    private static String lastReport="";
+
+    private JoltContactGuiOverlay() {}
+
+    /** Pure Java 8 perspective projection matching the editor gizmo. */
+    public static float[] project(double x,double y,double z,
+            EditorCamera camera,int viewportX,int viewportY,
+            int viewportWidth,int viewportHeight)
+    {
+        if(camera==null || viewportWidth<=0 || viewportHeight<=0)
+            return null;
+        double dx=x-camera.getCameraX();
+        double dy=y-camera.getCameraY();
+        double dz=z-camera.getCameraZ();
+        double yaw=Math.toRadians(camera.getYaw());
+        double pitch=Math.toRadians(camera.getPitch());
+
+        double cy=Math.cos(yaw),sy=Math.sin(yaw);
+        double cameraX=cy*dx-sy*dz;
+        double cameraZ=sy*dx+cy*dz;
+        double cp=Math.cos(pitch),sp=Math.sin(pitch);
+        double cameraY=cp*dy+sp*cameraZ;
+        cameraZ=-sp*dy+cp*cameraZ;
+        if(!Double.isFinite(cameraZ) || cameraZ>=-0.05D)
+            return null;
+        double focal=viewportHeight/(2D*Math.tan(Math.toRadians(60D)/2D));
+        double sx=viewportX+viewportWidth/2D+cameraX*focal/-cameraZ;
+        double syScreen=viewportY+viewportHeight/2D-cameraY*focal/-cameraZ;
+        if(!Double.isFinite(sx) || !Double.isFinite(syScreen) ||
+                Math.abs(sx)>1E7D || Math.abs(syScreen)>1E7D)
+            return null;
+        return new float[] {(float)sx,(float)syScreen};
+    }
+
+    public static void draw(Minecraft mc,EditorCamera camera,
+            int x,int y,int width,int height,JoltContactOverlaySnapshot snapshot)
+    {
+        if(mc==null || camera==null || snapshot==null ||
+                width<=0 || height<=0)return;
+        ScaledResolution res=new ScaledResolution(mc);
+        int scale=Math.max(1,res.getScaleFactor());
+        int viewportX=Math.max(0,x*scale);
+        int viewportY=Math.max(0,mc.displayHeight-(y+height)*scale);
+        int viewportW=Math.max(0,Math.min(width*scale,mc.displayWidth-viewportX));
+        int viewportH=Math.max(0,Math.min(height*scale,mc.displayHeight-viewportY));
+        if(viewportW==0 || viewportH==0)return;
+
+        int mode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        int segmentCount=0,visibleBodies=0;
+        try
+        {
+            GL20.glUseProgram(0);
+            GL11.glViewport(0,0,mc.displayWidth,mc.displayHeight);
+            GL11.glEnable(GL11.GL_SCISSOR_TEST);
+            GL11.glScissor(viewportX,viewportY,viewportW,viewportH);
+
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glPushMatrix();
+            try
+            {
+                GL11.glLoadIdentity();
+                GL11.glOrtho(0,res.getScaledWidth(),res.getScaledHeight(),
+                        0,-1,1);
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPushMatrix();
+                try
+                {
+                    GL11.glLoadIdentity();
+                    GL11.glDisable(GL11.GL_DEPTH_TEST);
+                    GL11.glDepthMask(false);
+                    GL11.glDisable(GL11.GL_TEXTURE_2D);
+                    GL11.glDisable(GL11.GL_LIGHTING);
+                    GL11.glDisable(GL11.GL_CULL_FACE);
+                    GL11.glDisable(GL11.GL_ALPHA_TEST);
+                    GL11.glEnable(GL11.GL_BLEND);
+                    GL11.glBlendFunc(GL11.GL_SRC_ALPHA,
+                            GL11.GL_ONE_MINUS_SRC_ALPHA);
+                    GL11.glShadeModel(GL11.GL_SMOOTH);
+
+                    Tessellator tess=Tessellator.getInstance();
+                    BufferBuilder buf=tess.getBuffer();
+                    buf.begin(GL11.GL_QUADS,DefaultVertexFormats.POSITION_COLOR);
+                    List<JoltContactOverlaySnapshot.Shape> shapes=snapshot.shapes;
+                    for(int i=0;i<shapes.size();i++)
+                    {
+                        int before=segmentCount;
+                        segmentCount+=drawCapsule(buf,shapes.get(i),camera,
+                                x,y,width,height);
+                        if(segmentCount>before)visibleBodies++;
+                    }
+                    tess.draw();
+
+                    GL11.glEnable(GL11.GL_TEXTURE_2D);
+                    GlStateManager.enableTexture2D();
+                    // Text is both a colour legend and an always-visible
+                    // diagnostic: counts on screen but zero projected shapes
+                    // indicate a camera/coordinate-space issue, NOT no Jolt.
+                    int labelX=x+9,labelY=y+12;
+                    String title="JOLT  torso "+snapshot.torsoCount+
+                            "   hair "+snapshot.hairCount+
+                            "   visible "+visibleBodies;
+                    if(!shapes.isEmpty() && visibleBodies==0)
+                        title+="  [outside camera]";
+                    Gui.drawRect(labelX-4,labelY-4,
+                            labelX+mc.fontRenderer.getStringWidth(title)+5,
+                            labelY+mc.fontRenderer.FONT_HEIGHT+4,0xA9001016);
+                    mc.fontRenderer.drawStringWithShadow(title,
+                            labelX,labelY,0xFFBDF8C6);
+                }
+                finally
+                {
+                    GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                    GL11.glPopMatrix();
+                }
+            }
+            finally
+            {
+                GL11.glMatrixMode(GL11.GL_PROJECTION);
+                GL11.glPopMatrix();
+            }
+        }
+        finally
+        {
+            GL20.glUseProgram(program);
+            GL11.glPopAttrib();
+            GL11.glMatrixMode(mode);
+        }
+
+        String report="frame="+snapshot.frame+" torso="+snapshot.torsoCount+
+                " hair="+snapshot.hairCount+" projectedShapes="+visibleBodies+
+                " projectedLines="+segmentCount+" camera=("+camera.getCameraX()+
+                ","+camera.getCameraY()+","+camera.getCameraZ()+")";
+        // Avoid one-line-per-render logs; report changes to topology or
+        // visibility category, not exact subpixel/camera differences.
+        String status=snapshot.torsoCount+":"+snapshot.hairCount+
+                ":"+(visibleBodies>0?"on-screen":"off-screen")+
+                ":"+(segmentCount>0?"drawn":"no-lines");
+        if(!status.equals(lastReport))
+        {
+            lastReport=status;
+            System.out.println("[BBS Animation Editor][Jolt][GUIOverlay] "+report);
+            if(visibleBodies==0 && !snapshot.shapes.isEmpty())
+            {
+                JoltContactOverlaySnapshot.Shape first=snapshot.shapes.get(0);
+                System.out.println("[BBS Animation Editor][Jolt][GUIOverlay] "+
+                        "First shape world endpoints: "+
+                        java.util.Arrays.toString(first.a)+" -> "+
+                        java.util.Arrays.toString(first.b)+
+                        ", radius="+first.radius+
+                        " (check native Jolt vs actor-world origin)");
+            }
+        }
+    }
+
+    /** Emit actual capsule rings and longitudinal arcs as thick GUI quads. */
+    private static int drawCapsule(BufferBuilder buf,
+            JoltContactOverlaySnapshot.Shape shape,EditorCamera camera,
+            int x,int y,int width,int height)
+    {
+        float[] a=shape.a,b=shape.b;
+        double dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
+        double length=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(!(length>1E-6D && length<5D))return 0;
+        double nx=dx/length,ny=dy/length,nz=dz/length;
+        double refx=Math.abs(ny)<0.85D?0D:1D;
+        double refy=Math.abs(ny)<0.85D?1D:0D;
+        double ux=-nz*refy,uy=nz*refx,uz=nx*refy-ny*refx;
+        double un=Math.sqrt(ux*ux+uy*uy+uz*uz);
+        if(un<1E-8D)return 0;
+        ux/=un;uy/=un;uz/=un;
+        double vx=ny*uz-nz*uy,vy=nz*ux-nx*uz,
+                vz=nx*uy-ny*ux;
+        double cx=(a[0]+b[0])*0.5D;
+        double cy=(a[1]+b[1])*0.5D;
+        double cz=(a[2]+b[2])*0.5D;
+        double half=Math.max(0.005D,length*0.5D-shape.radius);
+
+        float[][][] ring=new float[2*(CAP_STEPS+1)][SIDES][];
+        for(int side=0;side<2;side++)
+        {
+            for(int step=0;step<=CAP_STEPS;step++)
+            {
+                double angle=(Math.PI/2D)*
+                        (side==0 ? 1D-step/(double)CAP_STEPS
+                                 : step/(double)CAP_STEPS);
+                double along=(side==0?-1D:1D)*
+                        (half+shape.radius*Math.sin(angle));
+                double radius=shape.radius*Math.cos(angle);
+                int ringIndex=side*(CAP_STEPS+1)+step;
+                for(int i=0;i<SIDES;i++)
+                {
+                    double phi=2D*Math.PI*i/SIDES;
+                    double cos=radius*Math.cos(phi),sin=radius*Math.sin(phi);
+                    ring[ringIndex][i]=project(
+                            cx+nx*along+ux*cos+vx*sin,
+                            cy+ny*along+uy*cos+vy*sin,
+                            cz+nz*along+uz*cos+vz*sin,
+                            camera,x,y,width,height);
+                }
+            }
+        }
+        int rgb=shape.kind==JoltContactOverlaySnapshot.Kind.HAIR
+                ? 0xFF72C1 : 0x55FFA1;
+        int lines=0;
+        for(int step=0;step<ring.length;step++)
+        {
+            for(int i=0;i<SIDES;i++)
+            {
+                float[] current=ring[step][i];
+                float[] around=ring[step][(i+1)%SIDES];
+                if(emitLine(buf,current,around,rgb,220,1.7F))
+                    lines++;
+                if(step+1<ring.length &&
+                        emitLine(buf,current,ring[step+1][i],rgb,180,1.25F))
+                    lines++;
+            }
+        }
+        return lines;
+    }
+
+    private static boolean emitLine(BufferBuilder buf,float[] a,float[] b,
+            int rgb,int alpha,float thickness)
+    {
+        if(a==null||b==null)return false;
+        float dx=b[0]-a[0],dy=b[1]-a[1];
+        float len=(float)Math.sqrt(dx*dx+dy*dy);
+        if(len<0.1F || len>2000F)return false;
+        float sx=-dy/len*thickness*0.5F;
+        float sy=dx/len*thickness*0.5F;
+        int r=(rgb>>16)&255,g=(rgb>>8)&255,bl=rgb&255;
+        buf.pos(a[0]+sx,a[1]+sy,0D).color(r,g,bl,alpha).endVertex();
+        buf.pos(a[0]-sx,a[1]-sy,0D).color(r,g,bl,alpha).endVertex();
+        buf.pos(b[0]-sx,b[1]-sy,0D).color(r,g,bl,alpha).endVertex();
+        buf.pos(b[0]+sx,b[1]+sy,0D).color(r,g,bl,alpha).endVertex();
+        return true;
+    }
+}
