@@ -29,19 +29,48 @@ public final class JoltHairChain implements AutoCloseable {
     private final Body pin;
     private final Body[] links;
     private final float linkLength;
+    private final float startX;
     private final float startY;
+    private final float startZ;
+    private final float[] initialDirection;
+    private final float[] initialRotation;
     private final SwingTwistConstraint[] joints;
     private boolean closed;
 
     public JoltHairChain(int count, float linkLength, float startY,
             float stiffness, float damping, float falloff) {
+        this(count, linkLength, 0F, startY, 0F, 0F, -1F, 0F,
+                stiffness, damping, falloff);
+    }
+
+    /**
+     * Construct a strand at a genuine world-space bone pivot and direction.
+     * The caller must derive these from the native clean Chameleon matrices;
+     * no bone-space or render-space inversions belong inside the solver.
+     */
+    public JoltHairChain(int count, float linkLength,
+            float rootX, float rootY, float rootZ,
+            float directionX, float directionY, float directionZ,
+            float stiffness, float damping, float falloff) {
         if (count < 1 || count > 64 || !(linkLength >= 0.10F) ||
-                !Float.isFinite(linkLength) || !Float.isFinite(startY) ||
+                !Float.isFinite(linkLength) || !Float.isFinite(rootX) ||
+                !Float.isFinite(rootY) || !Float.isFinite(rootZ) ||
+                !Float.isFinite(directionX) || !Float.isFinite(directionY) ||
+                !Float.isFinite(directionZ) ||
                 !Float.isFinite(stiffness) || !Float.isFinite(damping) ||
                 !Float.isFinite(falloff))
             throw new IllegalArgumentException("Invalid chain parameters");
         this.linkLength = linkLength;
-        this.startY = startY;
+        this.startX = rootX;
+        this.startY = rootY;
+        this.startZ = rootZ;
+        float magnitude = (float) Math.sqrt(directionX * directionX +
+                directionY * directionY + directionZ * directionZ);
+        if (!(magnitude > 1E-6F) || !Float.isFinite(magnitude))
+            throw new IllegalArgumentException("Zero-length initial direction");
+        this.initialDirection = new float[] {directionX / magnitude,
+                directionY / magnitude, directionZ / magnitude};
+        this.initialRotation = rotationFromNegativeY(initialDirection);
         this.pairFilter = new ObjectLayerPairFilterTable(1);
         this.broadLayers = new BroadPhaseLayerInterfaceTable(1, 1);
         broadLayers.mapObjectToBroadPhaseLayer(0, 0);
@@ -60,7 +89,9 @@ public final class JoltHairChain implements AutoCloseable {
         // still carry inertia but cannot push against invisible body capsules.
         SphereShape pinShape = new SphereShape(0.025F);
         BodyCreationSettings pinSpec = new BodyCreationSettings(
-                pinShape, new RVec3(0D, startY, 0D), new Quat(),
+                pinShape, new RVec3(startX, startY, startZ),
+                new Quat(initialRotation[0], initialRotation[1],
+                        initialRotation[2], initialRotation[3]),
                 EMotionType.Kinematic, 0);
         this.pin = bodies.createBody(pinSpec);
         bodies.addBody(pin.getId(), EActivation.Activate);
@@ -72,9 +103,14 @@ public final class JoltHairChain implements AutoCloseable {
         float dampingRate = dampingPerSecond(damping);
         Body previous = pin;
         for (int i = 0; i < count; i++) {
-            float centerY = startY - (i + 0.5F) * linkLength;
+            float distance = (i + 0.5F) * linkLength;
             BodyCreationSettings spec = new BodyCreationSettings(
-                    shape, new RVec3(0D, centerY, 0D), new Quat(),
+                    shape, new RVec3(
+                            startX + distance * initialDirection[0],
+                            startY + distance * initialDirection[1],
+                            startZ + distance * initialDirection[2]),
+                    new Quat(initialRotation[0], initialRotation[1],
+                            initialRotation[2], initialRotation[3]),
                     EMotionType.Dynamic, 0);
             spec.setLinearDamping(dampingRate);
             spec.setAngularDamping(dampingRate);
@@ -84,14 +120,19 @@ public final class JoltHairChain implements AutoCloseable {
             spec.close();
             links[i] = body;
 
-            RVec3 pivot = new RVec3(0D, startY - i * linkLength, 0D);
+            RVec3 pivot = new RVec3(
+                    startX + i * linkLength * initialDirection[0],
+                    startY + i * linkLength * initialDirection[1],
+                    startZ + i * linkLength * initialDirection[2]);
             SwingTwistConstraintSettings jointSpec = new SwingTwistConstraintSettings();
             jointSpec.setPosition1(pivot);
             jointSpec.setPosition2(pivot);
-            jointSpec.setTwistAxis1(new Vec3(0F, -1F, 0F));
-            jointSpec.setTwistAxis2(new Vec3(0F, -1F, 0F));
-            jointSpec.setPlaneAxis1(new Vec3(1F, 0F, 0F));
-            jointSpec.setPlaneAxis2(new Vec3(1F, 0F, 0F));
+            float[] d = initialDirection;
+            float[] plane = perpendicular(d);
+            jointSpec.setTwistAxis1(new Vec3(d[0], d[1], d[2]));
+            jointSpec.setTwistAxis2(new Vec3(d[0], d[1], d[2]));
+            jointSpec.setPlaneAxis1(new Vec3(plane[0], plane[1], plane[2]));
+            jointSpec.setPlaneAxis2(new Vec3(plane[0], plane[1], plane[2]));
             float angle = (float)Math.toRadians(80D);
             jointSpec.setNormalHalfConeAngle(angle);
             jointSpec.setPlaneHalfConeAngle(angle);
@@ -136,6 +177,40 @@ public final class JoltHairChain implements AutoCloseable {
     }
 
     public int size() { return links.length; }
+
+    public float[] initialWorldRotation() { return initialRotation.clone(); }
+
+    /**
+     * Physical end points, rather than body centres, for visual diagnostics.
+     * Bone pose reconstruction should use the actual body quaternion.
+     */
+    public RVec3 attachmentPosition() {
+        return new RVec3(startX, startY, startZ);
+    }
+
+    private static float[] perpendicular(float[] direction) {
+        float x, y, z;
+        if (Math.abs(direction[1]) < 0.9F) {
+            x = -direction[2];
+            y = 0F;
+            z = direction[0];
+        } else {
+            x = 0F;
+            y = direction[2];
+            z = -direction[1];
+        }
+        float len = (float)Math.sqrt(x*x+y*y+z*z);
+        return new float[] {x/len,y/len,z/len};
+    }
+
+    /** Quaternion mapping local -Y (the authored strand axis) to world tangent. */
+    private static float[] rotationFromNegativeY(float[] d) {
+        float w = 1F - d[1];
+        float x = -d[2], z = d[0];
+        if (w < 1E-5F) return new float[] {1F,0F,0F,0F};
+        float length = (float)Math.sqrt(x*x+z*z+w*w);
+        return new float[] {x/length,0F,z/length,w/length};
+    }
 
     private static void tuneSpring(SwingTwistConstraint constraint,
             float stiffness, float damping, float falloff, int index, int total) {
