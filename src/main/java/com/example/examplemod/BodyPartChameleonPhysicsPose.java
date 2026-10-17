@@ -13,10 +13,19 @@ public final class BodyPartChameleonPhysicsPose
 {
     private BodyPartChameleonPhysicsPose() {}
 
-    @SuppressWarnings("unchecked")
+    /** Preserve the legacy limit for the existing Verlet solver. */
     public static boolean addLocalSwing(Object morph, String bone, float[] swing)
     {
-        if (morph == null || bone == null || swing == null || swing.length != 4)
+        return addLocalSwing(morph, bone, swing, 1.20F);
+    }
+
+    /** Jolt quaternions can require the full shortest-arc swing up to PI. */
+    @SuppressWarnings("unchecked")
+    public static boolean addLocalSwing(Object morph, String bone, float[] swing,
+            float maximumAngle)
+    {
+        if (morph == null || bone == null || swing == null || swing.length != 4 ||
+                !Float.isFinite(maximumAngle) || maximumAngle <= 0F)
             return false;
         try
         {
@@ -42,7 +51,7 @@ public final class BodyPartChameleonPhysicsPose
                 get(transform, "rotateY"),
                 get(transform, "rotateZ")
             };
-            float maxAngle = 1.20F; // hair needs to bend well past 25.8 degrees
+            float maxAngle = Math.min(maximumAngle, (float)Math.PI);
             float[] limited = new float[] {swing[0], swing[1], swing[2],
                     Math.max(-maxAngle, Math.min(maxAngle, swing[3]))};
             float[] composed = BodyPartPhysicsRotation.composeInBoneSpace(original, limited);

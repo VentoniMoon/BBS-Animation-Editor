@@ -17,6 +17,7 @@ public final class BodyPartPhysicsFrameState
     {
         int frame;
         Map<String, float[]> swings = new HashMap<String, float[]>();
+        java.util.Set<String> joltBones = new java.util.HashSet<String>();
 
         Sample(int frame)
         {
@@ -56,8 +57,18 @@ public final class BodyPartPhysicsFrameState
         lastTimelineFrame = frame;
     }
 
-    /** Called after the ordinary render and the solver's sequential step. */
+    /** Legacy solver output (keeps its historical angle limit). */
     public void accept(BodyPartModelData part, int frame, String bone, float[] localSwing)
+    {
+        accept(part, frame, bone, localSwing, false);
+    }
+
+    /**
+     * A Jolt swing is solved as a full quaternion and MUST NOT be clipped to
+     * the legacy Verlet correction angle at render time.
+     */
+    public void accept(BodyPartModelData part, int frame, String bone,
+            float[] localSwing, boolean fromJolt)
     {
         if (part == null || bone == null || localSwing == null || localSwing.length != 4)
             return;
@@ -71,6 +82,8 @@ public final class BodyPartPhysicsFrameState
             samples.put(part, existing);
         }
         existing.swings.put(bone, localSwing.clone());
+        if (fromJolt) existing.joltBones.add(bone);
+        else existing.joltBones.remove(bone);
     }
 
     /**
@@ -88,6 +101,14 @@ public final class BodyPartPhysicsFrameState
         return result;
     }
 
+    /** Matches the visible frozen sample, never the newly-computed frame. */
+    public boolean isJoltForRender(BodyPartModelData part, int frame, String bone)
+    {
+        if (frame != lastTimelineFrame || bone == null) return false;
+        Sample sample = visible.get(part);
+        return sample != null && sample.joltBones.contains(bone);
+    }
+
     /**
      * A paused editor may change its source bone pose without advancing time.
      * Publish the completed physics sample for the NEXT render pass of this
@@ -102,6 +123,7 @@ public final class BodyPartPhysicsFrameState
         Sample snapshot=new Sample(frame);
         for(Map.Entry<String,float[]> entry:sample.swings.entrySet())
             snapshot.swings.put(entry.getKey(),entry.getValue().clone());
+        snapshot.joltBones.addAll(sample.joltBones);
         visible.put(part,snapshot);
     }
 

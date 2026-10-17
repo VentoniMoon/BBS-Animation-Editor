@@ -1,0 +1,297 @@
+name: Jolt JNI Java 8 compatibility
+on:
+  push:
+    branches: [feature/jolt-java8-port]
+    paths:
+      - 'jolt-java8-port/**'
+      - '.github/workflows/jolt-java8.yml'
+      - 'src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
+      - 'src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java'
+      - 'src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java'
+      - 'src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java'
+      - 'build.gradle'
+  workflow_dispatch:
+
+jobs:
+  java8-bindings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout editor branch
+        uses: actions/checkout@v4
+      - name: Checkout pinned upstream JNI source
+        uses: actions/checkout@v4
+        with:
+          repository: stephengold/jolt-jni
+          ref: '6.0.0'
+          path: upstream-jolt
+          persist-credentials: false
+      - name: Compile with Java 8 bytecode target
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare compatibility source tree
+        run: |
+          python3 jolt-java8-port/tools/prepare_sources.py \
+            --upstream upstream-jolt --output "${{ runner.temp }}/jolt-java8"
+      - name: Compile ALL production bindings with --release 8
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          find "$OUT/src" jolt-java8-port/src/main/java/com/example/examplemod/physics src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java -type f -name '*.java' | sort > "$OUT/sources.txt"
+          mkdir -p "$OUT/classes"
+          javac --release 8 -encoding UTF-8 -d "$OUT/classes" @"$OUT/sources.txt"
+          # Package before compiling test classes; upstream MIT notice retained.
+          jar cf "$OUT/jolt-jni-6.0.0-java8.jar" -C "$OUT/classes" com/github/stephengold/joltjni
+          jar uf "$OUT/jolt-jni-6.0.0-java8.jar" -C "$OUT" UPSTREAM-LICENSE.txt
+          jar cf "$OUT/jolt-hair-prototype-java8.jar" -C "$OUT/classes" com/example/examplemod/physics
+          javac --release 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/Java8CleanerSmoke.java \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java
+      - name: Execute Java 8 cleanup smoke test
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Compile Java 8 native ABI test
+        run: |
+          javac -source 8 -target 8 -encoding UTF-8 -cp "${{ runner.temp }}/jolt-java8/classes" \
+            -d "${{ runner.temp }}/jolt-java8/classes" \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltNativeSmoke.java
+      - name: Cache the pinned native Jolt Linux library
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/jolt-java8/native-jolt.jar
+          key: jolt-java8-6.0.0-linux64-releasesp
+      - name: Download matching native Jolt 6.0.0 (Linux x86-64 ReleaseSp)
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          mkdir -p "$OUT/native"
+          if [ ! -s "$OUT/native-jolt.jar" ]; then
+            for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
+              if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
+                "$base/com/github/stephengold/jolt-jni-Linux64/6.0.0/jolt-jni-Linux64-6.0.0-ReleaseSp.jar" \
+                --output "$OUT/native-jolt.jar"; then
+                break
+              fi
+            done
+          fi
+          test -s "$OUT/native-jolt.jar"
+          (cd "$OUT/native" && jar xf "$OUT/native-jolt.jar")
+          find "$OUT/native" -type f -name '*.so' -print
+      - name: Assemble Java 8 JAR with Windows and Linux native Jolt
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
+            if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
+              "$base/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
+              --output "$OUT/windows-jolt.jar"; then
+              break
+            fi
+          done
+          test -s "$OUT/windows-jolt.jar"
+          mkdir -p "$OUT/native-win"
+          (cd "$OUT/native-win" && jar xf "$OUT/windows-jolt.jar")
+          test -f "$OUT/native/linux/x86-64/com/github/stephengold/libjoltjni.so"
+          test -f "$OUT/native-win/windows/x86-64/com/github/stephengold/joltjni.dll"
+          cp "$OUT/jolt-jni-6.0.0-java8.jar" "$OUT/jolt-jni-6.0.0-java8-bundled.jar"
+          jar uf "$OUT/jolt-jni-6.0.0-java8-bundled.jar" \
+            -C "$OUT/native" linux -C "$OUT/native-win" windows
+      - name: Test native Jolt JNI using actual Java 8
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
+          test -n "$LIB"
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.github.stephengold.joltjni.JoltNativeSmoke
+      - name: Compile and run SwingTwist chain on Java 8
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          javac -source 8 -target 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java
+          LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.github.stephengold.joltjni.JoltChainSmoke
+      - name: Run 4-link kinematic hair prototype on Linux Java 8
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          javac -source 8 -target 8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltPreviewBridgeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHorstHairFixtureSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java
+          LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltHairChainSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
+          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltPreviewBridgeSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltHorstHairFixtureSmoke
+          java -ea -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp "$OUT/classes:$OUT/native-jolt.jar" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp "$OUT/jolt-jni-6.0.0-java8-bundled.jar:$OUT/classes" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke missing
+      - name: Smoke test on actual Java 8 VM
+        run: |
+          java -version
+          java -ea -cp "${{ runner.temp }}/jolt-java8/classes" \
+            com.github.stephengold.joltjni.Java8CleanerSmoke
+          java -ea -cp "${{ runner.temp }}/jolt-java8/classes" \
+            com.github.stephengold.joltjni.JoltOwnerLifecycleSmoke
+
+      - name: Verify bone quaternion mapping under Java 8
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          javac -source 8 -target 8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java
+          java -ea -cp "$OUT/classes" com.example.examplemod.physics.JoltBoneQuaternionMapperSmoke
+      - name: Verify unclamped Jolt pose versus bounded legacy renderer
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          javac -source 8 -target 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/test-stubs/java/com/example/examplemod/BodyPartModelData.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java
+          java -ea -cp "$OUT/classes" com.example.examplemod.NativePreviewAngleSmoke
+      - name: Upload experimental Java 8 JNI and hair prototype jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: jolt-java8-experimental-jars
+          path: |
+            ${{ runner.temp }}/jolt-java8/jolt-jni-6.0.0-java8.jar
+            ${{ runner.temp }}/jolt-java8/jolt-jni-6.0.0-java8-bundled.jar
+            ${{ runner.temp }}/jolt-java8/jolt-hair-prototype-java8.jar
+            ${{ runner.temp }}/jolt-java8/UPSTREAM-LICENSE.txt
+
+  windows-java8-native:
+    needs: java8-bindings
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout editor branch
+        uses: actions/checkout@v4
+      - name: Checkout pinned JNI source
+        uses: actions/checkout@v4
+        with:
+          repository: stephengold/jolt-jni
+          ref: '6.0.0'
+          path: upstream-jolt
+          persist-credentials: false
+      - name: Validate Windows experimental JAR installer against actual artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jolt-java8-experimental-jars
+          path: ${{ runner.temp }}/jolt-artifacts
+      - name: Verify Windows installer checks the bundled Jolt artifacts
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'jolt-experimental.zip'
+          Compress-Archive -Path (Join-Path $env:RUNNER_TEMP 'jolt-artifacts/*') -DestinationPath $zip -Force
+          & ./jolt-java8-port/tools/prepare-windows-test.ps1 -ArtifactZip $zip
+          if (!(Test-Path libs/jolt-jni-6.0.0-java8-bundled.jar)) { throw 'Missing installed JNI jar' }
+          if (!(Test-Path libs/jolt-hair-prototype-java8.jar)) { throw 'Missing installed prototype jar' }
+      - name: Java 21 compiler
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare and compile all production JNI classes for Java 8
+        shell: bash
+        run: |
+          python jolt-java8-port/tools/prepare_sources.py --upstream upstream-jolt --output java8-win
+          find java8-win/src jolt-java8-port/src/main/java/com/example/examplemod/physics src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java -type f -name '*.java' | sort > java8-win/sources.txt
+          mkdir -p java8-win/classes
+          javac --release 8 -encoding UTF-8 -d java8-win/classes @java8-win/sources.txt
+      - name: Switch to the real Java 8 runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Compile Java 8 smoke tests and fetch Windows native library
+        shell: bash
+        run: |
+          javac -source 8 -target 8 -encoding UTF-8 -cp java8-win/classes -d java8-win/classes \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/Java8CleanerSmoke.java \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltNativeSmoke.java \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltChainSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairChainSmoke.java \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltPreviewBridgeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHorstHairFixtureSmoke.java
+          for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
+            if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
+              "$base/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
+              --output java8-win/native-jolt.jar; then
+              break
+            fi
+          done
+          test -s java8-win/native-jolt.jar
+          mkdir -p java8-win/native
+          (cd java8-win/native && jar xf ../native-jolt.jar)
+      - name: Compile editor angle bridge with Java 8 and run isolated fixture
+        shell: bash
+        run: |
+          javac -source 8 -target 8 -encoding UTF-8 -cp java8-win/classes -d java8-win/classes \
+            jolt-java8-port/test-stubs/java/com/example/examplemod/BodyPartModelData.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java
+          java -ea -cp java8-win/classes com.example.examplemod.NativePreviewAngleSmoke
+      - name: Run native physics on Java 8 for Windows
+        shell: bash
+        run: |
+          java -version
+          java -ea -cp java8-win/classes com.github.stephengold.joltjni.Java8CleanerSmoke
+          java -ea -cp java8-win/classes com.github.stephengold.joltjni.JoltOwnerLifecycleSmoke
+          java -ea -cp java8-win/classes com.example.examplemod.physics.JoltBoneQuaternionMapperSmoke
+          LIB="$(find java8-win/native -type f -iname '*joltjni.dll' -print -quit)"
+          test -n "$LIB"
+          WIN_LIB="$(cygpath -w "$PWD/$LIB")"
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.github.stephengold.joltjni.JoltNativeSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.github.stephengold.joltjni.JoltChainSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltHairChainSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
+          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltPreviewBridgeSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltHorstHairFixtureSmoke
+          java -ea -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp 'java8-win/classes;java8-win/native-jolt.jar' \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          java -ea -cp java8-win/classes \
+            com.example.examplemod.physics.JoltJava8BootstrapSmoke missing
