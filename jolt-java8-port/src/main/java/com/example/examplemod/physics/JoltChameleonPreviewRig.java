@@ -32,9 +32,8 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
      * @param boneWorld  one clean native Chameleon 4x4 matrix per driven bone
      * @param terminalTipWorld extra end of the final bone, in world blocks
      * @param parentWorld the immediate ancestor (often 'anchor') 4x4 world matrix
-     * @throws IllegalArgumentException when the first prototype cannot model the
-     *         native chain faithfully (uneven bone lengths, curved rest shape,
-     *         negative/mirrored determinant or unusable short segments).
+     * @throws IllegalArgumentException on invalid native matrices, mirrored
+     *         transforms or bone segments too short for stable Jolt physics.
      */
     public static JoltChameleonPreviewRig create(int frame, float[][] boneWorld,
             float[] terminalTipWorld, float[] parentWorld,
@@ -51,41 +50,16 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
             boneRestQuats[i] = rotation(boneWorld[i]);
         }
         positions[count] = terminalTipWorld.clone();
-        float[][] directions = new float[count][3];
-        float[] lengths = new float[count];
-        float total = 0F;
-        for (int i=0;i<count;i++) {
-            float dx=positions[i+1][0]-positions[i][0];
-            float dy=positions[i+1][1]-positions[i][1];
-            float dz=positions[i+1][2]-positions[i][2];
-            float length=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
-            if (!(length >= 0.10F) || !Float.isFinite(length))
-                throw new IllegalArgumentException("Jolt strand bone too short at index "+i);
-            lengths[i]=length;
-            directions[i]=new float[] {dx/length,dy/length,dz/length};
-            total+=length;
-        }
-        float average=total/count;
-        // Single-axis straight equal-length strands only in the *first*
-        // adapter. No silent flattening of curved hair or varying cuboid sizes.
-        for (int i=0;i<count;i++) {
-            if (Math.abs(lengths[i]-average)>average*0.15F)
-                throw new IllegalArgumentException("Unequal Jolt strand lengths at "+i);
-            float dot=directions[0][0]*directions[i][0] +
-                    directions[0][1]*directions[i][1] +
-                    directions[0][2]*directions[i][2];
-            if (dot < 0.97F)
-                throw new IllegalArgumentException("Bent model rest strand at "+i);
-        }
+        // Preserve each native pivot and the true terminal tip, including
+        // curved rest poses and individually varying segment lengths.
+        // Jolt builds one inertia capsule for each authored bone.
         float[] parentRest = rotation(parentWorld);
-        float[] origin=positions[0], dir=directions[0];
-        JoltHairChain chain = new JoltHairChain(count, average,
-                origin[0],origin[1],origin[2],
-                dir[0],dir[1],dir[2],stiffness,damping,falloff);
+        JoltHairChain chain = new JoltHairChain(
+                positions,stiffness,damping,falloff);
         float[][] corrections = new float[count][];
         for (int i=0;i<count;i++)
             corrections[i]=JoltBoneQuaternionMapper.restCorrection(
-                    chain.initialWorldRotation(),boneRestQuats[i]);
+                    chain.initialWorldRotation(i),boneRestQuats[i]);
         return new JoltChameleonPreviewRig(chain,corrections,parentRest,frame);
     }
 
