@@ -509,7 +509,9 @@ public class EditorSceneViewport
                             this.lastJoltOverlayFrame);
             JoltContactGuiOverlay.draw(Minecraft.getMinecraft(),this.camera,
                     this.x,this.y,this.width,this.height,shapes,
-                    this.joltActorX,this.joltActorY,this.joltActorZ);
+                    shapes!=null && shapes.worldSpace?0D:this.joltActorX,
+                    shapes!=null && shapes.worldSpace?0D:this.joltActorY,
+                    shapes!=null && shapes.worldSpace?0D:this.joltActorZ);
         }
     }
 
