@@ -34,120 +34,147 @@ public final class JoltHairChain implements AutoCloseable {
     private final float startZ;
     private final float[] initialDirection;
     private final float[] initialRotation;
+    private final float[][] initialRotations;
     private final SwingTwistConstraint[] joints;
     private boolean closed;
 
+    /** Backward-compatible straight vertical chain. */
     public JoltHairChain(int count, float linkLength, float startY,
             float stiffness, float damping, float falloff) {
-        this(count, linkLength, 0F, startY, 0F, 0F, -1F, 0F,
-                stiffness, damping, falloff);
+        this(count,linkLength,0F,startY,0F,0F,-1F,0F,
+                stiffness,damping,falloff);
+    }
+
+    /** Straight chain from arbitrary world-space attachment and tangent. */
+    public JoltHairChain(int count,float linkLength,
+            float rootX,float rootY,float rootZ,
+            float directionX,float directionY,float directionZ,
+            float stiffness,float damping,float falloff) {
+        this(straightPivots(count,linkLength,rootX,rootY,rootZ,
+                directionX,directionY,directionZ),stiffness,damping,falloff);
     }
 
     /**
-     * Construct a strand at a genuine world-space bone pivot and direction.
-     * The caller must derive these from the native clean Chameleon matrices;
-     * no bone-space or render-space inversions belong inside the solver.
+     * General Chameleon model: one world-space pivot for each bone, plus
+     * the terminal tip. Every segment has its OWN real length and direction.
+     * Supports curved and unequal-length strands without flattening them.
      */
-    public JoltHairChain(int count, float linkLength,
-            float rootX, float rootY, float rootZ,
-            float directionX, float directionY, float directionZ,
-            float stiffness, float damping, float falloff) {
-        if (count < 1 || count > 64 || !(linkLength >= 0.10F) ||
-                !Float.isFinite(linkLength) || !Float.isFinite(rootX) ||
-                !Float.isFinite(rootY) || !Float.isFinite(rootZ) ||
-                !Float.isFinite(directionX) || !Float.isFinite(directionY) ||
-                !Float.isFinite(directionZ) ||
-                !Float.isFinite(stiffness) || !Float.isFinite(damping) ||
+    public JoltHairChain(float[][] originalPivots,
+            float stiffness,float damping,float falloff) {
+        if (originalPivots==null || originalPivots.length<2 ||
+                originalPivots.length>65)
+            throw new IllegalArgumentException("Need 1-64 native bone segments");
+        if (!Float.isFinite(stiffness) || !Float.isFinite(damping) ||
                 !Float.isFinite(falloff))
-            throw new IllegalArgumentException("Invalid chain parameters");
-        this.linkLength = linkLength;
-        this.startX = rootX;
-        this.startY = rootY;
-        this.startZ = rootZ;
-        float magnitude = (float) Math.sqrt(directionX * directionX +
-                directionY * directionY + directionZ * directionZ);
-        if (!(magnitude > 1E-6F) || !Float.isFinite(magnitude))
-            throw new IllegalArgumentException("Zero-length initial direction");
-        this.initialDirection = new float[] {directionX / magnitude,
-                directionY / magnitude, directionZ / magnitude};
-        this.initialRotation = rotationFromNegativeY(initialDirection);
-        this.pairFilter = new ObjectLayerPairFilterTable(1);
-        this.broadLayers = new BroadPhaseLayerInterfaceTable(1, 1);
-        broadLayers.mapObjectToBroadPhaseLayer(0, 0);
-        this.broadFilter =
-                new ObjectVsBroadPhaseLayerFilterTable(broadLayers, 1, pairFilter, 1);
-        this.world = new PhysicsSystem();
-        world.init(256, 0, 512, 512, broadLayers, broadFilter, pairFilter);
-        world.setGravity(0F, -9.81F, 0F);
-        this.bodies = world.getBodyInterface();
-        this.allocator = new TempAllocatorImpl(2 * 1024 * 1024);
-        this.jobs = new JobSystemSingleThreaded(1024);
-        this.links = new Body[count];
-        this.joints = new SwingTwistConstraint[count];
+            throw new IllegalArgumentException("Invalid strand settings");
+        int count=originalPivots.length-1;
+        float[][] points=new float[count+1][3];
+        for(int i=0;i<points.length;i++) {
+            if(originalPivots[i]==null || originalPivots[i].length!=3)
+                throw new IllegalArgumentException("Invalid world pivot");
+            for(int j=0;j<3;j++) {
+                if(!Float.isFinite(originalPivots[i][j]))
+                    throw new IllegalArgumentException("Non-finite world pivot");
+                points[i][j]=originalPivots[i][j];
+            }
+        }
+        float[] lengths=new float[count];
+        float[][] directions=new float[count][3];
+        float[][] rotations=new float[count][4];
+        float total=0F;
+        for(int i=0;i<count;i++) {
+            float dx=points[i+1][0]-points[i][0];
+            float dy=points[i+1][1]-points[i][1];
+            float dz=points[i+1][2]-points[i][2];
+            float length=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+            if(!(length>=0.05F) || !Float.isFinite(length))
+                throw new IllegalArgumentException("Short/invalid Jolt bone "+i);
+            lengths[i]=length;
+            total+=length;
+            directions[i]=new float[] {dx/length,dy/length,dz/length};
+            rotations[i]=rotationFromNegativeY(directions[i]);
+        }
+        this.linkLength=total/count;
+        this.startX=points[0][0];
+        this.startY=points[0][1];
+        this.startZ=points[0][2];
+        this.initialDirection=directions[0].clone();
+        this.initialRotation=rotations[0].clone();
+        this.initialRotations=rotations;
+        this.pairFilter=new ObjectLayerPairFilterTable(1);
+        this.broadLayers=new BroadPhaseLayerInterfaceTable(1,1);
+        broadLayers.mapObjectToBroadPhaseLayer(0,0);
+        this.broadFilter=new ObjectVsBroadPhaseLayerFilterTable(
+                broadLayers,1,pairFilter,1);
+        this.world=new PhysicsSystem();
+        world.init(256,0,512,512,broadLayers,broadFilter,pairFilter);
+        world.setGravity(0F,-9.81F,0F);
+        this.bodies=world.getBodyInterface();
+        this.allocator=new TempAllocatorImpl(2*1024*1024);
+        this.jobs=new JobSystemSingleThreaded(1024);
+        this.links=new Body[count];
+        this.joints=new SwingTwistConstraint[count];
 
-        // No collisions in this first prototype. The physically shaped rods
-        // still carry inertia but cannot push against invisible body capsules.
-        SphereShape pinShape = new SphereShape(0.025F);
-        BodyCreationSettings pinSpec = new BodyCreationSettings(
-                pinShape, new RVec3(startX, startY, startZ),
-                new Quat(initialRotation[0], initialRotation[1],
-                        initialRotation[2], initialRotation[3]),
-                EMotionType.Kinematic, 0);
-        this.pin = bodies.createBody(pinSpec);
-        bodies.addBody(pin.getId(), EActivation.Activate);
+        // Inertia-only stand-ins: no invisible contact capsules.
+        SphereShape pinShape=new SphereShape(0.025F);
+        BodyCreationSettings pinSpec=new BodyCreationSettings(
+                pinShape,new RVec3(startX,startY,startZ),
+                new Quat(rotations[0][0],rotations[0][1],
+                        rotations[0][2],rotations[0][3]),
+                EMotionType.Kinematic,0);
+        this.pin=bodies.createBody(pinSpec);
+        bodies.addBody(pin.getId(),EActivation.Activate);
         pinSpec.close();
         pinShape.close();
-        float radius = Math.min(0.045F, linkLength * 0.3F);
-        CapsuleShape shape = new CapsuleShape(
-                Math.max(0.005F, linkLength * 0.5F - radius), radius);
-        float dampingRate = dampingPerSecond(damping);
-        Body previous = pin;
-        for (int i = 0; i < count; i++) {
-            float distance = (i + 0.5F) * linkLength;
-            BodyCreationSettings spec = new BodyCreationSettings(
-                    shape, new RVec3(
-                            startX + distance * initialDirection[0],
-                            startY + distance * initialDirection[1],
-                            startZ + distance * initialDirection[2]),
-                    new Quat(initialRotation[0], initialRotation[1],
-                            initialRotation[2], initialRotation[3]),
-                    EMotionType.Dynamic, 0);
+        Body previous=pin;
+        float dampingRate=dampingPerSecond(damping);
+        for(int i=0;i<count;i++) {
+            float length=lengths[i];
+            float radius=Math.min(0.045F,length*0.30F);
+            CapsuleShape capsule=new CapsuleShape(
+                    Math.max(0.005F,length*0.5F-radius),radius);
+            float[] q=rotations[i];
+            BodyCreationSettings spec=new BodyCreationSettings(
+                    capsule,new RVec3(
+                            (points[i][0]+points[i+1][0])*0.5D,
+                            (points[i][1]+points[i+1][1])*0.5D,
+                            (points[i][2]+points[i+1][2])*0.5D),
+                    new Quat(q[0],q[1],q[2],q[3]),
+                    EMotionType.Dynamic,0);
             spec.setLinearDamping(dampingRate);
             spec.setAngularDamping(dampingRate);
             spec.setGravityFactor(1F);
-            Body body = bodies.createBody(spec);
-            bodies.addBody(body.getId(), EActivation.Activate);
+            Body body=bodies.createBody(spec);
+            bodies.addBody(body.getId(),EActivation.Activate);
             spec.close();
-            links[i] = body;
+            capsule.close();
+            links[i]=body;
 
-            RVec3 pivot = new RVec3(
-                    startX + i * linkLength * initialDirection[0],
-                    startY + i * linkLength * initialDirection[1],
-                    startZ + i * linkLength * initialDirection[2]);
-            SwingTwistConstraintSettings jointSpec = new SwingTwistConstraintSettings();
+            SwingTwistConstraintSettings jointSpec=new SwingTwistConstraintSettings();
+            RVec3 pivot=new RVec3(points[i][0],points[i][1],points[i][2]);
             jointSpec.setPosition1(pivot);
             jointSpec.setPosition2(pivot);
-            float[] d = initialDirection;
-            float[] plane = perpendicular(d);
-            jointSpec.setTwistAxis1(new Vec3(d[0], d[1], d[2]));
-            jointSpec.setTwistAxis2(new Vec3(d[0], d[1], d[2]));
-            jointSpec.setPlaneAxis1(new Vec3(plane[0], plane[1], plane[2]));
-            jointSpec.setPlaneAxis2(new Vec3(plane[0], plane[1], plane[2]));
-            float angle = (float)Math.toRadians(80D);
-            jointSpec.setNormalHalfConeAngle(angle);
-            jointSpec.setPlaneHalfConeAngle(angle);
-            float twist = (float)Math.toRadians(45D);
-            jointSpec.setTwistMinAngle(-twist);
-            jointSpec.setTwistMaxAngle(twist);
-            SwingTwistConstraint constraint =
-                    (SwingTwistConstraint)jointSpec.create(previous, body);
+            float[] direction=directions[i],plane=perpendicular(direction);
+            jointSpec.setTwistAxis1(new Vec3(
+                    direction[0],direction[1],direction[2]));
+            jointSpec.setTwistAxis2(new Vec3(
+                    direction[0],direction[1],direction[2]));
+            jointSpec.setPlaneAxis1(new Vec3(plane[0],plane[1],plane[2]));
+            jointSpec.setPlaneAxis2(new Vec3(plane[0],plane[1],plane[2]));
+            float swingAngle=(float)Math.toRadians(80D);
+            jointSpec.setNormalHalfConeAngle(swingAngle);
+            jointSpec.setPlaneHalfConeAngle(swingAngle);
+            float twistAngle=(float)Math.toRadians(45D);
+            jointSpec.setTwistMinAngle(-twistAngle);
+            jointSpec.setTwistMaxAngle(twistAngle);
+            SwingTwistConstraint constraint=(SwingTwistConstraint)
+                    jointSpec.create(previous,body);
             world.addConstraint(constraint);
-            joints[i] = constraint;
+            joints[i]=constraint;
             jointSpec.close();
-            tuneSpring(constraint, stiffness, damping, falloff, i, count);
-            previous = body;
+            tuneSpring(constraint,stiffness,damping,falloff,i,count);
+            previous=body;
         }
-        shape.close();
     }
 
     public void setGravity(float multiplier) {
@@ -187,12 +214,36 @@ public final class JoltHairChain implements AutoCloseable {
 
     public float[] initialWorldRotation() { return initialRotation.clone(); }
 
+    public float[] initialWorldRotation(int boneIndex) {
+        return initialRotations[boneIndex].clone();
+    }
+
     /**
      * Physical end points, rather than body centres, for visual diagnostics.
      * Bone pose reconstruction should use the actual body quaternion.
      */
     public RVec3 attachmentPosition() {
         return new RVec3(startX, startY, startZ);
+    }
+
+    private static float[][] straightPivots(int count,float linkLength,
+            float rootX,float rootY,float rootZ,
+            float dx,float dy,float dz) {
+        if(count<1 || count>64 || !(linkLength>=0.05F) ||
+                !Float.isFinite(linkLength) || !Float.isFinite(rootX) ||
+                !Float.isFinite(rootY) || !Float.isFinite(rootZ) ||
+                !Float.isFinite(dx) || !Float.isFinite(dy) || !Float.isFinite(dz))
+            throw new IllegalArgumentException("Invalid straight strand");
+        float m=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(!(m>1E-6F) || !Float.isFinite(m))
+            throw new IllegalArgumentException("Invalid strand direction");
+        float[][] points=new float[count+1][3];
+        for(int i=0;i<=count;i++) {
+            points[i][0]=rootX+i*linkLength*dx/m;
+            points[i][1]=rootY+i*linkLength*dy/m;
+            points[i][2]=rootZ+i*linkLength*dz/m;
+        }
+        return points;
     }
 
     private static float[] perpendicular(float[] direction) {
