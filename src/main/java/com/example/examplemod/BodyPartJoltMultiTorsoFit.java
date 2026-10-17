@@ -99,7 +99,7 @@ public final class BodyPartJoltMultiTorsoFit
             median[i]=values[i][count[i]/2];
             if(median[i]<0.055F || median[i]>0.31F ||
                     median[i]<base.medianDistance*0.52F ||
-                    median[i]>base.medianDistance*1.42F)
+                    median[i]>base.medianDistance*1.55F)
                 return null;
             radius[i]=clamp(median[i]*0.90F,0.055F,0.22F);
             for(int c=0;c<3;c++)
