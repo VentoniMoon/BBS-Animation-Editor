@@ -1403,6 +1403,13 @@ public class BlockbusterActorPreviewRenderer
                 entityActor, previewFrame);
 
         /*
+         * Opt-in native Jolt contact wireframes, AFTER the actor is rendered
+         * but BEFORE restoring this viewport's 3D camera matrices. All
+         * geometry is read-only; body physics is not re-simulated.
+         */
+        this.bodyPartsPreviewRenderer.drawJoltColliderOverlay(previewFrame);
+
+        /*
          * =====================================================
          * LIGHTING
          * =====================================================
