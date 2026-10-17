@@ -283,6 +283,89 @@ This is a **diagnostic**, not a proven fix for the visible inversion.
 Do not alter quaternion signs, model axes or collision geometry
 until a real game log differentiates the sources.
 
+## Experimental native hair-versus-Emoticons torso contact (2026-10-17)
+
+The existing Jolt preview correctly hangs Chameleon hair under gravity
+when `-Dbbs.editor.physics.jolt.exactChildSpace=true` is used. Braids
+still penetrate the animated Emoticons body because **the original Jolt
+PhysicsSystem had NO body collider** and its sole object-layer pair
+filter enabled **zero** collision pairs. The existing
+`BodyPartPhysicsBodyCapsules` (hardcoded radius 0.18) is only an older
+Verlet-era proxy and was **never connected to native Jolt**.
+
+### What this experimental contact stage actually does
+
+Set the **four** JVM properties on the *client*:
+
+```text
+-Dbbs.editor.physics.jolt.preview=true
+-Dbbs.editor.physics.jolt.exactChildSpace=true
+-Dbbs.editor.physics.jolt.diagnostic=true
+-Dbbs.editor.physics.jolt.torsoContacts=true
+```
+
+An actual renderer-evaluated Emoticons `low_body` matrix and dynamically
+identified upper-torso bone matrix provide the joint axis. The snapshot
+of **CPU-skinned** `body` mesh triangles is filtered by torso skin
+weights via `EmoticonsSkinCollisionGroups.select(..., TORSO)`.
+`BodyPartJoltTorsoFit` measures the unique skinned vertices near
+that axis and derives a conservative proxy radius from their median
+radial distance. It **refuses** a degenerate/unreasonably long bone
+axis, too few aligned skin witnesses, a radius outside the expected
+torso range, NaN coordinates, or an unrecognized mesh.
+
+Only when this geometry checks out, the Jolt scene creates a
+**kinematic torso CapsuleShape** in a dedicated layer. Jolt's object
+pair filter allows **only dynamic hair vs this torso layer**; hair
+links and their kinematic root do not self-collide. The torso collider
+follows the Emoticons bone transforms at each animation tick.
+Contact is solved **natively** along with the SwingTwist constraints,
+not by teleporting bone pivots after the solver.
+
+The per-frame status log is:
+
+```text
+[BBS Animation Editor][Jolt][Torso] fitted radius=... blocks, points=.../...
+```
+
+or
+
+```text
+[BBS Animation Editor][Jolt][Torso] unavailable (native torso landmarks/skin mesh differ; contacts OFF, no guessed capsule)
+```
+
+**This is a conservative proxy, NOT an exact triangle-mesh collision
+or a collision solution for every limb.** Head, arms and the wide
+corners of the ribbon-shaped braid may still penetrate. A future
+skin-mesh contact stage needs confirmed outward surface normals and a
+stable world-space mesh transform. The present mesh-fit guard reduces
+but does not mathematically prove that Emoticons CPU-skinned vertices
+and its native bone matrices have identical coordinate frames, so
+the behavior requires an in-game validation before enabling by default.
+
+**New Jolt prototype JAR required:** the Java 8 physics module now has
+`JoltChameleonPreviewRig.setTorsoCollider(float[],float[],float)`. A
+previous JAR still runs normal hair physics but logs that optional
+contacts cannot be enabled. Download the latest green-run Actions
+artifact `jolt-java8-experimental-jars` and rerun:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\jolt-java8-port\\tools\\prepare-windows-test.ps1 -ArtifactZip "C:\\Users\\VentoniMoon\\Downloads\\jolt-java8-experimental-jars.zip"
+```
+
+Run `gradlew.bat runClient -PenableJoltExperimental --no-daemon`;
+inspect `[Jolt][Torso]`, `[Jolt][Compare]` and `[Jolt][Cube]`.
+First repeat the user's walking scene and compare braids against
+the torso with `torsoContacts` OFF and ON. Verify upright, X=80°,
+Y-tilted, walking, paused and fast movement, plus the head/shoulders.
+If a fitted proxy produces unintended repulsion, disable the
+experimental flag immediately; the former gravity fix is unaffected.
+
+Windows and Linux GitHub Actions run real native-Jolt tests confirming
+collision forces move a hair link away from a moving kinematic torso
+body. Full Forge/Emoticons in-game collisions **have not yet been
+verified by the user**.
+
 ## Reproduce the build and download experimental JARs
 
 [CI: Jolt JNI Java 8 compatibility](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
