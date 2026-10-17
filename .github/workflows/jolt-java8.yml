@@ -7,6 +7,9 @@ on:
       - '.github/workflows/jolt-java8.yml'
       - 'src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java'
       - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
+      - 'src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java'
+      - 'src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java'
+      - 'src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java'
       - 'build.gradle'
   workflow_dispatch:
 
@@ -160,6 +163,16 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java
           java -ea -cp "$OUT/classes" com.example.examplemod.physics.JoltBoneQuaternionMapperSmoke
+      - name: Verify unclamped Jolt pose versus bounded legacy renderer
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          javac -source 8 -target 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/test-stubs/java/com/example/examplemod/BodyPartModelData.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java
+          java -ea -cp "$OUT/classes" com.example.examplemod.NativePreviewAngleSmoke
       - name: Upload experimental Java 8 JNI and hair prototype jars
         uses: actions/upload-artifact@v4
         with:
@@ -226,6 +239,16 @@ jobs:
           test -s java8-win/native-jolt.jar
           mkdir -p java8-win/native
           (cd java8-win/native && jar xf ../native-jolt.jar)
+      - name: Compile editor angle bridge with Java 8 and run isolated fixture
+        shell: bash
+        run: |
+          javac -source 8 -target 8 -encoding UTF-8 -cp java8-win/classes -d java8-win/classes \
+            jolt-java8-port/test-stubs/java/com/example/examplemod/BodyPartModelData.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java
+          java -ea -cp java8-win/classes com.example.examplemod.NativePreviewAngleSmoke
       - name: Run native physics on Java 8 for Windows
         shell: bash
         run: |
