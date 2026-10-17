@@ -63,6 +63,12 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         return new JoltChameleonPreviewRig(chain,corrections,parentRest,frame);
     }
 
+    /** World center of the final physical bone, for continuity diagnostics. */
+    public float[] lastBodyPosition() {
+        com.github.stephengold.joltjni.RVec3 p=chain.position(chain.size()-1);
+        return new float[] {(float)p.xx(),(float)p.yy(),(float)p.zz()};
+    }
+
     public void setGravity(float multiplier) {
         chain.setGravity(multiplier);
     }
