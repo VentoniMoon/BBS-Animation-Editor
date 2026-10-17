@@ -1,7 +1,7 @@
 name: Jolt JNI Java 8 compatibility
 on:
   push:
-    branches: [feature/jolt-java8-port, feature/jolt-cube-geometry-check, feature/jolt-torso-contacts, feature/jolt-multicollider-debug, feature/jolt-overlay-visible, feature/jolt-gui-wireframe]
+    branches: [main, feature/jolt-java8-port, feature/jolt-cube-geometry-check, feature/jolt-torso-contacts, feature/jolt-multicollider-debug, feature/jolt-overlay-visible, feature/jolt-gui-wireframe]
     paths:
       - 'jolt-java8-port/**'
       - '.github/workflows/jolt-java8.yml'
