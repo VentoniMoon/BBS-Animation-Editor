@@ -418,6 +418,16 @@ public final class BodyPartJoltPreviewAdapter {
         return state.compoundEnabled?3:state.torsoEnabled?1:0;
     }
 
+    /** Box forms installed in an accepted Jolt sample (not guessed markup).
+     *  A kinematic box reaches its target at the end of the stepped tick. */
+    public float[][] additionalBoxesFor(String modelId,int frame)
+    {
+        if(!drawContactsRequested() || modelId==null)return null;
+        State state=scenes.get(modelId);
+        if(state==null || state.frame!=frame)return null;
+        return copyMatrices(state.lastAdditionalBoxes);
+    }
+
     public float[][] hairSegmentsFor(String modelId,int frame) {
         if(!drawContactsRequested() || modelId==null)return null;
         State state=scenes.get(modelId);
