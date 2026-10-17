@@ -511,7 +511,7 @@ public class BodyPartsPreviewRenderer
                                 JoltContactOverlaySnapshot.Kind.HAIR,
                                 new float[] {link[0],link[1],link[2]},
                                 new float[] {link[3],link[4],link[5]},
-                                link[6]));
+                                link[6],id));
                     }
                     catch(IllegalArgumentException ignored)
                     {
