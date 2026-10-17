@@ -20,6 +20,7 @@ on:
       - 'src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
+      - 'src/main/java/com/example/examplemod/EditorEmoticonsRecordPlayback.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsPanel.java'
       - 'src/main/java/com/example/examplemod/JoltContactWireframe.java'
       - 'src/main/java/com/example/examplemod/JoltContactOverlayPass.java'
@@ -72,6 +73,17 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
+      - name: Verify Emoticons Record scrubbing and jump on Java 8
+        run: |
+          OUT="${{ runner.temp }}/emoticons-record-smoke"
+          mkdir -p "$OUT"
+          javac -source 8 -target 8 -encoding UTF-8 -d "$OUT" \
+            jolt-java8-port/test-stubs/java/mchorse/blockbuster/common/entity/EntityActor.java \
+            jolt-java8-port/test-stubs/java/mchorse/emoticons/skin_n_bones/api/metamorph/AnimatedMorph.java \
+            jolt-java8-port/test-stubs/java/com/example/examplemod/EditorAnimatorMorphController.java \
+            src/main/java/com/example/examplemod/EditorEmoticonsRecordPlayback.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/EmoticonsRecordPlaybackSmoke.java
+          java -ea -cp "$OUT" com.example.examplemod.EmoticonsRecordPlaybackSmoke
       - name: Compile Java 8 native ABI test
         run: |
           javac -source 8 -target 8 -encoding UTF-8 -cp "${{ runner.temp }}/jolt-java8/classes" \
