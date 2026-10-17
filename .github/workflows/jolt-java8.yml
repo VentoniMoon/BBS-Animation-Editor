@@ -12,6 +12,8 @@ on:
       - 'src/main/java/com/example/examplemod/BodyPartJoltPoseDiagnostic.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java'
       - 'src/main/java/com/example/examplemod/BodyPartChameleonRenderedCubeProbe.java'
+      - 'src/main/java/com/example/examplemod/BodyPartChameleonChildRenderSpace.java'
+      - 'src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java'
       - 'build.gradle'
   workflow_dispatch:
@@ -179,6 +181,9 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartJoltPoseDiagnostic.java \
             src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java \
             src/main/java/com/example/examplemod/BodyPartChameleonRenderedCubeProbe.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonChildRenderSpace.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonRenderSpaceSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltCubeGeometrySmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonActualCubeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java \
@@ -187,6 +192,7 @@ jobs:
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltRenderedDirectionSmoke
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltCubeGeometrySmoke
           java -ea -cp "$OUT/classes" com.example.examplemod.JoltChameleonActualCubeSmoke
+          java -ea -cp "$OUT/classes" com.example.examplemod.JoltChameleonRenderSpaceSmoke
       - name: Upload experimental Java 8 JNI and hair prototype jars
         uses: actions/upload-artifact@v4
         with:
@@ -278,6 +284,9 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartJoltPoseDiagnostic.java \
             src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java \
             src/main/java/com/example/examplemod/BodyPartChameleonRenderedCubeProbe.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonChildRenderSpace.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonRenderSpaceSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltCubeGeometrySmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonActualCubeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/NativePreviewAngleSmoke.java \
@@ -286,6 +295,7 @@ jobs:
           java -ea -cp java8-win/classes com.example.examplemod.JoltRenderedDirectionSmoke
           java -ea -cp java8-win/classes com.example.examplemod.JoltCubeGeometrySmoke
           java -ea -cp java8-win/classes com.example.examplemod.JoltChameleonActualCubeSmoke
+          java -ea -cp java8-win/classes com.example.examplemod.JoltChameleonRenderSpaceSmoke
       - name: Run native physics on Java 8 for Windows
         shell: bash
         run: |
