@@ -89,6 +89,85 @@ public final class BodyPartJoltCubeGeometry
                 center,tip,minY,maxY,tip[1]-bonePivot[1]);
     }
 
+    /**
+     * EXACT decoded Chameleon quad vertices (block units), not the Blockbench
+     * source origin. Chameleon mirrors cube X while importing geo JSON, and
+     * applies an optional per-cube local pivot rotation BEFORE drawing each
+     * quad (ChameleonCubeRenderer). The provided boneWorld 4x4 is from
+     * ChameleonPostRenderer, which already includes bone.initial.translate.
+     *
+     * The longer geometric axis connects the average top and bottom source
+     * Y-face vertices, after the same cube rotation and bone world matrix as
+     * the renderer. No source-geo handedness assumptions are necessary.
+     */
+    public static Measurement measureRenderedVertices(float[] boneWorld,
+            float[] boneInitialPivotPx,float[] cubePivotPx,
+            float[] cubeRotationDegrees,float[][] quadVertexBlocks)
+    {
+        check(boneWorld,16,"native bone 4x4");
+        check(boneInitialPivotPx,3,"bone initial pivot");
+        check(cubePivotPx,3,"cube pivot");
+        check(cubeRotationDegrees,3,"cube rotation");
+        if(quadVertexBlocks==null || quadVertexBlocks.length<2)
+            throw new IllegalArgumentException("Missing rendered quad vertices");
+        float minLocalY=Float.POSITIVE_INFINITY;
+        float maxLocalY=Float.NEGATIVE_INFINITY;
+        for(float[] v:quadVertexBlocks)
+        {
+            check(v,3,"rendered vertex");
+            minLocalY=Math.min(minLocalY,v[1]);
+            maxLocalY=Math.max(maxLocalY,v[1]);
+        }
+        if(maxLocalY-minLocalY<=1E-6F)
+            throw new IllegalArgumentException("Cube has no local Y extent");
+        float[] cubePivotBlocks={cubePivotPx[0]/16F,
+                cubePivotPx[1]/16F,cubePivotPx[2]/16F};
+        float[] rotation=BodyPartPhysicsRotation.eulerXYZ(
+                (float)Math.toRadians(cubeRotationDegrees[0]),
+                (float)Math.toRadians(cubeRotationDegrees[1]),
+                (float)Math.toRadians(cubeRotationDegrees[2]));
+        float[] top=new float[3],bottom=new float[3];
+        int topCount=0,bottomCount=0;
+        float minWorldY=Float.POSITIVE_INFINITY,maxWorldY=Float.NEGATIVE_INFINITY;
+        for(float[] point:quadVertexBlocks)
+        {
+            float x=point[0]-cubePivotBlocks[0];
+            float y=point[1]-cubePivotBlocks[1];
+            float z=point[2]-cubePivotBlocks[2];
+            float px=cubePivotBlocks[0]+rotation[0]*x+rotation[3]*y+rotation[6]*z;
+            float py=cubePivotBlocks[1]+rotation[1]*x+rotation[4]*y+rotation[7]*z;
+            float pz=cubePivotBlocks[2]+rotation[2]*x+rotation[5]*y+rotation[8]*z;
+            float[] world=worldPoint(boneWorld,boneInitialPivotPx,
+                    px*16F,py*16F,pz*16F);
+            minWorldY=Math.min(minWorldY,world[1]);
+            maxWorldY=Math.max(maxWorldY,world[1]);
+            if(Math.abs(point[1]-minLocalY)<1E-5F)
+            {
+                for(int k=0;k<3;k++)bottom[k]+=world[k];
+                bottomCount++;
+            }
+            if(Math.abs(point[1]-maxLocalY)<1E-5F)
+            {
+                for(int k=0;k<3;k++)top[k]+=world[k];
+                topCount++;
+            }
+        }
+        if(topCount==0 || bottomCount==0)
+            throw new IllegalArgumentException("Incomplete cube faces");
+        for(int k=0;k<3;k++)
+        {
+            top[k]/=topCount;
+            bottom[k]/=bottomCount;
+        }
+        float[] center={(top[0]+bottom[0])*0.5F,
+                (top[1]+bottom[1])*0.5F,
+                (top[2]+bottom[2])*0.5F};
+        float[] pivot={boneWorld[12],boneWorld[13],boneWorld[14]};
+        return new Measurement(unit(sub(bottom,top)),unit(sub(center,pivot)),
+                unit(sub(bottom,pivot)),center,bottom,
+                minWorldY,maxWorldY,bottom[1]-pivot[1]);
+    }
+
     public static float alignmentDegrees(float[] a, float[] b)
     {
         float[] p=unit(a),q=unit(b);
