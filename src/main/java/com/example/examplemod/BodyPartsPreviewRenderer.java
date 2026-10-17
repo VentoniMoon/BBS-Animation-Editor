@@ -1259,11 +1259,11 @@ public class BodyPartsPreviewRenderer
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
                 AnimationBone finalBone = chain.bones.get(chain.bones.size()-1);
-                BodyPartChameleonCubeProbe.Cube finalCube =
-                        BodyPartChameleonCubeProbe.getReference(finalBone.getName());
-                boolean hasTip=finalCube!=null;
+                // A chain is identified by configured bone hierarchy, not the
+                // author of the original hairstyle. Its terminal pivot comes
+                // from the actual decoded Chameleon cube geometry below.
                 BodyPartChainSolver.Vec3[] joints =
-                        new BodyPartChainSolver.Vec3[chain.bones.size()+(hasTip?1:0)];
+                        new BodyPartChainSolver.Vec3[chain.bones.size()+1];
                 BodyPartChainSolver.Vec3 last = null;
                 int jointIndex = 0;
                 for (AnimationBone bone : chain.bones)
@@ -1286,20 +1286,34 @@ public class BodyPartsPreviewRenderer
                     joints[jointIndex++] = current;
                     last = current;
                 }
-                // The last cube must have its own simulated direction.
-                // Previously it had no child pivot, so it was never rotated.
-                if(hasTip)
+                // Read Chameleon's decoded, already rotated cube geometry.
+                // This supports arbitrary Blockbench models, including head
+                // hair and renamed strand bones. No hardcoded hair.geo values
+                // or source-JSON sign assumptions influence native Jolt.
+                float[] terminalMatrix=world.getBoneWorldMatrix(finalBone.getName());
+                BodyPartChameleonRenderedCubeProbe.Result tipGeometry =
+                        BodyPartChameleonRenderedCubeProbe.inspect(
+                                part.morph.get(), finalBone.getName(), terminalMatrix);
+                boolean hasTip=false;
+                if(tipGeometry!=null && tipGeometry.measurement!=null)
                 {
-                    float[] terminalMatrix=world.getBoneWorldMatrix(finalBone.getName());
+                    float[] xyz=tipGeometry.measurement.cubeTipWorld;
                     BodyPartChainSolver.Vec3 tip=
-                            BodyPartPhysicsPoseAdapter.transformPoint(
-                                    terminalMatrix,finalCube.terminalTipLocal());
-                    if(tip.sub(last).length()<0.00001F)
+                            new BodyPartChainSolver.Vec3(xyz[0],xyz[1],xyz[2]);
+                    float segmentLength=tip.sub(last).length();
+                    if(Float.isFinite(segmentLength) &&
+                            segmentLength>=0.05F && segmentLength<=1.0F)
                     {
-                        reportPhysicsBoneProbe(data,"zero-length terminal hair tip");
-                        return;
+                        joints[jointIndex]=tip;
+                        hasTip=true;
                     }
-                    joints[jointIndex]=tip;
+                }
+                if(!hasTip)
+                {
+                    reportPhysicsBoneProbe(data,
+                            "No valid Chameleon rendered-cube tip for "
+                            +finalBone.getName()+" (requires a terminal cube)");
+                    continue;
                 }
                 /*
                  * Optional real Jolt physical chain: drive it with the CLEAN
