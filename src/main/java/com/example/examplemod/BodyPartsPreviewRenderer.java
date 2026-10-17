@@ -1946,19 +1946,11 @@ public class BodyPartsPreviewRenderer
                 for (Map.Entry<String, float[]> entry : swings.entrySet())
                 {
                     float[] swing = entry.getValue();
-                    // The historical inverted swing was established only
-                    // for the LEFT root's Y=180 attachment. Do not extend
-                    // that unverified sign convention to the BACK chain:
-                    // its solver already computes directions in the
-                    // rendered bone basis. This is an isolated A/B change.
-                    // Chameleon local swing is opposite to the world-space
-                    // swing angle produced by our solver. Apply the same
-                    // conversion to all strands, including the back chain.
-                    // Canonical next() returns the actual local angle.
-                    // The legacy writer historically inverted it here.
+                    // The Jolt mapper returns a local-space swing.
+                    // Do not apply historical Verlet sign inversions.
                     float[] corrected = new float[] {
                             swing[0], swing[1], swing[2],
-                            USE_CANONICAL_PHYSICS_SWING ? swing[3] : -swing[3]
+                            swing[3]
                     };
                     float[] before = readChameleonPoseEuler(child, entry.getKey());
                     float angleLimit = physicsFrames.isJoltForRender(
