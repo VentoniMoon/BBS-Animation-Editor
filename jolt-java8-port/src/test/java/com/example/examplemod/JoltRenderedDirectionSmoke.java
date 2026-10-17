@@ -69,7 +69,7 @@ public final class JoltRenderedDirectionSmoke
                 float[][] world={pose(0,0,0,matrix),
                         pose(dir[0],dir[1],dir[2],matrix)};
                 float[] end={2*dir[0],2*dir[1],2*dir[2]};
-                float localCorrector=(mirroredY==0?-rad:rad);
+                float localCorrector=-rad;
                 Map<String,float[]> predicted=BodyPartJoltPoseDiagnostic.expectedDirections(
                         bones,world,end,twoSwings(
                                 new float[]{1,0,0,localCorrector},
