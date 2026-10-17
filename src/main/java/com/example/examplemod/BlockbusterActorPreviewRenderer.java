@@ -751,10 +751,13 @@ public class BlockbusterActorPreviewRenderer
         return this.bodyPartsPreviewRenderer.getPreparedMorph(data);
     }
 
-    /** Pass-through to the passive physics overlay; no second actor render. */
-    public void drawJoltColliderOverlay(int frame)
+    /**
+     * Immutable physics-shape snapshot for the post-Preview GUI overlay.
+     * Do not attempt immediate-mode GL drawing inside actor shaders/FBO.
+     */
+    public JoltContactOverlaySnapshot snapshotJoltContactShapes(int frame)
     {
-        this.bodyPartsPreviewRenderer.drawJoltColliderOverlay(frame);
+        return this.bodyPartsPreviewRenderer.snapshotJoltContactShapes(frame);
     }
 
     /*
