@@ -43,7 +43,7 @@ public final class JoltMultiTorsoNativeSmoke
                         x0+" vs "+x1);
 
             float[][] nativeHair=chain.nativeHairSegments();
-            if(nativeHair.length!=4 || nativeHair[0].length!=7)
+            if(nativeHair.length!=pivots.length-1 || nativeHair[0].length!=7)
                 throw new AssertionError("Raw hair rigid body segment count");
             for(float[] segment:nativeHair)
             {
