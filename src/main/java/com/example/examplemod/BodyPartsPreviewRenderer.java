@@ -1070,6 +1070,9 @@ public class BodyPartsPreviewRenderer
             if (local == null) return;
             float[] attachment =
                     worldFromRenderedChameleonChild(lowBodyWorld,part);
+            float[] actorFrame=actorFrameFor(frame);
+            if(actorFrame!=null)
+                attachment=BodyPartJoltActorSpace.matrix(actorFrame,attachment);
             BodyPartPhysicsWorldPose.MatrixSource visual =
                     BodyPartPhysicsWorldPose.worldSource(attachment, local);
             Map<String, String> previous = lastJoltDirectionReports.get(data);
