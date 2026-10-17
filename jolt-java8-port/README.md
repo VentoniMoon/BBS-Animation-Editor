@@ -2,8 +2,10 @@
 
 **Status:** the complete upstream Java bindings compile with Java 8 bytecode; the original
 native Jolt 6.0.0 ReleaseSp DLL/SO **runs on real Java 8** on **Windows x64 and Linux x64**.
-Native physics worlds, SwingTwist pendulums, and a four-segment hair-chain prototype are
-tested in CI. **This is NOT yet connected to Minecraft, Chameleon, or the editor renderer.**
+Native physics worlds, SwingTwist joints, curved and nonuniform chains and a
+reflection-only preview adapter are tested on real Java 8 in CI. The opt-in
+bridge has been wired into the actual Body Parts renderer source, but **the
+Forge mod has NOT yet been compiled and visually tested inside Minecraft.**
 
 Branches: `feature/jolt-java8-port`. The editor's `main` is intentionally untouched.
 
@@ -40,7 +42,8 @@ garbage-collection path invoke each freeing action only once.
 
 - One non-colliding kinematic attachment body and 1–64 dynamic capsule segments.
 - Actual Jolt `SwingTwistConstraint` joints, with motor springs when stiffness > 0.
-- Rest length fixed in physical space, authored orientation is not derived from Euler.
+- Each real bone segment has its own rest length and orientation; authored
+  curved and nonuniform Chameleon strands are preserved without flattening.
 - Root-to-tip spring falloff; independent linear/angular damping.
 - Fixed tick of 50ms with three substeps (~60Hz), matching Wemppy's timing.
 - Read-back of each native segment's actual position and quaternion.
@@ -56,7 +59,15 @@ Tests:
 - `JoltHairChainSmoke` — 4-link strand swings with moving anchor, then relaxes.
 - `JoltAnchorRotationSmoke` — checks continuous anchor X movement across 55–70°.
 - `JoltJava8BootstrapSmoke` — fail-closed process-level JNI init from configured native file.
-- `JoltBoneQuaternionMapperSmoke` — Jolt body world quaternion to local Chameleon quaternion with anchor Y=180°, X=50–75°, tested for continuity.
+- `JoltBoneQuaternionMapperSmoke` — native bone quaternions remain continuous
+  through anchor X=50–75° with Y=180°.
+- `JoltChameleonPreviewRigSmoke` — original 4×4 Chameleon world matrices, animated parent,
+  curved strand and local swing extraction.
+- `JoltPreviewBridgeSmoke` — opt-in reflective legacy preview, repeated frames,
+  seeking and native scene release.
+- `JoltHorstHairFixtureSmoke` — left/right/back geometry measured from the
+  supplied hair model, including real unequal lengths, with each chain
+  rotated through anchor X=0°→80°→0° (no large physical jumps).
 
 ## Reproduce the build and download experimental JARs
 
@@ -153,17 +164,18 @@ it logs the reason and falls back to legacy physics without a fatal
 exception. Turn off the opt-in flag to return to the old solver.
 
 **Prototype limitations:**
-- Only simple approximately straight, equal-segment-length strands.
-  Broken, short, curved, non-uniform or mirrored chains reject cleanly and
-  continue on the legacy solver. Real Horst hair compatibility is not yet
-  confirmed.
+- Curved, non-uniform strands are supported and the native tests now use
+  actual pivot/tip measurements of all three Horst hair chains. Degenerate
+  or mirrored bone transforms still reject cleanly and fall back. The
+  ***in-game* Horst model has not yet been tested**.
 - No rigid-body collision shapes assigned to the torso yet. This isolates
   gravity and the 60-degree artifact from mesh penetration.
 - The older Chameleon pose writer still converts local axis-angle to Euler
   for legacy 1.12.2, and clamps to 1.20 radians; exact Chameleon render
   handedness and posed bone matrices require a visual Minecraft run.
-- Timeline seeks and parameter changes recreate the native rig. A scene
-  needs to call `BodyPartsPreviewRenderer.clear()` on final teardown.
+- Timeline seeks and parameter changes recreate the native rig. The
+  existing `BlockbusterActorPreviewRenderer.clear()` calls
+  `BodyPartsPreviewRenderer.clear()`, which now disposes Jolt scenes.
 - The optional Gradle shaded-JAR path has not been built under real Forge:
   the repository does not include the user's runtime Blockbuster/Metamorph
   dependencies on GitHub Actions. Compile and in-game test on the user's
