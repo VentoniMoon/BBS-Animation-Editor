@@ -27,8 +27,9 @@ public final class JoltPreviewBridgeSmoke {
         try {
             Map<String,float[]> first=bridge.sample(data,"hair/back",bones,0,
                     world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1.0F);
-            if(first==null || !first.isEmpty())
-                throw new AssertionError("Jolt scene must initialize on first tick");
+            if(first==null || first.size()!=bones.length ||
+                    !bridge.wasRecreatedThisSample())
+                throw new AssertionError("Jolt first frame must return settled bone rotations");
             for(int tick=1;tick<=50;tick++) {
                 Map<String,float[]> result=bridge.sample(data,"hair/back",bones,
                         tick,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
@@ -42,11 +43,23 @@ public final class JoltPreviewBridgeSmoke {
                     50,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
             if(repeated==null || repeated.size()!=4)
                 throw new AssertionError("Repeated render must reuse snapshot");
+            if(bridge.wasRecreatedThisSample())
+                throw new AssertionError("Repeated paused frame unnecessarily rebuilt Jolt scene");
             // Reversing timeline must reset the native world safely.
             Map<String,float[]> seek=bridge.sample(data,"hair/back",bones,
                     12,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
-            if(seek==null || !seek.isEmpty())
-                throw new AssertionError("Seek must reset Jolt world");
+            if(seek==null || seek.size()!=bones.length ||
+                    !bridge.wasRecreatedThisSample())
+                throw new AssertionError("Seek must rebuild a settled Jolt world");
+            // Editing a *child* bone on a paused frame must also rebuild;
+            // checking only root and parent would keep the stale hair rig.
+            world[2]=world[2].clone();
+            world[2][12]+=0.03F;
+            Map<String,float[]> changed=bridge.sample(data,"hair/back",bones,
+                    12,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
+            if(changed==null || changed.size()!=bones.length ||
+                    !bridge.wasRecreatedThisSample())
+                throw new AssertionError("Paused child bone edit kept stale Jolt scene");
             System.out.println("Forge-style reflection preview bridge: PASS");
         } finally {
             bridge.clear();
