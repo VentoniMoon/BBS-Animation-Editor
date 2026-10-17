@@ -202,7 +202,9 @@ jobs:
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
-            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java
           for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
             if curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
               "$base/com/github/stephengold/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
