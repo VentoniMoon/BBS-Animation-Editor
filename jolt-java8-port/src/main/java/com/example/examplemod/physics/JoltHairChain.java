@@ -19,7 +19,7 @@ public final class JoltHairChain implements AutoCloseable {
     public static final float TICK = 1F / 20F;
     public static final int SUBSTEPS = 3;
     /**
-     * Opt-in test parameter only. Wenmppy exposes bend as a chain setting;
+     * Opt-in test parameter only. Wemppy exposes bend as a chain setting;
      * ours remains 80 degrees unless explicitly configured at launch.
      */
     public static final String BEND_DEGREES_PROPERTY =
