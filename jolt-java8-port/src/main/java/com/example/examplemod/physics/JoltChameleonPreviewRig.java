@@ -82,6 +82,19 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         return chain.hasTorsoCollider();
     }
 
+    /** Optional 3-zone native torso contacts: each collider follows the skin. */
+    public void setTorsoSegments(float[][] starts,float[][] ends,float[] radii)
+    {
+        chain.setTorsoSegments(starts,ends,radii);
+    }
+
+    /** Diagnostic only: actual native dynamic-body endpoints and contact radii. */
+    public float[][] nativeHairSegments()
+    {
+        return chain.nativeHairSegments();
+    }
+
+
     /**
      * On a seek or a stationary pose edit, resolve free-hanging gravity at the
      * CURRENT anchor pose before publishing an initial preview. This does not
