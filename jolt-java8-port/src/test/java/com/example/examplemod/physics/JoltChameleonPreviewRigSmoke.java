@@ -86,6 +86,28 @@ public final class JoltChameleonPreviewRigSmoke {
         } finally {
             rig.close();
         }
+        // Horst-type strands are often deliberately curved and not uniformly
+        // spaced. Preserve each pivot and segment length without flattening.
+        float[][] curved = new float[][] {
+                matrix(0D,3F,5F,-2F),
+                matrix(0D,3.02F,4.73F,-1.91F),
+                matrix(0D,3.10F,4.51F,-1.83F),
+                matrix(0D,3.15F,4.27F,-1.79F)
+        };
+        float[] curvedTip={3.18F,4.09F,-1.78F};
+        JoltChameleonPreviewRig curvedRig=JoltChameleonPreviewRig.create(0,
+                curved,curvedTip,parent,0.12F,0.35F,0.60F);
+        try {
+            for(int frame=1;frame<=150;frame++) {
+                curvedRig.advance(frame,new float[] {3F,5F,-2F},parent);
+                float[][] rotations=curvedRig.localBoneRotations();
+                for(float[] q:rotations)
+                    for(float v:q)if(!Float.isFinite(v))
+                        throw new AssertionError("Non-finite curved-chain pose");
+            }
+            System.out.println("Curved unequal-length Chameleon hair rig: PASS");
+        } finally {curvedRig.close(); }
+
         float[][] uneven=bone.clone();
         uneven[2]=matrix(0D,3F,5F-3F*0.125F,-2F+3F*0.21650635F);
         expectRejected(uneven,tip,parent);
