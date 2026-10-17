@@ -42,6 +42,9 @@ public final class JoltHairChain implements AutoCloseable {
     private final float[] initialRotation;
     private final float[][] initialRotations;
     private final SwingTwistConstraint[] joints;
+    /** Optional Emoticons torso proxy (layer 1); no hair self collision. */
+    private Body torsoCollider;
+    private float colliderRadius, colliderSpan;
     private boolean closed;
 
     /** Backward-compatible straight vertical chain. */
@@ -110,11 +113,16 @@ public final class JoltHairChain implements AutoCloseable {
         this.initialDirection=directions[0].clone();
         this.initialRotation=rotations[0].clone();
         this.initialRotations=rotations;
-        this.pairFilter=new ObjectLayerPairFilterTable(1);
-        this.broadLayers=new BroadPhaseLayerInterfaceTable(1,1);
+        // Jolt's table defaults to NO collisions. Separate torso/body
+        // contacts from hair/hair: adjacent hair bones should not collide
+        // against each other or the pinned kinematic root.
+        this.pairFilter=new ObjectLayerPairFilterTable(2);
+        pairFilter.enableCollision(0,1);
+        this.broadLayers=new BroadPhaseLayerInterfaceTable(2,2);
         broadLayers.mapObjectToBroadPhaseLayer(0,0);
+        broadLayers.mapObjectToBroadPhaseLayer(1,1);
         this.broadFilter=new ObjectVsBroadPhaseLayerFilterTable(
-                broadLayers,1,pairFilter,1);
+                broadLayers,2,pairFilter,2);
         this.world=new PhysicsSystem();
         world.init(256,0,512,512,broadLayers,broadFilter,pairFilter);
         world.setGravity(0F,-9.81F,0F);
@@ -184,6 +192,75 @@ public final class JoltHairChain implements AutoCloseable {
             tuneSpring(constraint,stiffness,damping,falloff,i,count);
             previous=body;
         }
+    }
+
+    /**
+     * Optional kinematic torso collider, fitted by the editor from the
+     * ACTUAL CPU-skinned Emoticons torso mesh and animated bone positions.
+     *
+     * Endpoints are in the same world frame as the hair chain. The capsule
+     * follows the actor every simulated frame and naturally reacts to all
+     * directions of gravity. No guessed giant capsule or flat-plane force.
+     * Caller must omit this method entirely unless mesh-space validation
+     * succeeded. Only the hair-vs-torso collision pair is enabled.
+     */
+    public void setTorsoCollider(float[] a,float[] b,float radius) {
+        requireOpen();
+        if(!finite3(a)||!finite3(b)||!Float.isFinite(radius)||
+                radius<0.04F||radius>0.24F)
+            throw new IllegalArgumentException("Invalid fitted torso collider");
+        float dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
+        float span=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(span<0.10F||span>1F)
+            throw new IllegalArgumentException("Unexpected torso joint span");
+        float[] direction=new float[]{dx/span,dy/span,dz/span};
+        float[] quaternion=rotationFromNegativeY(direction);
+        RVec3 center=new RVec3((a[0]+b[0])*0.5D,
+                (a[1]+b[1])*0.5D,(a[2]+b[2])*0.5D);
+        Quat orientation=new Quat(quaternion[0],quaternion[1],
+                quaternion[2],quaternion[3]);
+        if(torsoCollider==null) {
+            // Caps at both ends round the torso instead of terminating in
+            // artificial sharp contact planes. This is a fitted proxy, NOT
+            // a replacement for the skin mesh.
+            float halfCylinder=Math.max(0.005F,0.5F*span-radius);
+            CapsuleShape shape=new CapsuleShape(halfCylinder,radius);
+            BodyCreationSettings settings=new BodyCreationSettings(
+                    shape,center,orientation,EMotionType.Kinematic,1);
+            Body created=null;
+            try {
+                created=bodies.createBody(settings);
+                if(created==null)
+                    throw new IllegalStateException("Jolt failed to create torso collider");
+                bodies.addBody(created.getId(),EActivation.Activate);
+                torsoCollider=created;
+                colliderRadius=radius;
+                colliderSpan=span;
+            } finally {
+                settings.close();
+                shape.close();
+            }
+        } else {
+            // A dynamically changed torso thickness requires rebuilding
+            // the proxy in a fresh rig; NEVER silently reinterpret its shape.
+            if(Math.abs(colliderRadius-radius)>0.03F||
+                    Math.abs(colliderSpan-span)>0.08F)
+                throw new IllegalArgumentException(
+                        "Torso topology changed: restart preview scene");
+            bodies.moveKinematic(torsoCollider.getId(),center,orientation,TICK);
+        }
+    }
+
+    public boolean hasTorsoCollider() {
+        requireOpen();
+        return torsoCollider!=null;
+    }
+
+    private static boolean finite3(float[] xyz) {
+        if(xyz==null||xyz.length!=3)return false;
+        for(float value:xyz)
+            if(!Float.isFinite(value))return false;
+        return true;
     }
 
     public void setGravity(float multiplier) {
@@ -347,6 +424,11 @@ public final class JoltHairChain implements AutoCloseable {
                 bodies.removeBody(link.getId());
                 bodies.destroyBody(link.getId());
             }
+        }
+        if(torsoCollider!=null) {
+            bodies.removeBody(torsoCollider.getId());
+            bodies.destroyBody(torsoCollider.getId());
+            torsoCollider=null;
         }
         bodies.removeBody(pin.getId());
         bodies.destroyBody(pin.getId());
