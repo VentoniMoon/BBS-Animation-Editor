@@ -38,15 +38,47 @@ public final class JoltContactOverlaySnapshot
         }
     }
 
+    /** Actual kinematic Jolt box setup for an added BodyPart cube. */
+    public static final class Box
+    {
+        /** World xyz, quaternion xyzw, positive half xyz. */
+        public final float[] pose;
+
+        public Box(float[] input)
+        {
+            if(input==null || input.length!=10)
+                throw new IllegalArgumentException("Expected 10-float Jolt box");
+            for(float value:input)
+                if(!Float.isFinite(value))
+                    throw new IllegalArgumentException("Non-finite Jolt box");
+            for(int i=7;i<10;i++)
+                if(!(input[i]>=0.003F) || input[i]>2F)
+                    throw new IllegalArgumentException("Invalid Jolt box dimensions");
+            float q=input[3]*input[3]+input[4]*input[4]+
+                    input[5]*input[5]+input[6]*input[6];
+            if(Math.abs(q-1F)>0.02F)
+                throw new IllegalArgumentException("Invalid Jolt box quaternion");
+            this.pose=input.clone();
+        }
+    }
+
     public final int frame;
     public final int activeScenes;
     public final int torsoCount;
     public final int hairCount;
     public final List<Shape> shapes;
+    public final List<Box> boxes;
+    public final int boxCount;
 
     public JoltContactOverlaySnapshot(int frame,int activeScenes,List<Shape> items)
     {
-        if(activeScenes<0 || items==null)
+        this(frame,activeScenes,items,Collections.<Box>emptyList());
+    }
+
+    public JoltContactOverlaySnapshot(int frame,int activeScenes,List<Shape> items,
+            List<Box> boxItems)
+    {
+        if(activeScenes<0 || items==null || boxItems==null)
             throw new IllegalArgumentException("Invalid Jolt overlay snapshot");
         List<Shape> copy=new ArrayList<Shape>(items.size());
         int hair=0,torso=0;
@@ -63,6 +95,14 @@ public final class JoltContactOverlaySnapshot
         this.torsoCount=torso;
         this.hairCount=hair;
         this.shapes=Collections.unmodifiableList(copy);
+        List<Box> boxCopy=new ArrayList<Box>(boxItems.size());
+        for(Box box:boxItems)
+        {
+            if(box==null)throw new IllegalArgumentException("Null Jolt box");
+            boxCopy.add(new Box(box.pose));
+        }
+        this.boxCount=boxCopy.size();
+        this.boxes=Collections.unmodifiableList(boxCopy);
     }
 
     private static boolean isValid(float[] v)
