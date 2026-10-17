@@ -56,8 +56,22 @@ public final class BodyPartPhysicsChains
                 // strands (often on head hairstyles). It stays animated:
                 // each child independently starts a Jolt chain and inherits
                 // the selected parent's settings. No bone is simulated twice.
+                int previousCount=result.size();
                 for(AnimationBone child:children)
+                {
+                    // Decorative single-bone attachments (ears, ribbons,
+                    // ornaments) are not dynamic strands. A shared head
+                    // anchor must not fail merely because one sibling has
+                    // no joint to simulate.
+                    if(child==null || child.getChildren()==null ||
+                            child.getChildren().isEmpty())
+                        continue;
                     appendLinearChain(child,settings,used,result);
+                }
+                if(result.size()==previousCount)
+                    throw new IllegalStateException(
+                            "Shared physics anchor "+bone.getName()+
+                            " has no child chains with at least two bones");
             }
             else
             {
