@@ -108,6 +108,35 @@ public final class JoltChameleonPreviewRigSmoke {
             System.out.println("Curved unequal-length Chameleon hair rig: PASS");
         } finally {curvedRig.close(); }
 
+        // A single Chameleon cube (e.g. headwear/front bang) is a valid
+        // physical strand: one driven bone and its decoded free cube tip.
+        // Previously both the editor and this bridge rejected <2 bones.
+        float[][] single={matrix(0D,3F,5F,-2F)};
+        float[] singleTip={3.04F,4.77F,-2.07F};
+        JoltChameleonPreviewRig one=JoltChameleonPreviewRig.create(0,
+                single,singleTip,parent,0.35F,0.25F,0.60F);
+        try {
+            one.setGravity(1F);
+            one.settle(20);
+            if(one.nativeHairSegments().length!=1 ||
+                    one.localBoneRotations().length!=1)
+                throw new AssertionError("Single bone missing native Jolt link");
+            for(int tick=1;tick<=28;tick++)
+            {
+                float[] animatedParent=matrix(tick<=9 ? tick*5D : 45D,
+                        3F,5F,-2F);
+                one.advance(tick,new float[]{3F,5F,-2F},animatedParent);
+                float[][] swings=one.localBoneSwings(single,animatedParent);
+                if(swings.length!=1 || swings[0].length!=4)
+                    throw new AssertionError("Single-bone swing missing");
+                for(float value:swings[0])
+                    if(!Float.isFinite(value))
+                        throw new AssertionError("Non-finite single-bone motion");
+            }
+            System.out.println("Single Chameleon head-hair bone + cube tip: PASS");
+        }
+        finally {one.close();}
+
         float[][] uneven=bone.clone();
         uneven[2]=matrix(0D,3F,5F-3F*0.125F,-2F+3F*0.21650635F);
         expectRejected(uneven,tip,parent);
