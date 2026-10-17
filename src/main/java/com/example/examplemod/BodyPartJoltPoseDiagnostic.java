@@ -78,6 +78,26 @@ public final class BodyPartJoltPoseDiagnostic
         return normalize(new float[] {tip[0]-p[0], tip[1]-p[1], tip[2]-p[2]});
     }
 
+    /**
+     * Angle between two CLEAN native attachment frames. A sudden change
+     * here means a frozen Jolt sample was captured under a different
+     * parent's orientation. Classify that event as SOURCE_CHANGED rather
+     * than incorrectly blaming the Chameleon bone-Euler adapter.
+     */
+    public static float parentRotationChangeDegrees(float[] first,
+            float[] second)
+    {
+        float[] a=orthonormalBasis(first);
+        float[] b=orthonormalBasis(second);
+        // Trace(Ra^-1 * Rb) is the sum of the three corresponding
+        // unit-axis dot products, independent of scale or translation.
+        double trace=0D;
+        for(int i=0;i<9;i++)
+            trace+=a[i]*b[i];
+        double cosine=Math.max(-1D,Math.min(1D,(trace-1D)*0.5D));
+        return (float)Math.toDegrees(Math.acos(cosine));
+    }
+
     public static float errorDegrees(float[] expected, float[] actual)
     {
         float[] a = normalize(expected), b = normalize(actual);
