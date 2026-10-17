@@ -98,6 +98,12 @@ public class BodyPartsPreviewRenderer
     /** Compare Jolt's intended direction with Chameleon's ACTUAL rendered pivots. */
     private static final boolean JOLT_DIRECTION_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
+    /**
+     * Enable accurate ChameleonMorph.render() outer scale/Y180 transform
+     * only in the experimental Jolt route. Compare on/off in-game first.
+     */
+    private static final boolean JOLT_EXACT_CHILD_SPACE =
+            Boolean.getBoolean("bbs.editor.physics.jolt.exactChildSpace");
     /** Sample generated AFTER a render; available for the next draw of that frame. */
     private final Map<BodyPartModelData, Map<String, float[]>> joltSampleDirections =
             new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
@@ -636,6 +642,27 @@ public class BodyPartsPreviewRenderer
      * produced the Jolt axis-angle applied to THIS SAME frame. Never infer an
      * axis sign from a screenshot or change the simulated pose here.
      */
+    /**
+     * Native ChameleonRenderer.postRender() is invoked under identity by our
+     * matrix probe. It therefore omits the OUTER ChameleonMorph.render()
+     * matrix. Metamorph's nested morph renderer supplies implicit +180 Y
+     * yaw after the BodyPart transform, and the child morph's own scale.
+     */
+    private static float[] worldFromRenderedChameleonChild(
+            float[] parentWorld,BodyPart part)
+    {
+        float[] worldPart=BodyPartPhysicsAttachment.worldMatrix(parentWorld,part);
+        if(!BodyPartJoltPreviewAdapter.isRequested() || !JOLT_EXACT_CHILD_SPACE)
+            return worldPart;
+        if(part==null || part.morph==null || part.morph.get()==null ||
+                !part.morph.get().getClass().getName().endsWith(".ChameleonMorph"))
+            return worldPart;
+        float scale=BodyPartChameleonChildRenderSpace.renderScale(
+                part.morph.get(),
+                net.minecraft.client.Minecraft.getMinecraft().getRenderPartialTicks());
+        return BodyPartChameleonChildRenderSpace.withChildRender(worldPart,scale);
+    }
+
     private void diagnoseJoltRenderedDirections(BodyPartModelData data,
             BodyPart part, float[] lowBodyWorld, int frame)
     {
@@ -653,7 +680,7 @@ public class BodyPartsPreviewRenderer
                     BodyPartChameleonMatrixProbe.source(part.morph.get());
             if (local == null) return;
             float[] attachment =
-                    BodyPartPhysicsAttachment.worldMatrix(lowBodyWorld, part);
+                    worldFromRenderedChameleonChild(lowBodyWorld,part);
             BodyPartPhysicsWorldPose.MatrixSource visual =
                     BodyPartPhysicsWorldPose.worldSource(attachment, local);
             Map<String, String> previous = lastJoltDirectionReports.get(data);
@@ -721,6 +748,71 @@ public class BodyPartsPreviewRenderer
                         lastTimes.put(bone, Long.valueOf(now));
                         System.out.println("[BBS Animation Editor][Jolt][Compare] "
                                 + cause + " " + report + " (world-space segment direction)");
+
+                        /*
+                         * Probe the ACTUAL decoded Chameleon quads, after
+                         * ModelParser mirrored their X coordinates and after
+                         * each cube's own pivot/rotation. The old static
+                         * Horst reference is only a labeled fallback.
+                         */
+                        BodyPartChameleonCubeProbe.Cube reference =
+                                BodyPartChameleonCubeProbe.getReference(bone);
+                        try
+                        {
+                            BodyPartChameleonRenderedCubeProbe.Result loaded =
+                                    BodyPartChameleonRenderedCubeProbe.inspect(
+                                            part.morph.get(),bone,current);
+                            BodyPartJoltCubeGeometry.Measurement geometry = loaded != null
+                                    ? loaded.measurement : reference != null
+                                    ? BodyPartJoltCubeGeometry.measure(current,
+                                            reference.pivot,reference.origin,
+                                            reference.size,reference.inflate)
+                                    : null;
+                            if (geometry != null)
+                            {
+                                float cubeVsPivot =
+                                        BodyPartJoltCubeGeometry.alignmentDegrees(
+                                                geometry.cubeDown,actual);
+                                float tipVsPivot =
+                                        BodyPartJoltCubeGeometry.alignmentDegrees(
+                                                geometry.pivotToTip,actual);
+                                float cubeVsNative = raw == null ? Float.NaN :
+                                        BodyPartJoltCubeGeometry.alignmentDegrees(
+                                                geometry.cubeDown,raw);
+                                String classification = Float.isFinite(sourceShift)
+                                        && sourceShift >= 1F ? "SOURCE_CHANGED"
+                                        : cubeVsPivot > 90F ? "CUBE_REVERSED"
+                                        : "CUBE_ALIGNED";
+                                String source = loaded == null
+                                        ? "HorstReferenceUnverified" : "ActualChameleonQuads";
+                                int cubes = loaded == null ? 1 : loaded.cubeCount;
+                                int vertices = loaded == null ? 0 : loaded.vertexCount;
+                                System.out.println(String.format(java.util.Locale.ROOT,
+                                        "[BBS Animation Editor][Jolt][Cube] %s "
+                                        + "frame=%d bone=%s source=%s cubes=%d vertices=%d "
+                                        + "cubeDown=(%.2f,%.2f,%.2f) "
+                                        + "pivotNext=(%.2f,%.2f,%.2f) "
+                                        + "cubePivotDeg=%.1f pivotTipDeg=%.1f "
+                                        + "cubeNativeDeg=%.1f cubeCenterY=%.3f "
+                                        + "cubeTipY=%.3f pivotTipDeltaY=%.3f "
+                                        + "cubeBoundsY=[%.3f,%.3f]",
+                                        classification,frame,bone,source,cubes,vertices,
+                                        geometry.cubeDown[0],geometry.cubeDown[1],
+                                        geometry.cubeDown[2],
+                                        actual[0],actual[1],actual[2],
+                                        cubeVsPivot,tipVsPivot,cubeVsNative,
+                                        geometry.cubeCenterWorld[1],
+                                        geometry.cubeTipWorld[1],
+                                        geometry.pivotToTipWorldY,
+                                        geometry.minWorldY,geometry.maxWorldY));
+                            }
+                        }
+                        catch (RuntimeException geometryError)
+                        {
+                            System.err.println("[BBS Animation Editor][Jolt][Cube] "
+                                    + "Measurement unavailable for " + bone
+                                    + ": " + geometryError.getMessage());
+                        }
                     }
                 }
             }
@@ -968,7 +1060,7 @@ public class BodyPartsPreviewRenderer
         /* Metamorph records parent limb BEFORE its BodyPart transform. */
         try
         {
-            float[] attached = BodyPartPhysicsAttachment.worldMatrix(parentMatrix, part);
+            float[] attached = worldFromRenderedChameleonChild(parentMatrix,part);
             BodyPartPhysicsWorldPose.MatrixSource world =
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
             boolean advanced = false;
@@ -1113,7 +1205,9 @@ public class BodyPartsPreviewRenderer
                                 if (reportedJoltPreview.add(stateId))
                                     System.out.println("[BBS Animation Editor][Jolt] "
                                             + "Native quaternion preview active: " + stateId
-                                            + " (body collisions and export not enabled)");
+                                            + " (childRenderSpace="
+                                            + (JOLT_EXACT_CHILD_SPACE ? "scale+Y180" : "legacyNoChildYaw")
+                                            + ", body collisions and export not enabled)");
                                 for (Map.Entry<String, float[]> swing : physical.entrySet())
                                 {
                                     physicsFrames.accept(data, frame,
