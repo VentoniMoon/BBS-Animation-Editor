@@ -5,6 +5,9 @@ on:
     paths:
       - 'jolt-java8-port/**'
       - '.github/workflows/jolt-java8.yml'
+      - 'src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
+      - 'build.gradle'
   workflow_dispatch:
 
 jobs:
