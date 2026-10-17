@@ -64,6 +64,12 @@ public final class JoltMultiTorsoBridgeSmoke
                     0F,.30F,1F,a,b,base.radius,multi);
             if(first==null||first.size()!=3||!bridge.wasRecreatedThisSample())
                 throw new AssertionError("Compound reflection create unavailable");
+            if(bridge.contactModeFor("compound/back",0)!=3)
+                throw new AssertionError("Overlay must identify THREE installed Jolt colliders");
+            if(bridge.contactModeFor("compound/back",1)!=0)
+                throw new AssertionError("Overlay must reject stale frame contact proxies");
+            if(bridge.contactModeFor("unknown-scene",0)!=0)
+                throw new AssertionError("Overlay must not invent contact geometry");
             if(!BodyPartJoltPreviewAdapter.drawContactsRequested())
                 throw new AssertionError("Missing live debug drawing opt-in");
             float[][] real=bridge.hairSegmentsFor("compound/back",0);
@@ -83,6 +89,9 @@ public final class JoltMultiTorsoBridgeSmoke
                     0F,.30F,1F,a,b,base.radius,next);
             if(moving==null||moving.size()!=3||bridge.wasRecreatedThisSample())
                 throw new AssertionError("Compound torso recreated unnecessarily");
+            if(bridge.contactModeFor("compound/back",1)!=3 ||
+                    bridge.contactModeFor("compound/back",0)!=0)
+                throw new AssertionError("Contact frame/version mismatch");
             System.out.println("Native Java8 compound reflection & UI toggle: PASS");
         }
         finally

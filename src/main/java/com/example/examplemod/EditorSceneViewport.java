@@ -33,6 +33,8 @@ public class EditorSceneViewport
 
     private boolean worldAfterActorRendered;
     private boolean weatherRendered;
+    /** Frame sampled by the actor before the final preview FBO overlay. */
+    private int lastJoltOverlayFrame = -1;
 
 
     public EditorSceneViewport()
@@ -124,6 +126,7 @@ public class EditorSceneViewport
             List<AnimationBone> bones,
             int currentFrame)
     {
+        this.lastJoltOverlayFrame = currentFrame;
         if (mc == null)
         {
             return;
@@ -463,6 +466,28 @@ public class EditorSceneViewport
          */
 
         this.endWorldRender();
+
+        /*
+         * The old collider debug was drawn inside RenderManager's actor
+         * pass and then covered by late world/cloud rendering and shader
+         * state. Draw AFTER all world/actor/cloud passes but BEFORE the
+         * Preview framebuffer is copied to the GUI. Reconstruct the SAME
+         * perspective and camera as the established visible gizmo.
+         */
+        if (BodyPartJoltPreviewAdapter.drawContactsRequested()
+                && this.lastJoltOverlayFrame >= 0)
+        {
+            final int frame = this.lastJoltOverlayFrame;
+            JoltContactOverlayPass.render(mc,this.camera,
+                    this.x,this.y,this.width,this.height,
+                    new Runnable()
+                    {
+                        @Override public void run()
+                        {
+                            actorPreviewRenderer.drawJoltColliderOverlay(frame);
+                        }
+                    });
+        }
 
 
         /*
