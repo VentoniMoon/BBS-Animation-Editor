@@ -44,6 +44,9 @@ public final class JoltRenderedDirectionSmoke
     public static void main(String[] args) {
         final String[] bones={"back_strand_1","back_strand_2"};
         float[] id=BodyPartPhysicsRotation.eulerXYZ(0F,0F,0F);
+        // Translation never changes angular source-pose diagnostics.
+        close(BodyPartJoltPoseDiagnostic.parentRotationChangeDegrees(
+                pose(0,0,0,id),pose(9,-5,8,id)),0F);
         float[][] plain={pose(0,0,0,id),pose(0,-1,0,id)};
         float[] tip={0,-2,0};
         Map<String,float[]> corrected=BodyPartJoltPoseDiagnostic.expectedDirections(
@@ -65,6 +68,12 @@ public final class JoltRenderedDirectionSmoke
             float rad=(float)Math.toRadians(degrees);
             for(int mirroredY:new int[]{0,180}) {
                 float[] matrix=basis(rad,(float)Math.toRadians(mirroredY));
+                float sourceAngle=BodyPartJoltPoseDiagnostic.parentRotationChangeDegrees(
+                        pose(0,0,0,basis(0F,(float)Math.toRadians(mirroredY))),
+                        pose(2,4,6,matrix));
+                if(Math.abs(sourceAngle-degrees)>0.1F)
+                    throw new AssertionError("Parent tilt "+degrees+
+                            " Y="+mirroredY+" measured "+sourceAngle);
                 float[] dir=rotate(matrix,new float[]{0,-1,0});
                 float[][] world={pose(0,0,0,matrix),
                         pose(dir[0],dir[1],dir[2],matrix)};
