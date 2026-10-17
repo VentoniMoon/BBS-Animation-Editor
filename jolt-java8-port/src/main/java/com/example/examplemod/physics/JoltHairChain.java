@@ -55,6 +55,10 @@ public final class JoltHairChain implements AutoCloseable {
     /** Three independently fitted native bodies; mutually noncolliding. */
     private Body[] torsoSegments;
     private float[] torsoSegmentRadius, torsoSegmentSpan;
+    /** Optional cube colliders from arbitrary additional Chameleon BodyParts. */
+    public static final int MAX_ADDITIONAL_BOXES=32;
+    private Body[] additionalBoxes;
+    private float[][] additionalBoxHalf;
     private final float[] physicalLengths;
     private final float[] physicalRadii;
     private boolean closed;
@@ -132,7 +136,7 @@ public final class JoltHairChain implements AutoCloseable {
         // against each other or the pinned kinematic root.
         // Subgroup 0=pin, 1..N=dynamic hair, N+1..N+3=torso shapes.
         // There is one physical world per chain, so group id 0 is local.
-        this.contactGroups=new GroupFilterTable(count+4);
+        this.contactGroups=new GroupFilterTable(count+4+MAX_ADDITIONAL_BOXES);
         this.pairFilter=new ObjectLayerPairFilterTable(2);
         pairFilter.enableCollision(0,1);
         this.broadLayers=new BroadPhaseLayerInterfaceTable(2,2);
@@ -380,6 +384,110 @@ public final class JoltHairChain implements AutoCloseable {
         }
     }
 
+    /**
+     * Animated kinematic collision boxes from OTHER attached BodyParts.
+     * Every row contains world center xyz, quaternion xyzw and positive half
+     * dimensions xyz (ten floats), all in the SAME frame as hair and torso.
+     *
+     * The geometry is created once per chain; later frames move these native
+     * bodies with velocity so a turning chest can actually nudge front hair.
+     * If topology or half extents change, the caller must recreate this rig.
+     * Existing inertia-only hair / torso setups remain untouched when no
+     * additional boxes were supplied.
+     */
+    public void setAdditionalBoxes(float[][] boxes)
+    {
+        requireOpen();
+        if(boxes==null || boxes.length==0)
+        {
+            if(additionalBoxes!=null && additionalBoxes.length>0)
+                throw new IllegalArgumentException(
+                        "Collision topology changed: recreate Jolt rig");
+            return;
+        }
+        if(boxes.length>MAX_ADDITIONAL_BOXES)
+            throw new IllegalArgumentException("Too many BodyPart collision boxes");
+        RVec3[] centers=new RVec3[boxes.length];
+        Quat[] rotations=new Quat[boxes.length];
+        float[][] extents=new float[boxes.length][3];
+        for(int i=0;i<boxes.length;i++)
+        {
+            float[] box=boxes[i];
+            if(box==null || box.length!=10)
+                throw new IllegalArgumentException("Expected 10-float collision box");
+            for(float value:box)
+                if(!Float.isFinite(value))
+                    throw new IllegalArgumentException("Non-finite collision box");
+            float qLength=box[3]*box[3]+box[4]*box[4]+
+                    box[5]*box[5]+box[6]*box[6];
+            if(Math.abs(qLength-1F)>0.02F)
+                throw new IllegalArgumentException("Non-unit collision quaternion");
+            for(int axis=0;axis<3;axis++)
+            {
+                extents[i][axis]=box[7+axis];
+                if(!(extents[i][axis]>=0.003F) ||
+                        extents[i][axis]>2F)
+                    throw new IllegalArgumentException("Invalid collision half-size");
+            }
+            centers[i]=new RVec3(box[0],box[1],box[2]);
+            rotations[i]=new Quat(box[3],box[4],box[5],box[6]);
+        }
+        if(additionalBoxes==null)
+        {
+            Body[] created=new Body[boxes.length];
+            try
+            {
+                for(int i=0;i<boxes.length;i++)
+                {
+                    BoxShape shape=new BoxShape(new Vec3(
+                            extents[i][0],extents[i][1],extents[i][2]),0.002F);
+                    BodyCreationSettings settings=new BodyCreationSettings(
+                            shape,centers[i],rotations[i],EMotionType.Kinematic,1);
+                    settings.setCollisionGroup(new CollisionGroup(
+                            contactGroups,0,links.length+4+i));
+                    try
+                    {
+                        created[i]=bodies.createBody(settings);
+                        if(created[i]==null)
+                            throw new IllegalStateException("Jolt could not create BodyPart box");
+                        bodies.addBody(created[i].getId(),EActivation.Activate);
+                    }
+                    finally
+                    {
+                        settings.close();
+                        shape.close();
+                    }
+                }
+                additionalBoxes=created;
+                additionalBoxHalf=extents;
+            }
+            catch(Throwable error)
+            {
+                for(Body body:created)
+                    if(body!=null)
+                    {
+                        bodies.removeBody(body.getId());
+                        bodies.destroyBody(body.getId());
+                    }
+                throw error;
+            }
+        }
+        else
+        {
+            if(additionalBoxes.length!=boxes.length)
+                throw new IllegalArgumentException(
+                        "Collision box count changed: recreate Jolt rig");
+            for(int i=0;i<boxes.length;i++)
+                for(int k=0;k<3;k++)
+                    if(Math.abs(additionalBoxHalf[i][k]-extents[i][k])>0.025F)
+                        throw new IllegalArgumentException(
+                                "Collision box size changed: recreate Jolt rig");
+            for(int i=0;i<boxes.length;i++)
+                bodies.moveKinematic(additionalBoxes[i].getId(),
+                        centers[i],rotations[i],TICK);
+        }
+    }
+
     /** A strand root is jointed into this animated body, not a free impact. */
     private void excuseRootContact(int zone)
     {
@@ -609,6 +717,16 @@ public final class JoltHairChain implements AutoCloseable {
                 }
             }
             torsoSegments=null;
+        }
+        if(additionalBoxes!=null)
+        {
+            for(Body body:additionalBoxes)
+                if(body!=null)
+                {
+                    bodies.removeBody(body.getId());
+                    bodies.destroyBody(body.getId());
+                }
+            additionalBoxes=null;
         }
         bodies.removeBody(pin.getId());
         bodies.destroyBody(pin.getId());
