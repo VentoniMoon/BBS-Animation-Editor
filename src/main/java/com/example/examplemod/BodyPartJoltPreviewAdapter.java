@@ -340,6 +340,17 @@ public final class BodyPartJoltPreviewAdapter {
                     state.rawHairBodies=collectHairSegments(scene,boneNames);
                     scenes.put(id,state);
                     recreatedLastSample=true;
+                    // Compare mirrored/neighboring strands from their actual
+                    // initial physical inputs, not from subjective camera
+                    // perspective. A missing head chain never reaches here.
+                    System.out.println("[BBS Editor][Jolt][ChainInit] id="+id+
+                            " frame="+frame+" bones="+Arrays.toString(boneNames)+
+                            " root="+Arrays.toString(root)+
+                            " tip="+Arrays.toString(terminalTipWorld)+
+                            " stiffness="+stiffness+" damping="+damping+
+                            " gravity="+gravity+" torso="+
+                            (useCompound?"compound":useTorso?"single":"none")+
+                            " extraBoxes="+(boxes==null?0:boxes.length));
                     return copy(state.sample);
                 } catch(Throwable failure) {
                     scene.close();
