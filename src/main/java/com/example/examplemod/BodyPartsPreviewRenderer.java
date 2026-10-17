@@ -721,6 +721,64 @@ public class BodyPartsPreviewRenderer
                         lastTimes.put(bone, Long.valueOf(now));
                         System.out.println("[BBS Animation Editor][Jolt][Compare] "
                                 + cause + " " + report + " (world-space segment direction)");
+
+                        /*
+                         * Horst-specific, read-only reference geometry. A
+                         * correct pivot-to-child vector is NOT automatically
+                         * proof that its rendered cube extends downward.
+                         * Measure reference cuboid direction, center and
+                         * actual lower face in the SAME post-render world
+                         * bone matrix as the next pivot. Do not change pose.
+                         */
+                        BodyPartChameleonCubeProbe.Cube cube =
+                                BodyPartChameleonCubeProbe.getReference(bone);
+                        if (cube != null)
+                        {
+                            try
+                            {
+                                BodyPartJoltCubeGeometry.Measurement geometry =
+                                        BodyPartJoltCubeGeometry.measure(
+                                                current,cube.pivot,cube.origin,
+                                                cube.size,cube.inflate);
+                                float cubeVsPivot =
+                                        BodyPartJoltCubeGeometry.alignmentDegrees(
+                                                geometry.cubeDown,actual);
+                                float tipVsPivot =
+                                        BodyPartJoltCubeGeometry.alignmentDegrees(
+                                                geometry.pivotToTip,actual);
+                                float cubeVsNative = raw == null ? Float.NaN :
+                                        BodyPartJoltCubeGeometry.alignmentDegrees(
+                                                geometry.cubeDown,raw);
+                                String classification = Float.isFinite(sourceShift)
+                                        && sourceShift >= 1F ? "SOURCE_CHANGED"
+                                        : cubeVsPivot > 90F ? "CUBE_REVERSED"
+                                        : "CUBE_ALIGNED";
+                                System.out.println(String.format(java.util.Locale.ROOT,
+                                        "[BBS Animation Editor][Jolt][Cube] %s "
+                                        + "frame=%d bone=%s cubeDown=(%.2f,%.2f,%.2f) "
+                                        + "pivotNext=(%.2f,%.2f,%.2f) "
+                                        + "cubePivotDeg=%.1f pivotTipDeg=%.1f "
+                                        + "cubeNativeDeg=%.1f cubeCenterY=%.3f "
+                                        + "cubeTipY=%.3f pivotTipDeltaY=%.3f "
+                                        + "cubeBoundsY=[%.3f,%.3f] "
+                                        + "referenceGeometry=true cubeLocalRotation=notMeasured",
+                                        classification,frame,bone,
+                                        geometry.cubeDown[0],geometry.cubeDown[1],
+                                        geometry.cubeDown[2],
+                                        actual[0],actual[1],actual[2],
+                                        cubeVsPivot,tipVsPivot,cubeVsNative,
+                                        geometry.cubeCenterWorld[1],
+                                        geometry.cubeTipWorld[1],
+                                        geometry.pivotToTipWorldY,
+                                        geometry.minWorldY,geometry.maxWorldY));
+                            }
+                            catch (RuntimeException geometryError)
+                            {
+                                System.err.println("[BBS Animation Editor][Jolt][Cube] "
+                                        + "Reference measurement unavailable for " + bone
+                                        + ": " + geometryError.getMessage());
+                            }
+                        }
                     }
                 }
             }
