@@ -439,6 +439,14 @@ public final class JoltHairChain implements AutoCloseable {
             {
                 for(int i=0;i<boxes.length;i++)
                 {
+                    // As with the fitted torso, the kinematic pin and first
+                    // physical hair link are attached at/inside the skin.
+                    // Excluding these two subgroups prevents an initial
+                    // contact explosion against passive scalp/chest cubes.
+                    // Downstream links retain real Jolt box contacts.
+                    int boxGroup=links.length+4+i;
+                    contactGroups.disableCollision(0,boxGroup);
+                    contactGroups.disableCollision(1,boxGroup);
                     BoxShape shape=new BoxShape(new Vec3(
                             extents[i][0],extents[i][1],extents[i][2]),0.002F);
                     BodyCreationSettings settings=new BodyCreationSettings(
