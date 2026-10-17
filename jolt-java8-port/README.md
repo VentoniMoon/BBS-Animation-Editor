@@ -439,6 +439,67 @@ When a compound mesh fit is unavailable, `[Jolt][Torso]` logs
 - `main` before the change is preserved at
   `backup/main-before-multicollider-debug-20261017`.
 
+## Fix: Jolt wireframe colliders invisible under actor + late world passes (2026-10-17)
+
+In the first in-game three-zone trial the user's screenshot showed only
+red/green/blue **gizmo rotation rings**; those are *not* Jolt collision
+wireframes. The original Jolt overlay was drawn in the actor
+RenderManager pass. That is the wrong place for guaranteed visibility
+with OptiFine: the actor can leave the shader pipeline active, and the
+remaining after-actor world/cloud passes can cover the immediate-mode
+lines. Drawing these lines before `finishPreviewRender()` completes
+was not enough.
+
+The overlay is now drawn in `EditorSceneViewport.finishPreviewRender()`
+**after all actor, world and cloud drawing, before the Preview FBO is
+composited into the GUI**, using the same preview-rectangle 3D camera,
+GL viewport, world coordinates, and shader reset as the working
+`EditorGizmoController.draw3D()`. The GL state, viewport, shader
+program and camera matrices are saved and restored. The physics
+scene does not advance just to draw diagnostics.
+
+A second bug of the original diagnostic was that it drew *candidate*
+Emoticons mesh-fit shapes even when a Jolt scene had not yet installed
+those physical bodies. The new overlay interrogates
+`BodyPartJoltPreviewAdapter.contactModeFor(modelId,frame)` for
+the actual active single-body vs three-body physics scene at the exact
+current frame. It draws magenta wireframes for native Jolt hair bodies,
+and green/yellow wireframes only for truly enabled native torso shapes.
+
+Turn on `Show Jolt colliders` in **Body Parts > Physics** or start
+the client with `-Dbbs.editor.physics.jolt.drawColliders=true`.
+Check the log:
+
+```powershell
+Select-String -Path '.\\run\\logs\\latest.log' -SimpleMatch '[Jolt][Overlay]','[Jolt][Torso]' | Select-Object -Last 30
+```
+
+Expected on a working three-strand Jolt preview with compound torso:
+
+```text
+[Jolt][Overlay] nativeHairSegments=... actualTorsoCapsules=3 activeJoltScenes=...
+```
+
+If both counts are zero despite a visible animated hair model, check
+that the current run is using the experimental `runClient
+-PenableJoltExperimental` with the latest prototype JAR and that
+`preview=true`. If the current scene uses the previous single torso
+fallback, the overlay correctly reports `actualTorsoCapsules=1`.
+
+**The remaining penetration under Y/yaw rotation is not yet fixed by
+this diagnostic patch.** The physically round capsules are smaller than
+the irregular skinned Emoticons body in certain directions and the hair
+Jolt capsule radii are much smaller than the visible Chameleon cube
+width. The first thing to verify now is whether physical pink hair
+wireframes are excluded from the green/yellow torso zones when the
+visible polygon hair still intersects the mesh. Do not flip axes,
+silently expand a capsule, or claim exact skin-mesh contact based only
+on the axis and radius.
+
+This patch is **editor-only**; the preceding Jolt JNI and native
+prototype JARs from the last passing run can be reused. Real Forge +
+OptiFine visual rendering still needs a user screenshot to confirm.
+
 ## Reproduce the build and download experimental JARs
 
 [CI: Jolt JNI Java 8 compatibility](https://github.com/VentoniMoon/BBS-Animation-Editor/actions/workflows/jolt-java8.yml)
