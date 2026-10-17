@@ -45,6 +45,11 @@ public final class JoltHairChain implements AutoCloseable {
     /** Optional Emoticons torso proxy (layer 1); no hair self collision. */
     private Body torsoCollider;
     private float colliderRadius, colliderSpan;
+    /** Three independently fitted native bodies; mutually noncolliding. */
+    private Body[] torsoSegments;
+    private float[] torsoSegmentRadius, torsoSegmentSpan;
+    private final float[] physicalLengths;
+    private final float[] physicalRadii;
     private boolean closed;
 
     /** Backward-compatible straight vertical chain. */
@@ -106,6 +111,8 @@ public final class JoltHairChain implements AutoCloseable {
             directions[i]=new float[] {dx/length,dy/length,dz/length};
             rotations[i]=rotationFromNegativeY(directions[i]);
         }
+        this.physicalLengths=lengths.clone();
+        this.physicalRadii=new float[count];
         this.linkLength=total/count;
         this.startX=points[0][0];
         this.startY=points[0][1];
@@ -148,6 +155,7 @@ public final class JoltHairChain implements AutoCloseable {
         for(int i=0;i<count;i++) {
             float length=lengths[i];
             float radius=Math.min(0.045F,length*0.30F);
+            physicalRadii[i]=radius;
             CapsuleShape capsule=new CapsuleShape(
                     Math.max(0.005F,length*0.5F-radius),radius);
             float[] q=rotations[i];
@@ -253,8 +261,141 @@ public final class JoltHairChain implements AutoCloseable {
 
     public boolean hasTorsoCollider() {
         requireOpen();
-        return torsoCollider!=null;
+        return torsoCollider!=null || torsoSegments!=null;
     }
+    /**
+     * Compound torso made of actual native Jolt kinematic capsules.
+     * The actor's CPU-skinned mesh (not a hardcoded model) supplies
+     * each radius. This is intentionally a separate, opt-in path.
+     *
+     * Repeated calls MOVE the same native collider bodies. A changing
+     * shape within the same scene is rejected rather than silently
+     * desynchronizing visible debug geometry from physical contacts.
+     */
+    public void setTorsoSegments(float[][] a,float[][] b,float[] radii)
+    {
+        requireOpen();
+        if(a==null||b==null||radii==null || radii.length!=3 ||
+                a.length!=3 || b.length!=3)
+            throw new IllegalArgumentException("Need three fitted torso contacts");
+        if(torsoCollider!=null)
+            throw new IllegalStateException("Cannot mix single and compound torso");
+        float[] spans=new float[3];
+        RVec3[] centers=new RVec3[3];
+        Quat[] orientations=new Quat[3];
+        for(int i=0;i<3;i++)
+        {
+            if(!finite3(a[i])||!finite3(b[i])||
+                    !Float.isFinite(radii[i])||radii[i]<0.05F||
+                    radii[i]>0.23F)
+                throw new IllegalArgumentException("Invalid fitted torso segment "+i);
+            float x=b[i][0]-a[i][0],y=b[i][1]-a[i][1],z=b[i][2]-a[i][2];
+            float length=(float)Math.sqrt(x*x+y*y+z*z);
+            if(!Float.isFinite(length) || length<0.075F || length>0.70F)
+                throw new IllegalArgumentException("Torso segment length invalid "+i);
+            spans[i]=length;
+            float[] rotation=rotationFromNegativeY(
+                    new float[]{x/length,y/length,z/length});
+            centers[i]=new RVec3((a[i][0]+b[i][0])*0.5D,
+                    (a[i][1]+b[i][1])*0.5D,
+                    (a[i][2]+b[i][2])*0.5D);
+            orientations[i]=new Quat(rotation[0],rotation[1],
+                    rotation[2],rotation[3]);
+        }
+        if(torsoSegments==null)
+        {
+            // Create all 3 only AFTER validating every input. Bodies share
+            // layer 1 and do not collide against other layer-1 bodies.
+            Body[] created=new Body[3];
+            try
+            {
+                for(int i=0;i<3;i++)
+                {
+                    float halfCylinder=Math.max(0.005F,
+                            0.5F*spans[i]-radii[i]);
+                    CapsuleShape shape=new CapsuleShape(halfCylinder,radii[i]);
+                    BodyCreationSettings settings=new BodyCreationSettings(
+                            shape,centers[i],orientations[i],
+                            EMotionType.Kinematic,1);
+                    try
+                    {
+                        created[i]=bodies.createBody(settings);
+                        if(created[i]==null)
+                            throw new IllegalStateException("Failed torso contact "+i);
+                        bodies.addBody(created[i].getId(),EActivation.Activate);
+                    }
+                    finally
+                    {
+                        settings.close();
+                        shape.close();
+                    }
+                }
+                torsoSegments=created;
+                torsoSegmentRadius=radii.clone();
+                torsoSegmentSpan=spans.clone();
+            }
+            catch(Throwable error)
+            {
+                for(Body body:created)
+                    if(body!=null)
+                    {
+                        bodies.removeBody(body.getId());
+                        bodies.destroyBody(body.getId());
+                    }
+                throw error;
+            }
+        }
+        else
+        {
+            for(int i=0;i<3;i++)
+                if(Math.abs(torsoSegmentRadius[i]-radii[i])>0.025F ||
+                        Math.abs(torsoSegmentSpan[i]-spans[i])>0.055F)
+                    throw new IllegalArgumentException(
+                            "Torso segment size changed: recreate native scene "+i);
+            for(int i=0;i<3;i++)
+                bodies.moveKinematic(torsoSegments[i].getId(),
+                        centers[i],orientations[i],TICK);
+        }
+    }
+
+    public boolean hasTorsoSegments()
+    {
+        requireOpen();
+        return torsoSegments!=null && torsoSegments.length==3;
+    }
+
+    /**
+     * Diagnostic WORLD endpoints of the actual Jolt rigid-body capsules;
+     * columns: x0,y0,z0,x1,y1,z1,radius. Never infers body positions from
+     * a Chameleon pivot or changes simulation state.
+     */
+    public float[][] nativeHairSegments()
+    {
+        requireOpen();
+        float[][] values=new float[links.length][7];
+        for(int i=0;i<links.length;i++)
+        {
+            RVec3 center=position(i);
+            Quat rotation=rotation(i);
+            float x=rotation.getX(),y=rotation.getY();
+            float z=rotation.getZ(),w=rotation.getW();
+            float dx=-2F*(x*y-z*w);
+            float dy=-1F+2F*(x*x+z*z);
+            float dz=-2F*(y*z+x*w);
+            float half=physicalLengths[i]*0.5F;
+            values[i]=new float[] {
+                    (float)center.xx()-half*dx,
+                    (float)center.yy()-half*dy,
+                    (float)center.zz()-half*dz,
+                    (float)center.xx()+half*dx,
+                    (float)center.yy()+half*dy,
+                    (float)center.zz()+half*dz,
+                    physicalRadii[i]
+            };
+        }
+        return values;
+    }
+
 
     private static boolean finite3(float[] xyz) {
         if(xyz==null||xyz.length!=3)return false;
@@ -429,6 +570,15 @@ public final class JoltHairChain implements AutoCloseable {
             bodies.removeBody(torsoCollider.getId());
             bodies.destroyBody(torsoCollider.getId());
             torsoCollider=null;
+        }
+        if(torsoSegments!=null) {
+            for(Body body:torsoSegments) {
+                if(body!=null) {
+                    bodies.removeBody(body.getId());
+                    bodies.destroyBody(body.getId());
+                }
+            }
+            torsoSegments=null;
         }
         bodies.removeBody(pin.getId());
         bodies.destroyBody(pin.getId());
