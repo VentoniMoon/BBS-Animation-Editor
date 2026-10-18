@@ -580,9 +580,11 @@ public final class BodyPartJoltPreviewAdapter {
     public Map<String,float[]> rawDirectionsFor(String modelId, int frame) {
         if(!RAW_DIAGNOSTIC || modelId==null)return Collections.emptyMap();
         State state=scenes.get(modelId);
-        if(state==null || state.frame!=frame || state.raw==null)
+        if(state==null || state.presentedFrame!=frame)
             return Collections.emptyMap();
-        return copy(state.raw);
+        RecordedFrame recorded=state.history.get(Integer.valueOf(frame));
+        return recorded==null?Collections.<String,float[]>emptyMap():
+                copy(recorded.raw);
     }
 
     /**
@@ -597,7 +599,8 @@ public final class BodyPartJoltPreviewAdapter {
     public int contactModeFor(String modelId,int frame) {
         if(modelId==null)return 0;
         State state=scenes.get(modelId);
-        if(state==null || state.frame!=frame)return 0;
+        if(state==null || state.presentedFrame!=frame ||
+                !state.history.containsKey(Integer.valueOf(frame)))return 0;
         return state.compoundEnabled?3:state.torsoEnabled?1:0;
     }
 
@@ -607,17 +610,17 @@ public final class BodyPartJoltPreviewAdapter {
     {
         if(!drawContactsRequested() || modelId==null)return null;
         State state=scenes.get(modelId);
-        if(state==null || state.frame!=frame)return null;
-        return copyMatrices(state.lastAdditionalBoxes);
+        if(state==null || state.presentedFrame!=frame)return null;
+        RecordedFrame recorded=state.history.get(Integer.valueOf(frame));
+        return recorded==null?null:copyMatrices(recorded.boxes);
     }
 
     public float[][] hairSegmentsFor(String modelId,int frame) {
         if(!drawContactsRequested() || modelId==null)return null;
         State state=scenes.get(modelId);
-        if(state==null||state.frame!=frame)return null;
-        if(state.rawHairBodies==null)
-            state.rawHairBodies=collectHairSegments(state.rig,state.bones);
-        return state.rawHairBodies==null?null:copyMatrices(state.rawHairBodies);
+        if(state==null || state.presentedFrame!=frame)return null;
+        RecordedFrame recorded=state.history.get(Integer.valueOf(frame));
+        return recorded==null?null:copyMatrices(recorded.hair);
     }
 
     private float[][] collectHairSegments(AutoCloseable rig,String[] bones) {
