@@ -133,8 +133,8 @@ public final class JoltContactGuiOverlay
                     {
                         if(!boxModelShown(box))continue;
                         int before=segmentCount;
-                        segmentCount+=drawBox(buf,box,camera,x,y,width,height,
-                                actorX,actorY,actorZ);
+                        segmentCount+=drawAddedCollider(buf,box,camera,
+                                x,y,width,height,actorX,actorY,actorZ);
                         if(segmentCount>before)
                         {
                             visibleBodies++;
@@ -286,7 +286,7 @@ public final class JoltContactGuiOverlay
         double cx=(a[0]+b[0])*0.5D+actorX;
         double cy=(a[1]+b[1])*0.5D+actorY;
         double cz=(a[2]+b[2])*0.5D+actorZ;
-        double half=Math.max(0.005D,length*0.5D-shape.radius);
+        double half=Math.max(0D,length*0.5D-shape.radius);
 
         float[][][] ring=new float[2*(CAP_STEPS+1)][SIDES][];
         for(int side=0;side<2;side++)
@@ -313,7 +313,8 @@ public final class JoltContactGuiOverlay
             }
         }
         int rgb=shape.kind==JoltContactOverlaySnapshot.Kind.HAIR
-                ? 0xFF72C1 : 0x55FFA1;
+                ?0xFF72C1:shape.kind==JoltContactOverlaySnapshot.Kind.ADDED
+                ?0xFFD66B:0x55FFA1;
         int lines=0;
         for(int step=0;step<ring.length;step++)
         {
@@ -346,6 +347,37 @@ public final class JoltContactGuiOverlay
             lines+=drawPivotCross(buf,endB,0xFFF9BA,x,y,width,height);
         }
         return lines;
+    }
+
+    /** Draw the actual primitive type installed into the native Jolt
+     * physics system, not a rotated AABB substitute. Box=12 edges,
+     * Sphere=closed rounded profile, Capsule=shaft and hemispherical caps.
+     */
+    private static int drawAddedCollider(BufferBuilder buf,
+            JoltContactOverlaySnapshot.Box box,EditorCamera camera,
+            int x,int y,int width,int height,
+            double actorX,double actorY,double actorZ)
+    {
+        if(box.primitive==JoltColliderPrimitives.BOX)
+            return drawBox(buf,box,camera,x,y,width,height,
+                    actorX,actorY,actorZ);
+        float[] desc=new float[11];
+        System.arraycopy(box.pose,0,desc,0,10);
+        desc[10]=box.primitive;
+        try
+        {
+            float[][] ends=JoltColliderPrimitives.capsulePoles(desc);
+            JoltContactOverlaySnapshot.Shape primitive=
+                    new JoltContactOverlaySnapshot.Shape(
+                            JoltContactOverlaySnapshot.Kind.ADDED,
+                            ends[0],ends[1],box.pose[7],box.source);
+            return drawCapsule(buf,primitive,camera,x,y,width,height,
+                    actorX,actorY,actorZ);
+        }
+        catch(IllegalArgumentException bad)
+        {
+            return 0;
+        }
     }
 
     /**
