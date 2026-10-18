@@ -134,6 +134,33 @@ public final class JoltChameleonColliderCaptureSmoke
         if(BodyPartChameleonCollisionBoxes.collect(morph,world,
                 Collections.<String>emptySet()).size()!=3)
             throw new AssertionError("Undriven hair cube should remain passive");
+        final BodyPartCollisionSettings config=new BodyPartCollisionSettings();
+        config.setEnabled(false);
+        BodyPartChameleonCollisionBoxes.SettingsSource configured=
+                new BodyPartChameleonCollisionBoxes.SettingsSource()
+                {
+                    @Override public BodyPartCollisionSettings forBone(String name)
+                    {
+                        return "boobs".equals(name)?config:null;
+                    }
+                };
+        BodyPartChameleonCollisionBoxes.Capture removed=
+                BodyPartChameleonCollisionBoxes.capture(morph,world,
+                        new HashSet<String>(Arrays.asList("front_hair_1")),
+                        configured);
+        if(!removed.boxes.isEmpty() || !removed.shapes.isEmpty())
+            throw new AssertionError("Disabled chest still collided with hair");
+        config.setEnabled(true);
+        config.setShape(BodyPartCollisionSettings.Shape.CAPSULE);
+        BodyPartChameleonCollisionBoxes.Capture changed=
+                BodyPartChameleonCollisionBoxes.capture(morph,world,
+                        new HashSet<String>(Arrays.asList("front_hair_1")),
+                        configured);
+        if(changed.boxes.size()!=2 || changed.shapes.size()!=2 ||
+                changed.shapes.get(0)[10]!=JoltColliderPrimitives.CAPSULE)
+            throw new AssertionError("Collider shape ignored authored NBT settings");
+        if(changed.boxes.get(0)[7]!=changed.shapes.get(0)[7])
+            throw new AssertionError("Outline/Jolt capsule provenance diverged");
         System.out.println("Chameleon two-cube chest, unsupported cube and "
                 +"same-model dynamic hair exclusion: PASS");
     }
