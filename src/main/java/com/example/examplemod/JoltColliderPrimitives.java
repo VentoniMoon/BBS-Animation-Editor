@@ -77,6 +77,24 @@ public final class JoltColliderPrimitives
         return shape;
     }
 
+    /** Endpoints of the capsule's outer poles (not cylinder ends).
+     *  Passing these to GUI drawCapsule() gives the exact native
+     *  Y-aligned Sphere/Capsule profile after the authored cube rotation.
+     */
+    public static float[][] capsulePoles(float[] p)
+    {
+        if(p==null || p.length!=11 || (p[10]!=SPHERE && p[10]!=CAPSULE))
+            throw new IllegalArgumentException("Expected sphere/capsule descriptor");
+        float x=p[3],y=p[4],z=p[5],w=p[6];
+        float[] axis={2F*(x*y-w*z),1F-2F*(x*x+z*z),
+                2F*(y*z+w*x)};
+        float h=p[8];
+        return new float[][] {
+                {p[0]-axis[0]*h,p[1]-axis[1]*h,p[2]-axis[2]*h},
+                {p[0]+axis[0]*h,p[1]+axis[1]*h,p[2]+axis[2]*h}
+        };
+    }
+
     public static float[] toOutline(float[] primitive)
     {
         if(primitive==null || primitive.length!=11)
