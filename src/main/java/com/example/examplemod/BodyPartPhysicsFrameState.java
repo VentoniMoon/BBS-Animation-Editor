@@ -101,6 +101,39 @@ public final class BodyPartPhysicsFrameState
         return result;
     }
 
+    /**
+     * Render-only sub-tick interpolation. This NEVER advances physics.
+     * The previous Jolt frame is frozen at beginFrame(); the current frame
+     * is published after the first normal actor draw. Only when both
+     * complete and have identical driven-bone topology do we interpolate
+     * local axis-angle swings via quaternion slerp. Legacy solver remains
+     * unchanged. Paused/seeked frames never blend a stale previous pose.
+     */
+    public Map<String,float[]> forRenderInterpolated(
+            BodyPartModelData part,int frame,float fraction)
+    {
+        Map<String,float[]> fallback=forRender(part,frame);
+        if(fallback==null || !Float.isFinite(fraction))return fallback;
+        Sample previous=visible.get(part);
+        Sample current=samples.get(part);
+        if(previous==null || current==null ||
+                previous.frame!=frame-1 || current.frame!=frame ||
+                previous.joltBones.isEmpty() ||
+                !previous.joltBones.equals(current.joltBones) ||
+                !previous.swings.keySet().equals(current.swings.keySet()))
+            return fallback;
+        try
+        {
+            return JoltPhysicsPoseInterpolator.swings(
+                    previous.swings,current.swings,
+                    Math.max(0F,Math.min(1F,fraction)));
+        }
+        catch(IllegalArgumentException invalid)
+        {
+            return fallback;
+        }
+    }
+
     /** Matches the visible frozen sample, never the newly-computed frame. */
     public boolean isJoltForRender(BodyPartModelData part, int frame, String bone)
     {
