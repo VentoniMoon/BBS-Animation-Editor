@@ -14,7 +14,7 @@ import java.util.List;
  */
 public final class JoltContactOverlaySnapshot
 {
-    public enum Kind { TORSO, HAIR }
+    public enum Kind { TORSO, HAIR, ADDED }
 
     public static final class Shape
     {
@@ -34,7 +34,7 @@ public final class JoltContactOverlaySnapshot
                 String source)
         {
             if(kind==null || !isValid(a) || !isValid(b) ||
-                    !Float.isFinite(radius) || radius<=0F || radius>0.5F)
+                    !Float.isFinite(radius) || radius<=0F || radius>2F)
                 throw new IllegalArgumentException("Invalid Jolt capsule snapshot");
             float dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
             if(dx*dx+dy*dy+dz*dz<0.000025F)
@@ -54,14 +54,24 @@ public final class JoltContactOverlaySnapshot
         public final float[] pose;
         /** Source BodyPart model name; used only for debugging. */
         public final String source;
+        /** Native primitive (0=Box,1=Sphere,2=Capsule). */
+        public final int primitive;
 
         public Box(float[] input)
         {
-            this(input,"unknown");
+            this(input,"unknown",JoltColliderPrimitives.BOX);
         }
 
         public Box(float[] input,String source)
         {
+            this(input,source,JoltColliderPrimitives.BOX);
+        }
+
+        public Box(float[] input,String source,int primitive)
+        {
+            if(primitive<JoltColliderPrimitives.BOX ||
+                    primitive>JoltColliderPrimitives.CAPSULE)
+                throw new IllegalArgumentException("Unknown primitive");
             if(input==null || input.length!=10)
                 throw new IllegalArgumentException("Expected 10-float Jolt box");
             for(float value:input)
@@ -76,6 +86,7 @@ public final class JoltContactOverlaySnapshot
                 throw new IllegalArgumentException("Invalid Jolt box quaternion");
             this.pose=input.clone();
             this.source=source==null?"unknown":source;
+            this.primitive=primitive;
         }
     }
 
@@ -114,7 +125,7 @@ public final class JoltContactOverlaySnapshot
                 throw new IllegalArgumentException("Null native Jolt shape");
             copy.add(new Shape(item.kind,item.a,item.b,item.radius,item.source));
             if(item.kind==Kind.HAIR)hair++;
-            else torso++;
+            else if(item.kind==Kind.TORSO)torso++;
         }
         this.frame=frame;
         this.worldSpace=worldSpace;
@@ -126,7 +137,7 @@ public final class JoltContactOverlaySnapshot
         for(Box box:boxItems)
         {
             if(box==null)throw new IllegalArgumentException("Null Jolt box");
-            boxCopy.add(new Box(box.pose,box.source));
+            boxCopy.add(new Box(box.pose,box.source,box.primitive));
         }
         this.boxCount=boxCopy.size();
         this.boxes=Collections.unmodifiableList(boxCopy);
