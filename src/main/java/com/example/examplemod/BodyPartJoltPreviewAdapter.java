@@ -56,6 +56,8 @@ public final class BodyPartJoltPreviewAdapter {
     private Method setTorsoCollider;
     private Method setTorsoSegments;
     private Method setAdditionalBoxes;
+    private Method setAdditionalShapes;
+    private boolean warnedTypedColliders;
     private Method nativeHairSegments;
     private boolean torsoWarning;
     /** Optional prototype API: old downloaded JARs must still work. */
@@ -79,6 +81,8 @@ public final class BodyPartJoltPreviewAdapter {
         float[][] lastMultiA,lastMultiB;
         float[] lastMultiR;
         float[][] lastAdditionalBoxes;
+        float[][] lastAdditionalShapes;
+        final boolean typedShapes;
         float[][] rawHairBodies;
         Map<String, float[]> sample=Collections.emptyMap();
         Map<String, float[]> raw=Collections.emptyMap();
@@ -88,7 +92,8 @@ public final class BodyPartJoltPreviewAdapter {
                 float[] root, float[] parent, float[][] boneWorld,
                 float[] terminalTip,float[] torsoA,float[] torsoB,
                 float radius,BodyPartJoltMultiTorsoFit.Segments multi,
-                float[][] attachedBoxes) {
+                float[][] attachedBoxes,float[][] attachedShapes,
+                boolean typedShapes) {
             this.rig=rig;
             this.bones=bones.clone();
             this.frame=frame;
@@ -108,6 +113,8 @@ public final class BodyPartJoltPreviewAdapter {
             this.lastMultiB=multi==null?null:multi.ends();
             this.lastMultiR=multi==null?null:multi.radii();
             this.lastAdditionalBoxes=copyMatrices(attachedBoxes);
+            this.lastAdditionalShapes=copyMatrices(attachedShapes);
+            this.typedShapes=typedShapes;
         }
     }
 
@@ -184,6 +191,12 @@ public final class BodyPartJoltPreviewAdapter {
                         System.err.println("[BBS Editor][Jolt][Compound] "
                                 + "Updated Jolt prototype needed; using single fitted torso");
                     }
+                }
+                try {
+                    setAdditionalShapes=klass.getMethod("setAdditionalShapes",
+                            float[][].class);
+                } catch(NoSuchMethodException older) {
+                    // Optional primitive extension; legacy boxes still work.
                 }
                 try {
                     setAdditionalBoxes=klass.getMethod("setAdditionalBoxes",
@@ -267,14 +280,28 @@ public final class BodyPartJoltPreviewAdapter {
                 torsoA,torsoB,torsoRadius,compound,null);
     }
 
-    /** All additional collision boxes come from other animated BodyParts. */
+    /** Backwards-compatible API for older callers and Jolt artifacts. */
     public Map<String, float[]> sample(File gameDir, String modelId,
             String[] boneNames, int frame, float[][] cleanBoneWorld,
             float[] terminalTipWorld, float[] cleanParentWorld,
             float stiffness, float damping, float gravity,
             float[] torsoA,float[] torsoB,float torsoRadius,
             BodyPartJoltMultiTorsoFit.Segments compound,
-            float[][] attachedBoxes) {
+            float[][] attachedBoxes)
+    {
+        return sample(gameDir,modelId,boneNames,frame,cleanBoneWorld,
+                terminalTipWorld,cleanParentWorld,stiffness,damping,gravity,
+                torsoA,torsoB,torsoRadius,compound,attachedBoxes,null);
+    }
+
+    /** Extended authored Box/Sphere/Capsule geometry, optional for Java 8. */
+    public Map<String, float[]> sample(File gameDir, String modelId,
+            String[] boneNames, int frame, float[][] cleanBoneWorld,
+            float[] terminalTipWorld, float[] cleanParentWorld,
+            float stiffness, float damping, float gravity,
+            float[] torsoA,float[] torsoB,float torsoRadius,
+            BodyPartJoltMultiTorsoFit.Segments compound,
+            float[][] attachedBoxes,float[][] attachedShapes) {
         recreatedLastSample=false;
         if(!initialize(gameDir))return null;
         if(modelId==null || boneNames==null || cleanBoneWorld==null ||
@@ -295,10 +322,25 @@ public final class BodyPartJoltPreviewAdapter {
         float[][] compoundA=useCompound?compound.starts():null;
         float[][] compoundB=useCompound?compound.ends():null;
         float[] compoundR=useCompound?compound.radii():null;
-        boolean useAdditional=setAdditionalBoxes!=null &&
+        boolean useShapes=setAdditionalShapes!=null &&
+                TORSO_CONTACTS && attachedShapes!=null &&
+                attachedShapes.length>0;
+        boolean useAdditional=(setAdditionalBoxes!=null || useShapes) &&
                 TORSO_CONTACTS && attachedBoxes!=null &&
                 attachedBoxes.length>0;
+        if(attachedShapes!=null && attachedShapes.length>0 &&
+                !useShapes && !warnedTypedColliders)
+            for(float[] shape:attachedShapes)
+                if(shape!=null && shape.length==11 && shape[10]!=0F)
+                {
+                    warnedTypedColliders=true;
+                    System.err.println("[BBS Editor][Jolt][Shapes] "+
+                            "Installed JNI JAR lacks typed primitives; using Box "+
+                            "outlines as contact proxies until the JAR is updated.");
+                    break;
+                }
         float[][] boxes=useAdditional?copyMatrices(attachedBoxes):null;
+        float[][] shapes=useShapes?copyMatrices(attachedShapes):null;
         State state=scenes.get(id);
         // A render pass is not a physics tick. A paused timeline can draw
         // dozens of times with slightly different Chameleon partial-tick
@@ -318,9 +360,11 @@ public final class BodyPartJoltPreviewAdapter {
                 state.gravity==gravity &&
                 state.torsoEnabled==useTorso &&
                 state.compoundEnabled==useCompound &&
+                state.typedShapes==useShapes &&
                 (useAdditional==(state.lastAdditionalBoxes!=null)) &&
-                (!useAdditional ||
-                        sameBoxGeometry(boxes,state.lastAdditionalBoxes)) &&
+                (!useAdditional || (useShapes?
+                        JoltColliderPrimitives.sameTopology(shapes,state.lastAdditionalShapes):
+                        sameBoxGeometry(boxes,state.lastAdditionalBoxes))) &&
                 (!useTorso ||
                         Math.abs(state.torsoRadius-torsoRadius)<=0.025F) &&
                 (!useCompound ||
@@ -334,8 +378,11 @@ public final class BodyPartJoltPreviewAdapter {
                 state.gravity!=gravity ||
                 state.torsoEnabled!=useTorso ||
                 state.compoundEnabled!=useCompound ||
+                state.typedShapes!=useShapes ||
                 (useAdditional != (state.lastAdditionalBoxes!=null)) ||
-                (useAdditional && !sameBoxGeometry(boxes,state.lastAdditionalBoxes)) ||
+                (useAdditional && (useShapes?
+                        !JoltColliderPrimitives.sameTopology(shapes,state.lastAdditionalShapes):
+                        !sameBoxGeometry(boxes,state.lastAdditionalBoxes))) ||
                 (useTorso && (Math.abs(state.torsoRadius-torsoRadius)>0.025F ||
                   Math.abs(distance(state.lastTorsoA,state.lastTorsoB)-
                            distance(torsoA,torsoB))>0.065F)) ||
@@ -382,7 +429,10 @@ public final class BodyPartJoltPreviewAdapter {
                         setTorsoSegments.invoke(instance,(Object)compoundA,
                                 (Object)compoundB,(Object)compoundR);
                     if(useAdditional)
-                        setAdditionalBoxes.invoke(instance,(Object)boxes);
+                    {
+                        if(useShapes)setAdditionalShapes.invoke(instance,(Object)shapes);
+                        else setAdditionalBoxes.invoke(instance,(Object)boxes);
+                    }
                     // The source frame may be a static pose or direct seek.
                     // Relax only once on reset; never simulate every render.
                     settle.invoke(instance,24);
@@ -390,7 +440,7 @@ public final class BodyPartJoltPreviewAdapter {
                             gravity,root,cleanParentWorld,cleanBoneWorld,
                             terminalTipWorld,useTorso?torsoA:null,
                             useTorso?torsoB:null,useTorso?torsoRadius:0F,
-                            useCompound?compound:null,boxes);
+                            useCompound?compound:null,boxes,shapes,useShapes);
                     state.sample=collect(scene,boneNames,cleanBoneWorld,cleanParentWorld);
                     state.raw=collectNativeDirections(scene,boneNames);
                     state.rawHairBodies=collectHairSegments(scene,boneNames);
@@ -426,7 +476,10 @@ public final class BodyPartJoltPreviewAdapter {
                 setTorsoSegments.invoke(state.rig,(Object)compoundA,
                         (Object)compoundB,(Object)compoundR);
             if(useAdditional)
-                setAdditionalBoxes.invoke(state.rig,(Object)boxes);
+            {
+                if(useShapes)setAdditionalShapes.invoke(state.rig,(Object)shapes);
+                else setAdditionalBoxes.invoke(state.rig,(Object)boxes);
+            }
             advance.invoke(state.rig,frame,root,cleanParentWorld);
             Map<String,float[]> result=collect(state.rig,boneNames,
                     cleanBoneWorld,cleanParentWorld);
@@ -449,6 +502,7 @@ public final class BodyPartJoltPreviewAdapter {
                 state.lastMultiR=compoundR.clone();
             }
             state.lastAdditionalBoxes=copyMatrices(boxes);
+            state.lastAdditionalShapes=copyMatrices(shapes);
             return result;
         } catch(Throwable error) {
             dispose(id);
