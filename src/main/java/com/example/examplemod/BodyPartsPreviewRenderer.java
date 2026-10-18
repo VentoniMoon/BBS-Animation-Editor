@@ -473,20 +473,16 @@ public class BodyPartsPreviewRenderer
      * capture phase already excludes ALL driven physics bones of each part,
      * so no dynamic hair cube is also created as a kinematic collider.
      *
-     * The first native hair link is excluded from passive body contacts
-     * (same policy as torso) to avoid root self-penetration impulses.
+     * A native first-link contact is only excluded when the root sits
+     * inside that specific owning body shape; external chest and parent
+     * limb contacts remain active.
      */
     private float[][] passiveCollisionBoxes(BodyPartModelData owner,int frame)
     {
         if(frame!=attachedCollisionFrame)return null;
         java.util.List<float[]> combined=new java.util.ArrayList<float[]>();
-        if(frame==parentEmoticonsColliderFrame &&
-                parentEmoticonsColliders!=null)
-            for(float[] box:parentEmoticonsColliders.boxes)
-            {
-                if(combined.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
-                combined.add(box.clone());
-            }
+        // User-authored Chameleon colliders have priority when the 32-form
+        // budget is full. Parent geometry fills the remaining slots.
         for(BodyPartModelData data:collisionPartOrder)
         {
             java.util.List<float[]> source=attachedCollisionBoxes.get(data);
@@ -498,6 +494,13 @@ public class BodyPartsPreviewRenderer
                 combined.add(box.clone());
             }
         }
+        if(frame==parentEmoticonsColliderFrame &&
+                parentEmoticonsColliders!=null)
+            for(float[] box:parentEmoticonsColliders.boxes)
+            {
+                if(combined.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
+                combined.add(box.clone());
+            }
         return combined.isEmpty()?null:
                 combined.toArray(new float[combined.size()][]);
     }
@@ -508,13 +511,6 @@ public class BodyPartsPreviewRenderer
     {
         if(frame!=attachedCollisionFrame)return null;
         java.util.List<float[]> result=new java.util.ArrayList<float[]>();
-        if(frame==parentEmoticonsColliderFrame &&
-                parentEmoticonsColliders!=null)
-            for(float[] shape:parentEmoticonsColliders.shapes)
-            {
-                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
-                result.add(shape.clone());
-            }
         for(BodyPartModelData data:collisionPartOrder)
         {
             java.util.List<float[]> shapes=attachedCollisionShapes.get(data);
@@ -525,6 +521,13 @@ public class BodyPartsPreviewRenderer
                 result.add(shape.clone());
             }
         }
+        if(frame==parentEmoticonsColliderFrame &&
+                parentEmoticonsColliders!=null)
+            for(float[] shape:parentEmoticonsColliders.shapes)
+            {
+                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
+                result.add(shape.clone());
+            }
         return result.isEmpty()?null:result.toArray(new float[result.size()][]);
     }
 
@@ -536,13 +539,6 @@ public class BodyPartsPreviewRenderer
     {
         java.util.List<String> result=new java.util.ArrayList<String>();
         if(frame!=attachedCollisionFrame)return result;
-        if(frame==parentEmoticonsColliderFrame &&
-                parentEmoticonsColliders!=null)
-            for(String name:parentEmoticonsColliders.owners)
-            {
-                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
-                result.add(name);
-            }
         for(BodyPartModelData data:collisionPartOrder)
         {
             java.util.List<float[]> forms=attachedCollisionBoxes.get(data);
@@ -554,6 +550,13 @@ public class BodyPartsPreviewRenderer
                     result.size()<BodyPartChameleonCollisionBoxes.MAX_BOXES;i++)
                 result.add(model);
         }
+        if(frame==parentEmoticonsColliderFrame &&
+                parentEmoticonsColliders!=null)
+            for(String name:parentEmoticonsColliders.owners)
+            {
+                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
+                result.add(name);
+            }
         return result;
     }
 
