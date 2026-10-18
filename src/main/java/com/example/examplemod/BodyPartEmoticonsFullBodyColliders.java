@@ -74,42 +74,29 @@ public final class BodyPartEmoticonsFullBodyColliders {
         if(cache.local.isEmpty()){
             cache.meshFingerprint=token.toString();
             List<BOBJBone> bones=EmoticonsModelAccess.getBones((AnimatedMorph)morph);
-            for(EmoticonsCollisionGeometryProvider.MeshSnapshot src:sources){
-                if(src==null)continue;
-                for(EmoticonsSkinCollisionGroups.Group group:
-                        EmoticonsSkinCollisionGroups.Group.values()){
-                    // OTHER collects unweighted/unknown vertices. When actual
-                    // body groups exist it could form a huge second collider
-                    // spanning the entire actor and repel hair sideways.
-                    // Preserve it only for meshes with no recognized groups.
-                    if(group==EmoticonsSkinCollisionGroups.Group.OTHER &&
-                            cache.groups>0)continue;
-                    EmoticonsCollisionGeometryProvider.MeshSnapshot region=
-                            EmoticonsSkinCollisionGroups.select(
-                                    morph,src,EnumSet.of(group));
-                    if(region==null||region.triangleCount()<8)continue;
-                    String name=bestBone(bones,group);
-                    float[] matrix=name==null?null:
-                            BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
-                                    morph,name);
-                    int slices=(group==EmoticonsSkinCollisionGroups.Group.HEAD)?1:
-                            (group==EmoticonsSkinCollisionGroups.Group.TORSO)?2:3;
-                    List<float[]> local=matrix==null?
-                            EmoticonsSkinnedBodyHull.boxes(
-                                    region.vertices,region.triangles,slices,.018F):
-                            EmoticonsSkinnedBodyHull.boneLocalBoxes(
-                                    region.vertices,region.triangles,
-                                    matrix,slices,.018F);
-                    if(local.isEmpty())continue;
-                    // If no reliable bone matrix exists, the hull is still
-                    // able to follow root actor motion without guessed bones.
-                    if(matrix==null)name=null;
-                    cache.groups++;cache.triangles+=region.triangleCount();
-                    for(float[] shape:local){
-                        if(cache.local.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)
-                            break;
-                        cache.local.add(new LocalBox(name,
-                                "emoticons."+group.name(),shape));
+            if (bones != null) for (BOBJBone bone : bones) {
+                if (bone == null || bone.name == null) continue;
+                float[] matrix = BodyPartEmoticonsAttachmentProbe
+                        .lastRenderedBoneMatrix(morph,bone.name);
+                if (matrix == null) continue;
+                for (EmoticonsCollisionGeometryProvider.MeshSnapshot src : sources) {
+                    if (src == null) continue;
+                    EmoticonsCollisionGeometryProvider.MeshSnapshot region =
+                            EmoticonsSkinCollisionGroups.selectBone(
+                                    morph,src,bone.name);
+                    if (region == null || region.triangleCount() < 8) continue;
+                    // Fixed bone-local geometry follows animation without
+                    // changing Jolt topology every time the limb rotates.
+                    List<float[]> local = EmoticonsSkinnedBodyHull.boneLocalBoxes(
+                            region.vertices,region.triangles,matrix,1,.018F);
+                    if (local.isEmpty()) continue;
+                    cache.groups++;
+                    cache.triangles += region.triangleCount();
+                    for (float[] shape : local) {
+                        if (cache.local.size() >=
+                                BodyPartChameleonCollisionBoxes.MAX_BOXES) break;
+                        cache.local.add(new LocalBox(bone.name,
+                                "emoticons."+bone.name,shape));
                     }
                 }
             }
