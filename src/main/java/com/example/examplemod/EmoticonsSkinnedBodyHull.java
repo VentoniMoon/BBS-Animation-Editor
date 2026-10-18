@@ -19,6 +19,118 @@ import java.util.List;
 public final class EmoticonsSkinnedBodyHull {
     private EmoticonsSkinnedBodyHull() {}
 
+
+    /**
+     * Fit the animated skinned mesh in the COORDINATE FRAME of its driven
+     * parent bone. Its half-extents are authored once, then reused while
+     * the rigid bone frame follows Emoticons animation. This prevents a
+     * rotated arm's axis-aligned bounding box from changing dimensions on
+     * every tick and triggering perpetual native Jolt rig restarts.
+     */
+    public static List<float[]> boneLocalBoxes(float[] vertices,int[] triangles,
+            float[] boneMatrix,int slices,float padding)
+    {
+        if(vertices==null||vertices.length%3!=0 ||
+                !rigidBasis(boneMatrix))return new ArrayList<float[]>();
+        float[] converted=new float[vertices.length];
+        for(int i=0;i<vertices.length;i+=3){
+            float dx=vertices[i]-boneMatrix[12];
+            float dy=vertices[i+1]-boneMatrix[13];
+            float dz=vertices[i+2]-boneMatrix[14];
+            for(int axis=0;axis<3;axis++){
+                float bx=boneMatrix[axis*4],by=boneMatrix[axis*4+1],
+                        bz=boneMatrix[axis*4+2];
+                float length2=bx*bx+by*by+bz*bz;
+                converted[i+axis]=(dx*bx+dy*by+dz*bz)/length2;
+            }
+        }
+        return boxes(converted,triangles,slices,padding);
+    }
+
+    /** Transform an immutable bone-local Box into model/world coordinates.
+     * Handles proper 3D bone rotations as well as translation.
+     */
+    public static float[] transformRigid(float[] matrix,float[] box)
+    {
+        if(!rigidBasis(matrix)||box==null||box.length!=10)
+            throw new IllegalArgumentException("Invalid rigid Emoticons collider");
+        float[] out=box.clone();
+        for(int axis=0;axis<3;axis++)
+            out[axis]=matrix[12+axis]+matrix[axis]*box[0]+
+                    matrix[4+axis]*box[1]+matrix[8+axis]*box[2];
+        for(int axis=0;axis<3;axis++){
+            float x=matrix[axis*4],y=matrix[axis*4+1],
+                    z=matrix[axis*4+2];
+            float length=(float)Math.sqrt(x*x+y*y+z*z);
+            out[axis+7]=box[axis+7]*length;
+        }
+        float[] q=quaternion(matrix);
+        System.arraycopy(q,0,out,3,4);
+        return out;
+    }
+
+    private static boolean rigidBasis(float[] m)
+    {
+        if(m==null||m.length!=16)return false;
+        for(float v:m)if(!Float.isFinite(v))return false;
+        float[] lengths=new float[3];
+        for(int axis=0;axis<3;axis++){
+            float x=m[axis*4],y=m[axis*4+1],z=m[axis*4+2];
+            lengths[axis]=(float)Math.sqrt(x*x+y*y+z*z);
+            if(lengths[axis]<.01F||lengths[axis]>4F)return false;
+        }
+        for(int i=0;i<3;i++)
+            for(int j=i+1;j<3;j++){
+                float dot=0F;
+                for(int k=0;k<3;k++)
+                    dot+=m[i*4+k]*m[j*4+k];
+                if(Math.abs(dot)/(lengths[i]*lengths[j])>.025F)
+                    return false;
+            }
+        float det=(m[0]*(m[5]*m[10]-m[9]*m[6])-
+                m[4]*(m[1]*m[10]-m[9]*m[2])+
+                m[8]*(m[1]*m[6]-m[5]*m[2]))/
+                (lengths[0]*lengths[1]*lengths[2]);
+        return det>.95F;
+    }
+
+    private static float[] quaternion(float[] m)
+    {
+        float[] n=new float[9];
+        for(int col=0;col<3;col++){
+            float a=m[col*4],b=m[col*4+1],c=m[col*4+2];
+            float length=(float)Math.sqrt(a*a+b*b+c*c);
+            n[col*3]=a/length;
+            n[col*3+1]=b/length;
+            n[col*3+2]=c/length;
+        }
+        float trace=n[0]+n[4]+n[8];
+        float x,y,z,w;
+        if(trace>0F){
+            float t=(float)Math.sqrt(trace+1F)*2F;
+            w=.25F*t;
+            x=(n[5]-n[7])/t;
+            y=(n[6]-n[2])/t;
+            z=(n[1]-n[3])/t;
+        }else if(n[0]>n[4]&&n[0]>n[8]){
+            float t=(float)Math.sqrt(1F+n[0]-n[4]-n[8])*2F;
+            w=(n[5]-n[7])/t;x=.25F*t;
+            y=(n[3]+n[1])/t;z=(n[6]+n[2])/t;
+        }else if(n[4]>n[8]){
+            float t=(float)Math.sqrt(1F+n[4]-n[0]-n[8])*2F;
+            w=(n[6]-n[2])/t;x=(n[3]+n[1])/t;
+            y=.25F*t;z=(n[7]+n[5])/t;
+        }else{
+            float t=(float)Math.sqrt(1F+n[8]-n[0]-n[4])*2F;
+            w=(n[1]-n[3])/t;x=(n[6]+n[2])/t;
+            y=(n[7]+n[5])/t;z=.25F*t;
+        }
+        float length=(float)Math.sqrt(x*x+y*y+z*z+w*w);
+        if(!(length>.01F))
+            throw new IllegalArgumentException("Invalid Emoticons bone rotation");
+        return new float[]{x/length,y/length,z/length,w/length};
+    }
+
     /** Return 10-component OBBs in the SAME local frame as vertices. */
     public static List<float[]> boxes(float[] vertices,int[] triangles,
             int slices,float padding)
