@@ -61,7 +61,11 @@ public final class EmoticonsSkinnedBodyHull {
         if(max[2]-min[2]>max[main]-min[main])main=2;
         float length=max[main]-min[main];
         if(!(length>0.025F)||length>3.5F)return result;
-        int nSlices=Math.min(slices,Math.max(1,(int)Math.floor(length/.14F)));
+        // A cube with only eight vertices has no samples at the middle
+        // of its long axis. Splitting it would leave a literal hole in the
+        // parent body hull, so segment only sufficiently dense skin meshes.
+        int nSlices=count<32?1:
+                Math.min(slices,Math.max(1,(int)Math.floor(length/.14F)));
         for(int slice=0;slice<nSlices;slice++){
             float lowSlice=min[main]+length*slice/nSlices;
             float highSlice=min[main]+length*(slice+1F)/nSlices;
