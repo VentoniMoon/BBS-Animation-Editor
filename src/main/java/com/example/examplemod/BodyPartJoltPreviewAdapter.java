@@ -461,6 +461,32 @@ public final class BodyPartJoltPreviewAdapter {
                 (useCompound && compoundShapeChanged(
                         state.lastMultiA,state.lastMultiB,state.lastMultiR,
                         compoundA,compoundB,compoundR));
+        // Show which SOURCE bone orientations actually arrive from the
+        // animation/attachment render pass. Distinguishes missing input
+        // rotation from a native motor/Chameleon output mapping problem.
+        // Opt-in, only every five sequential 20Hz ticks (never per GUI draw).
+        if(RAW_DIAGNOSTIC && state!=null && frame==state.frame+1 &&
+                frame%5==0 && state.lastBones!=null &&
+                state.lastBones.length==cleanBoneWorld.length)
+        {
+            float parentTurn=JoltPhysicsDiscontinuity.angularDistance(
+                    state.lastParent,cleanParentWorld);
+            float rootTurn=JoltPhysicsDiscontinuity.angularDistance(
+                    state.lastBones[0],cleanBoneWorld[0]);
+            float maxInternal=0F;
+            for(int b=1;b<cleanBoneWorld.length;b++)
+                maxInternal=Math.max(maxInternal,
+                        JoltPhysicsDiscontinuity.angularDistance(
+                                state.lastBones[b],cleanBoneWorld[b]));
+            float degrees=180F/(float)Math.PI;
+            System.out.println("[BBS Editor][Jolt][BoneDrive] "+id+
+                    " frame="+frame+" parentStepDegrees="+(parentTurn*degrees)+
+                    " rootStepDegrees="+(rootTurn*degrees)+
+                    " maxInternalStepDegrees="+(maxInternal*degrees)+
+                    " rootShift="+JoltPhysicsDiscontinuity.distance(
+                            state.lastRoot,root)+
+                    " animatedJointTargets="+(advanceWithBones!=null));
+        }
         // Teleport boundaries: do not feed a 6-block move/180-degree
         // instantaneous scene jump into a 50ms Jolt kinematic velocity.
         // Only classify genuinely adjacent frames. Frame seeks already
