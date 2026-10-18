@@ -94,6 +94,13 @@ public class BodyPartsPreviewRenderer
     /** Compare Jolt's intended direction with Chameleon's ACTUAL rendered pivots. */
     private static final boolean JOLT_DIRECTION_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
+    /** Visual only: quaternion interpolation, never an extra Jolt tick.
+     * Disable for strict A/B diagnostics with
+     * -Dbbs.editor.physics.jolt.visualInterpolation=false
+     */
+    private static final boolean JOLT_VISUAL_INTERPOLATION=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.visualInterpolation","true"));
     /**
      * Jolt needs the same child render space as visible Chameleon geometry:
      * ChameleonMorph.render() applies scale and Y=180 after the BodyPart.
@@ -2293,7 +2300,14 @@ public class BodyPartsPreviewRenderer
              * Reverse the test swing only on the left root, pending a full
              * handedness/basis correction across all chains.
              */
-            Map<String, float[]> swings = physicsFrames.forRender(data, frame);
+            Map<String, float[]> swings =
+                    JOLT_VISUAL_INTERPOLATION &&
+                    BodyPartJoltPreviewAdapter.isRequested() &&
+                    BlockbusterPreviewAnimationState.isPlaying()
+                        ? physicsFrames.forRenderInterpolated(data,frame,
+                                net.minecraft.client.Minecraft.getMinecraft()
+                                        .getRenderPartialTicks())
+                        : physicsFrames.forRender(data,frame);
             if (swings != null)
             {
                 int appliedCount = 0;
