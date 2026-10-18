@@ -56,6 +56,11 @@ public final class JoltColliderMarkupSmoke
                 alongX,JoltColliderPrimitives.CAPSULE,1F);
         near(capsuleX[8],.3F);
         near(capsuleX[7],.04F);
+        float[][] endsX=JoltColliderPrimitives.capsulePoles(capsuleX);
+        near(endsX[0][0],-.3F);
+        near(endsX[1][0],.3F);
+        near(endsX[0][1],0F);
+        near(endsX[1][2],0F);
         // Y-axis of q(Z,-90°) is the original model's X axis.
         float qz=capsuleX[5],qw=capsuleX[6];
         near(-2F*qz*qw,1F);
@@ -64,6 +69,9 @@ public final class JoltColliderMarkupSmoke
                 alongZ,JoltColliderPrimitives.CAPSULE,1F);
         near(capsuleZ[8],.27F);
         near(capsuleZ[7],.04F);
+        float[][] endsZ=JoltColliderPrimitives.capsulePoles(capsuleZ);
+        near(endsZ[0][2],-.27F);
+        near(endsZ[1][2],.27F);
         near(2F*capsuleZ[3]*capsuleZ[6],1F);
 
         check(!JoltColliderPrimitives.sameTopology(
