@@ -160,6 +160,8 @@ public class BodyPartsPreviewRenderer
      * render, never once per hair attachment. Same native world frame and
      * source ordering as the additional Chameleon BodyPart colliders. */
     private BodyPartEmoticonsFullBodyColliders.Capture parentEmoticonsColliders;
+    private final BodyPartEmoticonsFullBodyColliders.Cache parentColliderCache =
+            new BodyPartEmoticonsFullBodyColliders.Cache();
     private int parentEmoticonsColliderFrame=-1;
     private String reportedParentColliderState="";
 
@@ -257,7 +259,7 @@ public class BodyPartsPreviewRenderer
         {
             BodyPartEmoticonsFullBodyColliders.Capture hull=
                     BodyPartEmoticonsFullBodyColliders.capture(
-                            morph,actorFrameFor(frame));
+                            morph,actorFrameFor(frame),parentColliderCache);
             if(hull.isReady())
             {
                 parentEmoticonsColliders=hull;
