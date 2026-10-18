@@ -27,9 +27,10 @@ public final class BodyPartJoltPreviewAdapter {
             Boolean.getBoolean("bbs.editor.physics.jolt.preview");
     private static final boolean RAW_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
-    /** Opt-in only; no collisions are added to existing default Jolt. */
+    /** Jolt preview body contacts default ON; opt out explicitly for A/B. */
     private static final boolean TORSO_CONTACTS =
-            Boolean.getBoolean("bbs.editor.physics.jolt.torsoContacts");
+            REQUESTED && Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.torsoContacts","true"));
     private static final boolean COMPOUND_TORSO =
             Boolean.getBoolean("bbs.editor.physics.jolt.compoundTorso");
     private static volatile boolean drawContacts =
