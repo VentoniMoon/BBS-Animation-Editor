@@ -39,7 +39,7 @@ public final class JoltWorldGravityTiltSmoke {
                 if(frame==20)strongest=tipY(tilted);
             }
             float finalY=tipY(tilted);
-            if(!(finalY<-.65F))
+            if(!(finalY<-.92F) || !(strongest<-.90F))
                 throw new AssertionError("World gravity no longer hangs hair down at 75-degree tilt: "+finalY+" early="+strongest);
             System.out.println("World gravity still points down after animated tilt: PASS finalY="+finalY+" at frame20="+strongest);
         } finally {tilted.close();}
