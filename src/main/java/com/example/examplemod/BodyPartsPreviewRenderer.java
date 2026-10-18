@@ -162,6 +162,11 @@ public class BodyPartsPreviewRenderer
     private BodyPartEmoticonsFullBodyColliders.Capture parentEmoticonsColliders;
     private final BodyPartEmoticonsFullBodyColliders.Cache parentColliderCache =
             new BodyPartEmoticonsFullBodyColliders.Cache();
+    /** Enabled by default, can be disabled for legacy torso-only A/B:
+     * -Dbbs.editor.physics.jolt.fullParentColliders=false */
+    private static final boolean FULL_PARENT_COLLIDERS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.fullParentColliders","true"));
     private int parentEmoticonsColliderFrame=-1;
     private String reportedParentColliderState="";
 
@@ -255,7 +260,8 @@ public class BodyPartsPreviewRenderer
         // skinned parent hull: overlapping contacts falsely push hair aside.
         parentEmoticonsColliders=null;
         parentEmoticonsColliderFrame=-1;
-        if(BodyPartJoltPreviewAdapter.torsoContactsRequested())
+        if(BodyPartJoltPreviewAdapter.torsoContactsRequested() &&
+                FULL_PARENT_COLLIDERS)
         {
             BodyPartEmoticonsFullBodyColliders.Capture hull=
                     BodyPartEmoticonsFullBodyColliders.capture(
