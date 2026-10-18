@@ -196,6 +196,7 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltMultiTorsoNativeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAttachedBoxNativeSmoke.java \
              jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltMirroredFrontHairNativeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAuthoredPrimitiveNativeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairInertiaSmoke.java \
              jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltActorTravelInertiaSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
@@ -218,6 +219,8 @@ jobs:
             com.example.examplemod.physics.JoltAttachedBoxNativeSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltMirroredFrontHairNativeSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltAuthoredPrimitiveNativeSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltHairInertiaSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
@@ -371,6 +374,7 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltMultiTorsoNativeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAttachedBoxNativeSmoke.java \
              jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltMirroredFrontHairNativeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAuthoredPrimitiveNativeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairInertiaSmoke.java \
              jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltActorTravelInertiaSmoke.java \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java \
@@ -462,6 +466,8 @@ jobs:
             com.example.examplemod.physics.JoltAttachedBoxNativeSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltMirroredFrontHairNativeSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltAuthoredPrimitiveNativeSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltHairInertiaSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
