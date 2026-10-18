@@ -190,6 +190,72 @@ public final class EmoticonsSkinCollisionGroups
         return null;
     }
 
+    /**
+     * Select skinned triangles by their dominant actual armature bone.
+     * Each triangle has exactly one owner to avoid overlapping colliders.
+     */
+    public static EmoticonsCollisionGeometryProvider.MeshSnapshot selectBone(
+            Object morph, EmoticonsCollisionGeometryProvider.MeshSnapshot snapshot,
+            String boneName)
+    {
+        if (!(morph instanceof AnimatedMorph) || snapshot == null ||
+                boneName == null) return null;
+        for (AnimationMesh mesh : EmoticonsModelAccess.getMeshes((AnimatedMorph)morph))
+        {
+            if (mesh == null || mesh.data == null || !snapshot.name.equals(mesh.name))
+                continue;
+            int[] indices = mesh.data.indexData;
+            int[] boneIds = mesh.data.boneIndexData;
+            float[] weights = mesh.data.weightData;
+            BOBJArmature armature = mesh.getArmature();
+            if (indices == null || boneIds == null || weights == null ||
+                    armature == null || armature.orderedBones == null ||
+                    indices.length != snapshot.triangles.length ||
+                    weights.length != boneIds.length ||
+                    weights.length != (long)(snapshot.vertices.length / 3) * 4)
+                return null;
+            int target = -1;
+            for (BOBJBone bone : armature.orderedBones)
+                if (bone != null && boneName.equals(bone.name))
+                    target = bone.index;
+            if (target < 0) return null;
+            List<Integer> selected = new ArrayList<Integer>();
+            for (int t = 0; t + 2 < indices.length; t += 3)
+            {
+                Map<Integer,Float> mass = new LinkedHashMap<Integer,Float>();
+                for (int j = 0; j < 3; j++)
+                {
+                    int vi = indices[t+j];
+                    if (vi < 0 || vi >= snapshot.vertices.length/3) return null;
+                    int off = vi*4;
+                    for (int slot = 0; slot < 4; slot++)
+                    {
+                        float w = weights[off+slot];
+                        if (w <= 0F || !Float.isFinite(w)) continue;
+                        Integer id = Integer.valueOf(boneIds[off+slot]);
+                        Float old = mass.get(id);
+                        mass.put(id, Float.valueOf(w + (old==null?0F:old.floatValue())));
+                    }
+                }
+                int dominant = -1;
+                float maximum = 0F;
+                for (Map.Entry<Integer,Float> entry : mass.entrySet())
+                    if (entry.getValue().floatValue() > maximum)
+                    {
+                        dominant = entry.getKey().intValue();
+                        maximum = entry.getValue().floatValue();
+                    }
+                if (dominant == target)
+                    for (int j=0;j<3;j++) selected.add(Integer.valueOf(indices[t+j]));
+            }
+            int[] tris = new int[selected.size()];
+            for (int i=0;i<tris.length;i++) tris[i]=selected.get(i).intValue();
+            return new EmoticonsCollisionGeometryProvider.MeshSnapshot(
+                    snapshot.name+"_bone_"+boneName,snapshot.vertices,tris);
+        }
+        return null;
+    }
+
     private static void increment(Map<Group,Integer> counts,Group group)
     {counts.put(group,Integer.valueOf(counts.get(group).intValue()+1));}
 
