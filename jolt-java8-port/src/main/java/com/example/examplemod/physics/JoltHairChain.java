@@ -477,7 +477,12 @@ public final class JoltHairChain implements AutoCloseable {
                 {
                     int boxGroup=links.length+4+i;
                     contactGroups.disableCollision(0,boxGroup);
-                    contactGroups.disableCollision(1,boxGroup);
+                    // The first DYNAMIC hair link must collide with other
+                    // BodyParts (in particular a chest). Exclude it only
+                    // from a passive shape enclosing its own root anchor,
+                    // such as the attached hair model's decorative scalp.
+                    if(rootInsidePrimitive(shapes[i],0.035F))
+                        contactGroups.disableCollision(1,boxGroup);
                     Shape shape;
                     if(kinds[i]==0)
                         shape=new BoxShape(new Vec3(
@@ -541,6 +546,37 @@ public final class JoltHairChain implements AutoCloseable {
                 bodies.moveKinematic(additionalBoxes[i].getId(),
                         centers[i],rotations[i],TICK);
         }
+    }
+
+    /** Root-ownership test for the FIRST dynamic link; do not blanket-ignore
+     * arbitrary chest/shoulder colliders. Local-space distance works for
+     * rotated boxes, spheres and vertical capsule primitives alike.
+     */
+    private boolean rootInsidePrimitive(float[] row,float margin)
+    {
+        float dx=startX-row[0],dy=startY-row[1],dz=startZ-row[2];
+        float x=row[3],y=row[4],z=row[5],w=row[6];
+        // Project root in the collider's local axes (inverse unit quaternion).
+        float a=(1F-2F*(y*y+z*z))*dx+
+                2F*(x*y+w*z)*dy+2F*(x*z-w*y)*dz;
+        float b=2F*(x*y-w*z)*dx+
+                (1F-2F*(x*x+z*z))*dy+2F*(y*z+w*x)*dz;
+        float c=2F*(x*z+w*y)*dx+
+                2F*(y*z-w*x)*dy+(1F-2F*(x*x+y*y))*dz;
+        int kind=(int)row[10];
+        if(kind==0)
+            return Math.abs(a)<=row[7]+margin &&
+                    Math.abs(b)<=row[8]+margin &&
+                    Math.abs(c)<=row[9]+margin;
+        if(kind==1)
+        {
+            float radius=row[7]+margin;
+            return a*a+b*b+c*c<=radius*radius;
+        }
+        float cylinder=Math.max(0F,row[8]-row[7]);
+        float nearestY=Math.max(-cylinder,Math.min(cylinder,b));
+        float h=b-nearestY,r=row[7]+margin;
+        return a*a+h*h+c*c<=r*r;
     }
 
     /** A strand root is jointed into this animated body, not a free impact. */
