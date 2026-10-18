@@ -808,6 +808,14 @@ public final class JoltHairChain implements AutoCloseable {
         float along = total <= 1 ? 0F : index / (float)(total - 1);
         float share = 1F - falloff * along;
         float hz = (0.5F + 11.5F * stiffness) * (float)Math.sqrt(share);
+        // The first physical link is driven by a rotating kinematic parent.
+        // If its motor has full authored stiffness it holds hair in the
+        // BODY'S tilted local frame, overpowering gravity in world -Y.
+        // Keep a soft root spring for transient head/body rotation impulse;
+        // let gravity establish the hanging world direction. Internal
+        // hair joints retain their authored stiffness, so character
+        // animation and distributed lag are not disabled.
+        if(index==0)hz*=0.35F;
         float ratio = 0.25F + 0.75F * damping;
         MotorSettings swing = constraint.getSwingMotorSettings();
         MotorSettings twist = constraint.getTwistMotorSettings();
