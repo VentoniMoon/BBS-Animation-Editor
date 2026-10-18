@@ -156,6 +156,12 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionShapes =
             new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
     private int attachedCollisionFrame = -1;
+    /** Full animated PARENT Emoticons skin colliders: captured once per actor
+     * render, never once per hair attachment. Same native world frame and
+     * source ordering as the additional Chameleon BodyPart colliders. */
+    private BodyPartEmoticonsFullBodyColliders.Capture parentEmoticonsColliders;
+    private int parentEmoticonsColliderFrame=-1;
+    private String reportedParentColliderState="";
 
     /* Emoticons provides model-local bone transforms. The renderer then
      * rotates/translates the complete actor. Both physical chains AND their
@@ -239,6 +245,35 @@ public class BodyPartsPreviewRenderer
                 System.out.println("[BBS Animation Editor][Physics] "
                         + "Emoticons skinned collision geometry available: "+report
                         + " (mesh-local snapshot, collision solver not yet connected)");
+            }
+        }
+        // Independent from hair parent bones: HEAD, TORSO, both ARMS and
+        // both LEGS always have collision coverage if skinned mesh exists.
+        // Never use the old torso-only proxy simultaneously with this
+        // skinned parent hull: overlapping contacts falsely push hair aside.
+        parentEmoticonsColliders=null;
+        parentEmoticonsColliderFrame=-1;
+        if(BodyPartJoltPreviewAdapter.torsoContactsRequested())
+        {
+            BodyPartEmoticonsFullBodyColliders.Capture hull=
+                    BodyPartEmoticonsFullBodyColliders.capture(
+                            morph,actorFrameFor(frame));
+            if(hull.isReady())
+            {
+                parentEmoticonsColliders=hull;
+                parentEmoticonsColliderFrame=frame;
+            }
+            String report="groups="+hull.groups+
+                    " triangles="+hull.triangles+
+                    " shapes="+hull.shapes.size()+
+                    " frame="+frame+
+                    " (head/torso/arms/legs; skinned mesh)";
+            if(!report.substring(0,report.indexOf(" frame=")).equals(
+                    reportedParentColliderState))
+            {
+                reportedParentColliderState=report.substring(
+                        0,report.indexOf(" frame="));
+                System.out.println("[BBS Animation Editor][Jolt][ParentSkin] "+report);
             }
         }
         captureAttachedChameleonColliders(morph,frame);
@@ -443,6 +478,13 @@ public class BodyPartsPreviewRenderer
     {
         if(frame!=attachedCollisionFrame)return null;
         java.util.List<float[]> combined=new java.util.ArrayList<float[]>();
+        if(frame==parentEmoticonsColliderFrame &&
+                parentEmoticonsColliders!=null)
+            for(float[] box:parentEmoticonsColliders.boxes)
+            {
+                if(combined.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
+                combined.add(box.clone());
+            }
         for(BodyPartModelData data:collisionPartOrder)
         {
             java.util.List<float[]> source=attachedCollisionBoxes.get(data);
@@ -464,6 +506,13 @@ public class BodyPartsPreviewRenderer
     {
         if(frame!=attachedCollisionFrame)return null;
         java.util.List<float[]> result=new java.util.ArrayList<float[]>();
+        if(frame==parentEmoticonsColliderFrame &&
+                parentEmoticonsColliders!=null)
+            for(float[] shape:parentEmoticonsColliders.shapes)
+            {
+                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
+                result.add(shape.clone());
+            }
         for(BodyPartModelData data:collisionPartOrder)
         {
             java.util.List<float[]> shapes=attachedCollisionShapes.get(data);
@@ -485,6 +534,13 @@ public class BodyPartsPreviewRenderer
     {
         java.util.List<String> result=new java.util.ArrayList<String>();
         if(frame!=attachedCollisionFrame)return result;
+        if(frame==parentEmoticonsColliderFrame &&
+                parentEmoticonsColliders!=null)
+            for(String name:parentEmoticonsColliders.owners)
+            {
+                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
+                result.add(name);
+            }
         for(BodyPartModelData data:collisionPartOrder)
         {
             java.util.List<float[]> forms=attachedCollisionBoxes.get(data);
@@ -1672,6 +1728,18 @@ public class BodyPartsPreviewRenderer
                                     contactFrame!=null &&
                                     contactFrame.intValue()==frame
                                     ? joltMultiTorsoFits.get(data):null;
+                            // Once full parent skinned hulls are installed,
+                            // retire the old 3 torso capsules for this frame.
+                            // Otherwise two overlapping approximation systems
+                            // compete and can squeeze hair sideways.
+                            if(frame==parentEmoticonsColliderFrame &&
+                                    parentEmoticonsColliders!=null &&
+                                    parentEmoticonsColliders.owners.contains(
+                                            "emoticons.TORSO"))
+                            {
+                                contact=null;
+                                segments=null;
+                            }
                             float[] colliderA=contact==null?null:contact.a;
                             float[] colliderB=contact==null?null:contact.b;
                             BodyPartJoltMultiTorsoFit.Segments nativeSegments=segments;
@@ -1999,6 +2067,8 @@ public class BodyPartsPreviewRenderer
         this.attachedCollisionBoxes.clear();
         this.attachedCollisionShapes.clear();
         this.attachedCollisionFrame=-1;
+        this.parentEmoticonsColliders=null;
+        this.parentEmoticonsColliderFrame=-1;
 
         // Do not probe/log last-rendered matrices here: prepareModels()
         // runs on every draw BEFORE the actor's current render and therefore
