@@ -70,14 +70,15 @@ public final class BodyPartJoltPreviewAdapter {
      * while the Jolt world continues evolving at its highest visited tick. */
     private static final class RecordedFrame {
         final Map<String,float[]> pose, raw;
-        final float[][] hair,boxes;
+        final float[][] hair,boxes,shapes;
         RecordedFrame(Map<String,float[]> pose,Map<String,float[]> raw,
-                float[][] hair,float[][] boxes)
+                float[][] hair,float[][] boxes,float[][] shapes)
         {
             this.pose=copy(pose);
             this.raw=copy(raw);
             this.hair=copyMatrices(hair);
             this.boxes=copyMatrices(boxes);
+            this.shapes=copyMatrices(shapes);
         }
     }
 
@@ -109,7 +110,8 @@ public final class BodyPartJoltPreviewAdapter {
         void remember(int tick)
         {
             history.put(Integer.valueOf(tick),
-                    new RecordedFrame(sample,raw,rawHairBodies,lastAdditionalBoxes));
+                    new RecordedFrame(sample,raw,rawHairBodies,
+                            lastAdditionalBoxes,lastAdditionalShapes));
             // Bound memory. Uncached older seek falls back to the earlier
             // conservative scene-recreation behavior.
             while(history.size()>1500)
@@ -613,6 +615,18 @@ public final class BodyPartJoltPreviewAdapter {
         if(state==null || state.presentedFrame!=frame)return null;
         RecordedFrame recorded=state.history.get(Integer.valueOf(frame));
         return recorded==null?null:copyMatrices(recorded.boxes);
+    }
+
+    /** Only shapes actually installed by the native typed-collider API.
+     *  Null means the older box-only Jolt prototype is in use.
+     */
+    public float[][] additionalShapesFor(String modelId,int frame)
+    {
+        if(!drawContactsRequested() || modelId==null)return null;
+        State state=scenes.get(modelId);
+        if(state==null || state.presentedFrame!=frame)return null;
+        RecordedFrame recorded=state.history.get(Integer.valueOf(frame));
+        return recorded==null?null:copyMatrices(recorded.shapes);
     }
 
     public float[][] hairSegmentsFor(String modelId,int frame) {
