@@ -51,6 +51,9 @@ public final class BodyPartJoltPreviewAdapter {
     private Method create;
     private Method setGravity;
     private Method advance;
+    /** Newer Jolt prototype: source-root key rotation as well as parent. */
+    private Method advanceWithBones;
+    private boolean warnedOldRotationApi;
     private Method settle;
     private Method localSwings;
     private Method setTorsoCollider;
@@ -199,6 +202,17 @@ public final class BodyPartJoltPreviewAdapter {
                 setGravity=klass.getMethod("setGravity",float.class);
                 advance=klass.getMethod("advance",int.class,
                         float[].class,float[].class);
+                try {
+                    advanceWithBones=klass.getMethod("advance",int.class,
+                            float[].class,float[].class,float[][].class);
+                } catch(NoSuchMethodException older) {
+                    if(!warnedOldRotationApi) {
+                        warnedOldRotationApi=true;
+                        System.err.println("[BBS Editor][Jolt][RootRotation] "
+                                + "Installed prototype lacks animated root-bone rotation. "
+                                + "Update jolt-hair-prototype-java8.jar.");
+                    }
+                }
                 settle=klass.getMethod("settle",int.class);
                 localSwings=klass.getMethod("localBoneSwings",
                         float[][].class,float[].class);
@@ -542,7 +556,11 @@ public final class BodyPartJoltPreviewAdapter {
                 if(useShapes)setAdditionalShapes.invoke(state.rig,(Object)shapes);
                 else setAdditionalBoxes.invoke(state.rig,(Object)boxes);
             }
-            advance.invoke(state.rig,frame,root,cleanParentWorld);
+            if(advanceWithBones!=null)
+                advanceWithBones.invoke(state.rig,frame,root,
+                        cleanParentWorld,cleanBoneWorld);
+            else
+                advance.invoke(state.rig,frame,root,cleanParentWorld);
             Map<String,float[]> result=collect(state.rig,boneNames,
                     cleanBoneWorld,cleanParentWorld);
             state.sample=copy(result);
