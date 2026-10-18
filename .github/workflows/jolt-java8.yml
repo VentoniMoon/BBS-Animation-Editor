@@ -31,6 +31,7 @@ on:
       - 'src/main/java/com/example/examplemod/BodyPartsPersistence.java'
       - 'src/main/java/com/example/examplemod/JoltColliderPrimitives.java'
       - 'src/main/java/com/example/examplemod/JoltPhysicsTimeline.java'
+      - 'src/main/java/com/example/examplemod/JoltPhysicsOfflineRunner.java'
       - 'src/main/java/com/example/examplemod/JoltPhysicsPoseInterpolator.java'
       - 'src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java'
       - 'src/main/java/com/example/examplemod/JoltContactWireframe.java'
@@ -69,7 +70,7 @@ jobs:
       - name: Compile ALL production bindings with --release 8
         run: |
           OUT="${{ runner.temp }}/jolt-java8"
-          find "$OUT/src" jolt-java8-port/src/main/java/com/example/examplemod/physics src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java src/main/java/com/example/examplemod/JoltColliderPrimitives.java src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java -type f -name '*.java' | sort > "$OUT/sources.txt"
+          find "$OUT/src" jolt-java8-port/src/main/java/com/example/examplemod/physics src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java src/main/java/com/example/examplemod/JoltColliderPrimitives.java src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java src/main/java/com/example/examplemod/JoltPhysicsTimeline.java src/main/java/com/example/examplemod/JoltPhysicsOfflineRunner.java -type f -name '*.java' | sort > "$OUT/sources.txt"
           mkdir -p "$OUT/classes"
           javac --release 8 -encoding UTF-8 -d "$OUT/classes" @"$OUT/sources.txt"
           # Package before compiling test classes; upstream MIT notice retained.
@@ -205,6 +206,7 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltPreviewBridgeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltOfflineReplayNativeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltMultiTorsoBridgeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHorstHairFixtureSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
@@ -234,6 +236,8 @@ jobs:
             com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
           java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltPreviewBridgeSmoke
+          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltOfflineReplayNativeSmoke
           java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.physics.jolt.compoundTorso=true -Dbbs.editor.physics.jolt.drawColliders=true -Dbbs.editor.jolt.native="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltMultiTorsoBridgeSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
@@ -358,7 +362,7 @@ jobs:
         shell: bash
         run: |
           python jolt-java8-port/tools/prepare_sources.py --upstream upstream-jolt --output java8-win
-          find java8-win/src jolt-java8-port/src/main/java/com/example/examplemod/physics src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java src/main/java/com/example/examplemod/JoltColliderPrimitives.java src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java -type f -name '*.java' | sort > java8-win/sources.txt
+          find java8-win/src jolt-java8-port/src/main/java/com/example/examplemod/physics src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java src/main/java/com/example/examplemod/JoltColliderPrimitives.java src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java src/main/java/com/example/examplemod/JoltPhysicsTimeline.java src/main/java/com/example/examplemod/JoltPhysicsOfflineRunner.java -type f -name '*.java' | sort > java8-win/sources.txt
           mkdir -p java8-win/classes
           javac --release 8 -encoding UTF-8 -d java8-win/classes @java8-win/sources.txt
       - name: Switch to the real Java 8 runtime
@@ -388,6 +392,7 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltPreviewBridgeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltOfflineReplayNativeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltMultiTorsoBridgeSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHorstHairFixtureSmoke.java
           for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
@@ -487,6 +492,8 @@ jobs:
             com.example.examplemod.physics.JoltChameleonPreviewRigSmoke
           java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltPreviewBridgeSmoke
+          java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.diagnostic=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltOfflineReplayNativeSmoke
           java -ea -Dbbs.editor.physics.jolt.preview=true -Dbbs.editor.physics.jolt.torsoContacts=true -Dbbs.editor.physics.jolt.compoundTorso=true -Dbbs.editor.physics.jolt.drawColliders=true -Dbbs.editor.jolt.native="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltMultiTorsoBridgeSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
