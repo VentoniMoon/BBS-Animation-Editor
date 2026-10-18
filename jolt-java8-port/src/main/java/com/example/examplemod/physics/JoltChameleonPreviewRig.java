@@ -97,6 +97,12 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         chain.setAdditionalBoxes(worldBoxes);
     }
 
+    /** Typed authored passive colliders, kinematically moved per tick. */
+    public void setAdditionalShapes(float[][] worldShapes)
+    {
+        chain.setAdditionalShapes(worldShapes);
+    }
+
     /** Diagnostic only: actual native dynamic-body endpoints and contact radii. */
     public float[][] nativeHairSegments()
     {
