@@ -19,16 +19,20 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
      * Its parent can remain fixed while an animation key rotates the root
      * hair bone; following parent-only yaw would silently ignore that key. */
     private final float[] restRootBoneRotation;
+    private final float[][] restBoneWorldRotations;
     private float[] currentParentRotation;
     private int lastFrame;
 
     private JoltChameleonPreviewRig(JoltHairChain chain, float[][] corrections,
-            float[] restParentRotation,float[] restRootBoneRotation,int frame) {
+            float[] restParentRotation,float[][] restBoneWorldRotations,int frame) {
         this.chain = chain;
         this.corrections = corrections;
         this.previousLocals = new float[corrections.length][];
         this.restParentRotation = restParentRotation;
-        this.restRootBoneRotation = restRootBoneRotation.clone();
+        this.restRootBoneRotation = restBoneWorldRotations[0].clone();
+        this.restBoneWorldRotations=new float[restBoneWorldRotations.length][];
+        for(int i=0;i<restBoneWorldRotations.length;i++)
+            this.restBoneWorldRotations[i]=restBoneWorldRotations[i].clone();
         this.currentParentRotation = restParentRotation;
         this.lastFrame = frame;
     }
@@ -66,7 +70,7 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
             corrections[i]=JoltBoneQuaternionMapper.restCorrection(
                     chain.initialWorldRotation(i),boneRestQuats[i]);
         return new JoltChameleonPreviewRig(chain,corrections,parentRest,
-                boneRestQuats[0],frame);
+                boneRestQuats,frame);
     }
 
     /** World center of the final physical bone, for continuity diagnostics. */
@@ -133,7 +137,7 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
      * historical parent-only drive for pre-existing external integrations. */
     public void advance(int frame, float[] rootWorldPosition,
             float[] currentParentWorldMatrix) {
-        advanceImpl(frame,rootWorldPosition,currentParentWorldMatrix,null);
+        advanceImpl(frame,rootWorldPosition,currentParentWorldMatrix,null,null);
     }
 
     /**
@@ -149,12 +153,16 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
             float[] currentParentWorldMatrix,float[][] cleanBoneWorld) {
         if(cleanBoneWorld==null || cleanBoneWorld.length!=corrections.length)
             throw new IllegalArgumentException("Missing authored bone poses");
+        float[][] authored=new float[cleanBoneWorld.length][];
+        for(int i=0;i<authored.length;i++)
+            authored[i]=rotation(cleanBoneWorld[i]);
         advanceImpl(frame,rootWorldPosition,currentParentWorldMatrix,
-                rotation(cleanBoneWorld[0]));
+                authored[0],authored);
     }
 
     private void advanceImpl(int frame,float[] rootWorldPosition,
-            float[] currentParentWorldMatrix,float[] animatedRootRotation) {
+            float[] currentParentWorldMatrix,float[] animatedRootRotation,
+            float[][] authoredRotations) {
         if (frame != lastFrame+1)
             throw new IllegalStateException("Jolt preview seek: recreate rig");
         if (rootWorldPosition == null || rootWorldPosition.length != 3)
@@ -169,6 +177,8 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
                 delta,chain.initialWorldRotation());
         chain.moveAnchor(rootWorldPosition[0],rootWorldPosition[1],rootWorldPosition[2],
                 pinOrientation[0],pinOrientation[1],pinOrientation[2],pinOrientation[3]);
+        if(authoredRotations!=null && authoredRotations.length>1)
+            chain.setAnimatedJointTargets(restBoneWorldRotations,authoredRotations);
         chain.step();
         lastFrame=frame;
     }
