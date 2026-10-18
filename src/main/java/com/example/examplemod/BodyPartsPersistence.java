@@ -47,6 +47,7 @@ public final class BodyPartsPersistence
                 boneHolder.setTag("Bones", EditorSceneSerializer.writeBones(model.getBones()));
                 tag.setTag("Skeleton", boneHolder);
                 tag.setTag("Physics", model.writePhysicsSettings());
+                tag.setTag("Colliders", model.writeColliderSettings());
                 tag.setTag("CharacterTimeline", model.getCharacterTimeline().toNBT());
 
                 NBTTagList morphKeys = new NBTTagList();
@@ -134,6 +135,7 @@ public final class BodyPartsPersistence
             }
             readTransform(model.getGlobalTransform(), tag.getCompoundTag("Global"));
             model.readPhysicsSettings(tag.getTagList("Physics", 10));
+            model.readColliderSettings(tag.getTagList("Colliders", 10));
 
             if (tag.hasKey("CharacterTimeline", 10))
             {
