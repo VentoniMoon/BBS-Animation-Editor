@@ -160,8 +160,10 @@ public class BodyPartsPreviewRenderer
      * render, never once per hair attachment. Same native world frame and
      * source ordering as the additional Chameleon BodyPart colliders. */
     private BodyPartEmoticonsFullBodyColliders.Capture parentEmoticonsColliders;
-    private final BodyPartEmoticonsFullBodyColliders.Cache parentColliderCache =
-            new BodyPartEmoticonsFullBodyColliders.Cache();
+    /** Per-entity cached skin mesh bind geometry. Multi-actor preview must
+     * never reuse the fitted arm/body boxes of a different actor. */
+    private final java.util.Map<Integer,BodyPartEmoticonsFullBodyColliders.Cache>
+            parentColliderCaches=new java.util.HashMap<Integer,BodyPartEmoticonsFullBodyColliders.Cache>();
     /** Enabled by default, can be disabled for legacy torso-only A/B:
      * -Dbbs.editor.physics.jolt.fullParentColliders=false */
     private static final boolean FULL_PARENT_COLLIDERS=
@@ -263,9 +265,16 @@ public class BodyPartsPreviewRenderer
         if(BodyPartJoltPreviewAdapter.torsoContactsRequested() &&
                 FULL_PARENT_COLLIDERS)
         {
+            BodyPartEmoticonsFullBodyColliders.Cache skinCache=
+                    parentColliderCaches.get(Integer.valueOf(actor.getEntityId()));
+            if(skinCache==null)
+            {
+                skinCache=new BodyPartEmoticonsFullBodyColliders.Cache();
+                parentColliderCaches.put(Integer.valueOf(actor.getEntityId()),skinCache);
+            }
             BodyPartEmoticonsFullBodyColliders.Capture hull=
                     BodyPartEmoticonsFullBodyColliders.capture(
-                            morph,actorFrameFor(frame),parentColliderCache);
+                            morph,actorFrameFor(frame),skinCache);
             if(hull.isReady())
             {
                 parentEmoticonsColliders=hull;
@@ -3128,6 +3137,10 @@ public class BodyPartsPreviewRenderer
 
     public void clear()
     {
+        parentColliderCaches.clear();
+        parentEmoticonsColliders=null;
+        parentEmoticonsColliderFrame=-1;
+        reportedParentColliderState="";
         joltPreview.clear();
         joltActorWorldFrame=null;
         joltActorWorldFrameTick=-1;
