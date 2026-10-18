@@ -34,6 +34,15 @@ public final class BodyPartJoltPreviewAdapter {
             Boolean.getBoolean("bbs.editor.physics.jolt.compoundTorso");
     private static volatile boolean drawContacts =
             Boolean.getBoolean("bbs.editor.physics.jolt.drawColliders");
+    /** Large teleports are scene changes, not 50ms kinematic velocity.
+     * Defaults ON; disable for A/B tests only. Ordinary quick head turns
+     * (<165 degrees / tick) and movements (<3 blocks / tick) stay physical.
+     */
+    private static final boolean RESEED_TELEPORTS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.reseedTeleports","true"));
+    private static final float MAX_ROOT_STEP=3F;
+    private static final float MAX_PARENT_TURN=(float)Math.toRadians(165D);
     private static final String RIG =
             "com.example.examplemod.physics.JoltChameleonPreviewRig";
     private boolean attempted;
@@ -333,6 +342,25 @@ public final class BodyPartJoltPreviewAdapter {
                 (useCompound && compoundShapeChanged(
                         state.lastMultiA,state.lastMultiB,state.lastMultiR,
                         compoundA,compoundB,compoundR));
+        // Teleport boundaries: do not feed a 6-block move/180-degree
+        // instantaneous scene jump into a 50ms Jolt kinematic velocity.
+        // Only classify genuinely adjacent frames. Frame seeks already
+        // reconstruct the scene above. Rotation test uses world matrices,
+        // never flips an Euler channel to hide a discontinuity.
+        if(!recreate && RESEED_TELEPORTS && frame==state.frame+1)
+        {
+            JoltPhysicsDiscontinuity.Kind motion=
+                    JoltPhysicsDiscontinuity.classify(state.frame,frame,
+                            state.lastRoot,root,state.lastParent,
+                            cleanParentWorld,MAX_ROOT_STEP,MAX_PARENT_TURN);
+            if(motion!=JoltPhysicsDiscontinuity.Kind.CONTINUOUS)
+            {
+                System.out.println("[BBS Editor][Jolt][Teleport] "+id+
+                        " frame="+frame+" type="+motion+
+                        " (reseed rather than huge kinematic impulse)");
+                recreate=true;
+            }
+        }
         // Source-pose comparisons on a paused frame are deliberately
         // disabled: they compare live render/partial-tick matrices with an
         // earlier clean frame and can mistake applied physics for user edits.
