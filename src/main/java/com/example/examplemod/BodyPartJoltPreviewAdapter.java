@@ -65,6 +65,22 @@ public final class BodyPartJoltPreviewAdapter {
     private boolean nativeDirectionWarning;
     private boolean recreatedLastSample;
 
+    /** Data for a fully integrated native frame, never a guessed current
+     * frame after direct scrubbing. Copied buffers keep snapshots immutable
+     * while the Jolt world continues evolving at its highest visited tick. */
+    private static final class RecordedFrame {
+        final Map<String,float[]> pose, raw;
+        final float[][] hair,boxes;
+        RecordedFrame(Map<String,float[]> pose,Map<String,float[]> raw,
+                float[][] hair,float[][] boxes)
+        {
+            this.pose=copy(pose);
+            this.raw=copy(raw);
+            this.hair=copyMatrices(hair);
+            this.boxes=copyMatrices(boxes);
+        }
+    }
+
     private static final class State {
         final AutoCloseable rig;
         final String[] bones;
@@ -86,6 +102,20 @@ public final class BodyPartJoltPreviewAdapter {
         float[][] rawHairBodies;
         Map<String, float[]> sample=Collections.emptyMap();
         Map<String, float[]> raw=Collections.emptyMap();
+        final java.util.NavigableMap<Integer,RecordedFrame> history=
+                new java.util.TreeMap<Integer,RecordedFrame>();
+        int presentedFrame=-1;
+
+        void remember(int tick)
+        {
+            history.put(Integer.valueOf(tick),
+                    new RecordedFrame(sample,raw,rawHairBodies,lastAdditionalBoxes));
+            // Bound memory. Uncached older seek falls back to the earlier
+            // conservative scene-recreation behavior.
+            while(history.size()>1500)
+                history.pollFirstEntry();
+            presentedFrame=tick;
+        }
 
         State(AutoCloseable rig, String[] bones, int frame,
                 float stiffness, float damping, float gravity,
@@ -354,6 +384,29 @@ public final class BodyPartJoltPreviewAdapter {
         // again on the next timeline frame, which is the canonical 20 Hz
         // physics clock. Explicit same-frame key editing is a separate
         // invalidate operation, not inferred from transient render matrices.
+        // An already simulated tick remains deterministic on rewind:
+        // read its recorded result without moving a live native rig backward.
+        // The Jolt world stays at the highest simulated frame, so later
+        // forward playback can continue from its true physics history.
+        if(state!=null && frame<state.frame &&
+                Arrays.equals(state.bones,boneNames) &&
+                state.stiffness==stiffness &&
+                state.damping==damping && state.gravity==gravity &&
+                state.torsoEnabled==useTorso &&
+                state.compoundEnabled==useCompound &&
+                state.typedShapes==useShapes &&
+                (useAdditional==(state.lastAdditionalBoxes!=null)) &&
+                (!useAdditional || (useShapes?
+                        JoltColliderPrimitives.sameTopology(shapes,state.lastAdditionalShapes):
+                        sameBoxGeometry(boxes,state.lastAdditionalBoxes))))
+        {
+            RecordedFrame recorded=state.history.get(Integer.valueOf(frame));
+            if(recorded!=null)
+            {
+                state.presentedFrame=frame;
+                return copy(recorded.pose);
+            }
+        }
         if(state!=null && frame==state.frame &&
                 Arrays.equals(state.bones,boneNames) &&
                 state.stiffness==stiffness && state.damping==damping &&
@@ -370,7 +423,10 @@ public final class BodyPartJoltPreviewAdapter {
                 (!useCompound ||
                         !compoundShapeChanged(state.lastMultiA,state.lastMultiB,
                                 state.lastMultiR,compoundA,compoundB,compoundR)))
+        {
+            state.presentedFrame=frame;
             return copy(state.sample);
+        }
         boolean recreate=state==null || frame<state.frame ||
                 frame>state.frame+1 ||
                 !Arrays.equals(state.bones,boneNames) ||
@@ -445,6 +501,7 @@ public final class BodyPartJoltPreviewAdapter {
                     state.raw=collectNativeDirections(scene,boneNames);
                     state.rawHairBodies=collectHairSegments(scene,boneNames);
                     scenes.put(id,state);
+                    state.remember(frame);
                     recreatedLastSample=true;
                     // Compare mirrored/neighboring strands from their actual
                     // initial physical inputs, not from subjective camera
@@ -468,7 +525,10 @@ public final class BodyPartJoltPreviewAdapter {
             }
         }
         if(frame==state.frame)
+        {
+            state.presentedFrame=frame;
             return copy(state.sample);
+        }
         try {
             if(useTorso)
                 setTorsoCollider.invoke(state.rig,torsoA,torsoB,torsoRadius);
@@ -503,6 +563,7 @@ public final class BodyPartJoltPreviewAdapter {
             }
             state.lastAdditionalBoxes=copyMatrices(boxes);
             state.lastAdditionalShapes=copyMatrices(shapes);
+            state.remember(frame);
             return result;
         } catch(Throwable error) {
             dispose(id);
