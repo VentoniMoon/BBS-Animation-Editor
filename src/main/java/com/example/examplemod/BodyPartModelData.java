@@ -63,6 +63,55 @@ public class BodyPartModelData
         }
     }
 
+    /** Optional static collision markup. Unconfigured bones use legacy
+     * box colliders; these settings are NOT hair-chain settings. */
+    private final java.util.Map<String,BodyPartCollisionSettings> colliderSettings=
+            new java.util.LinkedHashMap<String,BodyPartCollisionSettings>();
+
+    public BodyPartCollisionSettings getCollisionSettings(String bone)
+    {
+        if(bone==null || bone.isEmpty())return null;
+        BodyPartCollisionSettings settings=colliderSettings.get(bone);
+        if(settings==null)
+        {
+            settings=new BodyPartCollisionSettings();
+            colliderSettings.put(bone,settings);
+        }
+        return settings;
+    }
+
+    /** No allocation during every read-only render capture. Null = default. */
+    public BodyPartCollisionSettings peekCollisionSettings(String bone)
+    {
+        return bone==null?null:colliderSettings.get(bone);
+    }
+
+    public net.minecraft.nbt.NBTTagList writeColliderSettings()
+    {
+        net.minecraft.nbt.NBTTagList list=new net.minecraft.nbt.NBTTagList();
+        for(java.util.Map.Entry<String,BodyPartCollisionSettings> entry:
+                colliderSettings.entrySet())
+        {
+            net.minecraft.nbt.NBTTagCompound nbt=entry.getValue().toNBT();
+            nbt.setString("Bone",entry.getKey());
+            list.appendTag(nbt);
+        }
+        return list;
+    }
+
+    public void readColliderSettings(net.minecraft.nbt.NBTTagList list)
+    {
+        colliderSettings.clear();
+        if(list==null)return;
+        for(int i=0;i<list.tagCount();i++)
+        {
+            net.minecraft.nbt.NBTTagCompound tag=list.getCompoundTagAt(i);
+            String bone=tag.getString("Bone");
+            if(!bone.isEmpty())
+                colliderSettings.put(bone,BodyPartCollisionSettings.fromNBT(tag));
+        }
+    }
+
     /** Morph replacements made by the Character Timeline. */
     private final TreeMap<Integer, NBTTagCompound> morphKeys =
             new TreeMap<Integer, NBTTagCompound>();
