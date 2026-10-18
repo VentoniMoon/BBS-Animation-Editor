@@ -15,15 +15,20 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
     private final float[][] corrections;
     private final float[][] previousLocals;
     private final float[] restParentRotation;
+    /** The pin must also track the first driven bone's authored rotation.
+     * Its parent can remain fixed while an animation key rotates the root
+     * hair bone; following parent-only yaw would silently ignore that key. */
+    private final float[] restRootBoneRotation;
     private float[] currentParentRotation;
     private int lastFrame;
 
     private JoltChameleonPreviewRig(JoltHairChain chain, float[][] corrections,
-            float[] restParentRotation, int frame) {
+            float[] restParentRotation,float[] restRootBoneRotation,int frame) {
         this.chain = chain;
         this.corrections = corrections;
         this.previousLocals = new float[corrections.length][];
         this.restParentRotation = restParentRotation;
+        this.restRootBoneRotation = restRootBoneRotation.clone();
         this.currentParentRotation = restParentRotation;
         this.lastFrame = frame;
     }
@@ -60,7 +65,8 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         for (int i=0;i<count;i++)
             corrections[i]=JoltBoneQuaternionMapper.restCorrection(
                     chain.initialWorldRotation(i),boneRestQuats[i]);
-        return new JoltChameleonPreviewRig(chain,corrections,parentRest,frame);
+        return new JoltChameleonPreviewRig(chain,corrections,parentRest,
+                boneRestQuats[0],frame);
     }
 
     /** World center of the final physical bone, for continuity diagnostics. */
@@ -122,19 +128,45 @@ public final class JoltChameleonPreviewRig implements AutoCloseable {
         for (int i = 0; i < ticks; i++) chain.step();
     }
 
-    /** Only adjacent timeline frames are valid; caller must recreate on seek. */
+    /** Existing Java8 JNI compatibility. New callers must supply the
+     * current CLEAN root bone rotation too. The old entrypoint retains the
+     * historical parent-only drive for pre-existing external integrations. */
     public void advance(int frame, float[] rootWorldPosition,
             float[] currentParentWorldMatrix) {
+        advanceImpl(frame,rootWorldPosition,currentParentWorldMatrix,null);
+    }
+
+    /**
+     * Drive kinematic hair pins with the actual animated FIRST BONE world
+     * rotation, not only its parent. Parent and root have independent
+     * animation tracks in Chameleon, including stationary head tilts.
+     *
+     * Keep the initial Jolt -Y segment and authored Chameleon Y180 basis
+     * unchanged. Only the difference from this chain's authored rest root
+     * is applied, so non-zero initial rest rotations are not doubled.
+     */
+    public void advance(int frame,float[] rootWorldPosition,
+            float[] currentParentWorldMatrix,float[][] cleanBoneWorld) {
+        if(cleanBoneWorld==null || cleanBoneWorld.length!=corrections.length)
+            throw new IllegalArgumentException("Missing authored bone poses");
+        advanceImpl(frame,rootWorldPosition,currentParentWorldMatrix,
+                rotation(cleanBoneWorld[0]));
+    }
+
+    private void advanceImpl(int frame,float[] rootWorldPosition,
+            float[] currentParentWorldMatrix,float[] animatedRootRotation) {
         if (frame != lastFrame+1)
             throw new IllegalStateException("Jolt preview seek: recreate rig");
         if (rootWorldPosition == null || rootWorldPosition.length != 3)
             throw new IllegalArgumentException("Missing animated root world pivot");
         currentParentRotation=rotation(currentParentWorldMatrix);
-        float[] parentDelta=JoltBoneQuaternionMapper.multiply(
-                currentParentRotation,
-                JoltBoneQuaternionMapper.inverse(restParentRotation));
+        float[] delta=animatedRootRotation==null ?
+                JoltBoneQuaternionMapper.multiply(currentParentRotation,
+                        JoltBoneQuaternionMapper.inverse(restParentRotation)) :
+                JoltBoneQuaternionMapper.multiply(animatedRootRotation,
+                        JoltBoneQuaternionMapper.inverse(restRootBoneRotation));
         float[] pinOrientation=JoltBoneQuaternionMapper.multiply(
-                parentDelta,chain.initialWorldRotation());
+                delta,chain.initialWorldRotation());
         chain.moveAnchor(rootWorldPosition[0],rootWorldPosition[1],rootWorldPosition[2],
                 pinOrientation[0],pinOrientation[1],pinOrientation[2],pinOrientation[3]);
         chain.step();
