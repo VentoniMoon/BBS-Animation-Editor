@@ -78,6 +78,12 @@ public final class BodyPartEmoticonsFullBodyColliders {
                 if(src==null)continue;
                 for(EmoticonsSkinCollisionGroups.Group group:
                         EmoticonsSkinCollisionGroups.Group.values()){
+                    // OTHER collects unweighted/unknown vertices. When actual
+                    // body groups exist it could form a huge second collider
+                    // spanning the entire actor and repel hair sideways.
+                    // Preserve it only for meshes with no recognized groups.
+                    if(group==EmoticonsSkinCollisionGroups.Group.OTHER &&
+                            cache.groups>0)continue;
                     EmoticonsCollisionGeometryProvider.MeshSnapshot region=
                             EmoticonsSkinCollisionGroups.select(
                                     morph,src,EnumSet.of(group));
