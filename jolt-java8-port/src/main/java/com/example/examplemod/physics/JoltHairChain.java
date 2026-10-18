@@ -52,6 +52,8 @@ public final class JoltHairChain implements AutoCloseable {
     private final float[] initialRotation;
     private final float[][] initialRotations;
     private final SwingTwistConstraint[] joints;
+    /** Initial joint constraint frame, world-space quaternion (twist/plane). */
+    private final float[][] jointFrames;
     /** Optional Emoticons torso proxy (layer 1); no hair self collision. */
     private Body torsoCollider;
     private float colliderRadius, colliderSpan;
@@ -156,6 +158,7 @@ public final class JoltHairChain implements AutoCloseable {
         this.jobs=new JobSystemSingleThreaded(1024);
         this.links=new Body[count];
         this.joints=new SwingTwistConstraint[count];
+        this.jointFrames=new float[count][];
 
         // Inertia-only stand-ins: no invisible contact capsules.
         SphereShape pinShape=new SphereShape(0.025F);
@@ -200,6 +203,15 @@ public final class JoltHairChain implements AutoCloseable {
             jointSpec.setPosition1(pivot);
             jointSpec.setPosition2(pivot);
             float[] direction=directions[i],plane=perpendicular(direction);
+            // Jolt's constraint frame has X=twist, Y=plane and Z=X cross Y.
+            // Keep the exact same axis frame for future authored joint keys.
+            float cx=direction[1]*plane[2]-direction[2]*plane[1];
+            float cy=direction[2]*plane[0]-direction[0]*plane[2];
+            float cz=direction[0]*plane[1]-direction[1]*plane[0];
+            float[] f={direction[0],direction[1],direction[2],0F,
+                    plane[0],plane[1],plane[2],0F,
+                    cx,cy,cz,0F,0F,0F,0F,1F};
+            jointFrames[i]=JoltChameleonPreviewRig.rotation(f);
             jointSpec.setTwistAxis1(new Vec3(
                     direction[0],direction[1],direction[2]));
             jointSpec.setTwistAxis2(new Vec3(
@@ -638,6 +650,41 @@ public final class JoltHairChain implements AutoCloseable {
         if (!Float.isFinite(multiplier) || multiplier < 0F || multiplier > 2F)
             throw new IllegalArgumentException("Invalid gravity multiplier");
         world.setGravity(0F, -9.81F * multiplier, 0F);
+    }
+
+    /**
+     * Update each joint's motor rest orientation to the CLEAN authored
+     * rotation of its respective Chameleon bone, without teleporting
+     * dynamic rigid bodies. This makes mid-chain rotation keys exert a
+     * physical torque; the actual movement still passes through Jolt.
+     *
+     * For joint i (i>0), derive the desired world swing of its two adjacent
+     * bones from their relative deltas versus the initial authored pose.
+     * Express that relative motion in the joint's original twist/plane
+     * frame, NOT an Euler axis or an arbitrary world-space quaternion.
+     */
+    public void setAnimatedJointTargets(float[][] rest,float[][] animated)
+    {
+        requireOpen();
+        if(rest==null || animated==null ||
+                rest.length!=links.length || animated.length!=links.length)
+            throw new IllegalArgumentException("Authored joint pose count mismatch");
+        for(int i=1;i<links.length;i++)
+        {
+            float[] parentDelta=JoltBoneQuaternionMapper.multiply(
+                    animated[i-1],JoltBoneQuaternionMapper.inverse(rest[i-1]));
+            float[] childDelta=JoltBoneQuaternionMapper.multiply(
+                    animated[i],JoltBoneQuaternionMapper.inverse(rest[i]));
+            float[] f=jointFrames[i];
+            // Constraint frame1 = parentDelta * f, frame2 = childDelta * f.
+            float[] target=JoltBoneQuaternionMapper.multiply(
+                    JoltBoneQuaternionMapper.inverse(f),
+                    JoltBoneQuaternionMapper.multiply(
+                            JoltBoneQuaternionMapper.inverse(parentDelta),
+                            JoltBoneQuaternionMapper.multiply(childDelta,f)));
+            joints[i].setTargetOrientationCs(new Quat(
+                    target[0],target[1],target[2],target[3]));
+        }
     }
 
     /** Advance exactly one Minecraft animation tick at a fixed 60Hz substep. */
