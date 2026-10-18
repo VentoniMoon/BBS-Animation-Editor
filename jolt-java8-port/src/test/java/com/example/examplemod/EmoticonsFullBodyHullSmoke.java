@@ -25,6 +25,11 @@ public final class EmoticonsFullBodyHullSmoke {
         return new Region(p,new int[]{0,1,2,1,3,2,4,5,6,5,7,6,
                 0,1,4,1,5,4,2,3,6,3,7,6,0,2,4,2,6,4,1,3,5,3,7,5});
     }
+    private static void near(float a,float b,String name) {
+        if(Math.abs(a-b)>.0005F)
+            throw new AssertionError(name+": "+a+" vs "+b);
+    }
+
     private static boolean covered(float[] point,List<float[]> boxes) {
         for(float[] b:boxes)
             if(Math.abs(point[0]-b[0])<=b[7]+.001 &&
@@ -56,6 +61,22 @@ public final class EmoticonsFullBodyHullSmoke {
             throw new AssertionError("Unexpected segmented hull count "+all.size());
         if(!EmoticonsSkinnedBodyHull.boxes(new float[3],new int[0],2,.018F).isEmpty())
             throw new AssertionError("Degenerate region fabricated collider");
+        // Fit a swung arm ONCE in its animated bone frame, then drive
+        // it with a 90-degree rotated bone. Dimensions must NOT change or
+        // Jolt would rebuild its hair scene every animation tick.
+        Region arm=cuboid(.5F,1.4F,0F,.10F,.36F,.12F);
+        float[] initial={1,0,0,0, 0,1,0,0, 0,0,1,0, .5F,1.4F,0F,1F};
+        List<float[]> local=EmoticonsSkinnedBodyHull.boneLocalBoxes(
+                arm.positions,arm.triangles,initial,1,.018F);
+        if(local.size()!=1)throw new AssertionError("No bone-local limb hull");
+        float[] tilted={1,0,0,0, 0,0,1,0, 0,-1,0,0, .5F,1.4F,0F,1};
+        float[] before=EmoticonsSkinnedBodyHull.transformRigid(initial,local.get(0));
+        float[] after=EmoticonsSkinnedBodyHull.transformRigid(tilted,local.get(0));
+        for(int k=7;k<10;k++)
+            near(before[k],after[k],"fixed native shape dimension");
+        if(Math.abs(after[3])<.5F)
+            throw new AssertionError("Animated arm did not rotate Box");
+        System.out.println("Rigid Emoticons arm hull moves with bone without resizing: PASS");
         System.out.println("Emoticons full parent: head/torso/arms/legs skin hull: PASS boxes="+all.size());
     }
 }
