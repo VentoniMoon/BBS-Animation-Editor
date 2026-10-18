@@ -202,6 +202,7 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHairInertiaSmoke.java \
              jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltActorTravelInertiaSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
+             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnimatedRootRotationSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltChameleonPreviewRigSmoke.java \
@@ -230,6 +231,8 @@ jobs:
             com.example.examplemod.physics.JoltActorTravelInertiaSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltAnimatedRootRotationSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
@@ -387,6 +390,7 @@ jobs:
              jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltActorTravelInertiaSmoke.java \
             jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltOwnerLifecycleSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnchorRotationSmoke.java \
+             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltAnimatedRootRotationSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltBoneQuaternionMapperSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltArbitraryRestPoseSmoke.java \
@@ -486,6 +490,8 @@ jobs:
             com.example.examplemod.physics.JoltActorTravelInertiaSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltAnchorRotationSmoke
+          java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
+            com.example.examplemod.physics.JoltAnimatedRootRotationSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
             com.example.examplemod.physics.JoltArbitraryRestPoseSmoke
           java -ea -Djolt.native.path="$WIN_LIB" -cp java8-win/classes \
