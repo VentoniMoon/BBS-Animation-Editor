@@ -61,6 +61,7 @@ public class BodyPartsEditorPanel
         {
             physicsPanel.setTarget(x + 5, y + 28,
                     bone.getName(), model.getPhysicsSettings(bone.getName()),
+                    model.getCollisionSettings(bone.getName()),
                     countChainBones(bone));
         }
     }
