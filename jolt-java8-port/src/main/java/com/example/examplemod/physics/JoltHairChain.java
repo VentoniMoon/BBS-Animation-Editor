@@ -62,6 +62,7 @@ public final class JoltHairChain implements AutoCloseable {
     public static final int MAX_ADDITIONAL_BOXES=32;
     private Body[] additionalBoxes;
     private float[][] additionalBoxHalf;
+    private int[] additionalShapeKinds;
     private final float[] physicalLengths;
     private final float[] physicalRadii;
     private boolean closed;
@@ -398,69 +399,106 @@ public final class JoltHairChain implements AutoCloseable {
      * Existing inertia-only hair / torso setups remain untouched when no
      * additional boxes were supplied.
      */
+    /** Legacy API accepted by previously downloaded editor builds. */
     public void setAdditionalBoxes(float[][] boxes)
     {
+        if(boxes==null)
+        {
+            setAdditionalShapes(null);
+            return;
+        }
+        float[][] primitives=new float[boxes.length][];
+        for(int i=0;i<boxes.length;i++)
+        {
+            if(boxes[i]==null || boxes[i].length!=10)
+                throw new IllegalArgumentException("Expected 10-float Box");
+            primitives[i]=new float[11];
+            System.arraycopy(boxes[i],0,primitives[i],0,10);
+            primitives[i][10]=0F;
+        }
+        setAdditionalShapes(primitives);
+    }
+
+    /**
+     * Typed passive collision bodies from any authored Chameleon bone.
+     * Each 11-float descriptor holds center, quaternion, three half-sizes
+     * and type 0=box, 1=sphere, 2=capsule. Native capsule long axis is Y;
+     * the caller has already rotated its quaternion onto its longest
+     * decoded cube axis. Only genuinely changed topologies require a reset.
+     */
+    public void setAdditionalShapes(float[][] shapes)
+    {
         requireOpen();
-        if(boxes==null || boxes.length==0)
+        if(shapes==null || shapes.length==0)
         {
             if(additionalBoxes!=null && additionalBoxes.length>0)
                 throw new IllegalArgumentException(
                         "Collision topology changed: recreate Jolt rig");
             return;
         }
-        if(boxes.length>MAX_ADDITIONAL_BOXES)
-            throw new IllegalArgumentException("Too many BodyPart collision boxes");
-        RVec3[] centers=new RVec3[boxes.length];
-        Quat[] rotations=new Quat[boxes.length];
-        float[][] extents=new float[boxes.length][3];
-        for(int i=0;i<boxes.length;i++)
+        if(shapes.length>MAX_ADDITIONAL_BOXES)
+            throw new IllegalArgumentException("Too many BodyPart collision shapes");
+        RVec3[] centers=new RVec3[shapes.length];
+        Quat[] rotations=new Quat[shapes.length];
+        float[][] extents=new float[shapes.length][3];
+        int[] kinds=new int[shapes.length];
+
+        for(int i=0;i<shapes.length;i++)
         {
-            float[] box=boxes[i];
-            if(box==null || box.length!=10)
-                throw new IllegalArgumentException("Expected 10-float collision box");
-            for(float value:box)
+            float[] row=shapes[i];
+            if(row==null || row.length!=11)
+                throw new IllegalArgumentException("Expected 11-float collider");
+            for(float value:row)
                 if(!Float.isFinite(value))
-                    throw new IllegalArgumentException("Non-finite collision box");
-            float qLength=box[3]*box[3]+box[4]*box[4]+
-                    box[5]*box[5]+box[6]*box[6];
+                    throw new IllegalArgumentException("Nonfinite collider");
+            int kind=(int)row[10];
+            if(row[10]!=(float)kind || kind<0 || kind>2)
+                throw new IllegalArgumentException("Unknown Jolt collider type");
+            kinds[i]=kind;
+            float qLength=row[3]*row[3]+row[4]*row[4]+
+                    row[5]*row[5]+row[6]*row[6];
             if(Math.abs(qLength-1F)>0.02F)
-                throw new IllegalArgumentException("Non-unit collision quaternion");
+                throw new IllegalArgumentException("Non-unit collision rotation");
             for(int axis=0;axis<3;axis++)
             {
-                extents[i][axis]=box[7+axis];
-                if(!(extents[i][axis]>=0.003F) ||
-                        extents[i][axis]>2F)
-                    throw new IllegalArgumentException("Invalid collision half-size");
+                extents[i][axis]=row[7+axis];
+                if(extents[i][axis]<0.003F || extents[i][axis]>2F)
+                    throw new IllegalArgumentException("Invalid collider half-size");
             }
-            centers[i]=new RVec3(box[0],box[1],box[2]);
-            rotations[i]=new Quat(box[3],box[4],box[5],box[6]);
+            centers[i]=new RVec3(row[0],row[1],row[2]);
+            rotations[i]=new Quat(row[3],row[4],row[5],row[6]);
         }
         if(additionalBoxes==null)
         {
-            Body[] created=new Body[boxes.length];
+            Body[] created=new Body[shapes.length];
             try
             {
-                for(int i=0;i<boxes.length;i++)
+                for(int i=0;i<shapes.length;i++)
                 {
-                    // As with the fitted torso, the kinematic pin and first
-                    // physical hair link are attached at/inside the skin.
-                    // Excluding these two subgroups prevents an initial
-                    // contact explosion against passive scalp/chest cubes.
-                    // Downstream links retain real Jolt box contacts.
                     int boxGroup=links.length+4+i;
                     contactGroups.disableCollision(0,boxGroup);
                     contactGroups.disableCollision(1,boxGroup);
-                    BoxShape shape=new BoxShape(new Vec3(
-                            extents[i][0],extents[i][1],extents[i][2]),0.002F);
+                    Shape shape;
+                    if(kinds[i]==0)
+                        shape=new BoxShape(new Vec3(
+                                extents[i][0],extents[i][1],extents[i][2]),
+                                0.002F);
+                    else if(kinds[i]==1)
+                        shape=new SphereShape(extents[i][0]);
+                    else
+                        shape=new CapsuleShape(
+                                Math.max(0.005F,
+                                        extents[i][1]-extents[i][0]),
+                                extents[i][0]);
                     BodyCreationSettings settings=new BodyCreationSettings(
                             shape,centers[i],rotations[i],EMotionType.Kinematic,1);
                     settings.setCollisionGroup(new CollisionGroup(
-                            contactGroups,0,links.length+4+i));
+                            contactGroups,0,boxGroup));
                     try
                     {
                         created[i]=bodies.createBody(settings);
                         if(created[i]==null)
-                            throw new IllegalStateException("Jolt could not create BodyPart box");
+                            throw new IllegalStateException("Cannot create BodyPart collider");
                         bodies.addBody(created[i].getId(),EActivation.Activate);
                     }
                     finally
@@ -471,6 +509,7 @@ public final class JoltHairChain implements AutoCloseable {
                 }
                 additionalBoxes=created;
                 additionalBoxHalf=extents;
+                additionalShapeKinds=kinds;
             }
             catch(Throwable error)
             {
@@ -485,15 +524,20 @@ public final class JoltHairChain implements AutoCloseable {
         }
         else
         {
-            if(additionalBoxes.length!=boxes.length)
+            if(additionalBoxes.length!=shapes.length)
                 throw new IllegalArgumentException(
-                        "Collision box count changed: recreate Jolt rig");
-            for(int i=0;i<boxes.length;i++)
+                        "Collider count changed: recreate native rig");
+            for(int i=0;i<shapes.length;i++)
+            {
+                if(additionalShapeKinds[i]!=kinds[i])
+                    throw new IllegalArgumentException(
+                            "Collider primitive changed: recreate native rig");
                 for(int k=0;k<3;k++)
                     if(Math.abs(additionalBoxHalf[i][k]-extents[i][k])>0.025F)
                         throw new IllegalArgumentException(
-                                "Collision box size changed: recreate Jolt rig");
-            for(int i=0;i<boxes.length;i++)
+                                "Collider size changed: recreate native rig");
+            }
+            for(int i=0;i<shapes.length;i++)
                 bodies.moveKinematic(additionalBoxes[i].getId(),
                         centers[i],rotations[i],TICK);
         }
