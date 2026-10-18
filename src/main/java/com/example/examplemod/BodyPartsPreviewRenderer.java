@@ -1705,6 +1705,47 @@ public class BodyPartsPreviewRenderer
                                             ?passiveCollisionShapes(frame):null);
                             if (physical != null)
                             {
+                                // Compare REAL physical links from the native
+                                // solver with INSTALLED passive box shapes.
+                                // Earlier ContactProbe measured clean animated
+                                // (pre-Jolt) pivots and could not distinguish
+                                // a collision filtering failure from a valid
+                                // Jolt contact with an undersized body proxy.
+                                if(JOLT_CONTACT_PROBE && frame%5==0)
+                                {
+                                    float[][] nativeLinks=
+                                            joltPreview.hairSegmentsFor(stateId,frame);
+                                    float[][] nativeBoxes=
+                                            joltPreview.additionalBoxesFor(stateId,frame);
+                                    if(nativeLinks!=null && nativeBoxes!=null &&
+                                            nativeBoxes.length>0)
+                                    {
+                                        java.util.List<String> sources=
+                                                passiveCollisionSources(frame);
+                                        for(int linkIndex=0;
+                                                linkIndex<nativeLinks.length;
+                                                linkIndex++)
+                                        {
+                                            BodyPartJoltContactProbe.Nearest nearest=
+                                                    BodyPartJoltContactProbe.nearestSolvedLink(
+                                                            nativeLinks[linkIndex],nativeBoxes);
+                                            String source=nearest.index>=0 &&
+                                                    nearest.index<sources.size()
+                                                    ?sources.get(nearest.index):
+                                                    "unknown";
+                                            System.out.println(
+                                                    "[BBS Animation Editor][Jolt][NativeContactProbe] "+
+                                                    "frame="+frame+" strand="+stateId+
+                                                    " physicalLink="+linkIndex+
+                                                    " nearestModel="+source+
+                                                    " nearestBox="+nearest.index+
+                                                    " approximateClearance="+
+                                                            nearest.clearance+
+                                                    " (negative=sampled capsule overlaps OBB; "+
+                                                    "real Jolt pose, not authored bone)");
+                                        }
+                                    }
+                                }
                                 if (JOLT_DIRECTION_DIAGNOSTIC)
                                 {
                                     try
