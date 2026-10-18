@@ -21,6 +21,9 @@ on:
       - 'src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java'
+      - 'src/main/java/com/example/examplemod/EmoticonsSkinnedBodyHull.java'
+      - 'src/main/java/com/example/examplemod/BodyPartEmoticonsFullBodyColliders.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltContactProbe.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java'
       - 'src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java'
@@ -85,6 +88,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
+      - name: Verify skinned full-parent Emoticons collider hull
+        run: |
+          OUT="${{ runner.temp }}/emoticons-full-body-hull"
+          mkdir -p "$OUT"
+          javac -source 8 -target 8 -encoding UTF-8 -d "$OUT" \
+            src/main/java/com/example/examplemod/EmoticonsSkinnedBodyHull.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/EmoticonsFullBodyHullSmoke.java
+          java -ea -cp "$OUT" com.example.examplemod.EmoticonsFullBodyHullSmoke
+
       - name: Verify actor-world physics / collider transforms on Java 8
         run: |
           OUT="${{ runner.temp }}/actor-world-test"
