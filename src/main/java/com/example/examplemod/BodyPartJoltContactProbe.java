@@ -52,6 +52,44 @@ public final class BodyPartJoltContactProbe
         }
     }
 
+    /**
+     * Native Jolt hair segment against installed oriented Box colliders.
+     * Uses actual SOLVED physical endpoints + five samples along the link,
+     * not Chameleon's pre-physics authored pivot positions. The computed
+     * minimum is an approximate signed clearance, not a contact manifold.
+     * Subtract the native hair capsule radius; this also exposes cases
+     * where the line center stays outside yet the volume intersects.
+     */
+    public static Nearest nearestSolvedLink(float[] solvedLink,float[][] boxes)
+    {
+        if(solvedLink==null || solvedLink.length!=7 ||
+                boxes==null || boxes.length==0)
+            return new Nearest(Float.POSITIVE_INFINITY,-1);
+        for(float v:solvedLink)
+            if(!Float.isFinite(v))
+                throw new IllegalArgumentException("Invalid native hair capsule");
+        if(solvedLink[6]<=0F)
+            throw new IllegalArgumentException("Invalid native hair radius");
+        float minimum=Float.POSITIVE_INFINITY;
+        int nearest=-1;
+        for(int i=0;i<boxes.length;i++)
+        {
+            float[] box=boxes[i];
+            if(box==null || box.length!=10)continue;
+            for(int fraction=0;fraction<=4;fraction++)
+            {
+                float t=fraction*0.25F;
+                float[] p=new float[]{
+                        solvedLink[0]+t*(solvedLink[3]-solvedLink[0]),
+                        solvedLink[1]+t*(solvedLink[4]-solvedLink[1]),
+                        solvedLink[2]+t*(solvedLink[5]-solvedLink[2])};
+                float distance=signedDistance(p,box)-solvedLink[6];
+                if(distance<minimum){minimum=distance;nearest=i;}
+            }
+        }
+        return new Nearest(minimum,nearest);
+    }
+
     public static Nearest nearest(float[] point,float[][] boxes)
     {
         if(point==null || boxes==null || boxes.length==0)
