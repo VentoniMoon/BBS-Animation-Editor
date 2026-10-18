@@ -260,9 +260,9 @@ public final class JoltHairChain implements AutoCloseable {
         Quat orientation=new Quat(quaternion[0],quaternion[1],
                 quaternion[2],quaternion[3]);
         if(torsoCollider==null) {
-            // The first link shares its root with the animated body.
-            // Other dynamic links remain collidable with the torso.
-            excuseRootContact(0);
+            // The first hair segment is allowed to contact the torso
+            // unless its attached root is already inside this shape.
+            excuseRootContact(0,rootInsideCapsule(a,b,radius,0.035F));
             // Caps at both ends round the torso instead of terminating in
             // artificial sharp contact planes. This is a fitted proxy, NOT
             // a replacement for the skin mesh.
@@ -341,9 +341,12 @@ public final class JoltHairChain implements AutoCloseable {
         }
         if(torsoSegments==null)
         {
-            // No contact against the attached pin/root; downstream links
-            // still contact every fitted torso zone.
-            for(int zone=0;zone<3;zone++)excuseRootContact(zone);
+            // Keep the animated kinematic pin out of contacts. Do NOT
+            // blanket-exclude the first dynamic link against every zone:
+            // a frontal braid may have only that link near the torso.
+            for(int zone=0;zone<3;zone++)
+                excuseRootContact(zone,rootInsideCapsule(
+                        a[zone],b[zone],radii[zone],0.035F));
             // Create all 3 only AFTER validating every input. Bodies share
             // layer 1 and do not collide against other layer-1 bodies.
             Body[] created=new Body[3];
@@ -591,12 +594,32 @@ public final class JoltHairChain implements AutoCloseable {
         return a*a+h*h+c*c<=r*r;
     }
 
-    /** A strand root is jointed into this animated body, not a free impact. */
-    private void excuseRootContact(int zone)
+    /** A shape enclosing the attachment root is an own-body contact;
+     * otherwise the first physical hair segment must be able to collide.
+     */
+    private boolean rootInsideCapsule(float[] a,float[] b,float radius,
+            float margin)
+    {
+        float dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
+        float span2=dx*dx+dy*dy+dz*dz;
+        if(!(span2>1E-7F))return false;
+        float t=((startX-a[0])*dx+(startY-a[1])*dy+
+                (startZ-a[2])*dz)/span2;
+        t=Math.min(1F,Math.max(0F,t));
+        float x=startX-a[0]-t*dx,y=startY-a[1]-t*dy,
+                z=startZ-a[2]-t*dz;
+        float threshold=radius+margin;
+        return x*x+y*y+z*z<=threshold*threshold;
+    }
+
+    /** Exclude kinematic pin always; exclude first DYNAMIC link ONLY when
+     * its own root originates within this specific physical collider.
+     */
+    private void excuseRootContact(int zone,boolean excludeFirstLink)
     {
         int body=links.length+1+zone;
         contactGroups.disableCollision(0,body);
-        contactGroups.disableCollision(1,body);
+        if(excludeFirstLink)contactGroups.disableCollision(1,body);
     }
 
     public boolean hasTorsoSegments()
