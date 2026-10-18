@@ -46,6 +46,22 @@ public final class JoltContactClearanceSmoke
             if(nearest.index!=1)
                 throw new AssertionError("Nearest chest lost after actor yaw");
         }
+        // A native physics capsule can overlap a box even when its
+        // animated source pivot is outside. Test the ACTUAL segment path
+        // and subtract native capsule radius from sampled signed clearance.
+        float[] solvedLink={-.8F,1.5F,0F, .8F,1.5F,0F, .04F};
+        BodyPartJoltContactProbe.Nearest solved=
+                BodyPartJoltContactProbe.nearestSolvedLink(
+                        solvedLink,new float[][]{chest});
+        if(solved.index!=0)
+            throw new AssertionError("Missed crossed chest collision");
+        near(solved.clearance,-.34F,"native through-box clearance");
+        float[] far={2F,1.5F,0F, 2.4F,1.5F,0F,.04F};
+        solved=BodyPartJoltContactProbe.nearestSolvedLink(
+                far,new float[][]{chest});
+        if(solved.index!=0 || !(solved.clearance>1F))
+            throw new AssertionError("False contact for distant physical link");
         System.out.println("Mirror hair/chest clearances invariant under world yaw: PASS");
+        System.out.println("Native physical capsule versus installed box diagnostic: PASS");
     }
 }
