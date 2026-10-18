@@ -94,6 +94,7 @@ jobs:
             src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java \
             src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java \
+            src/main/java/com/example/examplemod/JoltColliderPrimitives.java \
             src/main/java/com/example/examplemod/BodyPartJoltContactProbe.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltActorWorldSpaceSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltContactClearanceSmoke.java
