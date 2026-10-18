@@ -535,6 +535,7 @@ public class BodyPartsPreviewRenderer
                 if(!anyBoxesAdded)
                 {
                     float[][] installed=joltPreview.additionalBoxesFor(id,frame);
+                    float[][] primitiveRows=joltPreview.additionalShapesFor(id,frame);
                     if(installed!=null)
                     {
                         for(int index=0;index<installed.length;index++)
@@ -542,8 +543,14 @@ public class BodyPartsPreviewRenderer
                             {
                                 String owner=index<boxOwners.size()
                                         ?boxOwners.get(index):"unknown";
+                                int primitive=JoltColliderPrimitives.BOX;
+                                if(primitiveRows!=null &&
+                                        index<primitiveRows.length &&
+                                        primitiveRows[index]!=null &&
+                                        primitiveRows[index].length==11)
+                                    primitive=(int)primitiveRows[index][10];
                                 boxes.add(new JoltContactOverlaySnapshot.Box(
-                                        installed[index],owner));
+                                        installed[index],owner,primitive));
                             }
                             catch(IllegalArgumentException ignored) {}
                         anyBoxesAdded=true;
