@@ -4,25 +4,27 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
+
+import mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
 
 /**
- * Complete Emoticons PARENT collision volume, independent of where a child
- * Chameleon hair morph happens to be attached. Uses all available skinned
- * mesh geometry and bone-weight labels: head, torso, both arms, both legs,
- * and remaining geometry (when not classifiable by bone names).
+ * Complete skinned Emoticons PARENT collision hull. Hair can be attached
+ * to ANY bone: every available head/torso/arm/leg mesh group is captured
+ * independently from that attachment.
  *
- * The result is a sequence of world-space kinematic BOX shapes compatible
- * with the existing Jolt additionalShape bridge. A missing skinned mesh
- * fails closed instead of introducing guessed static cuboids.
+ * Mesh geometry is fitted in each physical region's bone LOCAL frame once
+ * and then driven by current post-render Emoticons bone matrices each tick.
+ * Fixed dimensions are vital: a changing world-aligned limb AABB would
+ * otherwise trigger a Jolt rig reconstruction whenever the limb rotates.
  *
- * These segmented boxes are a skinned-mesh APPROXIMATION, not collision
- * against individual triangles; the latter requires a separate native
- * triangle mesh / deformable mesh solution.
+ * These are conservative kinematic BOX approximations, not triangle-
+ * perfect collisions with a deformable skinned mesh.
  */
 public final class BodyPartEmoticonsFullBodyColliders {
     public static final class Capture {
-        public final List<float[]> boxes;
-        public final List<float[]> shapes;
+        public final List<float[]> boxes,shapes;
         public final List<String> owners;
         public final int groups,triangles;
         Capture(List<float[]> boxes,List<float[]> shapes,
@@ -34,51 +36,122 @@ public final class BodyPartEmoticonsFullBodyColliders {
         }
         public boolean isReady(){return !shapes.isEmpty();}
     }
-
+    private static final class LocalBox {
+        final String bone,owner;
+        final float[] local;
+        LocalBox(String bone,String owner,float[] local){
+            this.bone=bone;this.owner=owner;this.local=local.clone();
+        }
+    }
+    public static final class Cache {
+        private final List<LocalBox> local=new ArrayList<LocalBox>();
+        private int groups,triangles;
+        private String meshFingerprint="";
+        public void clear(){
+            local.clear();groups=triangles=0;meshFingerprint="";
+        }
+    }
     private BodyPartEmoticonsFullBodyColliders() {}
 
-    public static Capture capture(Object actorMorph,float[] actorWorld){
-        List<float[]> boxes=new ArrayList<float[]>();
-        List<float[]> shapes=new ArrayList<float[]>();
-        List<String> owners=new ArrayList<String>();
-        if(actorWorld==null||actorWorld.length!=16)
-            return new Capture(boxes,shapes,owners,0,0);
-        int groups=0,triangles=0;
-        try{
-            List<EmoticonsCollisionGeometryProvider.MeshSnapshot> sources=
-                    EmoticonsCollisionGeometryProvider.snapshot(actorMorph);
+    private static Capture empty(){
+        return new Capture(new ArrayList<float[]>(),
+                new ArrayList<float[]>(),new ArrayList<String>(),0,0);
+    }
+
+    public static Capture capture(Object morph,float[] actorFrame,Cache cache){
+        if(!(morph instanceof AnimatedMorph) ||
+                actorFrame==null || actorFrame.length!=16 || cache==null)
+            return empty();
+        List<EmoticonsCollisionGeometryProvider.MeshSnapshot> sources=
+                EmoticonsCollisionGeometryProvider.snapshot(morph);
+        StringBuilder token=new StringBuilder();
+        for(EmoticonsCollisionGeometryProvider.MeshSnapshot src:sources)
+            if(src!=null)token.append(src.name).append(':')
+                    .append(src.vertices.length).append(':')
+                    .append(src.triangles.length).append(';');
+        if(!token.toString().equals(cache.meshFingerprint))
+            cache.clear();
+        if(cache.local.isEmpty()){
+            cache.meshFingerprint=token.toString();
+            List<BOBJBone> bones=EmoticonsModelAccess.getBones((AnimatedMorph)morph);
             for(EmoticonsCollisionGeometryProvider.MeshSnapshot src:sources){
                 if(src==null)continue;
                 for(EmoticonsSkinCollisionGroups.Group group:
                         EmoticonsSkinCollisionGroups.Group.values()){
                     EmoticonsCollisionGeometryProvider.MeshSnapshot region=
                             EmoticonsSkinCollisionGroups.select(
-                                    actorMorph,src,EnumSet.of(group));
+                                    morph,src,EnumSet.of(group));
                     if(region==null||region.triangleCount()<8)continue;
+                    String name=bestBone(bones,group);
+                    float[] matrix=name==null?null:
+                            BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
+                                    morph,name);
                     int slices=(group==EmoticonsSkinCollisionGroups.Group.HEAD)?1:
                             (group==EmoticonsSkinCollisionGroups.Group.TORSO)?2:3;
-                    List<float[]> local=EmoticonsSkinnedBodyHull.boxes(
-                            region.vertices,region.triangles,slices,.018F);
+                    List<float[]> local=matrix==null?
+                            EmoticonsSkinnedBodyHull.boxes(
+                                    region.vertices,region.triangles,slices,.018F):
+                            EmoticonsSkinnedBodyHull.boneLocalBoxes(
+                                    region.vertices,region.triangles,
+                                    matrix,slices,.018F);
                     if(local.isEmpty())continue;
-                    groups++;triangles+=region.triangleCount();
+                    // If no reliable bone matrix exists, the hull is still
+                    // able to follow root actor motion without guessed bones.
+                    if(matrix==null)name=null;
+                    cache.groups++;cache.triangles+=region.triangleCount();
                     for(float[] shape:local){
-                        if(boxes.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)
-                            return new Capture(boxes,shapes,owners,groups,triangles);
-                        float[] world=BodyPartJoltActorSpace.box(
-                                actorWorld,shape);
-                        float[] primitive=JoltColliderPrimitives.encode(
-                                world,JoltColliderPrimitives.BOX,1F);
-                        shapes.add(primitive);
-                        boxes.add(JoltColliderPrimitives.toOutline(primitive));
-                        owners.add("emoticons."+group.name());
+                        if(cache.local.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)
+                            break;
+                        cache.local.add(new LocalBox(name,
+                                "emoticons."+group.name(),shape));
                     }
                 }
             }
-        }catch(RuntimeException error){
-            // Do not return a half-captured parent with inconsistent topology.
-            return new Capture(new ArrayList<float[]>(),
-                    new ArrayList<float[]>(),new ArrayList<String>(),0,0);
         }
-        return new Capture(boxes,shapes,owners,groups,triangles);
+        List<float[]> shapes=new ArrayList<float[]>();
+        List<float[]> boxes=new ArrayList<float[]>();
+        List<String> owners=new ArrayList<String>();
+        try{
+            for(LocalBox part:cache.local){
+                float[] bone=part.bone==null?
+                        BodyPartPhysicsMatrixSpace.identity():
+                        BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
+                                morph,part.bone);
+                if(bone==null)return empty();
+                float[] toWorld=BodyPartPhysicsMatrixSpace.multiply(actorFrame,bone);
+                float[] world=EmoticonsSkinnedBodyHull.transformRigid(
+                        toWorld,part.local);
+                float[] primitive=JoltColliderPrimitives.encode(
+                        world,JoltColliderPrimitives.BOX,1F);
+                boxes.add(JoltColliderPrimitives.toOutline(primitive));
+                shapes.add(primitive);
+                owners.add(part.owner);
+            }
+        }catch(RuntimeException error){return empty();}
+        return new Capture(boxes,shapes,owners,cache.groups,cache.triangles);
+    }
+
+    /** Select an actually rendered skinning bone, never assume an armature
+     * is attached to the same Emoticons bone as the user's hair BodyPart.
+     */
+    private static String bestBone(List<BOBJBone> bones,
+            EmoticonsSkinCollisionGroups.Group group)
+    {
+        if(bones==null || group==EmoticonsSkinCollisionGroups.Group.OTHER)
+            return null;
+        String chosen=null;
+        int score=Integer.MAX_VALUE;
+        for(BOBJBone bone:bones){
+            if(bone==null||bone.name==null||
+                    EmoticonsSkinCollisionGroups.classify(bone.name)!=group)
+                continue;
+            String n=bone.name.toLowerCase(Locale.ROOT);
+            int rating=n.length();
+            if(n.startsWith("low_")||n.contains("lower"))rating+=12;
+            if(group==EmoticonsSkinCollisionGroups.Group.TORSO &&
+                    (n.equals("body")||n.equals("upper_body")))rating-=20;
+            if(rating<score){score=rating;chosen=bone.name;}
+        }
+        return chosen;
     }
 }
