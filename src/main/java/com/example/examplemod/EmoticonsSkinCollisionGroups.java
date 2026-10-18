@@ -193,7 +193,7 @@ public final class EmoticonsSkinCollisionGroups
     private static void increment(Map<Group,Integer> counts,Group group)
     {counts.put(group,Integer.valueOf(counts.get(group).intValue()+1));}
 
-    private static Group classify(String boneName)
+    public static Group classify(String boneName)
     {
         if(boneName==null)return Group.OTHER;
         String n=boneName.toLowerCase(Locale.ROOT).replace("-","_").replace(" ","_");
