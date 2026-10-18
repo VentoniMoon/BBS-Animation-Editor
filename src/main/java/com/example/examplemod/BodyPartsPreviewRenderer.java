@@ -145,6 +145,9 @@ public class BodyPartsPreviewRenderer
             new java.util.ArrayList<BodyPartModelData>();
     private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionBoxes =
             new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
+    /** Parallel typed native shapes, matching box outlines exactly. */
+    private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionShapes =
+            new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
     private int attachedCollisionFrame = -1;
 
     /* Emoticons provides model-local bone transforms. The renderer then
@@ -342,6 +345,7 @@ public class BodyPartsPreviewRenderer
     private void captureAttachedChameleonColliders(Object actorMorph,int frame)
     {
         attachedCollisionBoxes.clear();
+        attachedCollisionShapes.clear();
         attachedCollisionFrame=frame;
         if(!BodyPartJoltPreviewAdapter.torsoContactsRequested())return;
         for(BodyPartModelData data:collisionPartOrder)
@@ -381,9 +385,19 @@ public class BodyPartsPreviewRenderer
                     for(AnimationBone bone:chain.bones)
                         driven.add(bone.getName());
                 BodyPartChameleonCollisionBoxes.Capture captured=
-                        BodyPartChameleonCollisionBoxes.capture(child,world,driven);
+                        BodyPartChameleonCollisionBoxes.capture(child,world,driven,
+                            new BodyPartChameleonCollisionBoxes.SettingsSource()
+                            {
+                                @Override public BodyPartCollisionSettings forBone(String id)
+                                {
+                                    return data.peekCollisionSettings(id);
+                                }
+                            });
                 if(!captured.boxes.isEmpty())
+                {
                     attachedCollisionBoxes.put(data,captured.boxes);
+                    attachedCollisionShapes.put(data,captured.shapes);
+                }
                 reportColliderCapture(data,"attached cubes="+captured.boxes.size()+
                         " visitedBones="+captured.visitedBones+
                         " candidateCubes="+captured.visitedCubes+
@@ -435,6 +449,25 @@ public class BodyPartsPreviewRenderer
         }
         return combined.isEmpty()?null:
                 combined.toArray(new float[combined.size()][]);
+    }
+
+    /** Corresponding native Jolt primitive rows in exactly the same order
+     *  as passiveCollisionBoxes(), for World-space kinematic contacts. */
+    private float[][] passiveCollisionShapes(int frame)
+    {
+        if(frame!=attachedCollisionFrame)return null;
+        java.util.List<float[]> result=new java.util.ArrayList<float[]>();
+        for(BodyPartModelData data:collisionPartOrder)
+        {
+            java.util.List<float[]> shapes=attachedCollisionShapes.get(data);
+            if(shapes==null)continue;
+            for(float[] shape:shapes)
+            {
+                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
+                result.add(shape.clone());
+            }
+        }
+        return result.isEmpty()?null:result.toArray(new float[result.size()][]);
     }
 
     /** Stable per-box provenance for exactly the same ordering as
@@ -1653,7 +1686,9 @@ public class BodyPartsPreviewRenderer
                                             ?0F:contact.radius,
                                     chain.settings.hasBodyCollisions()?nativeSegments:null,
                                     chain.settings.hasBodyCollisions()
-                                            ?passiveCollisionBoxes(data,frame):null);
+                                            ?passiveCollisionBoxes(data,frame):null,
+                                    chain.settings.hasBodyCollisions()
+                                            ?passiveCollisionShapes(frame):null);
                             if (physical != null)
                             {
                                 if (JOLT_DIRECTION_DIAGNOSTIC)
@@ -1907,6 +1942,7 @@ public class BodyPartsPreviewRenderer
         this.renderedCollisionParts.clear();
         this.collisionPartOrder.clear();
         this.attachedCollisionBoxes.clear();
+        this.attachedCollisionShapes.clear();
         this.attachedCollisionFrame=-1;
 
         // Do not probe/log last-rendered matrices here: prepareModels()
