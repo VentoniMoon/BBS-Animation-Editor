@@ -51,11 +51,13 @@ public final class JoltPreviewBridgeSmoke {
                         throw new AssertionError("Invalid native Jolt direction");
                 }
             }
+            Map<String,float[]> original12=null;
             for(int tick=1;tick<=50;tick++) {
                 Map<String,float[]> result=bridge.sample(data,"hair/back",bones,
                         tick,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
                 if(result==null || result.size()!=4)
                     throw new AssertionError("No physical preview swing at frame "+tick);
+                if(tick==12)original12=result;
                 for(float[] swing:result.values())
                     for(float value:swing)if(!Float.isFinite(value))
                         throw new AssertionError("Non-finite visual pose");
@@ -66,12 +68,23 @@ public final class JoltPreviewBridgeSmoke {
                 throw new AssertionError("Repeated render must reuse snapshot");
             if(bridge.wasRecreatedThisSample())
                 throw new AssertionError("Repeated paused frame unnecessarily rebuilt Jolt scene");
-            // Reversing timeline must reset the native world safely.
+            // Already simulated source ticks are now read from immutable
+            // recorded snapshots. No native reinitialization may destroy
+            // accumulated inertia merely because the playhead moved back.
             Map<String,float[]> seek=bridge.sample(data,"hair/back",bones,
                     12,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
             if(seek==null || seek.size()!=bones.length ||
-                    !bridge.wasRecreatedThisSample())
-                throw new AssertionError("Seek must rebuild a settled Jolt world");
+                    bridge.wasRecreatedThisSample() ||
+                    !sameSample(seek,original12))
+                throw new AssertionError("Backward seek failed exact Jolt history replay");
+            Map<String,float[]> cached20=bridge.sample(data,"hair/back",bones,
+                    20,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
+            if(cached20==null || bridge.wasRecreatedThisSample())
+                throw new AssertionError("Previously simulated forward seek reset rig");
+            // Return to earlier frame before exercising paused 200-pass
+            // render feedback; the highest native scene tick remains 50.
+            seek=bridge.sample(data,"hair/back",bones,
+                    12,world,tip,matrix(3F,5F,-2F),0.15F,0.3F,1F);
             // The editor can render ~200 times while the timeline is at
             // a single frame. Render interpolation or physics-feedback must
             // NEVER reinitialize a rig on those draws, even if clean matrices
