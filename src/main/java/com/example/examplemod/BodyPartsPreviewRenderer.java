@@ -84,6 +84,15 @@ public class BodyPartsPreviewRenderer
     /** Stable sampled pose shared by all render passes of a preview frame. */
     private final BodyPartPhysicsFrameState physicsFrames =
             new BodyPartPhysicsFrameState();
+    /** Opt-in capture of the final VISIBLE Jolt/Chameleon pose for key baking.
+     * Never changes live physics unless the user explicitly commits keys. */
+    private final BodyPartPhysicsBakeController bakeController =
+            new BodyPartPhysicsBakeController();
+
+    public BodyPartPhysicsBakeController getBakeController()
+    {
+        return bakeController;
+    }
     private final Map<BodyPartModelData, Boolean> visualProbeReported =
             new IdentityHashMap<BodyPartModelData, Boolean>();
     /* Snapshot the clean Chameleon pose rotation before applying the probe.
@@ -2538,6 +2547,9 @@ public class BodyPartsPreviewRenderer
                         }
                         appliedCount++;
                         float[] after = readChameleonPoseEuler(child, entry.getKey());
+                        if (bakeController.isRecording() &&
+                                physicsFrames.isJoltForRender(data,frame,entry.getKey()))
+                            bakeController.capture(data,frame,entry.getKey(),before,after);
                         if (before != null && after != null)
                         {
                             Map<String, float[]> offsets = previewEulerDeltas.get(data);
