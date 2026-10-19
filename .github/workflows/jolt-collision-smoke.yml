@@ -1,0 +1,36 @@
+name: Jolt collision geometry (Java 8)
+on:
+  push:
+    paths:
+      - 'src/main/java/com/example/examplemod/JoltColliderPrimitives.java'
+      - 'src/main/java/com/example/examplemod/EmoticonsSkinnedBodyHull.java'
+      - 'src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java'
+      - 'src/main/java/com/example/examplemod/JoltStaticPoseChange.java'
+      - 'src/test/java/com/example/examplemod/JoltCollisionGeometrySmokeTest.java'
+      - 'src/test/java/com/example/examplemod/JoltStaticPoseChangeSmokeTest.java'
+      - '.github/workflows/jolt-collision-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  geometry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Compile standalone Java 8 collision tests
+        run: |
+          mkdir -p build/jolt-collision-smoke
+          javac -encoding UTF-8 -source 8 -target 8 -d build/jolt-collision-smoke \
+            src/main/java/com/example/examplemod/JoltColliderPrimitives.java \
+            src/main/java/com/example/examplemod/EmoticonsSkinnedBodyHull.java \
+            src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java \
+            src/main/java/com/example/examplemod/JoltStaticPoseChange.java \
+            src/test/java/com/example/examplemod/JoltCollisionGeometrySmokeTest.java \
+            src/test/java/com/example/examplemod/JoltStaticPoseChangeSmokeTest.java
+      - name: Test collider geometry
+        run: java -cp build/jolt-collision-smoke com.example.examplemod.JoltCollisionGeometrySmokeTest
+      - name: Test paused-frame key edits
+        run: java -cp build/jolt-collision-smoke com.example.examplemod.JoltStaticPoseChangeSmokeTest
