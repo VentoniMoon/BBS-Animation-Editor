@@ -2,6 +2,8 @@ package com.example.examplemod;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Locale;
 
@@ -46,8 +48,15 @@ public final class BodyPartEmoticonsFullBodyColliders {
         private final List<LocalBox> local=new ArrayList<LocalBox>();
         private int groups,triangles;
         private String meshFingerprint="";
+        private boolean initialized;
+        /** Bones whose initial matrix/mesh was singular (e.g. scale zero).
+         * Retry only these bones on later frames instead of freezing holes
+         * in the cached body forever. */
+        private final Set<String> pending=new LinkedHashSet<String>();
         public void clear(){
             local.clear();groups=triangles=0;meshFingerprint="";
+            initialized=false;
+            pending.clear();
         }
     }
     /**
@@ -100,36 +109,69 @@ public final class BodyPartEmoticonsFullBodyColliders {
         for(EmoticonsCollisionGeometryProvider.MeshSnapshot src:sources)
             if(src!=null)token.append(src.name).append(':')
                     .append(src.vertices.length).append(':')
-                    .append(src.triangles.length).append(';');
+                    .append(src.triangles.length).append(':')
+                    .append(java.util.Arrays.hashCode(src.triangles)).append(';');
         if(!token.toString().equals(cache.meshFingerprint))
             cache.clear();
-        if(cache.local.isEmpty()){
+        if(!cache.initialized || !cache.pending.isEmpty())
+        {
+            boolean initial=!cache.initialized;
+            cache.initialized=true;
             cache.meshFingerprint=token.toString();
             List<BOBJBone> bones=EmoticonsModelAccess.getBones((AnimatedMorph)morph);
-            if (bones != null) for (BOBJBone bone : bones) {
-                if (bone == null || bone.name == null) continue;
-                float[] matrix = BodyPartEmoticonsAttachmentProbe
+            if(bones!=null) for(BOBJBone bone:bones)
+            {
+                if(bone==null || bone.name==null ||
+                        (!initial && !cache.pending.contains(bone.name)))
+                    continue;
+                float[] matrix=BodyPartEmoticonsAttachmentProbe
                         .lastRenderedBoneMatrix(morph,bone.name);
-                if (matrix == null) continue;
-                for (EmoticonsCollisionGeometryProvider.MeshSnapshot src : sources) {
-                    if (src == null) continue;
-                    EmoticonsCollisionGeometryProvider.MeshSnapshot region =
+                if(matrix==null)
+                {
+                    cache.pending.add(bone.name);
+                    continue;
+                }
+                List<LocalBox> candidate=new ArrayList<LocalBox>();
+                int acceptedGroups=0,acceptedTriangles=0;
+                boolean singular=false;
+                for(EmoticonsCollisionGeometryProvider.MeshSnapshot src:sources)
+                {
+                    if(src==null)continue;
+                    EmoticonsCollisionGeometryProvider.MeshSnapshot region=
                             EmoticonsSkinCollisionGroups.selectBone(
                                     morph,src,bone.name);
-                    if (region == null || region.triangleCount() < 8) continue;
-                    // Fixed bone-local geometry follows animation without
-                    // changing Jolt topology every time the limb rotates.
-                    List<float[]> local = EmoticonsSkinnedBodyHull.boneLocalBoxes(
+                    if(region==null || region.triangleCount()<8)continue;
+                    // Do not permanently cache a missing limb while a
+                    // zero-scale key makes its bone matrix non-invertible.
+                    List<float[]> local=EmoticonsSkinnedBodyHull.boneLocalBoxes(
                             region.vertices,region.triangles,matrix,1,.018F);
-                    if (local.isEmpty()) continue;
-                    cache.groups++;
-                    cache.triangles += region.triangleCount();
-                    for (float[] shape : local) {
-                        if (cache.local.size() >=
-                                BodyPartChameleonCollisionBoxes.MAX_BOXES) break;
-                        cache.local.add(new LocalBox(bone.name,
-                                "emoticons."+bone.name,shape));
+                    if(local.isEmpty())
+                    {
+                        singular=true;
+                        break;
                     }
+                    acceptedGroups++;
+                    acceptedTriangles+=region.triangleCount();
+                    for(float[] shape:local)
+                        candidate.add(new LocalBox(bone.name,
+                                "emoticons."+bone.name,shape));
+                }
+                if(singular)
+                {
+                    cache.pending.add(bone.name);
+                    continue;
+                }
+                boolean recovered=cache.pending.remove(bone.name);
+                if(cache.local.size()+candidate.size()<=
+                        BodyPartChameleonCollisionBoxes.MAX_BOXES)
+                {
+                    cache.local.addAll(candidate);
+                    cache.groups+=acceptedGroups;
+                    cache.triangles+=acceptedTriangles;
+                    if(recovered && !candidate.isEmpty())
+                        System.out.println(
+                                "[BBS Animation Editor][Jolt][ParentSkinRecover] "+
+                                "bone="+bone.name+" shapes="+candidate.size());
                 }
             }
         }
