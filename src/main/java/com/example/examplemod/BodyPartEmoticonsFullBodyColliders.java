@@ -20,8 +20,8 @@ import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
  * Fixed dimensions are vital: a changing world-aligned limb AABB would
  * otherwise trigger a Jolt rig reconstruction whenever the limb rotates.
  *
- * These are conservative kinematic BOX approximations, not triangle-
- * perfect collisions with a deformable skinned mesh.
+ * These are conservative kinematic box / capsule approximations, not
+ * triangle-perfect collisions with the deformable skinned mesh.
  */
 public final class BodyPartEmoticonsFullBodyColliders {
     public static final class Capture {
@@ -139,7 +139,10 @@ public final class BodyPartEmoticonsFullBodyColliders {
                         .lastRenderedBoneMatrix(morph,bone.name);
                 if(matrix==null)
                 {
-                    cache.pending.add(bone.name);
+                    if(cache.pending.add(bone.name))
+                        System.out.println(
+                                "[BBS Animation Editor][Jolt][ParentSkinDeferred] "+
+                                "bone="+bone.name+" reason=missing matrix");
                     continue;
                 }
                 List<LocalBox> candidate=new ArrayList<LocalBox>();
@@ -169,7 +172,10 @@ public final class BodyPartEmoticonsFullBodyColliders {
                 }
                 if(singular)
                 {
-                    cache.pending.add(bone.name);
+                    if(cache.pending.add(bone.name))
+                        System.out.println(
+                                "[BBS Animation Editor][Jolt][ParentSkinDeferred] "+
+                                "bone="+bone.name+" reason=degenerate geometry/scale");
                     continue;
                 }
                 boolean recovered=cache.pending.remove(bone.name);
