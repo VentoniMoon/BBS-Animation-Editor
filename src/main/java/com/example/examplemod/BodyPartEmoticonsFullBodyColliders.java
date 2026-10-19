@@ -152,7 +152,12 @@ public final class BodyPartEmoticonsFullBodyColliders {
                         toWorld,part.local);
                 float[] primitive=JoltColliderPrimitives.encode(
                         world,primitiveForBone(part.bone),CONTACT_SCALE);
-                boxes.add(JoltColliderPrimitives.toOutline(primitive));
+                // The old Java 8 Jolt JAR understands only OBBs.
+                // Give it the fitted BONE BOX rather than a thin surrogate
+                // made from a capsule's radius/axial descriptor.
+                float[] fallback=JoltColliderPrimitives.encode(
+                        world,JoltColliderPrimitives.BOX,CONTACT_SCALE);
+                boxes.add(JoltColliderPrimitives.toOutline(fallback));
                 shapes.add(primitive);
                 owners.add(part.owner);
             }
