@@ -207,13 +207,18 @@ public final class EmoticonsSkinCollisionGroups
             int[] indices = mesh.data.indexData;
             int[] boneIds = mesh.data.boneIndexData;
             float[] weights = mesh.data.weightData;
-            BOBJArmature armature = mesh.getArmature();
+            BOBJArmature armature = mesh.getCurrentArmature();
+            if (armature == null) armature = mesh.getArmature();
             if (indices == null || boneIds == null || weights == null ||
                     armature == null || armature.orderedBones == null ||
                     indices.length != snapshot.triangles.length ||
                     weights.length != boneIds.length ||
                     weights.length != (long)(snapshot.vertices.length / 3) * 4)
                 return null;
+            // Never assign triangles from a different (same-sized) mesh
+            // while a morph/skeleton is switched at a timeline key.
+            for (int i=0;i<indices.length;i++)
+                if (indices[i]!=snapshot.triangles[i])return null;
             int target = -1;
             for (BOBJBone bone : armature.orderedBones)
                 if (bone != null && boneName.equals(bone.name))
