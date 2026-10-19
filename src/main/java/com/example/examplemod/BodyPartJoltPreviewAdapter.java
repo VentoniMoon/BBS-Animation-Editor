@@ -149,7 +149,7 @@ public final class BodyPartJoltPreviewAdapter {
             this.lastMultiB=multi==null?null:multi.ends();
             this.lastMultiR=multi==null?null:multi.radii();
             this.lastAdditionalBoxes=copyMatrices(attachedBoxes);
-            this.lastAdditionalShapes=copyMatrices(attachedShapes);
+            this.lastAdditionalShapes=typedShapes?copyMatrices(attachedShapes):null;
             this.typedShapes=typedShapes;
         }
     }
@@ -609,7 +609,7 @@ public final class BodyPartJoltPreviewAdapter {
                 state.lastMultiR=compoundR.clone();
             }
             state.lastAdditionalBoxes=copyMatrices(boxes);
-            state.lastAdditionalShapes=copyMatrices(shapes);
+            state.lastAdditionalShapes=useShapes?copyMatrices(shapes):null;
             state.remember(frame);
             return result;
         } catch(Throwable error) {
