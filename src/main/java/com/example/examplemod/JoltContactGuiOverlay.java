@@ -166,25 +166,32 @@ public final class JoltContactGuiOverlay
                     // diagnostic: counts on screen but zero projected shapes
                     // indicate a camera/coordinate-space issue, NOT no Jolt.
                     int labelX=x+9,labelY=y+12;
-                    String title="JOLT  torso "+snapshot.torsoCount+
-                            "   hair "+snapshot.hairCount+
-                            "   extras "+drawnBoxes+"/"+snapshot.boxCount+
-                            "   visible "+visibleBodies;
+                    String title="JOLT hair "+snapshot.hairCount+
+                            " torso "+snapshot.torsoCount+
+                            " extras "+drawnBoxes+"/"+snapshot.boxCount+
+                            " visible "+visibleBodies;
+                    String detail="parent "+parentShown+"/"+parentInstalled+
+                            " attachments "+attachedShown+"/"+attachedInstalled;
                     if(!BOX_MODEL_FILTER.isEmpty())
-                        title+=" [model:"+BOX_MODEL_FILTER+"]";
+                        detail+=" [model:"+BOX_MODEL_FILTER+
+                                (SHOW_PARENT?" +parent]":"]");
                     if(!CHAIN_FILTER.isEmpty())
-                        title+=" [chain:"+CHAIN_FILTER+"]";
-                    if(!shapes.isEmpty() && visibleBodies==0)
-                        title+="  [outside camera]";
-                    Gui.drawRect(labelX-4,labelY-4,
-                            labelX+mc.fontRenderer.getStringWidth(title)+5,
-                            labelY+mc.fontRenderer.FONT_HEIGHT+4,0xA9001016);
+                        detail+=" [chain:"+CHAIN_FILTER+"]";
+                    if(visibleBodies==0)
+                        detail+=" [outside camera]";
+                    int captionWidth=Math.max(mc.fontRenderer.getStringWidth(title),
+                            mc.fontRenderer.getStringWidth(detail));
+                    Gui.drawRect(labelX-4,labelY-4,labelX+captionWidth+5,
+                            labelY+mc.fontRenderer.FONT_HEIGHT*2+7,0xA9001016);
                     mc.fontRenderer.drawStringWithShadow(title,
                             labelX,labelY,0xFFBDF8C6);
+                    mc.fontRenderer.drawStringWithShadow(detail,
+                            labelX,labelY+mc.fontRenderer.FONT_HEIGHT+2,
+                            0xFFFFD66B);
                     // In filtered mode put provenance directly onto the
                     // cube. The boxes are GUI-projected; depth is deliberately
                     // disabled, so this is not an occlusion test.
-                    if(!BOX_MODEL_FILTER.isEmpty())
+                    if(BONE_LABELS)
                     {
                         int number=0;
                         for(JoltContactOverlaySnapshot.Box box:snapshot.boxes)
@@ -226,7 +233,9 @@ public final class JoltContactGuiOverlay
 
         String report="frame="+snapshot.frame+" torso="+snapshot.torsoCount+
                 " hair="+snapshot.hairCount+" boxes="+snapshot.boxCount+
-                " boxesShown="+drawnBoxes+" filter="+BOX_MODEL_FILTER+
+                " boxesShown="+drawnBoxes+" parent="+parentShown+"/"+parentInstalled+
+                " attachments="+attachedShown+"/"+attachedInstalled+
+                " filter="+BOX_MODEL_FILTER+
                 " chain="+CHAIN_FILTER+
                 " projectedShapes="+visibleBodies+
                 " projectedLines="+segmentCount+" camera=("+camera.getCameraX()+
@@ -235,7 +244,8 @@ public final class JoltContactGuiOverlay
         // Avoid one-line-per-render logs; report changes to topology or
         // visibility category, not exact subpixel/camera differences.
         String status=snapshot.torsoCount+":"+snapshot.hairCount+
-                ":"+snapshot.boxCount+":"+drawnBoxes+":"+BOX_MODEL_FILTER+
+                ":"+snapshot.boxCount+":"+drawnBoxes+":"+parentShown+
+                ":"+attachedShown+":"+BOX_MODEL_FILTER+
                 ":"+CHAIN_FILTER+
                 ":"+(visibleBodies>0?"on-screen":"off-screen")+
                 ":"+(segmentCount>0?"drawn":"no-lines");
@@ -250,7 +260,8 @@ public final class JoltContactGuiOverlay
                         ") quaternion=("+
                         box.pose[3]+","+box.pose[4]+","+
                         box.pose[5]+","+box.pose[6]+") half=("+
-                        box.pose[7]+","+box.pose[8]+","+box.pose[9]+")");
+                        box.pose[7]+","+box.pose[8]+","+box.pose[9]+
+                        ") primitive="+box.primitive);
             if(visibleBodies==0 && !snapshot.shapes.isEmpty())
             {
                 JoltContactOverlaySnapshot.Shape first=snapshot.shapes.get(0);
