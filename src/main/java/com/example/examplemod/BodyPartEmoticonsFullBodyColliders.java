@@ -80,11 +80,22 @@ public final class BodyPartEmoticonsFullBodyColliders {
         catch(NumberFormatException ignored){return 0.93F;}
     }
 
-    /** Smooth axial contacts for limbs, boxes for wide torso/head meshes. */
+    /**
+     * Torso capsule is an optional smooth-contact A/B experiment. The
+     * standard box still better approximates the chest's broad shape.
+     * Requires a Jolt prototype supporting setAdditionalShapes().
+     */
+    private static final boolean TORSO_CAPSULE=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.jolt.parentTorsoCapsule","false"));
+
+    /** Smooth axial contacts for limbs, optional torso capsule, head box. */
     private static int primitiveForBone(String bone)
     {
         if(bone==null)return JoltColliderPrimitives.BOX;
         String n=bone.toLowerCase(Locale.ROOT);
+        if(TORSO_CAPSULE && (n.equals("body") || n.equals("upper_body") ||
+                n.equals("low_body") || n.equals("torso")))
+            return JoltColliderPrimitives.CAPSULE;
         return n.contains("arm") || n.contains("leg") ||
                 n.contains("elbow") || n.contains("knee") ||
                 n.contains("neck") || n.contains("shoulder") ||
