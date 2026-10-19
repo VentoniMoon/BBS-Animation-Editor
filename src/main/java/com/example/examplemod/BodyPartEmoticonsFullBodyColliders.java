@@ -136,13 +136,17 @@ public final class BodyPartEmoticonsFullBodyColliders {
         List<float[]> shapes=new ArrayList<float[]>();
         List<float[]> boxes=new ArrayList<float[]>();
         List<String> owners=new ArrayList<String>();
-        try{
-            for(LocalBox part:cache.local){
+        for(LocalBox part:cache.local)
+        {
+            // One absent bone or malformed mesh shape must never disable
+            // contact with every other body bone for the current frame.
+            try
+            {
                 float[] bone=part.bone==null?
                         BodyPartPhysicsMatrixSpace.identity():
                         BodyPartEmoticonsAttachmentProbe.lastRenderedBoneMatrix(
                                 morph,part.bone);
-                if(bone==null)return empty();
+                if(bone==null)continue;
                 float[] toWorld=BodyPartPhysicsMatrixSpace.multiply(actorFrame,bone);
                 float[] world=EmoticonsSkinnedBodyHull.transformRigid(
                         toWorld,part.local);
@@ -152,7 +156,12 @@ public final class BodyPartEmoticonsFullBodyColliders {
                 shapes.add(primitive);
                 owners.add(part.owner);
             }
-        }catch(RuntimeException error){return empty();}
+            catch(RuntimeException invalidShape)
+            {
+                // Fail closed for this shape only, preserving remaining
+                // installed bone contacts in the native scene.
+            }
+        }
         return new Capture(boxes,shapes,owners,cache.groups,cache.triangles);
     }
 
