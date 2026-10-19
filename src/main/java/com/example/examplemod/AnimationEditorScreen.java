@@ -3370,12 +3370,69 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
+    /**
+     * Ctrl+Shift+B: arm a non-destructive Jolt capture on a selected Body Part,
+     * then play the timeline. Pause and press again to bake the completed
+     * visual poses into ordinary Body Parts keys. This deliberately cannot
+     * commit while playback is running.
+     */
+    private void togglePhysicsBake()
+    {
+        BlockbusterActorPreviewRenderer renderer =
+                findBlockbusterActorPreviewRenderer(
+                        this.sceneViewport,new HashSet<Object>(),0);
+        if(renderer==null)
+            renderer=findBlockbusterActorPreviewRenderer(
+                    this.actorPreviewController,new HashSet<Object>(),0);
+        String message;
+        if(renderer==null)
+        {
+            message="Preview actor is not initialized yet.";
+        }
+        else
+        {
+            BodyPartPhysicsBakeController bake=
+                    renderer.getPhysicsBakeController();
+            if(bake.isRecording())
+            {
+                if(this.playbackController.isPlaying())
+                    message="Pause the timeline before committing Jolt bake.";
+                else
+                {
+                    message=bake.commit();
+                    if(message.startsWith("Baked "))
+                        markEditorDirty();
+                }
+            }
+            else if(this.playbackController.isPlaying())
+                message="Pause first, then arm bake with Ctrl+Shift+B.";
+            else
+                message=bake.begin(
+                        this.bodyPartsController.getSelectedModel(),
+                        this.playbackController.getCurrentFrame());
+        }
+        System.out.println("[BBS Editor][Bake] "+message);
+        if(this.mc!=null && this.mc.player!=null)
+            this.mc.player.sendMessage(
+                    new net.minecraft.util.text.TextComponentString(
+                            "[BBS Editor] "+message));
+    }
+
     @Override
     protected void keyTyped(
             char typedChar,
             int keyCode)
             throws java.io.IOException
     {
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_B &&
+                (org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LCONTROL) ||
+                 org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RCONTROL)) &&
+                (org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_LSHIFT) ||
+                 org.lwjgl.input.Keyboard.isKeyDown(org.lwjgl.input.Keyboard.KEY_RSHIFT)))
+        {
+            togglePhysicsBake();
+            return;
+        }
         if (this.editorInput != null)
         {
             this.editorInput.keyTyped(
