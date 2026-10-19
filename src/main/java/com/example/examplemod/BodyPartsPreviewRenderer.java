@@ -1748,14 +1748,13 @@ public class BodyPartsPreviewRenderer
                                     contactFrame!=null &&
                                     contactFrame.intValue()==frame
                                     ? joltMultiTorsoFits.get(data):null;
-                            // Once full parent skinned hulls are installed,
-                            // retire the old 3 torso capsules for this frame.
+                            // Per-bone Emoticons colliders supersede legacy torso
+                            // capsules. Do not stack both collision systems.
                             // Otherwise two overlapping approximation systems
                             // compete and can squeeze hair sideways.
                             if(frame==parentEmoticonsColliderFrame &&
                                     parentEmoticonsColliders!=null &&
-                                    parentEmoticonsColliders.owners.contains(
-                                            "emoticons.TORSO"))
+                                    parentEmoticonsColliders.isReady())
                             {
                                 contact=null;
                                 segments=null;
