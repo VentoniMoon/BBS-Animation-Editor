@@ -2,7 +2,6 @@ package com.example.examplemod;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 
@@ -51,6 +50,39 @@ public final class BodyPartEmoticonsFullBodyColliders {
             local.clear();groups=triangles=0;meshFingerprint="";
         }
     }
+    /**
+     * Render geometry is intentionally a little wider than the physical
+     * contact proxy. The chain can visually overlap a surface without its
+     * central rigid capsule starting deep inside the parent.
+     * JVM override: -Dbbs.editor.physics.jolt.parentContactScale=1.0
+     */
+    private static final float CONTACT_SCALE=readContactScale();
+
+    private static float readContactScale()
+    {
+        String property=System.getProperty(
+                "bbs.editor.physics.jolt.parentContactScale","0.93");
+        try
+        {
+            float value=Float.parseFloat(property);
+            return Float.isFinite(value) && value>=0.70F && value<=1.00F
+                    ?value:0.93F;
+        }
+        catch(NumberFormatException ignored){return 0.93F;}
+    }
+
+    /** Smooth axial contacts for limbs, boxes for wide torso/head meshes. */
+    private static int primitiveForBone(String bone)
+    {
+        if(bone==null)return JoltColliderPrimitives.BOX;
+        String n=bone.toLowerCase(Locale.ROOT);
+        return n.contains("arm") || n.contains("leg") ||
+                n.contains("elbow") || n.contains("knee") ||
+                n.contains("neck") || n.contains("shoulder") ||
+                n.contains("hand") || n.contains("foot")
+                ?JoltColliderPrimitives.CAPSULE:JoltColliderPrimitives.BOX;
+    }
+
     private BodyPartEmoticonsFullBodyColliders() {}
 
     private static Capture empty(){
@@ -115,7 +147,7 @@ public final class BodyPartEmoticonsFullBodyColliders {
                 float[] world=EmoticonsSkinnedBodyHull.transformRigid(
                         toWorld,part.local);
                 float[] primitive=JoltColliderPrimitives.encode(
-                        world,JoltColliderPrimitives.BOX,1F);
+                        world,primitiveForBone(part.bone),CONTACT_SCALE);
                 boxes.add(JoltColliderPrimitives.toOutline(primitive));
                 shapes.add(primitive);
                 owners.add(part.owner);
