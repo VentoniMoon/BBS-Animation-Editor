@@ -1,0 +1,27 @@
+name: Jolt pose bake (Java 8)
+on:
+  push:
+    paths:
+      - 'src/main/java/com/example/examplemod/BodyPartPhysicsBakeController.java'
+      - 'src/test/bake-stubs/**'
+      - '.github/workflows/jolt-bake-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Compile production bake controller with isolated fixtures
+        run: |
+          mkdir -p build/jolt-bake-smoke
+          javac -encoding UTF-8 -source 8 -target 8 -d build/jolt-bake-smoke \
+            src/test/bake-stubs/mchorse/mclib/utils/keyframes/KeyframeInterpolation.java \
+            src/test/bake-stubs/com/example/examplemod/BodyPartPhysicsBakeControllerSmokeTest.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsBakeController.java
+      - name: Test pose bake transaction
+        run: java -cp build/jolt-bake-smoke com.example.examplemod.BodyPartPhysicsBakeControllerSmokeTest
