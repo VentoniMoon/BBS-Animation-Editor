@@ -220,6 +220,27 @@ public class BodyPartsPreviewRenderer
      * No extra render, GL matrix manipulation or changes to keys.
      */
     private String lastEmoticonsGeometryReport = "";
+    private int lastParentGravityProbeFrame=-1;
+
+    /**
+     * A true world-gravity vector projected into the rendered bone frame.
+     * It MUST rotate in local coordinates when the bone tilts in world
+     * space. Diagnostic only: never rotates the actual gravity vector.
+     */
+    private static String localWorldDown(float[] m)
+    {
+        if(m==null || m.length!=16)return "unavailable";
+        float[] projected=new float[3];
+        for(int axis=0;axis<3;axis++)
+        {
+            int k=axis*4;
+            float length=(float)Math.sqrt(m[k]*m[k]+
+                    m[k+1]*m[k+1]+m[k+2]*m[k+2]);
+            if(!(length>0.00001F))return "singular";
+            projected[axis]=-m[k+1]/length;
+        }
+        return java.util.Arrays.toString(projected);
+    }
 
     public void captureRenderedAttachmentMatrices(EntityActor actor, int frame)
     {
@@ -233,6 +254,26 @@ public class BodyPartsPreviewRenderer
         joltActorWorldFrame=BodyPartJoltActorSpace.worldFromActor(
                 actor.posX,actor.posY,actor.posZ,yaw);
         joltActorWorldFrameTick=frame;
+        if(JOLT_CONTACT_PROBE && frame%5==0 &&
+                lastParentGravityProbeFrame!=frame)
+        {
+            lastParentGravityProbeFrame=frame;
+            for(String name:new String[]{"body","low_body","head"})
+            {
+                float[] local=BodyPartEmoticonsAttachmentProbe
+                        .lastRenderedBoneMatrix(morph,name);
+                if(local==null)continue;
+                float[] world=BodyPartJoltActorSpace.matrix(
+                        joltActorWorldFrame,local);
+                System.out.println("[BBS Animation Editor][Jolt][WorldGravityProbe] "+
+                        "frame="+frame+" bone="+name+
+                        " actorPitch="+actor.rotationPitch+
+                        " actorYaw="+yaw+
+                        " worldDownInBone="+localWorldDown(world)+
+                        " boneOrigin="+java.util.Arrays.toString(
+                                new float[]{world[12],world[13],world[14]}));
+            }
+        }
         if (frame == 0 || frame == 20)
         {
             java.util.List<EmoticonsCollisionGeometryProvider.MeshSnapshot> surfaces =
