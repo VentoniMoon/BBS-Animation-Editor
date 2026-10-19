@@ -39,6 +39,12 @@ public final class BodyPartJoltPreviewAdapter {
      * Defaults ON; disable for A/B tests only. Ordinary quick head turns
      * (<165 degrees / tick) and movements (<3 blocks / tick) stay physical.
      */
+    /** Preserve contact poses after manual key edits on a paused frame.
+     * Large orientation/position changes reseed once; sub-frame jitter does
+     * not. Can be disabled for A/B tests. */
+    private static final boolean RESEED_EDITED_POSE=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.reseedEditedPose","true"));
     private static final boolean RESEED_TELEPORTS=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.jolt.reseedTeleports","true"));
@@ -389,6 +395,14 @@ public final class BodyPartJoltPreviewAdapter {
         float[][] boxes=useAdditional?copyMatrices(attachedBoxes):null;
         float[][] shapes=useShapes?copyMatrices(attachedShapes):null;
         State state=scenes.get(id);
+        boolean changedStaticPose=RESEED_EDITED_POSE && state!=null &&
+                frame==state.frame &&
+                JoltStaticPoseChange.significant(
+                        state.lastParent,cleanParentWorld,
+                        state.lastAdditionalBoxes,boxes);
+        if(changedStaticPose)
+            System.out.println("[BBS Editor][Jolt][StaticPoseEdit] "+
+                    id+" frame="+frame+" reseed after changed parent/contact pose");
         // A render pass is not a physics tick. A paused timeline can draw
         // dozens of times with slightly different Chameleon partial-tick
         // matrices, or with the previously published physics pose. Those
@@ -424,7 +438,7 @@ public final class BodyPartJoltPreviewAdapter {
                 return copy(recorded.pose);
             }
         }
-        if(state!=null && frame==state.frame &&
+        if(state!=null && frame==state.frame && !changedStaticPose &&
                 Arrays.equals(state.bones,boneNames) &&
                 state.stiffness==stiffness && state.damping==damping &&
                 state.gravity==gravity &&
@@ -444,8 +458,8 @@ public final class BodyPartJoltPreviewAdapter {
             state.presentedFrame=frame;
             return copy(state.sample);
         }
-        boolean recreate=state==null || frame<state.frame ||
-                frame>state.frame+1 ||
+        boolean recreate=state==null || changedStaticPose ||
+                frame<state.frame || frame>state.frame+1 ||
                 !Arrays.equals(state.bones,boneNames) ||
                 state.stiffness!=stiffness || state.damping!=damping ||
                 state.gravity!=gravity ||
