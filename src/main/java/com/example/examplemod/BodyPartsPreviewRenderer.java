@@ -2488,6 +2488,7 @@ public class BodyPartsPreviewRenderer
              * handedness/basis correction across all chains.
              */
             Map<String, float[]> swings =
+                    !bakeController.isRecording() &&
                     JOLT_VISUAL_INTERPOLATION &&
                     BodyPartJoltPreviewAdapter.isRequested() &&
                     BlockbusterPreviewAnimationState.isPlaying()
@@ -3189,6 +3190,7 @@ public class BodyPartsPreviewRenderer
 
     public void clear()
     {
+        bakeController.reset();
         parentColliderCaches.clear();
         parentEmoticonsColliders=null;
         parentEmoticonsColliderFrame=-1;
