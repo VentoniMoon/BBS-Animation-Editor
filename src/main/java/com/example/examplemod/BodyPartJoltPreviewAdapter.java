@@ -81,14 +81,16 @@ public final class BodyPartJoltPreviewAdapter {
     private static final class RecordedFrame {
         final Map<String,float[]> pose, raw;
         final float[][] hair,boxes,shapes;
+        final float[] parent;
         RecordedFrame(Map<String,float[]> pose,Map<String,float[]> raw,
-                float[][] hair,float[][] boxes,float[][] shapes)
+                float[][] hair,float[][] boxes,float[][] shapes,float[] parent)
         {
             this.pose=copy(pose);
             this.raw=copy(raw);
             this.hair=copyMatrices(hair);
             this.boxes=copyMatrices(boxes);
             this.shapes=copyMatrices(shapes);
+            this.parent=parent==null?null:parent.clone();
         }
     }
 
@@ -121,7 +123,7 @@ public final class BodyPartJoltPreviewAdapter {
         {
             history.put(Integer.valueOf(tick),
                     new RecordedFrame(sample,raw,rawHairBodies,
-                            lastAdditionalBoxes,lastAdditionalShapes));
+                            lastAdditionalBoxes,lastAdditionalShapes,lastParent));
             // Bound memory. Uncached older seek falls back to the earlier
             // conservative scene-recreation behavior.
             while(history.size()>1500)
@@ -432,11 +434,18 @@ public final class BodyPartJoltPreviewAdapter {
                         sameBoxGeometry(boxes,state.lastAdditionalBoxes))))
         {
             RecordedFrame recorded=state.history.get(Integer.valueOf(frame));
-            if(recorded!=null)
+            if(recorded!=null &&
+                    !(RESEED_EDITED_POSE &&
+                            JoltStaticPoseChange.significant(
+                                    recorded.parent,cleanParentWorld,
+                                    recorded.boxes,boxes)))
             {
                 state.presentedFrame=frame;
                 return copy(recorded.pose);
             }
+            if(recorded!=null && RESEED_EDITED_POSE)
+                System.out.println("[BBS Editor][Jolt][StaticPoseEdit] "+
+                        id+" frame="+frame+" invalidated cached rewind pose");
         }
         if(state!=null && frame==state.frame && !changedStaticPose &&
                 Arrays.equals(state.bones,boneNames) &&
