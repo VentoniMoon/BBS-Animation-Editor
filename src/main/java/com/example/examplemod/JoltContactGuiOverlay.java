@@ -43,6 +43,17 @@ public final class JoltContactGuiOverlay
             System.getProperty("bbs.editor.physics.jolt.overlayChain","")
                     .trim().toLowerCase(java.util.Locale.ROOT);
 
+    /** Keep every parent bone visible even when inspecting one attachment. */
+    private static final boolean SHOW_PARENT=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.jolt.overlayShowParent","true"));
+    private static final boolean BONE_LABELS=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.jolt.overlayBoneLabels","false"));
+
+    private static boolean isParent(JoltContactOverlaySnapshot.Box box)
+    {
+        return box.source.startsWith("emoticons.");
+    }
+
     private JoltContactGuiOverlay() {}
 
     /** Exact perspective math shared with the editor gizmo (Java 8 tested). */
@@ -84,6 +95,10 @@ public final class JoltContactGuiOverlay
         int activeTexture=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         int segmentCount=0,visibleBodies=0,drawnBoxes=0;
+        int parentInstalled=0,parentShown=0,attachedInstalled=0,attachedShown=0;
+        for(JoltContactOverlaySnapshot.Box box:snapshot.boxes)
+            if(isParent(box))parentInstalled++;
+            else attachedInstalled++;
         try
         {
             GL20.glUseProgram(0);
@@ -139,6 +154,8 @@ public final class JoltContactGuiOverlay
                         {
                             visibleBodies++;
                             drawnBoxes++;
+                            if(isParent(box))parentShown++;
+                            else attachedShown++;
                         }
                     }
                     tess.draw();
@@ -259,9 +276,19 @@ public final class JoltContactGuiOverlay
 
     private static boolean boxModelShown(JoltContactOverlaySnapshot.Box box)
     {
-        return BOX_MODEL_FILTER.isEmpty() ||
+        return BOX_MODEL_FILTER.isEmpty() || (SHOW_PARENT && isParent(box)) ||
                 box.source.toLowerCase(java.util.Locale.ROOT)
                         .contains(BOX_MODEL_FILTER);
+    }
+
+    private static int boxColor(JoltContactOverlaySnapshot.Box box)
+    {
+        if(!isParent(box))return 0xFFD66B;
+        String n=box.source.toLowerCase(java.util.Locale.ROOT);
+        if(n.contains("head") || n.contains("neck"))return 0x74F1FF;
+        if(n.contains("arm") || n.contains("hand"))return 0x78FF9B;
+        if(n.contains("leg") || n.contains("foot"))return 0xCDA0FF;
+        return 0x5AFFC7;
     }
 
     /** Emit actual capsule rings and longitudinal arcs as thick GUI quads. */
@@ -313,7 +340,8 @@ public final class JoltContactGuiOverlay
             }
         }
         int rgb=shape.kind==JoltContactOverlaySnapshot.Kind.HAIR
-                ?0xFF72C1:shape.kind==JoltContactOverlaySnapshot.Kind.ADDED
+                ?0xFF72C1:shape.source.startsWith("emoticons.")
+                ?0x66FFBA:shape.kind==JoltContactOverlaySnapshot.Kind.ADDED
                 ?0xFFD66B:0x55FFA1;
         int lines=0;
         for(int step=0;step<ring.length;step++)
@@ -410,10 +438,11 @@ public final class JoltContactGuiOverlay
                     camera,x,y,width,height);
         }
         int lines=0;
+        int color=boxColor(box);
         for(int i=0;i<8;i++)
             for(int bit=1;bit<=4;bit*=2)
                 if((i&bit)==0 && emitLine(buf,corners[i],corners[i|bit],
-                        0xFFD66B,225,1.6F,x,y,width,height))lines++;
+                        color,225,1.6F,x,y,width,height))lines++;
         return lines;
     }
 
