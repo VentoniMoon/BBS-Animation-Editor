@@ -1474,6 +1474,12 @@ public class BlockbusterActorPreviewRenderer
         return this.actor;
     }
 
+    /** The selected actor's opt-in Jolt -> Body Parts key bake session. */
+    public BodyPartPhysicsBakeController getPhysicsBakeController()
+    {
+        return this.bodyPartsPreviewRenderer.getBakeController();
+    }
+
 
     /*
      * =========================================================
