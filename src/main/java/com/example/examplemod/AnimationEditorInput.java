@@ -1278,11 +1278,53 @@ public class AnimationEditorInput
         }
     }
 
+    private void toggleJoltBake()
+    {
+        BodyPartPhysicsBakeController bake=screen.getPhysicsBakeController();
+        String message;
+        if(bake==null)
+            message="Preview actor is not initialized yet.";
+        else if(bake.isRecording())
+        {
+            if(playbackController.isPlaying())
+                message="Pause timeline before committing the Jolt bake.";
+            else
+            {
+                message=bake.commit();
+                if(message.startsWith("Baked "))
+                    markDirty();
+            }
+        }
+        else if(playbackController.isPlaying())
+            message="Pause first, then arm Jolt bake with Ctrl+Shift+B.";
+        else
+            message=bake.begin(bodyPartsController.getSelectedModel(),
+                    playbackController.getCurrentFrame());
+
+        System.out.println("[BBS Editor][Bake] "+message);
+        net.minecraft.client.Minecraft mc=net.minecraft.client.Minecraft.getMinecraft();
+        if(mc!=null && mc.player!=null)
+            mc.player.sendMessage(
+                    new net.minecraft.util.text.TextComponentString(
+                            "[BBS Editor] "+message));
+    }
+
     public void keyTyped(
             char typedChar,
             int keyCode)
             throws IOException
     {
+        /* Jolt physics bake: arm on pause, play, pause and commit. */
+        if(keyCode==Keyboard.KEY_B &&
+                (Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) ||
+                 Keyboard.isKeyDown(Keyboard.KEY_RCONTROL)) &&
+                (Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) ||
+                 Keyboard.isKeyDown(Keyboard.KEY_RSHIFT)))
+        {
+            toggleJoltBake();
+            return;
+        }
+
         /*
          * =========================================================
          * CHARACTER RECORD EXPORT (Ctrl + Shift + E)
