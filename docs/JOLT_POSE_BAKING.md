@@ -18,24 +18,19 @@ change the native Jolt JAR, the existing Weld mechanism, or live hair physics.
 6. Save the project with Ctrl+S and use the existing Record export action
    to write the result back to Blockbuster. Replay with Jolt disabled.
 
-## Bake interpolation A/B test
+## Interpolation (stable LINEAR)
 
-New bakes default to **HERMITE**, which uses neighboring equally-spaced
-key values to smooth angular velocity between simulation frames. The captured
-rotation on every integer frame stays unchanged; only the animation between
-frames changes. Old previously baked tracks are not retroactively changed.
+New bakes always create **LINEAR** keyframes, as in the initial working
+version. Every simulated game tick (20 ticks/sec) is captured exactly, so
+changing an editor key's interpolation to HERMITE or CUBIC cannot change the
+pose exported at that same integer tick to a Blockbuster Record `.dat`.
 
-Select a mode in the `runClient` JVM options and restart the game before
-making a **new** bake:
+The experimental `bbs.editor.physics.jolt.bakeInterpolation` JVM option is
+no longer read and can be removed from the launch configuration. Existing
+saved keys are not automatically modified; rebake from the clean, unbaked
+recording to restore LINEAR interpolation.
 
-* `-Dbbs.editor.physics.jolt.bakeInterpolation=hermite` (default, smooth)
-* `-Dbbs.editor.physics.jolt.bakeInterpolation=linear` (legacy baseline)
-* `-Dbbs.editor.physics.jolt.bakeInterpolation=cubic` (per-key interval easing
-  with INOUT; experimental, can look jerky with 20 keys/second)
-
-Each completed bake prints `interpolation=HERMITE|LINEAR|CUBIC` in the log.
-Compare the SAME animation with the same physics settings on separate
-scene copies. Preserve your original unbaked recording.
+The editor reports `interpolation=LINEAR` after a successful bake.
 
 ### Repeating a bake on the same model
 
@@ -57,17 +52,6 @@ Diagnostic messages:
 * `[BBS Editor][Bake] Commit check: recordedFrames=...` -- confirms what
   was buffered before key creation.
 * `Baked N Body Parts bone keys` -- means in-memory key creation completed.
-
-
-Why not CUBIC by default? In McLib 1.12.2 it is a two-key easing curve and
-can decelerate/accelerate at *every* one-tick segment. McLib HERMITE uses the
-preceding/following key values to approximate continuous angular velocity.
-With this densely sampled physics, Hermite is worth testing first.
-
-**Limitation:** HERMITE may overshoot the angle at sudden reversals or
-contacts. Recheck the hair/body collisions and compare the playback at
-half-ticks. If Hermite visibly passes through the character, revert to
-`linear` until tangent limiting can be implemented.
 
 
 The status is printed to `latest.log` with `[BBS Editor][Bake]` and
@@ -104,8 +88,8 @@ also sent to in-game chat when available.
   relative to the solver's internal tick. Compare exported playback frame by
   frame before relying on the result.
 * Every recorded frame gets a key (20 keys per simulated second). Key
-  reduction and final export optimization are not implemented. HERMITE is
-  interpolation metadata, not a new physics pass or higher sampling rate.
+  reduction and final export optimization are not implemented. All baked
+  keyframes use LINEAR interpolation, matching the original implementation.
 * In case the actor/model is switched or the preview is reset mid-session,
   restart the capture rather than trying to splice scenes.
 * The current export supports **bone transforms**, not deformed vertices:
