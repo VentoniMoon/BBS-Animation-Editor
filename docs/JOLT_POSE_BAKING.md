@@ -18,6 +18,36 @@ change the native Jolt JAR, the existing Weld mechanism, or live hair physics.
 6. Save the project with Ctrl+S and use the existing Record export action
    to write the result back to Blockbuster. Replay with Jolt disabled.
 
+## Bake interpolation A/B test
+
+New bakes default to **HERMITE**, which uses neighboring equally-spaced
+key values to smooth angular velocity between simulation frames. The captured
+rotation on every integer frame stays unchanged; only the animation between
+frames changes. Old previously baked tracks are not retroactively changed.
+
+Select a mode in the `runClient` JVM options and restart the game before
+making a **new** bake:
+
+* `-Dbbs.editor.physics.jolt.bakeInterpolation=hermite` (default, smooth)
+* `-Dbbs.editor.physics.jolt.bakeInterpolation=linear` (legacy baseline)
+* `-Dbbs.editor.physics.jolt.bakeInterpolation=cubic` (per-key interval easing
+  with INOUT; experimental, can look jerky with 20 keys/second)
+
+Each completed bake prints `interpolation=HERMITE|LINEAR|CUBIC` in the log.
+Compare the SAME animation with the same physics settings on separate
+scene copies. Preserve your original unbaked recording.
+
+Why not CUBIC by default? In McLib 1.12.2 it is a two-key easing curve and
+can decelerate/accelerate at *every* one-tick segment. McLib HERMITE uses the
+preceding/following key values to approximate continuous angular velocity.
+With this densely sampled physics, Hermite is worth testing first.
+
+**Limitation:** HERMITE may overshoot the angle at sudden reversals or
+contacts. Recheck the hair/body collisions and compare the playback at
+half-ticks. If Hermite visibly passes through the character, revert to
+`linear` until tangent limiting can be implemented.
+
+
 The status is printed to `latest.log` with `[BBS Editor][Bake]` and
 also sent to in-game chat when available.
 
@@ -52,7 +82,8 @@ also sent to in-game chat when available.
   relative to the solver's internal tick. Compare exported playback frame by
   frame before relying on the result.
 * Every recorded frame gets a key (20 keys per simulated second). Key
-  reduction and final export optimization are not implemented.
+  reduction and final export optimization are not implemented. HERMITE is
+  interpolation metadata, not a new physics pass or higher sampling rate.
 * In case the actor/model is switched or the preview is reset mid-session,
   restart the capture rather than trying to splice scenes.
 * The current export supports **bone transforms**, not deformed vertices:
