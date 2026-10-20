@@ -74,7 +74,11 @@ public final class BodyPartPhysicsBakeController
                 break;
             }
         }
-        if(!hasPhysics)return "Enable at least one physics chain first.";
+        if(!hasPhysics)
+            return "Jolt bake NOT armed: no active physics chains. "+
+                    "A successful bake disables live physics. "+
+                    "Clear or revert the OLD baked keys, re-enable hair "+
+                    "physics on this Body Part, then arm again.";
         reset();
         target=model;
         requestedStart=frame;
@@ -158,10 +162,16 @@ public final class BodyPartPhysicsBakeController
         }
         if(frames.size()<2)
         {
+            int count=frames.size();
             reset();
-            return "Bake rejected: fewer than two completed physics frames.";
+            return "Bake rejected: only "+count+" captured Jolt frames. "+
+                    "Keep the selected model visible and play the timeline "+
+                    "sequentially after arming.";
         }
         int first=frames.firstKey(),last=frames.lastKey();
+        System.out.println("[BBS Editor][Bake] Commit check: recordedFrames="+
+                frames.size()+" range="+first+".."+last+
+                " distinctBonesFirstFrame="+frames.get(first).size());
         if(frames.size()!=last-first+1)
         {
             reset();
