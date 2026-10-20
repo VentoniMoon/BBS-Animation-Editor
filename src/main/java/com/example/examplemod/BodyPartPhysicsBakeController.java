@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import mchorse.mclib.utils.keyframes.KeyframeInterpolation;
+import mchorse.mclib.utils.keyframes.KeyframeEasing;
 
 /**
  * Experimental, opt-in Body Parts/Jolt bake buffer. Collects the ACTUAL
@@ -24,6 +25,31 @@ public final class BodyPartPhysicsBakeController
     private final TreeMap<Integer, Map<String,AnimationTransform>> frames =
             new TreeMap<Integer, Map<String,AnimationTransform>>();
     private String failure;
+
+    /**
+     * Smoothing is ONLY a property of the exported key interpolation. The
+     * sampled poses and the native Jolt solver are unchanged.
+     *
+     * McLib CUBIC is per-pair ease-in/out and can slow down at every tick.
+     * HERMITE uses neighboring samples, which is the intended continuous
+     * velocity approximation for densely (and evenly) sampled physics.
+     *
+     * -Dbbs.editor.physics.jolt.bakeInterpolation=hermite|linear|cubic
+     */
+    private static KeyframeInterpolation selectedInterpolation()
+    {
+        String setting=System.getProperty(
+                "bbs.editor.physics.jolt.bakeInterpolation","hermite");
+        if("linear".equalsIgnoreCase(setting))
+            return KeyframeInterpolation.LINEAR;
+        if("cubic".equalsIgnoreCase(setting))
+            return KeyframeInterpolation.CUBIC;
+        if(!"hermite".equalsIgnoreCase(setting) &&
+                !"smooth".equalsIgnoreCase(setting))
+            System.out.println("[BBS Editor][Bake] Unknown interpolation '"+
+                    setting+"'; using HERMITE");
+        return KeyframeInterpolation.HERMITE;
+    }
 
     public boolean isRecording() { return target!=null; }
     public int frameCount() { return frames.size(); }
@@ -191,6 +217,8 @@ public final class BodyPartPhysicsBakeController
             }
             staged.put(bone,keys);
         }
+        // One mode per bake so multi-bone tracks remain consistent.
+        KeyframeInterpolation interpolation=selectedInterpolation();
         // From here onward only deterministic in-memory key writes happen.
         int count=0;
         for(Map.Entry<AnimationBone,Map<Integer,AnimationTransform>> track:staged.entrySet())
@@ -209,7 +237,10 @@ public final class BodyPartPhysicsBakeController
                 to.setPosition(from.getPositionX(),from.getPositionY(),from.getPositionZ());
                 to.setRotation(from.getRotationX(),from.getRotationY(),from.getRotationZ());
                 to.setScale(from.getScaleX(),from.getScaleY(),from.getScaleZ());
-                key.setInterpolation(KeyframeInterpolation.LINEAR);
+                if(interpolation==KeyframeInterpolation.CUBIC)
+                    key.setInterpolation(interpolation,KeyframeEasing.INOUT);
+                else
+                    key.setInterpolation(interpolation);
                 count++;
             }
         // A baked track and live Jolt simultaneously would double-animate.
@@ -221,7 +252,8 @@ public final class BodyPartPhysicsBakeController
                 if(settings.isEnabled())settings.setEnabled(false);
             }
         String output="Baked "+count+" Body Parts bone keys, "+
-                first+".."+last+" ("+initial.size()+" bones). "+
+                first+".."+last+" ("+initial.size()+" bones), interpolation="+
+                interpolation.name()+". "+
                 "Live physics disabled for this model. Save and export.";
         System.out.println("[BBS Editor][Bake] "+output);
         reset();
