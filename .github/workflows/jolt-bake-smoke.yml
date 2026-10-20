@@ -21,6 +21,7 @@ jobs:
           mkdir -p build/jolt-bake-smoke
           javac -encoding UTF-8 -source 8 -target 8 -d build/jolt-bake-smoke \
             src/test/bake-stubs/mchorse/mclib/utils/keyframes/KeyframeInterpolation.java \
+            src/test/bake-stubs/mchorse/mclib/utils/keyframes/KeyframeEasing.java \
             src/test/bake-stubs/com/example/examplemod/BodyPartPhysicsBakeControllerSmokeTest.java \
             src/main/java/com/example/examplemod/BodyPartPhysicsBakeController.java
       - name: Test pose bake transaction
