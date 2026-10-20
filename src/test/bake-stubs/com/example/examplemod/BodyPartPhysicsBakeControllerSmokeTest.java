@@ -30,6 +30,7 @@ public class BodyPartPhysicsBakeControllerSmokeTest
     }
     public static void main(String[] args)
     {
+        System.clearProperty("bbs.editor.physics.jolt.bakeInterpolation");
         BodyPartPhysicsBakeController bake=new BodyPartPhysicsBakeController();
         BodyPartModelData data=model("braid");
         check(bake.begin(data,0).contains("ARMED"),"arm bake");
@@ -48,6 +49,9 @@ public class BodyPartPhysicsBakeControllerSmokeTest
         String result=bake.commit();
         check(result.startsWith("Baked 3 "),result);
         check(data.bones.get(0).keys.size()==3,"all baked keys");
+        check(data.bones.get(0).keys.get(0).getInterpolation() ==
+                mchorse.mclib.utils.keyframes.KeyframeInterpolation.HERMITE,
+                "default physics bake should use Hermite");
         near(data.bones.get(0).keys.get(0).getTransform().getRotationX(),
                 10F,"frame0 capture");
         near(data.bones.get(0).keys.get(1).getTransform().getRotationX(),
@@ -76,6 +80,40 @@ public class BodyPartPhysicsBakeControllerSmokeTest
         check(bake.commit().contains("coverage changed"),
                 "reject missing physical bone on later frame");
         check(partial.bones.get(0).keys.isEmpty(),"no partial commit");
+
+        // A/B controls must NOT affect on-key physics poses, only the
+        // interpolation metadata emitted into the Body Parts timeline.
+        String[] modes={"linear","cubic","hermite"};
+        mchorse.mclib.utils.keyframes.KeyframeInterpolation[] expected={
+            mchorse.mclib.utils.keyframes.KeyframeInterpolation.LINEAR,
+            mchorse.mclib.utils.keyframes.KeyframeInterpolation.CUBIC,
+            mchorse.mclib.utils.keyframes.KeyframeInterpolation.HERMITE};
+        for(int i=0;i<modes.length;i++)
+        {
+            System.setProperty("bbs.editor.physics.jolt.bakeInterpolation",
+                    modes[i]);
+            BodyPartModelData selected=model("braid");
+            check(bake.begin(selected,0).contains("ARMED"),"arm "+modes[i]);
+            for(int frame=0;frame<3;frame++)
+                bake.capture(selected,frame,"braid",new float[3],
+                        new float[]{(float)Math.toRadians(14F*frame),0F,0F});
+            String message=bake.commit();
+            check(message.contains("interpolation="+expected[i].name()),
+                    "log mode "+modes[i]+": "+message);
+            for(int frame=0;frame<3;frame++)
+            {
+                AnimationKeyframe key=selected.bones.get(0).keys.get(frame);
+                check(key.getInterpolation()==expected[i],
+                        "mode "+modes[i]+" at "+frame);
+                near(key.getTransform().getRotationX(),14F*frame,
+                        "preserve exact sample "+modes[i]+" at "+frame);
+                if("cubic".equals(modes[i]))
+                    check(key.getEasing()==
+                        mchorse.mclib.utils.keyframes.KeyframeEasing.INOUT,
+                        "cubic easing must be INOUT");
+            }
+        }
+        System.clearProperty("bbs.editor.physics.jolt.bakeInterpolation");
         System.out.println("Jolt bake controller smoke tests passed");
     }
 }
@@ -118,9 +156,22 @@ final class AnimationTransform
 final class AnimationKeyframe
 {
     private final AnimationTransform transform=new AnimationTransform();
+    private mchorse.mclib.utils.keyframes.KeyframeInterpolation interpolation=
+            mchorse.mclib.utils.keyframes.KeyframeInterpolation.LINEAR;
+    private mchorse.mclib.utils.keyframes.KeyframeEasing easing=
+            mchorse.mclib.utils.keyframes.KeyframeEasing.IN;
     AnimationTransform getTransform() {return transform;}
+    mchorse.mclib.utils.keyframes.KeyframeInterpolation getInterpolation()
+    {return interpolation;}
+    mchorse.mclib.utils.keyframes.KeyframeEasing getEasing()
+    {return easing;}
     void setInterpolation(
-            mchorse.mclib.utils.keyframes.KeyframeInterpolation value) {}
+            mchorse.mclib.utils.keyframes.KeyframeInterpolation value)
+    {interpolation=value;}
+    void setInterpolation(
+            mchorse.mclib.utils.keyframes.KeyframeInterpolation value,
+            mchorse.mclib.utils.keyframes.KeyframeEasing mode)
+    {interpolation=value;easing=mode;}
 }
 
 final class AnimationBone
