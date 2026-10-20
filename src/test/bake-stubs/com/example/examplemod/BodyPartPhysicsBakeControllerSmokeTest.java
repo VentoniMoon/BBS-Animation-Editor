@@ -60,6 +60,13 @@ public class BodyPartPhysicsBakeControllerSmokeTest
                 40F,"frame2 capture");
         check(!data.getPhysicsSettings("braid").isEnabled(),
                 "prevent double-physics after commit");
+        String rearm=bake.begin(data,0);
+        check(rearm.contains("no active physics chains"),
+                "rebake must explain that the last bake disabled Jolt");
+        check(!bake.isRecording(),
+                "failed rearm must not start an empty capture session");
+        check(data.bones.get(0).keys.size()==3,
+                "failed rearm must preserve successful baked keys");
 
         BodyPartModelData skipped=model("braid");
         check(bake.begin(skipped,0).contains("ARMED"),"second arm");
