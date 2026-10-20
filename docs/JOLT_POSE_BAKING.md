@@ -37,6 +37,28 @@ Each completed bake prints `interpolation=HERMITE|LINEAR|CUBIC` in the log.
 Compare the SAME animation with the same physics settings on separate
 scene copies. Preserve your original unbaked recording.
 
+### Repeating a bake on the same model
+
+After a successful bake, all active physics chains for that Body Part are
+disabled intentionally to avoid double-animating the result. **Ctrl+Shift+B
+will not arm again until at least one hair chain is re-enabled.**
+
+For a clean A/B retest, first use a backup of the **unbaked** scene or revert
+only the previous bake-generated bone keys, then re-enable the physical chains
+and arm Ctrl+Shift+B. Merely re-enabling physics while retaining the old
+baked rotations would simulate ON TOP of those rotations, giving misleading
+results.
+
+Diagnostic messages:
+* `Jolt bake NOT armed: no active physics chains` -- re-enable the chain,
+  preferably after reverting the previous bake.
+* `Bake rejected: only N captured Jolt frames` -- start normal sequential
+  playback while the selected actor remains visible.
+* `[BBS Editor][Bake] Commit check: recordedFrames=...` -- confirms what
+  was buffered before key creation.
+* `Baked N Body Parts bone keys` -- means in-memory key creation completed.
+
+
 Why not CUBIC by default? In McLib 1.12.2 it is a two-key easing curve and
 can decelerate/accelerate at *every* one-tick segment. McLib HERMITE uses the
 preceding/following key values to approximate continuous angular velocity.
