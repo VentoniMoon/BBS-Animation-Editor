@@ -50,8 +50,8 @@ public class BodyPartPhysicsBakeControllerSmokeTest
         check(result.startsWith("Baked 3 "),result);
         check(data.bones.get(0).keys.size()==3,"all baked keys");
         check(data.bones.get(0).keys.get(0).getInterpolation() ==
-                mchorse.mclib.utils.keyframes.KeyframeInterpolation.HERMITE,
-                "default physics bake should use Hermite");
+                mchorse.mclib.utils.keyframes.KeyframeInterpolation.LINEAR,
+                "default physics bake should use Linear");
         near(data.bones.get(0).keys.get(0).getTransform().getRotationX(),
                 10F,"frame0 capture");
         near(data.bones.get(0).keys.get(1).getTransform().getRotationX(),
@@ -88,37 +88,23 @@ public class BodyPartPhysicsBakeControllerSmokeTest
                 "reject missing physical bone on later frame");
         check(partial.bones.get(0).keys.isEmpty(),"no partial commit");
 
-        // A/B controls must NOT affect on-key physics poses, only the
-        // interpolation metadata emitted into the Body Parts timeline.
-        String[] modes={"linear","cubic","hermite"};
-        mchorse.mclib.utils.keyframes.KeyframeInterpolation[] expected={
-            mchorse.mclib.utils.keyframes.KeyframeInterpolation.LINEAR,
-            mchorse.mclib.utils.keyframes.KeyframeInterpolation.CUBIC,
-            mchorse.mclib.utils.keyframes.KeyframeInterpolation.HERMITE};
-        for(int i=0;i<modes.length;i++)
+        // Legacy experimental JVM property must never change the stable bake.
+        System.setProperty("bbs.editor.physics.jolt.bakeInterpolation","hermite");
+        BodyPartModelData stable=model("braid");
+        check(bake.begin(stable,0).contains("ARMED"),"re-arm linear test");
+        for(int frame=0;frame<3;frame++)
+            bake.capture(stable,frame,"braid",new float[3],
+                    new float[]{(float)Math.toRadians(14F*frame),0F,0F});
+        String message=bake.commit();
+        check(message.contains("interpolation=LINEAR"),message);
+        for(int frame=0;frame<3;frame++)
         {
-            System.setProperty("bbs.editor.physics.jolt.bakeInterpolation",
-                    modes[i]);
-            BodyPartModelData selected=model("braid");
-            check(bake.begin(selected,0).contains("ARMED"),"arm "+modes[i]);
-            for(int frame=0;frame<3;frame++)
-                bake.capture(selected,frame,"braid",new float[3],
-                        new float[]{(float)Math.toRadians(14F*frame),0F,0F});
-            String message=bake.commit();
-            check(message.contains("interpolation="+expected[i].name()),
-                    "log mode "+modes[i]+": "+message);
-            for(int frame=0;frame<3;frame++)
-            {
-                AnimationKeyframe key=selected.bones.get(0).keys.get(frame);
-                check(key.getInterpolation()==expected[i],
-                        "mode "+modes[i]+" at "+frame);
-                near(key.getTransform().getRotationX(),14F*frame,
-                        "preserve exact sample "+modes[i]+" at "+frame);
-                if("cubic".equals(modes[i]))
-                    check(key.getEasing()==
-                        mchorse.mclib.utils.keyframes.KeyframeEasing.INOUT,
-                        "cubic easing must be INOUT");
-            }
+            AnimationKeyframe key=stable.bones.get(0).keys.get(frame);
+            check(key.getInterpolation()==
+                    mchorse.mclib.utils.keyframes.KeyframeInterpolation.LINEAR,
+                    "must always produce LINEAR");
+            near(key.getTransform().getRotationX(),14F*frame,
+                    "preserve physical sample on frame "+frame);
         }
         System.clearProperty("bbs.editor.physics.jolt.bakeInterpolation");
         System.out.println("Jolt bake controller smoke tests passed");
