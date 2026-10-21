@@ -23,6 +23,10 @@ public final class EditorMultiActorPreviewController
 
     private boolean showAllActors = true;
 
+    /** Do not reuse native EntityActor render state across scene loads. */
+    private EditorSceneState previousScene;
+    private int previousSceneIndex=-1;
+
     public boolean isShowAllActors()
     {
         return this.showAllActors;
@@ -41,6 +45,14 @@ public final class EditorMultiActorPreviewController
             int frame,
             BodyPartsEditorController bodyPartsController)
     {
+        if(scene!=previousScene ||
+                (scene!=null && scene.getSelectedScene()!=previousSceneIndex))
+        {
+            reset();
+            previousScene=scene;
+            previousSceneIndex=scene==null?-1:scene.getSelectedScene();
+        }
+
         if (!this.showAllActors || scene == null || viewport == null)
         {
             return;
@@ -146,5 +158,7 @@ public final class EditorMultiActorPreviewController
             renderer.reset();
         }
         renderers.clear();
+        previousScene=null;
+        previousSceneIndex=-1;
     }
 }
