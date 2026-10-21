@@ -47,22 +47,38 @@ public final class BbsFsWorldFrameCapture
         int sh = source.framebufferHeight;
         if (sw <= 0 || sh <= 0) return;
 
-        if (snapshot == null)
-            snapshot = new Framebuffer(sw, sh, true);
-        else if (snapshot.framebufferWidth != sw ||
-                snapshot.framebufferHeight != sh)
-            snapshot.createBindFramebuffer(sw, sh);
-
-        if (source == snapshot) return;
+        /*
+         * Framebuffer allocation/resize changes the bound FBO and viewport.
+         * Preserve the game render target BEFORE allocating, otherwise the
+         * editor GUI may accidentally draw into the snapshot itself.
+         */
+        int read = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int draw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        java.nio.IntBuffer viewport = org.lwjgl.BufferUtils.createIntBuffer(16);
+        GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
 
         try
         {
-            ready = blit(source, snapshot,
-                    0, 0, sw, sh, 0, 0, sw, sh);
+            if (snapshot == null)
+                snapshot = new Framebuffer(sw, sh, true);
+            else if (snapshot.framebufferWidth != sw ||
+                    snapshot.framebufferHeight != sh)
+                snapshot.createBindFramebuffer(sw, sh);
+
+            if (source != snapshot)
+                ready = blit(source, snapshot,
+                        0, 0, sw, sh, 0, 0, sw, sh);
         }
         catch (Throwable error)
         {
             reportFailure("World snapshot: " + error);
+        }
+        finally
+        {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+            GL11.glViewport(viewport.get(0), viewport.get(1),
+                    viewport.get(2), viewport.get(3));
         }
     }
 
