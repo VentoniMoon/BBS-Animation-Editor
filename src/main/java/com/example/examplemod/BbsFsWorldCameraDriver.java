@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
+import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
@@ -72,6 +73,7 @@ public final class BbsFsWorldCameraDriver
         }
         if (event.phase != TickEvent.Phase.START) return;
 
+        BbsFsWorldProjection.beginFrame();
         Minecraft mc = Minecraft.getMinecraft();
         if (viewport == null || !(mc.currentScreen instanceof AnimationEditorScreen)
                 || mc.world == null || mc.player == null)
@@ -114,6 +116,20 @@ public final class BbsFsWorldCameraDriver
         activePose = pose;
         mc.gameSettings.thirdPersonView = 0;
         mc.setRenderViewEntity(view);
+    }
+
+    /**
+     * Camera and shaderpack projection must come from the actual Minecraft
+     * world render, not an approximation reconstructed in GuiScreen.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void nativeWorldLast(RenderWorldLastEvent event)
+    {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (controlling && viewport != null &&
+                mc.currentScreen instanceof AnimationEditorScreen &&
+                mc.getRenderViewEntity() == view)
+            BbsFsWorldProjection.capture(mc.displayWidth, mc.displayHeight);
     }
 
     @SubscribeEvent
