@@ -24,6 +24,18 @@ class AnimationEditorScreen
     }
 }
 
+/** Test-only shader stage: real implementation uses OptiFine reflection. */
+class BbsFsOptiFineEntityStage implements AutoCloseable
+{
+    static int opened, closed;
+    static BbsFsOptiFineEntityStage open()
+    {
+        opened++;
+        return new BbsFsOptiFineEntityStage();
+    }
+    public void close(){closed++;}
+}
+
 /** Test-only GL guard: verifies close even on actor exception. */
 class BbsFsWorldGlGuard implements AutoCloseable
 {
