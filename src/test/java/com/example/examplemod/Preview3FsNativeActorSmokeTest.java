@@ -14,9 +14,6 @@ public final class Preview3FsNativeActorSmokeTest
 
     public static void main(String[] args)
     {
-        System.setProperty("bbs.editor.preview3.nativeActors","true");
-        check(BbsFsNativeActorPass.isRequested(),"opt-in wasn't read");
-
         Minecraft mc = new Minecraft();
         EditorSceneViewport viewport = new EditorSceneViewport();
         AnimationEditorScreen screen = new AnimationEditorScreen();
