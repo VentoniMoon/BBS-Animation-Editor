@@ -59,8 +59,9 @@ public final class ChameleonWeldRendererTransformer implements IClassTransformer
             ClassNode node=new ClassNode(ASM5);
             new ClassReader(bytes).accept(node,ClassReader.EXPAND_FRAMES);
             MethodNode original=null;
-            for(MethodNode m:node.methods)
+            for(Object member:node.methods)
             {
+                MethodNode m=(MethodNode)member;
                 if("render".equals(m.name) && DESC.equals(m.desc) &&
                         (m.access&ACC_STATIC)!=0)
                     original=m;
