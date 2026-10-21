@@ -10,6 +10,11 @@ on:
       - 'src/main/java/com/example/examplemod/PreviewCameraMatrices.java'
       - 'src/main/java/com/example/examplemod/JoltContactScreenProjection.java'
       - 'src/main/java/com/example/examplemod/PreviewSceneRenderCoordinator.java'
+      - 'src/main/java/com/example/examplemod/BbsFsNativeActorPass.java'
+      - 'src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java'
+      - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
+      - 'src/main/java/com/example/examplemod/BbsFsWorldProjection.java'
+      - 'src/main/java/com/example/examplemod/BbsFsPreviewTarget.java'
       - 'src/main/java/com/example/examplemod/PreviewNativeWorldBridge.java'
       - 'src/main/java/com/example/examplemod/PreviewWorldRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -20,6 +25,7 @@ on:
       - 'src/test/java/com/example/examplemod/Preview3*Test.java'
       - 'src/test/preview3-stubs/**'
       - 'src/test/preview3-native-stubs/**'
+      - 'src/test/preview3-fs-stubs/**'
       - '.github/workflows/preview3-java8.yml'
   pull_request:
     paths:
@@ -29,6 +35,11 @@ on:
       - 'src/main/java/com/example/examplemod/PreviewCameraMatrices.java'
       - 'src/main/java/com/example/examplemod/JoltContactScreenProjection.java'
       - 'src/main/java/com/example/examplemod/PreviewSceneRenderCoordinator.java'
+      - 'src/main/java/com/example/examplemod/BbsFsNativeActorPass.java'
+      - 'src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java'
+      - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
+      - 'src/main/java/com/example/examplemod/BbsFsWorldProjection.java'
+      - 'src/main/java/com/example/examplemod/BbsFsPreviewTarget.java'
       - 'src/main/java/com/example/examplemod/PreviewNativeWorldBridge.java'
       - 'src/main/java/com/example/examplemod/PreviewWorldRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -91,3 +102,15 @@ jobs:
             src/test/java/com/example/examplemod/Preview3CoordinatorSmokeTest.java
           java -ea -cp build/preview3/scene \
             com.example.examplemod.Preview3CoordinatorSmokeTest
+
+      - name: Compile FS native actor pass and verify single-render ownership
+        run: |
+          mkdir -p build/preview3/fs-actors
+          javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/fs-actors \
+            src/test/preview3-fs-stubs/net/minecraft/client/Minecraft.java \
+            src/test/preview3-fs-stubs/net/minecraft/client/shader/Framebuffer.java \
+            src/test/preview3-fs-stubs/com/example/examplemod/BbsFsNativeActorStubs.java \
+            src/main/java/com/example/examplemod/BbsFsNativeActorPass.java \
+            src/test/java/com/example/examplemod/Preview3FsNativeActorSmokeTest.java
+          java -ea -cp build/preview3/fs-actors \
+            com.example.examplemod.Preview3FsNativeActorSmokeTest
