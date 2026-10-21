@@ -11,6 +11,14 @@ public class EditorCamera
 
     private double distance;
 
+    /** Interactive navigation or externally sampled cinematic camera. */
+    public enum Mode { ORBIT, FREE, TRACK }
+    private Mode mode=Mode.ORBIT;
+    private float roll=0F;
+    private float fov=60F;
+    private float nearPlane=0.05F;
+    private float farPlane=512F;
+
     private static final double MIN_DISTANCE = 2.0D;
     private static final double MAX_DISTANCE = 100.0D;
 
@@ -42,6 +50,74 @@ public class EditorCamera
         this.pitch = 15.0F;
 
         this.distance = 8.0D;
+        this.roll=0F;
+        this.fov=60F;
+        this.nearPlane=0.05F;
+        this.farPlane=512F;
+        this.mode=Mode.ORBIT;
+    }
+
+    /** Changing navigation mode never moves or rotates the camera. */
+    public void setMode(Mode mode)
+    {
+        if(mode!=null)this.mode=mode;
+    }
+
+    public Mode getMode() { return mode; }
+
+    public float getRoll() { return roll; }
+    public void setRoll(float roll)
+    {
+        if(Float.isFinite(roll))this.roll=roll;
+    }
+
+    public float getFov() { return fov; }
+    public void setFov(float fov)
+    {
+        if(Float.isFinite(fov))
+            this.fov=Math.max(1F,Math.min(170F,fov));
+    }
+
+    public float getNearPlane() { return nearPlane; }
+    public void setNearPlane(float near)
+    {
+        if(Float.isFinite(near) && near>0F && near<farPlane)
+            nearPlane=near;
+    }
+
+    public float getFarPlane() { return farPlane; }
+    public void setFarPlane(float far)
+    {
+        if(Float.isFinite(far) && far>nearPlane)
+            farPlane=far;
+    }
+
+    /** World-space eye position with camera optics, independent of target. */
+    public PreviewCameraPose sample()
+    {
+        return new PreviewCameraPose(getCameraX(),getCameraY(),getCameraZ(),
+                yaw,pitch,roll,fov,nearPlane,farPlane);
+    }
+
+    /**
+     * Apply a camera-track sample WITHOUT rebuilding the actor or preview
+     * scene. Retain the previous orbit radius for seamless manual takeover.
+     */
+    public void apply(PreviewCameraPose pose)
+    {
+        if(pose==null)return;
+        this.yaw=pose.yaw;
+        this.pitch=pose.pitch;
+        this.roll=pose.roll;
+        this.fov=pose.fov;
+        this.nearPlane=pose.nearPlane;
+        this.farPlane=pose.farPlane;
+        double y=Math.toRadians(this.yaw);
+        double p=Math.toRadians(this.pitch);
+        double horizontal=Math.cos(p)*this.distance;
+        this.targetX=pose.x-Math.sin(y)*horizontal;
+        this.targetY=pose.y+Math.sin(p)*this.distance;
+        this.targetZ=pose.z-Math.cos(y)*horizontal;
     }
 
     public void setTarget(
