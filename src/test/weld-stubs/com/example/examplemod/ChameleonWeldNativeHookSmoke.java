@@ -70,6 +70,10 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
         }
     }
 
+    public static final class TestMorph {
+        public boolean bbs$weld;
+    }
+
     private static final class TestLoader extends ClassLoader
     {
         TestLoader() {super(ChameleonWeldNativeHookSmoke.class.getClassLoader());}
@@ -170,7 +174,11 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
 
         Class<?> renderer=new TestLoader().define(patched);
         Method render=renderer.getMethod("render",Model.class);
-        render.invoke(null,model);
+        TestMorph morph=new TestMorph();
+        morph.bbs$weld=true;
+        ChameleonWeldRuntime.enterMorph(morph);
+        try { render.invoke(null,model); }
+        finally { ChameleonWeldRuntime.exitMorph(); }
         near(oldParent.x,origPX);
         near(oldParent.y,origPY);
         near(oldChild.x,origCX);
@@ -179,7 +187,9 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
         Probe.throwOnDraw=true;
         try
         {
-            render.invoke(null,model);
+            ChameleonWeldRuntime.enterMorph(morph);
+            try { render.invoke(null,model); }
+            finally { ChameleonWeldRuntime.exitMorph(); }
             throw new AssertionError("Expected simulated Chameleon draw failure");
         }
         catch(InvocationTargetException expected)
@@ -198,7 +208,10 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
         ChameleonWeldRuntime.enterMorph(disabled);
         Probe.throwOnDraw=false;
         Probe.expectWeld=false;
-        render.invoke(null,model);
+        morph.bbs$weld=false;
+        ChameleonWeldRuntime.enterMorph(morph);
+        try { render.invoke(null,model); }
+        finally { ChameleonWeldRuntime.exitMorph(); }
         near(oldParent.x,origPX);
         near(oldChild.x,origCX);
         ChameleonWeldRuntime.exitMorph();
