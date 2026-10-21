@@ -3613,7 +3613,10 @@ public class AnimationEditorScreen extends GuiScreen
     {
         /* Never leave the detached preview camera as Minecraft's view. */
         if (this.sceneViewport != null)
+        {
             BbsFsWorldCameraDriver.detach(this.sceneViewport);
+            this.sceneViewport.disposePreviewResources();
+        }
         BbsFsWorldFrameCapture.release();
 
         EditorSessionSelection.remember(this.sceneState);
