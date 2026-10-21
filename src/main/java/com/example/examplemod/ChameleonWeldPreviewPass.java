@@ -166,7 +166,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     }
 
     @SuppressWarnings("unchecked")
-    private static float[][] face(Object cube,boolean top)throws Exception
+    private float[][] face(Object cube,boolean top)throws Exception
     {
         List<Object> quads=(List<Object>)field(cube,"quads");
         if(quads.isEmpty())return null;
@@ -174,8 +174,10 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         for(Object quad:quads)
             for(Object vertex:(List<Object>)field(quad,"vertices"))
             {
-                float v=vec(vertex,"position").y;
-                y=top?Math.max(y,v):Math.min(y,v);
+                Vector3f v=vec(vertex,"position");
+                float[] base=originals.get(v);
+                float yy=base==null?v.y:base[1];
+                y=top?Math.max(y,yy):Math.min(y,yy);
             }
 
         List<float[]> unique=new ArrayList<float[]>();
@@ -183,17 +185,21 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             for(Object vertex:(List<Object>)field(quad,"vertices"))
             {
                 Vector3f v=vec(vertex,"position");
-                if(Math.abs(v.y-y)>FACE_EPS)continue;
+                float[] original=originals.get(v);
+                float vx=original==null?v.x:original[0];
+                float vy=original==null?v.y:original[1];
+                float vz=original==null?v.z:original[2];
+                if(Math.abs(vy-y)>FACE_EPS)continue;
                 boolean exists=false;
                 for(float[] old:unique)
-                    if(Math.abs(old[0]-v.x)<=FACE_EPS &&
-                            Math.abs(old[1]-v.y)<=FACE_EPS &&
-                            Math.abs(old[2]-v.z)<=FACE_EPS)
+                    if(Math.abs(old[0]-vx)<=FACE_EPS &&
+                            Math.abs(old[1]-vy)<=FACE_EPS &&
+                            Math.abs(old[2]-vz)<=FACE_EPS)
                     {
                         exists=true;
                         break;
                     }
-                if(!exists)unique.add(new float[] {v.x,v.y,v.z});
+                if(!exists)unique.add(new float[] {vx,vy,vz});
             }
         if(unique.size()!=4)return null;
         return unique.toArray(new float[4][3]);
