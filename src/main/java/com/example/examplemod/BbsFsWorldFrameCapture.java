@@ -1,5 +1,7 @@
 package com.example.examplemod;
 
+import java.nio.IntBuffer;
+import org.lwjgl.BufferUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.shader.Framebuffer;
