@@ -312,7 +312,7 @@ public class EditorSceneViewport
             return;
         }
 
-        if (actorData == null)
+        if (!BbsFsNativeActorPass.isRendering() || actorData == null)
         {
             return;
         }
@@ -328,36 +328,17 @@ public class EditorSceneViewport
         this.joltActorZ = frame.getZ();
         this.hasJoltActorOrigin = true;
 
-        /*
-         * =========================================================
-         * ACTOR
-         * =========================================================
-         *
-         * OptiFine entity/shader pass больше здесь НЕ запускается.
-         *
-         * Актёр просто рисуется поверх первого прохода мира.
-         */
-
-        int viewportX = this.x, viewportY = this.y;
-        int viewportWidth = this.width, viewportHeight = this.height;
-        if (BbsFsNativeActorPass.isRendering())
-        {
-            /* Actors now inhabit the actual Minecraft world framebuffer.
-             * Their full-screen coordinates will be cropped only when
-             * BBS FS copies the finished native frame to the film. */
-            viewportX = 0;
-            viewportY = 0;
-            viewportWidth = BbsFsNativeActorPass.worldViewportWidth();
-            viewportHeight = BbsFsNativeActorPass.worldViewportHeight();
-        }
+        /* The native world event is the only recorded-actor pass. */
+        int viewportWidth = BbsFsNativeActorPass.worldViewportWidth();
+        int viewportHeight = BbsFsNativeActorPass.worldViewportHeight();
 
         this.actorPreviewRenderer.drawActor(
                 mc,
                 actorData,
                 frame,
                 this.camera,
-                viewportX,
-                viewportY,
+                0,
+                0,
                 viewportWidth,
                 viewportHeight
         );
@@ -376,16 +357,12 @@ public class EditorSceneViewport
             BlockbusterRecordFrame frame,
             BlockbusterActorPreviewRenderer renderer)
     {
-        if (mc == null || renderer == null || frame == null) return;
-        int vx=this.x, vy=this.y, vw=this.width, vh=this.height;
-        if (BbsFsNativeActorPass.isRendering())
-        {
-            vx=0; vy=0;
-            vw=BbsFsNativeActorPass.worldViewportWidth();
-            vh=BbsFsNativeActorPass.worldViewportHeight();
-        }
+        if (!BbsFsNativeActorPass.isRendering() ||
+                mc == null || renderer == null || frame == null) return;
         renderer.drawActor(
-                mc, data, frame, this.camera, vx, vy, vw, vh);
+                mc, data, frame, this.camera, 0, 0,
+                BbsFsNativeActorPass.worldViewportWidth(),
+                BbsFsNativeActorPass.worldViewportHeight());
     }
 
     /**
