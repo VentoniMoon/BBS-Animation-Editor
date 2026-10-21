@@ -396,7 +396,13 @@ public class PreviewShaderBridge
              *
              */
 
-            if (this.shouldUseShaderPipeline())
+            /*
+             * BBS FS-style preview copies the already finished vanilla /
+             * OptiFine world frame. Starting OptiFine here again would
+             * create a nested shader render and corrupt the main target.
+             */
+            if (this.shouldUseShaderPipeline()
+                    && !(this.mc.currentScreen instanceof AnimationEditorScreen))
             {
                 float partialTicks =
                         this.mc.getRenderPartialTicks();
