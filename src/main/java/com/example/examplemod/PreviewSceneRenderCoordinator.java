@@ -39,27 +39,21 @@ public final class PreviewSceneRenderCoordinator
             started=viewport.getRenderBackend().isPreviewRenderActive();
             if(!started)return;
 
-            // Background actors must not overwrite selected actor animation
-            // state: EditorMultiActorPreviewController restores it in finally.
             /*
-             * If the actor pass already ran during RenderWorldLastEvent, it
-             * is already part of the captured native Minecraft framebuffer.
-             * Never invoke Body Parts/Jolt a second time for the same frame.
+             * Native-world actor event owns all record actor rendering.
+             * The completed world frame already contains selected and
+             * background actors. Never fall back to rendering them a
+             * second time in the GUI: doing so breaks depth/OptiFine and
+             * can advance Jolt/Body Parts twice.
+             *
+             * Selected-ready and gizmo preparation are GUI-only operations;
+             * execute them only for a frame containing native actors.
              */
-            if (!BbsFsNativeActorPass.didRenderThisFrame())
+            if (BbsFsNativeActorPass.didRenderThisFrame())
             {
-                if(actors!=null)
-                    actors.drawBackgroundActors(
-                            mc,viewport,scene,selected,frame,bodyParts);
-
-                viewport.drawActor(mc,selected,selectedRecordFrame);
+                if (selectedReady != null) selectedReady.run();
+                if (overlay3D != null) overlay3D.run();
             }
-
-            if(selectedReady!=null)selectedReady.run();
-
-            // Gizmo belongs to this exact 3D camera/depth pass, not a second
-            // GUI-only projection or a rerender of the actor.
-            if(overlay3D!=null)overlay3D.run();
         }
         finally
         {
