@@ -1367,6 +1367,22 @@ public class BlockbusterActorPreviewRenderer
 
         GlStateManager.enableTexture2D();
 
+        /*
+         * RenderManager.renderEntity(...) does not initialize the per-entity
+         * lightmap; vanilla does this in renderEntityStatic(...). We render
+         * with explicit record coordinates, so we must reproduce that
+         * vanilla step here. Without it, the previous texture/lightmap
+         * coordinates can make a recorded actor appear fullbright under
+         * OptiFine shaders, while the surrounding world remains correct.
+         */
+        int packedLight = entityActor.getBrightnessForRender();
+        if (entityActor.isBurning())
+            packedLight = 15728880; // vanilla burning-entity lighting
+        net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(
+                net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit,
+                (float) (packedLight & 65535),
+                (float) (packedLight >>> 16));
+
         GlStateManager.color(
                 1.0F,
                 1.0F,
