@@ -95,7 +95,18 @@ public final class BbsFsNativeActorPass
             {
                 mc.entityRenderer.enableLightmap();
                 lightmapEnabled = true;
-                if (!editor.renderActorsInNativeWorld()) return;
+
+                /*
+                 * Forge's RenderWorldLastEvent runs after OptiFine's normal
+                 * entity stage. Re-enter that exact shader program so morphs
+                 * receive the same entity lighting as the main world. The
+                 * previous OptiFine program is restored on every exit.
+                 */
+                try (BbsFsOptiFineEntityStage shaders =
+                             BbsFsOptiFineEntityStage.open())
+                {
+                    if (!editor.renderActorsInNativeWorld()) return;
+                }
             }
             finally
             {
