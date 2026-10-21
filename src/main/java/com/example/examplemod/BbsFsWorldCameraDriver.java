@@ -129,10 +129,15 @@ public final class BbsFsWorldCameraDriver
         if (controlling && viewport != null &&
                 mc.currentScreen instanceof AnimationEditorScreen &&
                 mc.getRenderViewEntity() == view)
-            BbsFsWorldProjection.capture(mc.displayWidth, mc.displayHeight);
+        {
+            net.minecraft.client.shader.Framebuffer source = mc.getFramebuffer();
+            if (source != null)
+                BbsFsWorldProjection.capture(source.framebufferWidth,
+                        source.framebufferHeight);
+        }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public void cameraSetup(EntityViewRenderEvent.CameraSetup event)
     {
         if (controlling && activePose != null &&
@@ -140,7 +145,7 @@ public final class BbsFsWorldCameraDriver
             event.setRoll(-activePose.roll);
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public void cameraFov(EntityViewRenderEvent.FOVModifier event)
     {
         if (controlling && activePose != null &&
@@ -157,8 +162,13 @@ public final class BbsFsWorldCameraDriver
             if (viewport != null && viewport.getHeight() > 0)
             {
                 Minecraft mc = Minecraft.getMinecraft();
-                double screenAspect = (double) mc.displayWidth /
-                        Math.max(1, mc.displayHeight);
+                net.minecraft.client.shader.Framebuffer world =
+                        mc.getFramebuffer();
+                double screenAspect = world != null
+                        ? (double) world.framebufferWidth /
+                                Math.max(1, world.framebufferHeight)
+                        : (double) mc.displayWidth /
+                                Math.max(1, mc.displayHeight);
                 double previewAspect = (double) viewport.getWidth() /
                         viewport.getHeight();
                 if (previewAspect > screenAspect)
