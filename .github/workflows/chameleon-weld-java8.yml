@@ -56,6 +56,8 @@ jobs:
             src/test/weld-stubs/mchorse/metamorph/api/morphs/AbstractMorph.java \
             src/test/weld-stubs/net/minecraft/launchwrapper/IClassTransformer.java \
             src/test/weld-stubs/net/minecraft/nbt/NBTTagCompound.java \
+            src/test/weld-stubs/net/minecraft/entity/EntityLivingBase.java \
+            src/test/weld-stubs/net/minecraft/nbt/NBTTagCompound.java \
             src/test/weld-stubs/mchorse/chameleon/ClientProxy.java \
             src/test/weld-stubs/mchorse/chameleon/lib/data/model/*.java \
             src/main/java/com/example/examplemod/ChameleonWeldGeometry.java \
@@ -63,8 +65,10 @@ jobs:
             src/main/java/com/example/examplemod/ChameleonWeldRuntime.java \
             src/main/java/com/example/examplemod/ChameleonWeldMorphTransformer.java \
             src/main/java/com/example/examplemod/ChameleonWeldRendererTransformer.java \
+            src/main/java/com/example/examplemod/ChameleonWeldMorphTransformer.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldPreviewCompileSmoke.java \
-            src/test/weld-stubs/com/example/examplemod/ChameleonWeldNativeHookSmoke.java
+            src/test/weld-stubs/com/example/examplemod/ChameleonWeldNativeHookSmoke.java \
+            src/test/weld-stubs/com/example/examplemod/ChameleonWeldMorphHookSmoke.java
 
       - name: Verify native hook, model filtering, and exception-safe cleanup
         run: |
@@ -73,3 +77,5 @@ jobs:
             com.example.examplemod.ChameleonWeldPreviewCompileSmoke
           java -ea -cp "$CP" \
             com.example.examplemod.ChameleonWeldNativeHookSmoke
+          java -ea -cp "$CP" \
+            com.example.examplemod.ChameleonWeldMorphHookSmoke
