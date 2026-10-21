@@ -3008,10 +3008,17 @@ public class AnimationEditorScreen extends GuiScreen
         // world frame or GL blit failed: these are essential smoke signals.
         boolean fsReady = this.sceneViewport != null &&
                 this.sceneViewport.hasCapturedNativeWorldFrame();
+        boolean fsDepthReady = fsReady && BbsFsWorldFrameCapture.isDepthValid();
         drawToolbarButton(x, y + 64, 26, 26, fsReady);
-        drawCenteredString(fontRenderer, fsReady ? "FS" : "F!",
+        /*
+         * FS = color + depth captured; F~ = valid color but missing native
+         * depth (record actor occlusion is uncertain); F! = no world frame.
+         * These are diagnostics, not switches to the old world renderer.
+         */
+        drawCenteredString(fontRenderer,
+                fsDepthReady ? "FS" : (fsReady ? "F~" : "F!"),
                 x + 13, y + 9 + 64,
-                fsReady ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+                fsDepthReady ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
