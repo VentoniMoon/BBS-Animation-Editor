@@ -191,8 +191,11 @@ public class BodyPartsEditorPanel
                     x + 9, modelY + SECTION_HEIGHT, WIDTH - 18, 20, mouseX, mouseY);
             drawButton(mc, "REMOVE ATTACHMENT",
                     x + 9, modelY + SECTION_HEIGHT + 24, WIDTH - 18, 17, mouseX, mouseY);
+            boolean chameleon=isChameleonWeldCandidate(selected);
             drawButton(mc,
-                    "WELD GEOMETRY: " + (selected.isWeldEnabled() ? "ON" : "OFF"),
+                    chameleon
+                            ? "WELD GEOMETRY: " + (selected.isWeldEnabled() ? "ON" : "OFF")
+                            : "WELD: CHAMELEON ONLY",
                     x + 9, modelY + SECTION_HEIGHT + 46, WIDTH - 18, 18,
                     mouseX, mouseY);
         }
@@ -365,7 +368,8 @@ public class BodyPartsEditorPanel
                     && mouseY >= modelY + SECTION_HEIGHT + 46
                     && mouseY < modelY + SECTION_HEIGHT + 64)
             {
-                selected.setWeldEnabled(!selected.isWeldEnabled());
+                if (isChameleonWeldCandidate(selected))
+                    selected.setWeldEnabled(!selected.isWeldEnabled());
                 return true;
             }
         }
@@ -377,6 +381,20 @@ public class BodyPartsEditorPanel
     {
         return mouseX >= x + 7 && mouseX < x + WIDTH - 7
                 && mouseY >= sectionY && mouseY < sectionY + SECTION_HEIGHT;
+    }
+
+    /**
+     * Weld's current geometry solver supports Chameleon cuboid bones.
+     * Avoid exposing an active switch for unrelated Emoticons/Blockbuster
+     * attachments until they have their own renderer implementations.
+     */
+    private static boolean isChameleonWeldCandidate(BodyPartModelData model)
+    {
+        if (model == null) return false;
+        AbstractMorph morph=model.getBaseMorph();
+        return morph!=null &&
+                "mchorse.chameleon.metamorph.ChameleonMorph"
+                        .equals(morph.getClass().getName());
     }
 
     private int getGlobalY(int modelY)
