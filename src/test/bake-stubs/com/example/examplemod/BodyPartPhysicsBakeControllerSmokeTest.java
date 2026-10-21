@@ -35,6 +35,7 @@ public class BodyPartPhysicsBakeControllerSmokeTest
         BodyPartModelData data=model("braid");
         check(bake.begin(data,0).contains("ARMED"),"arm bake");
         check(data.bones.get(0).keys.isEmpty(),"no eager key mutation");
+        check(!bake.hasCapturedFrame(0),"must wait for first bake frame");
         for(int f=0;f<=2;f++)
         {
             bake.capture(data,f,"braid",
@@ -45,6 +46,9 @@ public class BodyPartPhysicsBakeControllerSmokeTest
                     new float[]{(float)Math.toRadians(120),0F,0F});
         }
         check(bake.frameCount()==3,"collect three frames");
+        check(bake.hasCapturedFrame(0) && bake.hasCapturedFrame(1) &&
+                bake.hasCapturedFrame(2),"every tick has a sample");
+        check(!bake.hasCapturedFrame(3),"next frame must wait");
         check(data.bones.get(0).keys.isEmpty(),"still no keys before commit");
         String result=bake.commit();
         check(result.startsWith("Baked 3 "),result);
@@ -78,6 +82,16 @@ public class BodyPartPhysicsBakeControllerSmokeTest
                 "failed bake must preserve existing tracks");
         check(skipped.getPhysicsSettings("braid").isEnabled(),
                 "failed bake must preserve live physics");
+
+        BodyPartModelData stalled=model("braid");
+        check(bake.begin(stalled,0).contains("ARMED"),"stall test arm");
+        for(int i=0;i<199;i++)
+            check(!bake.hasTimedOutWaitingFor(0),"premature timeout "+i);
+        check(bake.hasTimedOutWaitingFor(0),"timeout after 200 ticks");
+        check(bake.commit().contains("No completed Jolt pose for frame 0"),
+                "clear stalled bake diagnosis");
+        check(stalled.bones.get(0).keys.isEmpty(),
+                "timeout must preserve existing keys");
 
         BodyPartModelData partial=model("braid","loose_end");
         check(bake.begin(partial,0).contains("ARMED"),"third arm");
