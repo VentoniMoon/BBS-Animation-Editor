@@ -1,78 +1,103 @@
-# Experimental Chameleon Weld: hair-body Preview (stage 1)
+# Chameleon Weld — editor Preview + native Blockbuster playback
 
-This first implementation is **not a port of BBS FS's cubic renderer**.
-It provides an opt-in, reversible vertex-space Weld for static Chameleon
-Body Parts using the same seam-pair idea.
+This implementation uses the original ChameleonRenderer to draw its model
+and wraps its `render(Model)` call with a reversible Weld seam adjustment.
 
-## What the experiment does
+## Why the playback fix is different from Editor Preview
 
-- Finds parent/child Chameleon bones that each own exactly one cube.
-- Matches the parent's lower face to the child's upper face in the
-  *authored rest pose*. Unrelated/offset faces are rejected.
-- Uses the exact Chameleon 1.12.2 bone transform order (Z/Y/X rotation,
-  pivot/scale, including Chameleon's X-translation convention).
-- Resolves matching 3D corners of the two adjacent faces to one common
-  seam in model space (default **parentShare = 0.5**).
-- Updates every adjacent face vertex at those corners, preserving texture UV.
-- Restores original vertex data in a `try-with-resources` after the actor
-  is rendered. No Jolt sample, keyframe, Record .dat or geo.json is changed.
-- Starts **OFF** by default.
+Blockbuster Record playback renders attached Chameleon morphs through
+`ChameleonMorph.renderModel()` → `ChameleonRenderer.render(Model)`, outside
+the editor's `BlockbusterActorPreviewRenderer`. The original Preview-only
+Weld consequently did not appear in recorded scene playback.
 
-## Preview A/B test
+The editor mod now registers an ASM 5 LaunchClassLoader transformer during
+client preInit. It safely renames the original ChameleonRenderer.render(Model)
+implementation and creates a wrapper:
 
-Run the ForgeGradle development client with the following JVM property:
+1. Call `ChameleonWeldRuntime.begin(model)` **after native animation pose
+   evaluation**, just before the original renderer.
+2. Render Chameleon using the unmodified underlying renderer.
+3. Call `ChameleonWeldRuntime.end()` in a bytecode try/finally, even if the
+   renderer throws.
+
+The runtime scopes are thread-local and restore every temporarily adjusted
+vertex. Physics state, Jolt colliders, animator keyframes, textures/UVs,
+Blockbuster .dat and source geo.json are **not modified**.
+
+If the hook is installed successfully, the editor skips its older Weld pass to
+avoid welding the same vertices twice; the native hook covers both paths.
+
+## Model selection
+
+Native Weld is currently **restricted to the exact registered Chameleon key
+`hair body`**, matching `chameleon.hair body` in the user's test record.
+The model identifier inside the geo.json often says `geometry.steve` and
+cannot be used for identifying the attachment.
+
+To add explicitly named models (experimental), set
+`-Dbbs.editor.weld.models=hair body;some other model` in the Minecraft JVM.
+Do not enable broad discovery for unrelated models; automatic matches are
+limited to single-cube parent-child seams.
+
+## Correctly matching all seven hair seams
+
+Chameleon permits UV-omitted faces: its ModelCube.generateQuads will not create
+rendered vertices for those untextured faces. The earlier implementation
+found just three seams by scanning the existing quad vertices, missing the
+left/right strands.
+
+Weld now reconstructs the authored face corners using exactly Chameleon's
+origin, size, and inflate formula. It patches existing rendered vertices
+only, preserving all texture UVs and omitting untextured faces.
+
+Expected joints for the reference hair body model:
+
+- left_strand_1 → left_strand_2 → left_strand_3 (2 seams)
+- right_strand_1 → right_strand_2 → right_strand_3 (2 seams)
+- back_strand_1 → back_strand_2 → back_strand_3 → back_strand_4 (3 seams)
+
+## A/B test in the developer client
+
+After merging latest `main`:
 
 ```powershell
-git pull origin main
-.\gradlew runClient -Dbbs.editor.weld.preview=true
+git pull --ff-only origin main
+.\gradlew runClient -PenableJoltExperimental -Dbbs.editor.weld.preview=true
 ```
 
-Normal control (identical physics/keys, Weld disabled):
+Open the editor and compare against **ordinary Blockbuster Record playback in
+the world**, for example hairbake_1; both should use the same native Weld.
 
-```powershell
-.\gradlew runClient -Dbbs.editor.weld.preview=false
-```
-
-The preview log should report:
+Useful log markers:
 
 ```text
-[BBS Editor][Weld] Preview seam welding active, 7 matching joints
+[BBS Editor][Weld] Native ChameleonRenderer.render(Model) hooked
+[BBS Editor][Weld][Runtime] Native Chameleon render: 7 matching joints; model=hair body
 ```
 
-The count may differ when additional single-cube Chameleon attachments
-are present. The initial experimental pass skips Chameleon models with
-action animations, multi-cube bones and cube-local rotations rather
-than touching unsupported geometry.
+Compare without Weld:
 
-## Verified rest bindings: `hair body1.geo.json`
+```powershell
+.\gradlew runClient -PenableJoltExperimental -Dbbs.editor.weld.preview=false
+```
 
-| Source bone | Source face | Target bone | Target face |
-|---|---|---|---|
-| left_strand_1 | DOWN | left_strand_2 | UP |
-| left_strand_2 | DOWN | left_strand_3 | UP |
-| right_strand_1 | DOWN | right_strand_2 | UP |
-| right_strand_2 | DOWN | right_strand_3 | UP |
-| back_strand_1 | DOWN | back_strand_2 | UP |
-| back_strand_2 | DOWN | back_strand_3 | UP |
-| back_strand_3 | DOWN | back_strand_4 | UP |
+The client Gradle config forwards the existing `bbs.editor.weld.preview`
+property to the Minecraft process; the runtime hook respects it. A dedicated
+`bbs.editor.weld.runtime` JVM system property takes precedence. In an actual
+built mod without a flag, model-scoped runtime Weld defaults to ON.
 
-Every rest-face pair matches in all three axes (including each cube's
-inflation). These seams do not require guessed contact positions.
+## Tested and untested
 
-## Deliberate limits
+- CI on Java 8 validates 7 authored rest seams, an ASM 5 render wrapper,
+  live one-joint posed geometry, hair-only filtering, and exception-safe
+  restoration.
+- Still requires an in-game test with the user's exact Chameleon 1.2.1,
+  Blockbuster 2.7.1 and Jolt-enabled editor.
+- This version stitches face corners; it does not yet add curved vertex
+  subdivision or smoothed surface normals like the full BBS FS cubic Weld.
+- Weld requires the BBS Animation Editor mod on the **rendering client**. A
+  .dat record by itself does not serialize a dynamic weld renderer hook.
 
-1. **Preview only.** Existing exported `.dat` files and ordinary Blockbuster
-   world playback still use Chameleon's default rendering. Export/runtime
-   welding needs a separate, safe integration into Chameleon's render phase.
-2. This first implementation directly deforms quad corners and doesn't
-   subdivide faces or share smoothed vertex normals (unlike the more
-   sophisticated BBS FS CubicCubeRenderer Weld).
-3. The matching heuristic is limited to coincident, axis-aligned, one-cube
-   parent/child DOWN/UP faces. Explicit per-model weld rules and a UI panel
-   are planned after the hair test.
-4. Disable the property to rule out rendering-only issues; if the test
-   produces shading artifacts, pivot offsets or gaps, capture a short video
-   and `latest.log` (including `[BBS Editor][Weld]`).
-
-The Jolt simulation, deterministic 20Hz physics bake, collider fitting and
-interpolated Chameleon pose export are **not modified by Weld**.
+If the native hook marker does not appear during game startup, check whether
+another mod already loaded ChameleonRenderer before our client preInit. The
+editor Preview retains its previous Weld fallback when the hook is absent.
