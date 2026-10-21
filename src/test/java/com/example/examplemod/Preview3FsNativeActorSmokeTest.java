@@ -24,32 +24,35 @@ public final class Preview3FsNativeActorSmokeTest
         BbsFsNativeActorPass.beginFrame();
         check(!BbsFsNativeActorPass.didRenderThisFrame(),
                 "frame had actors before native event");
-        BbsFsNativeActorPass.render(mc,screen,viewport,0F);
+        BbsFsNativeActorPass.render(mc,screen,viewport,0F,1280,720);
         check(BbsFsNativeActorPass.didRenderThisFrame(),
                 "native event did not own actor frame");
         check(screen.renders==1,"first world event did not call renderer");
+        check(BbsFsNativeActorPass.worldViewportWidth()==0 &&
+                BbsFsNativeActorPass.worldViewportHeight()==0,
+                "native GL viewport dimensions leaked after render");
 
-        BbsFsNativeActorPass.render(mc,screen,viewport,0F);
+        BbsFsNativeActorPass.render(mc,screen,viewport,0F,1280,720);
         check(screen.renders==1,"actor simulation was invoked twice");
 
         BbsFsNativeActorPass.beginFrame();
         check(!BbsFsNativeActorPass.didRenderThisFrame(),
                 "native actor ownership leaked across frames");
         viewport.width=0;
-        BbsFsNativeActorPass.render(mc,screen,viewport,0F);
+        BbsFsNativeActorPass.render(mc,screen,viewport,0F,1280,720);
         check(screen.renders==1,"invalid film viewport rendered actors");
         check(!BbsFsNativeActorPass.didRenderThisFrame(),
                 "invalid film viewport stole GUI actor rendering");
 
         viewport.width=900;
         screen.shouldRender=false;
-        BbsFsNativeActorPass.render(mc,screen,viewport,0F);
+        BbsFsNativeActorPass.render(mc,screen,viewport,0F,1280,720);
         check(!BbsFsNativeActorPass.didRenderThisFrame(),
                 "failed scene preparation stole GUI actor rendering");
 
         screen.shouldRender=true;
         screen.throwOnRender=true;
-        BbsFsNativeActorPass.render(mc,screen,viewport,0F);
+        BbsFsNativeActorPass.render(mc,screen,viewport,0F,1280,720);
         check(!BbsFsNativeActorPass.isRendering(),
                 "exception leaked native world render flag");
         check(BbsFsNativeActorPass.didRenderThisFrame(),
