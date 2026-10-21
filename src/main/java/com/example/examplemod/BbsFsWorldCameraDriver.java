@@ -32,6 +32,7 @@ public final class BbsFsWorldCameraDriver
     private World previousWorld;
     private int previousPerspective;
     private boolean previousHideGUI;
+    private boolean previousViewBobbing;
     private boolean hidHudThisFrame;
     private boolean registered;
     private boolean controlling;
@@ -110,9 +111,16 @@ public final class BbsFsWorldCameraDriver
         if (!hidHudThisFrame)
         {
             previousHideGUI = mc.gameSettings.hideGUI;
+            previousViewBobbing = mc.gameSettings.viewBobbing;
             hidHudThisFrame = true;
         }
         mc.gameSettings.hideGUI = true;
+        /*
+         * A fixed cinematic camera cannot inherit Minecraft's player
+         * walking head-bob: our gizmo/record actor camera has no such bob,
+         * so restoring this state at RenderTick END keeps depth in sync.
+         */
+        mc.gameSettings.viewBobbing = false;
 
         activePose = pose;
         mc.gameSettings.thirdPersonView = 0;
@@ -201,6 +209,7 @@ public final class BbsFsWorldCameraDriver
         if (!hidHudThisFrame) return;
         Minecraft mc = Minecraft.getMinecraft();
         mc.gameSettings.hideGUI = previousHideGUI;
+        mc.gameSettings.viewBobbing = previousViewBobbing;
         hidHudThisFrame = false;
     }
 
