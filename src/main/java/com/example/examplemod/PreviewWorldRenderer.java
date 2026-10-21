@@ -655,11 +655,13 @@ public class PreviewWorldRenderer
 
         this.renderTerrainFarPlane =
                 Math.max(
+                        camera.getFarPlane(),
+                        Math.max(
                         256.0F,
                         this.mc.gameSettings
                                 .renderDistanceChunks
                                 * 16.0F
-                );
+                        ));
 
 
         this.saveOpenGLState();
@@ -789,11 +791,13 @@ public class PreviewWorldRenderer
 
             this.renderTerrainFarPlane =
                     Math.max(
+                            camera.getFarPlane(),
+                            Math.max(
                             256.0F,
                             this.mc.gameSettings
                                     .renderDistanceChunks
                                     * 16.0F
-                    );
+                            ));
 
 
             this.saveOpenGLState();
