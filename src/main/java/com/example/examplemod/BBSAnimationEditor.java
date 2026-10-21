@@ -34,16 +34,20 @@ public class BBSAnimationEditor
         {
             try
             {
+                // Install the per-instance morph field and NBT/copy hook
+                // BEFORE resolving the ordinary Chameleon render class.
+                net.minecraft.launchwrapper.Launch.classLoader.registerTransformer(
+                        "com.example.examplemod.ChameleonWeldMorphTransformer");
                 net.minecraft.launchwrapper.Launch.classLoader.registerTransformer(
                         "com.example.examplemod.ChameleonWeldRendererTransformer");
 
-                // Force loading through LaunchClassLoader so the instrumentation
-                // status is known before BodyParts Preview chooses its fallback.
+                Class.forName("mchorse.chameleon.metamorph.ChameleonMorph",
+                        false,net.minecraft.launchwrapper.Launch.classLoader);
                 Class.forName("mchorse.chameleon.lib.render.ChameleonRenderer",
                         false,net.minecraft.launchwrapper.Launch.classLoader);
-                if(!ChameleonWeldRendererTransformer.isPatched())
-                    logger.warn("Chameleon Weld runtime hook was not applied; "+
-                            "editor Preview fallback remains available.");
+                if(!ChameleonWeldRuntime.isRendererHookInstalled())
+                    logger.warn("Chameleon Weld native per-part hook is incomplete; "+
+                            "all Weld remains disabled until the hook is active.");
             }
             catch(ClassNotFoundException missingChameleon)
             {
