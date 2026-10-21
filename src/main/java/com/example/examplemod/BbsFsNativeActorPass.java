@@ -84,7 +84,24 @@ public final class BbsFsNativeActorPass
         rendering = true;
         try (BbsFsWorldGlGuard ignored = new BbsFsWorldGlGuard(mc))
         {
-            if (!editor.renderActorsInNativeWorld()) return;
+            /*
+             * RenderWorldLastEvent fires AFTER vanilla's entity pass, which
+             * has already disabled the lightmap. Re-enable the same Minecraft
+             * lightmap used by RenderGlobal.renderEntities instead of drawing
+             * record actors with missing/fullbright light coordinates.
+             */
+            boolean lightmapEnabled = false;
+            try
+            {
+                mc.entityRenderer.enableLightmap();
+                lightmapEnabled = true;
+                if (!editor.renderActorsInNativeWorld()) return;
+            }
+            finally
+            {
+                if (lightmapEnabled)
+                    mc.entityRenderer.disableLightmap();
+            }
             renderedThisFrame = true;
             renderedSequence = frameSequence;
             if (!diagnosed)
