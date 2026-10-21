@@ -331,15 +331,32 @@ public class EditorSceneViewport
          * Актёр просто рисуется поверх первого прохода мира.
          */
 
+        int viewportX = this.x, viewportY = this.y;
+        int viewportWidth = this.width, viewportHeight = this.height;
+        if (BbsFsNativeActorPass.isRendering())
+        {
+            /* Actors now inhabit the actual Minecraft world framebuffer.
+             * Their full-screen coordinates will be cropped only when
+             * BBS FS copies the finished native frame to the film. */
+            net.minecraft.client.shader.Framebuffer world = mc.getFramebuffer();
+            if (world != null)
+            {
+                viewportX = 0;
+                viewportY = 0;
+                viewportWidth = world.framebufferWidth;
+                viewportHeight = world.framebufferHeight;
+            }
+        }
+
         this.actorPreviewRenderer.drawActor(
                 mc,
                 actorData,
                 frame,
                 this.camera,
-                this.x,
-                this.y,
-                this.width,
-                this.height
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight
         );
 
 
@@ -357,9 +374,18 @@ public class EditorSceneViewport
             BlockbusterActorPreviewRenderer renderer)
     {
         if (mc == null || renderer == null || frame == null) return;
+        int vx=this.x, vy=this.y, vw=this.width, vh=this.height;
+        if (BbsFsNativeActorPass.isRendering())
+        {
+            net.minecraft.client.shader.Framebuffer world = mc.getFramebuffer();
+            if (world != null)
+            {
+                vx=0; vy=0;
+                vw=world.framebufferWidth; vh=world.framebufferHeight;
+            }
+        }
         renderer.drawActor(
-                mc, data, frame, this.camera,
-                this.x, this.y, this.width, this.height);
+                mc, data, frame, this.camera, vx, vy, vw, vh);
     }
 
     /**
