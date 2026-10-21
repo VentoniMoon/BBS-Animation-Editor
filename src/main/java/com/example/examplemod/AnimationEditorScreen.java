@@ -3580,7 +3580,11 @@ public class AnimationEditorScreen extends GuiScreen
             {
                 int frame=this.timeline.getTick();
                 if(!bake.hasCapturedFrame(frame))
+                {
                     advanceTimeline=false;
+                    if(bake.hasTimedOutWaitingFor(frame))
+                        this.timeline.pause();
+                }
                 else if(frame>=Math.min(this.timeline.getLastTick(),
                         bake.getLastRecordableFrame()))
                 {
