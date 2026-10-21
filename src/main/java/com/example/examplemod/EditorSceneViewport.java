@@ -33,6 +33,8 @@ public class EditorSceneViewport
 
     private boolean worldAfterActorRendered;
     private boolean weatherRendered;
+    /** True when native Minecraft rendered this preview frame. */
+    private boolean nativeWorldRendered;
     /** Frame sampled by the actor before the final preview FBO overlay. */
     private int lastJoltOverlayFrame = -1;
     private double joltActorX, joltActorY, joltActorZ;
@@ -52,6 +54,7 @@ public class EditorSceneViewport
 
         this.worldAfterActorRendered = false;
         this.weatherRendered = false;
+        this.nativeWorldRendered = false;
 
         this.renderBackend =
                 new PreviewRenderBackend(
@@ -196,14 +199,12 @@ public class EditorSceneViewport
          * больше не выполняем.
          */
 
-        this.minecraftWorldPreview.draw(
-                mc,
-                this.camera,
-                this.x,
-                this.y,
-                this.width,
-                this.height
-        );
+        this.nativeWorldRendered=PreviewNativeWorldBridge.render(
+                mc,this.camera,this.renderBackend);
+        if(!this.nativeWorldRendered)
+            this.minecraftWorldPreview.draw(
+                    mc,this.camera,this.x,this.y,this.width,this.height
+            );
 
 
         /* Clouds render only after actors, translucent world and weather. */
@@ -400,7 +401,8 @@ public class EditorSceneViewport
             return;
         }
 
-        this.minecraftWorldPreview.drawAfterActor();
+        if(!this.nativeWorldRendered)
+            this.minecraftWorldPreview.drawAfterActor();
 
         this.worldAfterActorRendered = true;
     }
@@ -419,10 +421,10 @@ public class EditorSceneViewport
             return;
         }
 
-        this.weatherRenderer.render(
-                this.camera,
-                mc.getRenderPartialTicks()
-        );
+        if(!this.nativeWorldRendered)
+            this.weatherRenderer.render(
+                    this.camera,mc.getRenderPartialTicks()
+            );
 
         this.weatherRendered = true;
     }
@@ -430,7 +432,8 @@ public class EditorSceneViewport
 
     private void endWorldRender()
     {
-        this.minecraftWorldPreview.endRender();
+        if(!this.nativeWorldRendered)
+            this.minecraftWorldPreview.endRender();
     }
 
 
@@ -465,7 +468,8 @@ public class EditorSceneViewport
          * before actors left the cloud texture/state active at the start
          * of the multi-actor render sequence.
          */
-        this.minecraftWorldPreview.renderClouds();
+        if(!this.nativeWorldRendered)
+            this.minecraftWorldPreview.renderClouds();
 
         /*
          * =========================================================
