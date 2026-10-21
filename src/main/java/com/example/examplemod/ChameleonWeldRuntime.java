@@ -44,10 +44,11 @@ public final class ChameleonWeldRuntime
     /** Master A/B test switch, independent of each attachment's flag. */
     public static boolean isEnabled()
     {
-        String setting=System.getProperty("bbs.editor.weld.runtime");
-        if(setting==null)
-            setting=System.getProperty("bbs.editor.weld.preview","true");
-        return Boolean.parseBoolean(setting);
+        // Only a deliberate runtime override disables all welding. The
+        // old Gradle preview flag defaults false and must NOT suppress an
+        // attachment that the user explicitly enabled in the new UI.
+        return Boolean.parseBoolean(
+                System.getProperty("bbs.editor.weld.runtime","true"));
     }
 
     public static boolean isRendererHookInstalled()
