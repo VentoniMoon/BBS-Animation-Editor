@@ -74,6 +74,14 @@ public final class BodyPartJoltPreviewAdapter {
     private Method nativeDirections;
     private boolean nativeDirectionWarning;
     private boolean recreatedLastSample;
+    /** Read from the editor's playback state by its render owner. Keep
+     * this adapter independent of the GUI/actor state for JNI tests. */
+    private boolean timelinePlaying;
+
+    public void setTimelinePlaying(boolean playing)
+    {
+        this.timelinePlaying=playing;
+    }
 
     /** Data for a fully integrated native frame, never a guessed current
      * frame after direct scrubbing. Copied buffers keep snapshots immutable
@@ -445,7 +453,7 @@ public final class BodyPartJoltPreviewAdapter {
          * differences during walking must never reinitialize Jolt. */
         boolean changedStaticPose=RESEED_EDITED_POSE && state!=null &&
                 frame==state.frame &&
-                !BlockbusterPreviewAnimationState.isPlaying() &&
+                !this.timelinePlaying &&
                 JoltStaticPoseChange.significant(
                         state.lastParent,cleanParentWorld,
                         state.lastAdditionalBoxes,boxes);
