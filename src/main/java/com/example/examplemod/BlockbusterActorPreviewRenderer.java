@@ -1427,6 +1427,9 @@ public class BlockbusterActorPreviewRenderer
         try (ChameleonWeldPreviewPass weld=
                 this.bodyPartsPreviewRenderer.beginWeldPreview(actorPartialTicks))
         {
+            // Match OptiFine's RenderGlobal entity pass (entity ID/material
+            // uniforms), in addition to the correct world lightmap coords.
+            BbsFsOptiFineEntityStage.beforeEntity(entityActor);
             renderManager.renderEntity(
                     entityActor,
                     entityActor.posX,
