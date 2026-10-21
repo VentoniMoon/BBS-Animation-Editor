@@ -168,6 +168,7 @@ public final class BbsFsPreviewTarget
 
         int mode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
         int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        int activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
 
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
@@ -217,6 +218,7 @@ public final class BbsFsPreviewTarget
             GL11.glPopMatrix();
             GL11.glMatrixMode(mode);
             GL11.glPopAttrib();
+            GL13.glActiveTexture(activeTexture);
             GL20.glUseProgram(program);
         }
     }
