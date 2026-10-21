@@ -24,6 +24,8 @@ public final class BodyPartPhysicsBakeController
     private final TreeMap<Integer, Map<String,AnimationTransform>> frames =
             new TreeMap<Integer, Map<String,AnimationTransform>>();
     private String failure;
+    private int waitingFrame=Integer.MIN_VALUE;
+    private int waitTicks;
 
     public boolean isRecording() { return target!=null; }
     public int frameCount() { return frames.size(); }
@@ -40,6 +42,28 @@ public final class BodyPartPhysicsBakeController
     public int getLastRecordableFrame()
     {
         return target==null ? -1 : target.getEndFrame();
+    }
+
+    /**
+     * Return true if lockstep playback has stalled for ten seconds of
+     * Minecraft update ticks without a completed Jolt pose. Fail explicitly
+     * rather than leave the Timeline playing at the same frame forever.
+     */
+    public boolean hasTimedOutWaitingFor(int frame)
+    {
+        if(target==null)return false;
+        if(failure!=null)return true;
+        if(waitingFrame!=frame)
+        {
+            waitingFrame=frame;
+            waitTicks=0;
+        }
+        if(++waitTicks<200)return false;
+        failure="No completed Jolt pose for frame "+frame+
+                " after 10 seconds. Check preview visibility, physics "+
+                "chain settings and [Jolt] errors in latest.log.";
+        System.err.println("[BBS Editor][Bake] "+failure);
+        return true;
     }
 
     public String begin(BodyPartModelData model, int frame)
@@ -82,7 +106,7 @@ public final class BodyPartPhysicsBakeController
     public void capture(BodyPartModelData model,int frame,String boneName,
             float[] before,float[] after)
     {
-        if(target==null || target!=model || frame<requestedStart ||
+        if(target==null || failure!=null || target!=model || frame<requestedStart ||
                 frame>model.getEndFrame() || boneName==null ||
                 before==null || after==null ||
                 before.length!=3 || after.length!=3)
@@ -275,5 +299,7 @@ public final class BodyPartPhysicsBakeController
         frames.clear();
         failure=null;
         requestedStart=0;
+        waitingFrame=Integer.MIN_VALUE;
+        waitTicks=0;
     }
 }
