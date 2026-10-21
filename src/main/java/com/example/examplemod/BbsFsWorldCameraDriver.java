@@ -144,8 +144,21 @@ public final class BbsFsWorldCameraDriver
             if (source != null)
             {
                 BbsFsWorldFrameCapture.markNativeWorldRendered();
-                BbsFsWorldProjection.capture(source.framebufferWidth,
-                        source.framebufferHeight);
+
+                /*
+                 * OptiFine may render to its own internal framebuffer,
+                 * possibly at a different shader resolution than
+                 * Minecraft.framebufferMc. Capture the ACTUAL active world
+                 * viewport dimensions; the final composited frame will be
+                 * copied from Minecraft's resolved buffer later.
+                 */
+                java.nio.IntBuffer glViewport =
+                        org.lwjgl.BufferUtils.createIntBuffer(16);
+                org.lwjgl.opengl.GL11.glGetInteger(
+                        org.lwjgl.opengl.GL11.GL_VIEWPORT, glViewport);
+                int worldWidth = Math.max(1, glViewport.get(2));
+                int worldHeight = Math.max(1, glViewport.get(3));
+                BbsFsWorldProjection.capture(worldWidth, worldHeight);
 
                 /*
                  * Experimental next phase: recorded actors participate in
@@ -154,7 +167,8 @@ public final class BbsFsWorldCameraDriver
                  */
                 BbsFsNativeActorPass.render(mc,
                         (AnimationEditorScreen) mc.currentScreen,
-                        viewport, event.getPartialTicks());
+                        viewport, event.getPartialTicks(),
+                        worldWidth, worldHeight);
             }
         }
     }
