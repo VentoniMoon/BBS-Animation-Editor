@@ -30,6 +30,8 @@ public final class BbsFsWorldCameraDriver
     private Entity previousView;
     private World previousWorld;
     private int previousPerspective;
+    private boolean previousHideGUI;
+    private boolean hidHudThisFrame;
     private boolean registered;
     private boolean controlling;
     private PreviewCameraPose activePose;
@@ -63,6 +65,11 @@ public final class BbsFsWorldCameraDriver
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void renderTick(TickEvent.RenderTickEvent event)
     {
+        if (event.phase == TickEvent.Phase.END)
+        {
+            restoreHud();
+            return;
+        }
         if (event.phase != TickEvent.Phase.START) return;
 
         Minecraft mc = Minecraft.getMinecraft();
@@ -90,6 +97,19 @@ public final class BbsFsWorldCameraDriver
             previousWorld = mc.world;
             controlling = true;
         }
+
+        /*
+         * The normal Minecraft world frame is captured into the film
+         * texture. Its hotbar/crosshair/debug overlay must NOT end up in
+         * that texture. Suppress only the in-game HUD for this render tick;
+         * GuiScreen and its editor panels remain visible.
+         */
+        if (!hidHudThisFrame)
+        {
+            previousHideGUI = mc.gameSettings.hideGUI;
+            hidHudThisFrame = true;
+        }
+        mc.gameSettings.hideGUI = true;
 
         activePose = pose;
         mc.gameSettings.thirdPersonView = 0;
@@ -138,8 +158,17 @@ public final class BbsFsWorldCameraDriver
         }
     }
 
+    private void restoreHud()
+    {
+        if (!hidHudThisFrame) return;
+        Minecraft mc = Minecraft.getMinecraft();
+        mc.gameSettings.hideGUI = previousHideGUI;
+        hidHudThisFrame = false;
+    }
+
     private void release()
     {
+        restoreHud();
         if (!controlling) return;
 
         Minecraft mc = Minecraft.getMinecraft();
