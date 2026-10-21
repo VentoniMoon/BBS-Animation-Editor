@@ -45,6 +45,8 @@ on:
       - 'src/main/java/com/example/examplemod/JoltContactScreenProjection.java'
       - 'src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
+      - 'src/main/java/com/example/examplemod/PreviewCameraPose.java'
+      - 'src/main/java/com/example/examplemod/PreviewCameraProjection.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java'
       - 'build.gradle'
   workflow_dispatch:
@@ -337,6 +339,8 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonColliderCaptureSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltColliderMarkupSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltRenderInterpolationSmoke.java \
+            src/main/java/com/example/examplemod/PreviewCameraPose.java \
+            src/main/java/com/example/examplemod/PreviewCameraProjection.java \
             src/main/java/com/example/examplemod/EditorCamera.java \
             src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
@@ -482,6 +486,8 @@ jobs:
             jolt-java8-port/src/test/java/com/example/examplemod/JoltChameleonColliderCaptureSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltColliderMarkupSmoke.java \
             jolt-java8-port/src/test/java/com/example/examplemod/JoltRenderInterpolationSmoke.java \
+            src/main/java/com/example/examplemod/PreviewCameraPose.java \
+            src/main/java/com/example/examplemod/PreviewCameraProjection.java \
             src/main/java/com/example/examplemod/EditorCamera.java \
             src/main/java/com/example/examplemod/JoltContactOverlaySnapshot.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
