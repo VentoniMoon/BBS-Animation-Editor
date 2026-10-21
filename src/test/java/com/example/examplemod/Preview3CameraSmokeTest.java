@@ -55,6 +55,20 @@ public final class Preview3CameraSmokeTest
                 1,0,0,camera,100,200,800,450);
         near(legacy[0],rotated[0],0.001);
         near(legacy[1],rotated[1],0.001);
+        // An explicit GL View/Projection matrix is the canonical camera
+        // sample for future camera clips, stencil selection and render hooks.
+        PreviewCameraMatrices matrices=new PreviewCameraMatrices(
+                camera.sample(),800,450);
+        double[] ndc=matrices.projectNdc(1,0,0);
+        require(ndc!=null,"valid View/Projection matrix");
+        near(100+(ndc[0]+1D)*800D/2D,rotated[0],0.001);
+        near(200+(1D-ndc[1])*450D/2D,rotated[1],0.001);
+        // The world point exactly at the camera eye cannot project.
+        require(matrices.projectNdc(
+                camera.getCameraX(),camera.getCameraY(),
+                camera.getCameraZ())==null,
+                "eye position projection should be rejected");
+
 
         camera.setMode(EditorCamera.Mode.TRACK);
         PreviewCameraPose animated=new PreviewCameraPose(24,6,-13,170,30,45,
