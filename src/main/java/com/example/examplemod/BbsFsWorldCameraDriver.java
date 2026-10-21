@@ -74,6 +74,7 @@ public final class BbsFsWorldCameraDriver
         if (event.phase != TickEvent.Phase.START) return;
 
         BbsFsWorldProjection.beginFrame();
+        BbsFsNativeActorPass.beginFrame();
         Minecraft mc = Minecraft.getMinecraft();
         if (viewport == null || !(mc.currentScreen instanceof AnimationEditorScreen)
                 || mc.world == null || mc.player == null)
