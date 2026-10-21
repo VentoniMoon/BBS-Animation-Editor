@@ -16,8 +16,6 @@ public class EditorSceneViewport
     private int height;
 
     private final AnimationPreview animationPreview;
-    /** Created only if external legacy code explicitly requests it. */
-    private MinecraftWorldPreview minecraftWorldPreview;
     private boolean sceneAvailable;
     private final EditorCamera camera;
     private final BlockbusterActorPreviewRenderer actorPreviewRenderer;
@@ -286,15 +284,6 @@ public class EditorSceneViewport
         return this.animationPreview;
     }
 
-
-    /** Compatibility only. Preview FS never constructs or renders this. */
-    @Deprecated
-    public MinecraftWorldPreview getMinecraftWorldPreview()
-    {
-        if (this.minecraftWorldPreview == null)
-            this.minecraftWorldPreview = new MinecraftWorldPreview();
-        return this.minecraftWorldPreview;
-    }
 
 
     public void drawActor(
@@ -737,8 +726,6 @@ public class EditorSceneViewport
 
 
         this.sceneAvailable = true;
-        if (this.minecraftWorldPreview != null)
-            this.minecraftWorldPreview.setSceneAvailable(true);
 
 
         /*
@@ -768,8 +755,6 @@ public class EditorSceneViewport
 
 
         this.sceneAvailable = false;
-        if (this.minecraftWorldPreview != null)
-            this.minecraftWorldPreview.clearScene();
 
         this.camera.reset();
         this.focusOnCurrentPlayer();
