@@ -2962,6 +2962,13 @@ public class AnimationEditorScreen extends GuiScreen
         drawCenteredString(fontRenderer, "F", x + 13, y + 9 + 32,
                 previewAutoFocus.isEnabled()
                         ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+
+        // Preview 3.0: opt-in genuine Minecraft world pass. If it fails,
+        // automatic fallback disables the toggle for this session.
+        boolean nativeWorld=PreviewNativeWorldBridge.isRequested();
+        drawToolbarButton(x, y + 64, 26, 26, nativeWorld);
+        drawCenteredString(fontRenderer, "N", x + 13, y + 9 + 64,
+                nativeWorld ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
@@ -2979,6 +2986,13 @@ public class AnimationEditorScreen extends GuiScreen
             if (mouseY >= y + 32 && mouseY < y + 58)
             {
                 previewAutoFocus.toggle();
+                return true;
+            }
+            if (mouseY >= y + 64 && mouseY < y + 90)
+            {
+                BodyPartPhysicsBakeController bake=getPhysicsBakeController();
+                if(bake==null || !bake.isRecording())
+                    PreviewNativeWorldBridge.toggleRequested();
                 return true;
             }
         }
