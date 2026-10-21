@@ -95,6 +95,29 @@ public final class BbsFsPreviewTarget
             /* Temporary editor actors use Minecraft's fixed-function model
              * renderer. Avoid inheriting an OptiFine final shader program. */
             GL20.glUseProgram(0);
+
+            /*
+             * The framebuffer has full display size, but record actors and
+             * the gizmo must render into EXACTLY the film preview subrect.
+             * The native world has already been cropped into this region.
+             * Old PreviewShaderBridge set this viewport implicitly;
+             * without it actors receive the wrong projection and depth.
+             */
+            ScaledResolution sr = new ScaledResolution(mc);
+            int factor = Math.max(1, sr.getScaleFactor());
+            int vx = Math.max(0, x * factor);
+            int vy = Math.max(0, framebuffer.framebufferHeight -
+                    (y + height) * factor);
+            int vw = Math.min(width * factor,
+                    framebuffer.framebufferWidth - vx);
+            int vh = Math.min(height * factor,
+                    framebuffer.framebufferHeight - vy);
+            if (vw <= 0 || vh <= 0)
+                throw new IllegalArgumentException("Invalid film viewport");
+            GL11.glViewport(vx, vy, vw, vh);
+            GL11.glScissor(vx, vy, vw, vh);
+            GL11.glEnable(GL11.GL_SCISSOR_TEST);
+
             active = true;
             return true;
         }
