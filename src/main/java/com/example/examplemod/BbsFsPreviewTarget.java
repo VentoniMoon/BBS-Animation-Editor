@@ -33,6 +33,7 @@ public final class BbsFsPreviewTarget
     private int savedRead;
     private int savedDraw;
     private int savedProgram;
+    private int savedTextureUnit;
     private final IntBuffer savedViewport = BufferUtils.createIntBuffer(16);
     private int x, y, width, height;
 
@@ -68,6 +69,7 @@ public final class BbsFsPreviewTarget
         savedRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         savedDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         savedProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        savedTextureUnit = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         savedViewport.clear();
         GL11.glGetInteger(GL11.GL_VIEWPORT, savedViewport);
 
@@ -144,6 +146,7 @@ public final class BbsFsPreviewTarget
         GL11.glViewport(savedViewport.get(0), savedViewport.get(1),
                 savedViewport.get(2), savedViewport.get(3));
         GL11.glPopAttrib();
+        GL13.glActiveTexture(savedTextureUnit);
         GL20.glUseProgram(savedProgram);
     }
 
