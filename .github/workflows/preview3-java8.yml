@@ -11,6 +11,7 @@ on:
       - 'src/main/java/com/example/examplemod/PreviewSceneRenderCoordinator.java'
       - 'src/test/java/com/example/examplemod/Preview3*Test.java'
       - 'src/test/preview3-stubs/**'
+      - 'src/test/preview3-native-stubs/**'
       - '.github/workflows/preview3-java8.yml'
   pull_request:
     paths:
@@ -44,6 +45,24 @@ jobs:
             src/test/java/com/example/examplemod/Preview3CameraSmokeTest.java
           java -ea -cp build/preview3/camera \
             com.example.examplemod.Preview3CameraSmokeTest
+
+      - name: Compile native Minecraft world bridge with Java 8 API fixtures
+        run: |
+          mkdir -p build/preview3/native
+          javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/native \
+            src/test/preview3-native-stubs/net/minecraft/entity/Entity.java \
+            src/test/preview3-native-stubs/net/minecraft/client/shader/Framebuffer.java \
+            src/test/preview3-native-stubs/net/minecraft/client/Minecraft.java \
+            src/test/preview3-native-stubs/net/minecraftforge/common/MinecraftForge.java \
+            src/test/preview3-native-stubs/net/minecraftforge/client/event/EntityViewRenderEvent.java \
+            src/test/preview3-native-stubs/net/minecraftforge/fml/common/eventhandler/SubscribeEvent.java \
+            src/test/preview3-native-stubs/com/example/examplemod/PreviewNativeWorldStubs.java \
+            src/main/java/com/example/examplemod/PreviewCameraPose.java \
+            src/main/java/com/example/examplemod/EditorCamera.java \
+            src/main/java/com/example/examplemod/PreviewNativeWorldBridge.java \
+            src/test/java/com/example/examplemod/Preview3NativeWorldSmokeTest.java
+          java -ea -cp build/preview3/native \
+            com.example.examplemod.Preview3NativeWorldSmokeTest
 
       - name: Compile scene coordinator and test actor order / GL cleanup
         run: |
