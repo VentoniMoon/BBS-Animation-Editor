@@ -55,7 +55,12 @@ public final class Preview3FsNativeActorSmokeTest
         check(BbsFsNativeActorPass.didRenderThisFrame(),
                 "exception would replay potentially advanced Jolt state");
         check(screen.renders==3,"unexpected number of native actor invocations");
+        check(BbsFsWorldGlGuard.opened == BbsFsWorldGlGuard.closed,
+                "native actor exception leaked a GL guard");
+        check(BbsFsWorldGlGuard.opened == 3,
+                "unexpected number of native GL render passes");
 
-        System.out.println("Preview FS native actor ownership and exception cleanup PASS");
+        System.out.println("Preview FS native actor ownership, GL guard "
+                + "and exception cleanup PASS");
     }
 }
