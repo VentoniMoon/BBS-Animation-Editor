@@ -224,10 +224,25 @@ public final class BbsFsWorldFrameCapture
     {
         ready = false;
         nativeWorldSeen = false;
-        if (snapshot != null)
+        if (snapshot == null) return;
+
+        /* Deleting a Minecraft Framebuffer can rebind the default target.
+         * Never leave that change behind when the editor GUI is closed. */
+        int read = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int draw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        IntBuffer viewport = BufferUtils.createIntBuffer(16);
+        GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
+        try
         {
             snapshot.deleteFramebuffer();
+        }
+        finally
+        {
             snapshot = null;
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+            GL11.glViewport(viewport.get(0), viewport.get(1),
+                    viewport.get(2), viewport.get(3));
         }
     }
 
