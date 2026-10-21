@@ -93,6 +93,16 @@ public class BodyPartsPreviewRenderer
     {
         return bakeController;
     }
+
+    /**
+     * Optional render-only Chameleon Weld. Vertices are restored at the end
+     * of the actor pass, so bake/physics and exported .dat remain unchanged.
+     */
+    public ChameleonWeldPreviewPass beginWeldPreview(float partialTicks)
+    {
+        return ChameleonWeldPreviewPass.begin(
+                this.preparedMorphs.values(),partialTicks);
+    }
     private final Map<BodyPartModelData, Boolean> visualProbeReported =
             new IdentityHashMap<BodyPartModelData, Boolean>();
     /* Snapshot the clean Chameleon pose rotation before applying the probe.
