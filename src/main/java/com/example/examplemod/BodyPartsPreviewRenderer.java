@@ -2122,6 +2122,10 @@ public class BodyPartsPreviewRenderer
          * Do not leave body parts from a previous frame alive.
          */
         physicsFrames.beginFrame(frame);
+        // The Jolt bridge needs the current playback mode but should not
+        // depend on editor/GUI classes in its standalone Java 8 build.
+        joltPreview.setTimelinePlaying(
+                BlockbusterPreviewAnimationState.isPlaying());
         manager.parts.clear();
         this.preparedMorphs.clear();
         this.previewEulerDeltas.clear();
