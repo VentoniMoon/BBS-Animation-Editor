@@ -2286,6 +2286,11 @@ public class BodyPartsPreviewRenderer
             net.minecraft.nbt.NBTTagCompound tag =
                     new net.minecraft.nbt.NBTTagCompound();
             part.toNBT(tag);
+            // The morph's Chameleon NBT also carries this option via the
+            // native morph hook. Keep explicit attachment metadata for
+            // independent editor import and future versions.
+            if (isChameleon)
+                tag.setBoolean("BBSWeld", data.isWeldEnabled());
             result.appendTag(tag);
         }
 
