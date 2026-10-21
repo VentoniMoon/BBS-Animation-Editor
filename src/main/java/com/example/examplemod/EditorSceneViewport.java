@@ -255,6 +255,26 @@ public class EditorSceneViewport
         return this.camera;
     }
 
+    /** Camera-track playback must not move the actor or change Jolt time. */
+    public void setCameraMode(EditorCamera.Mode mode)
+    {
+        this.camera.setMode(mode);
+        if(mode==EditorCamera.Mode.TRACK)this.rotatingCamera=false;
+    }
+
+    public void applyCameraTrack(PreviewCameraPose pose)
+    {
+        if(pose==null)return;
+        this.camera.setMode(EditorCamera.Mode.TRACK);
+        this.rotatingCamera=false;
+        this.camera.apply(pose);
+    }
+
+    public void releaseCameraTrack()
+    {
+        this.camera.setMode(EditorCamera.Mode.ORBIT);
+    }
+
 
     public PreviewRenderBackend getRenderBackend()
     {
@@ -536,6 +556,7 @@ public class EditorSceneViewport
             int mouseY,
             int button)
     {
+        if(this.camera.getMode()==EditorCamera.Mode.TRACK)return false;
         if (!isInside(
                 mouseX,
                 mouseY))
@@ -615,6 +636,7 @@ public class EditorSceneViewport
             int mouseY,
             int amount)
     {
+        if(this.camera.getMode()==EditorCamera.Mode.TRACK)return false;
         if (!isInside(
                 mouseX,
                 mouseY))
@@ -646,6 +668,7 @@ public class EditorSceneViewport
     public void updateCameraMovement(
             Minecraft mc)
     {
+        if(this.camera.getMode()==EditorCamera.Mode.TRACK)return;
         if (mc == null)
         {
             return;
