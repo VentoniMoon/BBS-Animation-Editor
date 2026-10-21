@@ -75,6 +75,7 @@ public final class BbsFsWorldCameraDriver
         if (event.phase != TickEvent.Phase.START) return;
 
         BbsFsWorldProjection.beginFrame();
+        BbsFsWorldFrameCapture.beginNativeFrame();
         BbsFsNativeActorPass.beginFrame();
         Minecraft mc = Minecraft.getMinecraft();
         if (viewport == null || !(mc.currentScreen instanceof AnimationEditorScreen)
@@ -142,6 +143,7 @@ public final class BbsFsWorldCameraDriver
             net.minecraft.client.shader.Framebuffer source = mc.getFramebuffer();
             if (source != null)
             {
+                BbsFsWorldFrameCapture.markNativeWorldRendered();
                 BbsFsWorldProjection.capture(source.framebufferWidth,
                         source.framebufferHeight);
 
