@@ -93,7 +93,8 @@ public final class BbsFsWorldCameraDriver
             view = new PreviewCameraEntity(mc.world);
 
         view.updateCamera(pose.x, pose.y, pose.z,
-                pose.yaw + 180F, -pose.pitch);
+                BbsFsCameraConventions.entityYaw(pose.yaw),
+                BbsFsCameraConventions.entityPitch(pose.pitch));
 
         if (!controlling)
         {
@@ -178,7 +179,20 @@ public final class BbsFsWorldCameraDriver
     {
         if (controlling && activePose != null &&
                 Minecraft.getMinecraft().getRenderViewEntity() == view)
-            event.setRoll(-activePose.roll);
+        {
+            /*
+             * Set all three orientation axes explicitly, just as BBS FS
+             * ForgeCameraHandler does. The editor's yaw convention differs
+             * from Minecraft's entity rotation: the default native event
+             * yaw can otherwise mirror actors/gizmo relative to chunks.
+             */
+            event.setYaw(
+                    BbsFsCameraConventions.cameraSetupYaw(activePose.yaw));
+            event.setPitch(
+                    BbsFsCameraConventions.cameraSetupPitch(activePose.pitch));
+            event.setRoll(
+                    BbsFsCameraConventions.cameraSetupRoll(activePose.roll));
+        }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
