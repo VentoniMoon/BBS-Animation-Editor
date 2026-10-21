@@ -397,8 +397,55 @@ public final class BodyPartJoltPreviewAdapter {
         float[][] boxes=useAdditional?copyMatrices(attachedBoxes):null;
         float[][] shapes=useShapes?copyMatrices(attachedShapes):null;
         State state=scenes.get(id);
+
+        /*
+         * Skin-fitted collider dimensions fluctuate during walk cycles.
+         * Jolt's kinematic setters move existing shapes but cannot resize
+         * them without rebuilding the rig and losing hair inertia.
+         * For sequential ticks, keep the collider dimensions from the
+         * initial scene while following the skinned center/orientation.
+         * Genuine changes in count/type, settings or timeline position
+         * still follow the original recreation path.
+         */
+        if(state!=null && frame==state.frame+1)
+        {
+            if(useTorso && state.torsoEnabled)
+            {
+                JoltKinematicColliderSizing.Capsule stable=
+                        JoltKinematicColliderSizing.holdCapsule(
+                                torsoA,torsoB,torsoRadius,
+                                state.lastTorsoA,state.lastTorsoB,
+                                state.torsoRadius);
+                torsoA=stable.a;
+                torsoB=stable.b;
+                torsoRadius=stable.radius;
+            }
+            if(useCompound && state.compoundEnabled)
+            {
+                JoltKinematicColliderSizing.holdCompound(
+                        compoundA,compoundB,compoundR,
+                        state.lastMultiA,state.lastMultiB,state.lastMultiR);
+            }
+            if(useAdditional && state.typedShapes==useShapes)
+            {
+                if(useShapes)
+                {
+                    if(JoltKinematicColliderSizing.holdPrimitiveSizes(
+                            shapes,state.lastAdditionalShapes,11))
+                        JoltKinematicColliderSizing.holdPrimitiveSizes(
+                                boxes,state.lastAdditionalBoxes,10);
+                }
+                else
+                    JoltKinematicColliderSizing.holdPrimitiveSizes(
+                            boxes,state.lastAdditionalBoxes,10);
+            }
+        }
+
+        /* Paused-frame user edits may reseed, but transient render
+         * differences during walking must never reinitialize Jolt. */
         boolean changedStaticPose=RESEED_EDITED_POSE && state!=null &&
                 frame==state.frame &&
+                !BlockbusterPreviewAnimationState.isPlaying() &&
                 JoltStaticPoseChange.significant(
                         state.lastParent,cleanParentWorld,
                         state.lastAdditionalBoxes,boxes);
@@ -536,6 +583,27 @@ public final class BodyPartJoltPreviewAdapter {
         // Rebuilds for actual static key changes must be explicitly
         // invalidated by the editor, or reached via timeline seek.
         if(recreate) {
+            if(state!=null)
+            {
+                String reason;
+                if(changedStaticPose) reason="paused-pose-edit";
+                else if(frame<state.frame || frame>state.frame+1)
+                    reason="seek-or-skipped-frame";
+                else if(!Arrays.equals(state.bones,boneNames))
+                    reason="bone-topology";
+                else if(state.stiffness!=stiffness ||
+                        state.damping!=damping || state.gravity!=gravity)
+                    reason="physics-settings";
+                else if(state.torsoEnabled!=useTorso ||
+                        state.compoundEnabled!=useCompound ||
+                        state.typedShapes!=useShapes ||
+                        (useAdditional!=(state.lastAdditionalBoxes!=null)))
+                    reason="collider-mode-or-availability";
+                else reason="collision-topology-or-teleport";
+                System.out.println("[BBS Editor][Jolt][Recreate] "+id+
+                        " previousFrame="+state.frame+
+                        " frame="+frame+" reason="+reason);
+            }
             dispose(id);
             try {
                 Object instance=create.invoke(null,frame,cleanBoneWorld,
