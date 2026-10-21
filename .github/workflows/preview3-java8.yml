@@ -26,6 +26,7 @@ on:
       - 'src/test/preview3-stubs/**'
       - 'src/test/preview3-native-stubs/**'
       - 'src/test/preview3-fs-stubs/**'
+      - 'src/test/preview3-fs-bridge-stubs/**'
       - '.github/workflows/preview3-java8.yml'
   pull_request:
     paths:
@@ -49,6 +50,8 @@ on:
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
       - 'src/test/java/com/example/examplemod/Preview3*Test.java'
       - 'src/test/preview3-stubs/**'
+      - 'src/test/preview3-fs-stubs/**'
+      - 'src/test/preview3-fs-bridge-stubs/**'
   workflow_dispatch:
 
 jobs:
@@ -114,3 +117,25 @@ jobs:
             src/test/java/com/example/examplemod/Preview3FsNativeActorSmokeTest.java
           java -ea -cp build/preview3/fs-actors \
             com.example.examplemod.Preview3FsNativeActorSmokeTest
+
+      - name: Compile FS frame capture and verify native FBO/GL lifecycle
+        run: |
+          mkdir -p build/preview3/fs-render
+          javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/fs-render \
+            src/test/preview3-fs-bridge-stubs/org/lwjgl/BufferUtils.java \
+            src/test/preview3-fs-bridge-stubs/org/lwjgl/opengl/GL11.java \
+            src/test/preview3-fs-bridge-stubs/org/lwjgl/opengl/GL13.java \
+            src/test/preview3-fs-bridge-stubs/org/lwjgl/opengl/GL20.java \
+            src/test/preview3-fs-bridge-stubs/org/lwjgl/opengl/GL30.java \
+            src/test/preview3-fs-bridge-stubs/net/minecraft/client/Minecraft.java \
+            src/test/preview3-fs-bridge-stubs/net/minecraft/client/gui/ScaledResolution.java \
+            src/test/preview3-fs-bridge-stubs/net/minecraft/client/shader/Framebuffer.java \
+            src/test/preview3-fs-bridge-stubs/net/minecraft/client/renderer/entity/RenderManager.java \
+            src/test/preview3-fs-bridge-stubs/com/example/examplemod/BbsFsBridgeStubs.java \
+            src/main/java/com/example/examplemod/BbsFsPreviewTarget.java \
+            src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java \
+            src/main/java/com/example/examplemod/BbsFsWorldProjection.java \
+            src/main/java/com/example/examplemod/BbsFsWorldGlGuard.java \
+            src/test/java/com/example/examplemod/Preview3FsFramebufferSmokeTest.java
+          java -ea -cp build/preview3/fs-render \
+            com.example.examplemod.Preview3FsFramebufferSmokeTest
