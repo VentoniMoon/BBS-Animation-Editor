@@ -24,6 +24,12 @@ public final class Preview3NativeWorldSmokeTest
         editorCamera.setRoll(15F);
 
         require(PreviewNativeWorldBridge.isRequested(),"experiment opt-in ignored");
+        PreviewNativeWorldBridge.toggleRequested();
+        require(!PreviewNativeWorldBridge.isRequested(),"could not switch Native OFF");
+        require(!PreviewNativeWorldBridge.render(mc,editorCamera,backend),
+                "OFF path still re-rendered the world");
+        PreviewNativeWorldBridge.toggleRequested();
+        require(PreviewNativeWorldBridge.isRequested(),"could not switch Native ON");
         boolean drawn=PreviewNativeWorldBridge.render(mc,editorCamera,backend);
         require(drawn,"native renderer did not start");
         require(mc.entityRenderer.draws==1,"native world not rendered");
