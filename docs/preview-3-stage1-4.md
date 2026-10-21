@@ -34,8 +34,14 @@ export, Record or keyframe format is changed here.
 - The native path still needs a real OptiFine/shader-pack and viewport
   aspect/depth/GUI-region test. It must NOT be treated as feature-complete
   or enabled by default.
+- The editor's right-side Preview toolbar has **N**, a per-session Native
+  World A/B switch (ALL, F, then N). The switch is blocked while Jolt bake
+  is recording. Native auto-disables for the rest of the session if the
+  renderer raises an exception.
 
-For a dedicated developer test, add in **local** `build.gradle`, inside
+Use the **N** button in the editor for direct A/B comparison without
+changing Gradle. For an opt-in default at client startup, add in
+**local** `build.gradle`, inside
 `minecraft { runs { client { ... } } }`:
 
 ```groovy
