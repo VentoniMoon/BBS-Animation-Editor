@@ -202,7 +202,7 @@ public final class BbsFsWorldFrameCapture
 
             GL30.glBlitFramebuffer(sx0, sy0, sx1, sy1,
                     dx0, dy0, dx1, dy1,
-                    GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+                    GL11.GL_COLOR_BUFFER_BIT, GL11.GL_LINEAR);
 
             int error = GL11.glGetError();
             if (error != GL11.GL_NO_ERROR)
