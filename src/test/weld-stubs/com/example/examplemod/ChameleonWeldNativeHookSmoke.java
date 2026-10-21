@@ -26,6 +26,7 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
     public static final class Probe
     {
         static boolean throwOnDraw;
+        static boolean expectWeld=true;
         static int draws;
 
         public static void view(Object raw)
@@ -35,6 +36,15 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
             ModelBone child=parent.children.get(0);
             Vector3f a=parent.cubes.get(0).quads.get(0).vertices.get(0).position;
             Vector3f b=child.cubes.get(0).quads.get(0).vertices.get(0).position;
+
+            if(!expectWeld)
+            {
+                if(Math.abs(a.x-(-4.08F/16F))>1E-6F ||
+                        Math.abs(b.x-(-4.08F/16F))>1E-6F)
+                    throw new AssertionError("Non-hair model was unexpectedly welded");
+                draws++;
+                return;
+            }
 
             float angle=(float)Math.toRadians(child.current.rotation.z);
             float c=(float)Math.cos(angle),s=(float)Math.sin(angle);
@@ -174,8 +184,17 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
         near(oldChild.x,origCX);
         near(oldChild.y,origCY);
 
-        if(Probe.draws!=2)
-            throw new AssertionError("Expected two welded Chameleon renders");
-        System.out.println("Native Chameleon Weld hook: normal and failure paths PASS");
+        ClientProxy.chameleonModels.clear();
+        ClientProxy.chameleonModels.put("another model",
+                new ClientProxy.Wrapper(model));
+        Probe.throwOnDraw=false;
+        Probe.expectWeld=false;
+        render.invoke(null,model);
+        near(oldParent.x,origPX);
+        near(oldChild.x,origCX);
+
+        if(Probe.draws!=3)
+            throw new AssertionError("Expected 2 hair Weld draws and 1 excluded draw");
+        System.out.println("Native Chameleon Weld hook: seam, model filter and failure rollback PASS");
     }
 }
