@@ -22,7 +22,7 @@ public final class Preview3CameraSmokeTest
         camera.setTarget(0,0,0);
         camera.setDistance(8);
         PreviewCameraPose pose=camera.sample();
-        require(camera.getMode()==EditorCamera.Mode.ORBIT,"default navigation");
+        require(camera.getMode()==EditorCamera.Mode.FREE,"FREE must be default navigation");
         near(pose.fov,60,0.001);
         near(pose.roll,0,0.001);
 
@@ -110,8 +110,87 @@ public final class Preview3CameraSmokeTest
             near(BbsFsCameraConventions.cameraSetupRoll(angle),-angle,0.001);
         }
 
+        /*
+         * FREE RMB movement must change ONLY the look direction. Previously
+         * rotate() moved the eye around a virtual target in front of it.
+         */
         camera.reset();
-        require(camera.getMode()==EditorCamera.Mode.ORBIT,"reset navigation");
+        require(camera.getMode()==EditorCamera.Mode.FREE,"reset navigation");
+        PreviewCameraPose initialEye = camera.sample();
+        camera.rotate(53F, -20F);
+        PreviewCameraPose freeEye = camera.sample();
+        near(freeEye.x,initialEye.x,1e-8);
+        near(freeEye.y,initialEye.y,1e-8);
+        near(freeEye.z,initialEye.z,1e-8);
+        near(freeEye.yaw,initialEye.yaw+53F,1e-6);
+        near(freeEye.pitch,initialEye.pitch-20F,1e-6);
+
+        /* Switching navigation keeps eye and angles frozen. */
+        camera.setMode(EditorCamera.Mode.ORBIT);
+        PreviewCameraPose orbitBefore = camera.sample();
+        near(orbitBefore.x,freeEye.x,1e-8);
+        near(orbitBefore.y,freeEye.y,1e-8);
+        near(orbitBefore.z,freeEye.z,1e-8);
+        near(orbitBefore.yaw,freeEye.yaw,1e-6);
+        double pivotX=camera.getTargetX();
+        double pivotY=camera.getTargetY();
+        double pivotZ=camera.getTargetZ();
+        camera.rotate(32F,18F);
+        PreviewCameraPose orbitAfter=camera.sample();
+        near(camera.getTargetX(),pivotX,1e-8);
+        near(camera.getTargetY(),pivotY,1e-8);
+        near(camera.getTargetZ(),pivotZ,1e-8);
+        require(Math.abs(orbitAfter.x-orbitBefore.x)>0.1 ||
+                Math.abs(orbitAfter.z-orbitBefore.z)>0.1,
+                "ORBIT must move eye around pivot");
+        camera.setMode(EditorCamera.Mode.FREE);
+        PreviewCameraPose switchedEye=camera.sample();
+        near(switchedEye.x,orbitAfter.x,1e-8);
+        near(switchedEye.y,orbitAfter.y,1e-8);
+        near(switchedEye.z,orbitAfter.z,1e-8);
+        camera.rotate(-75F,40F);
+        PreviewCameraPose afterSwitch=camera.sample();
+        near(afterSwitch.x,switchedEye.x,1e-8);
+        near(afterSwitch.y,switchedEye.y,1e-8);
+        near(afterSwitch.z,switchedEye.z,1e-8);
+
+        /* FREE wheel dollies along gaze instead of changing orbit radius. */
+        camera.reset();
+        camera.rotate(0F,-15F);
+        PreviewCameraPose beforeDolly=camera.sample();
+        double storedDistance=camera.getDistance();
+        camera.zoom(-1.5D);
+        PreviewCameraPose afterDolly=camera.sample();
+        near(afterDolly.x,beforeDolly.x,1e-8);
+        near(afterDolly.y,beforeDolly.y,1e-8);
+        near(afterDolly.z,beforeDolly.z-1.5D,1e-8);
+        near(camera.getDistance(),storedDistance,1e-8);
+
+        /* ORBIT wheel must continue changing distance, not the target. */
+        camera.setMode(EditorCamera.Mode.ORBIT);
+        pivotX=camera.getTargetX();
+        pivotY=camera.getTargetY();
+        pivotZ=camera.getTargetZ();
+        camera.zoom(1.5D);
+        near(camera.getDistance(),storedDistance+1.5D,1e-8);
+        near(camera.getTargetX(),pivotX,1e-8);
+        near(camera.getTargetY(),pivotY,1e-8);
+        near(camera.getTargetZ(),pivotZ,1e-8);
+
+        camera.setMode(EditorCamera.Mode.TRACK);
+        camera.apply(animated);
+        camera.setMode(EditorCamera.Mode.FREE);
+        PreviewCameraPose trackToFree=camera.sample();
+        near(trackToFree.x,animated.x,1e-8);
+        near(trackToFree.y,animated.y,1e-8);
+        near(trackToFree.z,animated.z,1e-8);
+        camera.rotate(10F, -10F);
+        near(camera.getCameraX(),trackToFree.x,1e-8);
+        near(camera.getCameraY(),trackToFree.y,1e-8);
+        near(camera.getCameraZ(),trackToFree.z,1e-8);
+
+        camera.reset();
+        require(camera.getMode()==EditorCamera.Mode.FREE,"reset navigation");
         near(camera.getFov(),60,1e-5);
         near(camera.getRoll(),0,1e-5);
         System.out.println("Preview 3.0 camera, projection, Roll/FOV, track and ray PASS");
