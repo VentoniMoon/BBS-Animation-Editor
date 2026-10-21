@@ -53,7 +53,7 @@ public final class EditorPreviewAutoFocusController
         previousActor = actorId;
 
         if (!enabled || playing || viewport == null || !actor.hasRecord() ||
-                viewport.getCamera().getMode() == EditorCamera.Mode.TRACK)
+                viewport.getCamera().getMode() != EditorCamera.Mode.ORBIT)
         {
             return;
         }
