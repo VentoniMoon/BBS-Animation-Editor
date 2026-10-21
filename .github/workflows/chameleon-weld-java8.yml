@@ -5,12 +5,16 @@ on:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/ChameleonWeldGeometry.java'
+      - 'src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java'
       - 'src/test/java/com/example/examplemod/ChameleonWeldGeometrySmokeTest.java'
+      - 'src/test/weld-stubs/**'
       - '.github/workflows/chameleon-weld-java8.yml'
   pull_request:
     paths:
       - 'src/main/java/com/example/examplemod/ChameleonWeldGeometry.java'
+      - 'src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java'
       - 'src/test/java/com/example/examplemod/ChameleonWeldGeometrySmokeTest.java'
+      - 'src/test/weld-stubs/**'
       - '.github/workflows/chameleon-weld-java8.yml'
   workflow_dispatch:
 
@@ -33,3 +37,13 @@ jobs:
         run: |
           java -ea -cp build/weld-java8 \
             com.example.examplemod.ChameleonWeldGeometrySmokeTest
+      - name: Compile renderer integration against optional-model stubs
+        run: |
+          javac -source 8 -target 8 -encoding UTF-8 -d build/weld-java8 \
+            src/test/weld-stubs/javax/vecmath/Vector3f.java \
+            src/test/weld-stubs/mchorse/metamorph/api/morphs/AbstractMorph.java \
+            src/main/java/com/example/examplemod/ChameleonWeldGeometry.java \
+            src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java \
+            src/test/weld-stubs/com/example/examplemod/ChameleonWeldPreviewCompileSmoke.java
+          java -ea -cp build/weld-java8 \
+            com.example.examplemod.ChameleonWeldPreviewCompileSmoke
