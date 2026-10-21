@@ -23,3 +23,12 @@ class AnimationEditorScreen
         return shouldRender;
     }
 }
+
+/** Test-only GL guard: verifies close even on actor exception. */
+class BbsFsWorldGlGuard implements AutoCloseable
+{
+    static int opened;
+    static int closed;
+    BbsFsWorldGlGuard(net.minecraft.client.Minecraft mc){opened++;}
+    public void close(){closed++;}
+}
