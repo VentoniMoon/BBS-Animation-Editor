@@ -82,7 +82,44 @@ OptiFine and Jolt.
 - Native world's existing entities vs record-only preview actor duplicates
 - Lifecycle: ESC, re-enter, resize window, world change, return from child GUI
 
-Next architectural step after baseline rendering validation:
-migrate selected/other recorded actors into a native-world event/pass so their
-lighting and shader participation are identical to ordinary Minecraft entities.
-Do not attempt that by blindly calling `renderWorld` twice.
+## Additional migration implemented (opt-in, not yet visually validated)
+
+The selected and background Blockbuster/Emoticons/Chameleon record actors can
+now be rendered directly at the **native** `RenderWorldLastEvent` using
+`BbsFsNativeActorPass`, with the actual GL viewport dimensions (not the
+display GUI framebuffer size). This route calls the established Body Parts,
+Jolt and Weld renderer exactly once and prevents the later GUI compositor
+from replaying that actor/Jolt frame. An exception-safe
+`BbsFsWorldGlGuard` restores RenderManager viewer position, shader program,
+framebuffer bindings, viewport and matrix stack.
+
+This route is controlled by `-Dbbs.editor.preview3.nativeActors=true`
+(client JVM; also forwarded from `build.gradle` to the dev client).
+**Default remains OFF**: without this switch, the native Minecraft WORLD
+is still captured BBS FS-style, while editor actors temporarily use the
+working compositing path. Native actors must be visually checked against
+OptiFine and all morph types before making the switch permanent.
+
+`BbsFsWorldFrameCapture` also requires confirmation that Forge emitted a
+fresh native `RenderWorldLastEvent` in the current tick: skipped world frames
+can no longer accidentally capture yesterday's editor GUI. The toolbar
+indicator shows `FS` only for a successful native film texture transfer;
+`F!` means capture was not available.
+
+Java 8 CI has separate isolated smoke tests for the original scene
+coordinator and the new native actor single-frame ownership / GL guard
+cleanup. These are NOT substitutes for full Forge compilation or actual
+modpack, OptiFine and shader tests.
+
+## Remaining engineering work
+
+- Verify true native entity shader/lightmap lifecycle with enabled native
+  actor mode and progressively make it the only actor route.
+- Remove dead older renderer classes and stop using the lazy compatibility
+  methods only after build and visual checks demonstrate equivalent behavior.
+- Verify alpha, translucent world/depth, framebuffer formats, shaderpack
+  internal resolution, 4k HiDPI/resize and sky/weather.
+- Verify Jolt bake, Weld, Body Parts transforms, gizmo pivots, all model
+  types, multi-actor scenes, camera tracks and saved records.
+- Do **not** invoke Minecraft `renderWorld` twice or reintroduce split
+  sky/chunk/fog passes as a fallback.
