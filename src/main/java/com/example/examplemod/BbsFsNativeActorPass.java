@@ -65,12 +65,13 @@ public final class BbsFsNativeActorPass
 
         Framebuffer target = mc.getFramebuffer();
         if (target == null || target.framebufferWidth <= 0 ||
-                target.framebufferHeight <= 0) return;
+                target.framebufferHeight <= 0 ||
+                viewport.getWidth() <= 0 || viewport.getHeight() <= 0) return;
 
         rendering = true;
         try
         {
-            editor.renderActorsInNativeWorld();
+            if (!editor.renderActorsInNativeWorld()) return;
             renderedThisFrame = true;
             renderedSequence = frameSequence;
             if (!diagnosed)
