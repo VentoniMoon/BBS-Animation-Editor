@@ -24,6 +24,7 @@ on:
       - 'src/test/java/com/example/examplemod/Preview3*Test.java'
       - 'src/test/preview3-stubs/**'
       - 'src/test/preview3-fs-stubs/**'
+      - 'src/test/preview3-optifine-stubs/**'
       - 'src/test/preview3-fs-bridge-stubs/**'
       - '.github/workflows/preview3-java8.yml'
   pull_request:
@@ -48,6 +49,7 @@ on:
       - 'src/test/java/com/example/examplemod/Preview3*Test.java'
       - 'src/test/preview3-stubs/**'
       - 'src/test/preview3-fs-stubs/**'
+      - 'src/test/preview3-optifine-stubs/**'
       - 'src/test/preview3-fs-bridge-stubs/**'
   workflow_dispatch:
 
@@ -119,3 +121,14 @@ jobs:
             src/test/java/com/example/examplemod/Preview3FsFramebufferSmokeTest.java
           java -ea -cp build/preview3/fs-render \
             com.example.examplemod.Preview3FsFramebufferSmokeTest
+
+      - name: Compile and test OptiFine native entity shader state bridge
+        run: |
+          mkdir -p build/preview3/optifine
+          javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/optifine \
+            src/test/preview3-optifine-stubs/net/minecraft/entity/Entity.java \
+            src/test/preview3-optifine-stubs/net/optifine/shaders/Shaders.java \
+            src/main/java/com/example/examplemod/BbsFsOptiFineEntityStage.java \
+            src/test/java/com/example/examplemod/Preview3OptiFineEntityStageSmokeTest.java
+          java -ea -cp build/preview3/optifine \
+            com.example.examplemod.Preview3OptiFineEntityStageSmokeTest

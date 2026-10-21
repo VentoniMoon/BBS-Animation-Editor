@@ -4,6 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
+import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
@@ -172,6 +174,36 @@ public final class BbsFsWorldCameraDriver
                         worldWidth, worldHeight);
             }
         }
+    }
+
+    /**
+     * The detached editor camera sees the real Minecraft world, but the
+     * local player is not a scene actor and must not enter the film frame.
+     * RenderPlayerEvent.Pre is cancellable; do not mutate player invisibility
+     * or remove them from the world (both alter gameplay and recordings).
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void hideLocalPlayer(RenderPlayerEvent.Pre event)
+    {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (controlling && mc.currentScreen instanceof AnimationEditorScreen
+                && mc.getRenderViewEntity() == view
+                && event.getEntityPlayer() == mc.player)
+            event.setCanceled(true);
+    }
+
+    /**
+     * hideGUI is only a temporary rendering hint. Other mods/shaderpacks
+     * may draw their overlay while the world texture is being captured.
+     * Explicitly suppress the VANILLA crosshair during our editor render.
+     */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void hideVanillaCrosshair(RenderGameOverlayEvent.Pre event)
+    {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (controlling && mc.currentScreen instanceof AnimationEditorScreen
+                && event.getType() == RenderGameOverlayEvent.ElementType.CROSSHAIRS)
+            event.setCanceled(true);
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
