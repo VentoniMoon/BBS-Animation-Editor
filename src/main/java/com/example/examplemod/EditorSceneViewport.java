@@ -23,6 +23,8 @@ public class EditorSceneViewport
     private final BlockbusterActorPreviewRenderer actorPreviewRenderer;
     private final PreviewRenderBackend renderBackend;
 
+    /** True only if the native world frame was copied into this film FBO. */
+    private boolean capturedWorldFrame;
     private boolean rotatingCamera;
 
     private int lastMouseX;
@@ -155,7 +157,7 @@ public class EditorSceneViewport
         if (!this.renderBackend.isPreviewRenderActive()) return;
 
         BbsFsWorldCameraDriver.attach(this);
-        BbsFsWorldFrameCapture.copyWorld(
+        this.capturedWorldFrame = BbsFsWorldFrameCapture.copyWorld(
                 mc, this.renderBackend, this.x, this.y,
                 this.width, this.height);
     }
@@ -229,6 +231,11 @@ public class EditorSceneViewport
     public PreviewRenderBackend getRenderBackend()
     {
         return this.renderBackend;
+    }
+
+    public boolean hasCapturedNativeWorldFrame()
+    {
+        return this.capturedWorldFrame;
     }
 
 
