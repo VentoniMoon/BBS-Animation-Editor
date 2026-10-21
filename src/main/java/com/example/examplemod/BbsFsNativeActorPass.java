@@ -12,9 +12,9 @@ import net.minecraft.client.shader.Framebuffer;
  * Body Parts, Jolt and Weld pipelines are invoked exactly once from Forge's
  * RenderWorldLastEvent, instead of a second GUI compositing pass.
  *
- * Disabled until actual 1.12.2 OptiFine + Blockbuster visual validation:
- * pass -Dbbs.editor.preview3.nativeActors=true to the CLIENT JVM. The
- * fallback is only for EDITOR ACTORS, not for the old world renderer.
+ * This is the sole recorded-actor rendering path. On missing world frames
+ * actors remain absent and diagnostics report the problem; no legacy
+ * GUI-world render or duplicated physics pass is used as fallback.
  */
 public final class BbsFsNativeActorPass
 {
@@ -46,11 +46,6 @@ public final class BbsFsNativeActorPass
     {
         return renderedThisFrame &&
                 renderedSequence == frameSequence;
-    }
-
-    public static boolean isRequested()
-    {
-        return true;
     }
 
     /** Actual GL viewport from RenderWorldLast, not Minecraft's GUI FBO. */
