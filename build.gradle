@@ -38,6 +38,11 @@ minecraft {
             property 'bbs.editor.weld.preview',
                     System.getProperty('bbs.editor.weld.preview', 'false')
 
+            // Only actor placement in the native world pass is experimental.
+            // BBS FS-style world capture itself is always used on this branch.
+            property 'bbs.editor.preview3.nativeActors',
+                    System.getProperty('bbs.editor.preview3.nativeActors', 'false')
+
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
         }
