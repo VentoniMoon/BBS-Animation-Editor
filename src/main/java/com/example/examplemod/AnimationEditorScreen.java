@@ -2792,7 +2792,8 @@ public class AnimationEditorScreen extends GuiScreen
                 previewHeight
         );
 
-        if (this.playbackController.isPlaying())
+        if (this.playbackController.isPlaying() &&
+                !BbsFsNativeActorPass.didRenderThisFrame())
         {
             applyAdapters(
                     this.playbackController
