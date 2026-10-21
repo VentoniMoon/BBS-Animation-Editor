@@ -24,6 +24,7 @@ public final class BbsFsNativeActorPass
     private static boolean renderedThisFrame;
     private static int frameSequence;
     private static int renderedSequence = -1;
+    private static int nativeViewportWidth, nativeViewportHeight;
     private static boolean diagnosed;
 
     private BbsFsNativeActorPass() {}
@@ -50,13 +51,25 @@ public final class BbsFsNativeActorPass
         return REQUESTED;
     }
 
+    /** Actual GL viewport from RenderWorldLast, not Minecraft's GUI FBO. */
+    public static int worldViewportWidth()
+    {
+        return nativeViewportWidth;
+    }
+
+    public static int worldViewportHeight()
+    {
+        return nativeViewportHeight;
+    }
+
     /**
      * Called only by the camera driver's native RenderWorldLastEvent.
      * Preserve actor simulation ownership: the GUI-side coordinator skips
      * both selected/background actors if this pass completed successfully.
      */
     public static void render(Minecraft mc, AnimationEditorScreen editor,
-            EditorSceneViewport viewport, float partialTicks)
+            EditorSceneViewport viewport, float partialTicks,
+            int worldWidth, int worldHeight)
     {
         if (!REQUESTED || rendering || renderedThisFrame ||
                 mc == null || editor == null || viewport == null ||
@@ -66,8 +79,11 @@ public final class BbsFsNativeActorPass
         Framebuffer target = mc.getFramebuffer();
         if (target == null || target.framebufferWidth <= 0 ||
                 target.framebufferHeight <= 0 ||
-                viewport.getWidth() <= 0 || viewport.getHeight() <= 0) return;
+                viewport.getWidth() <= 0 || viewport.getHeight() <= 0 ||
+                worldWidth <= 0 || worldHeight <= 0) return;
 
+        nativeViewportWidth = worldWidth;
+        nativeViewportHeight = worldHeight;
         rendering = true;
         try (BbsFsWorldGlGuard ignored = new BbsFsWorldGlGuard(mc))
         {
@@ -94,6 +110,7 @@ public final class BbsFsNativeActorPass
         finally
         {
             rendering = false;
+            nativeViewportWidth = nativeViewportHeight = 0;
         }
     }
 }
