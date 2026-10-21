@@ -21,6 +21,7 @@ public final class BbsFsOptiFineEntityStage implements AutoCloseable
 {
     private static boolean initialized;
     private static boolean unavailableReported;
+    private static boolean entityStageActive;
     private static Class<?> shadersClass;
     private static Field renderingWorld;
     private static Field activeProgram;
@@ -78,6 +79,7 @@ public final class BbsFsOptiFineEntityStage implements AutoCloseable
 
             Object previous = activeProgram.get(null);
             beginEntities.invoke(null);
+            entityStageActive = true;
             return new BbsFsOptiFineEntityStage(previous, true);
         }
         catch (Exception error)
@@ -90,7 +92,7 @@ public final class BbsFsOptiFineEntityStage implements AutoCloseable
 
     public static void beforeEntity(Entity actor)
     {
-        if (shadersClass == null || actor == null) return;
+        if (!entityStageActive || shadersClass == null || actor == null) return;
         try
         {
             if (renderingWorld.getBoolean(null))
@@ -118,6 +120,7 @@ public final class BbsFsOptiFineEntityStage implements AutoCloseable
         }
         finally
         {
+            entityStageActive = false;
             if (previousProgram != null)
             {
                 try
