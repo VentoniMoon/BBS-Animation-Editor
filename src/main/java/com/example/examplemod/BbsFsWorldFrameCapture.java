@@ -57,6 +57,12 @@ public final class BbsFsWorldFrameCapture
         java.nio.IntBuffer viewport = org.lwjgl.BufferUtils.createIntBuffer(16);
         GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
 
+        /*
+         * Vanilla Framebuffer constructors/resize modify texture binding,
+         * depth mask, clear color and possibly blend/cull state. Do not leak
+         * any of that into the GUI when the snapshot is first allocated.
+         */
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         try
         {
             if (snapshot == null)
@@ -79,6 +85,7 @@ public final class BbsFsWorldFrameCapture
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
             GL11.glViewport(viewport.get(0), viewport.get(1),
                     viewport.get(2), viewport.get(3));
+            GL11.glPopAttrib();
         }
     }
 
