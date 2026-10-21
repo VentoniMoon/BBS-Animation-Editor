@@ -2,20 +2,31 @@ package com.example.examplemod;
 
 import java.lang.reflect.Field;
 import java.util.ArrayDeque;
-import java.util.Map;
+import java.util.IdentityHashMap;
+
+import net.minecraft.nbt.NBTTagCompound;
 
 /**
- * Called from the REAL ChameleonRenderer.render(Model) after ChameleonMorph
- * has already resolved the Blockbuster pose. Works in the editor Preview and
- * in regular world / Blockbuster record playback, including nested BodyParts.
- *
- * Welding is restricted by the Chameleon model registry key, never applied to
- * arbitrary actors. All modified shared ModelVertex positions are rolled back
- * immediately after the corresponding native render, even on exception.
+ * Per-instance Weld attached to ChameleonMorph, NOT a model registry key.
+ * The transformer adds a boolean field to each morph and propagates it via
+ * the normal Chameleon NBT / copy / merge operations, including exported
+ * Blockbuster Body Parts and one-tick baked pose snapshots.
  */
 public final class ChameleonWeldRuntime
 {
-    private static final ThreadLocal<ArrayDeque<ChameleonWeldPreviewPass>> SCOPES =
+    public static final String NBT_KEY="BBSWeld";
+
+    private static final ThreadLocal<ArrayDeque<Object>> ACTIVE_MORPHS=
+            new ThreadLocal<ArrayDeque<Object>>()
+            {
+                @Override
+                protected ArrayDeque<Object> initialValue()
+                {
+                    return new ArrayDeque<Object>();
+                }
+            };
+
+    private static final ThreadLocal<ArrayDeque<ChameleonWeldPreviewPass>> SCOPES=
             new ThreadLocal<ArrayDeque<ChameleonWeldPreviewPass>>()
             {
                 @Override
@@ -30,12 +41,7 @@ public final class ChameleonWeldRuntime
 
     private ChameleonWeldRuntime() {}
 
-    /**
-     * ForgeGradle already passes bbs.editor.weld.preview to the game JVM.
-     * Respect that existing A/B switch unless a dedicated runtime override
-     * exists. In a packaged mod without a launch flag, enable hair-only
-     * welding by default so Blockbuster record playback looks like Preview.
-     */
+    /** Master A/B test switch, independent of each attachment's flag. */
     public static boolean isEnabled()
     {
         String setting=System.getProperty("bbs.editor.weld.runtime");
@@ -44,29 +50,53 @@ public final class ChameleonWeldRuntime
         return Boolean.parseBoolean(setting);
     }
 
-    /** Whether ChameleonRenderer.render has been instrumented successfully. */
     public static boolean isRendererHookInstalled()
     {
-        return ChameleonWeldRendererTransformer.isPatched();
+        return ChameleonWeldRendererTransformer.isPatched() &&
+                ChameleonWeldMorphTransformer.isPatched();
     }
 
     /**
-     * Class transformer emits one begin/end pair around each original render.
-     * Must not throw, since a failure must not prevent the actor from drawing.
+     * The native ChameleonMorph.renderModel wrapper pushes its exact instance.
+     * The native ChameleonRenderer.render(Model) wrapper reads the top frame;
+     * different instances of the same model can have different Weld choices.
+     */
+    public static void enterMorph(Object morph)
+    {
+        if(morph!=null)ACTIVE_MORPHS.get().push(morph);
+    }
+
+    public static void exitMorph()
+    {
+        ArrayDeque<Object> stack=ACTIVE_MORPHS.get();
+        if(!stack.isEmpty())stack.pop();
+        if(stack.isEmpty())ACTIVE_MORPHS.remove();
+    }
+
+    private static boolean currentMorphWeld()
+    {
+        ArrayDeque<Object> stack=ACTIVE_MORPHS.get();
+        return !stack.isEmpty() && isMorphWeldEnabled(stack.peek());
+    }
+
+    /**
+     * Called from the temporary renderer wrapper. Always returns normally to
+     * Chameleon, even if a morph/model does not support Weld.
      */
     public static void begin(Object model)
     {
-        ChameleonWeldPreviewPass scope = ChameleonWeldPreviewPass.beginPreparedModel(null);
+        ChameleonWeldPreviewPass scope=
+                ChameleonWeldPreviewPass.beginPreparedModel(null);
         try
         {
-            if(isEnabled() && isSelectedModel(model))
+            if(isEnabled() && currentMorphWeld())
             {
                 scope=ChameleonWeldPreviewPass.beginPreparedModel(model);
                 if(!reportedSuccess && scope.getSeamCount()>0)
                 {
                     reportedSuccess=true;
-                    System.out.println("[BBS Editor][Weld][Runtime] Native Chameleon render: "+
-                            scope.getSeamCount()+" matching joints; model=hair body");
+                    System.out.println("[BBS Editor][Weld][Runtime] Per-morph Weld active: "+
+                            scope.getSeamCount()+" matching joints");
                 }
             }
         }
@@ -78,7 +108,8 @@ public final class ChameleonWeldRuntime
             {
                 reportedFailure=true;
                 System.err.println("[BBS Editor][Weld][Runtime] Weld skipped: "+
-                        problem.getClass().getSimpleName()+": "+problem.getMessage());
+                        problem.getClass().getSimpleName()+": "+
+                        problem.getMessage());
             }
         }
         SCOPES.get().push(scope);
@@ -87,38 +118,61 @@ public final class ChameleonWeldRuntime
     public static void end()
     {
         ArrayDeque<ChameleonWeldPreviewPass> scopes=SCOPES.get();
-        if(!scopes.isEmpty())
-            scopes.pop().close();
-        if(scopes.isEmpty())
-            SCOPES.remove();
+        if(!scopes.isEmpty())scopes.pop().close();
+        if(scopes.isEmpty())SCOPES.remove();
     }
 
     /**
-     * Resolve model identity through Chameleon's cache: Model.id in geo.json
-     * is often a generic string like geometry.steve, not the morph's name.
+     * A field is injected into the ChameleonMorph class rather than using a
+     * global model-name table. Java reflection keeps Chameleon optional.
      */
-    @SuppressWarnings("unchecked")
-    private static boolean isSelectedModel(Object model)throws Exception
+    public static void setMorphWeld(Object morph,boolean enabled)
     {
-        if(model==null)return false;
-        Class<?> clientProxy=Class.forName("mchorse.chameleon.ClientProxy");
-        Field modelsField=clientProxy.getField("chameleonModels");
-        Object cache=modelsField.get(null);
-        if(!(cache instanceof Map))return false;
-        String names=System.getProperty("bbs.editor.weld.models","hair body");
-        for(Map.Entry<?,?> entry:((Map<?,?>)cache).entrySet())
+        if(morph==null)return;
+        try
         {
-            Object wrapped=entry.getValue();
-            if(wrapped==null || wrapped.getClass().getField("model").get(wrapped)!=model)
-                continue;
-            String key=String.valueOf(entry.getKey());
-            for(String selected:names.split(";"))
-            {
-                if(key.equalsIgnoreCase(selected.trim()))
-                    return true;
-            }
+            Field field=morph.getClass().getField("bbs$weld");
+            field.setBoolean(morph,enabled);
+        }
+        catch(ReflectiveOperationException missing)
+        {
+            // No Chameleon injection: never activate broad/global Weld.
+        }
+    }
+
+    public static boolean isMorphWeldEnabled(Object morph)
+    {
+        if(morph==null)return false;
+        try
+        {
+            return morph.getClass().getField("bbs$weld").getBoolean(morph);
+        }
+        catch(ReflectiveOperationException missing)
+        {
             return false;
         }
-        return false;
+    }
+
+    /** Persist in the morph's own NBT so exported .dat keeps this setting. */
+    public static void writeMorph(Object morph,NBTTagCompound tag)
+    {
+        if(isMorphWeldEnabled(morph))tag.setBoolean(NBT_KEY,true);
+        else tag.removeTag(NBT_KEY);
+    }
+
+    /** Missing metadata is unambiguously OFF (no implicit hair default). */
+    public static void readMorph(Object morph,NBTTagCompound tag)
+    {
+        setMorphWeld(morph,tag != null && tag.getBoolean(NBT_KEY));
+    }
+
+    public static void copyMorph(Object target,Object source)
+    {
+        setMorphWeld(target,isMorphWeldEnabled(source));
+    }
+
+    public static void mergeMorph(Object target,Object source,boolean accepted)
+    {
+        if(accepted)copyMorph(target,source);
     }
 }
