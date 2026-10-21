@@ -13,7 +13,8 @@ public class EditorCamera
 
     /** Interactive navigation or externally sampled cinematic camera. */
     public enum Mode { ORBIT, FREE, TRACK }
-    private Mode mode=Mode.ORBIT;
+    /* First-person free look is the default editor navigation. */
+    private Mode mode=Mode.FREE;
     private float roll=0F;
     private float fov=60F;
     private float nearPlane=0.05F;
@@ -54,13 +55,20 @@ public class EditorCamera
         this.fov=60F;
         this.nearPlane=0.05F;
         this.farPlane=512F;
-        this.mode=Mode.ORBIT;
+        this.mode=Mode.FREE;
     }
 
-    /** Changing navigation mode never moves or rotates the camera. */
+    /**
+     * Switch navigation without changing the world-space eye or any angle.
+     *
+     * The anchor is always stored at the current orbit distance in front
+     * of the eye. In ORBIT it is the pivot; in FREE it is only a convenient
+     * virtual anchor, so switching back can orbit around the current view.
+     * TRACK continues to own the eye directly through apply().
+     */
     public void setMode(Mode mode)
     {
-        if(mode!=null)this.mode=mode;
+        if (mode != null) this.mode = mode;
     }
 
     public Mode getMode() { return mode; }
@@ -155,17 +163,30 @@ public class EditorCamera
             float deltaYaw,
             float deltaPitch)
     {
-        this.yaw += deltaYaw;
-        this.pitch += deltaPitch;
+        if (!Float.isFinite(deltaYaw) || !Float.isFinite(deltaPitch))
+            return;
 
-        this.pitch =
-                Math.max(
-                        MIN_PITCH,
-                        Math.min(
-                                MAX_PITCH,
-                                this.pitch
-                        )
-                );
+        /*
+         * FREE: look around the camera's OWN optical center. The target
+         * must move as angles change, otherwise getCameraX/Y/Z() would
+         * orbit the eye around an invisible point in front of it.
+         *
+         * ORBIT: leave the target untouched, moving the eye around it.
+         */
+        double eyeX = this.getCameraX();
+        double eyeY = this.getCameraY();
+        double eyeZ = this.getCameraZ();
+
+        this.yaw += deltaYaw;
+        this.pitch = Math.max(MIN_PITCH, Math.min(MAX_PITCH,
+                this.pitch + deltaPitch));
+
+        if (this.mode == Mode.FREE)
+        {
+            this.targetX += eyeX - this.getCameraX();
+            this.targetY += eyeY - this.getCameraY();
+            this.targetZ += eyeZ - this.getCameraZ();
+        }
     }
 
     /*
@@ -177,16 +198,21 @@ public class EditorCamera
     public void zoom(
             double amount)
     {
-        this.distance += amount;
+        if (!Double.isFinite(amount)) return;
 
-        this.distance =
-                Math.max(
-                        MIN_DISTANCE,
-                        Math.min(
-                                MAX_DISTANCE,
-                                this.distance
-                        )
-                );
+        if (this.mode == Mode.FREE)
+        {
+            /*
+             * In FREE the wheel dollies the camera along its current look
+             * direction, not towards/away from an invisible orbit pivot.
+             * Negative amount = forward (same convention as orbit zoom).
+             */
+            this.moveForward(-amount);
+            return;
+        }
+
+        this.distance = Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE,
+                this.distance + amount));
     }
 
     public void setDistance(
