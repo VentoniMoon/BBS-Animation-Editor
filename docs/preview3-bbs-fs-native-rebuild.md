@@ -75,8 +75,9 @@ editor with `./gradlew -PciDependencies compileJava`, Java 8, Minecraft
 
 `-PciDependencies` resolves the exact public Curse Maven releases used
 locally: Blockbuster 2.7.1 (5492194), McLib 2.4.3 (5440933), and Emoticons
-1.1.2 (4528666). Metamorph 1.4 and Aperture 1.8.2 continue to come from
-the existing project's `libs/`. Without that CI flag, local
+1.1.2 (4528666), Metamorph 1.4 (5440927) and Aperture 1.8.2
+(5440944). Using their published Curse Maven releases avoids Git LFS
+pointer files in GitHub Actions. Without that CI flag, local
 `run/mods` paths work exactly as before.
 
 A successful `compileJava` verifies source/API compatibility but does
