@@ -26,8 +26,6 @@ import mchorse.metamorph.api.morphs.AbstractMorph;
  */
 public final class ChameleonWeldPreviewPass implements AutoCloseable
 {
-    private static final boolean REQUESTED=
-            Boolean.getBoolean("bbs.editor.weld.preview");
     private static final float FACE_EPS=1E-5F;
     private static final float MAX_REST_GAP=0.003F;
     private static boolean reportedFailure;
@@ -69,7 +67,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             Iterable<? extends AbstractMorph> childMorphs,float partialTicks)
     {
         ChameleonWeldPreviewPass pass=new ChameleonWeldPreviewPass();
-        if(!REQUESTED || childMorphs==null)return pass;
+        if(!ChameleonWeldRuntime.isEnabled() || childMorphs==null)return pass;
         try
         {
             for(AbstractMorph morph:childMorphs)
