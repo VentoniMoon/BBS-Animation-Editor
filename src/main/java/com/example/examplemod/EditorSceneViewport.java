@@ -118,7 +118,10 @@ public class EditorSceneViewport
             int currentFrame)
     {
         this.lastJoltOverlayFrame = currentFrame;
-        this.hasJoltActorOrigin = false;
+        /* Native actors were already rendered in RenderWorldLastEvent.
+         * Their Jolt origin must survive until the GUI overlay is drawn. */
+        if (!BbsFsNativeActorPass.didRenderThisFrame())
+            this.hasJoltActorOrigin = false;
         if (mc == null)
         {
             return;
@@ -285,6 +288,14 @@ public class EditorSceneViewport
     }
 
 
+
+    public void beginNativeActorFrame()
+    {
+        /* Called BEFORE RenderWorldLastEvent's selected actor draw, not by
+         * the later GUI compositing pass. Avoid showing previous actor
+         * collision overlays when the current scene has no selected actor. */
+        this.hasJoltActorOrigin = false;
+    }
 
     public void drawActor(
             Minecraft mc,
