@@ -3562,7 +3562,35 @@ public class AnimationEditorScreen extends GuiScreen
 
         super.updateScreen();
 
-        this.timeline.update();
+        /*
+         * Normal timeline playback follows Minecraft's 20 TPS. During a
+         * Jolt key bake, however, the native pose is captured by Preview
+         * rendering (which may run slower than 20 FPS). Never skip an
+         * uncaptured physics tick. Wait until the selected Body Part has
+         * supplied that tick's completed Jolt pose, then advance exactly
+         * one tick. This also prevents a bake silently wrapping to frame 0.
+         *
+         * Non-bake playback is completely unchanged.
+         */
+        boolean advanceTimeline=true;
+        if(this.timeline.isPlaying())
+        {
+            BodyPartPhysicsBakeController bake=getPhysicsBakeController();
+            if(bake!=null && bake.isRecording())
+            {
+                int frame=this.timeline.getTick();
+                if(!bake.hasCapturedFrame(frame))
+                    advanceTimeline=false;
+                else if(frame>=Math.min(this.timeline.getLastTick(),
+                        bake.getLastRecordableFrame()))
+                {
+                    this.timeline.pause();
+                    advanceTimeline=false;
+                }
+            }
+        }
+        if(advanceTimeline)
+            this.timeline.update();
         this.playbackController.update();
         this.wavWaveform.sync(this.wavAudio.getLoadedFile());
         this.wavAudio.update(
