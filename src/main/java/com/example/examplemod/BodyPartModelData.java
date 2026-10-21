@@ -21,6 +21,19 @@ public class BodyPartModelData
     /** Optional non-Blockbuster morph used by Chameleon and other Metamorph add-ons. */
     private AbstractMorph baseMorph;
 
+    /** Per-attachment geometry Weld. Explicit opt-in, separate from Jolt. */
+    private boolean weldEnabled;
+
+    public boolean isWeldEnabled()
+    {
+        return weldEnabled;
+    }
+
+    public void setWeldEnabled(boolean enabled)
+    {
+        this.weldEnabled=enabled;
+    }
+
     /** Experimental per-bone chain settings; keyed by stable model bone name. */
     private final java.util.Map<String, BodyPartPhysicsSettings> physicsSettings =
             new java.util.LinkedHashMap<String, BodyPartPhysicsSettings>();
