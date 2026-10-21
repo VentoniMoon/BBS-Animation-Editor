@@ -225,7 +225,12 @@ public class EditorSceneViewport
 
     public void releaseCameraTrack()
     {
-        this.camera.setMode(EditorCamera.Mode.ORBIT);
+        /*
+         * Return from a played cinematic camera to first-person navigation
+         * at the exact sampled world position, without jumping back to the
+         * orbit target or changing the camera angles.
+         */
+        this.camera.setMode(EditorCamera.Mode.FREE);
     }
 
 
