@@ -7,6 +7,7 @@ on:
       - 'src/main/java/com/example/examplemod/EditorCamera.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraPose.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraProjection.java'
+      - 'src/main/java/com/example/examplemod/PreviewCameraMatrices.java'
       - 'src/main/java/com/example/examplemod/JoltContactScreenProjection.java'
       - 'src/main/java/com/example/examplemod/PreviewSceneRenderCoordinator.java'
       - 'src/main/java/com/example/examplemod/PreviewNativeWorldBridge.java'
@@ -25,6 +26,7 @@ on:
       - 'src/main/java/com/example/examplemod/EditorCamera.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraPose.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraProjection.java'
+      - 'src/main/java/com/example/examplemod/PreviewCameraMatrices.java'
       - 'src/main/java/com/example/examplemod/JoltContactScreenProjection.java'
       - 'src/main/java/com/example/examplemod/PreviewSceneRenderCoordinator.java'
       - 'src/main/java/com/example/examplemod/PreviewNativeWorldBridge.java'
@@ -55,6 +57,7 @@ jobs:
             src/main/java/com/example/examplemod/EditorCamera.java \
             src/main/java/com/example/examplemod/PreviewCameraPose.java \
             src/main/java/com/example/examplemod/PreviewCameraProjection.java \
+            src/main/java/com/example/examplemod/PreviewCameraMatrices.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
             src/test/java/com/example/examplemod/Preview3CameraSmokeTest.java
           java -ea -cp build/preview3/camera \
