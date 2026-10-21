@@ -649,11 +649,9 @@ public class PreviewWorldRenderer
                 (float) width /
                         (float) height;
 
-        this.renderFov =
-                60.0F;
-
-        this.renderNearPlane =
-                0.05F;
+        // Camera optics are scene data, not hard-coded Preview constants.
+        this.renderFov = camera.getFov();
+        this.renderNearPlane = camera.getNearPlane();
 
         this.renderTerrainFarPlane =
                 Math.max(
@@ -2041,6 +2039,9 @@ public class PreviewWorldRenderer
     private void applyCameraRotation(
             EditorCamera camera)
     {
+        GlStateManager.rotate(
+                -camera.getRoll(), 0F, 0F, 1F
+        );
         GlStateManager.rotate(
                 -camera.getPitch(),
                 1.0F,
