@@ -2724,6 +2724,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         final int frame = this.playbackController.getCurrentFrame();
         final BlockbusterSceneActorData selected = getSelectedActor();
+        this.sceneViewport.beginNativeActorFrame();
 
         /* Background renderer saves/restores the selected actor animation
          * state. This ordering is the same as PreviewSceneRenderCoordinator. */
