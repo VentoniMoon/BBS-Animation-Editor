@@ -31,13 +31,17 @@ public final class ChameleonWeldRuntime
     private ChameleonWeldRuntime() {}
 
     /**
-     * True by default for the dedicated hair model. Set
-     * -Dbbs.editor.weld.runtime=false to restore standard Chameleon rendering.
+     * ForgeGradle already passes bbs.editor.weld.preview to the game JVM.
+     * Respect that existing A/B switch unless a dedicated runtime override
+     * exists. In a packaged mod without a launch flag, enable hair-only
+     * welding by default so Blockbuster record playback looks like Preview.
      */
     public static boolean isEnabled()
     {
-        return Boolean.parseBoolean(
-                System.getProperty("bbs.editor.weld.runtime","true"));
+        String setting=System.getProperty("bbs.editor.weld.runtime");
+        if(setting==null)
+            setting=System.getProperty("bbs.editor.weld.preview","true");
+        return Boolean.parseBoolean(setting);
     }
 
     /** Whether ChameleonRenderer.render has been instrumented successfully. */
