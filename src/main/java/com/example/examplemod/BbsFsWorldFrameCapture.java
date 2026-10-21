@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
 
 /**
@@ -89,6 +90,7 @@ public final class BbsFsWorldFrameCapture
          */
         int read = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int draw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int oldTextureUnit = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         java.nio.IntBuffer viewport = org.lwjgl.BufferUtils.createIntBuffer(16);
         GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
 
@@ -121,6 +123,7 @@ public final class BbsFsWorldFrameCapture
             GL11.glViewport(viewport.get(0), viewport.get(1),
                     viewport.get(2), viewport.get(3));
             GL11.glPopAttrib();
+            GL13.glActiveTexture(oldTextureUnit);
         }
     }
 
