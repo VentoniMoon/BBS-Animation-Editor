@@ -2,372 +2,122 @@ package com.example.examplemod;
 
 import net.minecraft.client.Minecraft;
 
-
 /**
- * Центральный менеджер 3D Preview.
+ * Preview FS compositor facade.
  *
- * Отвечает только за общий lifecycle Preview:
+ * The original PreviewShaderBridge was responsible for nested Minecraft /
+ * OptiFine world passes, 2500 lines of shader hooks and legacy FBO state.
+ * That is no longer the active preview pipeline.
  *
- *     beginPreviewRender()
- *             ↓
- *     подготовка EditorCamera
- *             ↓
- *     beginOptiFineRender()
- *             ↓
- *     Minecraft / Actor / Weather rendering
- *             ↓
- *     OptiFine endRender()
- *             ↓
- *     endPreviewRender()
- *
- * Вся работа с framebuffer и OptiFine находится
- * внутри PreviewShaderBridge.
+ * Our world image comes from the finished native Minecraft framebuffer.
+ * BbsFsPreviewTarget owns ONLY the editor composition target: world image,
+ * recorded actors, body parts and editor gizmos. It presents that target as
+ * an ordinary GUI texture, following BBSRendering/UIFilmPreview in BBS FS.
  */
-public class PreviewRenderBackend
+public final class PreviewRenderBackend
 {
     private final Minecraft mc;
+    private final BbsFsPreviewTarget target;
 
-    private final PreviewShaderBridge shaderBridge;
-
-    private boolean diagnosticsPrinted;
-
-    private boolean previewRenderActive;
-
+    /**
+     * Retained strictly for code compatibility with the retired
+     * PreviewNativeWorldBridge. Normal Preview FS never touches it.
+     */
+    private PreviewShaderBridge legacyBridge;
 
     public PreviewRenderBackend(Minecraft mc)
     {
         this.mc = mc;
-
-        this.shaderBridge =
-                new PreviewShaderBridge(mc);
-
-        this.diagnosticsPrinted = false;
-
-        this.previewRenderActive = false;
+        this.target = new BbsFsPreviewTarget(mc);
     }
-
-
-    /*
-     * =========================================================
-     * ACCESS
-     * =========================================================
-     */
 
     public Minecraft getMinecraft()
     {
         return this.mc;
     }
 
+    public BbsFsPreviewTarget getNativeTarget()
+    {
+        return this.target;
+    }
 
+    @Deprecated
     public PreviewShaderBridge getShaderBridge()
     {
-        return this.shaderBridge;
+        if (legacyBridge == null)
+            legacyBridge = new PreviewShaderBridge(mc);
+        return legacyBridge;
     }
 
-
-    public void setPreviewBounds(
-            int x,
-            int y,
-            int width,
-            int height)
+    public void setPreviewBounds(int x, int y, int width, int height)
     {
-        this.shaderBridge.setPreviewBounds(
-                x,
-                y,
-                width,
-                height
-        );
+        target.setBounds(x, y, width, height);
     }
 
-
-    /*
-     * =========================================================
-     * LEGACY ACCESS
-     * =========================================================
-     */
-
+    /** Old preview FBO abstraction is no longer part of rendering. */
+    @Deprecated
     public PreviewFramebuffer getPreviewFramebuffer()
     {
         return null;
     }
 
-
-    /*
-     * =========================================================
-     * OPTIFINE
-     * =========================================================
-     */
-
     public boolean isOptiFinePresent()
     {
-        return this.shaderBridge.isOptiFinePresent();
+        return legacyBridge != null && legacyBridge.isOptiFinePresent();
     }
-
 
     public boolean isShadersActive()
     {
-        return this.shaderBridge.isShaderPackLoaded();
+        return legacyBridge != null && legacyBridge.isShaderPackLoaded();
     }
-
 
     public boolean shouldUseShaderPipeline()
     {
-        return this.shaderBridge.isShaderPipelineActive();
+        return false; // Minecraft/OptiFine already rendered the world.
     }
-
-
-    /*
-     * =========================================================
-     * BEGIN PREVIEW
-     * =========================================================
-     */
 
     public void beginPreviewRender()
     {
-        if (this.previewRenderActive)
-        {
-            return;
-        }
-
-
-        if (this.mc == null)
-        {
-            return;
-        }
-
-
-        /*
-         * Только создаём Preview FBO
-         * и подготавливаем базовое состояние.
-         *
-         * OptiFine здесь намеренно НЕ запускается.
-         *
-         * EditorSceneViewport сначала должен установить
-         * projection/modelview EditorCamera.
-         */
-        if (!this.shaderBridge.beginPreview())
-        {
-            return;
-        }
-
-
-        this.previewRenderActive = true;
+        target.begin();
     }
 
-
-    /*
-     * =========================================================
-     * BEGIN OPTIFINE
-     * =========================================================
-     *
-     * Этот метод вызывается ПОСЛЕ того, как
-     * PreviewWorldRenderer установил EditorCamera.
-     */
-
+    /** World shader lifecycle belongs to Minecraft, not the GUI. */
+    @Deprecated
     public boolean beginOptiFineRender()
     {
-        if (!this.previewRenderActive)
-        {
-            return false;
-        }
-
-        if (this.mc == null)
-        {
-            return false;
-        }
-
-        if (!this.shaderBridge.shouldUseShaderPipeline())
-        {
-            return false;
-        }
-
-
-        /*
-         * Если OptiFine уже запущен,
-         * повторно beginRender() не вызываем.
-         */
-        if (this.shaderBridge.isOptiFineRendering())
-        {
-            return true;
-        }
-
-
-        float partialTicks =
-                this.mc.getRenderPartialTicks();
-
-        long finishTimeNano =
-                System.nanoTime();
-
-
-        boolean shaderStarted =
-                this.shaderBridge.beginOptiFineRender(
-                        partialTicks,
-                        finishTimeNano
-                );
-
-
-        if (!shaderStarted)
-        {
-            System.out.println(
-                    "[BBS Animation Editor] "
-                            + "OptiFine Preview pipeline "
-                            + "could not be started. "
-                            + "Continuing with normal Preview."
-            );
-        }
-
-
-        return shaderStarted;
+        return false;
     }
-
-
-    /*
-     * =========================================================
-     * END PREVIEW
-     * =========================================================
-     */
 
     public void endPreviewRender()
     {
-        if (!this.previewRenderActive)
-        {
-            return;
-        }
-
-
-        try
-        {
-            /*
-             * PreviewShaderBridge.endPreview()
-             * самостоятельно завершит OptiFine lifecycle,
-             * если он был запущен.
-             */
-            this.shaderBridge.endPreview();
-        }
-        finally
-        {
-            this.previewRenderActive = false;
-        }
+        target.end();
     }
-
 
     public boolean isPreviewRenderActive()
     {
-        return this.previewRenderActive;
+        return target.isActive();
     }
 
-
-    /*
-     * =========================================================
-     * DRAW PREVIEW TO GUI
-     * =========================================================
-     */
-
-    public void renderPreviewToScreen(
-            int x,
-            int y,
-            int width,
-            int height)
+    public void renderPreviewToScreen(int x, int y, int width, int height)
     {
-        if (this.mc == null)
-        {
-            return;
-        }
-
-
-        if (width <= 0 || height <= 0)
-        {
-            return;
-        }
-
-
-        this.shaderBridge.renderPreviewTexture(
-                x,
-                y,
-                width,
-                height
-        );
+        target.present();
     }
-
-
-    /*
-     * =========================================================
-     * DIAGNOSTICS
-     * =========================================================
-     */
 
     public void printDiagnostics()
     {
-        if (this.diagnosticsPrinted)
-        {
-            return;
-        }
-
-
-        this.diagnosticsPrinted = true;
-
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "===== PreviewRenderBackend ====="
-        );
-
-
-        System.out.println(
-                "[BBS Animation Editor] display="
-                        +
-                        (
-                                this.mc == null
-                                        ? "null"
-                                        : this.mc.displayWidth
-                                        + "x"
-                                        + this.mc.displayHeight
-                        )
-        );
-
-
-        System.out.println(
-                "[BBS Animation Editor] OptiFine="
-                        + this.isOptiFinePresent()
-        );
-
-
-        System.out.println(
-                "[BBS Animation Editor] Shaders="
-                        + this.isShadersActive()
-        );
-
-
-        System.out.println(
-                "[BBS Animation Editor] Shader pipeline="
-                        + this.shouldUseShaderPipeline()
-        );
-
-
-        this.shaderBridge.printDiagnostics();
-
-
-        System.out.println(
-                "[BBS Animation Editor] "
-                        + "================================="
-        );
+        System.out.println("[BBS Editor][FS Preview] Native Minecraft world "
+                + "capture, dedicated film texture compositor, no duplicate "
+                + "OptiFine pipeline. " + (mc == null ? "Minecraft=null" :
+                ("display=" + mc.displayWidth + "x" + mc.displayHeight)));
     }
-
-
-    /*
-     * =========================================================
-     * DELETE
-     * =========================================================
-     */
 
     public void delete()
     {
-        if (this.previewRenderActive)
+        target.dispose();
+        if (legacyBridge != null)
         {
-            this.endPreviewRender();
+            legacyBridge.delete();
+            legacyBridge = null;
         }
-
-
-        this.shaderBridge.delete();
     }
 }
