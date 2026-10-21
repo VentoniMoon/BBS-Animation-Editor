@@ -109,7 +109,33 @@ public final class BbsFsWorldCameraDriver
     {
         if (controlling && activePose != null &&
                 Minecraft.getMinecraft().getRenderViewEntity() == view)
-            event.setFOV(activePose.fov);
+        {
+            /*
+             * The native game renders at display aspect. Our film viewport
+             * center-crops that frame. When the viewport is wider than the
+             * screen, vertical cropping narrows the resulting effective
+             * FOV; compensate here so the displayed view and actor/gizmo
+             * projection agree on the editor's original FOV.
+             */
+            float adjusted = activePose.fov;
+            if (viewport != null && viewport.getHeight() > 0)
+            {
+                Minecraft mc = Minecraft.getMinecraft();
+                double screenAspect = (double) mc.displayWidth /
+                        Math.max(1, mc.displayHeight);
+                double previewAspect = (double) viewport.getWidth() /
+                        viewport.getHeight();
+                if (previewAspect > screenAspect)
+                {
+                    double tan = Math.tan(Math.toRadians(adjusted) * 0.5D);
+                    adjusted = (float) Math.toDegrees(
+                            2D * Math.atan(tan *
+                                    (previewAspect / screenAspect)));
+                    adjusted = Math.min(170F, adjusted);
+                }
+            }
+            event.setFOV(adjusted);
+        }
     }
 
     private void release()
