@@ -93,7 +93,7 @@ public final class BbsFsWorldFrameCapture
         if (!ready || snapshot == null || mc == null || backend == null
                 || width <= 0 || height <= 0) return false;
 
-        Framebuffer target = backend.getShaderBridge().getPreviewFramebuffer();
+        Framebuffer target = backend.getNativeTarget().getFramebuffer();
         if (target == null || target == snapshot) return false;
 
         ScaledResolution resolution = new ScaledResolution(mc);
