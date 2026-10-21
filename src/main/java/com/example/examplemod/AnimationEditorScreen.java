@@ -2963,12 +2963,10 @@ public class AnimationEditorScreen extends GuiScreen
                 previewAutoFocus.isEnabled()
                         ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
 
-        // Preview 3.0: opt-in genuine Minecraft world pass. If it fails,
-        // automatic fallback disables the toggle for this session.
-        boolean nativeWorld=PreviewNativeWorldBridge.isRequested();
-        drawToolbarButton(x, y + 64, 26, 26, nativeWorld);
-        drawCenteredString(fontRenderer, "N", x + 13, y + 9 + 64,
-                nativeWorld ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+        // Informational status, not another legacy/native switch.
+        // All world frames now come from the BBS FS-style native capture.
+        drawCenteredString(fontRenderer, "FS", x + 13, y + 9 + 64,
+                getAccentBrightColor());
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
@@ -2988,13 +2986,7 @@ public class AnimationEditorScreen extends GuiScreen
                 previewAutoFocus.toggle();
                 return true;
             }
-            if (mouseY >= y + 64 && mouseY < y + 90)
-            {
-                BodyPartPhysicsBakeController bake=getPhysicsBakeController();
-                if(bake==null || !bake.isRecording())
-                    PreviewNativeWorldBridge.toggleRequested();
-                return true;
-            }
+
         }
         return false;
     }
@@ -3613,6 +3605,10 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
+        /* Never leave the detached preview camera as Minecraft's view. */
+        if (this.sceneViewport != null)
+            BbsFsWorldCameraDriver.detach(this.sceneViewport);
+
         EditorSessionSelection.remember(this.sceneState);
 
         if (this.editorInput != null)
