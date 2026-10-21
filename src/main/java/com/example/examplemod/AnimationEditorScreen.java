@@ -3020,6 +3020,22 @@ public class AnimationEditorScreen extends GuiScreen
                 fsDepthReady ? "FS" : (fsReady ? "F~" : "F!"),
                 x + 13, y + 9 + 64,
                 fsDepthReady ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+
+        /*
+         * Preview camera navigation selector, independent of the FS
+         * framebuffer status above: FR = first-person FREE look, OR =
+         * orbit around the target. Switching preserves eye and angles.
+         */
+        EditorCamera.Mode cameraMode = this.sceneViewport == null
+                ? EditorCamera.Mode.FREE
+                : this.sceneViewport.getCamera().getMode();
+        boolean orbit = cameraMode == EditorCamera.Mode.ORBIT;
+        drawToolbarButton(x, y + 96, 26, 26, orbit);
+        drawCenteredString(fontRenderer,
+                cameraMode == EditorCamera.Mode.TRACK ? "TR"
+                        : (orbit ? "OR" : "FR"),
+                x + 13, y + 9 + 96,
+                orbit ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
@@ -3037,6 +3053,16 @@ public class AnimationEditorScreen extends GuiScreen
             if (mouseY >= y + 32 && mouseY < y + 58)
             {
                 previewAutoFocus.toggle();
+                return true;
+            }
+            if (mouseY >= y + 96 && mouseY < y + 122)
+            {
+                EditorCamera.Mode current =
+                        this.sceneViewport.getCamera().getMode();
+                this.sceneViewport.setCameraMode(
+                        current == EditorCamera.Mode.ORBIT
+                                ? EditorCamera.Mode.FREE
+                                : EditorCamera.Mode.ORBIT);
                 return true;
             }
 
