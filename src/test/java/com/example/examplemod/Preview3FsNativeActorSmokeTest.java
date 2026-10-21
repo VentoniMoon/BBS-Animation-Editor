@@ -59,6 +59,12 @@ public final class Preview3FsNativeActorSmokeTest
                 "native actor exception leaked a GL guard");
         check(BbsFsWorldGlGuard.opened == 3,
                 "unexpected number of native GL render passes");
+        check(mc.entityRenderer.enables==3 &&
+                mc.entityRenderer.disables==3,
+                "native actor pass did not restore world lightmap");
+        check(BbsFsOptiFineEntityStage.opened==3 &&
+                BbsFsOptiFineEntityStage.closed==3,
+                "native entity shader stage leaked on success/error");
 
         System.out.println("Preview FS native actor ownership, GL guard "
                 + "and exception cleanup PASS");
