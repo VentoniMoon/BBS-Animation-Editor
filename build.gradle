@@ -72,8 +72,16 @@ dependencies {
         compile files('run/mods/mclib-2.4.3-1.12.2.jar')
     }
 
-    compile fg.deobf('blank:metamorph-1.4:1.12.2')
-    compile fg.deobf('blank:aperture-1.8.2:1.12.2')
+    if (project.hasProperty('ciDependencies')) {
+        // CI repository JARs are not guaranteed to be real ZIP archives
+        // (e.g. Git LFS pointers). Resolve the actual published releases.
+        compile fg.deobf('curse.maven:metamorph-256932:5440927')
+        compile fg.deobf('curse.maven:aperture-271561:5440944')
+    } else {
+        // Keep the user's existing local workspace coordinates untouched.
+        compile fg.deobf('blank:metamorph-1.4:1.12.2')
+        compile fg.deobf('blank:aperture-1.8.2:1.12.2')
+    }
 }
 
 /*
