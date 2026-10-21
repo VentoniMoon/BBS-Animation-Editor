@@ -100,6 +100,12 @@ public class BodyPartsPreviewRenderer
      */
     public ChameleonWeldPreviewPass beginWeldPreview(float partialTicks)
     {
+        // Never weld the same vertex twice. When the native hook is live,
+        // ChameleonRenderer handles BOTH Blockbuster playback and editor
+        // preview after the final animated pose has been evaluated.
+        if(ChameleonWeldRuntime.isEnabled() &&
+                ChameleonWeldRuntime.isRendererHookInstalled())
+            return ChameleonWeldPreviewPass.begin(null,partialTicks);
         return ChameleonWeldPreviewPass.begin(
                 this.preparedMorphs.values(),partialTicks);
     }
