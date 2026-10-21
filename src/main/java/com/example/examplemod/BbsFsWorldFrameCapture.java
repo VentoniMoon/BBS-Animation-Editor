@@ -28,6 +28,8 @@ public final class BbsFsWorldFrameCapture
 {
     private static Framebuffer snapshot;
     private static boolean ready;
+    /** False if the source or destination world depth attachment failed. */
+    private static boolean depthValid;
     /** Set only by the actual RenderWorldLast event during this render tick. */
     private static boolean nativeWorldSeen;
     /** Prevent a second drawScreen() from recapturing already drawn GUI. */
@@ -44,6 +46,7 @@ public final class BbsFsWorldFrameCapture
         nativeWorldSeen = false;
         capturedThisNativeFrame = false;
         ready = false;
+        depthValid = false;
     }
 
     /** The camera driver's RenderWorldLastEvent observed a true world pass. */
@@ -72,6 +75,7 @@ public final class BbsFsWorldFrameCapture
             return;
         nativeWorldSeen = false;
         capturedThisNativeFrame = true;
+        depthValid = true;
 
         Framebuffer source = mc.getFramebuffer();
         int sw = source.framebufferWidth;
@@ -216,12 +220,16 @@ public final class BbsFsWorldFrameCapture
                     GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
 
             error = GL11.glGetError();
-            if (error != GL11.GL_NO_ERROR && !warnedDepth)
+            if (error != GL11.GL_NO_ERROR)
             {
-                warnedDepth = true;
-                System.err.println("[BBS Editor][FS Preview] World color "
-                        + "copied but depth copy failed (GL " + error
-                        + "); verify actor occlusion.");
+                depthValid = false;
+                if (!warnedDepth)
+                {
+                    warnedDepth = true;
+                    System.err.println("[BBS Editor][FS Preview] World color "
+                            + "copied but depth copy failed (GL " + error
+                            + "); editor actor occlusion is not guaranteed.");
+                }
             }
             return true;
         }
@@ -234,9 +242,15 @@ public final class BbsFsWorldFrameCapture
         }
     }
 
+    public static boolean isDepthValid()
+    {
+        return ready && depthValid;
+    }
+
     public static void release()
     {
         ready = false;
+        depthValid = false;
         nativeWorldSeen = false;
         capturedThisNativeFrame = false;
         if (snapshot == null) return;
