@@ -1970,7 +1970,8 @@ public class BodyPartsPreviewRenderer
             // consecutive-frame jitter. Playback still freezes the sample
             // for the entire render frame; no mid-draw reentrant stepping.
             if (initializedJolt ||
-                    (advanced && !BlockbusterPreviewAnimationState.isPlaying()))
+                    (advanced && (!BlockbusterPreviewAnimationState.isPlaying()
+                            || bakeController.isRecording())))
                 physicsFrames.publishEditedFrame(data,frame);
             reportPhysicsBoneProbe(data, advanced
                     ? "Jolt native preview advanced; multi-segment visual pose queued"
@@ -2502,9 +2503,9 @@ public class BodyPartsPreviewRenderer
              * Reverse the test swing only on the left root, pending a full
              * handedness/basis correction across all chains.
              */
-            Map<String, float[]> swings =
-                    !bakeController.isRecording() &&
-                    JOLT_VISUAL_INTERPOLATION &&
+            Map<String, float[]> swings = bakeController.isRecording()
+                    ? physicsFrames.forBakeRender(data,frame)
+                    : JOLT_VISUAL_INTERPOLATION &&
                     BodyPartJoltPreviewAdapter.isRequested() &&
                     BlockbusterPreviewAnimationState.isPlaying()
                         ? physicsFrames.forRenderInterpolated(data,frame,
