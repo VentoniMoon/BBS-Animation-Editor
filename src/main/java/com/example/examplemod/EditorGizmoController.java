@@ -6947,52 +6947,11 @@ public class EditorGizmoController
             int viewportHeight,
             EditorCamera camera)
     {
-        double dx = x - camera.getCameraX();
-        double dy = y - camera.getCameraY();
-        double dz = z - camera.getCameraZ();
-
-        double yaw = Math.toRadians(camera.getYaw());
-        double pitch = Math.toRadians(camera.getPitch());
-
-        double cy = Math.cos(yaw);
-        double sy = Math.sin(yaw);
-
-        double cameraX = cy * dx - sy * dz;
-        double cameraZ = sy * dx + cy * dz;
-
-        double cp = Math.cos(pitch);
-        double sp = Math.sin(pitch);
-
-        double cameraY = cp * dy + sp * cameraZ;
-        cameraZ = -sp * dy + cp * cameraZ;
-
-        if (cameraZ >= -0.05D)
-        {
-            return null;
-        }
-
-        double fov =
-                Math.toRadians(60.0D);
-
-        double focal =
-                viewportHeight /
-                        (2.0D * Math.tan(fov / 2.0D));
-
-        float screenX =
-                (float) (
-                        viewportX
-                                + viewportWidth / 2.0D
-                                + cameraX * focal / -cameraZ
-                );
-
-        float screenY =
-                (float) (
-                        viewportY
-                                + viewportHeight / 2.0D
-                                - cameraY * focal / -cameraZ
-                );
-
-        return new ScreenPoint(screenX, screenY);
+        if(camera==null)return null;
+        float[] pixel=PreviewCameraProjection.project(
+                x,y,z,camera.sample(),
+                viewportX,viewportY,viewportWidth,viewportHeight);
+        return pixel==null?null:new ScreenPoint(pixel[0],pixel[1]);
     }
 
     private float getGizmoScreenScale(
