@@ -102,6 +102,22 @@ public final class BodyPartPhysicsFrameState
     }
 
     /**
+     * Baking must use the completed Jolt sample of the EXACT current tick.
+     * The regular Preview intentionally displays a frozen previous tick;
+     * using that delayed pose for bake creates off-by-one keys and gaps.
+     * The solver publishes the completed current sample after rendering;
+     * lockstep playback holds the tick long enough for the next draw.
+     */
+    public Map<String,float[]> forBakeRender(BodyPartModelData part,int frame)
+    {
+        if(frame!=lastTimelineFrame)return null;
+        Sample visibleSample=visible.get(part);
+        if(visibleSample==null || visibleSample.frame!=frame ||
+                visibleSample.joltBones.isEmpty())return null;
+        return forRender(part,frame);
+    }
+
+    /**
      * Render-only sub-tick interpolation. This NEVER advances physics.
      * The previous Jolt frame is frozen at beginFrame(); the current frame
      * is published after the first normal actor draw. Only when both
