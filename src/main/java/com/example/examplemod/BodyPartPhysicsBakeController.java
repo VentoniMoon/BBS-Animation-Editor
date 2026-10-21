@@ -29,6 +29,19 @@ public final class BodyPartPhysicsBakeController
     public int frameCount() { return frames.size(); }
     public String failure() { return failure; }
 
+    /** Lockstep bake playback waits for a completed native pose of this tick. */
+    public boolean hasCapturedFrame(int frame)
+    {
+        Map<String,AnimationTransform> sample=frames.get(frame);
+        return sample!=null && !sample.isEmpty();
+    }
+
+    /** A recording can stop once its last active Body Part frame is captured. */
+    public int getLastRecordableFrame()
+    {
+        return target==null ? -1 : target.getEndFrame();
+    }
+
     public String begin(BodyPartModelData model, int frame)
     {
         if(model==null || !model.hasMorphModel() || model.getBones()==null ||
@@ -146,11 +159,28 @@ public final class BodyPartPhysicsBakeController
         System.out.println("[BBS Editor][Bake] Commit check: recordedFrames="+
                 frames.size()+" range="+first+".."+last+
                 " distinctBonesFirstFrame="+frames.get(first).size());
-        if(frames.size()!=last-first+1)
+        if(frames.size()!=last-first+1 || first>requestedStart)
         {
+            StringBuilder missing=new StringBuilder();
+            int count=0;
+            for(int tick=requestedStart;tick<=last;tick++)
+                if(!frames.containsKey(tick))
+                {
+                    count++;
+                    if(count<=12)
+                    {
+                        if(missing.length()>0)missing.append(", ");
+                        missing.append(tick);
+                    }
+                }
+            String detail="Bake rejected: missing timeline frames "+
+                    requestedStart+".."+last+" ("+count+
+                    " missing; first: "+missing+
+                    (count>12?", ...":"")+
+                    "). Recording must advance in lockstep with Jolt.";
+            System.out.println("[BBS Editor][Bake] "+detail);
             reset();
-            return "Bake rejected: missing timeline frames between "+first+
-                    " and "+last+". Replay sequentially without scrubbing.";
+            return detail;
         }
         Map<String,AnimationTransform> initial=frames.get(first);
         if(initial==null || initial.isEmpty())
