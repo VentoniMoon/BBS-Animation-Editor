@@ -2,6 +2,7 @@ package com.example.examplemod;
 
 import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
@@ -37,6 +38,7 @@ public final class Preview3FsFramebufferSmokeTest
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,17);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,19);
         GL20.glUseProgram(23);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + 3);
 
         BbsFsWorldFrameCapture.markNativeWorldRendered();
         BbsFsWorldFrameCapture.beginFrame(mc);
@@ -52,7 +54,10 @@ public final class Preview3FsFramebufferSmokeTest
                 mc,backend,100,50,800,600),"color world blit failed");
         require(GL30.blits>=3 && GL30.depthBlits>=1,
                 "color/depth native world was not blitted");
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + 5);
         target.end();
+        require(GL13.active==GL13.GL_TEXTURE0 + 3,
+                "target end leaked actor texture unit");
         require(GL30.read==17 && GL30.draw==19,
                 "target end leaked original FBO binding");
         require(GL20.program==23,"target end leaked GL shader program");
@@ -79,12 +84,15 @@ public final class Preview3FsFramebufferSmokeTest
         {
             mc.getRenderManager().viewerPosX=999;
             GL20.glUseProgram(0);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0 + 7);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glPushMatrix();
         }
         require(mc.getRenderManager().viewerPosX==91,
                 "actor guard leaked RenderManager position");
         require(GL20.program==11,"actor guard leaked shader program");
+        require(GL13.active==GL13.GL_TEXTURE0 + 3,
+                "actor guard leaked OpenGL active texture");
         require(GL11.modelDepth==1 && GL11.projDepth==1,
                 "actor guard leaked world matrix stack");
         require(GL11.attrDepth==beforeAttrib,
