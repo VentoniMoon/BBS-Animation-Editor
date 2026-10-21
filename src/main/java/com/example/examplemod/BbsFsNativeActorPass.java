@@ -18,8 +18,10 @@ import net.minecraft.client.shader.Framebuffer;
  */
 public final class BbsFsNativeActorPass
 {
-    private static final boolean REQUESTED =
-            Boolean.getBoolean("bbs.editor.preview3.nativeActors");
+    /*
+     * BBS FS preview actors now have exactly one draw owner: Minecraft's
+     * native world event. No second GUI actor pass or opt-in switch.
+     */
     private static boolean rendering;
     private static boolean renderedThisFrame;
     private static int frameSequence;
@@ -42,13 +44,13 @@ public final class BbsFsNativeActorPass
 
     public static boolean didRenderThisFrame()
     {
-        return REQUESTED && renderedThisFrame &&
+        return renderedThisFrame &&
                 renderedSequence == frameSequence;
     }
 
     public static boolean isRequested()
     {
-        return REQUESTED;
+        return true;
     }
 
     /** Actual GL viewport from RenderWorldLast, not Minecraft's GUI FBO. */
@@ -71,7 +73,7 @@ public final class BbsFsNativeActorPass
             EditorSceneViewport viewport, float partialTicks,
             int worldWidth, int worldHeight)
     {
-        if (!REQUESTED || rendering || renderedThisFrame ||
+        if (rendering || renderedThisFrame ||
                 mc == null || editor == null || viewport == null ||
                 !BbsFsWorldProjection.isCaptured() || mc.world == null)
             return;
