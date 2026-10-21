@@ -99,7 +99,8 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             throws Exception
     {
         if(morph==null || !"mchorse.chameleon.metamorph.ChameleonMorph"
-                .equals(morph.getClass().getName()))
+                .equals(morph.getClass().getName()) ||
+                !ChameleonWeldRuntime.isMorphWeldEnabled(morph))
             return;
         Object wrapper=morph.getClass().getMethod("getModel").invoke(morph);
         if(wrapper==null ||
