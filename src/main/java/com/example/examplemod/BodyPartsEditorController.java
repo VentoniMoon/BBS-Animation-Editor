@@ -258,6 +258,8 @@ public class BodyPartsEditorController
                         createAnimationBonesFromMorph(child),
                         0, lastFrame);
                 data.setMorph(child);
+                data.setWeldEnabled(
+                        ChameleonWeldRuntime.isMorphWeldEnabled(child));
 
                 /*
                  * BodyPart.translate uses blocks; the editor's global
