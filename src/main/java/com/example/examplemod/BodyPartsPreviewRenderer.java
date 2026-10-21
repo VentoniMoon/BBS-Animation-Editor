@@ -2232,19 +2232,34 @@ public class BodyPartsPreviewRenderer
             }
 
             /*
-             * Child pose snapshots also arrive every tick. Give nested
-             * Blockbuster morphs the same one-tick rendering transition
-             * as the actor's parent CustomMorph.
+             * Baked Body Parts contain a new internal-bone pose on every
+             * Record tick. As with a parent CustomMorph, the child must
+             * interpolate between successive snapshots over ONE tick.
+             *
+             * ChameleonMorph is an optional dependency, so identify it by
+             * name and use Metamorph's common IAnimationProvider API.
+             * Do not alter transitions of other morph types (notably
+             * Emoticons), whose timing may be intentionally different.
              */
-            if (part.morph != null
-                    && part.morph.get() instanceof CustomMorph)
+            AbstractMorph child = part.morph == null
+                    ? null : part.morph.get();
+            boolean isChameleon = child != null
+                    && "mchorse.chameleon.metamorph.ChameleonMorph"
+                            .equals(child.getClass().getName());
+            if ((child instanceof CustomMorph || isChameleon)
+                    && child instanceof mchorse.metamorph.api.morphs.utils.IAnimationProvider)
             {
-                CustomMorph child = (CustomMorph) part.morph.get();
-                child.animation.duration = 1;
-                child.animation.animates = true;
-                child.animation.ignored = false;
-                child.animation.interp =
-                        mchorse.mclib.utils.Interpolation.LINEAR;
+                mchorse.metamorph.api.morphs.utils.Animation animation =
+                        ((mchorse.metamorph.api.morphs.utils.IAnimationProvider)
+                                child).getAnimation();
+                if (animation != null)
+                {
+                    animation.duration = 1;
+                    animation.animates = true;
+                    animation.ignored = false;
+                    animation.interp =
+                            mchorse.mclib.utils.Interpolation.LINEAR;
+                }
             }
 
             net.minecraft.nbt.NBTTagCompound tag =
