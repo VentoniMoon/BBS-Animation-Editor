@@ -24,6 +24,11 @@ repositories {
     flatDir {
         dir 'libs'
     }
+    // CI can compile against the exact public 1.12.2 McHorse mod releases
+    // when the user's local run/mods directory is intentionally absent.
+    if (project.hasProperty('ciDependencies')) {
+        maven { url 'https://cursemaven.com/' }
+    }
 }
 
 minecraft {
@@ -37,11 +42,6 @@ minecraft {
             // Chameleon Weld preview. Defaults OFF for normal sessions.
             property 'bbs.editor.weld.preview',
                     System.getProperty('bbs.editor.weld.preview', 'false')
-
-            // Only actor placement in the native world pass is experimental.
-            // BBS FS-style world capture itself is always used on this branch.
-            property 'bbs.editor.preview3.nativeActors',
-                    System.getProperty('bbs.editor.preview3.nativeActors', 'false')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
@@ -59,9 +59,18 @@ minecraft {
 dependencies {
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2860'
 
-    compile files('run/mods/blockbuster-2.7.1-1.12.2.jar')
-    compileOnly files('run/mods/emoticons-1.1.2-1.12.2.jar')
-    compile files('run/mods/mclib-2.4.3-1.12.2.jar')
+    if (project.hasProperty('ciDependencies')) {
+        // Exact versions already used in the user's dev modpack.
+        // Blockbuster 2.7.1 / McLib 2.4.3 / Emoticons 1.1.2
+        compile fg.deobf('curse.maven:blockbuster-254152:5492194')
+        compile fg.deobf('curse.maven:mchorses-mclib-304750:5440933')
+        compileOnly fg.deobf('curse.maven:emoticons-311624:4528666')
+    } else {
+        // Existing local Forge workspace remains entirely unchanged.
+        compile files('run/mods/blockbuster-2.7.1-1.12.2.jar')
+        compileOnly files('run/mods/emoticons-1.1.2-1.12.2.jar')
+        compile files('run/mods/mclib-2.4.3-1.12.2.jar')
+    }
 
     compile fg.deobf('blank:metamorph-1.4:1.12.2')
     compile fg.deobf('blank:aperture-1.8.2:1.12.2')
