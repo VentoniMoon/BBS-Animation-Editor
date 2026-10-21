@@ -2703,6 +2703,39 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
+    /**
+     * Optional BBS FS-style actor stage, invoked only from Minecraft's
+     * RenderWorldLastEvent. The world camera/projection are already active.
+     *
+     * No second renderWorld(), no second snapshot and no editor FBO begin:
+     * this only evaluates the same actor/Body Parts/physics code that the
+     * GUI coordinator would otherwise draw in its later compositing pass.
+     */
+    public boolean renderActorsInNativeWorld()
+    {
+        if (this.sceneViewport == null || this.sceneState == null ||
+                mc == null || mc.world == null ||
+                this.sceneViewport.getWidth() <= 0 ||
+                this.sceneViewport.getHeight() <= 0)
+            return false;
+
+        if (this.playbackController.isPlaying())
+            applyAdapters(this.playbackController.getCurrentAnimationFrame());
+
+        final int frame = this.playbackController.getCurrentFrame();
+        final BlockbusterSceneActorData selected = getSelectedActor();
+
+        /* Background renderer saves/restores the selected actor animation
+         * state. This ordering is the same as PreviewSceneRenderCoordinator. */
+        this.multiActorPreview.drawBackgroundActors(
+                mc, this.sceneViewport, this.sceneState,
+                selected, frame, this.bodyPartsController);
+
+        this.sceneViewport.drawActor(
+                mc, selected, getCurrentRecordFrame());
+        return true;
+    }
+
     private void drawPreview(
             int mouseX,
             int mouseY)
