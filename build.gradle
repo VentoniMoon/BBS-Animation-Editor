@@ -33,6 +33,11 @@ minecraft {
         client {
             workingDirectory project.file('run')
 
+            // Explicit A/B switch for the experimental render-only
+            // Chameleon Weld preview. Defaults OFF for normal sessions.
+            property 'bbs.editor.weld.preview',
+                    System.getProperty('bbs.editor.weld.preview', 'false')
+
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
         }
