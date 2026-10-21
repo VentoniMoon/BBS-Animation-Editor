@@ -2335,6 +2335,12 @@ public class BodyPartsPreviewRenderer
             if (morph != null)
             {
                 morph = ChameleonBodyPartAnimations.apply(data, frame, morph);
+                // Persist this attachment's Weld choice inside the actual
+                // Chameleon morph; copy/merge and .dat now keep it per part.
+                if ("mchorse.chameleon.metamorph.ChameleonMorph"
+                        .equals(morph.getClass().getName()))
+                    ChameleonWeldRuntime.setMorphWeld(
+                            morph,data.isWeldEnabled());
                 // Preview-only registration; exportParts uses a different
                 // renderer instance and never calls prepareModels().
                 // No keys or morph rotations are modified here.
