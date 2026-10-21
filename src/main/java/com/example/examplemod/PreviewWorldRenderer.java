@@ -784,11 +784,8 @@ public class PreviewWorldRenderer
                     (float) width /
                             (float) height;
 
-            this.renderFov =
-                    60.0F;
-
-            this.renderNearPlane =
-                    0.05F;
+            this.renderFov = camera.getFov();
+            this.renderNearPlane = camera.getNearPlane();
 
             this.renderTerrainFarPlane =
                     Math.max(
