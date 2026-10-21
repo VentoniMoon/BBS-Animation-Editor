@@ -2986,8 +2986,11 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
     /**
-     * Two independent toggle buttons below the gizmo tools:
-     * group = render all actors; target = focus camera upon key selection.
+     * Compact preview controls below the gizmo tools: show-all actors,
+     * selected-key auto focus, and FREE/ORBIT navigation.
+     *
+     * Native framebuffer status belongs in diagnostics/logs, not a fake
+     * toolbar button. The FS/F~/F! indicator is intentionally removed.
      */
     private void drawStage8PreviewButtons(int right, int top)
     {
@@ -3004,37 +3007,19 @@ public class AnimationEditorScreen extends GuiScreen
                 previewAutoFocus.isEnabled()
                         ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
 
-        // Status of the *actual* native FBO transfer, not another switch.
-        // Never claim a healthy BBS FS viewport when Minecraft skipped its
-        // world frame or GL blit failed: these are essential smoke signals.
-        boolean fsReady = this.sceneViewport != null &&
-                this.sceneViewport.hasCapturedNativeWorldFrame();
-        boolean fsDepthReady = fsReady && BbsFsWorldFrameCapture.isDepthValid();
-        drawToolbarButton(x, y + 64, 26, 26, fsReady);
         /*
-         * FS = color + depth captured; F~ = valid color but missing native
-         * depth (record actor occlusion is uncertain); F! = no world frame.
-         * These are diagnostics, not switches to the old world renderer.
-         */
-        drawCenteredString(fontRenderer,
-                fsDepthReady ? "FS" : (fsReady ? "F~" : "F!"),
-                x + 13, y + 9 + 64,
-                fsDepthReady ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
-
-        /*
-         * Preview camera navigation selector, independent of the FS
-         * framebuffer status above: FR = first-person FREE look, OR =
-         * orbit around the target. Switching preserves eye and angles.
+         * FR = first-person FREE look, OR = orbit around the target;
+         * switching preserves the camera eye and viewing angles.
          */
         EditorCamera.Mode cameraMode = this.sceneViewport == null
                 ? EditorCamera.Mode.FREE
                 : this.sceneViewport.getCamera().getMode();
         boolean orbit = cameraMode == EditorCamera.Mode.ORBIT;
-        drawToolbarButton(x, y + 96, 26, 26, orbit);
+        drawToolbarButton(x, y + 64, 26, 26, orbit);
         drawCenteredString(fontRenderer,
                 cameraMode == EditorCamera.Mode.TRACK ? "TR"
                         : (orbit ? "OR" : "FR"),
-                x + 13, y + 9 + 96,
+                x + 13, y + 9 + 64,
                 orbit ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
     }
 
@@ -3055,7 +3040,7 @@ public class AnimationEditorScreen extends GuiScreen
                 previewAutoFocus.toggle();
                 return true;
             }
-            if (mouseY >= y + 96 && mouseY < y + 122)
+            if (mouseY >= y + 64 && mouseY < y + 90)
             {
                 EditorCamera.Mode current =
                         this.sceneViewport.getCamera().getMode();
