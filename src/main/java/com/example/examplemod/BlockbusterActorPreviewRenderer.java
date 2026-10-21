@@ -1265,12 +1265,33 @@ public class BlockbusterActorPreviewRenderer
                 (float) previewWidth /
                         (float) previewHeight;
 
-        GLU.gluPerspective(
-                camera.getFov(),
-                aspect,
-                camera.getNearPlane(),
-                Math.max(camera.getFarPlane(), 500.0F)
-        );
+        /*
+         * Match the native Minecraft/OptiFine depth written before the GUI.
+         * The capture's X/Y crop is corrected in the projection matrix.
+         * Only fall back to the historical editor camera if the world pass
+         * has not provided a usable projection (e.g. an empty dimension).
+         */
+        if (BbsFsNativeActorPass.isRendering())
+        {
+            /*
+             * RenderWorldLastEvent is still in the full-size world target.
+             * The actual Minecraft projection must NOT be film-cropped yet.
+             * The film capture will perform the crop once for everyone.
+             */
+            if (!BbsFsWorldProjection.loadForNativeWorld())
+                GLU.gluPerspective(camera.getFov(), aspect,
+                        camera.getNearPlane(),
+                        Math.max(camera.getFarPlane(), 500.0F));
+        }
+        else if (!BbsFsWorldProjection.loadForPreview(
+                previewWidth, previewHeight))
+        {
+            GLU.gluPerspective(
+                    camera.getFov(), aspect,
+                    camera.getNearPlane(),
+                    Math.max(camera.getFarPlane(), 500.0F)
+            );
+        }
 
         /*
          * =====================================================

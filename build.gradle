@@ -24,6 +24,11 @@ repositories {
     flatDir {
         dir 'libs'
     }
+    // CI can compile against the exact public 1.12.2 McHorse mod releases
+    // when the user's local run/mods directory is intentionally absent.
+    if (project.hasProperty('ciDependencies')) {
+        maven { url 'https://cursemaven.com/' }
+    }
 }
 
 minecraft {
@@ -54,12 +59,29 @@ minecraft {
 dependencies {
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2860'
 
-    compile files('run/mods/blockbuster-2.7.1-1.12.2.jar')
-    compileOnly files('run/mods/emoticons-1.1.2-1.12.2.jar')
-    compile files('run/mods/mclib-2.4.3-1.12.2.jar')
+    if (project.hasProperty('ciDependencies')) {
+        // Exact versions already used in the user's dev modpack.
+        // Blockbuster 2.7.1 / McLib 2.4.3 / Emoticons 1.1.2
+        compile fg.deobf('curse.maven:blockbuster-254152:5492194')
+        compile fg.deobf('curse.maven:mchorses-mclib-304750:5440933')
+        compileOnly fg.deobf('curse.maven:emoticons-311624:4528666')
+    } else {
+        // Existing local Forge workspace remains entirely unchanged.
+        compile files('run/mods/blockbuster-2.7.1-1.12.2.jar')
+        compileOnly files('run/mods/emoticons-1.1.2-1.12.2.jar')
+        compile files('run/mods/mclib-2.4.3-1.12.2.jar')
+    }
 
-    compile fg.deobf('blank:metamorph-1.4:1.12.2')
-    compile fg.deobf('blank:aperture-1.8.2:1.12.2')
+    if (project.hasProperty('ciDependencies')) {
+        // CI repository JARs are not guaranteed to be real ZIP archives
+        // (e.g. Git LFS pointers). Resolve the actual published releases.
+        compile fg.deobf('curse.maven:metamorph-256932:5440927')
+        compile fg.deobf('curse.maven:aperture-271561:5440944')
+    } else {
+        // Keep the user's existing local workspace coordinates untouched.
+        compile fg.deobf('blank:metamorph-1.4:1.12.2')
+        compile fg.deobf('blank:aperture-1.8.2:1.12.2')
+    }
 }
 
 /*

@@ -89,6 +89,27 @@ public final class Preview3CameraSmokeTest
         PreviewCameraPose mid=PreviewCameraPose.interpolate(a,b,0.5D);
         near(mid.yaw,180,1e-5);
 
+        /*
+         * Native Minecraft yaw includes +180 degrees from entity orientation
+         * during camera setup. Verify that it produces the exact same GL
+         * rotation as EditorCamera's manual actor/gizmo camera for every
+         * cardinal axis, and preserves pitch/roll (no X/Z hand tuning).
+         */
+        for (float editorYaw : new float[]{-180F,-90F,-45F,0F,45F,90F,180F})
+        {
+            float entityYaw=BbsFsCameraConventions.entityYaw(editorYaw);
+            float eventYaw=BbsFsCameraConventions.cameraSetupYaw(editorYaw);
+            float delta=(eventYaw + editorYaw)%360F;
+            near(delta,0,0.001);
+            near((entityYaw+180F-eventYaw)%360F,0,0.001);
+        }
+        for (float angle : new float[]{-80F,-15F,0F,20F,60F})
+        {
+            near(BbsFsCameraConventions.entityPitch(angle),-angle,0.001);
+            near(BbsFsCameraConventions.cameraSetupPitch(angle),-angle,0.001);
+            near(BbsFsCameraConventions.cameraSetupRoll(angle),-angle,0.001);
+        }
+
         camera.reset();
         require(camera.getMode()==EditorCamera.Mode.ORBIT,"reset navigation");
         near(camera.getFov(),60,1e-5);

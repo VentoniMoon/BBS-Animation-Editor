@@ -1691,6 +1691,12 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             float partialTicks)
     {
+        /*
+         * BBS FS native capture MUST happen before drawing any GUI pixel.
+         * Otherwise the world texture would contain our dark editor panels.
+         */
+        BbsFsWorldFrameCapture.beginFrame(this.mc);
+
         drawRect(
                 0,
                 0,
@@ -2697,6 +2703,40 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
+    /**
+     * Optional BBS FS-style actor stage, invoked only from Minecraft's
+     * RenderWorldLastEvent. The world camera/projection are already active.
+     *
+     * No second renderWorld(), no second snapshot and no editor FBO begin:
+     * this only evaluates the same actor/Body Parts/physics code that the
+     * GUI coordinator would otherwise draw in its later compositing pass.
+     */
+    public boolean renderActorsInNativeWorld()
+    {
+        if (this.sceneViewport == null || this.sceneState == null ||
+                mc == null || mc.world == null ||
+                this.sceneViewport.getWidth() <= 0 ||
+                this.sceneViewport.getHeight() <= 0)
+            return false;
+
+        if (this.playbackController.isPlaying())
+            applyAdapters(this.playbackController.getCurrentAnimationFrame());
+
+        final int frame = this.playbackController.getCurrentFrame();
+        final BlockbusterSceneActorData selected = getSelectedActor();
+        this.sceneViewport.beginNativeActorFrame();
+
+        /* Background renderer saves/restores the selected actor animation
+         * state. This ordering is the same as PreviewSceneRenderCoordinator. */
+        this.multiActorPreview.drawBackgroundActors(
+                mc, this.sceneViewport, this.sceneState,
+                selected, frame, this.bodyPartsController);
+
+        this.sceneViewport.drawActor(
+                mc, selected, getCurrentRecordFrame());
+        return true;
+    }
+
     private void drawPreview(
             int mouseX,
             int mouseY)
@@ -2753,7 +2793,8 @@ public class AnimationEditorScreen extends GuiScreen
                 previewHeight
         );
 
-        if (this.playbackController.isPlaying())
+        if (this.playbackController.isPlaying() &&
+                !BbsFsNativeActorPass.didRenderThisFrame())
         {
             applyAdapters(
                     this.playbackController
@@ -2963,12 +3004,22 @@ public class AnimationEditorScreen extends GuiScreen
                 previewAutoFocus.isEnabled()
                         ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
 
-        // Preview 3.0: opt-in genuine Minecraft world pass. If it fails,
-        // automatic fallback disables the toggle for this session.
-        boolean nativeWorld=PreviewNativeWorldBridge.isRequested();
-        drawToolbarButton(x, y + 64, 26, 26, nativeWorld);
-        drawCenteredString(fontRenderer, "N", x + 13, y + 9 + 64,
-                nativeWorld ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+        // Status of the *actual* native FBO transfer, not another switch.
+        // Never claim a healthy BBS FS viewport when Minecraft skipped its
+        // world frame or GL blit failed: these are essential smoke signals.
+        boolean fsReady = this.sceneViewport != null &&
+                this.sceneViewport.hasCapturedNativeWorldFrame();
+        boolean fsDepthReady = fsReady && BbsFsWorldFrameCapture.isDepthValid();
+        drawToolbarButton(x, y + 64, 26, 26, fsReady);
+        /*
+         * FS = color + depth captured; F~ = valid color but missing native
+         * depth (record actor occlusion is uncertain); F! = no world frame.
+         * These are diagnostics, not switches to the old world renderer.
+         */
+        drawCenteredString(fontRenderer,
+                fsDepthReady ? "FS" : (fsReady ? "F~" : "F!"),
+                x + 13, y + 9 + 64,
+                fsDepthReady ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
@@ -2988,13 +3039,7 @@ public class AnimationEditorScreen extends GuiScreen
                 previewAutoFocus.toggle();
                 return true;
             }
-            if (mouseY >= y + 64 && mouseY < y + 90)
-            {
-                BodyPartPhysicsBakeController bake=getPhysicsBakeController();
-                if(bake==null || !bake.isRecording())
-                    PreviewNativeWorldBridge.toggleRequested();
-                return true;
-            }
+
         }
         return false;
     }
@@ -3613,6 +3658,14 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
+        /* Never leave the detached preview camera as Minecraft's view. */
+        if (this.sceneViewport != null)
+        {
+            BbsFsWorldCameraDriver.detach(this.sceneViewport);
+            this.sceneViewport.disposePreviewResources();
+        }
+        BbsFsWorldFrameCapture.release();
+
         EditorSessionSelection.remember(this.sceneState);
 
         if (this.editorInput != null)

@@ -16,12 +16,13 @@ public class EditorSceneViewport
     private int height;
 
     private final AnimationPreview animationPreview;
-    private final MinecraftWorldPreview minecraftWorldPreview;
+    private boolean sceneAvailable;
     private final EditorCamera camera;
     private final BlockbusterActorPreviewRenderer actorPreviewRenderer;
     private final PreviewRenderBackend renderBackend;
-    private final PreviewWeatherRenderer weatherRenderer;
 
+    /** True only if the native world frame was copied into this film FBO. */
+    private boolean capturedWorldFrame;
     private boolean rotatingCamera;
 
     private int lastMouseX;
@@ -31,10 +32,6 @@ public class EditorSceneViewport
     private double sceneY;
     private double sceneZ;
 
-    private boolean worldAfterActorRendered;
-    private boolean weatherRendered;
-    /** True when native Minecraft rendered this preview frame. */
-    private boolean nativeWorldRendered;
     /** Frame sampled by the actor before the final preview FBO overlay. */
     private int lastJoltOverlayFrame = -1;
     private double joltActorX, joltActorY, joltActorZ;
@@ -52,9 +49,7 @@ public class EditorSceneViewport
         this.sceneY = 0.0D;
         this.sceneZ = 0.0D;
 
-        this.worldAfterActorRendered = false;
-        this.weatherRendered = false;
-        this.nativeWorldRendered = false;
+        this.sceneAvailable = false;
 
         this.renderBackend =
                 new PreviewRenderBackend(
@@ -64,27 +59,18 @@ public class EditorSceneViewport
         this.animationPreview =
                 new AnimationPreview();
 
-        this.minecraftWorldPreview =
-                new MinecraftWorldPreview();
-
-        this.minecraftWorldPreview.clearScene();
-
-        this.minecraftWorldPreview.setWorldPosition(
-                this.sceneX,
-                this.sceneY,
-                this.sceneZ
-        );
-
         this.actorPreviewRenderer =
                 new BlockbusterActorPreviewRenderer();
 
         this.camera =
                 new EditorCamera();
 
-        this.weatherRenderer =
-                new PreviewWeatherRenderer(
-                        Minecraft.getMinecraft()
-                );
+        /*
+         * Until a scene/actor is selected, begin near the actual player
+         * instead of the old hard-coded world origin (whose camera eye was
+         * below Y=0). Actor autofocus can override this target normally.
+         */
+        this.focusOnCurrentPlayer();
     }
 
 
@@ -132,7 +118,10 @@ public class EditorSceneViewport
             int currentFrame)
     {
         this.lastJoltOverlayFrame = currentFrame;
-        this.hasJoltActorOrigin = false;
+        /* Native actors were already rendered in RenderWorldLastEvent.
+         * Their Jolt origin must survive until the GUI overlay is drawn. */
+        if (!BbsFsNativeActorPass.didRenderThisFrame())
+            this.hasJoltActorOrigin = false;
         if (mc == null)
         {
             return;
@@ -160,54 +149,18 @@ public class EditorSceneViewport
 
 
         /*
-         * =========================================================
-         * BEGIN PREVIEW FBO
-         * =========================================================
-         *
-         * ВАЖНО:
-         *
-         * Здесь больше НЕТ никаких вызовов OptiFine.
-         *
-         * Shader pipeline временно полностью исключён из
-         * EditorSceneViewport. Мы вернём его после завершения
-         * основной архитектуры Preview.
+         * BBS FS camera: Forge's RenderTick START already selected our
+         * detached view. Minecraft rendered its normal world (and OptiFine)
+         * before GuiScreen, and BbsFsWorldFrameCapture captured that frame
+         * before any editor GUI pixels. Nothing renders chunks here.
          */
-
         this.renderBackend.beginPreviewRender();
+        if (!this.renderBackend.isPreviewRenderActive()) return;
 
-
-        this.worldAfterActorRendered = false;
-        this.weatherRendered = false;
-
-
-        /*
-         * =========================================================
-         * WORLD FIRST PASS
-         * =========================================================
-         *
-         * MinecraftWorldPreview сам подготавливает:
-         *
-         * - EditorCamera
-         * - projection
-         * - modelview
-         * - sky
-         * - fog
-         * - terrain
-         * - lighting
-         *
-         * Никаких дополнительных camera/shader операций здесь
-         * больше не выполняем.
-         */
-
-        this.nativeWorldRendered=PreviewNativeWorldBridge.render(
-                mc,this.camera,this.renderBackend);
-        if(!this.nativeWorldRendered)
-            this.minecraftWorldPreview.draw(
-                    mc,this.camera,this.x,this.y,this.width,this.height
-            );
-
-
-        /* Clouds render only after actors, translucent world and weather. */
+        BbsFsWorldCameraDriver.attach(this);
+        this.capturedWorldFrame = BbsFsWorldFrameCapture.copyWorld(
+                mc, this.renderBackend, this.x, this.y,
+                this.width, this.height);
     }
 
 
@@ -281,6 +234,11 @@ public class EditorSceneViewport
         return this.renderBackend;
     }
 
+    public boolean hasCapturedNativeWorldFrame()
+    {
+        return this.capturedWorldFrame;
+    }
+
 
     public int getX()
     {
@@ -330,11 +288,14 @@ public class EditorSceneViewport
     }
 
 
-    public MinecraftWorldPreview getMinecraftWorldPreview()
-    {
-        return this.minecraftWorldPreview;
-    }
 
+    public void beginNativeActorFrame()
+    {
+        /* Called BEFORE RenderWorldLastEvent's selected actor draw, not by
+         * the later GUI compositing pass. Avoid showing previous actor
+         * collision overlays when the current scene has no selected actor. */
+        this.hasJoltActorOrigin = false;
+    }
 
     public void drawActor(
             Minecraft mc,
@@ -351,7 +312,7 @@ public class EditorSceneViewport
             return;
         }
 
-        if (actorData == null)
+        if (!BbsFsNativeActorPass.isRendering() || actorData == null)
         {
             return;
         }
@@ -367,34 +328,22 @@ public class EditorSceneViewport
         this.joltActorZ = frame.getZ();
         this.hasJoltActorOrigin = true;
 
-        /*
-         * =========================================================
-         * ACTOR
-         * =========================================================
-         *
-         * OptiFine entity/shader pass больше здесь НЕ запускается.
-         *
-         * Актёр просто рисуется поверх первого прохода мира.
-         */
+        /* The native world event is the only recorded-actor pass. */
+        int viewportWidth = BbsFsNativeActorPass.worldViewportWidth();
+        int viewportHeight = BbsFsNativeActorPass.worldViewportHeight();
 
         this.actorPreviewRenderer.drawActor(
                 mc,
                 actorData,
                 frame,
                 this.camera,
-                this.x,
-                this.y,
-                this.width,
-                this.height
+                0,
+                0,
+                viewportWidth,
+                viewportHeight
         );
 
 
-        /*
-         * После актёра дорисовываем прозрачные/поздние
-         * слои мира.
-         */
-
-        this.renderWorldAfterActor();
     }
 
 
@@ -408,102 +357,20 @@ public class EditorSceneViewport
             BlockbusterRecordFrame frame,
             BlockbusterActorPreviewRenderer renderer)
     {
-        if (mc == null || renderer == null || frame == null) return;
+        if (!BbsFsNativeActorPass.isRendering() ||
+                mc == null || renderer == null || frame == null) return;
         renderer.drawActor(
-                mc, data, frame, this.camera,
-                this.x, this.y, this.width, this.height);
+                mc, data, frame, this.camera, 0, 0,
+                BbsFsNativeActorPass.worldViewportWidth(),
+                BbsFsNativeActorPass.worldViewportHeight());
     }
 
-    private void renderWorldAfterActor()
-    {
-        if (this.worldAfterActorRendered)
-        {
-            return;
-        }
-
-        if(!this.nativeWorldRendered)
-            this.minecraftWorldPreview.drawAfterActor();
-
-        this.worldAfterActorRendered = true;
-    }
-
-
-    private void renderWeather(
-            Minecraft mc)
-    {
-        if (this.weatherRendered)
-        {
-            return;
-        }
-
-        if (mc == null)
-        {
-            return;
-        }
-
-        if(!this.nativeWorldRendered)
-            this.weatherRenderer.render(
-                    this.camera,mc.getRenderPartialTicks()
-            );
-
-        this.weatherRendered = true;
-    }
-
-
-    private void endWorldRender()
-    {
-        if(!this.nativeWorldRendered)
-            this.minecraftWorldPreview.endRender();
-    }
-
-
+    /**
+     * The entire world including translucent layers, weather and clouds
+     * already lives in BBS FS's native captured frame.
+     */
     public void finishPreviewRender()
     {
-        Minecraft mc =
-                Minecraft.getMinecraft();
-
-
-        /*
-         * =========================================================
-         * WORLD AFTER ACTOR
-         * =========================================================
-         */
-
-        this.renderWorldAfterActor();
-
-
-        /*
-         * =========================================================
-         * WEATHER
-         * =========================================================
-         */
-
-        this.renderWeather(
-                mc
-        );
-
-
-        /*
-         * Clouds are the final transparent world pass. Drawing them
-         * before actors left the cloud texture/state active at the start
-         * of the multi-actor render sequence.
-         */
-        if(!this.nativeWorldRendered)
-            this.minecraftWorldPreview.renderClouds();
-
-        /*
-         * =========================================================
-         * END WORLD
-         * =========================================================
-         */
-
-        this.endWorldRender();
-
-        /*
-         * =========================================================
-         * END PREVIEW FBO
-         * ========================================================= */
-
         this.renderBackend.endPreviewRender();
     }
 
@@ -846,16 +713,7 @@ public class EditorSceneViewport
         );
 
 
-        this.minecraftWorldPreview.setWorldPosition(
-                x,
-                y,
-                z
-        );
-
-
-        this.minecraftWorldPreview.setSceneAvailable(
-                true
-        );
+        this.sceneAvailable = true;
 
 
         /*
@@ -884,19 +742,31 @@ public class EditorSceneViewport
         );
 
 
-        this.minecraftWorldPreview.clearScene();
-
+        this.sceneAvailable = false;
 
         this.camera.reset();
-
-
-        this.worldAfterActorRendered = false;
-        this.weatherRendered = false;
+        this.focusOnCurrentPlayer();
     }
 
 
     public boolean hasScene()
     {
-        return this.minecraftWorldPreview.isSceneAvailable();
+        return this.sceneAvailable;
+    }
+
+    private void focusOnCurrentPlayer()
+    {
+        Minecraft mc = Minecraft.getMinecraft();
+        net.minecraft.entity.Entity player = mc.player != null
+                ? mc.player : mc.getRenderViewEntity();
+        if (player != null)
+            this.camera.setTarget(player.posX,
+                    player.posY + 3D, player.posZ);
+    }
+
+    /** Recreated lazily on returning from a child GUI. */
+    public void disposePreviewResources()
+    {
+        this.renderBackend.delete();
     }
 }

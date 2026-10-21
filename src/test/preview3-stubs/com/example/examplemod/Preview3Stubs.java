@@ -9,7 +9,14 @@ class Preview3Probe
 {
     static final List<String> order=new ArrayList<String>();
     static boolean throwActor;
-    static void reset(){order.clear();throwActor=false;}
+    static void reset(){order.clear();throwActor=false;
+        BbsFsNativeActorPass.rendered=false;}
+}
+/** Test-only stub. Real implementation lives in BbsFsNativeActorPass.java. */
+class BbsFsNativeActorPass
+{
+    static boolean rendered;
+    static boolean didRenderThisFrame(){return rendered;}
 }
 class EditorSceneState {}
 class BlockbusterSceneActorData {}
