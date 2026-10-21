@@ -135,6 +135,9 @@ public final class ChameleonWeldMorphHookSmoke implements Opcodes
         render.setAccessible(true);
         Delegate.expected=true;
         render.invoke(on,new EntityLivingBase(),0F);
+        // The 'off' instance was intentionally set ON by the NBT read test.
+        // Explicitly opt it out before checking the disabled render path.
+        ChameleonWeldRuntime.setMorphWeld(off,false);
         Delegate.expected=false;
         Delegate.throwOnDraw=true;
         try
