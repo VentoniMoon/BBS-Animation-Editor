@@ -23,19 +23,25 @@ public final class JoltRenderInterpolationSmoke
         frame.beginFrame(1);
         frame.accept(part,1,"hair",
                 new float[]{0,1,0,(float)Math.PI/2F},true);
-        // Preview sees previous tick; bake MUST NOT capture that stale pose.
+        // Preview sees the previous tick; bake MUST wait for the
+        // same-frame sample while ordinary interpolation remains unchanged.
         if(frame.forBakeRender(part,1)!=null)
             throw new AssertionError("Bake accepted delayed frame 0 as frame 1");
-        frame.publishEditedFrame(part,1);
-        near(frame.forBakeRender(part,1).get("hair")[3],(float)Math.PI/2F);
-        frame.beginFrame(2);
-        if(frame.forBakeRender(part,2)!=null)
-            throw new AssertionError("Bake captured previous frame after tick change");
-        // Return to frame 1 for the existing interpolation tests below.
-        frame.beginFrame(1);
-        frame.accept(part,1,"hair",
+        BodyPartPhysicsFrameState bakeFrame=new BodyPartPhysicsFrameState();
+        bakeFrame.beginFrame(0);
+        bakeFrame.accept(part,0,"hair",new float[]{0,1,0,0F},true);
+        bakeFrame.publishEditedFrame(part,0);
+        bakeFrame.beginFrame(1);
+        bakeFrame.accept(part,1,"hair",
                 new float[]{0,1,0,(float)Math.PI/2F},true);
-        frame.publishEditedFrame(part,1);
+        if(bakeFrame.forBakeRender(part,1)!=null)
+            throw new AssertionError("Bake captured prior frame before publish");
+        bakeFrame.publishEditedFrame(part,1);
+        near(bakeFrame.forBakeRender(part,1).get("hair")[3],(float)Math.PI/2F);
+        bakeFrame.beginFrame(2);
+        if(bakeFrame.forBakeRender(part,2)!=null)
+            throw new AssertionError("Bake captured previous frame after tick change");
+
         Map<String,float[]> previous=frame.forRender(part,1);
         near(previous.get("hair")[3],0F);
         Map<String,float[]> midpoint=frame.forRenderInterpolated(part,1,0.5F);
