@@ -1511,13 +1511,20 @@ public class EditorGizmoController
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
 
-        GLU.gluPerspective(
-                camera.getFov(),
-                (float) viewportWidth
-                        / (float) viewportHeight,
-                camera.getNearPlane(),
-                Math.max(camera.getFarPlane(),500.0F)
-        );
+        /*
+         * Exactly the same depth projection as the native world and actors.
+         * Gizmo orientation/pivot code below is deliberately unchanged.
+         */
+        if (!BbsFsWorldProjection.loadForPreview(
+                viewportWidth, viewportHeight))
+        {
+            GLU.gluPerspective(
+                    camera.getFov(),
+                    (float) viewportWidth / (float) viewportHeight,
+                    camera.getNearPlane(),
+                    Math.max(camera.getFarPlane(),500.0F)
+            );
+        }
 
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPushMatrix();
