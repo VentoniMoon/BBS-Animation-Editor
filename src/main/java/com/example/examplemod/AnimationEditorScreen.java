@@ -1691,6 +1691,12 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             float partialTicks)
     {
+        /*
+         * BBS FS native capture MUST happen before drawing any GUI pixel.
+         * Otherwise the world texture would contain our dark editor panels.
+         */
+        BbsFsWorldFrameCapture.beginFrame(this.mc);
+
         drawRect(
                 0,
                 0,
@@ -3608,6 +3614,7 @@ public class AnimationEditorScreen extends GuiScreen
         /* Never leave the detached preview camera as Minecraft's view. */
         if (this.sceneViewport != null)
             BbsFsWorldCameraDriver.detach(this.sceneViewport);
+        BbsFsWorldFrameCapture.release();
 
         EditorSessionSelection.remember(this.sceneState);
 
