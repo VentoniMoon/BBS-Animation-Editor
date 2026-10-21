@@ -69,7 +69,7 @@ public final class BbsFsNativeActorPass
                 viewport.getWidth() <= 0 || viewport.getHeight() <= 0) return;
 
         rendering = true;
-        try
+        try (BbsFsWorldGlGuard ignored = new BbsFsWorldGlGuard(mc))
         {
             if (!editor.renderActorsInNativeWorld()) return;
             renderedThisFrame = true;
