@@ -1512,16 +1512,17 @@ public class EditorGizmoController
         GL11.glLoadIdentity();
 
         GLU.gluPerspective(
-                60.0F,
+                camera.getFov(),
                 (float) viewportWidth
                         / (float) viewportHeight,
-                0.05F,
-                500.0F
+                camera.getNearPlane(),
+                Math.max(camera.getFarPlane(),500.0F)
         );
 
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
+        GL11.glRotatef(-camera.getRoll(),0F,0F,1F);
 
         GL11.glRotatef(
                 -camera.getPitch(),
@@ -2916,14 +2917,14 @@ public class EditorGizmoController
         cameraZ = -sp * dy + cp * cameraZ;
 
         double depth = -cameraZ;
-        if (depth <= 0.05D)
+        if (depth <= camera.getNearPlane())
         {
             return 0.35F;
         }
 
         double focal =
                 viewportHeight /
-                        (2.0D * Math.tan(Math.toRadians(60.0D) / 2.0D));
+                        (2.0D * Math.tan(Math.toRadians(camera.getFov()) / 2.0D));
 
         double worldSize = 50.0D * depth / focal;
 
