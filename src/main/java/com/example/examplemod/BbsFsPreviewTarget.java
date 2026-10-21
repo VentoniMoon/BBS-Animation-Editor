@@ -191,9 +191,13 @@ public final class BbsFsPreviewTarget
             GL11.glDisable(GL11.GL_ALPHA_TEST);
             GL11.glDepthMask(false);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA,
-                    GL11.GL_ONE_MINUS_SRC_ALPHA);
+            /*
+             * The native world frame is opaque as displayed by Minecraft.
+             * Shaderpack composites may leave non-opaque alpha in its
+             * texture; blending the entire film quad over editor panels
+             * would produce falsely dark/transparent world colors.
+             */
+            GL11.glDisable(GL11.GL_BLEND);
             GL11.glColor4f(1F, 1F, 1F, 1F);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D,
                     framebuffer.framebufferTexture);
