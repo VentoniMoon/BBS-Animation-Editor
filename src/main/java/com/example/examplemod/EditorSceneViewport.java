@@ -81,6 +81,17 @@ public class EditorSceneViewport
         this.camera =
                 new EditorCamera();
 
+        /*
+         * Until a scene/actor is selected, begin near the actual player
+         * instead of the old hard-coded world origin (whose camera eye was
+         * below Y=0). Actor autofocus can override this target normally.
+         */
+        net.minecraft.entity.Entity initialView =
+                Minecraft.getMinecraft().getRenderViewEntity();
+        if (initialView != null)
+            this.camera.setTarget(initialView.posX,
+                    initialView.posY + 3D, initialView.posZ);
+
         this.weatherRenderer =
                 new PreviewWeatherRenderer(
                         Minecraft.getMinecraft()
