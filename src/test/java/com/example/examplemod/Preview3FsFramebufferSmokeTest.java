@@ -40,6 +40,10 @@ public final class Preview3FsFramebufferSmokeTest
 
         BbsFsWorldFrameCapture.markNativeWorldRendered();
         BbsFsWorldFrameCapture.beginFrame(mc);
+        int nativeBlits = GL30.blits;
+        BbsFsWorldFrameCapture.beginFrame(mc);
+        require(GL30.blits == nativeBlits,
+                "repeated drawScreen captured editor GUI into world texture");
         require(GL30.read==17 && GL30.draw==19,
                 "world snapshot changed native FBO target");
         require(target.begin(),"target begin failed");
