@@ -23,6 +23,11 @@ import org.objectweb.asm.Opcodes;
  */
 public final class ChameleonWeldNativeHookSmoke implements Opcodes
 {
+    public static final class MorphState
+    {
+        public boolean bbs$weld;
+    }
+
     public static final class Probe
     {
         static boolean throwOnDraw;
@@ -144,6 +149,9 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
         parent.cubes.add(top);
         child.cubes.add(bottom);
         ClientProxy.chameleonModels.put("hair body",new ClientProxy.Wrapper(model));
+        MorphState enabled=new MorphState();
+        enabled.bbs$weld=true;
+        ChameleonWeldRuntime.enterMorph(enabled);
 
         Vector3f oldParent=top.quads.get(0).vertices.get(0).position;
         Vector3f oldChild=bottom.quads.get(0).vertices.get(0).position;
@@ -184,17 +192,19 @@ public final class ChameleonWeldNativeHookSmoke implements Opcodes
         near(oldChild.x,origCX);
         near(oldChild.y,origCY);
 
-        ClientProxy.chameleonModels.clear();
-        ClientProxy.chameleonModels.put("another model",
-                new ClientProxy.Wrapper(model));
+        // Same geometry / same model key, but second morph opts OUT.
+        ChameleonWeldRuntime.exitMorph();
+        MorphState disabled=new MorphState();
+        ChameleonWeldRuntime.enterMorph(disabled);
         Probe.throwOnDraw=false;
         Probe.expectWeld=false;
         render.invoke(null,model);
         near(oldParent.x,origPX);
         near(oldChild.x,origCX);
+        ChameleonWeldRuntime.exitMorph();
 
         if(Probe.draws!=3)
-            throw new AssertionError("Expected 2 hair Weld draws and 1 excluded draw");
-        System.out.println("Native Chameleon Weld hook: seam, model filter and failure rollback PASS");
+            throw new AssertionError("Expected 2 welded and 1 unwelded renders");
+        System.out.println("Native Chameleon Weld hook: per-instance opt-in and rollback PASS");
     }
 }
