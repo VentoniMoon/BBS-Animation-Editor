@@ -39,6 +39,32 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
 
     private ChameleonWeldPreviewPass() {}
 
+    /**
+     * Entry for the real ChameleonRenderer hook (Blockbuster playback,
+     * world rendering, and Preview). Unlike begin(morphs), the library has
+     * already applied the exact frame's pose to ModelBone.current.
+     */
+    public static ChameleonWeldPreviewPass beginPreparedModel(Object model)
+    {
+        ChameleonWeldPreviewPass pass=new ChameleonWeldPreviewPass();
+        if(model==null)return pass;
+        try
+        {
+            pass.prepareModel(model);
+        }
+        catch(Exception e)
+        {
+            pass.close();
+            throw new IllegalStateException("Chameleon Weld geometry failed",e);
+        }
+        return pass;
+    }
+
+    public int getSeamCount()
+    {
+        return seams;
+    }
+
     public static ChameleonWeldPreviewPass begin(
             Iterable<? extends AbstractMorph> childMorphs,float partialTicks)
     {
@@ -93,7 +119,12 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                 "applyPose",modelClass,float.class);
         apply.setAccessible(true);
         apply.invoke(morph,model,partialTicks);
+        prepareModel(model);
+    }
 
+    @SuppressWarnings("unchecked")
+    private void prepareModel(Object model)throws Exception
+    {
         List<Object> roots=(List<Object>)field(model,"bones");
         List<Bone> bones=new ArrayList<Bone>();
         for(Object root:roots)
@@ -165,44 +196,35 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                 Math.abs(r.z)>1E-5F;
     }
 
+    /**
+     * Derive the physical face from the cube geometry, not its visible quads.
+     * Chameleon supports UV-omitted faces: side strands have only side
+     * textures, hence scanning rendered vertices detects 3/7 hair joints.
+     * The bounds below reproduce ModelCube.generateQuads exactly.
+     */
     @SuppressWarnings("unchecked")
     private float[][] face(Object cube,boolean top)throws Exception
     {
         List<Object> quads=(List<Object>)field(cube,"quads");
         if(quads.isEmpty())return null;
-        float y=top?Float.NEGATIVE_INFINITY:Float.POSITIVE_INFINITY;
-        for(Object quad:quads)
-            for(Object vertex:(List<Object>)field(quad,"vertices"))
-            {
-                Vector3f v=vec(vertex,"position");
-                float[] base=originals.get(v);
-                float yy=base==null?v.y:base[1];
-                y=top?Math.max(y,yy):Math.min(y,yy);
-            }
+        Vector3f origin=vec(cube,"origin");
+        Vector3f size=vec(cube,"size");
+        float inflate=((Number)field(cube,"inflate")).floatValue();
 
-        List<float[]> unique=new ArrayList<float[]>();
-        for(Object quad:quads)
-            for(Object vertex:(List<Object>)field(quad,"vertices"))
-            {
-                Vector3f v=vec(vertex,"position");
-                float[] original=originals.get(v);
-                float vx=original==null?v.x:original[0];
-                float vy=original==null?v.y:original[1];
-                float vz=original==null?v.z:original[2];
-                if(Math.abs(vy-y)>FACE_EPS)continue;
-                boolean exists=false;
-                for(float[] old:unique)
-                    if(Math.abs(old[0]-vx)<=FACE_EPS &&
-                            Math.abs(old[1]-vy)<=FACE_EPS &&
-                            Math.abs(old[2]-vz)<=FACE_EPS)
-                    {
-                        exists=true;
-                        break;
-                    }
-                if(!exists)unique.add(new float[] {vx,vy,vz});
-            }
-        if(unique.size()!=4)return null;
-        return unique.toArray(new float[4][3]);
+        float minX=(origin.x-size.x-inflate)/16F;
+        float maxX=(origin.x+inflate)/16F;
+        float minY=(origin.y-inflate)/16F;
+        float maxY=(origin.y+size.y+inflate)/16F;
+        float minZ=(origin.z-inflate)/16F;
+        float maxZ=(origin.z+size.z+inflate)/16F;
+        float y=top?maxY:minY;
+
+        return new float[][] {
+            {minX,y,minZ},
+            {maxX,y,minZ},
+            {maxX,y,maxZ},
+            {minX,y,maxZ}
+        };
     }
 
     @SuppressWarnings("unchecked")
