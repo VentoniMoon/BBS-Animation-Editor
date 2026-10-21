@@ -191,6 +191,10 @@ public class BodyPartsEditorPanel
                     x + 9, modelY + SECTION_HEIGHT, WIDTH - 18, 20, mouseX, mouseY);
             drawButton(mc, "REMOVE ATTACHMENT",
                     x + 9, modelY + SECTION_HEIGHT + 24, WIDTH - 18, 17, mouseX, mouseY);
+            drawButton(mc,
+                    "WELD GEOMETRY: " + (selected.isWeldEnabled() ? "ON" : "OFF"),
+                    x + 9, modelY + SECTION_HEIGHT + 46, WIDTH - 18, 18,
+                    mouseX, mouseY);
         }
 
         drawAccordionHeader(mc, "GLOBAL TRANSFORM", globalY, globalSectionOpen, mouseX, mouseY);
@@ -356,6 +360,14 @@ public class BodyPartsEditorPanel
                 controller.removeSelectedAttachment();
                 return true;
             }
+
+            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9
+                    && mouseY >= modelY + SECTION_HEIGHT + 46
+                    && mouseY < modelY + SECTION_HEIGHT + 64)
+            {
+                selected.setWeldEnabled(!selected.isWeldEnabled());
+                return true;
+            }
         }
 
         return false;
@@ -369,7 +381,7 @@ public class BodyPartsEditorPanel
 
     private int getGlobalY(int modelY)
     {
-        return modelY + SECTION_HEIGHT + (modelSectionOpen ? 47 : 0);
+        return modelY + SECTION_HEIGHT + (modelSectionOpen ? 70 : 0);
     }
 
     private int getGlobalViewportTop(int modelY)
