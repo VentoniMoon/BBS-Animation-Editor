@@ -14,6 +14,7 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldProjection.java'
+      - 'src/main/java/com/example/examplemod/BbsFsCameraConventions.java'
       - 'src/main/java/com/example/examplemod/BbsFsPreviewTarget.java'
       - 'src/main/java/com/example/examplemod/PreviewNativeWorldBridge.java'
       - 'src/main/java/com/example/examplemod/PreviewWorldRenderer.java'
@@ -40,6 +41,7 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldProjection.java'
+      - 'src/main/java/com/example/examplemod/BbsFsCameraConventions.java'
       - 'src/main/java/com/example/examplemod/BbsFsPreviewTarget.java'
       - 'src/main/java/com/example/examplemod/PreviewNativeWorldBridge.java'
       - 'src/main/java/com/example/examplemod/PreviewWorldRenderer.java'
@@ -69,6 +71,7 @@ jobs:
           mkdir -p build/preview3/camera
           javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/camera \
             src/main/java/com/example/examplemod/EditorCamera.java \
+            src/main/java/com/example/examplemod/BbsFsCameraConventions.java \
             src/main/java/com/example/examplemod/PreviewCameraPose.java \
             src/main/java/com/example/examplemod/PreviewCameraProjection.java \
             src/main/java/com/example/examplemod/PreviewCameraMatrices.java \
