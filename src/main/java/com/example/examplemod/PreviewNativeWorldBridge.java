@@ -19,7 +19,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
  */
 public final class PreviewNativeWorldBridge
 {
-    private static final boolean REQUESTED=Boolean.getBoolean(
+    private static boolean requested=Boolean.getBoolean(
             "bbs.editor.preview3.nativeWorld");
     private static final PreviewNativeWorldBridge INSTANCE=
             new PreviewNativeWorldBridge();
@@ -33,12 +33,21 @@ public final class PreviewNativeWorldBridge
 
     private PreviewNativeWorldBridge() {}
 
-    public static boolean isRequested() { return REQUESTED; }
+    public static boolean isRequested()
+    {
+        return requested && !INSTANCE.disabledForSession;
+    }
+
+    /** Switch native/legacy renderer without changing Gradle or restarting. */
+    public static void toggleRequested()
+    {
+        requested=!requested;
+    }
 
     public static boolean render(Minecraft mc,EditorCamera camera,
             PreviewRenderBackend backend)
     {
-        if(!REQUESTED || mc==null || camera==null || backend==null ||
+        if(!isRequested() || mc==null || camera==null || backend==null ||
                 mc.world==null)return false;
         if(!handlerInstalled)
         {
