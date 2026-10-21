@@ -1381,15 +1381,24 @@ public class BlockbusterActorPreviewRenderer
                     entityActor, previewFrame, this.passiveBodyPartsModels);
         }
 
-        renderManager.renderEntity(
-                entityActor,
-                entityActor.posX,
-                entityActor.posY,
-                entityActor.posZ,
-                entityActor.rotationYaw,
-                actorPartialTicks,
-                true
-        );
+        /*
+         * Experimental Chameleon Weld wraps ONLY this actor's draw.
+         * Restore shared ModelCube vertices even on render failure. Disabled
+         * by default; never changes Jolt, scene records or morph data.
+         */
+        try (ChameleonWeldPreviewPass weld=
+                this.bodyPartsPreviewRenderer.beginWeldPreview(actorPartialTicks))
+        {
+            renderManager.renderEntity(
+                    entityActor,
+                    entityActor.posX,
+                    entityActor.posY,
+                    entityActor.posZ,
+                    entityActor.rotationYaw,
+                    actorPartialTicks,
+                    true
+            );
+        }
 
         /*
          * Snapshot native Emoticons animated limb transforms only AFTER the
