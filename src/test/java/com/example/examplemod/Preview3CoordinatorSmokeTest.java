@@ -42,6 +42,22 @@ public final class Preview3CoordinatorSmokeTest
         }
         if(scene.isDrawing() || viewport.getRenderBackend().isPreviewRenderActive())
             throw new AssertionError("Exception leaked a framebuffer or scene lock");
-        System.out.println("Preview 3.0 unified scene pass: ordering and cleanup PASS");
+
+        /* Recorded actors were already rendered in the native world event:
+         * do not advance Jolt or Morph state a second time from GUI. */
+        Preview3Probe.reset();
+        BbsFsNativeActorPass.rendered = true;
+        scene.draw(new Minecraft(),viewport,new EditorMultiActorPreviewController(),
+                new EditorSceneState(),new BlockbusterSceneActorData(),
+                new BlockbusterRecordFrame(),new BodyPartsEditorController(),
+                new ActorPose(),null,43,
+                () -> Preview3Probe.order.add("selected-ready"),
+                () -> Preview3Probe.order.add("gizmo"));
+        check("world","selected-ready","gizmo","cleanup");
+        if(scene.isDrawing() || viewport.getRenderBackend().isPreviewRenderActive())
+            throw new AssertionError("Native actor pass leaked compositor state");
+
+        System.out.println("Preview 3.0 unified scene pass: ordering, native "
+                + "actor single-render guard, cleanup PASS");
     }
 }
