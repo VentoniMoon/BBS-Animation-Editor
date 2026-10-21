@@ -26,20 +26,37 @@ public final class BbsFsWorldFrameCapture
 {
     private static Framebuffer snapshot;
     private static boolean ready;
+    /** Set only by the actual RenderWorldLast event during this render tick. */
+    private static boolean nativeWorldSeen;
     private static boolean reported;
     private static boolean reportedFailure;
     private static boolean warnedDepth;
 
     private BbsFsWorldFrameCapture() {}
 
+    /** Each Minecraft render tick must produce a fresh native world frame. */
+    public static void beginNativeFrame()
+    {
+        nativeWorldSeen = false;
+    }
+
+    /** The camera driver's RenderWorldLastEvent observed a true world pass. */
+    public static void markNativeWorldRendered()
+    {
+        nativeWorldSeen = true;
+    }
+
     /**
      * Call before the FIRST drawRect/GUI draw in the editor per frame.
      * A late capture would record our dark GUI panels instead of the world.
+     * If Minecraft skipped the world frame, NEVER capture stale GUI pixels
+     * from its framebuffer as if they were the scene.
      */
     public static void beginFrame(Minecraft mc)
     {
         ready = false;
-        if (mc == null || mc.world == null || mc.getFramebuffer() == null)
+        if (!nativeWorldSeen || mc == null || mc.world == null ||
+                mc.getFramebuffer() == null)
             return;
 
         Framebuffer source = mc.getFramebuffer();
@@ -206,6 +223,7 @@ public final class BbsFsWorldFrameCapture
     public static void release()
     {
         ready = false;
+        nativeWorldSeen = false;
         if (snapshot != null)
         {
             snapshot.deleteFramebuffer();
