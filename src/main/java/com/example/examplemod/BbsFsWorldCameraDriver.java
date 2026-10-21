@@ -133,8 +133,19 @@ public final class BbsFsWorldCameraDriver
         {
             net.minecraft.client.shader.Framebuffer source = mc.getFramebuffer();
             if (source != null)
+            {
                 BbsFsWorldProjection.capture(source.framebufferWidth,
                         source.framebufferHeight);
+
+                /*
+                 * Experimental next phase: recorded actors participate in
+                 * the native world pass BEFORE BBS FS captures its texture.
+                 * Never recursively render the world or touch the GUI FBO.
+                 */
+                BbsFsNativeActorPass.render(mc,
+                        (AnimationEditorScreen) mc.currentScreen,
+                        viewport, event.getPartialTicks());
+            }
         }
     }
 
