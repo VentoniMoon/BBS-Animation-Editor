@@ -96,6 +96,21 @@ public final class BbsFsWorldProjection
         return true;
     }
 
+    /**
+     * RenderWorldLast actors are in Minecraft's native full-screen
+     * framebuffer. No aspect cropping is appropriate at that stage: the
+     * finished whole frame will be cropped once by film capture later.
+     */
+    public static boolean loadForNativeWorld()
+    {
+        if (!captured) return false;
+        FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+        buffer.put(matrix);
+        buffer.flip();
+        GL11.glLoadMatrix(buffer);
+        return true;
+    }
+
     public static boolean isCaptured()
     {
         return captured;
