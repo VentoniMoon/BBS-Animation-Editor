@@ -3003,10 +3003,15 @@ public class AnimationEditorScreen extends GuiScreen
                 previewAutoFocus.isEnabled()
                         ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
 
-        // Informational status, not another legacy/native switch.
-        // All world frames now come from the BBS FS-style native capture.
-        drawCenteredString(fontRenderer, "FS", x + 13, y + 9 + 64,
-                getAccentBrightColor());
+        // Status of the *actual* native FBO transfer, not another switch.
+        // Never claim a healthy BBS FS viewport when Minecraft skipped its
+        // world frame or GL blit failed: these are essential smoke signals.
+        boolean fsReady = this.sceneViewport != null &&
+                this.sceneViewport.hasCapturedNativeWorldFrame();
+        drawToolbarButton(x, y + 64, 26, 26, fsReady);
+        drawCenteredString(fontRenderer, fsReady ? "FS" : "F!",
+                x + 13, y + 9 + 64,
+                fsReady ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
