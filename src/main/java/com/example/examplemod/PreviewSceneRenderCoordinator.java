@@ -41,11 +41,19 @@ public final class PreviewSceneRenderCoordinator
 
             // Background actors must not overwrite selected actor animation
             // state: EditorMultiActorPreviewController restores it in finally.
-            if(actors!=null)
-                actors.drawBackgroundActors(
-                        mc,viewport,scene,selected,frame,bodyParts);
+            /*
+             * If the actor pass already ran during RenderWorldLastEvent, it
+             * is already part of the captured native Minecraft framebuffer.
+             * Never invoke Body Parts/Jolt a second time for the same frame.
+             */
+            if (!BbsFsNativeActorPass.didRenderThisFrame())
+            {
+                if(actors!=null)
+                    actors.drawBackgroundActors(
+                            mc,viewport,scene,selected,frame,bodyParts);
 
-            viewport.drawActor(mc,selected,selectedRecordFrame);
+                viewport.drawActor(mc,selected,selectedRecordFrame);
+            }
 
             if(selectedReady!=null)selectedReady.run();
 
