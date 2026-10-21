@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.RenderManager;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
@@ -24,6 +25,7 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
     private final int oldReadFramebuffer;
     private final int oldDrawFramebuffer;
     private final int oldShaderProgram;
+    private final int oldTextureUnit;
     private final IntBuffer viewport = BufferUtils.createIntBuffer(16);
     private final int projectionDepth;
     private final int modelviewDepth;
@@ -39,6 +41,7 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
         oldDrawFramebuffer =
                 GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         oldShaderProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        oldTextureUnit = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         GL11.glGetInteger(GL11.GL_VIEWPORT, viewport);
         manager = mc.getRenderManager();
         viewerX = manager == null ? 0D : manager.viewerPosX;
@@ -89,6 +92,7 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
             GL11.glViewport(viewport.get(0), viewport.get(1),
                     viewport.get(2), viewport.get(3));
             GL11.glPopAttrib();
+            GL13.glActiveTexture(oldTextureUnit);
             GL20.glUseProgram(oldShaderProgram);
         }
     }
