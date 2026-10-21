@@ -345,14 +345,10 @@ public class EditorSceneViewport
             /* Actors now inhabit the actual Minecraft world framebuffer.
              * Their full-screen coordinates will be cropped only when
              * BBS FS copies the finished native frame to the film. */
-            net.minecraft.client.shader.Framebuffer world = mc.getFramebuffer();
-            if (world != null)
-            {
-                viewportX = 0;
-                viewportY = 0;
-                viewportWidth = world.framebufferWidth;
-                viewportHeight = world.framebufferHeight;
-            }
+            viewportX = 0;
+            viewportY = 0;
+            viewportWidth = BbsFsNativeActorPass.worldViewportWidth();
+            viewportHeight = BbsFsNativeActorPass.worldViewportHeight();
         }
 
         this.actorPreviewRenderer.drawActor(
@@ -384,12 +380,9 @@ public class EditorSceneViewport
         int vx=this.x, vy=this.y, vw=this.width, vh=this.height;
         if (BbsFsNativeActorPass.isRendering())
         {
-            net.minecraft.client.shader.Framebuffer world = mc.getFramebuffer();
-            if (world != null)
-            {
-                vx=0; vy=0;
-                vw=world.framebufferWidth; vh=world.framebufferHeight;
-            }
+            vx=0; vy=0;
+            vw=BbsFsNativeActorPass.worldViewportWidth();
+            vh=BbsFsNativeActorPass.worldViewportHeight();
         }
         renderer.drawActor(
                 mc, data, frame, this.camera, vx, vy, vw, vh);
