@@ -30,6 +30,8 @@ public final class BbsFsWorldFrameCapture
     private static boolean ready;
     /** Set only by the actual RenderWorldLast event during this render tick. */
     private static boolean nativeWorldSeen;
+    /** Prevent a second drawScreen() from recapturing already drawn GUI. */
+    private static boolean capturedThisNativeFrame;
     private static boolean reported;
     private static boolean reportedFailure;
     private static boolean warnedDepth;
@@ -40,6 +42,8 @@ public final class BbsFsWorldFrameCapture
     public static void beginNativeFrame()
     {
         nativeWorldSeen = false;
+        capturedThisNativeFrame = false;
+        ready = false;
     }
 
     /** The camera driver's RenderWorldLastEvent observed a true world pass. */
@@ -56,10 +60,18 @@ public final class BbsFsWorldFrameCapture
      */
     public static void beginFrame(Minecraft mc)
     {
+        /*
+         * Minecraft or another GUI mod may invoke the editor's drawScreen
+         * more than once during one world render tick. Capture ONLY the
+         * first pre-GUI image. Never overwrite it with our own panels.
+         */
+        if (capturedThisNativeFrame) return;
         ready = false;
         if (!nativeWorldSeen || mc == null || mc.world == null ||
                 mc.getFramebuffer() == null)
             return;
+        nativeWorldSeen = false;
+        capturedThisNativeFrame = true;
 
         Framebuffer source = mc.getFramebuffer();
         int sw = source.framebufferWidth;
@@ -226,6 +238,7 @@ public final class BbsFsWorldFrameCapture
     {
         ready = false;
         nativeWorldSeen = false;
+        capturedThisNativeFrame = false;
         if (snapshot == null) return;
 
         /* Deleting a Minecraft Framebuffer can rebind the default target.
