@@ -1266,10 +1266,10 @@ public class BlockbusterActorPreviewRenderer
                         (float) previewHeight;
 
         GLU.gluPerspective(
-                60.0F,
+                camera.getFov(),
                 aspect,
-                0.05F,
-                500.0F
+                camera.getNearPlane(),
+                Math.max(camera.getFarPlane(), 500.0F)
         );
 
         /*
@@ -1284,6 +1284,7 @@ public class BlockbusterActorPreviewRenderer
 
         GL11.glLoadIdentity();
 
+        GL11.glRotatef(-camera.getRoll(), 0F, 0F, 1F);
         GL11.glRotatef(
                 -camera.getPitch(),
                 1.0F,
