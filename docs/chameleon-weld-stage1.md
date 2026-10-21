@@ -1,103 +1,109 @@
-# Chameleon Weld — editor Preview + native Blockbuster playback
+# Chameleon Weld — per-BodyPart opt-in
 
-This implementation uses the original ChameleonRenderer to draw its model
-and wraps its `render(Model)` call with a reversible Weld seam adjustment.
+Weld now belongs to each **attached Chameleon morph instance**, not to the
+model registry key. Only the attachment whose **MODEL → WELD GEOMETRY**
+toggle is ON receives seam deformation.
 
-## Why the playback fix is different from Editor Preview
+A disabled part follows Chameleon's original renderer exactly, even if
+another part uses the same `hair body` geometry in the same scene.
 
-Blockbuster Record playback renders attached Chameleon morphs through
-`ChameleonMorph.renderModel()` → `ChameleonRenderer.render(Model)`, outside
-the editor's `BlockbusterActorPreviewRenderer`. The original Preview-only
-Weld consequently did not appear in recorded scene playback.
+## Workflow in the editor
 
-The editor mod now registers an ASM 5 LaunchClassLoader transformer during
-client preInit. It safely renames the original ChameleonRenderer.render(Model)
-implementation and creates a wrapper:
+1. Select the actor and the **Body Parts** attachment row (not an individual
+   internal bone keyframe).
+2. Expand **MODEL** in the Body Parts inspector.
+3. Click **WELD GEOMETRY: OFF** to turn welding ON for that specific
+   Chameleon attachment. Toggle back to OFF to disable.
+4. Save the editor with Ctrl+S and use the existing **Export** control to
+   update the Blockbuster record .dat.
+5. Preview and playback now read the same morph-level Weld flag.
 
-1. Call `ChameleonWeldRuntime.begin(model)` **after native animation pose
-   evaluation**, just before the original renderer.
-2. Render Chameleon using the unmodified underlying renderer.
-3. Call `ChameleonWeldRuntime.end()` in a bytecode try/finally, even if the
-   renderer throws.
+Existing editor saves with no `Weld` field load OFF. Existing exported
+recordings also load OFF until the corresponding attachment is configured
+and exported again. No implicit special treatment of `hair body`.
 
-The runtime scopes are thread-local and restore every temporarily adjusted
-vertex. Physics state, Jolt colliders, animator keyframes, textures/UVs,
-Blockbuster .dat and source geo.json are **not modified**.
+For now only Chameleon cubic attachments are supported; other morph types
+show **WELD: CHAMELEON ONLY** instead of an actionable toggle.
 
-If the hook is installed successfully, the editor skips its older Weld pass to
-avoid welding the same vertices twice; the native hook covers both paths.
+## How the record retains a per-instance Weld choice
 
-## Model selection
+`BodyPartModelData` stores `weldEnabled`. The editor's
+`BodyPartsPersistence` codec saves the Boolean `Weld` in each
+attachment entry of `editor.dat`.
 
-Native Weld is currently **restricted to the exact registered Chameleon key
-`hair body`**, matching `chameleon.hair body` in the user's test record.
-The model identifier inside the geo.json often says `geometry.steve` and
-cannot be used for identifying the attachment.
+At export time, the flag is set on the specific native `ChameleonMorph`.
+A tiny Forge ASM hook extends that morph instance with `bbs$weld` and
+preserves the value across:
 
-To add explicitly named models (experimental), set
-`-Dbbs.editor.weld.models=hair body;some other model` in the Minecraft JVM.
-Do not enable broad discovery for unrelated models; automatic matches are
-limited to single-cube parent-child seams.
+- `ChameleonMorph.toNBT` (adds optional `BBSWeld=true` tag)
+- `ChameleonMorph.fromNBT` (missing tag = false)
+- `ChameleonMorph.copy`
+- `ChameleonMorph.canMerge` (on successful merge)
 
-## Correctly matching all seven hair seams
+That means Metamorph morph loading, transition/copy operations, Blockbuster
+records, and editor re-import continue to agree on which attachment needs
+welding. Nothing is stored in the shared model cache.
 
-Chameleon permits UV-omitted faces: its ModelCube.generateQuads will not create
-rendered vertices for those untextured faces. The earlier implementation
-found just three seams by scanning the existing quad vertices, missing the
-left/right strands.
+The morph render wrapper supplies the **current morph instance** on a
+thread-local render stack. The existing `ChameleonRenderer.render(Model)`
+hook welds only when that instance's Boolean is true, immediately restores
+vertices afterward, and preserves nested body parts.
 
-Weld now reconstructs the authored face corners using exactly Chameleon's
-origin, size, and inflate formula. It patches existing rendered vertices
-only, preserving all texture UVs and omitting untextured faces.
+## Geometry behavior
 
-Expected joints for the reference hair body model:
+Weld matches parent DOWN and child UP faces using the cubes' actual
+origin/size/inflate coordinates rather than relying on the presence of UVs.
+This supports the seven known joints of the user's `hair body` model,
+including the side strands whose cubes omit face textures.
 
-- left_strand_1 → left_strand_2 → left_strand_3 (2 seams)
-- right_strand_1 → right_strand_2 → right_strand_3 (2 seams)
-- back_strand_1 → back_strand_2 → back_strand_3 → back_strand_4 (3 seams)
+UVs, keyframe angles, Jolt physics, collision settings and authored
+geo.json geometry are not changed.
 
-## A/B test in the developer client
+This is the first seam-corner implementation. Smoothed normals, subdivided
+bends, cube rotations and non-Chameleon morphs require further development.
 
-After merging latest `main`:
+## Developer-client testing
+
+Local Jolt jars and existing local Gradle settings can stay untouched:
 
 ```powershell
 git pull --ff-only origin main
-.\gradlew runClient -PenableJoltExperimental -Dbbs.editor.weld.preview=true
+.\gradlew runClient -PenableJoltExperimental
 ```
 
-Open the editor and compare against **ordinary Blockbuster Record playback in
-the world**, for example hairbake_1; both should use the same native Weld.
+The previous optional `-Dbbs.editor.weld.preview=true` flag is no
+longer required: Weld defaults OFF **per attachment**, while the runtime
+support is available. To disable all runtime welding for diagnostics, put
+`jvmArg '-Dbbs.editor.weld.runtime=false'` in the local
+`minecraft.runs.client` Gradle block.
 
-Useful log markers:
+Useful startup markers:
 
 ```text
+[BBS Editor][Weld] ChameleonMorph per-part NBT and render context hooked
 [BBS Editor][Weld] Native ChameleonRenderer.render(Model) hooked
-[BBS Editor][Weld][Runtime] Native Chameleon render: 7 matching joints; model=hair body
 ```
 
-Compare without Weld:
+Useful active-instance marker:
 
-```powershell
-.\gradlew runClient -PenableJoltExperimental -Dbbs.editor.weld.preview=false
+```text
+[BBS Editor][Weld][Runtime] Per-morph Weld active: 7 matching joints
 ```
 
-The client Gradle config forwards the existing `bbs.editor.weld.preview`
-property to the Minecraft process; the runtime hook respects it. A dedicated
-`bbs.editor.weld.runtime` JVM system property takes precedence. In an actual
-built mod without a flag, model-scoped runtime Weld defaults to ON.
+The message appears once per session. It indicates that at least one
+attachment was welded, not that all Chameleon instances are welded.
 
-## Tested and untested
+## Verification and scope
 
-- CI on Java 8 validates 7 authored rest seams, an ASM 5 render wrapper,
-  live one-joint posed geometry, hair-only filtering, and exception-safe
-  restoration.
-- Still requires an in-game test with the user's exact Chameleon 1.2.1,
-  Blockbuster 2.7.1 and Jolt-enabled editor.
-- This version stitches face corners; it does not yet add curved vertex
-  subdivision or smoothed surface normals like the full BBS FS cubic Weld.
-- Weld requires the BBS Animation Editor mod on the **rendering client**. A
-  .dat record by itself does not serialize a dynamic weld renderer hook.
+Java 8 tests cover seven rest-face pairs, two instances with opposite
+Weld settings on identical model geometry, NBT roundtrip, morph copy,
+successful merge, render context nesting, and vertex restoration after
+a simulated renderer exception.
 
-If the native hook marker does not appear during game startup, check whether
-another mod already loaded ChameleonRenderer before our client preInit. The
-editor Preview retains its previous Weld fallback when the hook is absent.
+**Not yet verified in the user's Forge development client.** Please test
+one Weld ON and one Weld OFF model in one scene, reopen the editor and
+re-export before checking normal Blockbuster playback.
+
+The BBS Animation Editor mod with the Chameleon hooks must be installed
+in the **rendering client**. A `.dat` record by itself cannot cause an
+unmodified Chameleon renderer to weld.
