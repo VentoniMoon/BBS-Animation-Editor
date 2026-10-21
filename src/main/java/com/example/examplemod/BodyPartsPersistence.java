@@ -35,6 +35,7 @@ public final class BodyPartsPersistence
                 tag.setString("Attachment", model.getAttachmentBoneName());
                 tag.setInteger("Start", model.getStartFrame());
                 tag.setInteger("End", model.getEndFrame());
+                tag.setBoolean("Weld", model.isWeldEnabled());
 
                 AbstractMorph morph = model.getBaseMorph();
                 if (morph != null)
@@ -136,6 +137,7 @@ public final class BodyPartsPersistence
             readTransform(model.getGlobalTransform(), tag.getCompoundTag("Global"));
             model.readPhysicsSettings(tag.getTagList("Physics", 10));
             model.readColliderSettings(tag.getTagList("Colliders", 10));
+            model.setWeldEnabled(tag.getBoolean("Weld"));
 
             if (tag.hasKey("CharacterTimeline", 10))
             {
