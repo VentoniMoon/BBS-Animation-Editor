@@ -56,6 +56,10 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorMultiActorPreviewController multiActorPreview =
             new EditorMultiActorPreviewController();
 
+    /** Owns one camera/world/actor/overlay pass and its GL cleanup. */
+    private final PreviewSceneRenderCoordinator preview3 =
+            new PreviewSceneRenderCoordinator();
+
     private final EditorPreviewAutoFocusController previewAutoFocus =
             new EditorPreviewAutoFocusController();
 
@@ -2759,62 +2763,28 @@ public class AnimationEditorScreen extends GuiScreen
 
         updatePreviewAutoFocus();
 
-        this.sceneViewport.draw(
+        this.preview3.draw(
                 mc,
-                this.recordController
-                        .getCurrentActorPose(),
-                this.actorPreviewController
-                        .getBones(),
-                this.playbackController
-                        .getCurrentFrame()
-        );
-
-        /*
-         * Draw background actors first. Selected actor and gizmo remain
-         * on the exact pre-stage-8 path.
-         */
-        this.multiActorPreview.drawBackgroundActors(
-                mc, this.sceneViewport, this.sceneState,
-                getSelectedActor(), this.playbackController.getCurrentFrame(),
-                this.bodyPartsController);
-
-        this.sceneViewport.drawActor(
-                mc,
+                this.sceneViewport,
+                this.multiActorPreview,
+                this.sceneState,
                 getSelectedActor(),
-                getCurrentRecordFrame()
-        );
-
-        syncCharacterEditor();
-
-        /*
-         * Stage 5:
-         * The Preview render is finished before the gizmo is drawn.
-         * The visible gizmo is a GUI overlay projected from the same
-         * editor camera, so it is completely isolated from the Preview
-         * framebuffer and shader state.
-         */
-        prepareGizmoTarget();
-        this.gizmoController.setPreviewActor(findRuntimeActor());
-
-        /*
-         * Original BBS-style gizmo pass:
-         * render actual 3D handles before the Preview framebuffer
-         * is closed/copied to the GUI.
-         */
-        this.gizmoController.draw3D(
-                mc,
-                left,
-                top,
-                previewWidth,
-                previewHeight,
-                getGizmoBone(),
-                getGizmoKeyframe(),
                 getCurrentRecordFrame(),
-                this.sceneViewport.getCamera(),
-                isGizmoEnabled()
+                this.bodyPartsController,
+                this.recordController.getCurrentActorPose(),
+                this.actorPreviewController.getBones(),
+                this.playbackController.getCurrentFrame(),
+                () -> {
+                    syncCharacterEditor();
+                    prepareGizmoTarget();
+                    this.gizmoController.setPreviewActor(findRuntimeActor());
+                },
+                () -> this.gizmoController.draw3D(
+                        mc, left, top, previewWidth, previewHeight,
+                        getGizmoBone(), getGizmoKeyframe(),
+                        getCurrentRecordFrame(),
+                        this.sceneViewport.getCamera(), isGizmoEnabled())
         );
-
-        this.sceneViewport.finishPreviewRender();
         this.sceneViewport.renderPreviewToScreen();
 
         /*
