@@ -226,10 +226,24 @@ public final class BbsFsPreviewTarget
     public void dispose()
     {
         if (active) end();
-        if (framebuffer != null)
+        if (framebuffer == null) return;
+
+        int read = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int draw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        IntBuffer previousViewport = BufferUtils.createIntBuffer(16);
+        GL11.glGetInteger(GL11.GL_VIEWPORT, previousViewport);
+        try
         {
             framebuffer.deleteFramebuffer();
+        }
+        finally
+        {
             framebuffer = null;
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+            GL11.glViewport(previousViewport.get(0),
+                    previousViewport.get(1), previousViewport.get(2),
+                    previousViewport.get(3));
         }
     }
 }
