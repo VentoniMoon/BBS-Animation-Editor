@@ -123,3 +123,34 @@ modpack, OptiFine and shader tests.
   types, multi-actor scenes, camera tracks and saved records.
 - Do **not** invoke Minecraft `renderWorld` twice or reintroduce split
   sky/chunk/fog passes as a fallback.
+
+## Frame freshness, orientation and GPU-state hardening (2026-10-21)
+
+- Native camera angles are now transformed explicitly via
+  `BbsFsCameraConventions`: editor yaw=0 looks toward -Z, Minecraft
+  `EntityRenderer` applies `entityYaw + 180`, and pitch/roll are inverted
+  to match the actor/gizmo projection. Forge CameraSetup receives all three
+  axes, preventing inherited camera-mod rotations. Cardinal axis parity
+  (including positive/negative X/Z) is covered by the Java 8 camera test.
+- The camera-to-editor frame snapshot is **idempotent** per native world tick.
+  Even if another mod calls `AnimationEditorScreen.drawScreen` twice, it
+  never overwrites the clean world texture with the newly drawn GUI.
+- Color transfer follows BBS FS's linear framebuffer blit; depth uses nearest.
+  Failed depth transfers are tracked separately from successful color blits,
+  so the small viewport indicator is `FS` for complete color+depth,
+  `F~` for color only (uncertain model occlusion), or `F!` for a missing
+  native world frame.
+- The frame snapshot, actor GL guard and film framebuffer preserve and
+  restore OpenGL's active texture unit as well as shader program, framebuffer
+  bindings and viewport. This is particularly important when OptiFine or
+  Body Parts touches lightmap and normal texture units.
+- New Java 8 CI now compiles the actual `BbsFsWorldFrameCapture`,
+  `BbsFsPreviewTarget`, `BbsFsWorldProjection` and
+  `BbsFsWorldGlGuard` classes against small Minecraft/LWJGL mock APIs.
+  It checks frame freshness, color/depth blits, compositor lifecycle,
+  GL matrix/texture restoration and projection. This detects Java source
+  issues that the earlier camera/actor-only CI could not detect.
+
+These mock-API compile checks are narrower than a complete Forge dev build.
+The actual Minecraft classpath, OptiFine interaction and visual occlusion
+remain unverified, by design: full modpack tests will follow later.
