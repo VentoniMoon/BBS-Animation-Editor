@@ -199,12 +199,20 @@ public class EditorSceneViewport
          * больше не выполняем.
          */
 
-        this.nativeWorldRendered=PreviewNativeWorldBridge.render(
-                mc,this.camera,this.renderBackend);
-        if(!this.nativeWorldRendered)
-            this.minecraftWorldPreview.draw(
-                    mc,this.camera,this.x,this.y,this.width,this.height
-            );
+        /*
+         * BBS FS architecture: camera already drove Minecraft's real world
+         * pass at RenderTick START. Copy the finished frame into our preview
+         * texture; never render another sky/chunk/shader pipeline here.
+         *
+         * Legacy world stages are deliberately disabled, even on failure:
+         * an empty preview is preferable to returning to the old broken
+         * world renderer without noticing.
+         */
+        BbsFsWorldCameraDriver.attach(this);
+        this.nativeWorldRendered = true;
+        BbsFsWorldFrameCapture.copyWorld(
+                mc, this.renderBackend, this.x, this.y,
+                this.width, this.height);
 
 
         /* Clouds render only after actors, translucent world and weather. */
