@@ -137,7 +137,9 @@ public final class BodyPartsPersistence
             readTransform(model.getGlobalTransform(), tag.getCompoundTag("Global"));
             model.readPhysicsSettings(tag.getTagList("Physics", 10));
             model.readColliderSettings(tag.getTagList("Colliders", 10));
-            model.setWeldEnabled(tag.getBoolean("Weld"));
+            model.setWeldEnabled(tag.hasKey("Weld")
+                    ? tag.getBoolean("Weld")
+                    : ChameleonWeldRuntime.isMorphWeldEnabled(morph));
 
             if (tag.hasKey("CharacterTimeline", 10))
             {
