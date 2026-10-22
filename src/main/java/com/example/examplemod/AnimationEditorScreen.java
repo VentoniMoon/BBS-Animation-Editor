@@ -2943,7 +2943,9 @@ public class AnimationEditorScreen extends GuiScreen
                 bottom
         );
 
-        drawStage8PreviewButtons(previewRight, top);
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.CAMERA)
+            drawStage8PreviewButtons(previewRight, top);
 
         /*
          * ---------------------------------------------------------
