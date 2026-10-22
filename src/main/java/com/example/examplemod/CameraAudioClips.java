@@ -77,7 +77,7 @@ public final class CameraAudioClips
                 tracks.put(clip,track);
             }
 
-            setVolume(track,clip);
+            setVolume(track,clip,sceneFrame);
             int offset=(int)number(clip,"offset",0D);
             int local=sceneFrame-clip.tick+offset;
             if(local<0){track.pause();continue;}
@@ -138,12 +138,15 @@ public final class CameraAudioClips
             if(source!=null)try{source.close();}catch(IOException ignored){}
         }
     }
-    private static void setVolume(Track track,CameraClipDocument.Clip clip)
+    private static void setVolume(Track track,CameraClipDocument.Clip clip,
+            int sceneFrame)
     {
         if(!track.sound.isControlSupported(FloatControl.Type.MASTER_GAIN))return;
         FloatControl volume=(FloatControl)track.sound.getControl(
                 FloatControl.Type.MASTER_GAIN);
-        double linear=Math.max(0D,Math.min(2D,number(clip,"volume",1D)));
+        double linear=Math.max(0D,Math.min(2D,
+                number(clip,"volume",1D)*
+                CameraClipEnvelope.factor(clip,sceneFrame)));
         float db=(float)(linear<=0D?volume.getMinimum():
                 Math.min(volume.getMaximum(),Math.max(volume.getMinimum(),
                         20D*Math.log10(linear))));
