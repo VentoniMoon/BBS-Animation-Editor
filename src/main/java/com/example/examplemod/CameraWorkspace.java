@@ -718,6 +718,9 @@ public final class CameraWorkspace
                 {
                     String key=new ArrayList<String>(chosen.settings.keySet()).get(index);
                     startTextField(screen,chosen.settings.get(key),false,key,chosen);
+                    // Editor can scroll inspector; keep the textbox attached
+                    // to the clicked visible row, not the absolute key index.
+                    editField.y=159+((mouseY-159)/16)*16;
                     return true;
                 }
             }
