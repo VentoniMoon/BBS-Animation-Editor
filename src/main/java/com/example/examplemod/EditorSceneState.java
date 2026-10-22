@@ -19,6 +19,14 @@ public class EditorSceneState
     /** Scene-wide camera clips are editor data, never a selected actor. */
     private final CameraClipDocument cameraClips=new CameraClipDocument();
 
+    /** Output aspect/resolution is shared by CAMERA and film preview modes. */
+    private final CameraOutputSettings cameraOutput=new CameraOutputSettings();
+
+    public CameraOutputSettings getCameraOutput()
+    {
+        return this.cameraOutput;
+    }
+
     public CameraClipDocument getCameraClips()
     {
         return this.cameraClips;
@@ -370,6 +378,7 @@ public class EditorSceneState
          */
         this.animationData.clear();
         this.cameraClips.clear();
+        this.cameraOutput.reset();
 
 
         /*
