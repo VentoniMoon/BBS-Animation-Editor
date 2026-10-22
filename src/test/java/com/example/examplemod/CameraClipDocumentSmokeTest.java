@@ -210,6 +210,17 @@ public final class CameraClipDocumentSmokeTest
                 "trim persistence roundtrip");
         check(restoredTrim.clips().get(0).keys.size()==2,
                 "keys unchanged by edge trim");
-        System.out.println("CAMERA clip layering, channels, trim and persistence PASS");
+        CameraClipDocument.Clip media=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.SUBTITLE,1,15,1);
+        media.settings.put("x","0.72");
+        media.settings.put("y","0.42");
+        check(trimDoc.add(media),"add moved media overlay");
+        CameraClipDocument mediaRestored=new CameraClipDocument();
+        mediaRestored.readJson(trimDoc.toJson());
+        near(Double.parseDouble(mediaRestored.clips().get(2)
+                .settings.get("x")),0.72D,"media X persists");
+        near(Double.parseDouble(mediaRestored.clips().get(2)
+                .settings.get("y")),0.42D,"media Y persists");
+        System.out.println("CAMERA clip layering, channels, trim, media persistence PASS");
     }
 }
