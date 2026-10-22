@@ -32,7 +32,8 @@ public final class CameraFilmCompositor
         List<CameraClipDocument.Clip> images=new ArrayList<CameraClipDocument.Clip>();
         for(CameraClipDocument.Clip clip:clips)
             if(clip.enabled&&clip.contains(tick)&&
-                    clip.kind==CameraClipDocument.Kind.IMAGE)
+                    (clip.kind==CameraClipDocument.Kind.IMAGE||
+                    clip.kind==CameraClipDocument.Kind.SUBTITLE))
                 images.add(clip);
         if(images.isEmpty())return;
         Collections.sort(images,new Comparator<CameraClipDocument.Clip>(){
@@ -77,7 +78,12 @@ public final class CameraFilmCompositor
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
             for(CameraClipDocument.Clip clip:images)
-                drawImage(clip,previewX,previewY,previewWidth,previewHeight);
+            {
+                if(clip.kind==CameraClipDocument.Kind.IMAGE)
+                    drawImage(clip,previewX,previewY,previewWidth,previewHeight);
+                else if(clip.kind==CameraClipDocument.Kind.SUBTITLE)
+                    drawSubtitle(mc,clip,previewX,previewY,previewWidth,previewHeight);
+            }
         }
         finally
         {
@@ -131,6 +137,41 @@ public final class CameraFilmCompositor
         GL11.glEnd();
         GL11.glColor4f(1F,1F,1F,1F);
     }
+    /** Subtitles are burned into the scene texture, never editor UI. */
+    private static void drawSubtitle(Minecraft mc,CameraClipDocument.Clip clip,
+            int px,int py,int pw,int ph)
+    {
+        String text=clip.settings.get("text");
+        if(text==null||text.isEmpty())return;
+        int packed=color(clip.settings.get("color"));
+        double opacity=clamp(number(clip,"opacity",1D),0D,1D);
+        int alpha=(int)Math.round(((packed>>>24)&255)*opacity);
+        int rgba=(packed&0xFFFFFF)|(alpha<<24);
+        if(alpha==0)return;
+        int x=px+(int)Math.round(pw*number(clip,"x",0.5D));
+        int y=py+(int)Math.round(ph*number(clip,"y",0.88D));
+        int maxWidth=(int)number(clip,"maxWidth",0D);
+        if(maxWidth<=0)maxWidth=pw-12;
+        maxWidth=Math.max(20,Math.min(pw,maxWidth));
+        int lineHeight=(int)clamp(number(clip,"lineHeight",12D),8D,64D);
+        String[] lines=text.replace("\\n","\n").split("\n",-1);
+        boolean shadow=Boolean.parseBoolean(clip.settings.get("textShadow"));
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        for(int i=0;i<Math.min(32,lines.length);i++)
+        {
+            String line=mc.fontRenderer.trimStringToWidth(lines[i],maxWidth);
+            int width=mc.fontRenderer.getStringWidth(line);
+            int left=x-width/2;
+            int rowY=y+i*lineHeight;
+            if(rowY<py||rowY+lineHeight>py+ph)continue;
+            // FontRenderer restores Minecraft's texture binding itself;
+            // the GL projection is already the film's GUI-scaled pixel plane.
+            if(shadow)mc.fontRenderer.drawStringWithShadow(line,left,rowY,rgba);
+            else mc.fontRenderer.drawString(line,left,rowY,rgba);
+        }
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+    }
+
     private static int color(String value)
     {
         if(value==null)return -1;
