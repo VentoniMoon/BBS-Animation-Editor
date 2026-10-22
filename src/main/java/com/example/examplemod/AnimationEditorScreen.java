@@ -79,6 +79,12 @@ public class AnimationEditorScreen extends GuiScreen
      * SHOT camera only takes ownership of the rendered pose, not the
      * editor's FREE/ORBIT position. Switching back restores free navigation.
      */
+    public void setCameraWorkspaceFrame(int frame)
+    {
+        this.playbackController.setCurrentFrame(Math.max(0,Math.min(
+                frame,Math.max(0,getSceneLength()-1))));
+    }
+
     public PreviewCameraPose getCameraWorkspaceNativePose()
     {
         PreviewCameraPose free=this.sceneViewport.getCamera().sample();
