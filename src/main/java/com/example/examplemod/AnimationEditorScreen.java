@@ -2890,6 +2890,17 @@ public class AnimationEditorScreen extends GuiScreen
                         getCurrentRecordFrame(),
                         this.sceneViewport.getCamera(), isGizmoEnabled())
         );
+        if(this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA)
+        {
+            this.cameraWorkspace.syncScene(this.sceneState);
+            CameraFilmCompositor.composite(mc,
+                    this.sceneViewport.getRenderBackend()
+                            .getNativeTarget().getFramebuffer(),
+                    left,top,previewWidth,previewHeight,
+                    this.cameraWorkspace.document.clips(),
+                    this.playbackController.getCurrentFrame());
+        }
         this.sceneViewport.renderPreviewToScreen();
 
         /*
