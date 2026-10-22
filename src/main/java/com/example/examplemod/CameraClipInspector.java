@@ -193,6 +193,34 @@ public final class CameraClipInspector
         }
         y+=43;
     }
+    private void channels(String key,String value)
+    {
+        int mask;
+        try{mask=Integer.parseInt(value.trim());}
+        catch(NumberFormatException bad){scalar(key,value,false);return;}
+        int pos=y-scroll;
+        if(visible(pos,45))
+        {
+            text("Enabled channels",right+12,pos,0xFFC8D6E0,width-right-24);
+            String[] names={"X","Y","Z","Yaw","Pit","Rol","FOV"};
+            int[] colors={0xFFDF4055,0xFF63C966,0xFF448FE8,
+                    0xFFF0D34E,0xFF29D6DD,0xFFC95DE6,0xFFB0B7BF};
+            int inner=width-right-24;
+            int step=inner/7;
+            for(int i=0;i<7;i++)
+            {
+                int x=right+12+i*step;
+                int w=i==6?inner-i*step:step-2;
+                boolean enabled=(mask&(1<<i))!=0;
+                rectangle(x,pos+18,x+w,pos+39,enabled?colors[i]:0xFF35424C);
+                if(!enabled)rectangle(x+2,pos+20,x+w-2,pos+37,0xFF19232A);
+                text(names[i],x+2,pos+24,enabled?0xFF101820:0xFF778892,
+                        w-3);
+                hits.add(new Hit(key,i,x,pos+18,w,value,false,true));
+            }
+        }
+        y+=47;
+    }
     private void settingsGroup(String title,List<Map.Entry<String,String>> entries)
     {
         if(entries==null||entries.isEmpty())return;
@@ -200,7 +228,8 @@ public final class CameraClipInspector
         for(Map.Entry<String,String> entry:entries)
         {
             String key=entry.getKey(),value=entry.getValue();
-            if(vector(key,value))coordinates(key,value);
+            if("active".equals(key))channels(key,value);
+            else if(vector(key,value))coordinates(key,value);
             else scalar(key,value,false);
         }
     }
