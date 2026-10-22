@@ -3771,6 +3771,8 @@ public class AnimationEditorScreen extends GuiScreen
                     == EditorModeController.EditorMode.CAMERA)
                 this.cameraWorkspace.captureNavigationPose(
                         this.sceneViewport.getCamera().sample());
+            else
+                this.cameraWorkspace.stopPreviewRecording();
         }
 
         super.updateScreen();
