@@ -143,9 +143,21 @@ public final class CameraWorkspace
     private boolean applyKeyField(String name,String value)
     {
         if(selectedKey==null||keyOwner==null)return false;
+        if("interpolation".equals(name))
+        {
+            selectedKey.interpolation=value.trim().toLowerCase(
+                    java.util.Locale.ROOT);
+            saveScene();return true;
+        }
         Double parsed=finiteDouble(value);
         if(parsed==null)return false;
         double n=parsed;
+        if("mask".equals(name))
+        {
+            if(n<0D||n>127D)return false;
+            selectedKey.mask=(int)Math.round(n);
+            saveScene();return true;
+        }
         if("tick".equals(name))
         {
             int at=(int)Math.round(n);
@@ -183,12 +195,15 @@ public final class CameraWorkspace
     private String keyField;
     private CameraClipDocument.Clip contextClip;
     private static final String[] KEY_FIELDS={
-        "tick","x","y","z","yaw","pitch","roll","fov"
+        "tick","x","y","z","yaw","pitch","roll","fov",
+        "mask","interpolation"
     };
 
     private String keyValue(CameraClipDocument.Key key,String field)
     {
         if("tick".equals(field))return Integer.toString(key.tick);
+        if("mask".equals(field))return Integer.toString(key.mask);
+        if("interpolation".equals(field))return key.interpolation;
         if("x".equals(field))return Double.toString(key.x);
         if("y".equals(field))return Double.toString(key.y);
         if("z".equals(field))return Double.toString(key.z);
@@ -499,14 +514,14 @@ public final class CameraWorkspace
             }
             if(selectedKey!=null&&keyOwner==selected)
             {
-                int keyTop=top-172;
+                int keyTop=top-176;
                 GuiScreen.drawRect(right+4,keyTop-6,width-3,keyTop-5,0xFF6BCBFF);
                 mc.fontRenderer.drawString("KEYFRAME PROPERTIES",
                         right+8,keyTop-4,0xFF6BCBFF);
                 for(int i=0;i<KEY_FIELDS.length;i++)
                     mc.fontRenderer.drawString(
                         KEY_FIELDS[i]+": "+keyValue(selectedKey,KEY_FIELDS[i]),
-                        right+8,keyTop+13+i*18,0xFFE7DCC9);
+                        right+8,keyTop+13+i*15,0xFFE7DCC9);
             }
         }
         else mc.fontRenderer.drawString("Select a clip",right+8,54,0xFF8A959E);
@@ -681,13 +696,13 @@ public final class CameraWorkspace
         }
         if(button==0&&mouseX>=right+8&&mouseX<screen.width
                 &&selectedKey!=null&&keyOwner==document.selected()
-                &&mouseY>=top-159&&mouseY<top-12)
+                &&mouseY>=top-163&&mouseY<top-13)
         {
-            int index=(mouseY-(top-159))/18;
+            int index=(mouseY-(top-163))/15;
             if(index>=0&&index<KEY_FIELDS.length)
             {
                 beginKeyEdit(screen,KEY_FIELDS[index],selectedKey,
-                        top-159+index*18);
+                        top-163+index*15);
                 return true;
             }
         }
