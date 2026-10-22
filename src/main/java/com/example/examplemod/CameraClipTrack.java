@@ -92,7 +92,11 @@ public final class CameraClipTrack
             case TRACKER:
                 values.put("x",0D);values.put("y",0D);values.put("z",0D);break;
             case DOLLY: values.put("distance",4D);break;
-            case DRAG: values.put("strength",0.6D);break;
+            case DRAG: values.put("strength",0.6D);values.put("delay",4D);break;
+            case MATH:
+                values.put("frequency",0.15D);values.put("amplitude",0D);break;
+            case REMAPPER:
+                values.put("speed",1D);values.put("offset",0D);break;
             case SHAKE:
                 values.put("amplitude",0.15D);values.put("frequency",2D);
                 values.put("rotation",1.2D);break;
@@ -262,21 +266,78 @@ public final class CameraClipTrack
      */
     public PreviewCameraPose sample(double frame,PreviewCameraPose fallback)
     {
-        PreviewCameraPose current=fallback==null?DEFAULT_POSE:fallback;
+        return sample(frame,fallback,null);
+    }
+
+    /**
+     * Re-evaluate the camera at an arbitrary scene time, resolving actor
+     * targets by stable Blockbuster actor ID (not selected list index).
+     */
+    public PreviewCameraPose sample(double frame,PreviewCameraPose fallback,
+        EditorSceneState scene)
+    {
+        return sampleBelow(frame,Integer.MAX_VALUE,
+            fallback==null?DEFAULT_POSE:fallback,scene);
+    }
+
+    private PreviewCameraPose sampleBelow(double frame,int upperLayer,
+        PreviewCameraPose fallback,EditorSceneState scene)
+    {
+        PreviewCameraPose current=fallback;
         List<Clip> active=new ArrayList<Clip>();
-        for(Clip c:clips)if(c.inside(frame))active.add(c);
+        for(Clip c:clips)
+            if(c.layer<upperLayer&&c.inside(frame))active.add(c);
         Collections.sort(active,Comparator.comparingInt(c->c.layer));
         for(Clip c:active)
         {
             double local=frame-c.tick;
-            double a=c.alpha(local);
-            if(a<=0)continue;
-            current=apply(c,local,a,current);
+            double alpha=c.alpha(local);
+            if(alpha<=0)continue;
+            if(c.type==Type.REMAPPER)
+            {
+                double mapped=c.tick+local*c.value("speed",1)+c.value("offset",0);
+                PreviewCameraPose remapped=sampleBelow(Math.max(0,mapped),
+                    c.layer,fallback,scene);
+                current=PreviewCameraPose.interpolate(current,remapped,alpha);
+            }
+            else if(c.type==Type.DRAG)
+            {
+                // Sample the underlayers at an earlier scene time, rather
+                // than retaining mutable state between random scrubs.
+                double delay=Math.max(0,c.value("delay",4));
+                PreviewCameraPose earlier=sampleBelow(Math.max(0,frame-delay),
+                    c.layer,fallback,scene);
+                double strength=Math.max(0,Math.min(1,c.value("strength",0.6)));
+                current=PreviewCameraPose.interpolate(current,earlier,
+                    alpha*strength);
+            }
+            else current=apply(c,local,alpha,current,scene,frame);
         }
         return current;
     }
 
-    private static PreviewCameraPose apply(Clip c,double local,double blend,PreviewCameraPose prev)
+    private static double[] resolveTarget(Clip c,EditorSceneState scene,
+        double frame)
+    {
+        if(scene==null)return null;
+        String name=c.text("target");
+        if(name.isEmpty())return null;
+        for(BlockbusterSceneActorData actor:scene.getActors())
+        {
+            if(actor==null||!name.equals(actor.getId())||
+                actor.getRecord()==null)continue;
+            BlockbusterRecord record=actor.getRecord();
+            if(record.getLength()<=0)continue;
+            int at=Math.max(0,Math.min(record.getLength()-1,(int)frame));
+            BlockbusterRecordFrame pose=record.getFrame(at);
+            if(pose!=null)
+                return new double[]{pose.getX(),pose.getY(),pose.getZ()};
+        }
+        return null;
+    }
+
+    private static PreviewCameraPose apply(Clip c,double local,double blend,
+        PreviewCameraPose prev,EditorSceneState scene,double frame)
     {
         double progress=Math.max(0,Math.min(1,local/Math.max(1,c.duration)));
         PreviewCameraPose keyed=sampleKeys(c,local);
@@ -296,6 +357,15 @@ public final class CameraClipTrack
             y=base.y-Math.sin(pitchRad)*dist;
             z=base.z+Math.cos(yawRad)*Math.cos(pitchRad)*dist;
             return PreviewCameraPose.interpolate(prev,pose(x,y,z,base.yaw,base.pitch,base.roll,base.fov,prev),blend);
+        }
+        case TRACKER:
+        {
+            double[] target=resolveTarget(c,scene,frame);
+            if(target==null)return prev;
+            x=target[0]+c.value("x",0);y=target[1]+c.value("y",0);
+            z=target[2]+c.value("z",0);
+            return PreviewCameraPose.interpolate(prev,pose(x,y,z,
+                c.rest.yaw,c.rest.pitch,c.rest.roll,c.rest.fov,prev),blend);
         }
         case TRANSLATE:
             x+=c.value("x",0)*blend;y+=c.value("y",0)*blend;z+=c.value("z",0)*blend;break;
@@ -318,6 +388,8 @@ public final class CameraClipTrack
             double radius=c.value("radius",4);
             double radians=Math.toRadians(c.value("degrees",360)*progress+c.value("yaw",0));
             double cx=c.value("x",prev.x),cy=c.value("y",prev.y),cz=c.value("z",prev.z);
+            double[] target=resolveTarget(c,scene,frame);
+            if(target!=null){cx=target[0];cy=target[1];cz=target[2];}
             x=cx+Math.sin(radians)*radius;y=cy+c.value("height",0);z=cz+Math.cos(radians)*radius;
             yaw=(float)Math.toDegrees(Math.atan2(cx-x,cz-z));
             pitch=(float)-Math.toDegrees(Math.atan2(cy-y,Math.hypot(cx-x,cz-z)));
@@ -326,6 +398,8 @@ public final class CameraClipTrack
         case LOOK:
         {
             double tx=c.value("x",prev.x),ty=c.value("y",prev.y),tz=c.value("z",prev.z+1);
+            double[] target=resolveTarget(c,scene,frame);
+            if(target!=null){tx=target[0];ty=target[1];tz=target[2];}
             double dx=tx-x,dy=ty-y,dz=tz-z;
             if(dx*dx+dy*dy+dz*dz>1e-6)
             {
@@ -346,11 +420,15 @@ public final class CameraClipTrack
             z+=Math.cos(yr)*Math.cos(pr)*shift;
             fov=(float)newFov;break;
         }
-        case DRAG:
-            // Stateless smoothing of the lower-layer camera toward clip rest.
-            return PreviewCameraPose.interpolate(prev,c.rest,
-                Math.min(1,Math.max(0,c.value("strength",0.6)))*blend);
-        case REMAPPER: case MATH: case TRACKER: case CURVE:
+        case MATH:
+        {
+            double f=c.value("frequency",0.15),amp=c.value("amplitude",0);
+            x+=Math.sin(local*f)*amp*blend;
+            y+=Math.sin(local*f+1.1)*amp*blend;
+            z+=Math.cos(local*f)*amp*blend;
+            break;
+        }
+        case DRAG: case REMAPPER: case CURVE:
         case AUDIO: case SUBTITLE: case IMAGE: case VIDEO:
             // Data is preserved; specialized evaluator/render runtime is separate.
             break;
