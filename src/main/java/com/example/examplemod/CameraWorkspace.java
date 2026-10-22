@@ -70,6 +70,34 @@ public final class CameraWorkspace
         return true;
     }
     private int presetScroll;
+    private int inspectorScroll;
+    private CameraClipDocument.Key selectedKey;
+    private CameraClipDocument.Clip keyOwner;
+    private String keyField;
+    private CameraClipDocument.Clip contextClip;
+    private int contextX,contextY;
+
+    public boolean mouseScrolled(int mouseX,int mouseY,int direction)
+    {
+        if(editField!=null||palette)return true;
+        if(mouseY>=25&&mouseY<top&&mouseX>=right)
+        {
+            int count=document.selected()==null?0:
+                    document.selected().settings.size();
+            int visible=Math.max(1,(top-159)/16);
+            inspectorScroll=Math.max(0,Math.min(Math.max(0,count-visible),
+                    inspectorScroll-direction));
+            return true;
+        }
+        if(mouseX<180&&mouseY>=90&&mouseY<top)
+        {
+            presetScroll=Math.max(0,Math.min(
+                    Math.max(0,presetNames.size()-Math.max(1,(top-95)/17)),
+                    presetScroll-direction));
+            return true;
+        }
+        return false;
+    }
 
     private static File sceneDocument(File scene)
     {
@@ -191,8 +219,10 @@ public final class CameraWorkspace
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
         mc.fontRenderer.drawString("Saved clip collections",10,53,0xFF87939D);
         mc.fontRenderer.drawString("Right click clip to save",10,69,0xFF87939D);
-        for(int i=0;i<presetNames.size()&&i<12;i++)
-            mc.fontRenderer.drawString(presetNames.get(i),12,95+i*17,0xFFD1DAE0);
+        int maxPresets=Math.max(0,(top-100)/17);
+        for(int i=0;i<maxPresets&&presetScroll+i<presetNames.size();i++)
+            mc.fontRenderer.drawString(presetNames.get(presetScroll+i),
+                    12,95+i*17,0xFFD1DAE0);
         if(lastError!=null)mc.fontRenderer.drawString(lastError,10,top-12,0xFFFF8888);
         mc.fontRenderer.drawString("CLIP PROPERTIES",right+8,34,0xFF64CAFF);
         CameraClipDocument.Clip selected=document.selected();
@@ -204,14 +234,22 @@ public final class CameraWorkspace
             mc.fontRenderer.drawString("Layer: "+selected.layer,right+8,105,0xFFC0C5C9);
             mc.fontRenderer.drawString("Enabled: "+selected.enabled,right+8,121,0xFFC0C5C9);
             mc.fontRenderer.drawString("Keys: "+selected.keys.size(),right+8,137,0xFFC0C5C9);
-            int yy=159;
+            int index=0;
             for(java.util.Map.Entry<String,String> property:selected.settings.entrySet())
             {
+                if(index++<inspectorScroll)continue;
+                int yy=159+16*(index-inspectorScroll-1);
                 if(yy+10>=top-10)break;
-                mc.fontRenderer.drawString(property.getKey()+": "+property.getValue(),
+                String value=property.getValue();
+                String line=property.getKey()+": "+value;
+                mc.fontRenderer.drawString(
+                        mc.fontRenderer.trimStringToWidth(line,169),
                         right+8,yy,0xFF91A0A8);
-                yy+=16;
             }
+            if(selectedKey!=null&&keyOwner==selected)
+                mc.fontRenderer.drawString(
+                        "KEY "+selectedKey.tick+"  (double RMB deletes)",
+                        right+8,top-22,0xFFE9C479);
         }
         else mc.fontRenderer.drawString("Select a clip",right+8,54,0xFF8A959E);
         GuiScreen.drawRect(0,top,width,bottom,0xFF111D27);
@@ -312,7 +350,7 @@ public final class CameraWorkspace
             CameraClipDocument.Clip chosen=document.selected();
             if(chosen!=null)
             {
-                int index=(mouseY-159)/16;
+                int index=(mouseY-159)/16+inspectorScroll;
                 if(index>=0&&index<chosen.settings.size())
                 {
                     String key=new ArrayList<String>(chosen.settings.keySet()).get(index);
@@ -354,9 +392,9 @@ public final class CameraWorkspace
             }
             palette=false;return true;
         }
-        if(mouseX<180&&mouseY>=85&&mouseY<85+Math.min(12,presetNames.size())*17&&button==0)
+        if(mouseX<180&&mouseY>=95&&mouseY<top&&button==0)
         {
-            int i=(mouseY-85)/17;
+            int i=(mouseY-95)/17+presetScroll;
             if(i>=0&&i<presetNames.size())
                 pastePreset(presetNames.get(i),frame,0);
             return true;
