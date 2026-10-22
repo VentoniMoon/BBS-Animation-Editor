@@ -44,7 +44,7 @@ public final class CameraWorkspace
         int x=preset?Math.max(12,screen.width/2-100):right+8;
         int y=preset?screen.height/2:Math.min(top-35,158+16*(clip==null?0:
                 new ArrayList<String>(clip.settings.keySet()).indexOf(key)));
-        editField=new GuiTextField(42,screen.fontRenderer,x,y,
+        editField=new GuiTextField(42,Minecraft.getMinecraft().fontRenderer,x,y,
                 preset?200:165,18);
         editField.setMaxStringLength(255);
         editField.setText(initial==null?"":initial);
