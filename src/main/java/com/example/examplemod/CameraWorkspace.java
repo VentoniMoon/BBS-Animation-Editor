@@ -34,6 +34,10 @@ public final class CameraWorkspace
         CameraImageCache.clear();
     }
     private boolean shot;
+    /** Read-only clip camera preview in Character, Pose and Body Parts. */
+    private boolean crossModeShot;
+    /** Explicit opt-in to writing the navigated FREE pose into clip keys. */
+    private boolean recordingPreview;
     private PreviewCameraPose lastNavigationPose;
     private CameraClipDocument.Clip trackedCameraClip;
     private CameraClipDocument.Key trackedCameraKey;
@@ -47,7 +51,7 @@ public final class CameraWorkspace
      */
     public void captureNavigationPose(PreviewCameraPose pose)
     {
-        if(shot||pose==null)
+        if(shot||!recordingPreview||pose==null)
         {
             lastNavigationPose=null;return;
         }
@@ -60,8 +64,9 @@ public final class CameraWorkspace
         if(clip!=trackedCameraClip||key!=trackedCameraKey)
         {
             if(navigationDirty)saveScene();
-            trackedCameraClip=clip;trackedCameraKey=key;
-            lastNavigationPose=pose;navigationDirty=false;
+            recordingPreview=false;
+            trackedCameraClip=null;trackedCameraKey=null;
+            lastNavigationPose=null;navigationDirty=false;
             navigationIdleTicks=0;return;
         }
         if(lastNavigationPose==null){lastNavigationPose=pose;return;}
@@ -87,11 +92,65 @@ public final class CameraWorkspace
     }
 
     public PreviewCameraPose sample(PreviewCameraPose editorPose,int sceneFrame,
-            CameraClipDocument.TargetResolver resolver)
+            CameraClipDocument.TargetResolver resolver,boolean inCameraMode)
     {
-        return shot?document.sample(sceneFrame,editorPose,resolver):editorPose;
+        return (inCameraMode?shot:crossModeShot)
+                ?document.sample(sceneFrame,editorPose,resolver):editorPose;
     }
     public boolean shot(){return shot;}
+    public boolean crossModeShot(){return crossModeShot;}
+    public boolean recordingPreview(){return recordingPreview;}
+    public void toggleCrossModeShot(){crossModeShot=!crossModeShot;}
+    private CameraClipDocument.Key editablePoseKey(int frame,
+            PreviewCameraPose free)
+    {
+        CameraClipDocument.Clip clip=document.selected();
+        if(clip==null)return null;
+        if(clip.kind!=CameraClipDocument.Kind.IDLE
+                &&clip.kind!=CameraClipDocument.Kind.DOLLY
+                &&clip.kind!=CameraClipDocument.Kind.PATH
+                &&clip.kind!=CameraClipDocument.Kind.KEYFRAME)return null;
+        if(selectedKey!=null&&keyOwner==clip)return selectedKey;
+        if((clip.kind==CameraClipDocument.Kind.IDLE
+                ||clip.kind==CameraClipDocument.Kind.DOLLY)
+                &&!clip.keys.isEmpty())return clip.keys.get(0);
+        if(!clip.kind.keyed||!clip.contains(frame))return null;
+        // Path/Keyframe author the key at the current scene frame.
+        document.keyAt(clip,frame,free);
+        int relative=frame-clip.tick;
+        for(CameraClipDocument.Key k:clip.keys)if(k.tick==relative)
+        {
+            selectedKey=k;keyOwner=clip;saveScene();return k;
+        }
+        return null;
+    }
+    private void togglePreviewRecording(AnimationEditorScreen screen,int frame)
+    {
+        if(recordingPreview)
+        {
+            recordingPreview=false;
+            if(navigationDirty)saveScene();
+            navigationDirty=false;
+            lastNavigationPose=null;trackedCameraClip=null;
+            trackedCameraKey=null;
+            return;
+        }
+        CameraClipDocument.Key key=editablePoseKey(frame,
+                screen.getCameraWorkspacePose());
+        if(key==null)
+        {
+            lastError="Select View/Dolly or a Path/Keyframe clip first";
+            return;
+        }
+        shot=false;
+        recordingPreview=true;
+        trackedCameraClip=document.selected();
+        trackedCameraKey=key;
+        screen.setCameraWorkspaceEditorPose(key);
+        lastNavigationPose=screen.getCameraWorkspacePose();
+        navigationDirty=false;navigationIdleTicks=0;
+        lastError=null;
+    }
     private boolean palette;
     private String activeSceneId;
     private File activeSceneFile;
@@ -487,6 +546,9 @@ public final class CameraWorkspace
         activeSceneFile=scene==null?null:sceneDocument(scene);
         document=state.getCameraClips();
         selectedKey=null;keyOwner=null;contextClip=null;
+        shot=false;crossModeShot=false;recordingPreview=false;
+        trackedCameraClip=null;trackedCameraKey=null;
+        lastNavigationPose=null;navigationDirty=false;
         groupSelection.clear();
         layerScroll=0;inspectorScroll=0;editField=null;
         choosingTarget=false;actorTargets.clear();
@@ -704,15 +766,20 @@ public final class CameraWorkspace
         rowBase=top+35;
         cameraTimeline.setLength(Math.max(1,length));
         cameraTimeline.clampOffset(Math.max(0,length-1),timelineW);
-        // This switches between the independent editor view and evaluated shot.
-        // Keep it compact: it must not obscure the native world preview.
-        // Place view toggle above the scene, not over the playback buttons.
-        int viewX=right-128;
-        GuiScreen.drawRect(viewX,43,right-8,65,0xE6111A22);
+        // Single-value camera viewer plus explicit edit-from-preview switch.
+        // FREE/SHOT is read-only; REC writes selected camera key on movement.
+        int viewX=right-96, recordX=right-48;
+        GuiScreen.drawRect(viewX,43,viewX+44,65,0xE6111A22);
         GuiScreen.drawRect(viewX,43,viewX+2,65,
-                EditorThemeManager.get().getAccent());
-        mc.fontRenderer.drawString(shot?"SHOT PREVIEW":"EDIT VIEW",
-                viewX+10,50,0xFFBDEBFF);
+                shot?EditorThemeManager.get().getAccentBright():0xFF526879);
+        mc.fontRenderer.drawString(shot?"SHOT":"FREE",
+                viewX+8,50,shot?0xFF8CDBFF:0xFFC3CFD5);
+        GuiScreen.drawRect(recordX,43,right-8,65,
+                recordingPreview?0xFF663430:0xE6111A22);
+        GuiScreen.drawRect(recordX,43,recordX+2,65,
+                recordingPreview?0xFFFF8064:0xFF526879);
+        mc.fontRenderer.drawString("REC",recordX+10,50,
+                recordingPreview?0xFFFFA18D:0xFFB5C7D2);
         GuiScreen.drawRect(0,25,timelineX,top,0xFF191E24);
         GuiScreen.drawRect(right,25,width,top,0xFF191E24);
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
@@ -1194,11 +1261,19 @@ public final class CameraWorkspace
             }
             return true;
         }
-        int toggleX=right-128;
-        if(button==0&&mouseX>=toggleX&&mouseX<right-8
+        int toggleX=right-96;
+        if(button==0&&mouseX>=toggleX&&mouseX<toggleX+44
                 &&mouseY>=43&&mouseY<65)
         {
             shot=!shot;
+            if(shot&&recordingPreview)
+                togglePreviewRecording(screen,frame);
+            return true;
+        }
+        if(button==0&&mouseX>=right-48&&mouseX<right-8
+                &&mouseY>=43&&mouseY<65)
+        {
+            togglePreviewRecording(screen,frame);
             return true;
         }
         if(mouseX<timelineX&&mouseY>=95&&mouseY<top&&button==0)
