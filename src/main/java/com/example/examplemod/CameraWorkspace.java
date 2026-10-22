@@ -33,7 +33,7 @@ public final class CameraWorkspace
     private Integer selectedKey;
     private CameraClipTrack.Clip drag;
     private Integer dragKey;
-    private int dragStartX, dragStartFrame, dragStartLayer;
+    private int dragStartX, dragStartFrame, dragStartLayer, dragStartDuration, dragOriginalKey;
     private boolean dragging, resizing, copied;
     private int playheadAtClick;
     private long lastLeft,lastRight;
@@ -134,8 +134,10 @@ public final class CameraWorkspace
     private static String shorten(String s,FontRenderer f,int limit)
     {
         if(s==null)return "";
-        while(s.length()>3&&f.getStringWidth(s)>limit)s=s.substring(0,s.length()-2)+"...";
-        return s;
+        String original=s;
+        int n=original.length();
+        while(n>0&&f.getStringWidth(original.substring(0,n)+(n<original.length()?"...":""))>limit)n--;
+        return n==0?"":original.substring(0,n)+(n<original.length()?"...":"");
     }
 
     public void drawInspector(Minecraft mc,int panelX,int top,int panelWidth,int bottom,
@@ -548,7 +550,8 @@ public final class CameraWorkspace
                         {dragKey=k;selectedKey=k;break;}
                     }
                     drag=hit;dragStartX=x;dragStartFrame=hit.tick;
-                    dragStartLayer=hit.layer;playheadAtClick=frame;
+                    dragStartLayer=hit.layer;dragStartDuration=hit.duration;
+                    dragOriginalKey=dragKey==null?-1:dragKey;playheadAtClick=frame;
                     dragging=false;copied=false;
                 }
                 else
@@ -591,17 +594,27 @@ public final class CameraWorkspace
     {
         if(drag==null||button!=0)return false;
         if(Math.abs(x-dragStartX)<3&&!dragging)return true;
-        if(!copied&&Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)||
-           !copied&&Keyboard.isKeyDown(Keyboard.KEY_RCONTROL))
+        if(!copied&&(Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)||
+             Keyboard.isKeyDown(Keyboard.KEY_RCONTROL)))
         {
-            CameraClipTrack.Clip copy=drag.copy();
-            track.add(copy);drag=copy;selected=copy;copied=true;
+            if(dragKey!=null)
+            {
+                PreviewCameraPose key=drag.keys.get(dragKey);
+                if(key!=null)drag.keys.put(Math.max(0,dragKey+1),key);
+                dragKey=Math.max(0,dragKey+1);
+            }
+            else
+            {
+                CameraClipTrack.Clip copy=drag.copy();
+                track.add(copy);drag=copy;selected=copy;
+            }
+            copied=true;
         }
         dragging=true;
         int delta=Math.round((x-dragStartX)/timeline.getPixelsPerFrame());
         if(dragKey!=null)
         {
-            int next=Math.max(0,Math.min(drag.duration-1,dragKey+delta));
+            int next=Math.max(0,Math.min(drag.duration-1,dragOriginalKey+delta));
             PreviewCameraPose key=drag.keys.get(dragKey);
             if(key!=null&&(next==dragKey||!drag.keys.containsKey(next)))
             {
@@ -613,13 +626,12 @@ public final class CameraWorkspace
         int newTick=Math.max(0,dragStartFrame+delta);
         if(resizing)
         {
-            int next=Math.max(1,drag.duration+delta);
+            int next=Math.max(1,dragStartDuration+delta);
             if(!track.conflicts(drag,drag.layer,drag.tick,next))drag.duration=next;
         }
         else
         {
-            int newLayer=Math.max(0,Math.min(4,
-                dragStartLayer-(y-lastHeight+TIMELINE_HEIGHT+35+24)/ROW));
+            int newLayer=dragStartLayer;
             // Dragging vertically uses exact row hit rather than pointer delta.
             int row=(y-(lastHeight-TIMELINE_HEIGHT+35+24))/ROW;
             if(row>=0&&row<5)newLayer=4-row;
