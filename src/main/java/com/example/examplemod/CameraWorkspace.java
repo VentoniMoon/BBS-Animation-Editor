@@ -34,6 +34,58 @@ public final class CameraWorkspace
         CameraImageCache.clear();
     }
     private boolean shot;
+    private PreviewCameraPose lastNavigationPose;
+    private CameraClipDocument.Clip trackedCameraClip;
+    private CameraClipDocument.Key trackedCameraKey;
+    private boolean navigationDirty;
+    private int navigationIdleTicks;
+
+    /**
+     * In EDIT VIEW moving/rotating the free camera is a third way to
+     * author the selected View/Dolly pose (or an explicitly selected key).
+     * The baseline is reset on selection changes to prevent accidental jumps.
+     */
+    public void captureNavigationPose(PreviewCameraPose pose)
+    {
+        if(shot||pose==null)
+        {
+            lastNavigationPose=null;return;
+        }
+        CameraClipDocument.Clip clip=document.selected();
+        CameraClipDocument.Key key=selectedKey!=null&&keyOwner==clip
+                ?selectedKey:
+                clip!=null&&(clip.kind==CameraClipDocument.Kind.IDLE
+                        ||clip.kind==CameraClipDocument.Kind.DOLLY)
+                        &&!clip.keys.isEmpty()?clip.keys.get(0):null;
+        if(clip!=trackedCameraClip||key!=trackedCameraKey)
+        {
+            if(navigationDirty)saveScene();
+            trackedCameraClip=clip;trackedCameraKey=key;
+            lastNavigationPose=pose;navigationDirty=false;
+            navigationIdleTicks=0;return;
+        }
+        if(lastNavigationPose==null){lastNavigationPose=pose;return;}
+        boolean moved=Math.abs(pose.x-lastNavigationPose.x)>1E-5D||
+                Math.abs(pose.y-lastNavigationPose.y)>1E-5D||
+                Math.abs(pose.z-lastNavigationPose.z)>1E-5D||
+                Math.abs(pose.yaw-lastNavigationPose.yaw)>1E-4F||
+                Math.abs(pose.pitch-lastNavigationPose.pitch)>1E-4F||
+                Math.abs(pose.roll-lastNavigationPose.roll)>1E-4F||
+                Math.abs(pose.fov-lastNavigationPose.fov)>1E-4F;
+        lastNavigationPose=pose;
+        if(moved&&key!=null)
+        {
+            key.x=pose.x;key.y=pose.y;key.z=pose.z;
+            key.yaw=pose.yaw;key.pitch=pose.pitch;
+            key.roll=pose.roll;key.fov=pose.fov;
+            navigationDirty=true;navigationIdleTicks=0;
+        }
+        else if(navigationDirty&&++navigationIdleTicks>=5)
+        {
+            saveScene();navigationDirty=false;
+        }
+    }
+
     public PreviewCameraPose sample(PreviewCameraPose editorPose,int sceneFrame,
             CameraClipDocument.TargetResolver resolver)
     {
@@ -613,6 +665,13 @@ public final class CameraWorkspace
     private boolean resizingClip;
     private int dragStartX,dragStartTick,dragStartLayer;
     private boolean cloneDrag;
+    private boolean scrubbingTimeline;
+    private CameraClipInspector.Hit numericDragCandidate;
+    private CameraClipDocument.Clip numericDragClip;
+    private CameraClipDocument.Key numericDragKey;
+    private int numericStartX;
+    private double numericStartValue;
+    private boolean numericDragging;
     private int scaleStart,scaleEnd;
     private int right;
     private int top;
@@ -973,9 +1032,22 @@ public final class CameraWorkspace
         if(button==0&&mouseX>=right&&mouseX<screen.width
                 &&mouseY>=25&&mouseY<top)
         {
+            numericDragCandidate=null;numericDragging=false;
             CameraClipInspector.Hit hit=inspector.hit(mouseX,mouseY);
             CameraClipDocument.Clip clip=document.selected();
             if(hit==null||clip==null)return true;
+            Double raw=finiteDouble(hit.value);
+            if(raw!=null&&!hit.toggle&&!hit.key.startsWith("@interp:")
+                    &&!hit.key.startsWith("@key:")
+                    &&!hit.key.startsWith("@media:")
+                    &&!"selector".equals(hit.key))
+            {
+                numericDragCandidate=hit;numericDragClip=clip;
+                numericDragKey=hit.keyframe?
+                        (selectedKey!=null&&keyOwner==clip?selectedKey:
+                            clip.keys.isEmpty()?null:clip.keys.get(0)):null;
+                numericStartX=mouseX;numericStartValue=raw;
+            }
             if(hit.key.startsWith("@interp:"))
             {
                 String action=hit.key.substring("@interp:".length());
@@ -1143,6 +1215,7 @@ public final class CameraWorkspace
                 cameraTimeline.getFrameFromMouseX(mouseX,timelineX)));
         if(button==0&&mouseY<top+35)
         {
+            scrubbingTimeline=true;
             screen.setCameraWorkspaceFrame(t);
             return true;
         }
@@ -1245,6 +1318,47 @@ public final class CameraWorkspace
     }
     public void move(int mouseX,int mouseY,int length)
     {
+        if(scrubbingTimeline)
+        {
+            AnimationEditorScreen ui=(AnimationEditorScreen)
+                    Minecraft.getMinecraft().currentScreen;
+            if(ui!=null)
+                ui.setCameraWorkspaceFrame(Math.max(0,Math.min(
+                        length-1,cameraTimeline.getFrameFromMouseX(
+                                mouseX,timelineX))));
+            return;
+        }
+        if(numericDragCandidate!=null)
+        {
+            int dx=mouseX-numericStartX;
+            if(!numericDragging&&Math.abs(dx)<3)return;
+            numericDragging=true;
+            // Cancel the click-to-type field only after an actual drag.
+            editField=null;editKey=null;keyField=null;
+            double multiplier=GuiScreen.isShiftKeyDown()?0.01D:
+                    GuiScreen.isCtrlKeyDown()?1D:0.1D;
+            double value=numericStartValue+dx*multiplier;
+            CameraClipInspector.Hit field=numericDragCandidate;
+            if(field.keyframe&&numericDragKey!=null)
+            {
+                if("x".equals(field.key))numericDragKey.x=value;
+                else if("y".equals(field.key))numericDragKey.y=value;
+                else if("z".equals(field.key))numericDragKey.z=value;
+                else if("yaw".equals(field.key))numericDragKey.yaw=(float)value;
+                else if("pitch".equals(field.key))numericDragKey.pitch=(float)value;
+                else if("roll".equals(field.key))numericDragKey.roll=(float)value;
+                else if("fov".equals(field.key))
+                    numericDragKey.fov=(float)Math.max(1D,Math.min(170D,value));
+            }
+            else if(numericDragClip!=null)
+            {
+                String key=field.component>=0?
+                        field.key+"#"+field.component:field.key;
+                applyClipField(numericDragClip,key,
+                        Double.toString(value));
+            }
+            return;
+        }
         if(draggedKey!=null&&draggedKeyOwner!=null)
         {
             int candidate=draggedKeyStart+Math.round(
@@ -1280,6 +1394,11 @@ public final class CameraWorkspace
     }
     public void release()
     {
+        scrubbingTimeline=false;
+        if(numericDragging)saveScene();
+        numericDragCandidate=null;numericDragClip=null;
+        numericDragKey=null;numericDragging=false;
+        if(navigationDirty){saveScene();navigationDirty=false;}
         if(dragged!=null||draggedKey!=null)
         {
             if(draggedKeyOwner!=null)
