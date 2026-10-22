@@ -2985,15 +2985,8 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         drawPreviewControls(
-                left,
-                previewRight,
-                top,
-                bottom
+                left, previewRight, top, bottom, mouseX, mouseY
         );
-
-        if (this.editorModeController.getMode()
-                != EditorModeController.EditorMode.CAMERA)
-            drawStage8PreviewButtons(previewRight, top);
 
         /*
          * ---------------------------------------------------------
@@ -3119,86 +3112,150 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
     /**
-     * Compact preview controls below the gizmo tools: show-all actors,
-     * selected-key auto focus, and FREE/ORBIT navigation.
-     *
-     * Native framebuffer status belongs in diagnostics/logs, not a fake
-     * toolbar button. The FS/F~/F! indicator is intentionally removed.
+     * Playback keeps its familiar three controls. Mini picture buttons live
+     * alongside it, never over the preview image.
+     * The same geometry is used for drawing, tooltips and hit detection.
      */
-    private void drawStage8PreviewButtons(int right, int top)
+    private static final int PREVIEW_ICON_SIZE=18;
+    private static final int PREVIEW_ICON_GAP=3;
+
+    private int previewExtraCount()
     {
-        int x = right - 36;
-        int y = top + 124;
-
-        drawToolbarButton(x, y, 26, 26, multiActorPreview.isShowAllActors());
-        drawCenteredString(fontRenderer, "ALL", x + 13, y + 9,
-                multiActorPreview.isShowAllActors()
-                        ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
-
-        drawToolbarButton(x, y + 32, 26, 26, previewAutoFocus.isEnabled());
-        drawCenteredString(fontRenderer, "F", x + 13, y + 9 + 32,
-                previewAutoFocus.isEnabled()
-                        ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
-
-        /*
-         * FR = first-person FREE look, OR = orbit around the target;
-         * switching preserves the camera eye and viewing angles.
-         */
-        EditorCamera.Mode cameraMode = this.sceneViewport == null
-                ? EditorCamera.Mode.FREE
-                : this.sceneViewport.getCamera().getMode();
-        boolean orbit = cameraMode == EditorCamera.Mode.ORBIT;
-        drawToolbarButton(x, y + 64, 26, 26, orbit);
-        drawCenteredString(fontRenderer,
-                cameraMode == EditorCamera.Mode.TRACK ? "TR"
-                        : (orbit ? "OR" : "FR"),
-                x + 13, y + 9 + 64,
-                orbit ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
-
-        // Film preview from CAMERA is also available while editing actors.
-        drawToolbarButton(x,y+96,26,26,cameraWorkspace.crossModeShot());
-        drawCenteredString(fontRenderer,"CAM",x+13,y+9+96,
-                cameraWorkspace.crossModeShot()
-                        ?getAccentBrightColor():COLOR_TEXT_SECONDARY);
+        return this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA?2:4;
     }
 
-    public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
+    private int previewPlaybackX(int left,int right)
     {
-        if (this.sceneViewport == null || button != 0
-                ||this.editorModeController.getMode()
-                    ==EditorModeController.EditorMode.CAMERA)return false;
-        int x = this.sceneViewport.getX() + this.sceneViewport.getWidth() - 36;
-        int y = this.sceneViewport.getY() + 124;
-        if (mouseX >= x && mouseX < x + 26)
+        int total=PREVIEW_BUTTON_WIDTH*3+PREVIEW_BUTTON_GAP*2;
+        return left+(right-left-total)/2;
+    }
+
+    private int previewExtraX(int left,int right)
+    {
+        int extra=previewExtraCount()*PREVIEW_ICON_SIZE+
+                (previewExtraCount()-1)*PREVIEW_ICON_GAP;
+        int playbackTotal=PREVIEW_BUTTON_WIDTH*3+PREVIEW_BUTTON_GAP*2;
+        int start=previewPlaybackX(left,right);
+        if(right-left>=playbackTotal+extra+17)
         {
-            if (mouseY >= y && mouseY < y + 26)
+            int after=start+playbackTotal+8;
+            if(after+extra<=right-5)return after;
+            return start-extra-8;
+        }
+        // Narrow window: a second short toolbar row above playback.
+        return left+(right-left-extra)/2;
+    }
+
+    private int previewExtraY(int left,int right,int bottom)
+    {
+        int extra=previewExtraCount()*PREVIEW_ICON_SIZE+
+                (previewExtraCount()-1)*PREVIEW_ICON_GAP;
+        int playbackTotal=PREVIEW_BUTTON_WIDTH*3+PREVIEW_BUTTON_GAP*2;
+        int playY=bottom-PREVIEW_BUTTON_HEIGHT-12;
+        return right-left>=playbackTotal+extra+17
+                ?playY+1:playY-PREVIEW_ICON_SIZE-4;
+    }
+
+    private void drawCompactPreviewTools(int left,int right,int bottom,
+            int mouseX,int mouseY)
+    {
+        int start=previewExtraX(left,right);
+        int y=previewExtraY(left,right,bottom);
+        boolean cameraMode=this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA;
+        EditorCamera.Mode navigation=this.sceneViewport==null
+                ?EditorCamera.Mode.FREE
+                :this.sceneViewport.getCamera().getMode();
+        boolean[] checked=cameraMode
+                ?new boolean[]{cameraWorkspace.shot(),cameraWorkspace.recordingPreview()}
+                :new boolean[]{multiActorPreview.isShowAllActors(),
+                        previewAutoFocus.isEnabled(),
+                        navigation==EditorCamera.Mode.ORBIT,
+                        cameraWorkspace.crossModeShot()};
+        int[] icons=cameraMode
+                ?new int[]{PreviewToolbarIcons.SHOT,PreviewToolbarIcons.RECORD}
+                :new int[]{PreviewToolbarIcons.ALL_ACTORS,
+                        PreviewToolbarIcons.AUTOFOCUS,
+                        PreviewToolbarIcons.NAVIGATION,
+                        PreviewToolbarIcons.FILM_CAMERA};
+        String[] hints=cameraMode
+                ?new String[]{
+                        cameraWorkspace.shot()?"Shot camera (switch to free view)"
+                                :"Free camera (switch to shot view)",
+                        cameraWorkspace.recordingPreview()
+                                ?"Stop recording selected camera key"
+                                :"Record camera movement to selected clip key"}
+                :new String[]{"Show all actors","Auto-focus selected key",
+                        navigation==EditorCamera.Mode.ORBIT
+                                ?"Orbit camera (switch to free)"
+                                :"Free camera (switch to orbit)",
+                        cameraWorkspace.crossModeShot()
+                                ?"Disable film camera view"
+                                :"View through CAMERA clips"};
+        for(int i=0;i<icons.length;i++)
+        {
+            int x=start+i*(PREVIEW_ICON_SIZE+PREVIEW_ICON_GAP);
+            boolean hovered=mouseX>=x&&mouseX<x+PREVIEW_ICON_SIZE
+                    &&mouseY>=y&&mouseY<y+PREVIEW_ICON_SIZE;
+            drawToolbarButton(x,y,PREVIEW_ICON_SIZE,PREVIEW_ICON_SIZE,
+                    hovered||checked[i]);
+            if(checked[i])drawRect(x,y+PREVIEW_ICON_SIZE-2,
+                    x+PREVIEW_ICON_SIZE,y+PREVIEW_ICON_SIZE,
+                    icons[i]==PreviewToolbarIcons.RECORD?0xFFFF6868:getAccentColor());
+            int ink=icons[i]==PreviewToolbarIcons.RECORD&&checked[i]
+                    ?0xFFFF9999:checked[i]||hovered
+                    ?getAccentBrightColor():COLOR_TEXT_SECONDARY;
+            PreviewToolbarIcons.draw(icons[i],x,y,ink,checked[i]);
+            if(hovered)
             {
-                multiActorPreview.toggleShowAllActors();
-                return true;
-            }
-            if (mouseY >= y + 32 && mouseY < y + 58)
-            {
-                previewAutoFocus.toggle();
-                return true;
-            }
-            if (mouseY >= y + 64 && mouseY < y + 90)
-            {
-                EditorCamera.Mode current =
-                        this.sceneViewport.getCamera().getMode();
-                this.sceneViewport.setCameraMode(
-                        current == EditorCamera.Mode.ORBIT
-                                ? EditorCamera.Mode.FREE
-                                : EditorCamera.Mode.ORBIT);
-                return true;
-            }
-            if(mouseY>=y+96&&mouseY<y+122)
-            {
-                cameraWorkspace.syncScene(sceneState);
-                cameraWorkspace.toggleCrossModeShot();
-                return true;
+                // Tooltip above buttons stays within the cinematic frame.
+                int tw=fontRenderer.getStringWidth(hints[i])+12;
+                int tipX=Math.max(left+2,Math.min(right-tw-2,x+9-tw/2));
+                int tipY=y-19;
+                drawRect(tipX,tipY,tipX+tw,tipY+16,0xF010171D);
+                drawRect(tipX,tipY,tipX+tw,tipY+1,getAccentColor());
+                drawString(fontRenderer,hints[i],tipX+6,tipY+4,COLOR_TEXT);
             }
         }
-        return false;
+    }
+
+    public boolean clickStage8PreviewButton(int mouseX,int mouseY,int button)
+    {
+        if(this.sceneViewport==null||button!=0)return false;
+        int left=this.sceneViewport.getX();
+        int right=left+this.sceneViewport.getWidth();
+        int bottom=this.sceneViewport.getY()+this.sceneViewport.getHeight();
+        int x=previewExtraX(left,right);
+        int y=previewExtraY(left,right,bottom);
+        int count=previewExtraCount();
+        if(mouseY<y||mouseY>=y+PREVIEW_ICON_SIZE)return false;
+        int offset=mouseX-x;
+        if(offset<0)return false;
+        int step=PREVIEW_ICON_SIZE+PREVIEW_ICON_GAP;
+        int which=offset/step;
+        if(which>=count||offset%step>=PREVIEW_ICON_SIZE)return false;
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+        {
+            if(which==0)cameraWorkspace.toggleShotView();
+            else cameraWorkspace.togglePreviewRecordingFromToolbar(
+                    this,this.playbackController.getCurrentFrame());
+            return true;
+        }
+        if(which==0)multiActorPreview.toggleShowAllActors();
+        else if(which==1)previewAutoFocus.toggle();
+        else if(which==2)
+        {
+            EditorCamera.Mode current=this.sceneViewport.getCamera().getMode();
+            this.sceneViewport.setCameraMode(current==EditorCamera.Mode.ORBIT
+                    ?EditorCamera.Mode.FREE:EditorCamera.Mode.ORBIT);
+        }
+        else
+        {
+            cameraWorkspace.syncScene(sceneState);
+            cameraWorkspace.toggleCrossModeShot();
+        }
+        return true;
     }
 
     private void updatePreviewAutoFocus()
@@ -3255,7 +3312,9 @@ public class AnimationEditorScreen extends GuiScreen
             int left,
             int right,
             int top,
-            int bottom)
+            int bottom,
+            int mouseX,
+            int mouseY)
     {
         int totalWidth =
                 PREVIEW_BUTTON_WIDTH * 3
@@ -3306,6 +3365,7 @@ public class AnimationEditorScreen extends GuiScreen
                 ">|",
                 false
         );
+        drawCompactPreviewTools(left,right,bottom,mouseX,mouseY);
     }
 
     private void drawPreviewButton(
@@ -3508,6 +3568,9 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws java.io.IOException
     {
+        // CAMERA's toolbar uses the same hitboxes as all other modes.
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                &&clickStage8PreviewButton(mouseX,mouseY,mouseButton))return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && this.cameraWorkspace.click(this,mouseX,mouseY,mouseButton,
