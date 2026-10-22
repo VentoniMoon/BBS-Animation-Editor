@@ -167,6 +167,32 @@ public final class CameraWorkspace
     private CameraClipDocument.Clip keyOwner;
     private String keyField;
     private CameraClipDocument.Clip contextClip;
+    private static final String[] KEY_FIELDS={
+        "tick","x","y","z","yaw","pitch","roll","fov"
+    };
+
+    private String keyValue(CameraClipDocument.Key key,String field)
+    {
+        if("tick".equals(field))return Integer.toString(key.tick);
+        if("x".equals(field))return Double.toString(key.x);
+        if("y".equals(field))return Double.toString(key.y);
+        if("z".equals(field))return Double.toString(key.z);
+        if("yaw".equals(field))return Float.toString(key.yaw);
+        if("pitch".equals(field))return Float.toString(key.pitch);
+        if("roll".equals(field))return Float.toString(key.roll);
+        return Float.toString(key.fov);
+    }
+    private void beginKeyEdit(AnimationEditorScreen screen,String name,
+            CameraClipDocument.Key key,int y)
+    {
+        editKey=null;editClip=null;
+        keyField=name;namingPreset=false;
+        editField=new GuiTextField(43,Minecraft.getMinecraft().fontRenderer,
+                right+8,y,165,17);
+        editField.setMaxStringLength(60);
+        editField.setText(keyValue(key,name));
+        editField.setFocused(true);
+    }
     private int contextX,contextY;
 
     public boolean mouseScrolled(int mouseX,int mouseY,int direction)
@@ -331,7 +357,8 @@ public final class CameraWorkspace
             {
                 if(index++<inspectorScroll)continue;
                 int yy=159+16*(index-inspectorScroll-1);
-                if(yy+10>=top-10)break;
+                if(yy+10>=top-(selectedKey!=null&&keyOwner==selected?180:10))
+                    break;
                 String value=property.getValue();
                 String line=property.getKey()+": "+value;
                 mc.fontRenderer.drawString(
@@ -339,9 +366,16 @@ public final class CameraWorkspace
                         right+8,yy,0xFF91A0A8);
             }
             if(selectedKey!=null&&keyOwner==selected)
-                mc.fontRenderer.drawString(
-                        "KEY "+selectedKey.tick+"  (double RMB deletes)",
-                        right+8,top-22,0xFFE9C479);
+            {
+                int keyTop=top-172;
+                GuiScreen.drawRect(right+4,keyTop-6,width-3,keyTop-5,0xFF6BCBFF);
+                mc.fontRenderer.drawString("KEYFRAME PROPERTIES",
+                        right+8,keyTop-4,0xFF6BCBFF);
+                for(int i=0;i<KEY_FIELDS.length;i++)
+                    mc.fontRenderer.drawString(
+                        KEY_FIELDS[i]+": "+keyValue(selectedKey,KEY_FIELDS[i]),
+                        right+8,keyTop+13+i*18,0xFFE7DCC9);
+            }
         }
         else mc.fontRenderer.drawString("Select a clip",right+8,54,0xFF8A959E);
         GuiScreen.drawRect(0,top,width,bottom,0xFF111D27);
@@ -378,7 +412,9 @@ public final class CameraWorkspace
             for(CameraClipDocument.Key key:clip.keys)
             {
                 int kx=timelineX+(int)((long)(clip.tick+key.tick)*timelineW/usable);
-                GuiScreen.drawRect(kx-1,y+4,kx+2,y+rowHeight-5,0xFFCBFFED);
+                GuiScreen.drawRect(kx-(key==selectedKey?2:1),y+4,
+                        kx+(key==selectedKey?3:2),y+rowHeight-5,
+                        key==selectedKey?0xFFFFFFB4:0xFFCBFFED);
             }
         }
         int cursor=timelineX+(int)((long)Math.max(0,frame)*timelineW/usable);
