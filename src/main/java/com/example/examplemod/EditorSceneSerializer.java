@@ -180,8 +180,29 @@ public final class EditorSceneSerializer
          * optional NBT string so old editor.dat files and Blockbuster
          * scenes remain readable without a format migration.
          */
-        scene.setString("CameraClips",
-                new com.google.gson.Gson().toJson(state.getCameraClips().toJson()));
+        /*
+         * Store potentially thousands of keys as compressed UTF-8 bytes.
+         * A plain NBTTagString would hit Java DataOutput.writeUTF's 65535
+         * byte limit on long camera scenes.
+         */
+        try
+        {
+            byte[] json=new com.google.gson.Gson()
+                    .toJson(state.getCameraClips().toJson())
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+            try(java.util.zip.GZIPOutputStream zip=
+                        new java.util.zip.GZIPOutputStream(bytes))
+            {
+                zip.write(json);
+            }
+            scene.setByteArray("CameraClipsZ",bytes.toByteArray());
+        }
+        catch(java.io.IOException impossibleInMemory)
+        {
+            throw new IllegalStateException("Cannot serialize CAMERA clips",
+                    impossibleInMemory);
+        }
 
         root.setTag(
                 "Scene",
@@ -349,20 +370,52 @@ public final class EditorSceneSerializer
         }
 
 
-        /* CAMERA was added after editor.dat format 1; absent is normal. */
+        /* CAMERA is optional for all existing editor.dat files. */
         state.getCameraClips().clear();
-        if(scene.hasKey("CameraClips",8))
+        if(scene.hasKey("CameraClipsZ",7))
         {
             try
             {
-                String json=scene.getString("CameraClips");
+                byte[] zipped=scene.getByteArray("CameraClipsZ");
+                if(zipped.length>16*1024*1024)
+                    throw new java.io.IOException("Compressed camera data too large");
+                java.io.ByteArrayOutputStream plain=
+                        new java.io.ByteArrayOutputStream();
+                try(java.util.zip.GZIPInputStream stream=
+                        new java.util.zip.GZIPInputStream(
+                                new java.io.ByteArrayInputStream(zipped)))
+                {
+                    byte[] buffer=new byte[8192];
+                    int count;
+                    while((count=stream.read(buffer))!=-1)
+                    {
+                        if(plain.size()+count>32*1024*1024)
+                            throw new java.io.IOException("Camera data too large");
+                        plain.write(buffer,0,count);
+                    }
+                }
+                String json=new String(plain.toByteArray(),
+                        java.nio.charset.StandardCharsets.UTF_8);
                 state.getCameraClips().readJson(
                         new com.google.gson.JsonParser().parse(json).getAsJsonObject());
             }
+            catch(java.io.IOException|RuntimeException invalid)
+            {
+                System.err.println("[BBS CAMERA] Invalid compressed clip data: "+
+                        invalid.getMessage());
+                state.getCameraClips().clear();
+            }
+        }
+        else if(scene.hasKey("CameraClips",8))
+        {
+            /* Compatibility with early builds using an uncompressed tag. */
+            try
+            {
+                state.getCameraClips().readJson(new com.google.gson.JsonParser()
+                        .parse(scene.getString("CameraClips")).getAsJsonObject());
+            }
             catch(RuntimeException invalid)
             {
-                System.err.println("[BBS CAMERA] Invalid scene camera clips: "+
-                        invalid.getMessage());
                 state.getCameraClips().clear();
             }
         }
