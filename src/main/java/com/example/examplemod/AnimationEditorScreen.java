@@ -162,6 +162,7 @@ public class AnimationEditorScreen extends GuiScreen
     private EditorSceneState sceneState;
     private EditorSceneViewport sceneViewport;
     private final CameraWorkspace cameraWorkspace=new CameraWorkspace();
+    private final CameraClipOverlays cameraClipOverlays=new CameraClipOverlays();
 
     public CameraWorkspace getCameraWorkspace(){return cameraWorkspace;}
     public CameraClipTrack getCameraClips(){return sceneState.getCameraClips();}
@@ -1523,6 +1524,7 @@ public class AnimationEditorScreen extends GuiScreen
         if(this.cameraWorkspace.isShotMode())
             this.cameraWorkspace.toggleShot(this.sceneViewport);
         this.cameraWorkspace.resetForScene();
+        this.cameraClipOverlays.clear();
         this.multiActorPreview.reset();
         this.previewAutoFocus.reset();
         try
@@ -2844,6 +2846,9 @@ public class AnimationEditorScreen extends GuiScreen
                         this.sceneViewport.getCamera(), isGizmoEnabled())
         );
         this.sceneViewport.renderPreviewToScreen();
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            this.cameraClipOverlays.render(mc,sceneState.getCameraClips(),
+                    playbackController.getCurrentFrame(),left,top,previewWidth,previewHeight);
 
         /*
          * The GUI pass only draws the three gizmo mode buttons.
@@ -3044,6 +3049,12 @@ public class AnimationEditorScreen extends GuiScreen
                         : (orbit ? "OR" : "FR"),
                 x + 13, y + 9 + 64,
                 orbit ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+        {
+            drawToolbarButton(x,y+96,26,26,cameraWorkspace.isShotMode());
+            drawCenteredString(fontRenderer,"SHOT",x+13,y+105,
+                    cameraWorkspace.isShotMode()?getAccentBrightColor():COLOR_TEXT_SECONDARY);
+        }
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
@@ -3061,6 +3072,12 @@ public class AnimationEditorScreen extends GuiScreen
             if (mouseY >= y + 32 && mouseY < y + 58)
             {
                 previewAutoFocus.toggle();
+                return true;
+            }
+            if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                    &&mouseY>=y+96&&mouseY<y+122)
+            {
+                cameraWorkspace.toggleShot(sceneViewport);
                 return true;
             }
             if (mouseY >= y + 64 && mouseY < y + 90)
@@ -3704,6 +3721,7 @@ public class AnimationEditorScreen extends GuiScreen
     public void onGuiClosed()
     {
         /* Never leave the detached preview camera as Minecraft's view. */
+        cameraClipOverlays.clear();
         if (this.sceneViewport != null)
         {
             BbsFsWorldCameraDriver.detach(this.sceneViewport);
