@@ -195,7 +195,11 @@ public final class CameraClipInspector
     private void keyEditor(CameraClipDocument.Key key,boolean point)
     {
         section(point?"PATH POINTS":"KEYFRAME CHANNELS");
-        field("@key:count","Keys",Integer.toString(selectedClip.keys.size()),false);
+        int countAt=y-scroll;
+        if(visible(countAt,18))
+            text("Keys: "+selectedClip.keys.size(),right+12,countAt+5,
+                    0xFFB7C5CC,width-right-24);
+        y+=21;
         button("Add key at playhead","@key:add");
         if(key==null)return;
         button("Previous key","@key:prev");
@@ -268,9 +272,9 @@ public final class CameraClipInspector
     private void transform()
     {
         section("TRANSFORM");
-        setting("transform","Transform");
-        // The serialized transform is BBS-specific; basic placement, rotation
-        // and scaling must never be silently written as fabricated XYZ fields.
+        setting("rotation","Rotation");
+        setting("scaleX","Scale X");
+        setting("scaleY","Scale Y");
     }
 
     /** Deliberately explicit per-type layouts; no settings-map reflection. */
@@ -399,6 +403,7 @@ public final class CameraClipInspector
             case IMAGE:
                 section("IMAGE");
                 setting("texture","Texture");
+                button("Browse images","@media:browse:texture");
                 setting("fullscreen","Fullscreen");
                 setting("smooth","Smooth");
                 setting("color","Tint");
@@ -408,6 +413,7 @@ public final class CameraClipInspector
             case AUDIO:
                 section("AUDIO");
                 setting("audio","Audio file");
+                button("Browse audio","@media:browse:audio");
                 setting("offset","Offset");
                 setting("volume","Volume");
                 button("Extend to audio length","@media:duration");
@@ -415,6 +421,7 @@ public final class CameraClipInspector
             case VIDEO:
                 section("VIDEO");
                 setting("video","Video file");
+                button("Browse videos","@media:browse:video");
                 setting("audio","Audio track");
                 setting("offset","Offset");
                 setting("volume","Volume");
@@ -437,11 +444,13 @@ public final class CameraClipInspector
                 setting("shadowOpaque","Opaque shadow");
                 section("FONT");
                 setting("font","Font file");
+                button("Browse fonts","@media:browse:font");
                 setting("fontSize","Font size");
                 setting("lineHeight","Line height");
                 setting("maxWidth","Max width");
                 section("IMAGE");
                 setting("image","Image file");
+                button("Browse images","@media:browse:image");
                 setting("imageRight","Image right");
                 setting("imageScale","Image scale");
                 placement();
