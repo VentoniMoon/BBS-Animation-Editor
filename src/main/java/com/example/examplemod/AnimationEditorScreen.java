@@ -95,6 +95,13 @@ public class AnimationEditorScreen extends GuiScreen
                 ?this.sceneViewport.getCameraForPreviewInteractions()
                 :this.sceneViewport.getCamera();
     }
+    public boolean isCrossModeCameraView()
+    {
+        return this.cameraWorkspace.crossModeShot()
+                &&this.editorModeController.getMode()
+                    !=EditorModeController.EditorMode.CAMERA;
+    }
+
 
     /**
      * Called at RenderTick START, before the native Minecraft world draw.
