@@ -248,6 +248,38 @@ public final class CameraClipDocument
         if(overlaps(clip,clip)){clip.tick=oldTick;clip.layer=oldLayer;return false;}
         return true;
     }
+    /**
+     * Resize either timeline boundary without moving the opposite edge.
+     * Keys stay relative to the clip start; reject trims that would silently
+     * discard keys. No changes persist when a same-layer clip overlaps.
+     *
+     * @param left true for the start handle; false for the end handle
+     * @param boundary absolute scene frame of the grabbed edge
+     */
+    public boolean trim(Clip clip,boolean left,int boundary)
+    {
+        if(clip==null||!clips.contains(clip))return false;
+        int oldTick=clip.tick,oldDuration=clip.duration;
+        long oldEnd=(long)oldTick+oldDuration;
+        long start=left?Math.max(0L,Math.min(
+                (long)boundary,oldEnd-1L)):oldTick;
+        long end=left?oldEnd:Math.max(start+1L,(long)boundary);
+        if(end>Integer.MAX_VALUE)return false;
+        int newDuration=(int)(end-start);
+        for(Key key:clip.keys)
+            if(key.tick<0||key.tick>=newDuration)return false;
+        if(start==oldTick&&newDuration==oldDuration)return false;
+        clip.tick=(int)start;
+        clip.duration=newDuration;
+        if(overlaps(clip,clip))
+        {
+            clip.tick=oldTick;
+            clip.duration=oldDuration;
+            return false;
+        }
+        return true;
+    }
+
     public boolean remove(Clip clip)
     {
         if(!clips.remove(clip))return false;
