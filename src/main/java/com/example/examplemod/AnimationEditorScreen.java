@@ -1709,9 +1709,10 @@ public class AnimationEditorScreen extends GuiScreen
     /** CAMERA gets first chance to consume wheel events over its panels. */
     public boolean scrollCameraWorkspace(int mouseX,int mouseY,int direction)
     {
-        return this.editorModeController.getMode()
-                == EditorModeController.EditorMode.CAMERA
-                && this.cameraWorkspace.mouseScrolled(mouseX,mouseY,direction);
+        if(editorModeController.getMode()!=EditorModeController.EditorMode.CAMERA)
+            return false;
+        if(cameraOutputPopup.isOpen())return cameraOutputPopup.scroll(direction);
+        return cameraWorkspace.mouseScrolled(mouseX,mouseY,direction);
     }
 
     public void selectActor(int index)
@@ -3149,7 +3150,7 @@ public class AnimationEditorScreen extends GuiScreen
     private int previewExtraCount()
     {
         return this.editorModeController.getMode()
-                ==EditorModeController.EditorMode.CAMERA?2:4;
+                ==EditorModeController.EditorMode.CAMERA?3:4;
     }
 
     private int previewPlaybackX(int left,int right)
@@ -3195,13 +3196,17 @@ public class AnimationEditorScreen extends GuiScreen
                 ?EditorCamera.Mode.FREE
                 :this.sceneViewport.getCamera().getMode();
         boolean[] checked=cameraMode
-                ?new boolean[]{cameraWorkspace.shot(),cameraWorkspace.recordingPreview()}
+                ?new boolean[]{cameraWorkspace.shot(),
+                        cameraWorkspace.recordingPreview(),
+                        cameraOutputPopup.isOpen()}
                 :new boolean[]{multiActorPreview.isShowAllActors(),
                         previewAutoFocus.isEnabled(),
                         navigation==EditorCamera.Mode.ORBIT,
                         cameraWorkspace.crossModeShot()};
         int[] icons=cameraMode
-                ?new int[]{PreviewToolbarIcons.SHOT,PreviewToolbarIcons.RECORD}
+                ?new int[]{PreviewToolbarIcons.SHOT,
+                        PreviewToolbarIcons.RECORD,
+                        PreviewToolbarIcons.OUTPUT_FORMAT}
                 :new int[]{PreviewToolbarIcons.ALL_ACTORS,
                         PreviewToolbarIcons.AUTOFOCUS,
                         PreviewToolbarIcons.NAVIGATION,
@@ -3212,7 +3217,10 @@ public class AnimationEditorScreen extends GuiScreen
                                 :"Free camera (switch to shot view)",
                         cameraWorkspace.recordingPreview()
                                 ?"Stop recording selected camera key"
-                                :"Record camera movement to selected clip key"}
+                                :"Record camera movement to selected clip key",
+                        "Output format ("+
+                                sceneState.getCameraOutput().getWidth()+" x "+
+                                sceneState.getCameraOutput().getHeight()+")"}
                 :new String[]{"Show all actors","Auto-focus selected key",
                         navigation==EditorCamera.Mode.ORBIT
                                 ?"Orbit camera (switch to free)"
@@ -3250,9 +3258,12 @@ public class AnimationEditorScreen extends GuiScreen
     public boolean clickStage8PreviewButton(int mouseX,int mouseY,int button)
     {
         if(this.sceneViewport==null||button!=0)return false;
-        int left=this.sceneViewport.getX();
-        int right=left+this.sceneViewport.getWidth();
-        int bottom=this.sceneViewport.getY()+this.sceneViewport.getHeight();
+        // Toolbar occupies the outer editor canvas even in portrait mode.
+        int left=this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA
+                ?CameraWorkspace.CAMERA_LEFT_WIDTH:LEFT_PANEL_WIDTH;
+        int right=this.width-185;
+        int bottom=this.height-getTimelineHeight();
         int x=previewExtraX(left,right);
         int y=previewExtraY(left,right,bottom);
         int count=previewExtraCount();
@@ -3265,8 +3276,10 @@ public class AnimationEditorScreen extends GuiScreen
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
         {
             if(which==0)cameraWorkspace.toggleShotView();
-            else cameraWorkspace.togglePreviewRecordingFromToolbar(
-                    this,this.playbackController.getCurrentFrame());
+            else if(which==1)
+                cameraWorkspace.togglePreviewRecordingFromToolbar(
+                        this,this.playbackController.getCurrentFrame());
+            else cameraOutputPopup.toggle();
             return true;
         }
         if(which==0)multiActorPreview.toggleShowAllActors();
@@ -3595,6 +3608,11 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws java.io.IOException
     {
+        // Output popup consumes clicks before the camera timeline and gizmos.
+        if(cameraOutputPopup.isOpen()
+                &&cameraOutputPopup.mouseClicked(mouseX,mouseY,mouseButton,
+                    sceneState.getCameraOutput(),
+                    () -> saveCameraOutputSettings()))return;
         // CAMERA's toolbar uses the same hitboxes as all other modes.
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
                 &&clickStage8PreviewButton(mouseX,mouseY,mouseButton))return;
@@ -3689,6 +3707,9 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        if(cameraOutputPopup.keyTyped(typedChar,keyCode,
+                    sceneState.getCameraOutput(),
+                    () -> saveCameraOutputSettings()))return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && this.cameraWorkspace.keyTyped(typedChar,keyCode))
