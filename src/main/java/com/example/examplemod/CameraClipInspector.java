@@ -38,6 +38,7 @@ public final class CameraClipInspector
         {return mx>=x&&mx<x+width&&my>=y&&my<y+height;}
     }
 
+    private static final int CONTENT_TOP=68;
     private final List<Hit> hits=new ArrayList<Hit>();
     private Minecraft mc;
     private int right,width,bottom,scroll,y,contentHeight,accent;
@@ -70,7 +71,7 @@ public final class CameraClipInspector
                 Math.max(0,CameraInterpolation.OPTIONS.length-6),
                 optionScroll+(direction>0?-1:1)));
     }
-    public int maxScroll(){return Math.max(0,contentHeight-Math.max(1,bottom-82));}
+    public int maxScroll(){return Math.max(0,contentHeight-Math.max(1,bottom-CONTENT_TOP));}
     public int clampedScroll(){return clampedScroll;}
     public float scale(){return uiScale;}
     /** Fold groups keep rarely used controls available without a giant wall. */
@@ -98,7 +99,7 @@ public final class CameraClipInspector
                 name==null?"":name,Math.max(1,maxWidth)),x,yy,color);
     }
     private boolean visible(int pos,int h)
-    {return pos>=82&&pos+h<=bottom-5;}
+    {return pos>=CONTENT_TOP&&pos+h<=bottom-5;}
     private void section(String title)
     {
         int at=y-scroll;
@@ -605,15 +606,15 @@ public final class CameraClipInspector
                 EditorThemeManager.get().getAccentBright(),screen.width-right-18);
         if(clip==null)
         {
-            text("Select a camera clip",right+9,67,
+            text("Select a camera clip",right+9,53,
                     0xFF8C999F,screen.width-right-16);
             contentHeight=0;clampedScroll=0;closeInterpolation();return;
         }
         if(selectedClip!=clip){closeInterpolation();optionScroll=0;}
         selectedClip=clip;
-        rect(right+7,53,screen.width-7,76,0xFF272E34);
-        rect(right+7,53,right+10,76,clip.kind.color);
-        text(clip.title,right+15,60,0xFFE8F1F3,screen.width-right-25);
+        rect(right+7,46,screen.width-7,63,0xFF272E34);
+        rect(right+7,46,right+10,63,clip.kind.color);
+        text(clip.title,right+15,50,0xFFE8F1F3,screen.width-right-25);
 
         // First pass measures layout without creating controls or graphics.
         measuring=true;
@@ -621,15 +622,15 @@ public final class CameraClipInspector
         bottom=timelineTop;
         scroll=0;
         layout(keyframe);
-        contentHeight=y-82+5;
+        contentHeight=y-CONTENT_TOP+5;
 
         // Adaptive fit, within legible bounds. Expanded long panels may
         // scroll rather than turn into unreadably tiny text.
-        int available=Math.max(1,timelineTop-82-5);
+        int available=Math.max(1,timelineTop-CONTENT_TOP-5);
         uiScale=Math.min(0.88F,Math.max(0.58F,
                 available/(float)Math.max(1,contentHeight)));
         width=right+(int)Math.ceil((screen.width-right)/uiScale);
-        bottom=82+(int)Math.floor((timelineTop-82)/uiScale);
+        bottom=CONTENT_TOP+(int)Math.floor((timelineTop-CONTENT_TOP)/uiScale);
         scroll=Math.max(0,Math.min(requestedScroll,maxScroll()));
         clampedScroll=scroll;
 
@@ -637,18 +638,18 @@ public final class CameraClipInspector
         GL11.glPushMatrix();
         try
         {
-            GL11.glTranslated(right,82D,0D);
+            GL11.glTranslated(right,(double)CONTENT_TOP,0D);
             GL11.glScaled(uiScale,uiScale,1D);
-            GL11.glTranslated(-right,-82D,0D);
+            GL11.glTranslated(-right,-(double)CONTENT_TOP,0D);
             measuring=false;
             layout(keyframe);
             if(maxScroll()>0)
             {
-                int size=Math.max(12,(bottom-82)*(bottom-82)/
+                int size=Math.max(12,(bottom-CONTENT_TOP)*(bottom-CONTENT_TOP)/
                         Math.max(1,contentHeight));
-                int off=(int)((long)scroll*Math.max(0,bottom-82-size)/
+                int off=(int)((long)scroll*Math.max(0,bottom-CONTENT_TOP-size)/
                         Math.max(1,maxScroll()));
-                rect(width-4,82+off,width-2,82+off+size,accent);
+                rect(width-4,CONTENT_TOP+off,width-2,CONTENT_TOP+off+size,accent);
             }
             renderInterpolationPopup();
         }
@@ -660,7 +661,7 @@ public final class CameraClipInspector
             Hit h=hits.get(i);
             hits.set(i,new Hit(h.key,h.component,
                     right+Math.round((h.x-right)*uiScale),
-                    82+Math.round((h.y-82)*uiScale),
+                    CONTENT_TOP+Math.round((h.y-CONTENT_TOP)*uiScale),
                     Math.max(1,Math.round(h.width*uiScale)),
                     Math.max(1,Math.round(h.height*uiScale)),
                     h.value,h.keyframe,h.toggle));
@@ -669,7 +670,7 @@ public final class CameraClipInspector
 
     private void layout(CameraClipDocument.Key keyframe)
     {
-        y=82;
+        y=CONTENT_TOP;
         section("GENERAL");
         field("@title","Title",selectedClip.title,false);
         field("@start","Start",Integer.toString(selectedClip.tick),false);
