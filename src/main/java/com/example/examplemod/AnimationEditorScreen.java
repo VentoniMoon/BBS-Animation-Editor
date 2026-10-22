@@ -1728,6 +1728,7 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
         {
+            this.cameraWorkspace.syncScene(this.sceneState);
             this.cameraWorkspace.draw(this,
                     this.playbackController.getCurrentFrame(),getSceneLength());
         }
