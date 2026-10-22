@@ -107,6 +107,36 @@ public final class CameraClipDocumentSmokeTest
         near(tracked.x,25,"record actor tracking at selected frame");
         near(tracked.y,7,"record actor offset");
         near(tracked.z,4,"record actor Z");
-        System.out.println("CAMERA clip layering, keyframes, targets, persistence PASS");
+        CameraClipDocument channels=new CameraClipDocument();
+        CameraClipDocument.Clip channelClip=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.KEYFRAME,0,60,0);
+        CameraClipDocument.Key cx0=new CameraClipDocument.Key(0,pose(0,999,0));
+        CameraClipDocument.Key cx1=new CameraClipDocument.Key(40,pose(20,999,0));
+        cx0.mask=1;cx1.mask=1;
+        channelClip.keys.add(cx0);channelClip.keys.add(cx1);
+        check(channels.add(channelClip),"single-channel keyframe");
+        PreviewCameraPose channelPose=channels.sample(20,pose(0,3,7));
+        near(channelPose.x,10,"independent channel interpolation");
+        near(channelPose.y,3,"missing channel must preserve lower layer");
+        near(channelPose.z,7,"missing position Z remains unchanged");
+        near(channelPose.fov,70,"missing FOV remains unchanged");
+
+        CameraClipDocument channelRestored=new CameraClipDocument();
+        channelRestored.readJson(channels.toJson());
+        check(channelRestored.clips().get(0).keys.get(0).mask==1,
+                "per-key channel mask persists");
+        CameraClipDocument.Clip path=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.PATH,0,60,0);
+        path.settings.put("interpPoint","hermite");
+        path.keys.add(new CameraClipDocument.Key(0,pose(0,0,0)));
+        path.keys.add(new CameraClipDocument.Key(20,pose(10,0,0)));
+        path.keys.add(new CameraClipDocument.Key(40,pose(50,0,0)));
+        CameraClipDocument pathDoc=new CameraClipDocument();
+        check(pathDoc.add(path),"hermite path");
+        double curved=pathDoc.sample(10,BASE).x;
+        check(curved>0&&curved<10&&Math.abs(curved-5)>0.1D,
+                "Hermite Path must differ from linear path");
+
+        System.out.println("CAMERA clip layering, channel masks, Hermite, persistence PASS");
     }
 }
