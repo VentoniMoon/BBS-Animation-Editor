@@ -93,6 +93,93 @@ public final class CameraClipDocument
         }
     }
 
+    /** JSON is editor-side metadata; never modify Blockbuster scene records. */
+    public com.google.gson.JsonObject toJson()
+    {
+        com.google.gson.JsonObject root=new com.google.gson.JsonObject();
+        root.addProperty("version",1);
+        com.google.gson.JsonArray items=new com.google.gson.JsonArray();
+        for(Clip clip:clips)items.add(clipToJson(clip));
+        root.add("clips",items);
+        return root;
+    }
+    public static com.google.gson.JsonObject clipToJson(Clip clip)
+    {
+        com.google.gson.JsonObject j=new com.google.gson.JsonObject();
+        j.addProperty("kind",clip.kind.name());
+        j.addProperty("title",clip.title);
+        j.addProperty("tick",clip.tick);
+        j.addProperty("duration",clip.duration);
+        j.addProperty("layer",clip.layer);
+        j.addProperty("enabled",clip.enabled);
+        com.google.gson.JsonObject settings=new com.google.gson.JsonObject();
+        for(Map.Entry<String,String> e:clip.settings.entrySet())
+            settings.addProperty(e.getKey(),e.getValue());
+        j.add("settings",settings);
+        com.google.gson.JsonArray keys=new com.google.gson.JsonArray();
+        for(Key key:clip.keys)
+        {
+            com.google.gson.JsonObject k=new com.google.gson.JsonObject();
+            k.addProperty("tick",key.tick);
+            k.addProperty("x",key.x);k.addProperty("y",key.y);k.addProperty("z",key.z);
+            k.addProperty("yaw",key.yaw);k.addProperty("pitch",key.pitch);
+            k.addProperty("roll",key.roll);k.addProperty("fov",key.fov);
+            keys.add(k);
+        }
+        j.add("keys",keys);
+        return j;
+    }
+    public static Clip clipFromJson(com.google.gson.JsonObject j)
+    {
+        Kind kind=Kind.valueOf(j.get("kind").getAsString());
+        Clip clip=new Clip(kind,j.get("tick").getAsInt(),
+                j.get("duration").getAsInt(),j.get("layer").getAsInt());
+        if(j.has("title"))clip.title=j.get("title").getAsString();
+        if(j.has("enabled"))clip.enabled=j.get("enabled").getAsBoolean();
+        if(j.has("settings"))for(Map.Entry<String,com.google.gson.JsonElement> e:
+                j.getAsJsonObject("settings").entrySet())
+            clip.settings.put(e.getKey(),e.getValue().getAsString());
+        if(j.has("keys"))for(com.google.gson.JsonElement entry:j.getAsJsonArray("keys"))
+        {
+            com.google.gson.JsonObject k=entry.getAsJsonObject();
+            PreviewCameraPose pose=new PreviewCameraPose(
+                    k.get("x").getAsDouble(),k.get("y").getAsDouble(),
+                    k.get("z").getAsDouble(),k.get("yaw").getAsFloat(),
+                    k.get("pitch").getAsFloat(),k.get("roll").getAsFloat(),
+                    k.get("fov").getAsFloat(),0.05F,512F);
+            Key key=new Key(k.get("tick").getAsInt(),pose);
+            if(key.tick>=0&&key.tick<clip.duration)clip.keys.add(key);
+        }
+        Collections.sort(clip.keys,new Comparator<Key>(){
+            @Override public int compare(Key a,Key b){return Integer.compare(a.tick,b.tick);}
+        });
+        return clip;
+    }
+    public void readJson(com.google.gson.JsonObject root)
+    {
+        List<Clip> loaded=new ArrayList<Clip>();
+        if(root!=null&&root.has("clips"))for(com.google.gson.JsonElement entry:
+                root.getAsJsonArray("clips"))
+        {
+            try
+            {
+                Clip clip=clipFromJson(entry.getAsJsonObject());
+                boolean overlaps=false;
+                for(Clip prior:loaded)
+                    if(prior.layer==clip.layer&&clip.tick<prior.tick+prior.duration
+                            &&prior.tick<clip.tick+clip.duration)
+                    {overlaps=true;break;}
+                if(!overlaps)loaded.add(clip);
+            }
+            catch(RuntimeException error)
+            {
+                System.err.println("[BBS CAMERA] Skipping invalid clip: "+error);
+            }
+        }
+        clips.clear();clips.addAll(loaded);selected=null;
+    }
+    public void clear(){clips.clear();selected=null;}
+
     private final List<Clip> clips=new ArrayList<Clip>();
     private Clip selected;
     public List<Clip> clips(){return Collections.unmodifiableList(clips);}
@@ -153,7 +240,7 @@ public final class CameraClipDocument
             if((clip.kind==Kind.KEYFRAME||clip.kind==Kind.PATH)&&!clip.keys.isEmpty())
             {
                 int local=frame-clip.tick;
-                Key from=clip.keys.get(0),to=from;
+                Key from=clip.keys.get(0),to=clip.keys.get(clip.keys.size()-1);
                 for(Key k:clip.keys)
                 {
                     if(k.tick<=local)from=k;
