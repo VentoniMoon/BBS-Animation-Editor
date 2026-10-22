@@ -31,7 +31,7 @@ public final class CameraClipOverlays
     private final Map<CameraClipTrack.Clip,VideoState> videoStates=
         new IdentityHashMap<CameraClipTrack.Clip,VideoState>();
 
-    private static final class ImageState
+    private static class ImageState
     {
         String path;
         ResourceLocation texture;
@@ -63,11 +63,10 @@ public final class CameraClipOverlays
         if(mc==null||track==null||w<=0||h<=0)return;
         boolean scissor=GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
         boolean depth=GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
-        org.lwjgl.BufferUtils.createIntBuffer(4);
         java.nio.IntBuffer oldScissor=org.lwjgl.BufferUtils.createIntBuffer(16);
         GL11.glGetInteger(GL11.GL_SCISSOR_BOX,oldScissor);
-        int sx=mc.displayWidth/Math.max(1,mc.currentScreen.width);
-        int sy=mc.displayHeight/Math.max(1,mc.currentScreen.height);
+        int sx=Math.max(1,mc.displayWidth/Math.max(1,mc.currentScreen.width));
+        int sy=Math.max(1,mc.displayHeight/Math.max(1,mc.currentScreen.height));
         int xx=left*sx;
         int yy=mc.displayHeight-(top+h)*sy;
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
