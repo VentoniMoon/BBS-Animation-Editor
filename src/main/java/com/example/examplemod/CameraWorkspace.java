@@ -1014,10 +1014,24 @@ public final class CameraWorkspace
                 {
                     int at=Math.min(clip.tick+clip.duration-1,
                             Math.max(clip.tick,frame));
-                    document.keyAt(clip,at,screen.getCameraWorkspacePose());
+                    boolean exists=false;
+                    for(CameraClipDocument.Key existing:clip.keys)
+                        if(existing.tick==at-clip.tick){exists=true;break;}
+                    if(!exists)document.keyAt(
+                            clip,at,screen.getCameraWorkspacePose());
                     for(CameraClipDocument.Key existing:clip.keys)
                         if(existing.tick==at-clip.tick)
-                        {selectedKey=existing;keyOwner=clip;break;}
+                        {
+                            selectedKey=existing;keyOwner=clip;
+                            if(!exists)
+                            {
+                                if(clip.kind==CameraClipDocument.Kind.REMAPPER)
+                                    existing.x=at;
+                                else if(clip.kind==CameraClipDocument.Kind.CURVE)
+                                    existing.x=0D;
+                            }
+                            break;
+                        }
                     saveScene();
                 }
                 else if("prev".equals(action)||"next".equals(action))
