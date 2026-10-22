@@ -25,10 +25,10 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
  */
 public final class CameraVideoFrames
 {
-    private static final int LIMIT=12;
+    private static final int LIMIT=16;
     private static final ThreadPoolExecutor DECODER=
             new ThreadPoolExecutor(1,1,30L,TimeUnit.SECONDS,
-                    new ArrayBlockingQueue<Runnable>(4),
+                    new ArrayBlockingQueue<Runnable>(6),
                     new java.util.concurrent.ThreadFactory()
                     {
                         @Override public Thread newThread(Runnable job)
@@ -81,20 +81,11 @@ public final class CameraVideoFrames
             }
             catch(java.util.concurrent.RejectedExecutionException busy)
             {
-                return null;
+                return previousDecodedFrame(file,frame);
             }
         }
-        if(cached.texture!=null)return cached.texture;
-        if(cached.job==null||!cached.job.isDone())
-            return previousDecodedFrame(file,frame);
-        try
-        {
-            BufferedImage image=cached.job.get();
-            if(image!=null)cached.texture=new DynamicTexture(image);
-            cached.job=null;
-            return cached.texture;
-        }
-        catch(Exception ignored){cached.job=null;return null;}
+        DynamicTexture ready=materialize(cached);
+        return ready!=null?ready:previousDecodedFrame(file,frame);
     }
 
     /**
@@ -106,12 +97,32 @@ public final class CameraVideoFrames
     private static DynamicTexture previousDecodedFrame(File source,int frame)
     {
         String prefix=source.getAbsolutePath()+"#"+source.lastModified()+"#";
-        for(int delta=1;delta<=2;delta++)
+        for(int delta=1;delta<=12;delta++)
         {
             Frame previous=frames.get(prefix+(frame-delta));
-            if(previous!=null&&previous.texture!=null)return previous.texture;
+            if(previous==null)continue;
+            // A ready decode can be uploaded by a later request: the
+            // frame that initiated it might no longer be at the playhead.
+            DynamicTexture texture=materialize(previous);
+            if(texture!=null)return texture;
         }
         return null;
+    }
+
+    /** Must be called on the client render thread, NEVER the decoder. */
+    private static DynamicTexture materialize(Frame frame)
+    {
+        if(frame==null)return null;
+        if(frame.texture!=null)return frame.texture;
+        if(frame.job==null||!frame.job.isDone())return null;
+        try
+        {
+            BufferedImage image=frame.job.get();
+            if(image!=null)frame.texture=new DynamicTexture(image);
+        }
+        catch(Exception ignored){}
+        finally {frame.job=null;}
+        return frame.texture;
     }
 
     private static BufferedImage decode(File file,int frame)
