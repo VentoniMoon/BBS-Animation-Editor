@@ -18,6 +18,8 @@ public class EditorSceneViewport
     private final AnimationPreview animationPreview;
     private boolean sceneAvailable;
     private final EditorCamera camera;
+    /** Temporary cinematic camera used only to place native recorded actors. */
+    private final EditorCamera nativeActorCamera=new EditorCamera();
     private final BlockbusterActorPreviewRenderer actorPreviewRenderer;
     private final PreviewRenderBackend renderBackend;
 
@@ -294,6 +296,15 @@ public class EditorSceneViewport
 
 
 
+    private EditorCamera cameraForNativeActor()
+    {
+        PreviewCameraPose pose=BbsFsWorldCameraDriver.nativeActorPose(this);
+        if(pose==null)return this.camera;
+        this.nativeActorCamera.setMode(EditorCamera.Mode.TRACK);
+        this.nativeActorCamera.apply(pose);
+        return this.nativeActorCamera;
+    }
+
     public void beginNativeActorFrame()
     {
         /* Called BEFORE RenderWorldLastEvent's selected actor draw, not by
@@ -341,7 +352,7 @@ public class EditorSceneViewport
                 mc,
                 actorData,
                 frame,
-                this.camera,
+                this.cameraForNativeActor(),
                 0,
                 0,
                 viewportWidth,
@@ -365,7 +376,7 @@ public class EditorSceneViewport
         if (!BbsFsNativeActorPass.isRendering() ||
                 mc == null || renderer == null || frame == null) return;
         renderer.drawActor(
-                mc, data, frame, this.camera, 0, 0,
+                mc, data, frame, this.cameraForNativeActor(), 0, 0,
                 BbsFsNativeActorPass.worldViewportWidth(),
                 BbsFsNativeActorPass.worldViewportHeight());
     }
