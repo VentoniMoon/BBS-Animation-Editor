@@ -355,14 +355,7 @@ public final class CameraClipEvaluator
     }
     private static double easing(double t,String name)
     {
-        t=clamp(t,0D,1D);
-        if("step".equalsIgnoreCase(name))return t>=1D?1D:0D;
-        if("smooth".equalsIgnoreCase(name)||"smoothstep".equalsIgnoreCase(name)
-                ||"cubic".equalsIgnoreCase(name))
-            return t*t*(3D-2D*t);
-        if("easeIn".equalsIgnoreCase(name))return t*t;
-        if("easeOut".equalsIgnoreCase(name))return 1D-(1D-t)*(1D-t);
-        return t;
+        return CameraInterpolation.sample(t,name);
     }
     private static double noise(double x,int channel)
     {
