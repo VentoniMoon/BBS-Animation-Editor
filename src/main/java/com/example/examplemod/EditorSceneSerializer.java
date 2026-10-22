@@ -175,6 +175,13 @@ public final class EditorSceneSerializer
         scene.setTag("BodyParts",
                 BodyPartsPersistence.write(state.getBodyPartsController()));
 
+        /*
+         * CAMERA is scene-wide and editor-only. JSON is embedded as an
+         * optional NBT string so old editor.dat files and Blockbuster
+         * scenes remain readable without a format migration.
+         */
+        scene.setString("CameraClips",
+                new com.google.gson.Gson().toJson(state.getCameraClips().toJson()));
 
         root.setTag(
                 "Scene",
@@ -341,6 +348,24 @@ public final class EditorSceneSerializer
             );
         }
 
+
+        /* CAMERA was added after editor.dat format 1; absent is normal. */
+        state.getCameraClips().clear();
+        if(scene.hasKey("CameraClips",8))
+        {
+            try
+            {
+                String json=scene.getString("CameraClips");
+                state.getCameraClips().readJson(
+                        new com.google.gson.JsonParser().parse(json).getAsJsonObject());
+            }
+            catch(RuntimeException invalid)
+            {
+                System.err.println("[BBS CAMERA] Invalid scene camera clips: "+
+                        invalid.getMessage());
+                state.getCameraClips().clear();
+            }
+        }
 
         /*
          * Old scenes without BodyParts remain compatible. The editor
