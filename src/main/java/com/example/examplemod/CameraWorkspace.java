@@ -1,6 +1,14 @@
 package com.example.examplemod;
 
 import java.util.ArrayList;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.Reader;
+import java.io.Writer;
+import java.io.IOException;
+import com.google.gson.JsonParser;
+import com.google.gson.GsonBuilder;
 import java.util.List;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.Minecraft;
@@ -10,6 +18,94 @@ public final class CameraWorkspace
 {
     public final CameraClipDocument document=new CameraClipDocument();
     private boolean palette;
+    private String activeSceneId;
+    private File activeSceneFile;
+    private String lastError;
+    private final List<String> presetNames=new ArrayList<String>();
+    private String savePresetName;
+    private int presetScroll;
+
+    private static File sceneDocument(File scene)
+    {
+        File directory=new File("config/bbs-editor/cameras");
+        String name=scene.getName().replaceAll("[^a-zA-Z0-9._-]","_");
+        return new File(directory,name+"-"+Integer.toHexString(
+                scene.getAbsolutePath().hashCode())+".json");
+    }
+    public void syncScene(EditorSceneState state)
+    {
+        File scene=null;
+        int i=state.getSelectedScene();
+        if(i>=0&&i<state.getSceneFiles().size())scene=state.getSceneFiles().get(i);
+        String id=scene==null?"":scene.getAbsolutePath();
+        if(id.equals(activeSceneId))return;
+        activeSceneId=id;
+        activeSceneFile=scene==null?null:sceneDocument(scene);
+        document.clear();
+        if(activeSceneFile!=null&&activeSceneFile.isFile())
+        {
+            try(Reader reader=new FileReader(activeSceneFile))
+            {
+                document.readJson(new JsonParser().parse(reader).getAsJsonObject());
+            }
+            catch(Exception e){lastError="Cannot read camera scene: "+e.getMessage();}
+        }
+        refreshPresets();
+    }
+    public void saveScene()
+    {
+        if(activeSceneFile==null)return;
+        if(!activeSceneFile.getParentFile().isDirectory() &&
+                !activeSceneFile.getParentFile().mkdirs())return;
+        try(Writer writer=new FileWriter(activeSceneFile))
+        {
+            new GsonBuilder().setPrettyPrinting().create()
+                    .toJson(document.toJson(),writer);
+        }
+        catch(IOException e){lastError="Cannot save camera scene: "+e.getMessage();}
+    }
+    private File presetsDir(){return new File("config/bbs-editor/camera-presets");}
+    private void refreshPresets()
+    {
+        presetNames.clear();
+        File[] files=presetsDir().listFiles();
+        if(files==null)return;
+        java.util.Arrays.sort(files);
+        for(File file:files)if(file.isFile()&&file.getName().endsWith(".json"))
+            presetNames.add(file.getName().substring(0,file.getName().length()-5));
+    }
+    public boolean saveSelectedPreset(String requested)
+    {
+        CameraClipDocument.Clip clip=document.selected();
+        if(clip==null||requested==null)return false;
+        String name=requested.trim().replaceAll("[^a-zA-Z0-9._-]","_");
+        if(name.isEmpty()||name.equals(".")||name.equals(".."))return false;
+        File folder=presetsDir();
+        if(!folder.isDirectory()&&!folder.mkdirs())return false;
+        try(Writer writer=new FileWriter(new File(folder,name+".json")))
+        {
+            new GsonBuilder().setPrettyPrinting().create()
+                    .toJson(CameraClipDocument.clipToJson(clip),writer);
+            refreshPresets();return true;
+        }
+        catch(IOException e){lastError="Cannot save preset: "+e.getMessage();return false;}
+    }
+    public boolean pastePreset(String name,int tick,int layer)
+    {
+        File file=new File(presetsDir(),name+".json");
+        if(!file.isFile())return false;
+        try(Reader reader=new FileReader(file))
+        {
+            CameraClipDocument.Clip clip=CameraClipDocument.clipFromJson(
+                    new JsonParser().parse(reader).getAsJsonObject());
+            clip.tick=Math.max(0,tick);clip.layer=Math.max(0,layer);
+            int tries=0;
+            while(document.overlaps(clip,null)&&tries++<64)clip.layer++;
+            if(!document.add(clip))return false;
+            saveScene();return true;
+        }
+        catch(Exception e){lastError="Cannot paste preset: "+e.getMessage();return false;}
+    }
     private int pendingTick,pendingLayer;
     private int lastClickX,lastClickY,lastButton=-1;
     private long lastClick;
@@ -38,6 +134,9 @@ public final class CameraWorkspace
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
         mc.fontRenderer.drawString("Saved clip collections",10,53,0xFF87939D);
         mc.fontRenderer.drawString("Right click clip to save",10,69,0xFF87939D);
+        for(int i=0;i<presetNames.size()&&i<12;i++)
+            mc.fontRenderer.drawString(presetNames.get(i),12,95+i*17,0xFFD1DAE0);
+        if(lastError!=null)mc.fontRenderer.drawString(lastError,10,top-12,0xFFFF8888);
         mc.fontRenderer.drawString("CLIP PROPERTIES",right+8,34,0xFF64CAFF);
         CameraClipDocument.Clip selected=document.selected();
         if(selected!=null)
@@ -135,10 +234,17 @@ public final class CameraWorkspace
                 {
                     document.add(new CameraClipDocument.Clip(kind,pendingTick,
                             Math.max(1,Math.min(40,length-pendingTick)),pendingLayer));
-                    palette=false;return true;
+                    palette=false;saveScene();return true;
                 }
             }
             palette=false;return true;
+        }
+        if(mouseX<180&&mouseY>=85&&mouseY<85+Math.min(12,presetNames.size())*17&&button==0)
+        {
+            int i=(mouseY-85)/17;
+            if(i>=0&&i<presetNames.size())
+                pastePreset(presetNames.get(i),frame,0);
+            return true;
         }
         if(mouseY<top||mouseX<timelineX||mouseY>=bottom)return false;
         int t=Math.max(0,Math.min(length-1,(int)((long)(mouseX-timelineX)*Math.max(1,length)/Math.max(1,timelineW))));
@@ -153,7 +259,7 @@ public final class CameraWorkspace
             if(twice)
             {
                 if(hit==null){pendingTick=t;pendingLayer=layer;palette=true;}
-                else if(hit.kind.keyed)document.keyAt(hit,frame,screen.getCameraWorkspacePose());
+                else if(hit.kind.keyed){document.keyAt(hit,frame,screen.getCameraWorkspacePose());saveScene();}
                 return true;
             }
             document.select(hit);
@@ -167,8 +273,13 @@ public final class CameraWorkspace
         }
         if(button==1)
         {
-            if(twice&&hit!=null)document.remove(hit);
-            else document.select(hit);
+            if(twice&&hit!=null){document.remove(hit);saveScene();}
+            else if(hit!=null)
+            {
+                document.select(hit);
+                // Enter preset name in chat input on the next iteration of
+                // the inspector; do not silently save a hardcoded name.
+            }
             return true;
         }
         return true;
@@ -186,5 +297,9 @@ public final class CameraWorkspace
         }
         else document.move(dragged,tick,layer);
     }
-    public void release(){dragged=null;cloneDrag=false;}
+    public void release()
+    {
+        if(dragged!=null)saveScene();
+        dragged=null;cloneDrag=false;
+    }
 }
