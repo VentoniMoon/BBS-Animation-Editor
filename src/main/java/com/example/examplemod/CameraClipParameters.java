@@ -48,8 +48,15 @@ public final class CameraClipParameters
     public static CameraClipDocument.Clip create(CameraClipDocument.Kind kind,
             int tick,int duration,int layer)
     {
-        CameraClipDocument.Clip clip=new CameraClipDocument.Clip(kind,tick,duration,layer);
+        CameraClipDocument.Clip clip=new CameraClipDocument.Clip(
+                kind,tick,duration,layer);
         clip.settings.putAll(defaults(kind));
+        clip.settings.put("envelope.enabled","false");
+        clip.settings.put("envelope.mode","0");
+        clip.settings.put("envelope.fadeIn","10");
+        clip.settings.put("envelope.fadeOut","10");
+        clip.settings.put("envelope.pre","linear");
+        clip.settings.put("envelope.post","linear");
         return clip;
     }
     private CameraClipParameters(){}
