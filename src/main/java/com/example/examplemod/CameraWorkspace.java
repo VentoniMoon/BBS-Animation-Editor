@@ -600,6 +600,16 @@ public final class CameraWorkspace
         int layer=(rowBase-mouseY)/rowHeight;
         if(layer<0||mouseY>rowBase)return true;
         CameraClipDocument.Clip hit=document.hit(t,layer);
+        CameraClipDocument.Key marker=null;
+        if(hit!=null)
+        {
+            for(CameraClipDocument.Key key:hit.keys)
+            {
+                int kx=timelineX+(int)((long)(hit.tick+key.tick)*
+                        timelineW/Math.max(1,length));
+                if(Math.abs(mouseX-kx)<=4){marker=key;break;}
+            }
+        }
         long now=System.currentTimeMillis();
         boolean twice=button==lastButton&&Math.abs(lastClickX-mouseX)<6&&Math.abs(lastClickY-mouseY)<6&&now-lastClick<350;
         lastClick=now;lastClickX=mouseX;lastClickY=mouseY;lastButton=button;
@@ -645,7 +655,27 @@ public final class CameraWorkspace
         }
         if(button==1)
         {
-            if(twice&&hit!=null){document.remove(hit);saveScene();}
+            if(marker!=null)
+            {
+                document.select(hit);contextClip=null;
+                if(twice&&selectedKey==marker&&keyOwner==hit)
+                {
+                    hit.keys.remove(marker);
+                    selectedKey=null;keyOwner=null;saveScene();
+                    lastButton=-1;
+                }
+                else
+                {
+                    selectedKey=marker;keyOwner=hit;
+                }
+                return true;
+            }
+            if(twice&&hit!=null)
+            {
+                document.remove(hit);contextClip=null;
+                selectedKey=null;keyOwner=null;
+                saveScene();lastButton=-1;
+            }
             else if(hit!=null)
             {
                 document.select(hit);
