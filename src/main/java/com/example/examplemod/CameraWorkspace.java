@@ -306,7 +306,7 @@ public final class CameraWorkspace
             }
             return true;
         }
-        if(mouseX<180&&mouseY>=90&&mouseY<top)
+        if(mouseX<timelineX&&mouseY>=90&&mouseY<top)
         {
             presetScroll=Math.max(0,Math.min(
                     Math.max(0,presetNames.size()-Math.max(1,(top-95)/17)),
@@ -520,7 +520,18 @@ public final class CameraWorkspace
     private final EditorTimeline cameraTimeline=new EditorTimeline();
     private int rowBase;
     private int layerScroll;
-    private int timelineX=180;
+    /** Compact CAMERA track and preset sidebar; Character stays unchanged. */
+    public static final int CAMERA_LEFT_WIDTH=130;
+    private int timelineX=CAMERA_LEFT_WIDTH;
+    private static int trackTheme(float strength)
+    {
+        int accent=EditorThemeManager.get().getAccent();
+        int r=(accent>>16)&255,g=(accent>>8)&255,b=accent&255;
+        r=Math.max(0,Math.min(255,Math.round(r*strength)));
+        g=Math.max(0,Math.min(255,Math.round(g*strength)));
+        b=Math.max(0,Math.min(255,Math.round(b*strength)));
+        return 0xFF000000|(r<<16)|(g<<8)|b;
+    }
     private int timelineW;
 
     public void draw(AnimationEditorScreen screen,int frame,int length)
@@ -528,24 +539,25 @@ public final class CameraWorkspace
         Minecraft mc=Minecraft.getMinecraft();
         int width=screen.width,height=screen.height;
         top=height-screen.getTimelineHeight();bottom=height;
-        right=Math.max(420,width-300);
+        right=width-185;
         timelineW=Math.max(1,width-timelineX-8);
         rowBase=top+35;
         cameraTimeline.setLength(Math.max(1,length));
         cameraTimeline.clampOffset(Math.max(0,length-1),timelineW);
         // This switches between the independent editor view and evaluated shot.
         // Keep it compact: it must not obscure the native world preview.
-        int viewX=right-136;
-        GuiScreen.drawRect(viewX,top-26,right-8,top-5,0xFF111923);
-        GuiScreen.drawRect(viewX,top-26,viewX+2,top-5,
+        // Place view toggle above the scene, not over the playback buttons.
+        int viewX=right-128;
+        GuiScreen.drawRect(viewX,43,right-8,65,0xE6111A22);
+        GuiScreen.drawRect(viewX,43,viewX+2,65,
                 EditorThemeManager.get().getAccent());
         mc.fontRenderer.drawString(shot?"SHOT PREVIEW":"EDIT VIEW",
-                viewX+12,top-19,0xFFBDEBFF);
-        GuiScreen.drawRect(0,25,180,top,0xFF191E24);
+                viewX+10,50,0xFFBDEBFF);
+        GuiScreen.drawRect(0,25,timelineX,top,0xFF191E24);
         GuiScreen.drawRect(right,25,width,top,0xFF191E24);
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
-        mc.fontRenderer.drawString("Saved clip collections",10,53,0xFF87939D);
-        mc.fontRenderer.drawString("Right click clip to save",10,69,0xFF87939D);
+        mc.fontRenderer.drawString("Saved presets",10,53,0xFF87939D);
+        mc.fontRenderer.drawString("RMB clip to save",10,69,0xFF87939D);
         int maxPresets=Math.max(0,(top-100)/17);
         for(int i=0;i<maxPresets&&presetScroll+i<presetNames.size();i++)
             mc.fontRenderer.drawString(presetNames.get(presetScroll+i),
@@ -560,13 +572,15 @@ public final class CameraWorkspace
             displayedKey=selected.keys.get(0);
         inspector.draw(screen,selected,displayedKey,
                 activeKey,inspectorScroll,right,top);
-        // Character-style ruler, top-down track list and accent-colored grid.
+        // Same exact dark accent-derived palette as CharacterTimeline.
         int accent=EditorThemeManager.get().getAccent();
-        GuiScreen.drawRect(0,top,width,bottom,0xFF0B1117);
+        GuiScreen.drawRect(0,top,width,bottom,trackTheme(0.07F));
         GuiScreen.drawRect(0,top,width,top+1,accent);
-        GuiScreen.drawRect(0,top,timelineX,top+35,0xFF1B2C38);
-        GuiScreen.drawRect(timelineX,top,width,top+20,0xFF1C303E);
-        GuiScreen.drawRect(timelineX,top+20,width,top+35,0xFF13222C);
+        GuiScreen.drawRect(0,top,width,top+35,trackTheme(0.12F));
+        GuiScreen.drawRect(0,top,timelineX,top+35,trackTheme(0.17F));
+        GuiScreen.drawRect(timelineX,top,width,top+20,trackTheme(0.17F));
+        GuiScreen.drawRect(timelineX,top+20,width,top+35,trackTheme(0.09F));
+        GuiScreen.drawRect(timelineX,top+34,width,top+35,trackTheme(0.20F));
         mc.fontRenderer.drawString("CAMERA",10,top+11,
                 EditorThemeManager.get().getAccentBright());
         int visibleRows=Math.max(1,(bottom-rowBase)/rowHeight);
@@ -574,24 +588,24 @@ public final class CameraWorkspace
         {
             int layer=row+layerScroll;
             int y=rowBase+row*rowHeight;
-            GuiScreen.drawRect(timelineX,y,width,y+rowHeight,
-                    layer%2==0?0xFF172936:0xFF11212C);
-            GuiScreen.drawRect(0,y,timelineX,y+rowHeight,
-                    layer%2==0?0xFF1B303F:0xFF172A37);
-            GuiScreen.drawRect(0,y+rowHeight-1,width,y+rowHeight,0xFF0B1A25);
             boolean active=selected!=null&&selected.layer==layer;
-            if(active)
-            {
-                GuiScreen.drawRect(0,y,3,y+rowHeight,accent);
-                GuiScreen.drawRect(3,y,timelineX,y+rowHeight,0xFF234055);
-            }
+            GuiScreen.drawRect(timelineX,y,width,y+rowHeight,
+                    active?trackTheme(0.22F):
+                    layer%2==0?trackTheme(0.12F):trackTheme(0.09F));
+            GuiScreen.drawRect(0,y,timelineX,y+rowHeight,
+                    active?trackTheme(0.22F):trackTheme(0.12F));
+            if(active)GuiScreen.drawRect(0,y,3,y+rowHeight,accent);
+            GuiScreen.drawRect(0,y+rowHeight-1,width,y+rowHeight,
+                    trackTheme(0.05F));
             mc.fontRenderer.drawString("Layer "+layer,10,y+6,
-                    active?0xFF8CDBFF:0xFFA5B9C7);
+                    active?EditorThemeManager.get().getAccentBright():
+                    0xFF9DA4A9);
         }
-        float ppf=cameraTimeline.getPixelsPerFrame();
-        int first=Math.max(0,cameraTimeline.getFrameFromMouseX(timelineX,timelineX)-2);
-        int last=Math.min(Math.max(length+1,first),Math.max(first,
-                cameraTimeline.getFrameFromMouseX(width+12,timelineX)+2));
+        int first=Math.max(0,
+                cameraTimeline.getFrameFromMouseX(timelineX,timelineX)-2);
+        // Fill the whole visible ruler even for an empty scene.
+        int last=Math.max(first,
+                cameraTimeline.getFrameFromMouseX(width+12,timelineX)+2);
         int step=cameraTimeline.getZoom()>=2F?1:
                 cameraTimeline.getZoom()>=1F?5:
                 cameraTimeline.getZoom()>=0.5F?10:20;
@@ -602,15 +616,16 @@ public final class CameraWorkspace
             boolean major=n%step==0;
             boolean secondary=!major&&n%5==0;
             GuiScreen.drawRect(x,top+35,x+1,bottom,
-                    major?0xFF2A5063:secondary?0xFF203C4C:0xFF172D3B);
+                    major?trackTheme(0.20F):
+                    secondary?trackTheme(0.15F):trackTheme(0.10F));
             GuiScreen.drawRect(x,top+35-(major?8:secondary?5:3),
-                    x+1,top+35,major?0xFFB0C3CE:0xFF657E8C);
+                    x+1,top+35,major?0xFF9DA4A9:0xFF666D72);
             if(major)
             {
                 String label=Integer.toString(n);
                 mc.fontRenderer.drawString(label,
                         x-mc.fontRenderer.getStringWidth(label)/2,
-                        top+23,0xFFB3C2CA);
+                        top+23,0xFF9DA4A9);
             }
         }
         for(CameraClipDocument.Clip clip:document.clips())
@@ -668,7 +683,7 @@ public final class CameraWorkspace
         {
             int menuWidth=250;
             int menuHeight=38+Math.min(12,actorTargets.size())*20;
-            int mx=Math.max(190,(right+180-menuWidth)/2);
+            int mx=Math.max(timelineX+10,(right+timelineX-menuWidth)/2);
             int my=Math.max(35,(top-menuHeight)/2);
             GuiScreen.drawRect(mx-3,my-3,mx+menuWidth+3,
                     my+menuHeight+3,0xFF080D12);
@@ -728,7 +743,7 @@ public final class CameraWorkspace
         if(choosingTarget)
         {
             int menuWidth=250,menuHeight=38+Math.min(12,actorTargets.size())*20;
-            int mx=Math.max(190,(right+180-menuWidth)/2);
+            int mx=Math.max(timelineX+10,(right+timelineX-menuWidth)/2);
             int my=Math.max(35,(top-menuHeight)/2);
             if(button==0&&mouseX>=mx+6&&mouseX<mx+menuWidth-6
                     &&mouseY>=my+34&&mouseY<my+34+Math.min(12,actorTargets.size())*20)
@@ -869,21 +884,21 @@ public final class CameraWorkspace
             }
             return true;
         }
-        int toggleX=right-136;
+        int toggleX=right-128;
         if(button==0&&mouseX>=toggleX&&mouseX<right-8
-                &&mouseY>=top-26&&mouseY<top-5)
+                &&mouseY>=43&&mouseY<65)
         {
             shot=!shot;
             return true;
         }
-        if(mouseX<180&&mouseY>=95&&mouseY<top&&button==0)
+        if(mouseX<timelineX&&mouseY>=95&&mouseY<top&&button==0)
         {
             int i=(mouseY-95)/17+presetScroll;
             if(i>=0&&i<presetNames.size())
                 pastePreset(presetNames.get(i),frame,0);
             return true;
         }
-        if(mouseX<180&&mouseY>=25&&mouseY<top)return true;
+        if(mouseX<timelineX&&mouseY>=25&&mouseY<top)return true;
         if(mouseX>=right&&mouseY>=25&&mouseY<top)return true;
         if(mouseY<top||mouseX<timelineX||mouseY>=bottom)return false;
         int t=Math.max(0,Math.min(Math.max(0,length-1),
