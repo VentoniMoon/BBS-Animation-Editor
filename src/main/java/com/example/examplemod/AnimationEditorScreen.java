@@ -161,6 +161,18 @@ public class AnimationEditorScreen extends GuiScreen
 
     private EditorSceneState sceneState;
     private EditorSceneViewport sceneViewport;
+    private final CameraWorkspace cameraWorkspace=new CameraWorkspace();
+
+    public CameraWorkspace getCameraWorkspace(){return cameraWorkspace;}
+    public CameraClipTrack getCameraClips(){return sceneState.getCameraClips();}
+
+    public void onCameraModeChanged(EditorModeController.EditorMode before)
+    {
+        if(before==EditorModeController.EditorMode.CAMERA &&
+                editorModeController.getMode()!=EditorModeController.EditorMode.CAMERA &&
+                cameraWorkspace.isShotMode())
+            cameraWorkspace.toggleShot(sceneViewport);
+    }
 
 
 
@@ -1706,7 +1718,9 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         drawTopBar();
-        drawActorPanel();
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            this.cameraWorkspace.drawLeft(mc,width,height,LEFT_PANEL_WIDTH);
+        else drawActorPanel();
 
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
@@ -1716,8 +1730,11 @@ public class AnimationEditorScreen extends GuiScreen
 
         drawPreview(mouseX, mouseY);
         drawTimeline();
-        drawWavWaveform();
-        drawInterpolationPanel(mouseX, mouseY);
+        if(this.editorModeController.getMode()!=EditorModeController.EditorMode.CAMERA)
+        {
+            drawWavWaveform();
+            drawInterpolationPanel(mouseX,mouseY);
+        }
 
         if (this.editorInput != null
                 && this.editorInput.isSceneDropdownOpen())
@@ -1746,6 +1763,9 @@ public class AnimationEditorScreen extends GuiScreen
                 mouseY,
                 partialTicks
         );
+
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            this.cameraWorkspace.drawPopups(mc,width,height);
 
         if (isDeleteDialogOpen())
         {
@@ -1909,15 +1929,9 @@ public class AnimationEditorScreen extends GuiScreen
                     "ACTOR: " + actorName;
         }
 
-        drawString(
-                fontRenderer,
-                actorText,
-                actorX,
-                8,
-                actor != null
-                        ? getAccentColor()
-                        : COLOR_TEXT_MUTED
-        );
+        if(this.editorModeController.getMode()!=EditorModeController.EditorMode.CAMERA)
+            drawString(fontRenderer,actorText,actorX,8,
+                    actor!=null?getAccentColor():COLOR_TEXT_MUTED);
 
         /*
          * =========================================================
@@ -2892,6 +2906,12 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA)
+        {
+            this.cameraWorkspace.drawInspector(mc,panelX,top,rightPanelWidth,bottom,
+                    this.sceneState.getCameraClips(),this.playbackController.getCurrentFrame());
+        }
+        else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CHARACTER)
         {
             this.characterEditorPanel.setBounds(
@@ -3241,6 +3261,13 @@ public class AnimationEditorScreen extends GuiScreen
 
     private void drawTimeline()
     {
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+        {
+            this.cameraWorkspace.drawTimeline(mc,width,height,LEFT_PANEL_WIDTH,
+                    timeline,sceneState.getCameraClips(),playbackController.getCurrentFrame(),
+                    getSceneLength());
+            return;
+        }
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
         {
@@ -3597,7 +3624,11 @@ public class AnimationEditorScreen extends GuiScreen
     {
         if (this.sceneViewport != null)
         {
-            this.sceneViewport.updateCameraMovement(mc);
+            if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                    &&this.cameraWorkspace.isShotMode())
+                this.cameraWorkspace.updateShot(sceneViewport,
+                        this.sceneState.getCameraClips(),playbackController.getCurrentFrame());
+            else this.sceneViewport.updateCameraMovement(mc);
         }
 
         super.updateScreen();
