@@ -155,6 +155,11 @@ public final class CameraWorkspace
     private int lastClickX,lastClickY,lastButton=-1;
     private long lastClick;
     private CameraClipDocument.Clip dragged;
+    private CameraClipDocument.Clip draggedKeyOwner;
+    private CameraClipDocument.Key draggedKey;
+    private int draggedKeyStart;
+    private boolean cloneKey;
+    private boolean resizingClip;
     private int dragStartX,dragStartTick,dragStartLayer;
     private boolean cloneDrag;
     private int scaleStart,scaleEnd;
@@ -288,8 +293,16 @@ public final class CameraWorkspace
     {
         if(editField!=null)
         {
-            if(button==0)
-                editField.mouseClicked(mouseX,mouseY,button);
+            boolean deleteDouble=namingPreset&&button==1&&lastButton==1
+                &&Math.abs(lastClickX-mouseX)<6&&Math.abs(lastClickY-mouseY)<6
+                &&System.currentTimeMillis()-lastClick<350;
+            if(deleteDouble&&document.selected()!=null)
+            {
+                document.remove(document.selected());
+                editField=null;saveScene();lastButton=-1;
+                return true;
+            }
+            if(button==0)editField.mouseClicked(mouseX,mouseY,button);
             return true;
         }
         if(button==0&&mouseX>=right+8&&mouseX<screen.width
@@ -366,11 +379,32 @@ public final class CameraWorkspace
                 return true;
             }
             document.select(hit);
+            draggedKey=null;draggedKeyOwner=null;
             dragged=hit;dragStartX=mouseX;
             if(hit!=null)
             {
                 dragStartTick=hit.tick;dragStartLayer=hit.layer;
                 cloneDrag=GuiScreen.isCtrlKeyDown();
+                resizingClip=false;
+                int edge=timelineX+(int)((long)(hit.tick+hit.duration)*timelineW/
+                        Math.max(1,length));
+                if(Math.abs(mouseX-edge)<=4)resizingClip=true;
+                if(!resizingClip)
+                {
+                    for(CameraClipDocument.Key key:hit.keys)
+                    {
+                        int markerX=timelineX+(int)((long)(hit.tick+key.tick)*
+                                timelineW/Math.max(1,length));
+                        if(Math.abs(mouseX-markerX)<=3)
+                        {
+                            draggedKeyOwner=hit;draggedKey=key;
+                            draggedKeyStart=key.tick;
+                            cloneKey=cloneDrag;
+                            dragged=null;
+                            break;
+                        }
+                    }
+                }
             }
             return true;
         }
@@ -390,8 +424,29 @@ public final class CameraWorkspace
     }
     public void move(int mouseX,int mouseY,int length)
     {
+        if(draggedKey!=null&&draggedKeyOwner!=null)
+        {
+            int candidate=draggedKeyStart+(int)((long)(mouseX-dragStartX)*
+                    Math.max(1,length)/Math.max(1,timelineW));
+            candidate=Math.max(0,Math.min(draggedKeyOwner.duration-1,candidate));
+            if(cloneKey&&candidate!=draggedKeyStart)
+            {
+                CameraClipDocument.Key copy=draggedKey.copy();
+                draggedKeyOwner.keys.add(copy);draggedKey=copy;cloneKey=false;
+            }
+            if(!cloneKey)draggedKey.tick=candidate;
+            return;
+        }
         if(dragged==null)return;
         int tick=dragStartTick+(int)((long)(mouseX-dragStartX)*Math.max(1,length)/Math.max(1,timelineW));
+        if(resizingClip)
+        {
+            int proposed=Math.max(1,dragged.duration+tick-dragStartTick);
+            int old=dragged.duration;
+            dragged.duration=proposed;
+            if(document.overlaps(dragged,dragged))dragged.duration=old;
+            return;
+        }
         int layer=Math.max(0,(rowBase-mouseY)/rowHeight);
         if(cloneDrag)
         {
@@ -403,7 +458,18 @@ public final class CameraWorkspace
     }
     public void release()
     {
-        if(dragged!=null)saveScene();
-        dragged=null;cloneDrag=false;
+        if(dragged!=null||draggedKey!=null)
+        {
+            if(draggedKeyOwner!=null)
+                java.util.Collections.sort(draggedKeyOwner.keys,
+                    new java.util.Comparator<CameraClipDocument.Key>(){
+                        @Override public int compare(CameraClipDocument.Key a,
+                                CameraClipDocument.Key b)
+                        {return Integer.compare(a.tick,b.tick);}
+                    });
+            saveScene();
+        }
+        dragged=null;draggedKey=null;draggedKeyOwner=null;
+        cloneDrag=false;cloneKey=false;resizingClip=false;
     }
 }
