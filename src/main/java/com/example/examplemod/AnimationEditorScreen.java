@@ -3717,6 +3717,10 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.sceneViewport != null)
         {
             this.sceneViewport.updateCameraMovement(mc);
+            if(this.editorModeController.getMode()
+                    == EditorModeController.EditorMode.CAMERA)
+                this.cameraWorkspace.captureNavigationPose(
+                        this.sceneViewport.getCamera().sample());
         }
 
         super.updateScreen();
