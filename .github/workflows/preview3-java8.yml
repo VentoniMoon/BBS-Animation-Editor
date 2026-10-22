@@ -23,6 +23,7 @@ on:
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
       - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
       - 'src/main/java/com/example/examplemod/CameraClip*.java'
+      - 'src/main/java/com/example/examplemod/CameraClipChannels.java'
       - 'src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java'
       - 'src/test/camera-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraMathExpressionSmokeTest.java'
@@ -53,6 +54,7 @@ on:
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
       - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
       - 'src/main/java/com/example/examplemod/CameraClip*.java'
+      - 'src/main/java/com/example/examplemod/CameraClipChannels.java'
       - 'src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java'
       - 'src/test/camera-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraMathExpressionSmokeTest.java'
@@ -163,6 +165,7 @@ jobs:
             src/main/java/com/example/examplemod/PreviewCameraPose.java \
             src/main/java/com/example/examplemod/CameraMathExpression.java \
             src/main/java/com/example/examplemod/CameraClipDocument.java \
+            src/main/java/com/example/examplemod/CameraClipChannels.java \
             src/main/java/com/example/examplemod/CameraClipEvaluator.java \
             src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java
           java -ea -cp build/camera/clips \
