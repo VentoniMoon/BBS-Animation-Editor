@@ -569,7 +569,9 @@ public class AnimationEditorInput
                 actorTop +
                         AnimationEditorScreen.ACTOR_PANEL_HEIGHT;
 
-        if (mouseX >= 0
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.CAMERA
+                && mouseX >= 0
                 && mouseX <=
                 AnimationEditorScreen.LEFT_PANEL_WIDTH
                 && mouseY >= actorTop + 30
@@ -610,10 +612,12 @@ public class AnimationEditorInput
                 AnimationEditorScreen.PREVIEW_BUTTON_WIDTH * 3
                         + AnimationEditorScreen.PREVIEW_BUTTON_GAP * 2;
 
+        int previewLeft = this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                ? CameraWorkspace.CAMERA_LEFT_WIDTH
+                : AnimationEditorScreen.LEFT_PANEL_WIDTH;
         int centerX =
-                AnimationEditorScreen.LEFT_PANEL_WIDTH
-                        + (previewRight -
-                        AnimationEditorScreen.LEFT_PANEL_WIDTH) / 2;
+                previewLeft + (previewRight - previewLeft) / 2;
 
         int startX =
                 centerX -

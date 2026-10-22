@@ -71,6 +71,10 @@ public final class CameraWorkspace
     {
         if(editField==null)
         {
+            if(keyCode==1&&choosingMedia)
+            {choosingMedia=false;return true;}
+            if(keyCode==1&&inspector.isInterpolationOpen())
+            {inspector.closeInterpolation();return true;}
             if(keyCode==1&&(palette||contextClip!=null))
             {
                 palette=false;contextClip=null;return true;
@@ -217,12 +221,101 @@ public final class CameraWorkspace
         saveScene();return true;
     }
 
+    /** Extend media duration when the referenced file has a readable length. */
+    private void extendMediaClip(CameraClipDocument.Clip clip)
+    {
+        if(clip==null)return;
+        String source=clip.kind==CameraClipDocument.Kind.VIDEO
+                ?clip.settings.get("video"):clip.settings.get("audio");
+        File file=CameraImageCache.resolve(source);
+        if(file==null||!file.isFile())
+        {lastError="Media file was not found";return;}
+        double seconds=0D;
+        if(clip.kind==CameraClipDocument.Kind.AUDIO)
+        {
+            try
+            {
+                javax.sound.sampled.AudioFileFormat format=
+                        javax.sound.sampled.AudioSystem.getAudioFileFormat(file);
+                javax.sound.sampled.AudioFormat audio=format.getFormat();
+                if(audio.getFrameRate()>0&&format.getFrameLength()>0)
+                    seconds=format.getFrameLength()/audio.getFrameRate();
+            }
+            catch(Exception invalid)
+            {lastError="Cannot read audio duration";return;}
+        }
+        else if(clip.kind==CameraClipDocument.Kind.VIDEO)
+        {
+            Process process=null;
+            try
+            {
+                process=new ProcessBuilder("ffprobe","-v","error",
+                        "-show_entries","format=duration",
+                        "-of","default=noprint_wrappers=1:nokey=1",
+                        file.getAbsolutePath()).redirectErrorStream(true).start();
+                java.io.BufferedReader reader=new java.io.BufferedReader(
+                        new java.io.InputStreamReader(process.getInputStream()));
+                String first=reader.readLine();
+                if(!process.waitFor(2,java.util.concurrent.TimeUnit.SECONDS))
+                {process.destroyForcibly();lastError="FFprobe timed out";return;}
+                seconds=Double.parseDouble(first);
+            }
+            catch(Exception invalid)
+            {lastError="FFprobe not available";return;}
+            finally{if(process!=null)process.destroy();}
+        }
+        if(!Double.isFinite(seconds)||seconds<=0D)
+        {lastError="Media duration unavailable";return;}
+        int original=clip.duration;
+        clip.duration=Math.max(1,Math.min(Integer.MAX_VALUE-clip.tick,
+                (int)Math.ceil(seconds*20D)));
+        if(document.overlaps(clip,clip))
+        {clip.duration=original;lastError="Media overlaps another clip";return;}
+        saveScene();
+    }
+
     private int presetScroll;
     private int inspectorScroll;
     private final CameraClipInspector inspector=new CameraClipInspector();
     private final List<String> actorTargets=new ArrayList<String>();
     private boolean choosingTarget;
     private int actorTargetScroll;
+    private boolean choosingMedia;
+    private String mediaProperty;
+    private final List<File> mediaFiles=new ArrayList<File>();
+    private int mediaScroll;
+
+    private void collectMediaFiles(File directory,int depth,String[] extensions)
+    {
+        if(depth>3||mediaFiles.size()>120)return;
+        File[] children=directory.listFiles();
+        if(children==null)return;
+        java.util.Arrays.sort(children);
+        for(File child:children)
+        {
+            if(child.isDirectory())collectMediaFiles(child,depth+1,extensions);
+            else
+            {
+                String name=child.getName().toLowerCase(java.util.Locale.ROOT);
+                for(String ext:extensions)if(name.endsWith(ext))
+                {mediaFiles.add(child);break;}
+            }
+            if(mediaFiles.size()>120)break;
+        }
+    }
+    private void openMediaPicker(String property)
+    {
+        mediaProperty=property;mediaFiles.clear();mediaScroll=0;
+        File root=new File("config/bbs-editor/media");
+        if(!root.isDirectory())root.mkdirs();
+        String[] types="texture".equals(property)||"image".equals(property)
+                ?new String[]{".png",".jpg",".jpeg",".webp"}
+                :"font".equals(property)?new String[]{".ttf",".otf"}
+                :"video".equals(property)?new String[]{".mp4",".mov",".webm",".mkv"}
+                :new String[]{".wav",".ogg",".mp3"};
+        collectMediaFiles(root,0,types);
+        choosingMedia=true;
+    }
     private CameraClipDocument.Key selectedKey;
     private CameraClipDocument.Clip keyOwner;
     private String keyField;
@@ -264,6 +357,12 @@ public final class CameraWorkspace
     public boolean mouseScrolled(int mouseX,int mouseY,int direction)
     {
         if(editField!=null||palette)return true;
+        if(choosingMedia)
+        {
+            mediaScroll=Math.max(0,Math.min(
+                    Math.max(0,mediaFiles.size()-12),mediaScroll+(direction>0?-1:1)));
+            return true;
+        }
         if(choosingTarget)
         {
             actorTargetScroll=Math.max(0,Math.min(
@@ -273,7 +372,8 @@ public final class CameraWorkspace
         }
         if(mouseY>=25&&mouseY<top&&mouseX>=right)
         {
-            inspectorScroll=Math.max(0,Math.min(inspector.maxScroll(),
+            if(inspector.isInterpolationOpen())inspector.scrollInterpolation(direction);
+            else inspectorScroll=Math.max(0,Math.min(inspector.maxScroll(),
                     inspectorScroll+(direction>0?-44:44)));
             return true;
         }
@@ -306,7 +406,7 @@ public final class CameraWorkspace
             }
             return true;
         }
-        if(mouseX<180&&mouseY>=90&&mouseY<top)
+        if(mouseX<timelineX&&mouseY>=90&&mouseY<top)
         {
             presetScroll=Math.max(0,Math.min(
                     Math.max(0,presetNames.size()-Math.max(1,(top-95)/17)),
@@ -338,6 +438,7 @@ public final class CameraWorkspace
         groupSelection.clear();
         layerScroll=0;inspectorScroll=0;editField=null;
         choosingTarget=false;actorTargets.clear();
+        choosingMedia=false;mediaFiles.clear();
         soundtrack.clear();
         CameraVideoFrames.clear();
         CameraImageCache.clear();
@@ -520,7 +621,18 @@ public final class CameraWorkspace
     private final EditorTimeline cameraTimeline=new EditorTimeline();
     private int rowBase;
     private int layerScroll;
-    private int timelineX=180;
+    /** Compact CAMERA track and preset sidebar; Character stays unchanged. */
+    public static final int CAMERA_LEFT_WIDTH=130;
+    private int timelineX=CAMERA_LEFT_WIDTH;
+    private static int trackTheme(float strength)
+    {
+        int accent=EditorThemeManager.get().getAccent();
+        int r=(accent>>16)&255,g=(accent>>8)&255,b=accent&255;
+        r=Math.max(0,Math.min(255,Math.round(r*strength)));
+        g=Math.max(0,Math.min(255,Math.round(g*strength)));
+        b=Math.max(0,Math.min(255,Math.round(b*strength)));
+        return 0xFF000000|(r<<16)|(g<<8)|b;
+    }
     private int timelineW;
 
     public void draw(AnimationEditorScreen screen,int frame,int length)
@@ -528,24 +640,25 @@ public final class CameraWorkspace
         Minecraft mc=Minecraft.getMinecraft();
         int width=screen.width,height=screen.height;
         top=height-screen.getTimelineHeight();bottom=height;
-        right=Math.max(420,width-300);
+        right=width-185;
         timelineW=Math.max(1,width-timelineX-8);
         rowBase=top+35;
         cameraTimeline.setLength(Math.max(1,length));
         cameraTimeline.clampOffset(Math.max(0,length-1),timelineW);
         // This switches between the independent editor view and evaluated shot.
         // Keep it compact: it must not obscure the native world preview.
-        int viewX=right-136;
-        GuiScreen.drawRect(viewX,top-26,right-8,top-5,0xFF111923);
-        GuiScreen.drawRect(viewX,top-26,viewX+2,top-5,
+        // Place view toggle above the scene, not over the playback buttons.
+        int viewX=right-128;
+        GuiScreen.drawRect(viewX,43,right-8,65,0xE6111A22);
+        GuiScreen.drawRect(viewX,43,viewX+2,65,
                 EditorThemeManager.get().getAccent());
         mc.fontRenderer.drawString(shot?"SHOT PREVIEW":"EDIT VIEW",
-                viewX+12,top-19,0xFFBDEBFF);
-        GuiScreen.drawRect(0,25,180,top,0xFF191E24);
+                viewX+10,50,0xFFBDEBFF);
+        GuiScreen.drawRect(0,25,timelineX,top,0xFF191E24);
         GuiScreen.drawRect(right,25,width,top,0xFF191E24);
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
-        mc.fontRenderer.drawString("Saved clip collections",10,53,0xFF87939D);
-        mc.fontRenderer.drawString("Right click clip to save",10,69,0xFF87939D);
+        mc.fontRenderer.drawString("Saved presets",10,53,0xFF87939D);
+        mc.fontRenderer.drawString("RMB clip to save",10,69,0xFF87939D);
         int maxPresets=Math.max(0,(top-100)/17);
         for(int i=0;i<maxPresets&&presetScroll+i<presetNames.size();i++)
             mc.fontRenderer.drawString(presetNames.get(presetScroll+i),
@@ -554,19 +667,19 @@ public final class CameraWorkspace
         CameraClipDocument.Clip selected=document.selected();
         CameraClipDocument.Key displayedKey=selectedKey;
         boolean activeKey=selectedKey!=null&&keyOwner==selected;
-        if(!activeKey&&selected!=null&&!selected.keys.isEmpty()
-                &&(selected.kind==CameraClipDocument.Kind.IDLE
-                   ||selected.kind==CameraClipDocument.Kind.DOLLY))
+        if(!activeKey&&selected!=null&&!selected.keys.isEmpty())
             displayedKey=selected.keys.get(0);
         inspector.draw(screen,selected,displayedKey,
                 activeKey,inspectorScroll,right,top);
-        // Character-style ruler, top-down track list and accent-colored grid.
+        // Same exact dark accent-derived palette as CharacterTimeline.
         int accent=EditorThemeManager.get().getAccent();
-        GuiScreen.drawRect(0,top,width,bottom,0xFF0B1117);
+        GuiScreen.drawRect(0,top,width,bottom,trackTheme(0.07F));
         GuiScreen.drawRect(0,top,width,top+1,accent);
-        GuiScreen.drawRect(0,top,timelineX,top+35,0xFF1B2C38);
-        GuiScreen.drawRect(timelineX,top,width,top+20,0xFF1C303E);
-        GuiScreen.drawRect(timelineX,top+20,width,top+35,0xFF13222C);
+        GuiScreen.drawRect(0,top,width,top+35,trackTheme(0.12F));
+        GuiScreen.drawRect(0,top,timelineX,top+35,trackTheme(0.17F));
+        GuiScreen.drawRect(timelineX,top,width,top+20,trackTheme(0.17F));
+        GuiScreen.drawRect(timelineX,top+20,width,top+35,trackTheme(0.09F));
+        GuiScreen.drawRect(timelineX,top+34,width,top+35,trackTheme(0.20F));
         mc.fontRenderer.drawString("CAMERA",10,top+11,
                 EditorThemeManager.get().getAccentBright());
         int visibleRows=Math.max(1,(bottom-rowBase)/rowHeight);
@@ -574,24 +687,24 @@ public final class CameraWorkspace
         {
             int layer=row+layerScroll;
             int y=rowBase+row*rowHeight;
-            GuiScreen.drawRect(timelineX,y,width,y+rowHeight,
-                    layer%2==0?0xFF172936:0xFF11212C);
-            GuiScreen.drawRect(0,y,timelineX,y+rowHeight,
-                    layer%2==0?0xFF1B303F:0xFF172A37);
-            GuiScreen.drawRect(0,y+rowHeight-1,width,y+rowHeight,0xFF0B1A25);
             boolean active=selected!=null&&selected.layer==layer;
-            if(active)
-            {
-                GuiScreen.drawRect(0,y,3,y+rowHeight,accent);
-                GuiScreen.drawRect(3,y,timelineX,y+rowHeight,0xFF234055);
-            }
+            GuiScreen.drawRect(timelineX,y,width,y+rowHeight,
+                    active?trackTheme(0.22F):
+                    layer%2==0?trackTheme(0.12F):trackTheme(0.09F));
+            GuiScreen.drawRect(0,y,timelineX,y+rowHeight,
+                    active?trackTheme(0.22F):trackTheme(0.12F));
+            if(active)GuiScreen.drawRect(0,y,3,y+rowHeight,accent);
+            GuiScreen.drawRect(0,y+rowHeight-1,width,y+rowHeight,
+                    trackTheme(0.05F));
             mc.fontRenderer.drawString("Layer "+layer,10,y+6,
-                    active?0xFF8CDBFF:0xFFA5B9C7);
+                    active?EditorThemeManager.get().getAccentBright():
+                    0xFF9DA4A9);
         }
-        float ppf=cameraTimeline.getPixelsPerFrame();
-        int first=Math.max(0,cameraTimeline.getFrameFromMouseX(timelineX,timelineX)-2);
-        int last=Math.min(Math.max(length+1,first),Math.max(first,
-                cameraTimeline.getFrameFromMouseX(width+12,timelineX)+2));
+        int first=Math.max(0,
+                cameraTimeline.getFrameFromMouseX(timelineX,timelineX)-2);
+        // Fill the whole visible ruler even for an empty scene.
+        int last=Math.max(first,
+                cameraTimeline.getFrameFromMouseX(width+12,timelineX)+2);
         int step=cameraTimeline.getZoom()>=2F?1:
                 cameraTimeline.getZoom()>=1F?5:
                 cameraTimeline.getZoom()>=0.5F?10:20;
@@ -602,15 +715,16 @@ public final class CameraWorkspace
             boolean major=n%step==0;
             boolean secondary=!major&&n%5==0;
             GuiScreen.drawRect(x,top+35,x+1,bottom,
-                    major?0xFF2A5063:secondary?0xFF203C4C:0xFF172D3B);
+                    major?trackTheme(0.20F):
+                    secondary?trackTheme(0.15F):trackTheme(0.10F));
             GuiScreen.drawRect(x,top+35-(major?8:secondary?5:3),
-                    x+1,top+35,major?0xFFB0C3CE:0xFF657E8C);
+                    x+1,top+35,major?0xFF9DA4A9:0xFF666D72);
             if(major)
             {
                 String label=Integer.toString(n);
                 mc.fontRenderer.drawString(label,
                         x-mc.fontRenderer.getStringWidth(label)/2,
-                        top+23,0xFFB3C2CA);
+                        top+23,0xFF9DA4A9);
             }
         }
         for(CameraClipDocument.Clip clip:document.clips())
@@ -668,7 +782,7 @@ public final class CameraWorkspace
         {
             int menuWidth=250;
             int menuHeight=38+Math.min(12,actorTargets.size())*20;
-            int mx=Math.max(190,(right+180-menuWidth)/2);
+            int mx=Math.max(timelineX+10,(right+timelineX-menuWidth)/2);
             int my=Math.max(35,(top-menuHeight)/2);
             GuiScreen.drawRect(mx-3,my-3,mx+menuWidth+3,
                     my+menuHeight+3,0xFF080D12);
@@ -685,6 +799,35 @@ public final class CameraWorkspace
                         mc.fontRenderer.trimStringToWidth(
                                 actorTargets.get(actorTargetScroll+i),menuWidth-28),
                         mx+13,sy+5,0xFFE3EDF3);
+            }
+        }
+        if(choosingMedia)
+        {
+            int menuWidth=Math.min(340,Math.max(185,right-timelineX-20));
+            int menuHeight=49+Math.min(12,mediaFiles.size())*20;
+            int mx=Math.max(timelineX+5,(right+timelineX-menuWidth)/2);
+            int my=Math.max(30,(top-menuHeight)/2);
+            GuiScreen.drawRect(mx-3,my-3,mx+menuWidth+3,
+                    my+menuHeight+3,0xFF080C10);
+            GuiScreen.drawRect(mx,my,mx+menuWidth,my+menuHeight,0xFF212A32);
+            GuiScreen.drawRect(mx,my,mx+menuWidth,my+2,
+                    EditorThemeManager.get().getAccent());
+            mc.fontRenderer.drawString("MEDIA / "+mediaProperty,
+                    mx+10,my+9,0xFF9DE6FF);
+            mc.fontRenderer.drawString(
+                    "config/bbs-editor/media (ESC to close)",
+                    mx+10,my+24,0xFF899BA9);
+            if(mediaFiles.isEmpty())
+                mc.fontRenderer.drawString("No matching files. Enter a path manually.",
+                        mx+10,my+42,0xFFC0C4C7);
+            for(int i=0;i<12&&mediaScroll+i<mediaFiles.size();i++)
+            {
+                int yy=my+44+i*20;
+                GuiScreen.drawRect(mx+6,yy,mx+menuWidth-6,yy+18,
+                        i%2==0?0xFF2A3945:0xFF23313C);
+                mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
+                        mediaFiles.get(mediaScroll+i).getName(),menuWidth-24),
+                        mx+12,yy+5,0xFFE0EBEF);
             }
         }
         if(editField!=null)
@@ -725,10 +868,33 @@ public final class CameraWorkspace
     }
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        if(choosingMedia)
+        {
+            int menuWidth=Math.min(340,Math.max(185,right-timelineX-20));
+            int menuHeight=49+Math.min(12,mediaFiles.size())*20;
+            int mx=Math.max(timelineX+5,(right+timelineX-menuWidth)/2);
+            int my=Math.max(30,(top-menuHeight)/2);
+            if(button==0&&mouseX>=mx+6&&mouseX<mx+menuWidth-6
+                    &&mouseY>=my+44&&mouseY<my+44+
+                            Math.min(12,mediaFiles.size())*20)
+            {
+                int index=mediaScroll+(mouseY-my-44)/20;
+                if(index>=0&&index<mediaFiles.size()
+                        &&document.selected()!=null&&mediaProperty!=null)
+                {
+                    File root=new File("config/bbs-editor/media");
+                    String file=root.toURI().relativize(
+                            mediaFiles.get(index).toURI()).getPath();
+                    document.selected().settings.put(mediaProperty,file);
+                    saveScene();
+                }
+            }
+            choosingMedia=false;return true;
+        }
         if(choosingTarget)
         {
             int menuWidth=250,menuHeight=38+Math.min(12,actorTargets.size())*20;
-            int mx=Math.max(190,(right+180-menuWidth)/2);
+            int mx=Math.max(timelineX+10,(right+timelineX-menuWidth)/2);
             int my=Math.max(35,(top-menuHeight)/2);
             if(button==0&&mouseX>=mx+6&&mouseX<mx+menuWidth-6
                     &&mouseY>=my+34&&mouseY<my+34+Math.min(12,actorTargets.size())*20)
@@ -810,6 +976,93 @@ public final class CameraWorkspace
             CameraClipInspector.Hit hit=inspector.hit(mouseX,mouseY);
             CameraClipDocument.Clip clip=document.selected();
             if(hit==null||clip==null)return true;
+            if(hit.key.startsWith("@interp:"))
+            {
+                String action=hit.key.substring("@interp:".length());
+                if(action.startsWith("open:"))
+                {
+                    inspector.toggleInterpolation(action.substring(5));
+                    return true;
+                }
+                if(action.startsWith("set:"))
+                {
+                    String encoded=action.substring(4);
+                    int separator=encoded.lastIndexOf(':');
+                    if(separator<0)return true;
+                    String property=encoded.substring(0,separator);
+                    String chosen=encoded.substring(separator+1);
+                    if(!CameraInterpolation.isKnown(chosen))return true;
+                    if("@key".equals(property))
+                    {
+                        if(selectedKey==null||keyOwner!=clip)
+                        {
+                            if(clip.keys.isEmpty())return true;
+                            selectedKey=clip.keys.get(0);keyOwner=clip;
+                        }
+                        selectedKey.interpolation=chosen;
+                    }
+                    else if(clip.settings.containsKey(property))
+                        clip.settings.put(property,chosen);
+                    inspector.closeInterpolation();
+                    saveScene();return true;
+                }
+            }
+            if(hit.key.startsWith("@key:"))
+            {
+                String action=hit.key.substring(5);
+                if("add".equals(action))
+                {
+                    int at=Math.min(clip.tick+clip.duration-1,
+                            Math.max(clip.tick,frame));
+                    boolean exists=false;
+                    for(CameraClipDocument.Key existing:clip.keys)
+                        if(existing.tick==at-clip.tick){exists=true;break;}
+                    if(!exists)document.keyAt(
+                            clip,at,screen.getCameraWorkspacePose());
+                    for(CameraClipDocument.Key existing:clip.keys)
+                        if(existing.tick==at-clip.tick)
+                        {
+                            selectedKey=existing;keyOwner=clip;
+                            if(!exists)
+                            {
+                                if(clip.kind==CameraClipDocument.Kind.REMAPPER)
+                                    existing.x=at;
+                                else if(clip.kind==CameraClipDocument.Kind.CURVE)
+                                    existing.x=0D;
+                            }
+                            break;
+                        }
+                    saveScene();
+                }
+                else if("prev".equals(action)||"next".equals(action))
+                {
+                    if(!clip.keys.isEmpty())
+                    {
+                        int at=clip.keys.indexOf(selectedKey);
+                        if(at<0)at=0;
+                        else at=Math.max(0,Math.min(clip.keys.size()-1,
+                                at+("next".equals(action)?1:-1)));
+                        selectedKey=clip.keys.get(at);keyOwner=clip;
+                    }
+                }
+                else if("remove".equals(action))
+                {
+                    if(selectedKey!=null&&keyOwner==clip)
+                    {clip.keys.remove(selectedKey);selectedKey=null;keyOwner=null;
+                    saveScene();}
+                }
+                return true;
+            }
+            if(hit.key.startsWith("@media:browse:"))
+            {
+                openMediaPicker(hit.key.substring("@media:browse:".length()));
+                return true;
+            }
+            if("@media:duration".equals(hit.key))
+            {
+                extendMediaClip(clip);
+                return true;
+            }
             if(hit.keyframe)
             {
                 if(selectedKey==null||keyOwner!=clip)
@@ -869,21 +1122,21 @@ public final class CameraWorkspace
             }
             return true;
         }
-        int toggleX=right-136;
+        int toggleX=right-128;
         if(button==0&&mouseX>=toggleX&&mouseX<right-8
-                &&mouseY>=top-26&&mouseY<top-5)
+                &&mouseY>=43&&mouseY<65)
         {
             shot=!shot;
             return true;
         }
-        if(mouseX<180&&mouseY>=95&&mouseY<top&&button==0)
+        if(mouseX<timelineX&&mouseY>=95&&mouseY<top&&button==0)
         {
             int i=(mouseY-95)/17+presetScroll;
             if(i>=0&&i<presetNames.size())
                 pastePreset(presetNames.get(i),frame,0);
             return true;
         }
-        if(mouseX<180&&mouseY>=25&&mouseY<top)return true;
+        if(mouseX<timelineX&&mouseY>=25&&mouseY<top)return true;
         if(mouseX>=right&&mouseY>=25&&mouseY<top)return true;
         if(mouseY<top||mouseX<timelineX||mouseY>=bottom)return false;
         int t=Math.max(0,Math.min(Math.max(0,length-1),

@@ -249,12 +249,38 @@ public final class CameraClipEvaluator
             }
             case REMAPPER:
             {
+                // BBS FS Remapper owns a single keyframe channel. Keys store
+                // local clip time in tick and remapped global frame in x.
                 int from=(int)number(clip,"from",clip.tick);
                 int to=(int)number(clip,"to",clip.tick+clip.duration);
-                double phase=(double)(frame-clip.tick)/Math.max(1,clip.duration);
-                phase=easing(phase,clip.settings.get("interp"));
-                int remapped=(int)Math.round(from+(to-from)*phase);
-                return eval(clips,remapped,fallback,resolver,clip.layer,depth+1);
+                double local=frame-clip.tick;
+                double remapped;
+                if(clip.keys.isEmpty())
+                {
+                    double phase=local/Math.max(1,clip.duration);
+                    remapped=from+(to-from)*easing(phase,clip.settings.get("interp"));
+                }
+                else
+                {
+                    CameraClipDocument.Key previous=clip.keys.get(0);
+                    CameraClipDocument.Key next=clip.keys.get(clip.keys.size()-1);
+                    for(CameraClipDocument.Key key:clip.keys)
+                    {
+                        if(key.tick<=local)previous=key;
+                        if(key.tick>=local){next=key;break;}
+                    }
+                    if(next.tick<=previous.tick)remapped=previous.x;
+                    else
+                    {
+                        double phase=clamp((local-previous.tick)/
+                                (next.tick-previous.tick),0D,1D);
+                        phase=CameraInterpolation.sample(phase,
+                                previous.interpolation);
+                        remapped=previous.x+(next.x-previous.x)*phase;
+                    }
+                }
+                return eval(clips,Math.max(0,(int)Math.round(remapped)),
+                        fallback,resolver,clip.layer,depth+1);
             }
             case SPLINE:
             {
@@ -355,14 +381,7 @@ public final class CameraClipEvaluator
     }
     private static double easing(double t,String name)
     {
-        t=clamp(t,0D,1D);
-        if("step".equalsIgnoreCase(name))return t>=1D?1D:0D;
-        if("smooth".equalsIgnoreCase(name)||"smoothstep".equalsIgnoreCase(name)
-                ||"cubic".equalsIgnoreCase(name))
-            return t*t*(3D-2D*t);
-        if("easeIn".equalsIgnoreCase(name))return t*t;
-        if("easeOut".equalsIgnoreCase(name))return 1D-(1D-t)*(1D-t);
-        return t;
+        return CameraInterpolation.sample(t,name);
     }
     private static double noise(double x,int channel)
     {

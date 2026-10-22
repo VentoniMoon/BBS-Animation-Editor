@@ -140,12 +140,23 @@ public final class CameraFilmCompositor
                 ?GL11.GL_LINEAR:GL11.GL_NEAREST;
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,filter);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,filter);
-        GL11.glBegin(GL11.GL_QUADS);
-        GL11.glTexCoord2d(0D,1D);GL11.glVertex2d(left,top);
-        GL11.glTexCoord2d(1D,1D);GL11.glVertex2d(right,top);
-        GL11.glTexCoord2d(1D,0D);GL11.glVertex2d(right,bottom);
-        GL11.glTexCoord2d(0D,0D);GL11.glVertex2d(left,bottom);
-        GL11.glEnd();
+        // BBS-style per-clip overlay transform; do not rotate the world FBO.
+        double cx=(left+right)/2D,cy=(top+bottom)/2D;
+        GL11.glPushMatrix();
+        try
+        {
+            GL11.glTranslated(cx,cy,0D);
+            GL11.glRotated(number(clip,"rotation",0D),0D,0D,1D);
+            GL11.glScaled(number(clip,"scaleX",1D),
+                    number(clip,"scaleY",1D),1D);
+            GL11.glBegin(GL11.GL_QUADS);
+            GL11.glTexCoord2d(0D,1D);GL11.glVertex2d(left-cx,top-cy);
+            GL11.glTexCoord2d(1D,1D);GL11.glVertex2d(right-cx,top-cy);
+            GL11.glTexCoord2d(1D,0D);GL11.glVertex2d(right-cx,bottom-cy);
+            GL11.glTexCoord2d(0D,0D);GL11.glVertex2d(left-cx,bottom-cy);
+            GL11.glEnd();
+        }
+        finally {GL11.glPopMatrix();}
         GL11.glColor4f(1F,1F,1F,1F);
     }
     /** Subtitles are burned into the scene texture, never editor UI. */
@@ -168,20 +179,26 @@ public final class CameraFilmCompositor
         int lineHeight=(int)clamp(number(clip,"lineHeight",12D),8D,64D);
         String[] lines=text.replace("\\n","\n").split("\n",-1);
         boolean shadow=Boolean.parseBoolean(clip.settings.get("textShadow"));
-        // Keep subtitles inside the film viewport. Do not disable scissor:
-        // text outside the preview must never paint the surrounding editor.
-        for(int i=0;i<Math.min(32,lines.length);i++)
+        // Text transforms happen in GUI coordinates inside the film scissor.
+        GL11.glPushMatrix();
+        try
         {
-            String line=mc.fontRenderer.trimStringToWidth(lines[i],maxWidth);
-            int width=mc.fontRenderer.getStringWidth(line);
-            int left=x-width/2;
-            int rowY=y+i*lineHeight;
-            if(rowY<py||rowY+lineHeight>py+ph)continue;
-            // FontRenderer restores Minecraft's texture binding itself;
-            // the GL projection is already the film's GUI-scaled pixel plane.
-            if(shadow)mc.fontRenderer.drawStringWithShadow(line,left,rowY,rgba);
-            else mc.fontRenderer.drawString(line,left,rowY,rgba);
+            GL11.glTranslated(x,y,0D);
+            GL11.glRotated(number(clip,"rotation",0D),0D,0D,1D);
+            GL11.glScaled(number(clip,"scaleX",1D),
+                    number(clip,"scaleY",1D),1D);
+            for(int i=0;i<Math.min(32,lines.length);i++)
+            {
+                String line=mc.fontRenderer.trimStringToWidth(lines[i],maxWidth);
+                int textWidth=mc.fontRenderer.getStringWidth(line);
+                int rowY=i*lineHeight;
+                if(y+rowY<py||y+rowY+lineHeight>py+ph)continue;
+                if(shadow)mc.fontRenderer.drawStringWithShadow(
+                        line,-textWidth/2,rowY,rgba);
+                else mc.fontRenderer.drawString(line,-textWidth/2,rowY,rgba);
+            }
         }
+        finally {GL11.glPopMatrix();}
     }
 
     private static int color(String value)

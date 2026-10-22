@@ -152,6 +152,35 @@ public final class CameraClipDocumentSmokeTest
         near(fading.sample(35,BASE).x,10,"half fade-out");
         near(CameraClipEnvelope.factor(fade,5),0.5,"shared media envelope");
 
-        System.out.println("CAMERA clip layering, channels, Hermite, envelopes, persistence PASS");
+        // All BBS interpolation dropdown choices must be finite and share
+        // endpoints with the curve shown in the native inspector.
+        check(CameraInterpolation.OPTIONS.length==40,"BBS FS interpolation registry");
+        for(String interpolation:CameraInterpolation.OPTIONS)
+        {
+            near(CameraInterpolation.sample(0D,interpolation),0D,
+                    "interpolation start "+interpolation);
+            near(CameraInterpolation.sample(1D,interpolation),1D,
+                    "interpolation end "+interpolation);
+            for(int t=1;t<10;t++)
+                check(Double.isFinite(CameraInterpolation.sample(t/10D,
+                        interpolation)),"finite interpolation "+interpolation);
+        }
+        near(CameraInterpolation.sample(0.25D,"quad_in"),0.0625D,
+                "quadratic easing preview equals actual interpolation");
+        CameraClipDocument remappedDoc=new CameraClipDocument();
+        CameraClipDocument.Clip timed=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.KEYFRAME,0,90,0);
+        timed.keys.add(new CameraClipDocument.Key(0,pose(0,0,0)));
+        timed.keys.add(new CameraClipDocument.Key(40,pose(40,0,0)));
+        check(remappedDoc.add(timed),"remapper lower camera path");
+        CameraClipDocument.Clip remap=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.REMAPPER,0,40,1);
+        CameraClipDocument.Key remap0=new CameraClipDocument.Key(0,pose(0,0,0));
+        CameraClipDocument.Key remap1=new CameraClipDocument.Key(20,pose(40,0,0));
+        remap.keys.add(remap0);remap.keys.add(remap1);
+        check(remappedDoc.add(remap),"remapper upper layer");
+        near(remappedDoc.sample(10,BASE).x,20D,
+                "remapper channel evaluates underlying camera at mapped frame");
+        System.out.println("CAMERA clip layering, channels, BBS easing, remapper, persistence PASS");
     }
 }
