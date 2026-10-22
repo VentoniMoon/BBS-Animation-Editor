@@ -18,6 +18,19 @@ import net.minecraft.client.Minecraft;
 public final class CameraWorkspace
 {
     public final CameraClipDocument document=new CameraClipDocument();
+    private final CameraAudioClips soundtrack=new CameraAudioClips();
+
+    public void syncAudio(int frame,boolean playing)
+    {
+        soundtrack.update(document.clips(),frame,playing);
+    }
+    public void pauseAudio(){soundtrack.pause();}
+    public void dispose()
+    {
+        soundtrack.clear();
+        CameraVideoFrames.clear();
+        CameraImageCache.clear();
+    }
     private boolean shot;
     public PreviewCameraPose sample(PreviewCameraPose editorPose,int sceneFrame,
             CameraClipDocument.TargetResolver resolver)
@@ -246,6 +259,7 @@ public final class CameraWorkspace
         document.clear();
         selectedKey=null;keyOwner=null;contextClip=null;
         layerScroll=0;inspectorScroll=0;editField=null;
+        soundtrack.clear();
         CameraVideoFrames.clear();
         CameraImageCache.clear();
         if(activeSceneFile!=null&&activeSceneFile.isFile())
