@@ -304,6 +304,15 @@ public class EditorSceneViewport
         this.nativeActorCamera.apply(pose);
         return this.nativeActorCamera;
     }
+    /**
+     * Camera whose matrices produced the current world frame. Gizmo picking
+     * and overlays must use it while clip viewing is active in other modes.
+     */
+    public EditorCamera getCameraForPreviewInteractions()
+    {
+        return cameraForNativeActor();
+    }
+
 
     public void beginNativeActorFrame()
     {
