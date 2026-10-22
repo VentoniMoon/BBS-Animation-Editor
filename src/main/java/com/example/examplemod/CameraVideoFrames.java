@@ -108,7 +108,6 @@ public final class CameraVideoFrames
                     "ffmpeg","-hide_banner","-loglevel","error",
                     "-i",file.getAbsolutePath(),"-ss",seconds,
                     "-frames:v","1","-f","image2pipe","-vcodec","png","-");
-            command.redirectError(ProcessBuilder.Redirect.DISCARD);
             process=command.start();
             BufferedImage image;
             try(InputStream stream=process.getInputStream())
