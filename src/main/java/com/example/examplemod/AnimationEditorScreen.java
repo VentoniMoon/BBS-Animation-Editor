@@ -1780,9 +1780,13 @@ public class AnimationEditorScreen extends GuiScreen
             this.cameraWorkspace.syncScene(this.sceneState);
             this.cameraWorkspace.draw(this,
                     this.playbackController.getCurrentFrame(),getSceneLength());
+            this.cameraWorkspace.syncAudio(
+                    this.playbackController.getCurrentFrame(),
+                    this.playbackController.isPlaying());
         }
         else
         {
+            this.cameraWorkspace.pauseAudio();
             drawTimeline();
             drawWavWaveform();
             drawInterpolationPanel(mouseX, mouseY);
@@ -3780,6 +3784,7 @@ public class AnimationEditorScreen extends GuiScreen
             this.sceneViewport.disposePreviewResources();
         }
         BbsFsWorldFrameCapture.release();
+        this.cameraWorkspace.dispose();
 
         EditorSessionSelection.remember(this.sceneState);
 
