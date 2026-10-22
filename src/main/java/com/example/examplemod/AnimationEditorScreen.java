@@ -1661,6 +1661,14 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+    /** CAMERA gets first chance to consume wheel events over its panels. */
+    public boolean scrollCameraWorkspace(int mouseX,int mouseY,int direction)
+    {
+        return this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                && this.cameraWorkspace.mouseScrolled(mouseX,mouseY,direction);
+    }
+
     public void selectActor(int index)
     {
         List<BlockbusterSceneActorData> actors =
