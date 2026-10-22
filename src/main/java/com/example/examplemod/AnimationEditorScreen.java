@@ -2983,6 +2983,10 @@ public class AnimationEditorScreen extends GuiScreen
                     this.playbackController.getCurrentFrame());
         }
         this.sceneViewport.renderPreviewToScreen();
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            cameraWorkspace.drawMediaSelection(
+                    playbackController.getCurrentFrame(),
+                    filmX,filmY,filmW,filmH);
 
         /*
          * The GUI pass only draws the three gizmo mode buttons.
@@ -3605,6 +3609,21 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
+    /**
+     * Playback buttons sit OVER the lower part of the film. Clicking Play
+     * must never start a drag on an image/subtitle behind that button.
+     */
+    private boolean isPlaybackButtonHit(int mouseX,int mouseY)
+    {
+        int left=CameraWorkspace.CAMERA_LEFT_WIDTH;
+        int right=width-185;
+        int total=PREVIEW_BUTTON_WIDTH*3+PREVIEW_BUTTON_GAP*2;
+        int x=left+(right-left-total)/2;
+        int y=height-getTimelineHeight()-PREVIEW_BUTTON_HEIGHT-12;
+        return mouseY>=y&&mouseY<y+PREVIEW_BUTTON_HEIGHT&&
+                mouseX>=x&&mouseX<x+total;
+    }
+
     @Override
     protected void mouseClicked(
             int mouseX,
@@ -3620,6 +3639,15 @@ public class AnimationEditorScreen extends GuiScreen
         // CAMERA's toolbar uses the same hitboxes as all other modes.
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
                 &&clickStage8PreviewButton(mouseX,mouseY,mouseButton))return;
+        // Topmost visible Image/Video/Subtitle can be dragged inside the
+        // current output-format frame, even when portrait (9:16).
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                &&sceneViewport!=null&&!isPlaybackButtonHit(mouseX,mouseY)
+                &&cameraWorkspace.beginMediaDrag(mouseX,mouseY,mouseButton,
+                        playbackController.getCurrentFrame(),
+                        sceneViewport.getX(),sceneViewport.getY(),
+                        sceneViewport.getWidth(),sceneViewport.getHeight()))
+            return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && this.cameraWorkspace.click(this,mouseX,mouseY,mouseButton,
