@@ -489,6 +489,32 @@ public final class CameraWorkspace
             if(button==0)editField.mouseClicked(mouseX,mouseY,button);
             return true;
         }
+        if(palette)
+        {
+            if(button!=0){palette=false;return true;}
+            int w=Math.min(480,screen.width-24),x=(screen.width-w)/2,y=Math.max(30,(screen.height-250)/2);
+            int column=(mouseX-x-8)/Math.max(1,(w-16)/3);
+            if(mouseX<x+8||column<0||column>2){palette=false;return true;}
+            CameraClipDocument.Family family=CameraClipDocument.Family.values()[column];
+            int row=(mouseY-y-48)/18,i=0;
+            if(mouseY>=y+48)for(CameraClipDocument.Kind kind:CameraClipDocument.Kind.values())
+            {
+                if(kind.family!=family)continue;
+                if(i++==row)
+                {
+                    CameraClipDocument.Clip made=CameraClipParameters.create(
+                            kind,pendingTick,Math.max(1,Math.min(40,length-pendingTick)),
+                            pendingLayer);
+                    if(kind==CameraClipDocument.Kind.IDLE
+                            ||kind==CameraClipDocument.Kind.DOLLY)
+                        made.keys.add(new CameraClipDocument.Key(0,
+                                screen.getCameraWorkspacePose()));
+                    if(document.add(made))saveScene();
+                    palette=false;return true;
+                }
+            }
+            palette=false;return true;
+        }
         if(contextClip!=null)
         {
             CameraClipDocument.Clip target=contextClip;
@@ -569,32 +595,6 @@ public final class CameraWorkspace
         {
             shot=!shot;
             return true;
-        }
-        if(palette)
-        {
-            if(button!=0){palette=false;return true;}
-            int w=Math.min(480,screen.width-24),x=(screen.width-w)/2,y=Math.max(30,(screen.height-250)/2);
-            int column=(mouseX-x-8)/Math.max(1,(w-16)/3);
-            if(mouseX<x+8||column<0||column>2){palette=false;return true;}
-            CameraClipDocument.Family family=CameraClipDocument.Family.values()[column];
-            int row=(mouseY-y-48)/18,i=0;
-            if(mouseY>=y+48)for(CameraClipDocument.Kind kind:CameraClipDocument.Kind.values())
-            {
-                if(kind.family!=family)continue;
-                if(i++==row)
-                {
-                    CameraClipDocument.Clip made=CameraClipParameters.create(
-                            kind,pendingTick,Math.max(1,Math.min(40,length-pendingTick)),
-                            pendingLayer);
-                    if(kind==CameraClipDocument.Kind.IDLE
-                            ||kind==CameraClipDocument.Kind.DOLLY)
-                        made.keys.add(new CameraClipDocument.Key(0,
-                                screen.getCameraWorkspacePose()));
-                    if(document.add(made))saveScene();
-                    palette=false;return true;
-                }
-            }
-            palette=false;return true;
         }
         if(mouseX<180&&mouseY>=95&&mouseY<top&&button==0)
         {
