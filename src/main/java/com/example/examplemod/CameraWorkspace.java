@@ -220,6 +220,9 @@ public final class CameraWorkspace
     private int presetScroll;
     private int inspectorScroll;
     private final CameraClipInspector inspector=new CameraClipInspector();
+    private final List<String> actorTargets=new ArrayList<String>();
+    private boolean choosingTarget;
+    private int actorTargetScroll;
     private CameraClipDocument.Key selectedKey;
     private CameraClipDocument.Clip keyOwner;
     private String keyField;
@@ -261,6 +264,13 @@ public final class CameraWorkspace
     public boolean mouseScrolled(int mouseX,int mouseY,int direction)
     {
         if(editField!=null||palette)return true;
+        if(choosingTarget)
+        {
+            actorTargetScroll=Math.max(0,Math.min(
+                    Math.max(0,actorTargets.size()-12),
+                    actorTargetScroll+(direction>0?-1:1)));
+            return true;
+        }
         if(mouseY>=25&&mouseY<top&&mouseX>=right)
         {
             inspectorScroll=Math.max(0,Math.min(inspector.maxScroll(),
@@ -327,6 +337,7 @@ public final class CameraWorkspace
         selectedKey=null;keyOwner=null;contextClip=null;
         groupSelection.clear();
         layerScroll=0;inspectorScroll=0;editField=null;
+        choosingTarget=false;actorTargets.clear();
         soundtrack.clear();
         CameraVideoFrames.clear();
         CameraImageCache.clear();
@@ -653,6 +664,29 @@ public final class CameraWorkspace
             mc.fontRenderer.drawString("Save as Preset",
                     contextX+8,contextY+9,0xFFE4F0FA);
         }
+        if(choosingTarget)
+        {
+            int menuWidth=250;
+            int menuHeight=38+Math.min(12,actorTargets.size())*20;
+            int mx=Math.max(190,(right+180-menuWidth)/2);
+            int my=Math.max(35,(top-menuHeight)/2);
+            GuiScreen.drawRect(mx-3,my-3,mx+menuWidth+3,
+                    my+menuHeight+3,0xFF080D12);
+            GuiScreen.drawRect(mx,my,mx+menuWidth,my+menuHeight,0xFF202A32);
+            GuiScreen.drawRect(mx,my,mx+menuWidth,my+2,
+                    EditorThemeManager.get().getAccent());
+            mc.fontRenderer.drawString("TRACK AN ACTOR",mx+12,my+11,0xFFBDEBFF);
+            for(int i=0;i<12&&actorTargetScroll+i<actorTargets.size();i++)
+            {
+                int sy=my+34+i*20;
+                GuiScreen.drawRect(mx+6,sy,mx+menuWidth-6,sy+18,
+                        i%2==0?0xFF283844:0xFF23313D);
+                mc.fontRenderer.drawString(
+                        mc.fontRenderer.trimStringToWidth(
+                                actorTargets.get(actorTargetScroll+i),menuWidth-28),
+                        mx+13,sy+5,0xFFE3EDF3);
+            }
+        }
         if(editField!=null)
         {
             if(namingPreset)
@@ -691,6 +725,27 @@ public final class CameraWorkspace
     }
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        if(choosingTarget)
+        {
+            int menuWidth=250,menuHeight=38+Math.min(12,actorTargets.size())*20;
+            int mx=Math.max(190,(right+180-menuWidth)/2);
+            int my=Math.max(35,(top-menuHeight)/2);
+            if(button==0&&mouseX>=mx+6&&mouseX<mx+menuWidth-6
+                    &&mouseY>=my+34&&mouseY<my+34+Math.min(12,actorTargets.size())*20)
+            {
+                int index=actorTargetScroll+(mouseY-my-34)/20;
+                if(index>=0&&index<actorTargets.size()
+                        &&document.selected()!=null)
+                {
+                    String target=actorTargets.get(index);
+                    document.selected().settings.put("selector",
+                            "<none>".equals(target)?"":target);
+                    saveScene();
+                }
+            }
+            choosingTarget=false;
+            return true;
+        }
         if(editField!=null)
         {
             if(button==0)editField.mouseClicked(mouseX,mouseY,button);
@@ -768,6 +823,32 @@ public final class CameraWorkspace
             else if("@enabled".equals(hit.key))
             {
                 clip.enabled=!clip.enabled;saveScene();return true;
+            }
+            else if("active".equals(hit.key)&&hit.component>=0)
+            {
+                try
+                {
+                    int mask=Integer.parseInt(clip.settings.get("active"));
+                    mask^=1<<hit.component;
+                    clip.settings.put("active",Integer.toString(mask));
+                    saveScene();
+                }
+                catch(NumberFormatException invalid)
+                {
+                    lastError="Invalid camera channel mask";
+                }
+                return true;
+            }
+            else if("selector".equals(hit.key)&&activeState!=null)
+            {
+                actorTargets.clear();
+                actorTargets.add("<none>");
+                for(BlockbusterSceneActorData actor:activeState.getActors())
+                    if(actor!=null&&actor.getId()!=null
+                            &&!actor.getId().isEmpty())
+                        actorTargets.add(actor.getId());
+                actorTargetScroll=0;choosingTarget=true;
+                return true;
             }
             else if(hit.toggle&&clip.settings.containsKey(hit.key))
             {
