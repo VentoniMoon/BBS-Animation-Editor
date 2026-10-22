@@ -742,8 +742,14 @@ public final class CameraWorkspace
     private CameraClipDocument.Key draggedKey;
     private int draggedKeyStart;
     private boolean cloneKey;
-    private boolean resizingClip;
+    /** -1 left trim handle, +1 right trim handle, 0 = moving the clip. */
+    private int resizeEdge;
+    private int dragStartDuration;
     private int dragStartX,dragStartTick,dragStartLayer;
+    private CameraClipDocument.Clip mediaDragged;
+    private int mediaMouseX,mediaMouseY,mediaFrameWidth,mediaFrameHeight;
+    private double mediaStartX,mediaStartY;
+    private boolean mediaDirty;
     private boolean cloneDrag;
     private boolean scrubbingTimeline;
     private CameraClipInspector.Hit numericDragCandidate;
@@ -890,9 +896,12 @@ public final class CameraWorkspace
                 GuiScreen.drawRect(kx-1,y+6,kx+2,y+13,
                         key==selectedKey?0xFFFFE07F:0xFF132635);
             }
-            // Right-hand trim handle, matching conventional film editors.
-            if(rx-x2==0&&rx-lx>12)
-                GuiScreen.drawRect(rx-3,y+6,rx-1,y+rowHeight-6,0xDDEAF7FF);
+            // Both edges are draggable. Draw clear grab handles, including
+            // on short clips; hit testing uses the actual pixel boundaries.
+            if(x>=timelineX&&x<width)
+                GuiScreen.drawRect(x+1,y+6,x+3,y+rowHeight-6,0xDDEAF7FF);
+            if(x2>=timelineX&&x2<width)
+                GuiScreen.drawRect(x2-3,y+6,x2-1,y+rowHeight-6,0xDDEAF7FF);
         }
         int cursor=cameraTimeline.getFrameX(Math.max(0,frame),timelineX);
         if(cursor>=timelineX&&cursor<width)
@@ -1296,6 +1305,31 @@ public final class CameraWorkspace
         int layer=(mouseY-rowBase)/rowHeight+layerScroll;
         if(layer<0||mouseY<rowBase)return true;
         CameraClipDocument.Clip hit=document.hit(t,layer);
+        int clickedEdge=0;
+        // Search displayed screen-space boundaries FIRST. Frame-only hit
+        // testing misses the far right handle because clip.end is exclusive.
+        if(button==0)
+        {
+            int nearest=6;
+            for(CameraClipDocument.Clip candidate:document.clips())
+            {
+                if(candidate.layer!=layer)continue;
+                int x1=cameraTimeline.getFrameX(candidate.tick,timelineX);
+                int x2=cameraTimeline.getFrameX(
+                        candidate.tick+candidate.duration,timelineX);
+                if(x2<timelineX-6||x1>screen.width+6)continue;
+                int leftDist=Math.abs(mouseX-x1);
+                int rightDist=Math.abs(mouseX-x2);
+                if(leftDist<=nearest)
+                {
+                    nearest=leftDist;hit=candidate;clickedEdge=-1;
+                }
+                if(rightDist<nearest)
+                {
+                    nearest=rightDist;hit=candidate;clickedEdge=1;
+                }
+            }
+        }
         CameraClipDocument.Key marker=null;
         if(hit!=null)
         {
@@ -1310,13 +1344,13 @@ public final class CameraWorkspace
         lastClick=now;lastClickX=mouseX;lastClickY=mouseY;lastButton=button;
         if(button==0)
         {
-            if(twice)
+            if(twice&&clickedEdge==0)
             {
                 if(hit==null){pendingTick=t;pendingLayer=layer;palette=true;}
                 else if(hit.kind.keyed){document.keyAt(hit,frame,screen.getCameraWorkspacePose());saveScene();}
                 return true;
             }
-            if(GuiScreen.isShiftKeyDown()&&hit!=null)
+            if(clickedEdge==0&&GuiScreen.isShiftKeyDown()&&hit!=null)
             {
                 if(!groupSelection.add(hit))groupSelection.remove(hit);
                 document.select(hit);
@@ -1331,11 +1365,10 @@ public final class CameraWorkspace
             if(hit!=null)
             {
                 dragStartTick=hit.tick;dragStartLayer=hit.layer;
-                cloneDrag=GuiScreen.isCtrlKeyDown();
-                resizingClip=false;
-                int edge=cameraTimeline.getFrameX(hit.tick+hit.duration,timelineX);
-                if(Math.abs(mouseX-edge)<=4)resizingClip=true;
-                if(!resizingClip)
+                cloneDrag=clickedEdge==0&&GuiScreen.isCtrlKeyDown();
+                resizeEdge=clickedEdge;
+                dragStartDuration=hit.duration;
+                if(resizeEdge==0)
                 {
                     for(CameraClipDocument.Key key:hit.keys)
                     {
@@ -1449,12 +1482,14 @@ public final class CameraWorkspace
         if(dragged==null)return;
         int tick=dragStartTick+Math.round(
                 (mouseX-dragStartX)/cameraTimeline.getPixelsPerFrame());
-        if(resizingClip)
+        if(resizeEdge!=0)
         {
-            int proposed=Math.max(1,dragged.duration+tick-dragStartTick);
-            int old=dragged.duration;
-            dragged.duration=proposed;
-            if(document.overlaps(dragged,dragged))dragged.duration=old;
+            int delta=Math.round((mouseX-dragStartX)/
+                    cameraTimeline.getPixelsPerFrame());
+            long boundary=resizeEdge<0?(long)dragStartTick+delta:
+                    (long)dragStartTick+dragStartDuration+delta;
+            if(boundary>=0L&&boundary<=Integer.MAX_VALUE)
+                document.trim(dragged,resizeEdge<0,(int)boundary);
             return;
         }
         int layer=Math.max(0,(mouseY-rowBase)/rowHeight+layerScroll);
@@ -1485,6 +1520,6 @@ public final class CameraWorkspace
             saveScene();
         }
         dragged=null;draggedKey=null;draggedKeyOwner=null;
-        cloneDrag=false;cloneKey=false;resizingClip=false;
+        cloneDrag=false;cloneKey=false;resizeEdge=0;
     }
 }
