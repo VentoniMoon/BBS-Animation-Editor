@@ -40,6 +40,8 @@ public final class CameraVideoFrames
     private static final Map<String,Frame> frames=
             new LinkedHashMap<String,Frame>(32,0.75F,true);
     private static boolean warnedFFmpeg;
+    private static final Map<String,Future<Integer>> DURATION=
+            new LinkedHashMap<String,Future<Integer>>();
     private static class Frame
     {
         Future<BufferedImage> job;
@@ -49,15 +51,26 @@ public final class CameraVideoFrames
     /** A GPU upload happens only when the async decoded result is ready. */
     public static DynamicTexture get(String video,int frame)
     {
+        return get(video,frame,false);
+    }
+
+    public static DynamicTexture get(String video,int frame,boolean loop)
+    {
         File file=CameraImageCache.resolve(video);
         if(file==null||!file.isFile()||frame<0)return null;
-        String key=file.getAbsolutePath()+"#"+file.lastModified()+"#"+frame;
+        int sourceFrame=frame;
+        if(loop)
+        {
+            int duration=durationFrames(file);
+            if(duration>0)sourceFrame=frame%duration;
+        }
+        String key=file.getAbsolutePath()+"#"+file.lastModified()+"#"+sourceFrame;
         Frame cached=frames.get(key);
         if(cached==null)
         {
             cached=new Frame();
             final File input=file;
-            final int request=frame;
+            final int request=sourceFrame;
             try
             {
                 cached.job=DECODER.submit(new Callable<BufferedImage>()
@@ -81,11 +94,11 @@ public final class CameraVideoFrames
             }
             catch(java.util.concurrent.RejectedExecutionException busy)
             {
-                return previousDecodedFrame(file,frame);
+                return previousDecodedFrame(file,sourceFrame);
             }
         }
         DynamicTexture ready=materialize(cached);
-        return ready!=null?ready:previousDecodedFrame(file,frame);
+        return ready!=null?ready:previousDecodedFrame(file,sourceFrame);
     }
 
     /**
@@ -123,6 +136,69 @@ public final class CameraVideoFrames
         catch(Exception ignored){}
         finally {frame.job=null;}
         return frame.texture;
+    }
+
+    /** Async duration discovery for looping: render never blocks on FFprobe. */
+    private static int durationFrames(File file)
+    {
+        String id=file.getAbsolutePath()+"#"+file.lastModified();
+        Future<Integer> future=DURATION.get(id);
+        if(future==null)
+        {
+            final File source=file;
+            try
+            {
+                future=DECODER.submit(new Callable<Integer>()
+                {
+                    @Override public Integer call()
+                    {
+                        return probeDurationFrames(source);
+                    }
+                });
+                if(DURATION.size()>=32)DURATION.clear();
+                DURATION.put(id,future);
+            }
+            catch(java.util.concurrent.RejectedExecutionException busy)
+            {
+                return -1;
+            }
+        }
+        if(!future.isDone())return -1;
+        try{return future.get();}
+        catch(Exception failed){return -1;}
+    }
+
+    private static int probeDurationFrames(File file)
+    {
+        Process p=null;
+        try
+        {
+            ProcessBuilder command=new ProcessBuilder(
+                    "ffprobe","-v","quiet","-show_entries","format=duration",
+                    "-of","default=noprint_wrappers=1:nokey=1",
+                    file.getAbsolutePath());
+            command.redirectError(new File(System.getProperty("os.name","")
+                    .toLowerCase(java.util.Locale.ROOT).contains("win")
+                    ?"NUL":"/dev/null"));
+            p=command.start();
+            String line;
+            try(java.io.BufferedReader reader=new java.io.BufferedReader(
+                    new java.io.InputStreamReader(p.getInputStream(),
+                            java.nio.charset.StandardCharsets.UTF_8)))
+            {
+                line=reader.readLine();
+            }
+            if(!p.waitFor(10,TimeUnit.SECONDS))
+            {
+                p.destroyForcibly();return -1;
+            }
+            double seconds=line==null?-1D:Double.parseDouble(line.trim());
+            if(!Double.isFinite(seconds)||seconds<=0D||
+                    seconds>86400D)return -1;
+            return Math.max(1,(int)Math.ceil(seconds*20D));
+        }
+        catch(Exception error){return -1;}
+        finally {if(p!=null)p.destroy();}
     }
 
     private static BufferedImage decode(File file,int frame)
@@ -174,6 +250,8 @@ public final class CameraVideoFrames
     }
     public static void clear()
     {
+        for(Future<Integer> future:DURATION.values())future.cancel(true);
+        DURATION.clear();
         for(Frame frame:frames.values())
         {
             if(frame.job!=null)frame.job.cancel(true);
