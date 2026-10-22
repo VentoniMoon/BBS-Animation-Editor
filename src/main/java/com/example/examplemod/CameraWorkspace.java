@@ -19,9 +19,10 @@ public final class CameraWorkspace
 {
     public final CameraClipDocument document=new CameraClipDocument();
     private boolean shot;
-    public PreviewCameraPose sample(PreviewCameraPose editorPose,int sceneFrame)
+    public PreviewCameraPose sample(PreviewCameraPose editorPose,int sceneFrame,
+            CameraClipDocument.TargetResolver resolver)
     {
-        return shot?document.sample(sceneFrame,editorPose):editorPose;
+        return shot?document.sample(sceneFrame,editorPose,resolver):editorPose;
     }
     public boolean shot(){return shot;}
     private boolean palette;
