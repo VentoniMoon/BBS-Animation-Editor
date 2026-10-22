@@ -568,6 +568,8 @@ public final class CameraWorkspace
         trackedCameraClip=null;trackedCameraKey=null;
         lastNavigationPose=null;navigationDirty=false;
         groupSelection.clear();
+        mediaDragged=null;mediaDirty=false;
+        resizeEdge=0;dragged=null;draggedKey=null;
         layerScroll=0;inspectorScroll=0;editField=null;
         choosingTarget=false;actorTargets.clear();
         choosingMedia=false;mediaFiles.clear();
@@ -1008,6 +1010,82 @@ public final class CameraWorkspace
             }
         }
     }
+    /**
+     * Left-drag an already visible Image, Video or Subtitle in the actual
+     * film rectangle. Works in 16:9, portrait and custom aspect formats.
+     * The selected clip follows its overlay; click can also select the
+     * highest visible media layer, without moving the scene camera.
+     */
+    public boolean beginMediaDrag(int mouseX,int mouseY,int button,int frame,
+            int filmX,int filmY,int filmW,int filmH)
+    {
+        if(button!=0||palette||choosingMedia||choosingTarget||
+                editField!=null||filmW<1||filmH<1)return false;
+        Minecraft mc=Minecraft.getMinecraft();
+        if(mc==null)return false;
+        CameraClipDocument.Clip target=null;
+        CameraClipDocument.Clip selected=document.selected();
+        if(selected!=null&&selected.enabled&&selected.contains(frame)
+                &&CameraMediaPlacement.contains(selected,mc.fontRenderer,
+                        filmX,filmY,filmW,filmH,mouseX,mouseY))
+            target=selected;
+        else
+        {
+            for(CameraClipDocument.Clip c:document.clips())
+            {
+                if(!c.enabled||!c.contains(frame)||
+                        !CameraMediaPlacement.contains(c,mc.fontRenderer,
+                                filmX,filmY,filmW,filmH,mouseX,mouseY))
+                    continue;
+                if(target==null||c.layer>=target.layer)target=c;
+            }
+        }
+        if(target==null)return false;
+        if(document.selected()!=target)
+        {
+            document.select(target);
+            selectedKey=null;keyOwner=null;inspectorScroll=0;
+            groupSelection.clear();groupSelection.add(target);
+        }
+        mediaDragged=target;
+        mediaMouseX=mouseX;mediaMouseY=mouseY;
+        mediaFrameWidth=filmW;mediaFrameHeight=filmH;
+        mediaStartX=CameraMediaPlacement.x(target);
+        mediaStartY=CameraMediaPlacement.y(target);
+        mediaDirty=false;
+        return true;
+    }
+
+    public void drawMediaSelection(int frame,int filmX,int filmY,
+            int filmW,int filmH)
+    {
+        CameraClipDocument.Clip selected=document.selected();
+        if(selected==null||!selected.enabled||!selected.contains(frame)
+                ||!CameraMediaPlacement.canDrag(selected))return;
+        Minecraft mc=Minecraft.getMinecraft();
+        if(mc==null)return;
+        int[] rect=CameraMediaPlacement.outline(selected,mc.fontRenderer,
+                filmX,filmY,filmW,filmH);
+        if(rect==null)return;
+        int left=Math.max(filmX,rect[0]),top=Math.max(filmY,rect[1]);
+        int right=Math.min(filmX+filmW,rect[2]);
+        int bottom=Math.min(filmY+filmH,rect[3]);
+        if(right<=left||bottom<=top)return;
+        int col=0xFF72D4F7;
+        GuiScreen.drawRect(left,top,right,top+1,col);
+        GuiScreen.drawRect(left,bottom-1,right,bottom,col);
+        GuiScreen.drawRect(left,top,left+1,bottom,col);
+        GuiScreen.drawRect(right-1,top,right,bottom,col);
+        // Center crosshair is editing chrome and is not in the final FBO.
+        int mx=filmX+(int)Math.round(filmW*CameraMediaPlacement.x(selected));
+        int my=filmY+(int)Math.round(filmH*CameraMediaPlacement.y(selected));
+        if(mx>=filmX+4&&mx<filmX+filmW-4&&my>=filmY+4&&my<filmY+filmH-4)
+        {
+            GuiScreen.drawRect(mx-4,my,mx+5,my+1,col);
+            GuiScreen.drawRect(mx,my-4,mx+1,my+5,col);
+        }
+    }
+
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
         if(choosingMedia)
@@ -1425,6 +1503,25 @@ public final class CameraWorkspace
     }
     public void move(int mouseX,int mouseY,int length)
     {
+        if(mediaDragged!=null)
+        {
+            if(mediaFrameWidth<1||mediaFrameHeight<1)return;
+            double x=mediaStartX+(mouseX-mediaMouseX)/
+                    (double)mediaFrameWidth;
+            double y=mediaStartY+(mouseY-mediaMouseY)/
+                    (double)mediaFrameHeight;
+            // Off-frame positioning is intentionally allowed for transitions.
+            x=Math.max(-2D,Math.min(3D,x));
+            y=Math.max(-2D,Math.min(3D,y));
+            if(!Double.toString(x).equals(mediaDragged.settings.get("x"))||
+                    !Double.toString(y).equals(mediaDragged.settings.get("y")))
+            {
+                mediaDragged.settings.put("x",Double.toString(x));
+                mediaDragged.settings.put("y",Double.toString(y));
+                mediaDirty=true;
+            }
+            return;
+        }
         if(scrubbingTimeline)
         {
             AnimationEditorScreen ui=(AnimationEditorScreen)
@@ -1503,6 +1600,8 @@ public final class CameraWorkspace
     }
     public void release()
     {
+        if(mediaDirty)saveScene();
+        mediaDragged=null;mediaDirty=false;
         scrubbingTimeline=false;
         if(numericDragging)saveScene();
         numericDragCandidate=null;numericDragClip=null;
