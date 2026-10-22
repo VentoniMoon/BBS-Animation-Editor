@@ -159,9 +159,14 @@ public final class CameraWorkspace
             mc.fontRenderer.drawString("Layer: "+selected.layer,right+8,105,0xFFC0C5C9);
             mc.fontRenderer.drawString("Enabled: "+selected.enabled,right+8,121,0xFFC0C5C9);
             mc.fontRenderer.drawString("Keys: "+selected.keys.size(),right+8,137,0xFFC0C5C9);
-            mc.fontRenderer.drawString(
-                selected.kind.keyed?"Double LMB: add key":"No key channels",
-                right+8,159,0xFF91A0A8);
+            int yy=159;
+            for(java.util.Map.Entry<String,String> property:selected.settings.entrySet())
+            {
+                if(yy+10>=top-10)break;
+                mc.fontRenderer.drawString(property.getKey()+": "+property.getValue(),
+                        right+8,yy,0xFF91A0A8);
+                yy+=16;
+            }
         }
         else mc.fontRenderer.drawString("Select a clip",right+8,54,0xFF8A959E);
         GuiScreen.drawRect(0,top,width,bottom,0xFF111D27);
@@ -251,7 +256,7 @@ public final class CameraWorkspace
                 if(kind.family!=family)continue;
                 if(i++==row)
                 {
-                    document.add(new CameraClipDocument.Clip(kind,pendingTick,
+                    document.add(CameraClipParameters.create(kind,pendingTick,
                             Math.max(1,Math.min(40,length-pendingTick)),pendingLayer));
                     palette=false;saveScene();return true;
                 }
