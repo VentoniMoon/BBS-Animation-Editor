@@ -240,14 +240,33 @@ public final class CameraWorkspace
                     inspectorScroll-direction));
             return true;
         }
-        if(mouseX>=timelineX&&mouseY>=top+34&&mouseY<bottom)
+        if(mouseX>=timelineX&&mouseY>=top&&mouseY<bottom)
         {
-            int highest=5;
-            for(CameraClipDocument.Clip clip:document.clips())
-                highest=Math.max(highest,clip.layer);
-            int visible=Math.max(1,(rowBase-top-32)/rowHeight);
-            layerScroll=Math.max(0,Math.min(Math.max(0,highest-visible+1),
-                    layerScroll+direction));
+            if(GuiScreen.isCtrlKeyDown())
+            {
+                int anchor=cameraTimeline.getFrameFromMouseX(mouseX,timelineX);
+                int oldX=cameraTimeline.getFrameX(anchor,timelineX);
+                cameraTimeline.changeZoom(direction>0?0.25F:-0.25F);
+                cameraTimeline.addOffset(
+                        cameraTimeline.getFrameX(anchor,timelineX)-oldX);
+                cameraTimeline.clampOffset(Math.max(0,cameraTimeline.getLength()-1),
+                        Math.max(1,timelineW));
+            }
+            else if(GuiScreen.isShiftKeyDown())
+            {
+                cameraTimeline.addOffset(direction>0?-60:60);
+                cameraTimeline.clampOffset(Math.max(0,cameraTimeline.getLength()-1),
+                        Math.max(1,timelineW));
+            }
+            else
+            {
+                int highest=5;
+                for(CameraClipDocument.Clip clip:document.clips())
+                    highest=Math.max(highest,clip.layer);
+                int visible=Math.max(1,(bottom-rowBase)/rowHeight);
+                layerScroll=Math.max(0,Math.min(Math.max(0,highest-visible+1),
+                        layerScroll+(direction>0?-1:1)));
+            }
             return true;
         }
         if(mouseX<180&&mouseY>=90&&mouseY<top)
@@ -459,7 +478,8 @@ public final class CameraWorkspace
     private int right;
     private int top;
     private int bottom;
-    private int rowHeight=23;
+    private int rowHeight=20;
+    private final EditorTimeline cameraTimeline=new EditorTimeline();
     private int rowBase;
     private int layerScroll;
     private int timelineX=180;
@@ -472,13 +492,17 @@ public final class CameraWorkspace
         top=height-screen.getTimelineHeight();bottom=height;
         right=width-185;
         timelineW=Math.max(1,width-timelineX-8);
-        rowBase=bottom-10;
-        // FREE/SHOT selection is separate from the editor's FR/OR navigation.
-        // Native camera driver samples this before vanilla renders the world.
-        GuiScreen.drawRect(Math.max(181,(right+180)/2-58),top-28,
-                Math.max(181,(right+180)/2+58),top-5,0xFF191E24);
-        mc.fontRenderer.drawString(shot?"SHOT  [FREE]":"FREE  [SHOT]",
-                Math.max(184,(right+180)/2-48),top-21,0xFF64CAFF);
+        rowBase=top+35;
+        cameraTimeline.setLength(Math.max(1,length));
+        cameraTimeline.clampOffset(Math.max(0,length-1),timelineW);
+        // This switches between the independent editor view and evaluated shot.
+        // Keep it compact: it must not obscure the native world preview.
+        int viewX=right-136;
+        GuiScreen.drawRect(viewX,top-26,right-8,top-5,0xFF111923);
+        GuiScreen.drawRect(viewX,top-26,viewX+2,top-5,
+                EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString(shot?"SHOT PREVIEW":"EDIT VIEW",
+                viewX+12,top-19,0xFFBDEBFF);
         GuiScreen.drawRect(0,25,180,top,0xFF191E24);
         GuiScreen.drawRect(right,25,width,top,0xFF191E24);
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
@@ -525,50 +549,100 @@ public final class CameraWorkspace
             }
         }
         else mc.fontRenderer.drawString("Select a clip",right+8,54,0xFF8A959E);
-        GuiScreen.drawRect(0,top,width,bottom,0xFF111D27);
-        GuiScreen.drawRect(0,top,width,top+1,0xFF68C5EB);
-        mc.fontRenderer.drawString("CAMERA TIMELINE",9,top+7,0xFF69CFFF);
-        mc.fontRenderer.drawString("Scene: "+length+" frames",92,top+7,0xFFA6B4C0);
-        int usable=Math.max(1,length);
-        for(int n=0;n<=usable;n+=Math.max(1,usable/8))
-        {
-            int x=timelineX+(int)((long)n*timelineW/usable);
-            GuiScreen.drawRect(x,top+28,x+1,bottom,0xFF334C5C);
-            mc.fontRenderer.drawString(Integer.toString(n),x,top+16,0xFF9AB3C3);
-        }
-        int visibleRows=Math.max(1,(rowBase-top-32)/rowHeight);
+        // Character-style ruler, top-down track list and accent-colored grid.
+        int accent=EditorThemeManager.get().getAccent();
+        GuiScreen.drawRect(0,top,width,bottom,0xFF0B1117);
+        GuiScreen.drawRect(0,top,width,top+1,accent);
+        GuiScreen.drawRect(0,top,timelineX,top+35,0xFF1B2C38);
+        GuiScreen.drawRect(timelineX,top,width,top+20,0xFF1C303E);
+        GuiScreen.drawRect(timelineX,top+20,width,top+35,0xFF13222C);
+        mc.fontRenderer.drawString("CAMERA",10,top+11,
+                EditorThemeManager.get().getAccentBright());
+        int visibleRows=Math.max(1,(bottom-rowBase)/rowHeight);
         for(int row=0;row<visibleRows;row++)
         {
             int layer=row+layerScroll;
-            int y=rowBase-(row+1)*rowHeight;
-            if(y<top+32)break;
-            GuiScreen.drawRect(0,y,width,y+rowHeight-1,layer%2==0?0xFF142534:0xFF162A3A);
-            mc.fontRenderer.drawString("Layer "+layer,10,y+6,0xFFA6B9C7);
+            int y=rowBase+row*rowHeight;
+            GuiScreen.drawRect(timelineX,y,width,y+rowHeight,
+                    layer%2==0?0xFF172936:0xFF11212C);
+            GuiScreen.drawRect(0,y,timelineX,y+rowHeight,
+                    layer%2==0?0xFF1B303F:0xFF172A37);
+            GuiScreen.drawRect(0,y+rowHeight-1,width,y+rowHeight,0xFF0B1A25);
+            boolean active=selected!=null&&selected.layer==layer;
+            if(active)
+            {
+                GuiScreen.drawRect(0,y,3,y+rowHeight,accent);
+                GuiScreen.drawRect(3,y,timelineX,y+rowHeight,0xFF234055);
+            }
+            mc.fontRenderer.drawString("Layer "+layer,10,y+6,
+                    active?0xFF8CDBFF:0xFFA5B9C7);
+        }
+        float ppf=cameraTimeline.getPixelsPerFrame();
+        int first=Math.max(0,cameraTimeline.getFrameFromMouseX(timelineX,timelineX)-2);
+        int last=Math.min(Math.max(length+1,first),Math.max(first,
+                cameraTimeline.getFrameFromMouseX(width+12,timelineX)+2));
+        int step=cameraTimeline.getZoom()>=2F?1:
+                cameraTimeline.getZoom()>=1F?5:
+                cameraTimeline.getZoom()>=0.5F?10:20;
+        for(int n=first;n<=last;n++)
+        {
+            int x=cameraTimeline.getFrameX(n,timelineX);
+            if(x<timelineX||x>=width)continue;
+            boolean major=n%step==0;
+            boolean secondary=!major&&n%5==0;
+            GuiScreen.drawRect(x,top+35,x+1,bottom,
+                    major?0xFF2A5063:secondary?0xFF203C4C:0xFF172D3B);
+            GuiScreen.drawRect(x,top+35-(major?8:secondary?5:3),
+                    x+1,top+35,major?0xFFB0C3CE:0xFF657E8C);
+            if(major)
+            {
+                String label=Integer.toString(n);
+                mc.fontRenderer.drawString(label,
+                        x-mc.fontRenderer.getStringWidth(label)/2,
+                        top+23,0xFFB3C2CA);
+            }
         }
         for(CameraClipDocument.Clip clip:document.clips())
         {
-            int x=timelineX+(int)((long)clip.tick*timelineW/usable);
-            int x2=timelineX+(int)((long)(clip.tick+clip.duration)*timelineW/usable);
-            int y=rowBase-(clip.layer-layerScroll+1)*rowHeight;
-            if(y<top+32||y>=bottom)continue;
-            GuiScreen.drawRect(x,y+2,Math.max(x+3,x2),y+rowHeight-3,clip.kind.color);
+            int x=cameraTimeline.getFrameX(clip.tick,timelineX);
+            int x2=cameraTimeline.getFrameX(clip.tick+clip.duration,timelineX);
+            int y=rowBase+(clip.layer-layerScroll)*rowHeight;
+            if(y<rowBase||y+rowHeight>bottom||x2<=timelineX||x>=width)continue;
+            int lx=Math.max(x,timelineX),rx=Math.min(width,Math.max(lx+2,x2));
+            GuiScreen.drawRect(lx,y+3,rx,y+rowHeight-3,
+                    clip.enabled?clip.kind.color:0xFF58626B);
+            GuiScreen.drawRect(lx,y+3,rx,y+5,0x66FFFFFF);
             if(clip==selected||groupSelection.contains(clip))
             {
-                int highlight=groupSelection.contains(clip)?0xFFFFFFB4:0xFFFFFFFF;
-                GuiScreen.drawRect(x,y+1,x2,y+2,highlight);
-                GuiScreen.drawRect(x,y+rowHeight-3,x2,y+rowHeight-2,highlight);
+                int highlight=groupSelection.contains(clip)?0xFFFFF2AB:0xFFFFFFFF;
+                GuiScreen.drawRect(lx,y+2,rx,y+3,highlight);
+                GuiScreen.drawRect(lx,y+rowHeight-3,rx,y+rowHeight-2,highlight);
+                GuiScreen.drawRect(lx,y+2,lx+1,y+rowHeight-2,highlight);
+                GuiScreen.drawRect(rx-1,y+2,rx,y+rowHeight-2,highlight);
             }
-            mc.fontRenderer.drawString(clip.title,x+4,y+6,0xFFFFFFFF);
+            if(rx-lx>24)
+                mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
+                        clip.title,Math.max(1,rx-lx-10)),lx+5,y+6,0xFFFFFFFF);
             for(CameraClipDocument.Key key:clip.keys)
             {
-                int kx=timelineX+(int)((long)(clip.tick+key.tick)*timelineW/usable);
-                GuiScreen.drawRect(kx-(key==selectedKey?2:1),y+4,
-                        kx+(key==selectedKey?3:2),y+rowHeight-5,
-                        key==selectedKey?0xFFFFFFB4:0xFFCBFFED);
+                int kx=cameraTimeline.getFrameX(clip.tick+key.tick,timelineX);
+                if(kx<lx||kx>=rx)continue;
+                GuiScreen.drawRect(kx-2,y+7,kx+3,y+12,
+                        key==selectedKey?0xFFFFF0A2:0xFFFFFFFF);
+                GuiScreen.drawRect(kx-1,y+6,kx+2,y+13,
+                        key==selectedKey?0xFFFFE07F:0xFF132635);
             }
+            // Right-hand trim handle, matching conventional film editors.
+            if(rx-x2==0&&rx-lx>12)
+                GuiScreen.drawRect(rx-3,y+6,rx-1,y+rowHeight-6,0xDDEAF7FF);
         }
-        int cursor=timelineX+(int)((long)Math.max(0,frame)*timelineW/usable);
-        GuiScreen.drawRect(cursor,top+26,cursor+1,bottom,0xFFE7BB65);
+        int cursor=cameraTimeline.getFrameX(Math.max(0,frame),timelineX);
+        if(cursor>=timelineX&&cursor<width)
+        {
+            GuiScreen.drawRect(cursor,top+19,cursor+1,bottom,
+                    EditorThemeManager.get().getAccentBright());
+            GuiScreen.drawRect(cursor-4,top+16,cursor+5,top+20,accent);
+        }
         if(palette)drawPalette(screen);
         if(contextClip!=null)
         {
@@ -725,9 +799,9 @@ public final class CameraWorkspace
                 }
             }
         }
-        int toggleX=Math.max(181,(right+180)/2-58);
-        if(button==0&&mouseX>=toggleX&&mouseX<toggleX+116
-                &&mouseY>=top-28&&mouseY<top-5)
+        int toggleX=right-136;
+        if(button==0&&mouseX>=toggleX&&mouseX<right-8
+                &&mouseY>=top-26&&mouseY<top-5)
         {
             shot=!shot;
             return true;
@@ -743,23 +817,21 @@ public final class CameraWorkspace
         if(mouseX>=right&&mouseY>=25&&mouseY<top)return true;
         if(mouseY<top||mouseX<timelineX||mouseY>=bottom)return false;
         int t=Math.max(0,Math.min(Math.max(0,length-1),
-                (int)((long)(mouseX-timelineX)*Math.max(1,length)/
-                Math.max(1,timelineW))));
-        if(button==0&&mouseY<top+34)
+                cameraTimeline.getFrameFromMouseX(mouseX,timelineX)));
+        if(button==0&&mouseY<top+35)
         {
             screen.setCameraWorkspaceFrame(t);
             return true;
         }
-        int layer=(rowBase-mouseY)/rowHeight+layerScroll;
-        if(layer<0||mouseY>rowBase)return true;
+        int layer=(mouseY-rowBase)/rowHeight+layerScroll;
+        if(layer<0||mouseY<rowBase)return true;
         CameraClipDocument.Clip hit=document.hit(t,layer);
         CameraClipDocument.Key marker=null;
         if(hit!=null)
         {
             for(CameraClipDocument.Key key:hit.keys)
             {
-                int kx=timelineX+(int)((long)(hit.tick+key.tick)*
-                        timelineW/Math.max(1,length));
+                int kx=cameraTimeline.getFrameX(hit.tick+key.tick,timelineX);
                 if(Math.abs(mouseX-kx)<=4){marker=key;break;}
             }
         }
@@ -791,15 +863,13 @@ public final class CameraWorkspace
                 dragStartTick=hit.tick;dragStartLayer=hit.layer;
                 cloneDrag=GuiScreen.isCtrlKeyDown();
                 resizingClip=false;
-                int edge=timelineX+(int)((long)(hit.tick+hit.duration)*timelineW/
-                        Math.max(1,length));
+                int edge=cameraTimeline.getFrameX(hit.tick+hit.duration,timelineX);
                 if(Math.abs(mouseX-edge)<=4)resizingClip=true;
                 if(!resizingClip)
                 {
                     for(CameraClipDocument.Key key:hit.keys)
                     {
-                        int markerX=timelineX+(int)((long)(hit.tick+key.tick)*
-                                timelineW/Math.max(1,length));
+                        int markerX=cameraTimeline.getFrameX(hit.tick+key.tick,timelineX);
                         if(Math.abs(mouseX-markerX)<=3)
                         {
                             draggedKeyOwner=hit;draggedKey=key;
@@ -854,8 +924,8 @@ public final class CameraWorkspace
     {
         if(draggedKey!=null&&draggedKeyOwner!=null)
         {
-            int candidate=draggedKeyStart+(int)((long)(mouseX-dragStartX)*
-                    Math.max(1,length)/Math.max(1,timelineW));
+            int candidate=draggedKeyStart+Math.round(
+                    (mouseX-dragStartX)/cameraTimeline.getPixelsPerFrame());
             candidate=Math.max(0,Math.min(draggedKeyOwner.duration-1,candidate));
             if(cloneKey&&candidate!=draggedKeyStart)
             {
@@ -866,7 +936,8 @@ public final class CameraWorkspace
             return;
         }
         if(dragged==null)return;
-        int tick=dragStartTick+(int)((long)(mouseX-dragStartX)*Math.max(1,length)/Math.max(1,timelineW));
+        int tick=dragStartTick+Math.round(
+                (mouseX-dragStartX)/cameraTimeline.getPixelsPerFrame());
         if(resizingClip)
         {
             int proposed=Math.max(1,dragged.duration+tick-dragStartTick);
@@ -875,7 +946,7 @@ public final class CameraWorkspace
             if(document.overlaps(dragged,dragged))dragged.duration=old;
             return;
         }
-        int layer=Math.max(0,(rowBase-mouseY)/rowHeight+layerScroll);
+        int layer=Math.max(0,(mouseY-rowBase)/rowHeight+layerScroll);
         if(cloneDrag)
         {
             CameraClipDocument.Clip copy=dragged.copy();
