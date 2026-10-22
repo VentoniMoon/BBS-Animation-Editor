@@ -165,7 +165,8 @@ public final class CameraFilmCompositor
         int lineHeight=(int)clamp(number(clip,"lineHeight",12D),8D,64D);
         String[] lines=text.replace("\\n","\n").split("\n",-1);
         boolean shadow=Boolean.parseBoolean(clip.settings.get("textShadow"));
-        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        // Keep subtitles inside the film viewport. Do not disable scissor:
+        // text outside the preview must never paint the surrounding editor.
         for(int i=0;i<Math.min(32,lines.length);i++)
         {
             String line=mc.fontRenderer.trimStringToWidth(lines[i],maxWidth);
@@ -178,7 +179,6 @@ public final class CameraFilmCompositor
             if(shadow)mc.fontRenderer.drawStringWithShadow(line,left,rowY,rgba);
             else mc.fontRenderer.drawString(line,left,rowY,rgba);
         }
-        GL11.glEnable(GL11.GL_SCISSOR_TEST);
     }
 
     private static int color(String value)
