@@ -41,7 +41,14 @@ public final class CameraClipEvaluator
         });
         PreviewCameraPose result=fallback;
         for(CameraClipDocument.Clip clip:active)
-            result=apply(clips,clip,frame,result,fallback,resolver,depth);
+        {
+            double weight=CameraClipEnvelope.factor(clip,frame);
+            if(weight<=0D)continue;
+            PreviewCameraPose applied=apply(
+                    clips,clip,frame,result,fallback,resolver,depth);
+            result=weight>=1D?applied:
+                    PreviewCameraPose.interpolate(result,applied,weight);
+        }
         return result;
     }
 
