@@ -98,6 +98,15 @@ public final class CameraWorkspace
                 ?document.sample(sceneFrame,editorPose,resolver):editorPose;
     }
     public boolean shot(){return shot;}
+    public void toggleShotView()
+    {
+        shot=!shot;
+        if(shot&&recordingPreview)stopPreviewRecording();
+    }
+    public void togglePreviewRecordingFromToolbar(AnimationEditorScreen screen,int frame)
+    {
+        togglePreviewRecording(screen,frame);
+    }
     public boolean crossModeShot(){return crossModeShot;}
     public boolean recordingPreview(){return recordingPreview;}
     public void toggleCrossModeShot(){crossModeShot=!crossModeShot;}
@@ -775,20 +784,8 @@ public final class CameraWorkspace
         rowBase=top+35;
         cameraTimeline.setLength(Math.max(1,length));
         cameraTimeline.clampOffset(Math.max(0,length-1),timelineW);
-        // Single-value camera viewer plus explicit edit-from-preview switch.
-        // FREE/SHOT is read-only; REC writes selected camera key on movement.
-        int viewX=right-96, recordX=right-48;
-        GuiScreen.drawRect(viewX,43,viewX+44,65,0xE6111A22);
-        GuiScreen.drawRect(viewX,43,viewX+2,65,
-                shot?EditorThemeManager.get().getAccentBright():0xFF526879);
-        mc.fontRenderer.drawString(shot?"SHOT":"FREE",
-                viewX+8,50,shot?0xFF8CDBFF:0xFFC3CFD5);
-        GuiScreen.drawRect(recordX,43,right-8,65,
-                recordingPreview?0xFF663430:0xE6111A22);
-        GuiScreen.drawRect(recordX,43,recordX+2,65,
-                recordingPreview?0xFFFF8064:0xFF526879);
-        mc.fontRenderer.drawString("REC",recordX+10,50,
-                recordingPreview?0xFFFFA18D:0xFFB5C7D2);
+        // Camera viewer and clip authoring buttons are drawn beside Play.
+        // This prevents controls from covering the cinematic image.
         GuiScreen.drawRect(0,25,timelineX,top,0xFF191E24);
         GuiScreen.drawRect(right,25,width,top,0xFF191E24);
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
@@ -1270,21 +1267,7 @@ public final class CameraWorkspace
             }
             return true;
         }
-        int toggleX=right-96;
-        if(button==0&&mouseX>=toggleX&&mouseX<toggleX+44
-                &&mouseY>=43&&mouseY<65)
-        {
-            shot=!shot;
-            if(shot&&recordingPreview)
-                togglePreviewRecording(screen,frame);
-            return true;
-        }
-        if(button==0&&mouseX>=right-48&&mouseX<right-8
-                &&mouseY>=43&&mouseY<65)
-        {
-            togglePreviewRecording(screen,frame);
-            return true;
-        }
+        // Toolbar view/record buttons are handled centrally by the screen.
         if(mouseX<timelineX&&mouseY>=95&&mouseY<top&&button==0)
         {
             int i=(mouseY-95)/17+presetScroll;
