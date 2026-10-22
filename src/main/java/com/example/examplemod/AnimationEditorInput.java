@@ -1191,6 +1191,7 @@ public class AnimationEditorInput
             }
 
             if (this.sceneViewport != null
+                    && !this.screen.isCrossModeCameraView()
                     && this.sceneViewport.mouseScrolled(
                     mouseX,
                     mouseY,
