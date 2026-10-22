@@ -22,7 +22,7 @@ public final class CameraOutputPopup
     private static final int MUTED=0xFFA4B7C3;
     private static final int BLUE=0xFF65CDF7;
     private static final int HEADER_HEIGHT=26;
-    private static final int ROW_HEIGHT=19;
+    private static final int ROW_HEIGHT=18;
 
     private static final class Option
     {
@@ -200,6 +200,29 @@ public final class CameraOutputPopup
         if(error!=null)
             font.drawString(font.trimStringToWidth(error,width-22),
                     x+11,y+177,0xFFFF9696);
+        if(height>=255)
+        {
+            int w=settings.getWidth(),h=settings.getHeight();
+            try
+            {
+                int candidateW=Integer.parseInt(widthInput.getText());
+                int candidateH=Integer.parseInt(heightInput.getText());
+                if(CameraOutputSettings.isValid(candidateW,candidateH))
+                {w=candidateW;h=candidateH;}
+            }
+            catch(NumberFormatException ignored){}
+            int maxW=Math.min(140,width-32),maxH=62;
+            double aspect=w/(double)h;
+            int rw,rh;
+            if(maxW/(double)maxH>aspect)
+            {rh=maxH;rw=Math.max(2,(int)Math.round(rh*aspect));}
+            else
+            {rw=maxW;rh=Math.max(2,(int)Math.round(rw/aspect));}
+            int px=x+(width-rw)/2,py=y+219+(maxH-rh)/2;
+            Gui.drawRect(px-1,py-1,px+rw+1,py+rh+1,BLUE);
+            Gui.drawRect(px,py,px+rw,py+rh,0xFF304A5E);
+            font.drawString("FRAME PREVIEW",x+11,y+200,MUTED);
+        }
     }
 
     public boolean mouseClicked(int mouseX,int mouseY,int button,
