@@ -235,6 +235,22 @@ public final class CameraClipInspector
         scalar("@layer",Integer.toString(clip.layer),false);
         scalar("@enabled",Boolean.toString(clip.enabled),false);
 
+        // View and Dolly have an initial camera pose even without a manually
+        // selected key marker. Show it where BBS exposes Position and Angle.
+        if((clip.kind==CameraClipDocument.Kind.IDLE
+                ||clip.kind==CameraClipDocument.Kind.DOLLY)
+                &&keyframe!=null)
+        {
+            section("CAMERA POSE");
+            scalar("x",Double.toString(keyframe.x),true);
+            scalar("y",Double.toString(keyframe.y),true);
+            scalar("z",Double.toString(keyframe.z),true);
+            scalar("yaw",Float.toString(keyframe.yaw),true);
+            scalar("pitch",Float.toString(keyframe.pitch),true);
+            scalar("roll",Float.toString(keyframe.roll),true);
+            scalar("fov",Float.toString(keyframe.fov),true);
+        }
+
         Map<String,List<Map.Entry<String,String>>> groups=
                 new LinkedHashMap<String,List<Map.Entry<String,String>>>();
         for(String name:new String[]{"TARGET","TRANSFORM","ANIMATION",
@@ -245,7 +261,8 @@ public final class CameraClipInspector
         for(Map.Entry<String,List<Map.Entry<String,String>>> part:groups.entrySet())
             settingsGroup(part.getKey(),part.getValue());
 
-        if(editKey&&keyframe!=null)
+        if(editKey&&keyframe!=null&&clip.kind!=CameraClipDocument.Kind.IDLE
+                &&clip.kind!=CameraClipDocument.Kind.DOLLY)
         {
             section("SELECTED KEYFRAME");
             scalar("tick",Integer.toString(keyframe.tick),true);
