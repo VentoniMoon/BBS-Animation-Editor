@@ -31,9 +31,9 @@ public final class CameraClipParameters
         add(CameraClipDocument.Kind.DOLLY_ZOOM,"focus","0");
         add(CameraClipDocument.Kind.AUDIO,"audio","","offset","0","volume","1");
         add(CameraClipDocument.Kind.CURVE,"channels","sun_rotation");
-        add(CameraClipDocument.Kind.SUBTITLE,"placement","center","color","FFFFFFFF","textShadow","true","background","0","backgroundOffset","2","shadow","0","shadowOpaque","false","transform","identity","lineHeight","12","maxWidth","0","font","","fontSize","9","image","","imageRight","true","imageScale","1");
-        add(CameraClipDocument.Kind.IMAGE,"texture","","placement","center","color","FFFFFFFF","fullscreen","false","smooth","true","transform","identity");
-        add(CameraClipDocument.Kind.VIDEO,"audio","","offset","0","volume","1","placement","center","color","FFFFFFFF","loop","false","fullscreen","false","smooth","true","transform","identity");
+        add(CameraClipDocument.Kind.SUBTITLE,"placement","center","color","FFFFFFFF","textShadow","true","background","0","backgroundOffset","2","shadow","0","shadowOpaque","false","transform","identity","lineHeight","12","maxWidth","0","font","","fontSize","9","image","","imageRight","true","imageScale","1","text","Subtitle","x","0.5","y","0.88","opacity","1");
+        add(CameraClipDocument.Kind.IMAGE,"texture","","placement","center","color","FFFFFFFF","fullscreen","false","smooth","true","transform","identity","x","0.5","y","0.5","width","0.5","height","0.5","opacity","1");
+        add(CameraClipDocument.Kind.VIDEO,"audio","","offset","0","volume","1","placement","center","color","FFFFFFFF","loop","false","fullscreen","false","smooth","true","transform","identity","video","","x","0.5","y","0.5","width","0.5","height","0.5","opacity","1");
     }
     private static void add(CameraClipDocument.Kind kind,String... pairs)
     {
