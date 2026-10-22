@@ -226,6 +226,27 @@ public final class CameraWorkspace
         case "FadeOut":return ""+selected.fadeOut;
         case "Key Local Frame":return selectedKey==null?"-":""+selectedKey;
         default:
+            if(selectedKey!=null)
+            {
+                PreviewCameraPose keyPose=selected.keys.get(selectedKey);
+                if(keyPose!=null)
+                {
+                    double number;
+                    switch(field)
+                    {
+                    case "x":number=keyPose.x;break;
+                    case "y":number=keyPose.y;break;
+                    case "z":number=keyPose.z;break;
+                    case "yaw":number=keyPose.yaw;break;
+                    case "pitch":number=keyPose.pitch;break;
+                    case "roll":number=keyPose.roll;break;
+                    case "fov":number=keyPose.fov;break;
+                    default:number=Double.NaN;
+                    }
+                    if(Double.isFinite(number))
+                        return String.format(java.util.Locale.ROOT,"%.3f",number);
+                }
+            }
             if(selected.strings.containsKey(field))return selected.text(field);
             return selected.values.containsKey(field)?
                 String.format(java.util.Locale.ROOT,"%.3f",selected.value(field,0)):"";
