@@ -318,19 +318,62 @@ public final class CameraWorkspace
     }
     public boolean saveSelectedPreset(String requested)
     {
-        CameraClipDocument.Clip clip=document.selected();
-        if(clip==null||requested==null)return false;
+        CameraClipDocument.Clip selected=document.selected();
+        if(selected==null||requested==null)return false;
         String name=requested.trim().replaceAll("[^a-zA-Z0-9._-]","_");
         if(name.isEmpty()||name.equals(".")||name.equals(".."))return false;
         File folder=presetsDir();
         if(!folder.isDirectory()&&!folder.mkdirs())return false;
-        try(Writer writer=new FileWriter(new File(folder,name+".json")))
+        File destination=new File(folder,name+".json");
+        if(destination.exists())
         {
-            new GsonBuilder().setPrettyPrinting().create()
-                    .toJson(CameraClipDocument.clipToJson(clip),writer);
-            refreshPresets();return true;
+            lastError="Preset already exists: "+name;return false;
         }
-        catch(IOException e){lastError="Cannot save preset: "+e.getMessage();return false;}
+
+        java.util.List<CameraClipDocument.Clip> chosen=
+                new java.util.ArrayList<CameraClipDocument.Clip>();
+        for(CameraClipDocument.Clip clip:groupSelection)
+            if(document.clips().contains(clip))chosen.add(clip);
+        if(chosen.isEmpty()||!chosen.contains(selected))
+        {
+            chosen.clear();chosen.add(selected);
+        }
+
+        com.google.gson.JsonElement data;
+        if(chosen.size()==1)
+            data=CameraClipDocument.clipToJson(chosen.get(0));
+        else
+        {
+            int first=Integer.MAX_VALUE,lowest=Integer.MAX_VALUE;
+            for(CameraClipDocument.Clip clip:chosen)
+            {
+                first=Math.min(first,clip.tick);
+                lowest=Math.min(lowest,clip.layer);
+            }
+            com.google.gson.JsonObject combined=new com.google.gson.JsonObject();
+            combined.addProperty("presetVersion",1);
+            com.google.gson.JsonArray items=new com.google.gson.JsonArray();
+            for(CameraClipDocument.Clip clip:chosen)
+            {
+                CameraClipDocument.Clip relative=clip.copy();
+                relative.tick-=first;
+                relative.layer-=lowest;
+                items.add(CameraClipDocument.clipToJson(relative));
+            }
+            combined.add("clips",items);
+            data=combined;
+        }
+        try(Writer writer=new FileWriter(destination))
+        {
+            new GsonBuilder().setPrettyPrinting().create().toJson(data,writer);
+            refreshPresets();lastError=null;return true;
+        }
+        catch(IOException error)
+        {
+            destination.delete();
+            lastError="Cannot save preset: "+error.getMessage();
+            return false;
+        }
     }
     public boolean pastePreset(String name,int tick,int layer)
     {
@@ -338,15 +381,53 @@ public final class CameraWorkspace
         if(!file.isFile())return false;
         try(Reader reader=new FileReader(file))
         {
-            CameraClipDocument.Clip clip=CameraClipDocument.clipFromJson(
-                    new JsonParser().parse(reader).getAsJsonObject());
-            clip.tick=Math.max(0,tick);clip.layer=Math.max(0,layer);
-            int tries=0;
-            while(document.overlaps(clip,null)&&tries++<64)clip.layer++;
-            if(!document.add(clip))return false;
+            com.google.gson.JsonObject root=new JsonParser().parse(reader)
+                    .getAsJsonObject();
+            java.util.List<CameraClipDocument.Clip> bundle=
+                    new java.util.ArrayList<CameraClipDocument.Clip>();
+            if(root.has("clips"))
+            {
+                for(com.google.gson.JsonElement element:root.getAsJsonArray("clips"))
+                    bundle.add(CameraClipDocument.clipFromJson(element.getAsJsonObject()));
+            }
+            else bundle.add(CameraClipDocument.clipFromJson(root));
+            if(bundle.isEmpty())return false;
+
+            int chosenBump=-1;
+            for(int bump=0;bump<64;bump++)
+            {
+                boolean collision=false;
+                for(CameraClipDocument.Clip clip:bundle)
+                {
+                    CameraClipDocument.Clip candidate=clip.copy();
+                    candidate.tick=Math.max(0,tick+clip.tick);
+                    candidate.layer=Math.max(0,layer+clip.layer+bump);
+                    if(document.overlaps(candidate,null))
+                    {collision=true;break;}
+                }
+                if(!collision){chosenBump=bump;break;}
+            }
+            if(chosenBump<0)
+            {
+                lastError="No free layers for camera preset";return false;
+            }
+            for(CameraClipDocument.Clip clip:bundle)
+            {
+                clip.tick=Math.max(0,tick+clip.tick);
+                clip.layer=Math.max(0,layer+clip.layer+chosenBump);
+                if(!document.add(clip))
+                {
+                    lastError="Preset collision on insertion";
+                    return false;
+                }
+            }
             saveScene();return true;
         }
-        catch(Exception e){lastError="Cannot paste preset: "+e.getMessage();return false;}
+        catch(Exception error)
+        {
+            lastError="Cannot paste preset: "+error.getMessage();
+            return false;
+        }
     }
     private int pendingTick,pendingLayer;
     private int lastClickX,lastClickY,lastButton=-1;
