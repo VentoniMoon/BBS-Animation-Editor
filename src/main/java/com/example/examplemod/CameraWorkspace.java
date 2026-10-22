@@ -71,6 +71,8 @@ public final class CameraWorkspace
     {
         if(editField==null)
         {
+            if(keyCode==1&&inspector.isInterpolationOpen())
+            {inspector.closeInterpolation();return true;}
             if(keyCode==1&&(palette||contextClip!=null))
             {
                 palette=false;contextClip=null;return true;
@@ -217,6 +219,59 @@ public final class CameraWorkspace
         saveScene();return true;
     }
 
+    /** Extend media duration when the referenced file has a readable length. */
+    private void extendMediaClip(CameraClipDocument.Clip clip)
+    {
+        if(clip==null)return;
+        String source=clip.kind==CameraClipDocument.Kind.VIDEO
+                ?clip.settings.get("video"):clip.settings.get("audio");
+        File file=CameraImageCache.resolve(source);
+        if(file==null||!file.isFile())
+        {lastError="Media file was not found";return;}
+        double seconds=0D;
+        if(clip.kind==CameraClipDocument.Kind.AUDIO)
+        {
+            try
+            {
+                javax.sound.sampled.AudioFileFormat format=
+                        javax.sound.sampled.AudioSystem.getAudioFileFormat(file);
+                javax.sound.sampled.AudioFormat audio=format.getFormat();
+                if(audio.getFrameRate()>0&&format.getFrameLength()>0)
+                    seconds=format.getFrameLength()/audio.getFrameRate();
+            }
+            catch(Exception invalid)
+            {lastError="Cannot read audio duration";return;}
+        }
+        else if(clip.kind==CameraClipDocument.Kind.VIDEO)
+        {
+            Process process=null;
+            try
+            {
+                process=new ProcessBuilder("ffprobe","-v","error",
+                        "-show_entries","format=duration",
+                        "-of","default=noprint_wrappers=1:nokey=1",
+                        file.getAbsolutePath()).redirectErrorStream(true).start();
+                java.io.BufferedReader reader=new java.io.BufferedReader(
+                        new java.io.InputStreamReader(process.getInputStream()));
+                String first=reader.readLine();
+                if(!process.waitFor(2,java.util.concurrent.TimeUnit.SECONDS))
+                {process.destroyForcibly();lastError="FFprobe timed out";return;}
+                seconds=Double.parseDouble(first);
+            }
+            catch(Exception invalid)
+            {lastError="FFprobe not available";return;}
+            finally{if(process!=null)process.destroy();}
+        }
+        if(!Double.isFinite(seconds)||seconds<=0D)
+        {lastError="Media duration unavailable";return;}
+        int original=clip.duration;
+        clip.duration=Math.max(1,Math.min(Integer.MAX_VALUE-clip.tick,
+                (int)Math.ceil(seconds*20D)));
+        if(document.overlaps(clip,clip))
+        {clip.duration=original;lastError="Media overlaps another clip";return;}
+        saveScene();
+    }
+
     private int presetScroll;
     private int inspectorScroll;
     private final CameraClipInspector inspector=new CameraClipInspector();
@@ -273,7 +328,8 @@ public final class CameraWorkspace
         }
         if(mouseY>=25&&mouseY<top&&mouseX>=right)
         {
-            inspectorScroll=Math.max(0,Math.min(inspector.maxScroll(),
+            if(inspector.isInterpolationOpen())inspector.scrollInterpolation(direction);
+            else inspectorScroll=Math.max(0,Math.min(inspector.maxScroll(),
                     inspectorScroll+(direction>0?-44:44)));
             return true;
         }
@@ -566,9 +622,7 @@ public final class CameraWorkspace
         CameraClipDocument.Clip selected=document.selected();
         CameraClipDocument.Key displayedKey=selectedKey;
         boolean activeKey=selectedKey!=null&&keyOwner==selected;
-        if(!activeKey&&selected!=null&&!selected.keys.isEmpty()
-                &&(selected.kind==CameraClipDocument.Kind.IDLE
-                   ||selected.kind==CameraClipDocument.Kind.DOLLY))
+        if(!activeKey&&selected!=null&&!selected.keys.isEmpty())
             displayedKey=selected.keys.get(0);
         inspector.draw(screen,selected,displayedKey,
                 activeKey,inspectorScroll,right,top);
@@ -825,6 +879,74 @@ public final class CameraWorkspace
             CameraClipInspector.Hit hit=inspector.hit(mouseX,mouseY);
             CameraClipDocument.Clip clip=document.selected();
             if(hit==null||clip==null)return true;
+            if(hit.key.startsWith("@interp:"))
+            {
+                String action=hit.key.substring("@interp:".length());
+                if(action.startsWith("open:"))
+                {
+                    inspector.toggleInterpolation(action.substring(5));
+                    return true;
+                }
+                if(action.startsWith("set:"))
+                {
+                    String encoded=action.substring(4);
+                    int separator=encoded.lastIndexOf(':');
+                    if(separator<0)return true;
+                    String property=encoded.substring(0,separator);
+                    String chosen=encoded.substring(separator+1);
+                    if(!CameraInterpolation.isKnown(chosen))return true;
+                    if("@key".equals(property))
+                    {
+                        if(selectedKey==null||keyOwner!=clip)
+                        {
+                            if(clip.keys.isEmpty())return true;
+                            selectedKey=clip.keys.get(0);keyOwner=clip;
+                        }
+                        selectedKey.interpolation=chosen;
+                    }
+                    else if(clip.settings.containsKey(property))
+                        clip.settings.put(property,chosen);
+                    inspector.closeInterpolation();
+                    saveScene();return true;
+                }
+            }
+            if(hit.key.startsWith("@key:"))
+            {
+                String action=hit.key.substring(5);
+                if("add".equals(action))
+                {
+                    int at=Math.min(clip.tick+clip.duration-1,
+                            Math.max(clip.tick,frame));
+                    document.keyAt(clip,at,screen.getCameraWorkspacePose());
+                    for(CameraClipDocument.Key existing:clip.keys)
+                        if(existing.tick==at-clip.tick)
+                        {selectedKey=existing;keyOwner=clip;break;}
+                    saveScene();
+                }
+                else if("prev".equals(action)||"next".equals(action))
+                {
+                    if(!clip.keys.isEmpty())
+                    {
+                        int at=clip.keys.indexOf(selectedKey);
+                        if(at<0)at=0;
+                        else at=Math.max(0,Math.min(clip.keys.size()-1,
+                                at+("next".equals(action)?1:-1)));
+                        selectedKey=clip.keys.get(at);keyOwner=clip;
+                    }
+                }
+                else if("remove".equals(action))
+                {
+                    if(selectedKey!=null&&keyOwner==clip)
+                    {clip.keys.remove(selectedKey);selectedKey=null;keyOwner=null;
+                    saveScene();}
+                }
+                return true;
+            }
+            if("@media:duration".equals(hit.key))
+            {
+                extendMediaClip(clip);
+                return true;
+            }
             if(hit.keyframe)
             {
                 if(selectedKey==null||keyOwner!=clip)
