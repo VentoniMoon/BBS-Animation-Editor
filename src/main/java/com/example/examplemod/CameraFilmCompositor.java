@@ -111,7 +111,8 @@ public final class CameraFilmCompositor
         {
             int offset=(int)number(clip,"offset",0D);
             int local=tick-clip.tick+offset;
-            texture=CameraVideoFrames.get(clip.settings.get("video"),local);
+            texture=CameraVideoFrames.get(clip.settings.get("video"),local,
+                    Boolean.parseBoolean(clip.settings.get("loop")));
         }
         else texture=CameraImageCache.get(clip.settings.get("texture"));
         if(texture==null)return;
