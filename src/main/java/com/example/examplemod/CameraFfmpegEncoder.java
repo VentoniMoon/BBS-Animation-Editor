@@ -39,6 +39,7 @@ public final class CameraFfmpegEncoder implements AutoCloseable
     private final Process process;
     private final OutputStream stdin;
     private final AtomicBoolean stopped=new AtomicBoolean(false);
+    private final AtomicBoolean canceled=new AtomicBoolean(false);
     private volatile boolean finished;
     private volatile int framesWritten;
 
@@ -181,6 +182,8 @@ public final class CameraFfmpegEncoder implements AutoCloseable
                 throw new IOException("FFmpeg timed out while finalizing MP4");
             }
             int code=process.exitValue();
+            if(canceled.get())
+                throw new IOException("CAMERA export canceled");
             if(code!=0||!output.isFile()||output.length()==0L)
                 throw new IOException("FFmpeg exited with code "+code+
                         ": "+readLog(logFile));
@@ -195,17 +198,33 @@ public final class CameraFfmpegEncoder implements AutoCloseable
         }
         finally
         {
-            if(!finished)process.destroyForcibly();
+            if(!finished)
+            {
+                process.destroyForcibly();
+                if(output.isFile())output.delete();
+                if(logFile.isFile())logFile.delete();
+            }
         }
     }
 
     /** Cancel immediately and delete a partial output; don't touch game GL. */
     public void cancel()
     {
-        if(!stopped.compareAndSet(false,true))return;
-        try{stdin.close();}catch(IOException ignored){}
+        // The writer may have already closed stdin and started finish().
+        // Cancellation must STILL kill FFmpeg during MP4 finalization.
+        if(finished||!canceled.compareAndSet(false,true))return;
+        stopped.set(true);
         process.destroyForcibly();
-        if(!finished&&output.isFile())output.delete();
+        try{stdin.close();}catch(IOException ignored){}
+        try
+        {
+            process.waitFor(2L,TimeUnit.SECONDS);
+        }
+        catch(InterruptedException interrupted)
+        {
+            Thread.currentThread().interrupt();
+        }
+        if(output.isFile())output.delete();
         if(logFile.isFile())logFile.delete();
     }
 
