@@ -421,9 +421,8 @@ public final class CameraWorkspace
             else if(hit!=null)
             {
                 document.select(hit);
-                startTextField(screen,hit.title,false,null,null);
-                namingPreset=true;
-                editField.setText(hit.title.replace(" ","_"));
+                startTextField(screen,hit.title.replace(" ","_"),true,
+                        null,hit);
             }
             return true;
         }
