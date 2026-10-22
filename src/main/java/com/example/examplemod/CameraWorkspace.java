@@ -11,6 +11,7 @@ import com.google.gson.JsonParser;
 import com.google.gson.GsonBuilder;
 import java.util.List;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.Minecraft;
 
 /** First CAMERA workspace surface using the existing Ocean/editor widgets. */
@@ -29,6 +30,44 @@ public final class CameraWorkspace
     private String lastError;
     private final List<String> presetNames=new ArrayList<String>();
     private String savePresetName;
+    private GuiTextField editField;
+    private CameraClipDocument.Clip editClip;
+    private String editKey;
+    private boolean namingPreset;
+
+    private void startTextField(AnimationEditorScreen screen,
+            String initial,boolean preset,String key,CameraClipDocument.Clip clip)
+    {
+        namingPreset=preset;
+        editClip=clip;
+        editKey=key;
+        int x=preset?Math.max(12,screen.width/2-100):right+8;
+        int y=preset?screen.height/2:Math.min(top-35,158+16*(clip==null?0:
+                new ArrayList<String>(clip.settings.keySet()).indexOf(key)));
+        editField=new GuiTextField(42,screen.fontRenderer,x,y,
+                preset?200:165,18);
+        editField.setMaxStringLength(255);
+        editField.setText(initial==null?"":initial);
+        editField.setFocused(true);
+    }
+    public boolean keyTyped(char typedChar,int keyCode)
+    {
+        if(editField==null)return false;
+        if(keyCode==1){editField=null;return true;}
+        if(keyCode==28||keyCode==156)
+        {
+            String value=editField.getText();
+            if(namingPreset)saveSelectedPreset(value);
+            else if(editClip!=null&&editKey!=null)
+            {
+                editClip.settings.put(editKey,value);
+                saveScene();
+            }
+            editField=null;return true;
+        }
+        editField.textboxKeyTyped(typedChar,keyCode);
+        return true;
+    }
     private int presetScroll;
 
     private static File sceneDocument(File scene)
@@ -209,6 +248,17 @@ public final class CameraWorkspace
         int cursor=timelineX+(int)((long)Math.max(0,frame)*timelineW/usable);
         GuiScreen.drawRect(cursor,top+26,cursor+1,bottom,0xFFE7BB65);
         if(palette)drawPalette(screen);
+        if(editField!=null)
+        {
+            if(namingPreset)
+            {
+                GuiScreen.drawRect(screen.width/2-116,screen.height/2-30,
+                    screen.width/2+116,screen.height/2+42,0xF0161A20);
+                mc.fontRenderer.drawString("SAVE CAMERA PRESET",screen.width/2-103,
+                    screen.height/2-20,0xFF69CFFF);
+            }
+            editField.drawTextBox();
+        }
     }
     private void drawPalette(AnimationEditorScreen screen)
     {
@@ -236,6 +286,27 @@ public final class CameraWorkspace
     }
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        if(editField!=null)
+        {
+            if(button==0)
+                editField.mouseClicked(mouseX,mouseY,button);
+            return true;
+        }
+        if(button==0&&mouseX>=right+8&&mouseX<screen.width
+                &&mouseY>=159&&mouseY<top-10)
+        {
+            CameraClipDocument.Clip chosen=document.selected();
+            if(chosen!=null)
+            {
+                int index=(mouseY-159)/16;
+                if(index>=0&&index<chosen.settings.size())
+                {
+                    String key=new ArrayList<String>(chosen.settings.keySet()).get(index);
+                    startTextField(screen,chosen.settings.get(key),false,key,chosen);
+                    return true;
+                }
+            }
+        }
         int toggleX=Math.max(181,(right+180)/2-58);
         if(button==0&&mouseX>=toggleX&&mouseX<toggleX+116
                 &&mouseY>=top-28&&mouseY<top-5)
@@ -301,8 +372,9 @@ public final class CameraWorkspace
             else if(hit!=null)
             {
                 document.select(hit);
-                // Enter preset name in chat input on the next iteration of
-                // the inspector; do not silently save a hardcoded name.
+                startTextField(screen,hit.title,false,null,null);
+                namingPreset=true;
+                editField.setText(hit.title.replace(" ","_"));
             }
             return true;
         }
