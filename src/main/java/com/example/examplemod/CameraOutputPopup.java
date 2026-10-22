@@ -122,10 +122,31 @@ public final class CameraOutputPopup
             Gui.drawRect(listX,yy,x+width-7,yy+ROW_HEIGHT-1,
                     chosen?SELECTED:over?0xFF303E48:ROW);
             if(chosen)Gui.drawRect(listX,yy,listX+2,yy+ROW_HEIGHT-1,BLUE);
+            // A tiny frame silhouette shows the actual aspect of each
+            // output preset, not just a label such as "16:9".
+            if(o.preset!=null)
+            {
+                double aspect=o.preset.width/(double)o.preset.height;
+                int rw,rh;
+                if(aspect>=22D/12D)
+                {
+                    rw=22;rh=Math.max(2,(int)Math.round(rw/aspect));
+                }
+                else
+                {
+                    rh=12;rw=Math.max(2,(int)Math.round(rh*aspect));
+                }
+                int px=listX+17-rw/2,py=yy+9-rh/2;
+                Gui.drawRect(px,py,px+rw,py+rh,
+                        chosen?BLUE:0xFF6C8798);
+                if(rw>3&&rh>3)
+                    Gui.drawRect(px+1,py+1,px+rw-1,py+rh-1,
+                            chosen?0xFF264D62:0xFF192730);
+            }
             String label=o.custom?"Custom resolution...":
                     o.preset.label;
-            font.drawString(font.trimStringToWidth(label,width-135),
-                    listX+8,yy+5,TEXT);
+            font.drawString(font.trimStringToWidth(label,
+                    Math.max(22,width-158)),listX+34,yy+5,TEXT);
             if(o.preset!=null)
             {
                 String size=o.preset.dimensions();
