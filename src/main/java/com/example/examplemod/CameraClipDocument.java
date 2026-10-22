@@ -197,6 +197,21 @@ public final class CameraClipDocument
         return out;
     }
 
+    public static final class Target
+    {
+        public final double x,y,z;
+        public final float yaw,pitch;
+        public Target(double x,double y,double z,float yaw,float pitch)
+        {
+            this.x=x;this.y=y;this.z=z;this.yaw=yaw;this.pitch=pitch;
+        }
+    }
+    /** Stable scene actor IDs, never transient UI-selected actor indexes. */
+    public interface TargetResolver
+    {
+        Target resolve(String actorId,int frame);
+    }
+
     private final List<Clip> clips=new ArrayList<Clip>();
     private Clip selected;
     public List<Clip> clips(){return Collections.unmodifiableList(clips);}
@@ -245,6 +260,11 @@ public final class CameraClipDocument
     }
     /** These are the currently supported pose-producing clip types. */
     public PreviewCameraPose sample(int frame,PreviewCameraPose fallback)
+    {
+        return sample(frame,fallback,null);
+    }
+    public PreviewCameraPose sample(int frame,PreviewCameraPose fallback,
+            TargetResolver resolver)
     {
         PreviewCameraPose result=fallback;
         List<Clip> active=new ArrayList<Clip>();
@@ -316,23 +336,92 @@ public final class CameraClipDocument
                     result.yaw+yaw,result.pitch+pitch,result.roll,
                     result.fov,result.nearPlane,result.farPlane);
             }
-            else if(clip.kind==Kind.LOOK && Boolean.parseBoolean(
-                    clip.settings.get("atBlock")))
+            else if(clip.kind==Kind.LOOK)
             {
-                double[] target=point(clip,"block");
-                double dx=target[0]-result.x;
-                double dy=target[1]-result.y;
-                double dz=target[2]-result.z;
-                double horizontal=Math.sqrt(dx*dx+dz*dz);
-                if(horizontal>1E-6D)
-                    result=new PreviewCameraPose(result.x,result.y,result.z,
-                        (float)Math.toDegrees(Math.atan2(-dx,dz)),
-                        (float)Math.toDegrees(Math.atan2(-dy,horizontal)),
-                        result.roll,result.fov,result.nearPlane,result.farPlane);
+                boolean block=Boolean.parseBoolean(clip.settings.get("atBlock"));
+                Target actor=resolver==null?null:resolver.resolve(
+                        clip.settings.get("selector"),frame);
+                if(block||actor!=null)
+                {
+                    double[] target=point(clip,"block");
+                    double[] offset=point(clip,"offset");
+                    double tx=block?target[0]:actor.x;
+                    double ty=block?target[1]:actor.y;
+                    double tz=block?target[2]:actor.z;
+                    double dx=tx+offset[0]-result.x;
+                    double dy=ty+offset[1]-result.y;
+                    double dz=tz+offset[2]-result.z;
+                    double horizontal=Math.sqrt(dx*dx+dz*dz);
+                    if(horizontal>1E-6D)
+                        result=new PreviewCameraPose(result.x,result.y,result.z,
+                            (float)Math.toDegrees(Math.atan2(-dx,dz)),
+                            (float)Math.toDegrees(Math.atan2(-dy,horizontal)),
+                            result.roll,result.fov,result.nearPlane,result.farPlane);
+                }
             }
-            // Tracker, Spline, Drag, Math, Remapper, Orbit, Dolly Zoom,
-            // graphics and audio require their full context/evaluators.
-            // Never silently treat that unfinished behavior as complete.
+            else if(clip.kind==Kind.TRACKER)
+            {
+                Target actor=resolver==null?null:resolver.resolve(
+                        clip.settings.get("selector"),frame);
+                if(actor!=null)
+                {
+                    double[] offset=point(clip,"offset");
+                    double[] angle=point(clip,"angle");
+                    boolean look=Boolean.parseBoolean(clip.settings.get("look_at"));
+                    double x=look?result.x:actor.x+offset[0];
+                    double y=look?result.y:actor.y+offset[1];
+                    double z=look?result.z:actor.z+offset[2];
+                    float yaw=actor.yaw+(float)angle[0];
+                    float pitch=actor.pitch+(float)angle[1];
+                    if(look)
+                    {
+                        double dx=actor.x+offset[0]-x;
+                        double dy=actor.y+offset[1]-y;
+                        double dz=actor.z+offset[2]-z;
+                        yaw=(float)Math.toDegrees(Math.atan2(-dx,dz));
+                        pitch=(float)Math.toDegrees(Math.atan2(-dy,
+                                Math.sqrt(dx*dx+dz*dz)));
+                    }
+                    result=new PreviewCameraPose(x,y,z,yaw,pitch,result.roll,
+                            (float)numeric(clip,"fov",70D),
+                            result.nearPlane,result.farPlane);
+                }
+            }
+            else if(clip.kind==Kind.ORBIT)
+            {
+                Target actor=resolver==null?null:resolver.resolve(
+                        clip.settings.get("selector"),frame);
+                boolean pointFallback=Boolean.parseBoolean(clip.settings.get("atBlock"));
+                if(actor!=null||pointFallback)
+                {
+                    double[] target=point(clip,"block");
+                    double[] offset=point(clip,"offset");
+                    double x=(actor==null?target[0]:actor.x)+offset[0];
+                    double y=(actor==null?target[1]:actor.y)+offset[1];
+                    double z=(actor==null?target[2]:actor.z)+offset[2];
+                    double yaw=Math.toRadians(numeric(clip,"yaw",0D));
+                    double pitch=Math.toRadians(numeric(clip,"pitch",0D));
+                    if(actor!=null&&Boolean.parseBoolean(clip.settings.get("copy")))
+                    {
+                        yaw+=Math.toRadians(actor.yaw);
+                        pitch+=Math.toRadians(actor.pitch);
+                    }
+                    double radius=numeric(clip,"distance",0D);
+                    double ex=x-Math.sin(yaw)*Math.cos(pitch)*radius;
+                    double ey=y+Math.sin(pitch)*radius;
+                    double ez=z+Math.cos(yaw)*Math.cos(pitch)*radius;
+                    double dx=x-ex,dy=y-ey,dz=z-ez;
+                    result=new PreviewCameraPose(ex,ey,ez,
+                            (float)Math.toDegrees(Math.atan2(-dx,dz)),
+                            (float)Math.toDegrees(Math.atan2(-dy,
+                                    Math.sqrt(dx*dx+dz*dz))),
+                            result.roll,result.fov,result.nearPlane,result.farPlane);
+                }
+            }
+            // The full BBS spline-path, formulas, remapping, compositing and
+            // video decoding require dedicated scene/render implementations.
+            // These kinds remain documented and editable but not misrepresented
+            // as rendering-compatible before those integrations land.
         }
         return result;
     }
