@@ -84,6 +84,13 @@ public final class CameraClipTrack
             values.put("roll",(double)pose.roll);values.put("fov",(double)pose.fov);
             switch(type)
             {
+            case TRANSLATE:
+                values.put("x",0D);values.put("y",0D);values.put("z",0D);break;
+            case ANGLE:
+                values.put("yaw",0D);values.put("pitch",0D);
+                values.put("roll",0D);values.put("fov",0D);break;
+            case TRACKER:
+                values.put("x",0D);values.put("y",0D);values.put("z",0D);break;
             case DOLLY: values.put("distance",4D);break;
             case DRAG: values.put("strength",0.6D);break;
             case SHAKE:
@@ -361,10 +368,10 @@ public final class CameraClipTrack
         if(c.keys.isEmpty())return c.rest;
         int k=(int)Math.floor(local);
         Map.Entry<Integer,PreviewCameraPose> lo=c.keys.floorEntry(k);
-        Map.Entry<Integer,PreviewCameraPose> hi=c.keys.ceilingEntry(k);
         if(lo==null)return c.keys.firstEntry().getValue();
+        if(lo.getKey()==local)return lo.getValue();
+        Map.Entry<Integer,PreviewCameraPose> hi=c.keys.higherEntry(lo.getKey());
         if(hi==null)return c.keys.lastEntry().getValue();
-        if(lo.getKey().equals(hi.getKey()))return lo.getValue();
         double t=(local-lo.getKey())/(hi.getKey()-lo.getKey());
         return PreviewCameraPose.interpolate(lo.getValue(),hi.getValue(),t);
     }
