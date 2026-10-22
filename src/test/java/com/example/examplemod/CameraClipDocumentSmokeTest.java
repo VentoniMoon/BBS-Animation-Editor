@@ -137,6 +137,21 @@ public final class CameraClipDocumentSmokeTest
         check(curved>0&&curved<10&&Math.abs(curved-5)>0.1D,
                 "Hermite Path must differ from linear path");
 
-        System.out.println("CAMERA clip layering, channel masks, Hermite, persistence PASS");
+        CameraClipDocument fading=new CameraClipDocument();
+        CameraClipDocument.Clip fade=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.IDLE,0,40,0);
+        fade.keys.add(new CameraClipDocument.Key(0,pose(20,0,0)));
+        fade.settings.put("envelope.enabled","true");
+        fade.settings.put("envelope.mode","0");
+        fade.settings.put("envelope.fadeIn","10");
+        fade.settings.put("envelope.fadeOut","10");
+        check(fading.add(fade),"add envelope clip");
+        near(fading.sample(0,BASE).x,0,"fade-in starts transparent");
+        near(fading.sample(5,BASE).x,10,"half fade-in");
+        near(fading.sample(20,BASE).x,20,"sustain");
+        near(fading.sample(35,BASE).x,10,"half fade-out");
+        near(CameraClipEnvelope.factor(fade,5),0.5,"shared media envelope");
+
+        System.out.println("CAMERA clip layering, channels, Hermite, envelopes, persistence PASS");
     }
 }
