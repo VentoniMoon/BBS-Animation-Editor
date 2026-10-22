@@ -204,6 +204,10 @@ public final class EditorSceneSerializer
                     impossibleInMemory);
         }
 
+        // Render resolution belongs to the whole scene, not individual clips.
+        // Optional tag keeps all older editor.dat scenes readable.
+        scene.setTag("CameraOutput",state.getCameraOutput().toNBT());
+
         root.setTag(
                 "Scene",
                 scene
@@ -369,6 +373,11 @@ public final class EditorSceneSerializer
             );
         }
 
+
+        // Absent/invalid resolutions load as 1920 x 1080.
+        state.getCameraOutput().readNBT(
+                scene.hasKey("CameraOutput",10)
+                        ?scene.getCompoundTag("CameraOutput"):null);
 
         /* CAMERA is optional for all existing editor.dat files. */
         state.getCameraClips().clear();
