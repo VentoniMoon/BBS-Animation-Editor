@@ -384,6 +384,15 @@ public final class CameraWorkspace
         int cursor=timelineX+(int)((long)Math.max(0,frame)*timelineW/usable);
         GuiScreen.drawRect(cursor,top+26,cursor+1,bottom,0xFFE7BB65);
         if(palette)drawPalette(screen);
+        if(contextClip!=null)
+        {
+            GuiScreen.drawRect(contextX,contextY,contextX+150,
+                    contextY+26,0xFF2A313B);
+            GuiScreen.drawRect(contextX,contextY,contextX+150,
+                    contextY+1,0xFF65C6F0);
+            mc.fontRenderer.drawString("Save as Preset",
+                    contextX+8,contextY+9,0xFFE4F0FA);
+        }
         if(editField!=null)
         {
             if(namingPreset)
@@ -424,17 +433,35 @@ public final class CameraWorkspace
     {
         if(editField!=null)
         {
-            boolean deleteDouble=namingPreset&&button==1&&lastButton==1
-                &&Math.abs(lastClickX-mouseX)<6&&Math.abs(lastClickY-mouseY)<6
-                &&System.currentTimeMillis()-lastClick<350;
-            if(deleteDouble&&document.selected()!=null)
-            {
-                document.remove(document.selected());
-                editField=null;saveScene();lastButton=-1;
-                return true;
-            }
             if(button==0)editField.mouseClicked(mouseX,mouseY,button);
             return true;
+        }
+        if(contextClip!=null)
+        {
+            CameraClipDocument.Clip target=contextClip;
+            contextClip=null;
+            boolean secondRight=button==1&&target==document.selected()
+                    &&lastButton==1
+                    &&Math.abs(lastClickX-mouseX)<6
+                    &&Math.abs(lastClickY-mouseY)<6
+                    &&System.currentTimeMillis()-lastClick<350;
+            if(secondRight)
+            {
+                document.remove(target);
+                selectedKey=null;keyOwner=null;
+                saveScene();lastButton=-1;
+                return true;
+            }
+            if(button==0&&mouseX>=contextX&&mouseX<contextX+150
+                    &&mouseY>=contextY&&mouseY<contextY+26)
+            {
+                document.select(target);
+                startTextField(screen,target.title.replace(" ","_"),true,
+                        null,target);
+                return true;
+            }
+            // Click outside the context menu closes it; the same click is
+            // otherwise handled normally by the underlying editor.
         }
         if(button==0&&mouseX>=right+8&&mouseX<screen.width
                 &&mouseY>=159&&mouseY<top-10)
@@ -552,8 +579,10 @@ public final class CameraWorkspace
             else if(hit!=null)
             {
                 document.select(hit);
-                startTextField(screen,hit.title.replace(" ","_"),true,
-                        null,hit);
+                selectedKey=null;keyOwner=null;
+                contextClip=hit;
+                contextX=Math.max(0,Math.min(screen.width-154,mouseX));
+                contextY=Math.max(27,Math.min(top-30,mouseY));
             }
             return true;
         }
