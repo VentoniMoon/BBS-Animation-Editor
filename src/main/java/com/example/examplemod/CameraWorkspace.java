@@ -35,41 +35,41 @@ public final class CameraWorkspace
         rowBase=bottom-10;
         GuiScreen.drawRect(0,25,180,top,0xFF191E24);
         GuiScreen.drawRect(right,25,width,top,0xFF191E24);
-        screen.drawString(mc.fontRenderer,"PRESETS",10,34,0xFF64CAFF);
-        screen.drawString(mc.fontRenderer,"Saved clip collections",10,53,0xFF87939D);
-        screen.drawString(mc.fontRenderer,"Right click clip to save",10,69,0xFF87939D);
-        screen.drawString(mc.fontRenderer,"CLIP PROPERTIES",right+8,34,0xFF64CAFF);
+        mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
+        mc.fontRenderer.drawString("Saved clip collections",10,53,0xFF87939D);
+        mc.fontRenderer.drawString("Right click clip to save",10,69,0xFF87939D);
+        mc.fontRenderer.drawString("CLIP PROPERTIES",right+8,34,0xFF64CAFF);
         CameraClipDocument.Clip selected=document.selected();
         if(selected!=null)
         {
-            screen.drawString(mc.fontRenderer,selected.kind.label,right+8,53,0xFFE7E7E7);
-            screen.drawString(mc.fontRenderer,"Start: "+selected.tick,right+8,73,0xFFC0C5C9);
-            screen.drawString(mc.fontRenderer,"Duration: "+selected.duration,right+8,89,0xFFC0C5C9);
-            screen.drawString(mc.fontRenderer,"Layer: "+selected.layer,right+8,105,0xFFC0C5C9);
-            screen.drawString(mc.fontRenderer,"Enabled: "+selected.enabled,right+8,121,0xFFC0C5C9);
-            screen.drawString(mc.fontRenderer,"Keys: "+selected.keys.size(),right+8,137,0xFFC0C5C9);
-            screen.drawString(mc.fontRenderer,
+            mc.fontRenderer.drawString(selected.kind.label,right+8,53,0xFFE7E7E7);
+            mc.fontRenderer.drawString("Start: "+selected.tick,right+8,73,0xFFC0C5C9);
+            mc.fontRenderer.drawString("Duration: "+selected.duration,right+8,89,0xFFC0C5C9);
+            mc.fontRenderer.drawString("Layer: "+selected.layer,right+8,105,0xFFC0C5C9);
+            mc.fontRenderer.drawString("Enabled: "+selected.enabled,right+8,121,0xFFC0C5C9);
+            mc.fontRenderer.drawString("Keys: "+selected.keys.size(),right+8,137,0xFFC0C5C9);
+            mc.fontRenderer.drawString(
                 selected.kind.keyed?"Double LMB: add key":"No key channels",
                 right+8,159,0xFF91A0A8);
         }
-        else screen.drawString(mc.fontRenderer,"Select a clip",right+8,54,0xFF8A959E);
+        else mc.fontRenderer.drawString("Select a clip",right+8,54,0xFF8A959E);
         GuiScreen.drawRect(0,top,width,bottom,0xFF111D27);
         GuiScreen.drawRect(0,top,width,top+1,0xFF68C5EB);
-        screen.drawString(mc.fontRenderer,"CAMERA TIMELINE",9,top+7,0xFF69CFFF);
-        screen.drawString(mc.fontRenderer,"Scene: "+length+" frames",92,top+7,0xFFA6B4C0);
+        mc.fontRenderer.drawString("CAMERA TIMELINE",9,top+7,0xFF69CFFF);
+        mc.fontRenderer.drawString("Scene: "+length+" frames",92,top+7,0xFFA6B4C0);
         int usable=Math.max(1,length);
         for(int n=0;n<=usable;n+=Math.max(1,usable/8))
         {
             int x=timelineX+(int)((long)n*timelineW/usable);
             GuiScreen.drawRect(x,top+28,x+1,bottom,0xFF334C5C);
-            screen.drawString(mc.fontRenderer,Integer.toString(n),x,top+16,0xFF9AB3C3);
+            mc.fontRenderer.drawString(Integer.toString(n),x,top+16,0xFF9AB3C3);
         }
         for(int layer=0;layer<6;layer++)
         {
             int y=rowBase-(layer+1)*rowHeight;
             if(y<top+32)break;
             GuiScreen.drawRect(0,y,width,y+rowHeight-1,layer%2==0?0xFF142534:0xFF162A3A);
-            screen.drawString(mc.fontRenderer,"Layer "+layer,10,y+6,0xFFA6B9C7);
+            mc.fontRenderer.drawString("Layer "+layer,10,y+6,0xFFA6B9C7);
         }
         for(CameraClipDocument.Clip clip:document.clips())
         {
@@ -83,7 +83,7 @@ public final class CameraWorkspace
                 GuiScreen.drawRect(x,y+1,x2,y+2,0xFFFFFFFF);
                 GuiScreen.drawRect(x,y+rowHeight-3,x2,y+rowHeight-2,0xFFFFFFFF);
             }
-            screen.drawString(mc.fontRenderer,clip.title,x+4,y+6,0xFFFFFFFF);
+            mc.fontRenderer.drawString(clip.title,x+4,y+6,0xFFFFFFFF);
             for(CameraClipDocument.Key key:clip.keys)
             {
                 int kx=timelineX+(int)((long)(clip.tick+key.tick)*timelineW/usable);
@@ -100,12 +100,12 @@ public final class CameraWorkspace
         int w=Math.min(480,screen.width-24),x=(screen.width-w)/2,y=Math.max(30,(screen.height-250)/2);
         GuiScreen.drawRect(x-3,y-3,x+w+3,y+233,0xFF080B0E);
         GuiScreen.drawRect(x,y,x+w,y+230,0xFF1C222A);
-        screen.drawString(mc.fontRenderer,"ADD CAMERA CLIP",x+9,y+8,0xFF65CEFF);
+        mc.fontRenderer.drawString("ADD CAMERA CLIP",x+9,y+8,0xFF65CEFF);
         CameraClipDocument.Family[] families=CameraClipDocument.Family.values();
         for(int c=0;c<3;c++)
         {
             int cx=x+8+c*(w-16)/3;
-            screen.drawString(mc.fontRenderer,
+            mc.fontRenderer.drawString(
                     c==0?"OVERWRITE":c==1?"MODIFIERS":"MISC",cx,y+31,0xFFB4CBD9);
             int i=0;
             for(CameraClipDocument.Kind kind:CameraClipDocument.Kind.values())
@@ -113,7 +113,7 @@ public final class CameraWorkspace
                 if(kind.family!=families[c])continue;
                 int yy=y+48+i*18;
                 GuiScreen.drawRect(cx,yy,cx+3,yy+15,kind.color);
-                screen.drawString(mc.fontRenderer,kind.label,cx+8,yy+3,0xFFE6EAED);
+                mc.fontRenderer.drawString(kind.label,cx+8,yy+3,0xFFE6EAED);
                 i++;
             }
         }
