@@ -17,6 +17,12 @@ import net.minecraft.client.Minecraft;
 public final class CameraWorkspace
 {
     public final CameraClipDocument document=new CameraClipDocument();
+    private boolean shot;
+    public PreviewCameraPose sample(PreviewCameraPose editorPose,int sceneFrame)
+    {
+        return shot?document.sample(sceneFrame,editorPose):editorPose;
+    }
+    public boolean shot(){return shot;}
     private boolean palette;
     private String activeSceneId;
     private File activeSceneFile;
@@ -129,6 +135,12 @@ public final class CameraWorkspace
         right=width-185;
         timelineW=Math.max(1,width-timelineX-8);
         rowBase=bottom-10;
+        // FREE/SHOT selection is separate from the editor's FR/OR navigation.
+        // Native camera driver samples this before vanilla renders the world.
+        GuiScreen.drawRect(Math.max(181,(right+180)/2-58),top-28,
+                Math.max(181,(right+180)/2+58),top-5,0xFF191E24);
+        mc.fontRenderer.drawString(shot?"SHOT  [FREE]":"FREE  [SHOT]",
+                Math.max(184,(right+180)/2-48),top-21,0xFF64CAFF);
         GuiScreen.drawRect(0,25,180,top,0xFF191E24);
         GuiScreen.drawRect(right,25,width,top,0xFF191E24);
         mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
@@ -219,6 +231,13 @@ public final class CameraWorkspace
     }
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        int toggleX=Math.max(181,(right+180)/2-58);
+        if(button==0&&mouseX>=toggleX&&mouseX<toggleX+116
+                &&mouseY>=top-28&&mouseY<top-5)
+        {
+            shot=!shot;
+            return true;
+        }
         if(palette)
         {
             if(button!=0){palette=false;return true;}
