@@ -84,11 +84,11 @@ public final class CameraWorkspace
     }
 
     public void updateShot(EditorSceneViewport viewport,CameraClipTrack clips,
-        int frame)
+        EditorSceneState scene,int frame)
     {
         if(!shotMode||viewport==null||clips==null)return;
         PreviewCameraPose base=freePose==null?viewport.getCamera().sample():freePose;
-        viewport.applyCameraTrack(clips.sample(frame,base));
+        viewport.applyCameraTrack(clips.sample(frame,base,scene));
     }
 
     private static int tint(){return EditorThemeManager.get().getAccent();}
