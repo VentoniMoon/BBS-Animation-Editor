@@ -514,7 +514,7 @@ public final class CameraWorkspace
                     "@duration".equals(key)?Integer.toString(clip.duration):
                     "@start".equals(key)?Integer.toString(clip.tick):clip.title;
             startTextField(screen,value,false,key,clip);
-            editField.yPosition=mouseY>=101?105:
+            editField.y=mouseY>=101?105:
                     mouseY>=85?89:mouseY>=69?73:54;
             return true;
         }
