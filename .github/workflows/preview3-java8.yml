@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/EditorCamera.java'
+      - 'src/main/java/com/example/examplemod/CameraClipTrack.java'
+      - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
+      - 'src/main/java/com/example/examplemod/CameraClipOverlays.java'
+      - 'src/test/camera-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraClipTrackSmokeTest.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraPose.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraProjection.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraMatrices.java'
@@ -30,6 +35,11 @@ on:
   pull_request:
     paths:
       - 'src/main/java/com/example/examplemod/EditorCamera.java'
+      - 'src/main/java/com/example/examplemod/CameraClipTrack.java'
+      - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
+      - 'src/main/java/com/example/examplemod/CameraClipOverlays.java'
+      - 'src/test/camera-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraClipTrackSmokeTest.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraPose.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraProjection.java'
       - 'src/main/java/com/example/examplemod/PreviewCameraMatrices.java'
@@ -132,3 +142,15 @@ jobs:
             src/test/java/com/example/examplemod/Preview3OptiFineEntityStageSmokeTest.java
           java -ea -cp build/preview3/optifine \
             com.example.examplemod.Preview3OptiFineEntityStageSmokeTest
+
+      - name: CAMERA 20-type layered sampling and NBT smoke test
+        run: |
+          mkdir -p build/camera/clips
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/clips \
+            src/test/camera-stubs/net/minecraft/nbt/NBTTagCompound.java \
+            src/test/camera-stubs/net/minecraft/nbt/NBTTagList.java \
+            src/test/camera-stubs/com/example/examplemod/CameraSceneStubs.java \
+            src/main/java/com/example/examplemod/PreviewCameraPose.java \
+            src/main/java/com/example/examplemod/CameraClipTrack.java \
+            src/test/java/com/example/examplemod/CameraClipTrackSmokeTest.java
+          java -ea -cp build/camera/clips com.example.examplemod.CameraClipTrackSmokeTest
