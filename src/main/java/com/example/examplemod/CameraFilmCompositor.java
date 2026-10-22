@@ -14,7 +14,7 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
 /**
- * Composites screen-space IMAGE clips INSIDE the captured film framebuffer.
+ * Composites screen-space IMAGE, VIDEO and SUBTITLE clips in the film FBO.
  *
  * This is intentionally not a GuiScreen paint operation: a future offline
  * video encoder reads exactly these film pixels, without editor chrome,
@@ -33,6 +33,7 @@ public final class CameraFilmCompositor
         for(CameraClipDocument.Clip clip:clips)
             if(clip.enabled&&clip.contains(tick)&&
                     (clip.kind==CameraClipDocument.Kind.IMAGE||
+                    clip.kind==CameraClipDocument.Kind.VIDEO||
                     clip.kind==CameraClipDocument.Kind.SUBTITLE))
                 images.add(clip);
         if(images.isEmpty())return;
@@ -79,8 +80,9 @@ public final class CameraFilmCompositor
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
             for(CameraClipDocument.Clip clip:images)
             {
-                if(clip.kind==CameraClipDocument.Kind.IMAGE)
-                    drawImage(clip,previewX,previewY,previewWidth,previewHeight);
+                if(clip.kind==CameraClipDocument.Kind.IMAGE||
+                        clip.kind==CameraClipDocument.Kind.VIDEO)
+                    drawImage(clip,previewX,previewY,previewWidth,previewHeight,tick);
                 else if(clip.kind==CameraClipDocument.Kind.SUBTITLE)
                     drawSubtitle(mc,clip,previewX,previewY,previewWidth,previewHeight);
             }
@@ -101,9 +103,16 @@ public final class CameraFilmCompositor
         }
     }
     private static void drawImage(CameraClipDocument.Clip clip,
-            int px,int py,int pw,int ph)
+            int px,int py,int pw,int ph,int tick)
     {
-        DynamicTexture texture=CameraImageCache.get(clip.settings.get("texture"));
+        DynamicTexture texture;
+        if(clip.kind==CameraClipDocument.Kind.VIDEO)
+        {
+            int offset=(int)number(clip,"offset",0D);
+            int local=tick-clip.tick+offset;
+            texture=CameraVideoFrames.get(clip.settings.get("video"),local);
+        }
+        else texture=CameraImageCache.get(clip.settings.get("texture"));
         if(texture==null)return;
 
         boolean fullscreen=Boolean.parseBoolean(clip.settings.get("fullscreen"));
