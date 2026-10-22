@@ -85,7 +85,8 @@ public final class CameraVideoFrames
             }
         }
         if(cached.texture!=null)return cached.texture;
-        if(cached.job==null||!cached.job.isDone())return null;
+        if(cached.job==null||!cached.job.isDone())
+            return previousDecodedFrame(file,frame);
         try
         {
             BufferedImage image=cached.job.get();
@@ -94,6 +95,23 @@ public final class CameraVideoFrames
             return cached.texture;
         }
         catch(Exception ignored){cached.job=null;return null;}
+    }
+
+    /**
+     * Avoid a black flicker every playback tick while FFmpeg decodes the
+     * requested frame. Only reuse a close, already-decoded frame belonging
+     * to the same source/version; a large timeline seek must not show a
+     * stale image from a completely different moment.
+     */
+    private static DynamicTexture previousDecodedFrame(File source,int frame)
+    {
+        String prefix=source.getAbsolutePath()+"#"+source.lastModified()+"#";
+        for(int delta=1;delta<=2;delta++)
+        {
+            Frame previous=frames.get(prefix+(frame-delta));
+            if(previous!=null&&previous.texture!=null)return previous.texture;
+        }
+        return null;
     }
 
     private static BufferedImage decode(File file,int frame)
