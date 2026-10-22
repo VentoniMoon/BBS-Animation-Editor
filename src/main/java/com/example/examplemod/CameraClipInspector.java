@@ -215,6 +215,25 @@ public final class CameraClipInspector
                 key.interpolation==null||key.interpolation.isEmpty()?
                         "linear":key.interpolation);
     }
+    private void singleChannelEditor(CameraClipDocument.Key key,String title)
+    {
+        section(title);
+        int at=y-scroll;
+        if(visible(at,18))
+            text("Keys: "+selectedClip.keys.size(),right+12,at+5,
+                    0xFFB7C5CC,width-right-24);
+        y+=21;
+        button("Add key at playhead","@key:add");
+        if(key==null)return;
+        button("Previous key","@key:prev");
+        button("Next key","@key:next");
+        button("Delete selected key","@key:remove");
+        keyField(key,"tick","Frame",Integer.toString(key.tick));
+        keyField(key,"x","Value",Double.toString(key.x));
+        interpolation("@key","Interpolation",
+                key.interpolation==null||key.interpolation.isEmpty()
+                        ?"linear":key.interpolation);
+    }
     private void interpolation(String key,String title,String value)
     {
         int at=y-scroll;
@@ -393,12 +412,12 @@ public final class CameraClipInspector
                 channels(0,6);
                 break;
             case REMAPPER:
-                keyEditor(key,false);
+                singleChannelEditor(key,"TIME REMAPPING");
                 break;
             case CURVE:
                 section("SHADER CURVE");
                 setting("channels","Channel");
-                keyEditor(key,false);
+                singleChannelEditor(key,"CURVE KEYS");
                 break;
             case IMAGE:
                 section("IMAGE");
