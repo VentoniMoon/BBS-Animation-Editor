@@ -14,6 +14,7 @@ public final class PreviewToolbarIcons
     public static final int AUTOFOCUS=3;
     public static final int NAVIGATION=4;
     public static final int FILM_CAMERA=5;
+    public static final int OUTPUT_FORMAT=6;
 
     private static void pixel(int x,int y,int w,int h,int c)
     {
@@ -80,6 +81,15 @@ public final class PreviewToolbarIcons
                 pixel(ox+2,oy+2,10,3,color);
                 pixel(ox+4,oy+2,2,3,0xFF151C21);
                 pixel(ox+8,oy+2,2,3,0xFF151C21);
+                break;
+            case OUTPUT_FORMAT:
+                // Small widescreen frame with cropped top/right registration.
+                pixel(ox+1,oy+3,12,9,color);
+                pixel(ox+3,oy+5,8,5,0xFF151C21);
+                pixel(ox+1,oy+3,3,1,color);
+                pixel(ox+1,oy+3,1,3,color);
+                pixel(ox+10,oy+11,3,1,color);
+                pixel(ox+12,oy+9,1,3,color);
                 break;
             default: break;
         }
