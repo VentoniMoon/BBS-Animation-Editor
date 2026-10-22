@@ -67,32 +67,7 @@ public final class CameraClipEvaluator
             }
             case KEYFRAME:
             case PATH:
-            {
-                if(clip.keys.isEmpty())return current;
-                CameraClipDocument.Key previous=clip.keys.get(0);
-                CameraClipDocument.Key following=clip.keys.get(clip.keys.size()-1);
-                int local=frame-clip.tick;
-                for(CameraClipDocument.Key key:clip.keys)
-                {
-                    if(key.tick<=local)previous=key;
-                    if(key.tick>=local){following=key;break;}
-                }
-                double t=previous==following?0:(double)(local-previous.tick)/
-                        Math.max(1,following.tick-previous.tick);
-                t=easing(t,clip.settings.get(
-                        clip.kind==CameraClipDocument.Kind.PATH?"interpPoint":"interpolation"));
-                PreviewCameraPose interpolated=PreviewCameraPose.interpolate(
-                        pose(previous,current),pose(following,current),t);
-                if(clip.kind==CameraClipDocument.Kind.KEYFRAME &&
-                        Boolean.parseBoolean(clip.settings.get("additive")))
-                    return new PreviewCameraPose(current.x+interpolated.x,
-                        current.y+interpolated.y,current.z+interpolated.z,
-                        current.yaw+interpolated.yaw,current.pitch+interpolated.pitch,
-                        current.roll+interpolated.roll,
-                        clampFov(current.fov+interpolated.fov),
-                        current.nearPlane,current.farPlane);
-                return interpolated;
-            }
+                return CameraClipChannels.sample(clip,frame,current);
             case TRANSLATE:
             {
                 double[] delta=point(clip,"translate");
