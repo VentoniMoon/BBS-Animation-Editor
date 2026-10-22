@@ -1602,6 +1602,7 @@ public class AnimationEditorScreen extends GuiScreen
 
     public void loadScene(int index)
     {
+        cameraOutputPopup.close();
         this.multiActorPreview.reset();
         this.previewAutoFocus.reset();
         try
@@ -2922,6 +2923,9 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         // Output frame belongs to the scene, independent of GUI pixels.
+        if(this.editorModeController.getMode()
+                !=EditorModeController.EditorMode.CAMERA
+                &&cameraOutputPopup.isOpen())cameraOutputPopup.close();
         boolean outputView=this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA
                 ||this.cameraWorkspace.crossModeShot();
