@@ -360,7 +360,9 @@ public class AnimationEditorInput
 
             if (selectedMode != null)
             {
+                EditorModeController.EditorMode previousMode=this.editorModeController.getMode();
                 this.editorModeController.setMode(selectedMode);
+                this.screen.onCameraModeChanged(previousMode);
 
                 this.keyframeController.resetSelectionOnly();
 
@@ -451,6 +453,19 @@ public class AnimationEditorInput
             this.sceneDropdownOpen = false;
             this.editorModeController.closeDropdown();
             this.editorThemeController.closeDropdown();
+        }
+
+        /* CAMERA owns its own timeline and inspector; do not forward its
+         * clicks to actor, POSE or Body Parts input handlers. */
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+        {
+            boolean consumed=this.screen.getCameraWorkspace().click(mouseX,mouseY,mouseButton,
+                    this.screen.width,this.screen.height,AnimationEditorScreen.LEFT_PANEL_WIDTH,
+                    this.timeline,this.playbackController,this.sceneState.getCameraClips(),
+                    this.sceneViewport.getCamera().sample());
+            if(this.screen.getCameraWorkspace().consumeShotToggle())
+                this.screen.getCameraWorkspace().toggleShot(this.sceneViewport);
+            if(consumed){this.markDirty();return;}
         }
 
         /*
@@ -838,6 +853,13 @@ public class AnimationEditorInput
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+        {
+            if(this.screen.getCameraWorkspace().drag(mouseX,mouseY,clickedMouseButton,
+                    this.timeline,this.sceneState.getCameraClips()))
+            {this.markDirty();return;}
+        }
+
         /*
          * =========================================================
          * STAGE 5 - GIZMO DRAG
@@ -1006,6 +1028,8 @@ public class AnimationEditorInput
             int mouseY,
             int state)
     {
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            this.screen.getCameraWorkspace().release();
         /*
          * Gizmo must release before the Preview camera receives
          * the same mouse-up event.
@@ -1105,6 +1129,15 @@ public class AnimationEditorInput
                     wheel > 0
                             ? 1
                             : -1;
+
+            if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            {
+                if(this.screen.getCameraWorkspace().wheel(mouseX,mouseY,direction,
+                        this.screen.height,this.screen.width))return;
+                if(this.sceneViewport!=null&&this.sceneViewport.mouseScrolled(mouseX,mouseY,direction))return;
+                this.timeline.changeZoom(direction*0.25F);
+                return;
+            }
 
             /*
              * =====================================================
@@ -1358,6 +1391,13 @@ public class AnimationEditorInput
                 keyCode))
         {
             return;
+        }
+
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                &&this.screen.getCameraWorkspace().key(typedChar,keyCode,
+                        this.sceneState.getCameraClips(),this.timeline))
+        {
+            this.markDirty();return;
         }
 
         /*

@@ -175,6 +175,9 @@ public final class EditorSceneSerializer
         scene.setTag("BodyParts",
                 BodyPartsPersistence.write(state.getBodyPartsController()));
 
+        /* CAMERA is independent from actors and saved in the same editor.dat. */
+        scene.setTag("CameraClips",state.getCameraClips().toNBT());
+
 
         root.setTag(
                 "Scene",
@@ -346,6 +349,11 @@ public final class EditorSceneSerializer
          * Old scenes without BodyParts remain compatible. The editor
          * controller was cleared before loading this scene.
          */
+        /* Legacy editor.dat without camera data remains valid. */
+        state.getCameraClips().clear();
+        if(scene.hasKey("CameraClips",10))
+            state.getCameraClips().fromNBT(scene.getCompoundTag("CameraClips"));
+
         if (scene.hasKey("BodyParts", 10))
         {
             /*
