@@ -66,6 +66,55 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorModeController editorModeController =
             new EditorModeController();
 
+    /** Dedicated scene-wide CAMERA workspace (never tied to actor selection). */
+    private final CameraWorkspace cameraWorkspace = new CameraWorkspace();
+
+    public PreviewCameraPose getCameraWorkspacePose()
+    {
+        return this.sceneViewport.getCamera().sample();
+    }
+
+    /**
+     * Called at RenderTick START, before the native Minecraft world draw.
+     * SHOT camera only takes ownership of the rendered pose, not the
+     * editor's FREE/ORBIT position. Switching back restores free navigation.
+     */
+    public void setCameraWorkspaceFrame(int frame)
+    {
+        this.playbackController.setCurrentFrame(Math.max(0,Math.min(
+                frame,Math.max(0,getSceneLength()-1))));
+    }
+
+    public PreviewCameraPose getCameraWorkspaceNativePose()
+    {
+        PreviewCameraPose free=this.sceneViewport.getCamera().sample();
+        if(this.editorModeController.getMode()!=EditorModeController.EditorMode.CAMERA)
+            return free;
+        this.cameraWorkspace.syncScene(this.sceneState);
+        return this.cameraWorkspace.sample(free,
+                this.playbackController.getCurrentFrame(),
+                new CameraClipDocument.TargetResolver()
+                {
+                    @Override
+                    public CameraClipDocument.Target resolve(String id,int frame)
+                    {
+                        if(id==null||id.isEmpty())return null;
+                        for(BlockbusterSceneActorData actor:sceneState.getActors())
+                        {
+                            if(actor==null||!id.equals(actor.getId())
+                                    ||!actor.hasRecord())continue;
+                            BlockbusterRecord record=actor.getRecord();
+                            BlockbusterRecordFrame state=record.getFrame(frame);
+                            if(state==null)return null;
+                            return new CameraClipDocument.Target(
+                                state.getX(),state.getY(),state.getZ(),
+                                state.getYaw(),state.getPitch());
+                        }
+                        return null;
+                    }
+                });
+    }
+
     private final EditorThemeController editorThemeController =
             new EditorThemeController();
 
@@ -1612,6 +1661,14 @@ public class AnimationEditorScreen extends GuiScreen
         );
     }
 
+    /** CAMERA gets first chance to consume wheel events over its panels. */
+    public boolean scrollCameraWorkspace(int mouseX,int mouseY,int direction)
+    {
+        return this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                && this.cameraWorkspace.mouseScrolled(mouseX,mouseY,direction);
+    }
+
     public void selectActor(int index)
     {
         List<BlockbusterSceneActorData> actors =
@@ -1706,7 +1763,9 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         drawTopBar();
-        drawActorPanel();
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.CAMERA)
+            drawActorPanel();
 
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
@@ -1715,9 +1774,23 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         drawPreview(mouseX, mouseY);
-        drawTimeline();
-        drawWavWaveform();
-        drawInterpolationPanel(mouseX, mouseY);
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA)
+        {
+            this.cameraWorkspace.syncScene(this.sceneState);
+            this.cameraWorkspace.draw(this,
+                    this.playbackController.getCurrentFrame(),getSceneLength());
+            this.cameraWorkspace.syncAudio(
+                    this.playbackController.getCurrentFrame(),
+                    this.playbackController.isPlaying());
+        }
+        else
+        {
+            this.cameraWorkspace.pauseAudio();
+            drawTimeline();
+            drawWavWaveform();
+            drawInterpolationPanel(mouseX, mouseY);
+        }
 
         if (this.editorInput != null
                 && this.editorInput.isSceneDropdownOpen())
@@ -1909,6 +1982,8 @@ public class AnimationEditorScreen extends GuiScreen
                     "ACTOR: " + actorName;
         }
 
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.CAMERA)
         drawString(
                 fontRenderer,
                 actorText,
@@ -2231,7 +2306,8 @@ public class AnimationEditorScreen extends GuiScreen
                 {
                         EditorModeController.EditorMode.CHARACTER,
                         EditorModeController.EditorMode.POSE,
-                        EditorModeController.EditorMode.BODY_PARTS
+                        EditorModeController.EditorMode.BODY_PARTS,
+                        EditorModeController.EditorMode.CAMERA
                 };
 
         for (int i = 0; i < modes.length; i++)
@@ -2826,6 +2902,17 @@ public class AnimationEditorScreen extends GuiScreen
                         getCurrentRecordFrame(),
                         this.sceneViewport.getCamera(), isGizmoEnabled())
         );
+        if(this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA)
+        {
+            this.cameraWorkspace.syncScene(this.sceneState);
+            CameraFilmCompositor.composite(mc,
+                    this.sceneViewport.getRenderBackend()
+                            .getNativeTarget().getFramebuffer(),
+                    left,top,previewWidth,previewHeight,
+                    this.cameraWorkspace.document.clips(),
+                    this.playbackController.getCurrentFrame());
+        }
         this.sceneViewport.renderPreviewToScreen();
 
         /*
@@ -2860,7 +2947,9 @@ public class AnimationEditorScreen extends GuiScreen
                 bottom
         );
 
-        drawStage8PreviewButtons(previewRight, top);
+        if (this.editorModeController.getMode()
+                != EditorModeController.EditorMode.CAMERA)
+            drawStage8PreviewButtons(previewRight, top);
 
         /*
          * ---------------------------------------------------------
@@ -3352,6 +3441,11 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws java.io.IOException
     {
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                && this.cameraWorkspace.click(this,mouseX,mouseY,mouseButton,
+                    this.playbackController.getCurrentFrame(),getSceneLength()))
+            return;
         if (this.editorInput != null)
         {
             this.editorInput.mouseClicked(
@@ -3369,6 +3463,13 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                && clickedMouseButton == 0)
+        {
+            this.cameraWorkspace.move(mouseX,mouseY,getSceneLength());
+            return;
+        }
         if (this.editorInput != null)
         {
             this.editorInput.mouseClickMove(
@@ -3386,6 +3487,9 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             int state)
     {
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA)
+            this.cameraWorkspace.release();
         if (this.editorInput != null)
         {
             this.editorInput.mouseReleased(
@@ -3428,6 +3532,10 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                && this.cameraWorkspace.keyTyped(typedChar,keyCode))
+            return;
         if (this.editorInput != null)
             this.editorInput.keyTyped(typedChar,keyCode);
     }
@@ -3676,6 +3784,7 @@ public class AnimationEditorScreen extends GuiScreen
             this.sceneViewport.disposePreviewResources();
         }
         BbsFsWorldFrameCapture.release();
+        this.cameraWorkspace.dispose();
 
         EditorSessionSelection.remember(this.sceneState);
 

@@ -90,7 +90,8 @@ public final class BbsFsWorldCameraDriver
         if (previousWorld != null && previousWorld != mc.world)
             release();
 
-        PreviewCameraPose pose = viewport.getCamera().sample();
+        PreviewCameraPose pose =
+                ((AnimationEditorScreen)mc.currentScreen).getCameraWorkspaceNativePose();
         if (view == null || view.world != mc.world)
             view = new PreviewCameraEntity(mc.world);
 

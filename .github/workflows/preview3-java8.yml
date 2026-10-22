@@ -21,6 +21,12 @@ on:
       - 'src/main/java/com/example/examplemod/EditorGizmoController.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
+      - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
+      - 'src/main/java/com/example/examplemod/CameraClip*.java'
+      - 'src/main/java/com/example/examplemod/CameraClipChannels.java'
+      - 'src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java'
+      - 'src/test/camera-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraMathExpressionSmokeTest.java'
       - 'src/test/java/com/example/examplemod/Preview3*Test.java'
       - 'src/test/preview3-stubs/**'
       - 'src/test/preview3-fs-stubs/**'
@@ -46,6 +52,12 @@ on:
       - 'src/main/java/com/example/examplemod/EditorGizmoController.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
+      - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
+      - 'src/main/java/com/example/examplemod/CameraClip*.java'
+      - 'src/main/java/com/example/examplemod/CameraClipChannels.java'
+      - 'src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java'
+      - 'src/test/camera-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraMathExpressionSmokeTest.java'
       - 'src/test/java/com/example/examplemod/Preview3*Test.java'
       - 'src/test/preview3-stubs/**'
       - 'src/test/preview3-fs-stubs/**'
@@ -132,3 +144,30 @@ jobs:
             src/test/java/com/example/examplemod/Preview3OptiFineEntityStageSmokeTest.java
           java -ea -cp build/preview3/optifine \
             com.example.examplemod.Preview3OptiFineEntityStageSmokeTest
+
+      - name: CAMERA deterministic procedural math clips
+        run: |
+          mkdir -p build/camera/math
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/math \
+            src/main/java/com/example/examplemod/PreviewCameraPose.java \
+            src/main/java/com/example/examplemod/CameraMathExpression.java \
+            src/test/java/com/example/examplemod/CameraMathExpressionSmokeTest.java
+          java -ea -cp build/camera/math \
+            com.example.examplemod.CameraMathExpressionSmokeTest
+
+      - name: CAMERA 20-type registry, layer, presets and actor tracking math
+        run: |
+          mkdir -p build/camera/clips
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/clips \
+            src/test/camera-stubs/com/google/gson/JsonElement.java \
+            src/test/camera-stubs/com/google/gson/JsonObject.java \
+            src/test/camera-stubs/com/google/gson/JsonArray.java \
+            src/main/java/com/example/examplemod/PreviewCameraPose.java \
+            src/main/java/com/example/examplemod/CameraMathExpression.java \
+            src/main/java/com/example/examplemod/CameraClipDocument.java \
+            src/main/java/com/example/examplemod/CameraClipChannels.java \
+            src/main/java/com/example/examplemod/CameraClipEnvelope.java \
+            src/main/java/com/example/examplemod/CameraClipEvaluator.java \
+            src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java
+          java -ea -cp build/camera/clips \
+            com.example.examplemod.CameraClipDocumentSmokeTest

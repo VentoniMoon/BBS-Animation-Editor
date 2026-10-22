@@ -22,7 +22,8 @@ public class EditorModeController
     {
         CHARACTER,
         POSE,
-        BODY_PARTS
+        BODY_PARTS,
+        CAMERA
     }
 
     public static final int TOP_BAR_HEIGHT = 25;
@@ -66,6 +67,7 @@ public class EditorModeController
             return "Character";
         }
 
+        if (this.mode == EditorMode.CAMERA) return "Camera";
         if (this.mode == EditorMode.BODY_PARTS)
         {
             return "Body Parts";
@@ -171,7 +173,7 @@ public class EditorModeController
 
     public int getDropdownHeight()
     {
-        return getDropdownRowHeight() * 3;
+        return getDropdownRowHeight() * 4;
     }
 
 
@@ -192,6 +194,7 @@ public class EditorModeController
         {
             return EditorMode.BODY_PARTS;
         }
+        if (row == 3) return EditorMode.CAMERA;
 
         return null;
     }
@@ -205,6 +208,7 @@ public class EditorModeController
             return "Character";
         }
 
+        if (mode == EditorMode.CAMERA) return "Camera";
         if (mode == EditorMode.BODY_PARTS)
         {
             return "Body Parts";

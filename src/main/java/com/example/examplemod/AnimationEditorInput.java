@@ -1107,6 +1107,13 @@ public class AnimationEditorInput
                             : -1;
 
             /*
+             * CAMERA owns both sidebars. Route scrolling before actor list
+             * and viewport so the old hidden actor list cannot consume it.
+             */
+            if (this.screen.scrollCameraWorkspace(mouseX,mouseY,direction))
+                return;
+
+            /*
              * =====================================================
              * ACTOR LIST
              * =====================================================
