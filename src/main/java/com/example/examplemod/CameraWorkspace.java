@@ -17,7 +17,9 @@ import net.minecraft.client.Minecraft;
 /** First CAMERA workspace surface using the existing Ocean/editor widgets. */
 public final class CameraWorkspace
 {
-    public final CameraClipDocument document=new CameraClipDocument();
+    /** Bound to EditorSceneState, persisted within <scene>.editor.dat. */
+    public CameraClipDocument document=new CameraClipDocument();
+    private EditorSceneState activeState;
     private final CameraAudioClips soundtrack=new CameraAudioClips();
 
     public void syncAudio(int frame,boolean playing)
@@ -253,36 +255,52 @@ public final class CameraWorkspace
         int i=state.getSelectedScene();
         if(i>=0&&i<state.getSceneFiles().size())scene=state.getSceneFiles().get(i);
         String id=scene==null?"":scene.getAbsolutePath();
-        if(id.equals(activeSceneId))return;
+        if(id.equals(activeSceneId)&&activeState==state)return;
         activeSceneId=id;
+        activeState=state;
         activeSceneFile=scene==null?null:sceneDocument(scene);
-        document.clear();
+        document=state.getCameraClips();
         selectedKey=null;keyOwner=null;contextClip=null;
         layerScroll=0;inspectorScroll=0;editField=null;
         soundtrack.clear();
         CameraVideoFrames.clear();
         CameraImageCache.clear();
-        if(activeSceneFile!=null&&activeSceneFile.isFile())
+
+        /*
+         * One-way migration from early CAMERA preview builds that wrote
+         * separate JSON files. Prefer embedded editor.dat data whenever it
+         * exists; never overwrite it with the legacy sidecar.
+         */
+        if(document.clips().isEmpty()&&activeSceneFile!=null
+                &&activeSceneFile.isFile())
         {
             try(Reader reader=new FileReader(activeSceneFile))
             {
                 document.readJson(new JsonParser().parse(reader).getAsJsonObject());
+                state.getSaveController().markDirty();
             }
-            catch(Exception e){lastError="Cannot read camera scene: "+e.getMessage();}
+            catch(Exception e){lastError="Cannot migrate camera scene: "+e.getMessage();}
         }
         refreshPresets();
     }
     public void saveScene()
     {
-        if(activeSceneFile==null)return;
-        if(!activeSceneFile.getParentFile().isDirectory() &&
-                !activeSceneFile.getParentFile().mkdirs())return;
-        try(Writer writer=new FileWriter(activeSceneFile))
+        if(activeState==null)return;
+        EditorSaveController saves=activeState.getSaveController();
+        if(saves==null)return;
+        try
         {
-            new GsonBuilder().setPrettyPrinting().create()
-                    .toJson(document.toJson(),writer);
+            saves.saveEditorDataOnly();
+            // Editor-only autosave must not mark Blockbuster record changes
+            // clean: a later Ctrl+S is still responsible for the full save.
+            saves.markDirty();
+            lastError=null;
         }
-        catch(IOException e){lastError="Cannot save camera scene: "+e.getMessage();}
+        catch(IOException e)
+        {
+            saves.markDirty();
+            lastError="Cannot save camera in editor.dat: "+e.getMessage();
+        }
     }
     private File presetsDir(){return new File("config/bbs-editor/camera-presets");}
     private void refreshPresets()
