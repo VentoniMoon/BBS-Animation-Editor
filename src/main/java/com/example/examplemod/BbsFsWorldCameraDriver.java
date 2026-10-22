@@ -40,6 +40,16 @@ public final class BbsFsWorldCameraDriver
     private boolean controlling;
     private PreviewCameraPose activePose;
 
+    /**
+     * The exact camera used for the native Minecraft world frame.
+     * Recorded actors must use this same pose, not the editor's FREE camera.
+     */
+    public static PreviewCameraPose nativeActorPose(EditorSceneViewport requested)
+    {
+        BbsFsWorldCameraDriver d=INSTANCE;
+        return d.controlling&&d.viewport==requested?d.activePose:null;
+    }
+
     private BbsFsWorldCameraDriver() {}
 
     public static void attach(EditorSceneViewport viewport)

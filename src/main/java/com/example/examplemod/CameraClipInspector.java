@@ -92,6 +92,23 @@ public final class CameraClipInspector
         if(out.length()>0)out.setCharAt(0,Character.toUpperCase(out.charAt(0)));
         return out.toString();
     }
+    /**
+     * Values retain their full stored precision; rounding is display-only.
+     * Clicking the field still edits the unrounded source number.
+     */
+    private static String compact(String original)
+    {
+        if(original==null)return "";
+        try
+        {
+            if(original.indexOf('.')<0&&original.indexOf('e')<0
+                    &&original.indexOf('E')<0)return original;
+            double parsed=Double.parseDouble(original.trim());
+            if(!Double.isFinite(parsed))return original;
+            return String.format(Locale.ROOT,"%.3f",parsed);
+        }
+        catch(NumberFormatException ignored){return original;}
+    }
     private void field(String key,String title,String value,boolean onKey)
     {
         int at=y-scroll;
@@ -109,7 +126,7 @@ public final class CameraClipInspector
                 text(checked?"On":"Off",x+5,at+5,0xFFD5E3E9,w-27);
                 rect(x+w-17,at+3,x+w-5,at+15,checked?accent:0xFF58626A);
             }
-            else text(value,x+5,at+5,0xFFE6F0F3,w-10);
+            else text(compact(value),x+5,at+5,0xFFE6F0F3,w-10);
             hits.add(new Hit(key,-1,x,at,w,value,onKey,toggle));
         }
         y+=23;
@@ -150,7 +167,7 @@ public final class CameraClipInspector
                 text(axisLabels[i],right+13,pos+5,0xFF9FBBCB,32);
                 rect(x,pos,x+w,pos+19,0xFF10151A);
                 rect(x,pos+18,x+w,pos+19,0xFF384148);
-                text(parts[i].trim(),x+5,pos+5,0xFFE6F0F3,w-10);
+                text(compact(parts[i].trim()),x+5,pos+5,0xFFE6F0F3,w-10);
                 hits.add(new Hit(key,i,x,pos,w,parts[i].trim(),false,false));
             }
             y+=23;
