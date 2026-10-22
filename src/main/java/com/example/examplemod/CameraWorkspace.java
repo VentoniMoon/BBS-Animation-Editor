@@ -209,6 +209,9 @@ public final class CameraWorkspace
         editField.setFocused(true);
     }
     private int contextX,contextY;
+    /** Shift-click multiple clips to save a reusable layered preset. */
+    private final java.util.LinkedHashSet<CameraClipDocument.Clip> groupSelection=
+            new java.util.LinkedHashSet<CameraClipDocument.Clip>();
 
     public boolean mouseScrolled(int mouseX,int mouseY,int direction)
     {
@@ -261,6 +264,7 @@ public final class CameraWorkspace
         activeSceneFile=scene==null?null:sceneDocument(scene);
         document=state.getCameraClips();
         selectedKey=null;keyOwner=null;contextClip=null;
+        groupSelection.clear();
         layerScroll=0;inspectorScroll=0;editField=null;
         soundtrack.clear();
         CameraVideoFrames.clear();
@@ -452,10 +456,11 @@ public final class CameraWorkspace
             int y=rowBase-(clip.layer-layerScroll+1)*rowHeight;
             if(y<top+32||y>=bottom)continue;
             GuiScreen.drawRect(x,y+2,Math.max(x+3,x2),y+rowHeight-3,clip.kind.color);
-            if(clip==selected)
+            if(clip==selected||groupSelection.contains(clip))
             {
-                GuiScreen.drawRect(x,y+1,x2,y+2,0xFFFFFFFF);
-                GuiScreen.drawRect(x,y+rowHeight-3,x2,y+rowHeight-2,0xFFFFFFFF);
+                int highlight=groupSelection.contains(clip)?0xFFFFFFB4:0xFFFFFFFF;
+                GuiScreen.drawRect(x,y+1,x2,y+2,highlight);
+                GuiScreen.drawRect(x,y+rowHeight-3,x2,y+rowHeight-2,highlight);
             }
             mc.fontRenderer.drawString(clip.title,x+4,y+6,0xFFFFFFFF);
             for(CameraClipDocument.Key key:clip.keys)
@@ -670,6 +675,14 @@ public final class CameraWorkspace
                 else if(hit.kind.keyed){document.keyAt(hit,frame,screen.getCameraWorkspacePose());saveScene();}
                 return true;
             }
+            if(GuiScreen.isShiftKeyDown()&&hit!=null)
+            {
+                if(!groupSelection.add(hit))groupSelection.remove(hit);
+                document.select(hit);
+                dragged=null;return true;
+            }
+            groupSelection.clear();
+            if(hit!=null)groupSelection.add(hit);
             if(hit!=document.selected()){selectedKey=null;keyOwner=null;inspectorScroll=0;}
             document.select(hit);
             draggedKey=null;draggedKeyOwner=null;
@@ -722,6 +735,7 @@ public final class CameraWorkspace
             if(twice&&hit!=null)
             {
                 document.remove(hit);contextClip=null;
+                groupSelection.remove(hit);
                 selectedKey=null;keyOwner=null;
                 saveScene();lastButton=-1;
             }
