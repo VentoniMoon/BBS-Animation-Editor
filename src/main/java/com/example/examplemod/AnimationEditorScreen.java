@@ -2817,7 +2817,11 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseX,
             int mouseY)
     {
-        int left = LEFT_PANEL_WIDTH;
+        // CAMERA needs only short Layer names and preset labels.
+        // Do not alter Character/Pose/Body Parts sidebars.
+        int left = this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                ? CameraWorkspace.CAMERA_LEFT_WIDTH : LEFT_PANEL_WIDTH;
         int top = TOP_BAR_HEIGHT;
         int rightPanelWidth = 185;
         int previewRight =
