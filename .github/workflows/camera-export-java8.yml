@@ -26,13 +26,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
-      - name: Check external FFmpeg in CI environment
+      - name: Install external FFmpeg to verify real MP4 encoding
         run: |
-          if command -v ffmpeg >/dev/null 2>&1; then
-            ffmpeg -hide_banner -encoders | grep libx264
-          else
-            echo "No FFmpeg available: Java 8 unit checks will still run"
-          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -hide_banner -encoders | grep libx264
       - name: Compile export pipeline and run frame/MP4 tests
         run: |
           mkdir -p build/camera/export
