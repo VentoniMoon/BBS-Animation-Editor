@@ -69,6 +69,8 @@ public final class CameraClipEvaluator
                 double[] direction=lookVector(
                         number(clip,"yaw",source.yaw),number(clip,"pitch",source.pitch));
                 double travel=number(clip,"distance",0.1D)*frac;
+                if(Boolean.parseBoolean(clip.settings.get("reverse")))
+                    travel=-travel;
                 return withPosition(source,source.x+direction[0]*travel,
                         source.y+direction[1]*travel,source.z+direction[2]*travel);
             }
