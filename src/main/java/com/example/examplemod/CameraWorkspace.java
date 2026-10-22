@@ -541,9 +541,14 @@ public final class CameraWorkspace
                     12,95+i*17,0xFFD1DAE0);
         if(lastError!=null)mc.fontRenderer.drawString(lastError,10,top-12,0xFFFF8888);
         CameraClipDocument.Clip selected=document.selected();
-        inspector.draw(screen,selected,selectedKey,
-                selectedKey!=null&&keyOwner==selected,
-                inspectorScroll,right,top);
+        CameraClipDocument.Key displayedKey=selectedKey;
+        boolean activeKey=selectedKey!=null&&keyOwner==selected;
+        if(!activeKey&&selected!=null&&!selected.keys.isEmpty()
+                &&(selected.kind==CameraClipDocument.Kind.IDLE
+                   ||selected.kind==CameraClipDocument.Kind.DOLLY))
+            displayedKey=selected.keys.get(0);
+        inspector.draw(screen,selected,displayedKey,
+                activeKey,inspectorScroll,right,top);
         // Character-style ruler, top-down track list and accent-colored grid.
         int accent=EditorThemeManager.get().getAccent();
         GuiScreen.drawRect(0,top,width,bottom,0xFF0B1117);
@@ -752,7 +757,12 @@ public final class CameraWorkspace
             if(hit==null||clip==null)return true;
             if(hit.keyframe)
             {
-                if(selectedKey==null||keyOwner!=clip)return true;
+                if(selectedKey==null||keyOwner!=clip)
+                {
+                    if(clip.keys.isEmpty())return true;
+                    selectedKey=clip.keys.get(0);
+                    keyOwner=clip;
+                }
                 beginKeyEdit(screen,hit.key,selectedKey,hit.y);
             }
             else if("@enabled".equals(hit.key))
