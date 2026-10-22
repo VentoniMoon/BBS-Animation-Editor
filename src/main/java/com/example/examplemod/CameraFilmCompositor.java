@@ -84,7 +84,8 @@ public final class CameraFilmCompositor
                         clip.kind==CameraClipDocument.Kind.VIDEO)
                     drawImage(clip,previewX,previewY,previewWidth,previewHeight,tick);
                 else if(clip.kind==CameraClipDocument.Kind.SUBTITLE)
-                    drawSubtitle(mc,clip,previewX,previewY,previewWidth,previewHeight);
+                    drawSubtitle(mc,clip,previewX,previewY,previewWidth,
+                            previewHeight,tick);
             }
         }
         finally
@@ -129,6 +130,7 @@ public final class CameraFilmCompositor
         if(right<=left||bottom<=top)return;
 
         float alpha=(float)clamp(number(clip,"opacity",1D),0D,1D);
+        alpha*=CameraClipEnvelope.factor(clip,tick);
         int rgba=color(clip.settings.get("color"));
         alpha*=((rgba>>>24)&255)/255F;
         GL11.glColor4f(((rgba>>>16)&255)/255F,
@@ -148,12 +150,13 @@ public final class CameraFilmCompositor
     }
     /** Subtitles are burned into the scene texture, never editor UI. */
     private static void drawSubtitle(Minecraft mc,CameraClipDocument.Clip clip,
-            int px,int py,int pw,int ph)
+            int px,int py,int pw,int ph,int tick)
     {
         String text=clip.settings.get("text");
         if(text==null||text.isEmpty())return;
         int packed=color(clip.settings.get("color"));
-        double opacity=clamp(number(clip,"opacity",1D),0D,1D);
+        double opacity=clamp(number(clip,"opacity",1D),0D,1D)*
+                CameraClipEnvelope.factor(clip,tick);
         int alpha=(int)Math.round(((packed>>>24)&255)*opacity);
         int rgba=(packed&0xFFFFFF)|(alpha<<24);
         if(alpha==0)return;
