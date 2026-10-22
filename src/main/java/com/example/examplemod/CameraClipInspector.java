@@ -170,28 +170,29 @@ public final class CameraClipInspector
     {
         String[] parts=value.split(",",-1);
         int pos=y-scroll;
-        if(visible(pos,42))
-        {
+        if(visible(pos,14))
             text(label(key),right+12,pos+1,0xFFC8D6E0,width-right-24);
-            int inner=width-right-24;
-            int partWidth=inner/parts.length;
-            String[] names=parts.length==4?
-                    new String[]{"X","Y","Z","W"}:
-                    parts.length==3?
-                    new String[]{"X","Y","Z"}:
-                    new String[]{"X","Y"};
-            for(int i=0;i<parts.length;i++)
-            {
-                int x=right+12+i*partWidth;
-                int w=i==parts.length-1?inner-i*partWidth-3:partWidth-4;
-                rectangle(x,pos+17,x+w,pos+36,0xFF0D161F);
-                rectangle(x,pos+35,x+w,pos+36,0xFF39505F);
-                text(names[i]+":",x+3,pos+22,0xFF7ACBF0,16);
-                text(parts[i].trim(),x+21,pos+22,0xFFE9F3F7,w-23);
-                hits.add(new Hit(key,i,x,pos+17,w,parts[i].trim(),false,false));
-            }
+        // Match BBS FS stacked coordinate fields: full-width numeric values
+        // remain readable even after restoring the normal 185px inspector.
+        String[] names=parts.length==4?
+                new String[]{"X","Y","Z","W"}:
+                parts.length==3?
+                new String[]{"X","Y","Z"}:
+                new String[]{"X","Y"};
+        for(int i=0;i<parts.length;i++)
+        {
+            int fieldY=pos+17+i*23;
+            if(!visible(fieldY,19))continue;
+            text(names[i],right+14,fieldY+5,0xFF7ACBF0,23);
+            int fieldX=right+44;
+            int fieldW=Math.max(32,width-fieldX-11);
+            rectangle(fieldX,fieldY,fieldX+fieldW,fieldY+19,0xFF0D161F);
+            rectangle(fieldX,fieldY+18,fieldX+fieldW,fieldY+19,0xFF39505F);
+            text(parts[i].trim(),fieldX+5,fieldY+5,0xFFE9F3F7,fieldW-10);
+            hits.add(new Hit(key,i,fieldX,fieldY,fieldW,
+                    parts[i].trim(),false,false));
         }
-        y+=43;
+        y+=17+parts.length*23+4;
     }
     private void channels(String key,String value)
     {
