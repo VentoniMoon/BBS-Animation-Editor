@@ -181,6 +181,35 @@ public final class CameraClipDocumentSmokeTest
         check(remappedDoc.add(remap),"remapper upper layer");
         near(remappedDoc.sample(10,BASE).x,20D,
                 "remapper channel evaluates underlying camera at mapped frame");
-        System.out.println("CAMERA clip layering, channels, BBS easing, remapper, persistence PASS");
+        CameraClipDocument trimDoc=new CameraClipDocument();
+        CameraClipDocument.Clip trimClip=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.KEYFRAME,10,20,0);
+        trimClip.keys.add(new CameraClipDocument.Key(0,pose(1,0,0)));
+        trimClip.keys.add(new CameraClipDocument.Key(12,pose(2,0,0)));
+        check(trimDoc.add(trimClip),"add trimmable camera clip");
+        CameraClipDocument.Clip neighbor=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.IMAGE,40,15,0);
+        check(trimDoc.add(neighbor),"add neighboring clip");
+        check(trimDoc.trim(trimClip,false,35),"extend right edge");
+        check(trimClip.tick==10&&trimClip.duration==25,
+                "right trim keeps start fixed");
+        check(!trimDoc.trim(trimClip,false,45),"reject overlap");
+        check(trimClip.tick==10&&trimClip.duration==25,
+                "failed trim keeps original duration");
+        check(!trimDoc.trim(trimClip,false,17),"protect keys on trim");
+        check(trimDoc.trim(trimClip,true,16),"trim left boundary");
+        check(trimClip.tick==16&&trimClip.duration==19,
+                "left trim keeps opposite end fixed");
+        check(!trimDoc.trim(trimClip,true,25),"left key trim blocked");
+        check(trimDoc.trim(trimClip,true,4),"extend clip leftwards");
+        check(trimClip.tick==4&&trimClip.duration==31,
+                "extended clip retains right boundary");
+        CameraClipDocument restoredTrim=new CameraClipDocument();
+        restoredTrim.readJson(trimDoc.toJson());
+        check(restoredTrim.clips().get(0).tick==4,
+                "trim persistence roundtrip");
+        check(restoredTrim.clips().get(0).keys.size()==2,
+                "keys unchanged by edge trim");
+        System.out.println("CAMERA clip layering, channels, trim and persistence PASS");
     }
 }
