@@ -500,7 +500,39 @@ public final class CameraWorkspace
             // otherwise handled normally by the underlying editor.
         }
         if(button==0&&mouseX>=right+8&&mouseX<screen.width
-                &&mouseY>=159&&mouseY<top-10)
+                &&mouseY>=53&&mouseY<139)
+        {
+            CameraClipDocument.Clip clip=document.selected();
+            if(clip==null)return true;
+            if(mouseY>=117&&mouseY<136)
+            {
+                clip.enabled=!clip.enabled;saveScene();return true;
+            }
+            String key=mouseY>=101?"@layer":mouseY>=85?"@duration":
+                    mouseY>=69?"@start":"@title";
+            String value="@layer".equals(key)?Integer.toString(clip.layer):
+                    "@duration".equals(key)?Integer.toString(clip.duration):
+                    "@start".equals(key)?Integer.toString(clip.tick):clip.title;
+            startTextField(screen,value,false,key,clip);
+            editField.yPosition=mouseY>=101?105:
+                    mouseY>=85?89:mouseY>=69?73:54;
+            return true;
+        }
+        if(button==0&&mouseX>=right+8&&mouseX<screen.width
+                &&selectedKey!=null&&keyOwner==document.selected()
+                &&mouseY>=top-159&&mouseY<top-12)
+        {
+            int index=(mouseY-(top-159))/18;
+            if(index>=0&&index<KEY_FIELDS.length)
+            {
+                beginKeyEdit(screen,KEY_FIELDS[index],selectedKey,
+                        top-159+index*18);
+                return true;
+            }
+        }
+        if(button==0&&mouseX>=right+8&&mouseX<screen.width
+                &&mouseY>=159&&mouseY<top-
+                    (selectedKey!=null&&keyOwner==document.selected()?180:10))
         {
             CameraClipDocument.Clip chosen=document.selected();
             if(chosen!=null)
@@ -579,6 +611,7 @@ public final class CameraWorkspace
                 else if(hit.kind.keyed){document.keyAt(hit,frame,screen.getCameraWorkspacePose());saveScene();}
                 return true;
             }
+            if(hit!=document.selected()){selectedKey=null;keyOwner=null;inspectorScroll=0;}
             document.select(hit);
             draggedKey=null;draggedKeyOwner=null;
             dragged=hit;dragStartX=mouseX;
@@ -599,6 +632,7 @@ public final class CameraWorkspace
                         if(Math.abs(mouseX-markerX)<=3)
                         {
                             draggedKeyOwner=hit;draggedKey=key;
+                            selectedKey=key;keyOwner=hit;
                             draggedKeyStart=key.tick;
                             cloneKey=cloneDrag;
                             dragged=null;
