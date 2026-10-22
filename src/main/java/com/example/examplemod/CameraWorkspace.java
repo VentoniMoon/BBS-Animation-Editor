@@ -71,6 +71,8 @@ public final class CameraWorkspace
     {
         if(editField==null)
         {
+            if(keyCode==1&&choosingMedia)
+            {choosingMedia=false;return true;}
             if(keyCode==1&&inspector.isInterpolationOpen())
             {inspector.closeInterpolation();return true;}
             if(keyCode==1&&(palette||contextClip!=null))
@@ -278,6 +280,42 @@ public final class CameraWorkspace
     private final List<String> actorTargets=new ArrayList<String>();
     private boolean choosingTarget;
     private int actorTargetScroll;
+    private boolean choosingMedia;
+    private String mediaProperty;
+    private final List<File> mediaFiles=new ArrayList<File>();
+    private int mediaScroll;
+
+    private void collectMediaFiles(File directory,int depth,String[] extensions)
+    {
+        if(depth>3||mediaFiles.size()>120)return;
+        File[] children=directory.listFiles();
+        if(children==null)return;
+        java.util.Arrays.sort(children);
+        for(File child:children)
+        {
+            if(child.isDirectory())collectMediaFiles(child,depth+1,extensions);
+            else
+            {
+                String name=child.getName().toLowerCase(java.util.Locale.ROOT);
+                for(String ext:extensions)if(name.endsWith(ext))
+                {mediaFiles.add(child);break;}
+            }
+            if(mediaFiles.size()>120)break;
+        }
+    }
+    private void openMediaPicker(String property)
+    {
+        mediaProperty=property;mediaFiles.clear();mediaScroll=0;
+        File root=new File("config/bbs-editor/media");
+        if(!root.isDirectory())root.mkdirs();
+        String[] types="texture".equals(property)||"image".equals(property)
+                ?new String[]{".png",".jpg",".jpeg",".webp"}
+                :"font".equals(property)?new String[]{".ttf",".otf"}
+                :"video".equals(property)?new String[]{".mp4",".mov",".webm",".mkv"}
+                :new String[]{".wav",".ogg",".mp3"};
+        collectMediaFiles(root,0,types);
+        choosingMedia=true;
+    }
     private CameraClipDocument.Key selectedKey;
     private CameraClipDocument.Clip keyOwner;
     private String keyField;
@@ -319,6 +357,12 @@ public final class CameraWorkspace
     public boolean mouseScrolled(int mouseX,int mouseY,int direction)
     {
         if(editField!=null||palette)return true;
+        if(choosingMedia)
+        {
+            mediaScroll=Math.max(0,Math.min(
+                    Math.max(0,mediaFiles.size()-12),mediaScroll+(direction>0?-1:1)));
+            return true;
+        }
         if(choosingTarget)
         {
             actorTargetScroll=Math.max(0,Math.min(
@@ -394,6 +438,7 @@ public final class CameraWorkspace
         groupSelection.clear();
         layerScroll=0;inspectorScroll=0;editField=null;
         choosingTarget=false;actorTargets.clear();
+        choosingMedia=false;mediaFiles.clear();
         soundtrack.clear();
         CameraVideoFrames.clear();
         CameraImageCache.clear();
@@ -756,6 +801,35 @@ public final class CameraWorkspace
                         mx+13,sy+5,0xFFE3EDF3);
             }
         }
+        if(choosingMedia)
+        {
+            int menuWidth=Math.min(340,Math.max(185,right-timelineX-20));
+            int menuHeight=49+Math.min(12,mediaFiles.size())*20;
+            int mx=Math.max(timelineX+5,(right+timelineX-menuWidth)/2);
+            int my=Math.max(30,(top-menuHeight)/2);
+            GuiScreen.drawRect(mx-3,my-3,mx+menuWidth+3,
+                    my+menuHeight+3,0xFF080C10);
+            GuiScreen.drawRect(mx,my,mx+menuWidth,my+menuHeight,0xFF212A32);
+            GuiScreen.drawRect(mx,my,mx+menuWidth,my+2,
+                    EditorThemeManager.get().getAccent());
+            mc.fontRenderer.drawString("MEDIA / "+mediaProperty,
+                    mx+10,my+9,0xFF9DE6FF);
+            mc.fontRenderer.drawString(
+                    "config/bbs-editor/media (ESC to close)",
+                    mx+10,my+24,0xFF899BA9);
+            if(mediaFiles.isEmpty())
+                mc.fontRenderer.drawString("No matching files. Enter a path manually.",
+                        mx+10,my+42,0xFFC0C4C7);
+            for(int i=0;i<12&&mediaScroll+i<mediaFiles.size();i++)
+            {
+                int yy=my+44+i*20;
+                GuiScreen.drawRect(mx+6,yy,mx+menuWidth-6,yy+18,
+                        i%2==0?0xFF2A3945:0xFF23313C);
+                mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
+                        mediaFiles.get(mediaScroll+i).getName(),menuWidth-24),
+                        mx+12,yy+5,0xFFE0EBEF);
+            }
+        }
         if(editField!=null)
         {
             if(namingPreset)
@@ -794,6 +868,29 @@ public final class CameraWorkspace
     }
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        if(choosingMedia)
+        {
+            int menuWidth=Math.min(340,Math.max(185,right-timelineX-20));
+            int menuHeight=49+Math.min(12,mediaFiles.size())*20;
+            int mx=Math.max(timelineX+5,(right+timelineX-menuWidth)/2);
+            int my=Math.max(30,(top-menuHeight)/2);
+            if(button==0&&mouseX>=mx+6&&mouseX<mx+menuWidth-6
+                    &&mouseY>=my+44&&mouseY<my+44+
+                            Math.min(12,mediaFiles.size())*20)
+            {
+                int index=mediaScroll+(mouseY-my-44)/20;
+                if(index>=0&&index<mediaFiles.size()
+                        &&document.selected()!=null&&mediaProperty!=null)
+                {
+                    File root=new File("config/bbs-editor/media");
+                    String file=root.toURI().relativize(
+                            mediaFiles.get(index).toURI()).getPath();
+                    document.selected().settings.put(mediaProperty,file);
+                    saveScene();
+                }
+            }
+            choosingMedia=false;return true;
+        }
         if(choosingTarget)
         {
             int menuWidth=250,menuHeight=38+Math.min(12,actorTargets.size())*20;
@@ -940,6 +1037,11 @@ public final class CameraWorkspace
                     {clip.keys.remove(selectedKey);selectedKey=null;keyOwner=null;
                     saveScene();}
                 }
+                return true;
+            }
+            if(hit.key.startsWith("@media:browse:"))
+            {
+                openMediaPicker(hit.key.substring("@media:browse:".length()));
                 return true;
             }
             if("@media:duration".equals(hit.key))
