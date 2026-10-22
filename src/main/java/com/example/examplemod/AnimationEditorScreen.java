@@ -1816,7 +1816,16 @@ public class AnimationEditorScreen extends GuiScreen
         }
         else
         {
-            this.cameraWorkspace.pauseAudio();
+            // Film audio follows the same frame when CAM view is enabled
+            // outside CAMERA; otherwise normal actor editing remains silent.
+            if(this.cameraWorkspace.crossModeShot())
+            {
+                this.cameraWorkspace.syncScene(this.sceneState);
+                this.cameraWorkspace.syncAudio(
+                        this.playbackController.getCurrentFrame(),
+                        this.playbackController.isPlaying());
+            }
+            else this.cameraWorkspace.pauseAudio();
             drawTimeline();
             drawWavWaveform();
             drawInterpolationPanel(mouseX, mouseY);
