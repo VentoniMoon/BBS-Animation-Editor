@@ -3424,6 +3424,13 @@ public class AnimationEditorScreen extends GuiScreen
                     .getTimelineHeight();
         }
 
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA)
+        {
+            // CAMERA shares Character's compact, fixed-height film timeline.
+            return this.characterTimelineEditorController.getTimelineHeight();
+        }
+
         return this.timelineController
                 .getTimelineHeight();
     }
