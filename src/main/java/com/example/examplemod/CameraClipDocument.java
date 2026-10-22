@@ -54,6 +54,10 @@ public final class CameraClipDocument
         public int tick;
         public double x,y,z;
         public float yaw,pitch,roll,fov;
+        /** Channel mask: x=1,y=2,z=4,yaw=8,pitch=16,roll=32,fov=64. */
+        public int mask=127;
+        /** Interpolation following this key; empty delegates to clip setting. */
+        public String interpolation="";
         public Key(int tick, PreviewCameraPose p)
         {
             this.tick=tick; this.x=p.x; this.y=p.y; this.z=p.z;
@@ -62,6 +66,8 @@ public final class CameraClipDocument
         public Key copy()
         {
             Key c=new Key(tick,new PreviewCameraPose(x,y,z,yaw,pitch,roll,fov,0.05F,512F));
+            c.mask=this.mask;
+            c.interpolation=this.interpolation;
             return c;
         }
     }
@@ -124,6 +130,8 @@ public final class CameraClipDocument
             k.addProperty("x",key.x);k.addProperty("y",key.y);k.addProperty("z",key.z);
             k.addProperty("yaw",key.yaw);k.addProperty("pitch",key.pitch);
             k.addProperty("roll",key.roll);k.addProperty("fov",key.fov);
+            k.addProperty("mask",key.mask);
+            k.addProperty("interpolation",key.interpolation);
             keys.add(k);
         }
         j.add("keys",keys);
@@ -148,6 +156,9 @@ public final class CameraClipDocument
                     k.get("pitch").getAsFloat(),k.get("roll").getAsFloat(),
                     k.get("fov").getAsFloat(),0.05F,512F);
             Key key=new Key(k.get("tick").getAsInt(),pose);
+            if(k.has("mask"))key.mask=k.get("mask").getAsInt()&127;
+            if(k.has("interpolation"))
+                key.interpolation=k.get("interpolation").getAsString();
             if(key.tick>=0&&key.tick<clip.duration)clip.keys.add(key);
         }
         Collections.sort(clip.keys,new Comparator<Key>(){
