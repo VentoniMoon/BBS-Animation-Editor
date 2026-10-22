@@ -53,22 +53,114 @@ public final class CameraWorkspace
     }
     public boolean keyTyped(char typedChar,int keyCode)
     {
-        if(editField==null)return false;
+        if(editField==null)
+        {
+            if(keyCode==1&&(palette||contextClip!=null))
+            {
+                palette=false;contextClip=null;return true;
+            }
+            return false;
+        }
         if(keyCode==1){editField=null;return true;}
         if(keyCode==28||keyCode==156)
         {
             String value=editField.getText();
             if(namingPreset)saveSelectedPreset(value);
+            else if(keyField!=null&&selectedKey!=null)
+            {
+                applyKeyField(keyField,value);
+            }
             else if(editClip!=null&&editKey!=null)
             {
-                editClip.settings.put(editKey,value);
-                saveScene();
+                if(!applyClipField(editClip,editKey,value))
+                    lastError="Invalid clip field: "+editKey;
+                else saveScene();
             }
-            editField=null;return true;
+            editField=null;editKey=null;keyField=null;return true;
         }
         editField.textboxKeyTyped(typedChar,keyCode);
         return true;
     }
+    private static Double finiteDouble(String raw)
+    {
+        try
+        {
+            double d=Double.parseDouble(raw.trim());
+            return Double.isFinite(d)?d:null;
+        }
+        catch(RuntimeException invalid){return null;}
+    }
+    private boolean applyClipField(CameraClipDocument.Clip clip,
+            String key,String value)
+    {
+        if(clip==null)return false;
+        if("@enabled".equals(key))
+        {
+            clip.enabled=Boolean.parseBoolean(value);return true;
+        }
+        if("@title".equals(key))
+        {
+            if(value==null||value.trim().isEmpty())return false;
+            clip.title=value.trim();return true;
+        }
+        if("@start".equals(key)||"@duration".equals(key)||"@layer".equals(key))
+        {
+            Double n=finiteDouble(value);
+            if(n==null||n<0D||n>Integer.MAX_VALUE)return false;
+            int number=(int)Math.round(n);
+            int tick=clip.tick,duration=clip.duration,layer=clip.layer;
+            if("@start".equals(key))clip.tick=number;
+            if("@duration".equals(key))clip.duration=Math.max(1,number);
+            if("@layer".equals(key))clip.layer=number;
+            if(document.overlaps(clip,clip))
+            {
+                clip.tick=tick;clip.duration=duration;clip.layer=layer;
+                return false;
+            }
+            return true;
+        }
+        if(clip.settings.containsKey(key))
+        {
+            clip.settings.put(key,value);return true;
+        }
+        return false;
+    }
+    private boolean applyKeyField(String name,String value)
+    {
+        if(selectedKey==null||keyOwner==null)return false;
+        Double parsed=finiteDouble(value);
+        if(parsed==null)return false;
+        double n=parsed;
+        if("tick".equals(name))
+        {
+            int at=(int)Math.round(n);
+            if(at<0||at>=keyOwner.duration)return false;
+            for(CameraClipDocument.Key other:keyOwner.keys)
+                if(other!=selectedKey&&other.tick==at)return false;
+            selectedKey.tick=at;
+        }
+        else if("x".equals(name))selectedKey.x=n;
+        else if("y".equals(name))selectedKey.y=n;
+        else if("z".equals(name))selectedKey.z=n;
+        else if("yaw".equals(name))selectedKey.yaw=(float)n;
+        else if("pitch".equals(name))selectedKey.pitch=(float)n;
+        else if("roll".equals(name))selectedKey.roll=(float)n;
+        else if("fov".equals(name))
+        {
+            if(n<1D||n>170D)return false;
+            selectedKey.fov=(float)n;
+        }
+        else return false;
+        java.util.Collections.sort(keyOwner.keys,
+            new java.util.Comparator<CameraClipDocument.Key>()
+            {
+                @Override public int compare(CameraClipDocument.Key a,
+                        CameraClipDocument.Key b)
+                {return Integer.compare(a.tick,b.tick);}
+            });
+        saveScene();return true;
+    }
+
     private int presetScroll;
     private int inspectorScroll;
     private CameraClipDocument.Key selectedKey;
