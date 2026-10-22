@@ -57,11 +57,12 @@ public final class CameraWorkspace
         namingPreset=preset;
         editClip=clip;
         editKey=key;
-        int x=preset?Math.max(12,screen.width/2-100):right+8;
+        keyField=null;
+        int x=preset?Math.max(12,screen.width/2-100):right+115;
         int y=preset?screen.height/2:Math.min(top-35,158+16*(clip==null?0:
                 new ArrayList<String>(clip.settings.keySet()).indexOf(key)));
         editField=new GuiTextField(42,Minecraft.getMinecraft().fontRenderer,x,y,
-                preset?200:165,18);
+                preset?200:Math.max(80,screen.width-right-124),18);
         editField.setMaxStringLength(255);
         editField.setText(initial==null?"":initial);
         editField.setFocused(true);
@@ -134,8 +135,36 @@ public final class CameraWorkspace
             }
             return true;
         }
+        // The BBS-style inspector exposes X/Y/Z as independently editable
+        // controls, while the persisted BBS parameter is still a CSV tuple.
+        int componentAt=key.lastIndexOf('#');
+        if(componentAt>0)
+        {
+            String parameter=key.substring(0,componentAt);
+            if(!clip.settings.containsKey(parameter))return false;
+            int index;
+            try{index=Integer.parseInt(key.substring(componentAt+1));}
+            catch(NumberFormatException invalid){return false;}
+            String[] parts=clip.settings.get(parameter).split(",",-1);
+            Double parsed=finiteDouble(value);
+            if(index<0||index>=parts.length||parsed==null)return false;
+            parts[index]=parsed.toString();
+            StringBuilder rebuilt=new StringBuilder();
+            for(int i=0;i<parts.length;i++)
+            {
+                if(i>0)rebuilt.append(',');
+                rebuilt.append(parts[i].trim());
+            }
+            clip.settings.put(parameter,rebuilt.toString());
+            return true;
+        }
         if(clip.settings.containsKey(key))
         {
+            if(!value.equalsIgnoreCase("true")
+                    &&!value.equalsIgnoreCase("false")
+                    &&("true".equalsIgnoreCase(clip.settings.get(key))
+                        ||"false".equalsIgnoreCase(clip.settings.get(key))))
+                return false;
             clip.settings.put(key,value);return true;
         }
         return false;
@@ -190,6 +219,7 @@ public final class CameraWorkspace
 
     private int presetScroll;
     private int inspectorScroll;
+    private final CameraClipInspector inspector=new CameraClipInspector();
     private CameraClipDocument.Key selectedKey;
     private CameraClipDocument.Clip keyOwner;
     private String keyField;
@@ -233,11 +263,8 @@ public final class CameraWorkspace
         if(editField!=null||palette)return true;
         if(mouseY>=25&&mouseY<top&&mouseX>=right)
         {
-            int count=document.selected()==null?0:
-                    document.selected().settings.size();
-            int visible=Math.max(1,(top-159)/16);
-            inspectorScroll=Math.max(0,Math.min(Math.max(0,count-visible),
-                    inspectorScroll-direction));
+            inspectorScroll=Math.max(0,Math.min(inspector.maxScroll(),
+                    inspectorScroll+(direction>0?-44:44)));
             return true;
         }
         if(mouseX>=timelineX&&mouseY>=top&&mouseY<bottom)
@@ -490,7 +517,7 @@ public final class CameraWorkspace
         Minecraft mc=Minecraft.getMinecraft();
         int width=screen.width,height=screen.height;
         top=height-screen.getTimelineHeight();bottom=height;
-        right=width-185;
+        right=Math.max(420,width-300);
         timelineW=Math.max(1,width-timelineX-8);
         rowBase=top+35;
         cameraTimeline.setLength(Math.max(1,length));
@@ -513,42 +540,10 @@ public final class CameraWorkspace
             mc.fontRenderer.drawString(presetNames.get(presetScroll+i),
                     12,95+i*17,0xFFD1DAE0);
         if(lastError!=null)mc.fontRenderer.drawString(lastError,10,top-12,0xFFFF8888);
-        mc.fontRenderer.drawString("CLIP PROPERTIES",right+8,34,0xFF64CAFF);
         CameraClipDocument.Clip selected=document.selected();
-        if(selected!=null)
-        {
-            mc.fontRenderer.drawString(selected.kind.label,right+8,53,0xFFE7E7E7);
-            mc.fontRenderer.drawString("Start: "+selected.tick,right+8,73,0xFFC0C5C9);
-            mc.fontRenderer.drawString("Duration: "+selected.duration,right+8,89,0xFFC0C5C9);
-            mc.fontRenderer.drawString("Layer: "+selected.layer,right+8,105,0xFFC0C5C9);
-            mc.fontRenderer.drawString("Enabled: "+selected.enabled,right+8,121,0xFFC0C5C9);
-            mc.fontRenderer.drawString("Keys: "+selected.keys.size(),right+8,137,0xFFC0C5C9);
-            int index=0;
-            for(java.util.Map.Entry<String,String> property:selected.settings.entrySet())
-            {
-                if(index++<inspectorScroll)continue;
-                int yy=159+16*(index-inspectorScroll-1);
-                if(yy+10>=top-(selectedKey!=null&&keyOwner==selected?180:10))
-                    break;
-                String value=property.getValue();
-                String line=property.getKey()+": "+value;
-                mc.fontRenderer.drawString(
-                        mc.fontRenderer.trimStringToWidth(line,169),
-                        right+8,yy,0xFF91A0A8);
-            }
-            if(selectedKey!=null&&keyOwner==selected)
-            {
-                int keyTop=top-176;
-                GuiScreen.drawRect(right+4,keyTop-6,width-3,keyTop-5,0xFF6BCBFF);
-                mc.fontRenderer.drawString("KEYFRAME PROPERTIES",
-                        right+8,keyTop-4,0xFF6BCBFF);
-                for(int i=0;i<KEY_FIELDS.length;i++)
-                    mc.fontRenderer.drawString(
-                        KEY_FIELDS[i]+": "+keyValue(selectedKey,KEY_FIELDS[i]),
-                        right+8,keyTop+13+i*15,0xFFE7DCC9);
-            }
-        }
-        else mc.fontRenderer.drawString("Select a clip",right+8,54,0xFF8A959E);
+        inspector.draw(screen,selected,selectedKey,
+                selectedKey!=null&&keyOwner==selected,
+                inspectorScroll,right,top);
         // Character-style ruler, top-down track list and accent-colored grid.
         int accent=EditorThemeManager.get().getAccent();
         GuiScreen.drawRect(0,top,width,bottom,0xFF0B1117);
@@ -749,55 +744,39 @@ public final class CameraWorkspace
             // Click outside the context menu closes it; the same click is
             // otherwise handled normally by the underlying editor.
         }
-        if(button==0&&mouseX>=right+8&&mouseX<screen.width
-                &&mouseY>=53&&mouseY<139)
+        if(button==0&&mouseX>=right&&mouseX<screen.width
+                &&mouseY>=25&&mouseY<top)
         {
+            CameraClipInspector.Hit hit=inspector.hit(mouseX,mouseY);
             CameraClipDocument.Clip clip=document.selected();
-            if(clip==null)return true;
-            if(mouseY>=117&&mouseY<136)
+            if(hit==null||clip==null)return true;
+            if(hit.keyframe)
+            {
+                if(selectedKey==null||keyOwner!=clip)return true;
+                beginKeyEdit(screen,hit.key,selectedKey,hit.y);
+            }
+            else if("@enabled".equals(hit.key))
             {
                 clip.enabled=!clip.enabled;saveScene();return true;
             }
-            String key=mouseY>=101?"@layer":mouseY>=85?"@duration":
-                    mouseY>=69?"@start":"@title";
-            String value="@layer".equals(key)?Integer.toString(clip.layer):
-                    "@duration".equals(key)?Integer.toString(clip.duration):
-                    "@start".equals(key)?Integer.toString(clip.tick):clip.title;
-            startTextField(screen,value,false,key,clip);
-            editField.y=mouseY>=101?105:
-                    mouseY>=85?89:mouseY>=69?73:54;
+            else if(hit.toggle&&clip.settings.containsKey(hit.key))
+            {
+                clip.settings.put(hit.key,Boolean.toString(
+                        !Boolean.parseBoolean(clip.settings.get(hit.key))));
+                saveScene();return true;
+            }
+            else
+            {
+                String field=hit.component<0?hit.key:hit.key+"#"+hit.component;
+                startTextField(screen,hit.value,false,field,clip);
+            }
+            if(editField!=null)
+            {
+                editField.x=hit.x;
+                editField.y=hit.y;
+                editField.width=Math.max(36,hit.width);
+            }
             return true;
-        }
-        if(button==0&&mouseX>=right+8&&mouseX<screen.width
-                &&selectedKey!=null&&keyOwner==document.selected()
-                &&mouseY>=top-163&&mouseY<top-13)
-        {
-            int index=(mouseY-(top-163))/15;
-            if(index>=0&&index<KEY_FIELDS.length)
-            {
-                beginKeyEdit(screen,KEY_FIELDS[index],selectedKey,
-                        top-163+index*15);
-                return true;
-            }
-        }
-        if(button==0&&mouseX>=right+8&&mouseX<screen.width
-                &&mouseY>=159&&mouseY<top-
-                    (selectedKey!=null&&keyOwner==document.selected()?180:10))
-        {
-            CameraClipDocument.Clip chosen=document.selected();
-            if(chosen!=null)
-            {
-                int index=(mouseY-159)/16+inspectorScroll;
-                if(index>=0&&index<chosen.settings.size())
-                {
-                    String key=new ArrayList<String>(chosen.settings.keySet()).get(index);
-                    startTextField(screen,chosen.settings.get(key),false,key,chosen);
-                    // Editor can scroll inspector; keep the textbox attached
-                    // to the clicked visible row, not the absolute key index.
-                    editField.y=159+((mouseY-159)/16)*16;
-                    return true;
-                }
-            }
         }
         int toggleX=right-136;
         if(button==0&&mouseX>=toggleX&&mouseX<right-8
