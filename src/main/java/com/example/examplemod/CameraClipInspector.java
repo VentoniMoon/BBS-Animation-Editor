@@ -1,8 +1,11 @@
 package com.example.examplemod;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import org.lwjgl.opengl.GL11;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 
@@ -16,23 +19,33 @@ public final class CameraClipInspector
     public static final class Hit
     {
         public final String key;
-        public final int component, x, y, width;
+        public final int component, x, y, width, height;
         public final String value;
         public final boolean keyframe, toggle;
         Hit(String key,int component,int x,int y,int width,String value,
                 boolean keyframe,boolean toggle)
         {
+            this(key,component,x,y,width,19,value,keyframe,toggle);
+        }
+        Hit(String key,int component,int x,int y,int width,int height,
+                String value,boolean keyframe,boolean toggle)
+        {
             this.key=key;this.component=component;this.x=x;this.y=y;
-            this.width=width;this.value=value;
+            this.width=width;this.height=height;this.value=value;
             this.keyframe=keyframe;this.toggle=toggle;
         }
         public boolean contains(int mx,int my)
-        {return mx>=x&&mx<x+width&&my>=y&&my<y+19;}
+        {return mx>=x&&mx<x+width&&my>=y&&my<y+height;}
     }
 
     private final List<Hit> hits=new ArrayList<Hit>();
     private Minecraft mc;
     private int right,width,bottom,scroll,y,contentHeight,accent;
+    private int physicalBottom,physicalWidth,clampedScroll;
+    private float uiScale=0.8F;
+    private boolean measuring;
+    private final Set<String> openedSections=new HashSet<String>();
+    private final Set<String> closedSections=new HashSet<String>();
     private String openInterpolation="";
     private int optionScroll;
     private CameraClipDocument.Clip selectedClip;
@@ -58,6 +71,25 @@ public final class CameraClipInspector
                 optionScroll+(direction>0?-1:1)));
     }
     public int maxScroll(){return Math.max(0,contentHeight-Math.max(1,bottom-82));}
+    public int clampedScroll(){return clampedScroll;}
+    public float scale(){return uiScale;}
+    /** Fold groups keep rarely used controls available without a giant wall. */
+    public boolean toggleSection(String id)
+    {
+        if(id.startsWith("open:"))
+        {
+            String name=id.substring(5);
+            if(!openedSections.add(name))openedSections.remove(name);
+            return true;
+        }
+        if(id.startsWith("close:"))
+        {
+            String name=id.substring(6);
+            if(!closedSections.add(name))closedSections.remove(name);
+            return true;
+        }
+        return false;
+    }
     private void rect(int x1,int y1,int x2,int y2,int c)
     {GuiScreen.drawRect(x1,y1,x2,y2,c);}
     private void text(String name,int x,int yy,int color,int maxWidth)
@@ -66,17 +98,36 @@ public final class CameraClipInspector
                 name==null?"":name,Math.max(1,maxWidth)),x,yy,color);
     }
     private boolean visible(int pos,int h)
-    {return pos>=82&&pos+h<=bottom-8;}
+    {return pos>=82&&pos+h<=bottom-5;}
     private void section(String title)
     {
         int at=y-scroll;
-        if(visible(at,19))
+        if(!measuring&&visible(at,16))
         {
-            rect(right+5,at,width-6,at+19,0xFF2B2D30);
-            rect(right+5,at,right+8,at+19,accent);
-            text(title,right+13,at+5,0xFFE2E5E6,width-right-24);
+            rect(right+5,at,width-6,at+16,0xFF2B2D30);
+            rect(right+5,at,right+8,at+16,accent);
+            text(title,right+13,at+4,0xFFE2E5E6,width-right-24);
         }
-        y+=24;
+        y+=18;
+    }
+    /** Fold advanced sections by default; clicking the bar expands them. */
+    private boolean foldSection(String title,boolean defaultClosed)
+    {
+        String id=selectedClip.kind.name()+":"+title;
+        boolean expanded=defaultClosed?openedSections.contains(id):
+                !closedSections.contains(id);
+        int at=y-scroll;
+        if(!measuring&&visible(at,16))
+        {
+            rect(right+5,at,width-6,at+16,0xFF2B2D30);
+            rect(right+5,at,right+8,at+16,accent);
+            text(title,right+13,at+4,0xFFE2E5E6,width-right-43);
+            text(expanded?"v":">",width-22,at+3,0xFF6AC9F3,12);
+            hits.add(new Hit("@fold:"+(defaultClosed?"open:":"close:")+id,
+                    -1,right+5,at,width-right-11,16,"",false,false));
+        }
+        y+=18;
+        return expanded;
     }
     private static String nice(String s)
     {
@@ -112,24 +163,24 @@ public final class CameraClipInspector
     private void field(String key,String title,String value,boolean onKey)
     {
         int at=y-scroll;
-        if(visible(at,19))
+        if(!measuring&&visible(at,16))
         {
-            int x=right+Math.min(77,(width-right)/2), w=width-x-10;
-            text(title,right+9,at+5,0xFFADBBC1,x-right-12);
-            rect(x,at,x+w,at+19,0xFF10151A);
-            rect(x,at+18,x+w,at+19,0xFF384148);
+            int x=right+Math.min(91,(width-right)/2), w=width-x-10;
+            text(title,right+9,at+4,0xFFADBBC1,x-right-12);
+            rect(x,at,x+w,at+16,0xFF10151A);
+            rect(x,at+15,x+w,at+16,0xFF384148);
             boolean toggle="true".equalsIgnoreCase(value)||
                     "false".equalsIgnoreCase(value);
             if(toggle)
             {
                 boolean checked=Boolean.parseBoolean(value);
-                text(checked?"On":"Off",x+5,at+5,0xFFD5E3E9,w-27);
-                rect(x+w-17,at+3,x+w-5,at+15,checked?accent:0xFF58626A);
+                text(checked?"On":"Off",x+5,at+4,0xFFD5E3E9,w-27);
+                rect(x+w-17,at+2,x+w-5,at+14,checked?accent:0xFF58626A);
             }
-            else text(compact(value),x+5,at+5,0xFFE6F0F3,w-10);
-            hits.add(new Hit(key,-1,x,at,w,value,onKey,toggle));
+            else text(compact(value),x+5,at+4,0xFFE6F0F3,w-10);
+            hits.add(new Hit(key,-1,x,at,w,16,value,onKey,toggle));
         }
-        y+=23;
+        y+=18;
     }
     private void setting(String key){setting(key,nice(key));}
     private void setting(String key,String title)
@@ -161,16 +212,16 @@ public final class CameraClipInspector
         for(int i=0;i<Math.min(axisLabels.length,parts.length);i++)
         {
             int pos=y-scroll;
-            if(visible(pos,19))
+            if(!measuring&&visible(pos,16))
             {
                 int x=right+48,w=width-x-10;
-                text(axisLabels[i],right+13,pos+5,0xFF9FBBCB,32);
-                rect(x,pos,x+w,pos+19,0xFF10151A);
-                rect(x,pos+18,x+w,pos+19,0xFF384148);
-                text(compact(parts[i].trim()),x+5,pos+5,0xFFE6F0F3,w-10);
-                hits.add(new Hit(key,i,x,pos,w,parts[i].trim(),false,false));
+                text(axisLabels[i],right+13,pos+4,0xFF9FBBCB,32);
+                rect(x,pos,x+w,pos+16,0xFF10151A);
+                rect(x,pos+15,x+w,pos+16,0xFF384148);
+                text(compact(parts[i].trim()),x+5,pos+4,0xFFE6F0F3,w-10);
+                hits.add(new Hit(key,i,x,pos,w,16,parts[i].trim(),false,false));
             }
-            y+=23;
+            y+=18;
         }
     }
     private void channels(int first,int last)
@@ -179,35 +230,36 @@ public final class CameraClipInspector
         if(raw==null)return;
         int mask;
         try{mask=Integer.parseInt(raw);}catch(NumberFormatException e){return;}
-        section("ACTIVE CHANNELS");
+        if(!foldSection("ACTIVE CHANNELS",true))return;
         String[] names={"X","Y","Z","Yaw","Pitch","Roll","FOV"};
         for(int i=first;i<=last;i++)
         {
             int pos=y-scroll;
-            if(visible(pos,19))
+            if(!measuring&&visible(pos,16))
             {
                 boolean enabled=(mask&(1<<i))!=0;
-                rect(right+12,pos,width-11,pos+19,0xFF10151A);
-                text(names[i],right+19,pos+5,0xFFBFCDD5,width-right-58);
-                rect(width-30,pos+4,width-17,pos+16,
+                rect(right+12,pos,width-11,pos+16,0xFF10151A);
+                text(names[i],right+19,pos+4,0xFFBFCDD5,width-right-58);
+                rect(width-30,pos+2,width-17,pos+14,
                         enabled?accent:0xFF555E66);
                 hits.add(new Hit("active",i,right+12,pos,width-right-23,
-                        raw,false,true));
+                        16,raw,false,true));
             }
-            y+=22;
+            y+=17;
         }
     }
     private void button(String text,String action)
     {
         int at=y-scroll;
-        if(visible(at,19))
+        if(!measuring&&visible(at,16))
         {
-            rect(right+10,at,width-11,at+19,0xFF30383F);
-            rect(right+10,at+18,width-11,at+19,accent);
-            text(text,right+16,at+5,0xFFE5F4FA,width-right-33);
-            hits.add(new Hit(action,-1,right+10,at,width-right-21,"",false,false));
+            rect(right+10,at,width-11,at+16,0xFF30383F);
+            rect(right+10,at+15,width-11,at+16,accent);
+            text(text,right+16,at+4,0xFFE5F4FA,width-right-33);
+            hits.add(new Hit(action,-1,right+10,at,width-right-21,
+                    16,"",false,false));
         }
-        y+=23;
+        y+=18;
     }
     private void keyEditor(CameraClipDocument.Key key,boolean point)
     {
