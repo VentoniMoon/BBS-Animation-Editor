@@ -15,6 +15,10 @@ public class EditorSceneState
 
     private final BlockbusterSceneManager sceneManager;
     private final SceneAnimationData animationData;
+    /** Scene-wide CAMERA clips; never tied to a selected actor. */
+    private final CameraClipTrack cameraClips=new CameraClipTrack();
+
+    public CameraClipTrack getCameraClips(){return cameraClips;}
 
     /*
      * Единая система сохранения редактора.
@@ -361,6 +365,7 @@ public class EditorSceneState
          * от одной сцены к другой.
          */
         this.animationData.clear();
+        this.cameraClips.clear();
 
 
         /*
