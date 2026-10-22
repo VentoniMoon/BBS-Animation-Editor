@@ -115,12 +115,7 @@ public final class CameraClipChannels
     }
     private static double easing(double t,String interpolation)
     {
-        if("step".equals(interpolation))return t>=1D?1D:0D;
-        if("smooth".equals(interpolation)||"cubic".equals(interpolation)
-                ||"smoothstep".equals(interpolation))return t*t*(3D-2D*t);
-        if("easein".equals(interpolation))return t*t;
-        if("easeout".equals(interpolation))return 1D-(1D-t)*(1D-t);
-        return t;
+        return CameraInterpolation.sample(t,interpolation);
     }
 
     private CameraClipChannels(){}
