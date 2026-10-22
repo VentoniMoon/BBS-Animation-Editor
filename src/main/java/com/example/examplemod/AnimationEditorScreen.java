@@ -74,6 +74,21 @@ public class AnimationEditorScreen extends GuiScreen
         return this.sceneViewport.getCamera().sample();
     }
 
+    /**
+     * Called at RenderTick START, before the native Minecraft world draw.
+     * SHOT camera only takes ownership of the rendered pose, not the
+     * editor's FREE/ORBIT position. Switching back restores free navigation.
+     */
+    public PreviewCameraPose getCameraWorkspaceNativePose()
+    {
+        PreviewCameraPose free=this.sceneViewport.getCamera().sample();
+        if(this.editorModeController.getMode()!=EditorModeController.EditorMode.CAMERA)
+            return free;
+        this.cameraWorkspace.syncScene(this.sceneState);
+        return this.cameraWorkspace.sample(free,
+                this.playbackController.getCurrentFrame());
+    }
+
     private final EditorThemeController editorThemeController =
             new EditorThemeController();
 
