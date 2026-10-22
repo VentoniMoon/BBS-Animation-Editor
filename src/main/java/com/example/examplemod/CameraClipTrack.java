@@ -90,8 +90,23 @@ public final class CameraClipTrack
                 values.put("yaw",0D);values.put("pitch",0D);
                 values.put("roll",0D);values.put("fov",0D);break;
             case TRACKER:
-                values.put("x",0D);values.put("y",0D);values.put("z",0D);break;
-            case DOLLY: values.put("distance",4D);break;
+                values.put("x",0D);values.put("y",0D);values.put("z",0D);
+                values.put("lookAt",0D);values.put("active",127D);
+                strings.put("target","");strings.put("group","");break;
+            case IDLE: break;
+            case DOLLY:
+                values.put("distance",4D);
+                values.put("interpolation",1D);break;
+            case PATH:
+                values.put("interpolation",1D);values.put("angleInterpolation",1D);
+                values.put("loop",0D);break;
+            case KEYFRAME:
+                values.put("distance",0D);values.put("additive",0D);break;
+            case SPLINE:
+                strings.put("target","");
+                values.put("progress",1D);values.put("rotationMode",1D);break;
+            case DOLLY_ZOOM:
+                values.put("focus",4D);break;
             case DRAG: values.put("strength",0.6D);values.put("delay",4D);break;
             case MATH:
                 values.put("frequency",0.15D);values.put("amplitude",0D);break;
@@ -99,10 +114,35 @@ public final class CameraClipTrack
                 values.put("speed",1D);values.put("offset",0D);break;
             case SHAKE:
                 values.put("amplitude",0.15D);values.put("frequency",2D);
-                values.put("rotation",1.2D);break;
+                values.put("rotation",1.2D);
+                values.put("seed",0D);values.put("noiseMode",1D);break;
             case ORBIT:
-                values.put("radius",4D);values.put("degrees",360D);break;
-            case DOLLY_ZOOM:values.put("focus",4D);break;
+                values.put("radius",4D);values.put("degrees",360D);
+                values.put("height",0D);strings.put("target","");break;
+            case LOOK:
+                strings.put("target","");
+                values.put("relative",0D);break;
+            case AUDIO:
+                values.put("volume",1D);values.put("offset",0D);
+                strings.put("resource","");break;
+            case CURVE:
+                strings.put("channel","sun_rotation");break;
+            case IMAGE:
+                values.put("screenX",0.5D);values.put("screenY",0.5D);
+                values.put("scale",1D);values.put("alpha",1D);
+                values.put("smooth",1D);values.put("fullscreen",0D);
+                strings.put("resource","");break;
+            case VIDEO:
+                values.put("screenX",0.5D);values.put("screenY",0.5D);
+                values.put("scale",1D);values.put("alpha",1D);
+                values.put("smooth",1D);values.put("fullscreen",0D);
+                values.put("loop",0D);values.put("offset",0D);
+                values.put("volume",1D);
+                strings.put("resource","");break;
+            case SUBTITLE:
+                values.put("screenX",0.5D);values.put("screenY",0.9D);
+                values.put("size",1D);values.put("shadow",1D);
+                values.put("background",0D);strings.put("text","");break;
             case AUDIO:values.put("volume",1D);values.put("offset",0D);break;
             case IMAGE:case VIDEO:
                 values.put("screenX",0.5D);values.put("screenY",0.5D);
