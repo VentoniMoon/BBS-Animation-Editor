@@ -92,7 +92,27 @@ public class AnimationEditorScreen extends GuiScreen
             return free;
         this.cameraWorkspace.syncScene(this.sceneState);
         return this.cameraWorkspace.sample(free,
-                this.playbackController.getCurrentFrame());
+                this.playbackController.getCurrentFrame(),
+                new CameraClipDocument.TargetResolver()
+                {
+                    @Override
+                    public CameraClipDocument.Target resolve(String id,int frame)
+                    {
+                        if(id==null||id.isEmpty())return null;
+                        for(BlockbusterSceneActorData actor:sceneState.getActors())
+                        {
+                            if(actor==null||!id.equals(actor.getId())
+                                    ||!actor.hasRecord())continue;
+                            BlockbusterRecord record=actor.getRecord();
+                            BlockbusterRecordFrame state=record.getFrame(frame);
+                            if(state==null)return null;
+                            return new CameraClipDocument.Target(
+                                state.getX(),state.getY(),state.getZ(),
+                                state.getYaw(),state.getPitch());
+                        }
+                        return null;
+                    }
+                });
     }
 
     private final EditorThemeController editorThemeController =
