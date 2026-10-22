@@ -207,6 +207,16 @@ public final class CameraWorkspace
                     inspectorScroll-direction));
             return true;
         }
+        if(mouseX>=timelineX&&mouseY>=top+34&&mouseY<bottom)
+        {
+            int highest=5;
+            for(CameraClipDocument.Clip clip:document.clips())
+                highest=Math.max(highest,clip.layer);
+            int visible=Math.max(1,(rowBase-top-32)/rowHeight);
+            layerScroll=Math.max(0,Math.min(Math.max(0,highest-visible+1),
+                    layerScroll+direction));
+            return true;
+        }
         if(mouseX<180&&mouseY>=90&&mouseY<top)
         {
             presetScroll=Math.max(0,Math.min(
@@ -234,6 +244,10 @@ public final class CameraWorkspace
         activeSceneId=id;
         activeSceneFile=scene==null?null:sceneDocument(scene);
         document.clear();
+        selectedKey=null;keyOwner=null;contextClip=null;
+        layerScroll=0;inspectorScroll=0;editField=null;
+        CameraVideoFrames.clear();
+        CameraImageCache.clear();
         if(activeSceneFile!=null&&activeSceneFile.isFile())
         {
             try(Reader reader=new FileReader(activeSceneFile))
@@ -315,6 +329,7 @@ public final class CameraWorkspace
     private int bottom;
     private int rowHeight=23;
     private int rowBase;
+    private int layerScroll;
     private int timelineX=180;
     private int timelineW;
 
@@ -389,9 +404,11 @@ public final class CameraWorkspace
             GuiScreen.drawRect(x,top+28,x+1,bottom,0xFF334C5C);
             mc.fontRenderer.drawString(Integer.toString(n),x,top+16,0xFF9AB3C3);
         }
-        for(int layer=0;layer<6;layer++)
+        int visibleRows=Math.max(1,(rowBase-top-32)/rowHeight);
+        for(int row=0;row<visibleRows;row++)
         {
-            int y=rowBase-(layer+1)*rowHeight;
+            int layer=row+layerScroll;
+            int y=rowBase-(row+1)*rowHeight;
             if(y<top+32)break;
             GuiScreen.drawRect(0,y,width,y+rowHeight-1,layer%2==0?0xFF142534:0xFF162A3A);
             mc.fontRenderer.drawString("Layer "+layer,10,y+6,0xFFA6B9C7);
@@ -400,8 +417,8 @@ public final class CameraWorkspace
         {
             int x=timelineX+(int)((long)clip.tick*timelineW/usable);
             int x2=timelineX+(int)((long)(clip.tick+clip.duration)*timelineW/usable);
-            int y=rowBase-(clip.layer+1)*rowHeight;
-            if(y<top+32)continue;
+            int y=rowBase-(clip.layer-layerScroll+1)*rowHeight;
+            if(y<top+32||y>=bottom)continue;
             GuiScreen.drawRect(x,y+2,Math.max(x+3,x2),y+rowHeight-3,clip.kind.color);
             if(clip==selected)
             {
@@ -597,7 +614,7 @@ public final class CameraWorkspace
             screen.setCameraWorkspaceFrame(t);
             return true;
         }
-        int layer=(rowBase-mouseY)/rowHeight;
+        int layer=(rowBase-mouseY)/rowHeight+layerScroll;
         if(layer<0||mouseY>rowBase)return true;
         CameraClipDocument.Clip hit=document.hit(t,layer);
         CameraClipDocument.Key marker=null;
@@ -713,7 +730,7 @@ public final class CameraWorkspace
             if(document.overlaps(dragged,dragged))dragged.duration=old;
             return;
         }
-        int layer=Math.max(0,(rowBase-mouseY)/rowHeight);
+        int layer=Math.max(0,(rowBase-mouseY)/rowHeight+layerScroll);
         if(cloneDrag)
         {
             CameraClipDocument.Clip copy=dragged.copy();
