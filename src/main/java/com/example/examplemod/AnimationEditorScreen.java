@@ -3481,6 +3481,10 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.CAMERA
+                && this.cameraWorkspace.keyTyped(typedChar,keyCode))
+            return;
         if (this.editorInput != null)
             this.editorInput.keyTyped(typedChar,keyCode);
     }
