@@ -1520,6 +1520,9 @@ public class AnimationEditorScreen extends GuiScreen
 
     public void loadScene(int index)
     {
+        if(this.cameraWorkspace.isShotMode())
+            this.cameraWorkspace.toggleShot(this.sceneViewport);
+        this.cameraWorkspace.resetForScene();
         this.multiActorPreview.reset();
         this.previewAutoFocus.reset();
         try
