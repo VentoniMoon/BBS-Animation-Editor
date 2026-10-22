@@ -327,9 +327,15 @@ public final class CameraWorkspace
                 if(kind.family!=family)continue;
                 if(i++==row)
                 {
-                    document.add(CameraClipParameters.create(kind,pendingTick,
-                            Math.max(1,Math.min(40,length-pendingTick)),pendingLayer));
-                    palette=false;saveScene();return true;
+                    CameraClipDocument.Clip made=CameraClipParameters.create(
+                            kind,pendingTick,Math.max(1,Math.min(40,length-pendingTick)),
+                            pendingLayer);
+                    if(kind==CameraClipDocument.Kind.IDLE
+                            ||kind==CameraClipDocument.Kind.DOLLY)
+                        made.keys.add(new CameraClipDocument.Key(0,
+                                screen.getCameraWorkspacePose()));
+                    if(document.add(made))saveScene();
+                    palette=false;return true;
                 }
             }
             palette=false;return true;
@@ -341,6 +347,8 @@ public final class CameraWorkspace
                 pastePreset(presetNames.get(i),frame,0);
             return true;
         }
+        if(mouseX<180&&mouseY>=25&&mouseY<top)return true;
+        if(mouseX>=right&&mouseY>=25&&mouseY<top)return true;
         if(mouseY<top||mouseX<timelineX||mouseY>=bottom)return false;
         int t=Math.max(0,Math.min(length-1,(int)((long)(mouseX-timelineX)*Math.max(1,length)/Math.max(1,timelineW))));
         int layer=(rowBase-mouseY)/rowHeight;
