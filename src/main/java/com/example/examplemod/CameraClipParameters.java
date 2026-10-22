@@ -15,7 +15,7 @@ public final class CameraClipParameters
     static
     {
         add(CameraClipDocument.Kind.IDLE,"position","camera");
-        add(CameraClipDocument.Kind.DOLLY,"position","camera","distance","0.1","yaw","0","pitch","0","interp","linear");
+        add(CameraClipDocument.Kind.DOLLY,"position","camera","distance","0.1","yaw","0","pitch","0","interp","linear","reverse","false");
         add(CameraClipDocument.Kind.PATH,"points","[]","interpPoint","hermite","interpAngle","hermite");
         add(CameraClipDocument.Kind.KEYFRAME,"additive","false","interpolation","linear","channels","XYZ Yaw Pitch Roll FOV Distance");
         add(CameraClipDocument.Kind.TRACKER,"selector","","offset","0,0,0","angle","0,0,0","fov","70","group","","look_at","false","relative","false","active","127");
