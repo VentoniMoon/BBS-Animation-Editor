@@ -124,15 +124,23 @@ public final class CameraWorkspace
         }
         return null;
     }
+    /**
+     * Called when changing editor mode. Authoring must not silently continue
+     * after the actor/preview controls have a different meaning.
+     */
+    public void stopPreviewRecording()
+    {
+        if(!recordingPreview&&!navigationDirty)return;
+        if(navigationDirty)saveScene();
+        recordingPreview=false;navigationDirty=false;
+        lastNavigationPose=null;trackedCameraClip=null;trackedCameraKey=null;
+    }
+
     private void togglePreviewRecording(AnimationEditorScreen screen,int frame)
     {
         if(recordingPreview)
         {
-            recordingPreview=false;
-            if(navigationDirty)saveScene();
-            navigationDirty=false;
-            lastNavigationPose=null;trackedCameraClip=null;
-            trackedCameraKey=null;
+            stopPreviewRecording();
             return;
         }
         CameraClipDocument.Key key=editablePoseKey(frame,
@@ -541,6 +549,7 @@ public final class CameraWorkspace
         if(i>=0&&i<state.getSceneFiles().size())scene=state.getSceneFiles().get(i);
         String id=scene==null?"":scene.getAbsolutePath();
         if(id.equals(activeSceneId)&&activeState==state)return;
+        stopPreviewRecording();
         activeSceneId=id;
         activeState=state;
         activeSceneFile=scene==null?null:sceneDocument(scene);
