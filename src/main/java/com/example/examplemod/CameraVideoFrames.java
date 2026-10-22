@@ -105,9 +105,15 @@ public final class CameraVideoFrames
             String seconds=String.format(java.util.Locale.ROOT,"%.6f",
                     frame/20D);
             ProcessBuilder command=new ProcessBuilder(
-                    "ffmpeg","-hide_banner","-loglevel","error",
-                    "-i",file.getAbsolutePath(),"-ss",seconds,
+                    "ffmpeg","-hide_banner","-loglevel","quiet",
+                    "-nostdin","-i",file.getAbsolutePath(),"-ss",seconds,
                     "-frames:v","1","-f","image2pipe","-vcodec","png","-");
+            // FFmpeg's stderr must not fill its pipe while stdout is decoded.
+            // Java 8 supports DISCARD only in newer JDKs; redirect to the
+            // platform null device instead (Windows and CI Linux).
+            command.redirectError(new File(System.getProperty("os.name","")
+                    .toLowerCase(java.util.Locale.ROOT).contains("win")
+                    ? "NUL" : "/dev/null"));
             process=command.start();
             BufferedImage image;
             try(InputStream stream=process.getInputStream())
