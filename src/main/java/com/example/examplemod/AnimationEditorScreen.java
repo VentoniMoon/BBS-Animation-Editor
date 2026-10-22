@@ -163,6 +163,7 @@ public class AnimationEditorScreen extends GuiScreen
     private EditorSceneViewport sceneViewport;
     private final CameraWorkspace cameraWorkspace=new CameraWorkspace();
     private final CameraClipOverlays cameraClipOverlays=new CameraClipOverlays();
+    private final CameraClipAudio cameraClipAudio=new CameraClipAudio();
 
     public CameraWorkspace getCameraWorkspace(){return cameraWorkspace;}
     public CameraClipTrack getCameraClips(){return sceneState.getCameraClips();}
@@ -1525,6 +1526,7 @@ public class AnimationEditorScreen extends GuiScreen
             this.cameraWorkspace.toggleShot(this.sceneViewport);
         this.cameraWorkspace.resetForScene();
         this.cameraClipOverlays.clear();
+        this.cameraClipAudio.reset();
         this.multiActorPreview.reset();
         this.previewAutoFocus.reset();
         try
@@ -3653,6 +3655,10 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         super.updateScreen();
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            cameraClipAudio.update(sceneState.getCameraClips(),
+                    playbackController.getCurrentFrame(),playbackController.isPlaying());
+        else cameraClipAudio.reset();
 
         /*
          * Normal timeline playback follows Minecraft's 20 TPS. During a
@@ -3723,6 +3729,7 @@ public class AnimationEditorScreen extends GuiScreen
     {
         /* Never leave the detached preview camera as Minecraft's view. */
         cameraClipOverlays.clear();
+        cameraClipAudio.reset();
         if (this.sceneViewport != null)
         {
             BbsFsWorldCameraDriver.detach(this.sceneViewport);
