@@ -143,12 +143,6 @@ public final class CameraClipTrack
                 values.put("screenX",0.5D);values.put("screenY",0.9D);
                 values.put("size",1D);values.put("shadow",1D);
                 values.put("background",0D);strings.put("text","");break;
-            case AUDIO:values.put("volume",1D);values.put("offset",0D);break;
-            case IMAGE:case VIDEO:
-                values.put("screenX",0.5D);values.put("screenY",0.5D);
-                values.put("scale",1D);values.put("alpha",1D);break;
-            case SUBTITLE:
-                values.put("screenX",0.5D);values.put("screenY",0.9D);break;
             default: break;
             }
             if(type.keyed)keys.put(0,pose);
