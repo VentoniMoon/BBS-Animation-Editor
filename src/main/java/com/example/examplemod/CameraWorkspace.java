@@ -803,6 +803,7 @@ public final class CameraWorkspace
             displayedKey=selected.keys.get(0);
         inspector.draw(screen,selected,displayedKey,
                 activeKey,inspectorScroll,right,top);
+        inspectorScroll=inspector.clampedScroll();
         // Same exact dark accent-derived palette as CharacterTimeline.
         int accent=EditorThemeManager.get().getAccent();
         GuiScreen.drawRect(0,top,width,bottom,trackTheme(0.07F));
@@ -1109,6 +1110,12 @@ public final class CameraWorkspace
             CameraClipInspector.Hit hit=inspector.hit(mouseX,mouseY);
             CameraClipDocument.Clip clip=document.selected();
             if(hit==null||clip==null)return true;
+            if(hit.key.startsWith("@fold:"))
+            {
+                inspector.toggleSection(hit.key.substring("@fold:".length()));
+                inspectorScroll=0;
+                return true;
+            }
             Double raw=finiteDouble(hit.value);
             if(raw!=null&&!hit.toggle&&!hit.key.startsWith("@interp:")
                     &&!hit.key.startsWith("@key:")
