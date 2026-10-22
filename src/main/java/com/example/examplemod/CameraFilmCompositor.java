@@ -141,12 +141,33 @@ public final class CameraFilmCompositor
                 ?GL11.GL_LINEAR:GL11.GL_NEAREST;
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,filter);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,filter);
-        GL11.glBegin(GL11.GL_QUADS);
-        GL11.glTexCoord2d(0D,1D);GL11.glVertex2d(left,top);
-        GL11.glTexCoord2d(1D,1D);GL11.glVertex2d(right,top);
-        GL11.glTexCoord2d(1D,0D);GL11.glVertex2d(right,bottom);
-        GL11.glTexCoord2d(0D,0D);GL11.glVertex2d(left,bottom);
-        GL11.glEnd();
+        /*
+         * Screen-space transform around the overlay center, applied after
+         * normalized placement and before drawing texture coordinates.
+         * This is a first step toward BBS FS's ValueTransform support.
+         */
+        double scaleX=clamp(number(clip,"scaleX",1D),-100D,100D);
+        double scaleY=clamp(number(clip,"scaleY",1D),-100D,100D);
+        double rotation=number(clip,"rotation",0D);
+        if(Math.abs(scaleX)<1E-6D||Math.abs(scaleY)<1E-6D)return;
+        double centerX=(left+right)/2D;
+        double centerY=(top+bottom)/2D;
+        GL11.glPushMatrix();
+        try
+        {
+            GL11.glTranslated(centerX,centerY,0D);
+            GL11.glRotated(rotation,0D,0D,1D);
+            GL11.glScaled(scaleX,scaleY,1D);
+            GL11.glTranslated(-centerX,-centerY,0D);
+
+            GL11.glBegin(GL11.GL_QUADS);
+            GL11.glTexCoord2d(0D,1D);GL11.glVertex2d(left,top);
+            GL11.glTexCoord2d(1D,1D);GL11.glVertex2d(right,top);
+            GL11.glTexCoord2d(1D,0D);GL11.glVertex2d(right,bottom);
+            GL11.glTexCoord2d(0D,0D);GL11.glVertex2d(left,bottom);
+            GL11.glEnd();
+        }
+        finally {GL11.glPopMatrix();}
         GL11.glColor4f(1F,1F,1F,1F);
     }
     /** Subtitles are burned into the scene texture, never editor UI. */
@@ -178,6 +199,26 @@ public final class CameraFilmCompositor
             int left=x-width/2;
             int rowY=y+i*lineHeight;
             if(rowY<py||rowY+lineHeight>py+ph)continue;
+
+            int bg=color(clip.settings.get("background"));
+            int bgAlpha=(int)(((bg>>>24)&255)*opacity);
+            if(bgAlpha>0)
+            {
+                int margin=(int)Math.max(0D,
+                        Math.min(64D,number(clip,"backgroundOffset",2D)));
+                GL11.glDisable(GL11.GL_TEXTURE_2D);
+                GL11.glColor4f(((bg>>>16)&255)/255F,
+                        ((bg>>>8)&255)/255F,(bg&255)/255F,
+                        bgAlpha/255F);
+                GL11.glBegin(GL11.GL_QUADS);
+                GL11.glVertex2d(left-margin,rowY-margin);
+                GL11.glVertex2d(left+width+margin,rowY-margin);
+                GL11.glVertex2d(left+width+margin,rowY+lineHeight+margin);
+                GL11.glVertex2d(left-margin,rowY+lineHeight+margin);
+                GL11.glEnd();
+                GL11.glColor4f(1F,1F,1F,1F);
+                GL11.glEnable(GL11.GL_TEXTURE_2D);
+            }
             // FontRenderer restores Minecraft's texture binding itself;
             // the GL projection is already the film's GUI-scaled pixel plane.
             if(shadow)mc.fontRenderer.drawStringWithShadow(line,left,rowY,rgba);
