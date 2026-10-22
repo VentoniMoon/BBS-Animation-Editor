@@ -74,6 +74,35 @@ public class AnimationEditorScreen extends GuiScreen
         return this.sceneViewport.getCamera().sample();
     }
 
+    /** Start authoring a camera key from exactly its saved world-space pose. */
+    public void setCameraWorkspaceEditorPose(CameraClipDocument.Key key)
+    {
+        if(key==null||this.sceneViewport==null)return;
+        PreviewCameraPose free=this.sceneViewport.getCamera().sample();
+        this.sceneViewport.getCamera().apply(new PreviewCameraPose(
+                key.x,key.y,key.z,key.yaw,key.pitch,key.roll,key.fov,
+                free.nearPlane,free.farPlane));
+        this.sceneViewport.setCameraMode(EditorCamera.Mode.FREE);
+    }
+
+    /** Shared camera for gizmo draw and picking while viewing film from a clip. */
+    public EditorCamera getPreviewInteractionCamera()
+    {
+        if(this.sceneViewport==null)return null;
+        return this.cameraWorkspace.crossModeShot()
+                &&this.editorModeController.getMode()
+                    !=EditorModeController.EditorMode.CAMERA
+                ?this.sceneViewport.getCameraForPreviewInteractions()
+                :this.sceneViewport.getCamera();
+    }
+    public boolean isCrossModeCameraView()
+    {
+        return this.cameraWorkspace.crossModeShot()
+                &&this.editorModeController.getMode()
+                    !=EditorModeController.EditorMode.CAMERA;
+    }
+
+
     /**
      * Called at RenderTick START, before the native Minecraft world draw.
      * SHOT camera only takes ownership of the rendered pose, not the
@@ -88,8 +117,9 @@ public class AnimationEditorScreen extends GuiScreen
     public PreviewCameraPose getCameraWorkspaceNativePose()
     {
         PreviewCameraPose free=this.sceneViewport.getCamera().sample();
-        if(this.editorModeController.getMode()!=EditorModeController.EditorMode.CAMERA)
-            return free;
+        boolean inCamera=this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA;
+        if(!inCamera&&!this.cameraWorkspace.crossModeShot())return free;
         this.cameraWorkspace.syncScene(this.sceneState);
         return this.cameraWorkspace.sample(free,
                 this.playbackController.getCurrentFrame(),
@@ -112,7 +142,7 @@ public class AnimationEditorScreen extends GuiScreen
                         }
                         return null;
                     }
-                });
+                },inCamera);
     }
 
     private final EditorThemeController editorThemeController =
@@ -1786,7 +1816,16 @@ public class AnimationEditorScreen extends GuiScreen
         }
         else
         {
-            this.cameraWorkspace.pauseAudio();
+            // Film audio follows the same frame when CAM view is enabled
+            // outside CAMERA; otherwise normal actor editing remains silent.
+            if(this.cameraWorkspace.crossModeShot())
+            {
+                this.cameraWorkspace.syncScene(this.sceneState);
+                this.cameraWorkspace.syncAudio(
+                        this.playbackController.getCurrentFrame(),
+                        this.playbackController.isPlaying());
+            }
+            else this.cameraWorkspace.pauseAudio();
             drawTimeline();
             drawWavWaveform();
             drawInterpolationPanel(mouseX, mouseY);
@@ -2904,10 +2943,11 @@ public class AnimationEditorScreen extends GuiScreen
                         mc, left, top, previewWidth, previewHeight,
                         getGizmoBone(), getGizmoKeyframe(),
                         getCurrentRecordFrame(),
-                        this.sceneViewport.getCamera(), isGizmoEnabled())
+                        getPreviewInteractionCamera(), isGizmoEnabled())
         );
         if(this.editorModeController.getMode()
-                == EditorModeController.EditorMode.CAMERA)
+                == EditorModeController.EditorMode.CAMERA
+                ||this.cameraWorkspace.crossModeShot())
         {
             this.cameraWorkspace.syncScene(this.sceneState);
             CameraFilmCompositor.composite(mc,
@@ -2933,7 +2973,7 @@ public class AnimationEditorScreen extends GuiScreen
                 null,
                 null,
                 null,
-                this.sceneViewport.getCamera(),
+                getPreviewInteractionCamera(),
                 isGizmoEnabled()
         );
 
@@ -3114,11 +3154,19 @@ public class AnimationEditorScreen extends GuiScreen
                         : (orbit ? "OR" : "FR"),
                 x + 13, y + 9 + 64,
                 orbit ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
+
+        // Film preview from CAMERA is also available while editing actors.
+        drawToolbarButton(x,y+96,26,26,cameraWorkspace.crossModeShot());
+        drawCenteredString(fontRenderer,"CAM",x+13,y+9+96,
+                cameraWorkspace.crossModeShot()
+                        ?getAccentBrightColor():COLOR_TEXT_SECONDARY);
     }
 
     public boolean clickStage8PreviewButton(int mouseX, int mouseY, int button)
     {
-        if (this.sceneViewport == null || button != 0) return false;
+        if (this.sceneViewport == null || button != 0
+                ||this.editorModeController.getMode()
+                    ==EditorModeController.EditorMode.CAMERA)return false;
         int x = this.sceneViewport.getX() + this.sceneViewport.getWidth() - 36;
         int y = this.sceneViewport.getY() + 124;
         if (mouseX >= x && mouseX < x + 26)
@@ -3143,13 +3191,21 @@ public class AnimationEditorScreen extends GuiScreen
                                 : EditorCamera.Mode.ORBIT);
                 return true;
             }
-
+            if(mouseY>=y+96&&mouseY<y+122)
+            {
+                cameraWorkspace.syncScene(sceneState);
+                cameraWorkspace.toggleCrossModeShot();
+                return true;
+            }
         }
         return false;
     }
 
     private void updatePreviewAutoFocus()
     {
+        if(this.cameraWorkspace.crossModeShot()
+                &&this.editorModeController.getMode()
+                    !=EditorModeController.EditorMode.CAMERA)return;
         if (this.sceneState == null || this.sceneViewport == null)
         {
             return;
@@ -3716,11 +3772,16 @@ public class AnimationEditorScreen extends GuiScreen
     {
         if (this.sceneViewport != null)
         {
-            this.sceneViewport.updateCameraMovement(mc);
+            if(!this.cameraWorkspace.crossModeShot()
+                    ||this.editorModeController.getMode()
+                        ==EditorModeController.EditorMode.CAMERA)
+                this.sceneViewport.updateCameraMovement(mc);
             if(this.editorModeController.getMode()
                     == EditorModeController.EditorMode.CAMERA)
                 this.cameraWorkspace.captureNavigationPose(
                         this.sceneViewport.getCamera().sample());
+            else
+                this.cameraWorkspace.stopPreviewRecording();
         }
 
         super.updateScreen();

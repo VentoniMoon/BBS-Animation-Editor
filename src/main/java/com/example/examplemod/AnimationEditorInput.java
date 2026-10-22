@@ -275,7 +275,7 @@ public class AnimationEditorInput
                         this.screen.getGizmoBone(),
                         this.screen.getGizmoKeyframe(),
                         this.screen.getCurrentRecordFrame(),
-                        this.sceneViewport.getCamera(),
+                        this.screen.getPreviewInteractionCamera(),
                         this.screen.isGizmoEnabled()
                 ))
         {
@@ -741,6 +741,7 @@ public class AnimationEditorInput
          */
 
         if (this.sceneViewport != null
+                && !this.screen.isCrossModeCameraView()
                 && this.sceneViewport.mousePressed(
                 mouseX,
                 mouseY,
@@ -984,6 +985,7 @@ public class AnimationEditorInput
          */
 
         if (this.sceneViewport != null
+                && !this.screen.isCrossModeCameraView()
                 && this.sceneViewport.mouseDragged(
                 mouseX,
                 mouseY))
@@ -1189,6 +1191,7 @@ public class AnimationEditorInput
             }
 
             if (this.sceneViewport != null
+                    && !this.screen.isCrossModeCameraView()
                     && this.sceneViewport.mouseScrolled(
                     mouseX,
                     mouseY,
