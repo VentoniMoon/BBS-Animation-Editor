@@ -363,7 +363,14 @@ public final class CameraWorkspace
         if(mouseX<180&&mouseY>=25&&mouseY<top)return true;
         if(mouseX>=right&&mouseY>=25&&mouseY<top)return true;
         if(mouseY<top||mouseX<timelineX||mouseY>=bottom)return false;
-        int t=Math.max(0,Math.min(length-1,(int)((long)(mouseX-timelineX)*Math.max(1,length)/Math.max(1,timelineW))));
+        int t=Math.max(0,Math.min(Math.max(0,length-1),
+                (int)((long)(mouseX-timelineX)*Math.max(1,length)/
+                Math.max(1,timelineW))));
+        if(button==0&&mouseY<top+34)
+        {
+            screen.setCameraWorkspaceFrame(t);
+            return true;
+        }
         int layer=(rowBase-mouseY)/rowHeight;
         if(layer<0||mouseY>rowBase)return true;
         CameraClipDocument.Clip hit=document.hit(t,layer);
