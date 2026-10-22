@@ -585,46 +585,99 @@ public final class CameraClipInspector
                     lx,at,rx-lx,option,false,false));
         }
     }
+    /**
+     * Two-pass layout: measure at compact row heights and then fit the
+     * inspector to the available preview height.  Values and hit testing are
+     * transformed back to GUI coordinates; only presentation is zoomed.
+     */
     public void draw(AnimationEditorScreen screen,CameraClipDocument.Clip clip,
             CameraClipDocument.Key keyframe,boolean keySelected,
-            int scroll,int right,int timelineTop)
+            int requestedScroll,int right,int timelineTop)
     {
         this.mc=Minecraft.getMinecraft();
-        this.right=right;this.width=screen.width;this.bottom=timelineTop;
-        this.scroll=scroll;this.accent=EditorThemeManager.get().getAccent();
+        this.right=right;this.physicalWidth=screen.width;
+        this.physicalBottom=timelineTop;
+        this.accent=EditorThemeManager.get().getAccent();
         this.hits.clear();
-        rect(right,25,width,bottom,0xFF191D21);
-        rect(right,25,right+2,bottom,0xFF30383E);
+        rect(right,25,screen.width,timelineTop,0xFF191D21);
+        rect(right,25,right+2,timelineTop,0xFF30383E);
         text("CLIP PROPERTIES",right+10,34,
-                EditorThemeManager.get().getAccentBright(),width-right-18);
+                EditorThemeManager.get().getAccentBright(),screen.width-right-18);
         if(clip==null)
         {
-            text("Select a camera clip",right+9,67,0xFF8C999F,width-right-16);
-            contentHeight=0;closeInterpolation();return;
+            text("Select a camera clip",right+9,67,
+                    0xFF8C999F,screen.width-right-16);
+            contentHeight=0;clampedScroll=0;closeInterpolation();return;
         }
         if(selectedClip!=clip){closeInterpolation();optionScroll=0;}
         selectedClip=clip;
-        rect(right+7,53,width-7,76,0xFF272E34);
+        rect(right+7,53,screen.width-7,76,0xFF272E34);
         rect(right+7,53,right+10,76,clip.kind.color);
-        text(clip.title,right+15,60,0xFFE8F1F3,width-right-25);
+        text(clip.title,right+15,60,0xFFE8F1F3,screen.width-right-25);
+
+        // First pass measures layout without creating controls or graphics.
+        measuring=true;
+        width=screen.width;
+        bottom=timelineTop;
+        scroll=0;
+        layout(keyframe);
+        contentHeight=y-82+5;
+
+        // Adaptive fit, within legible bounds. Expanded long panels may
+        // scroll rather than turn into unreadably tiny text.
+        int available=Math.max(1,timelineTop-82-5);
+        uiScale=Math.min(0.88F,Math.max(0.58F,
+                available/(float)Math.max(1,contentHeight)));
+        width=right+(int)Math.ceil((screen.width-right)/uiScale);
+        bottom=82+(int)Math.floor((timelineTop-82)/uiScale);
+        scroll=Math.max(0,Math.min(requestedScroll,maxScroll()));
+        clampedScroll=scroll;
+
+        // Header stays full size, inspector fields become more compact.
+        GL11.glPushMatrix();
+        try
+        {
+            GL11.glTranslated(right,82D,0D);
+            GL11.glScaled(uiScale,uiScale,1D);
+            GL11.glTranslated(-right,-82D,0D);
+            measuring=false;
+            layout(keyframe);
+            if(maxScroll()>0)
+            {
+                int size=Math.max(12,(bottom-82)*(bottom-82)/
+                        Math.max(1,contentHeight));
+                int off=(int)((long)scroll*Math.max(0,bottom-82-size)/
+                        Math.max(1,maxScroll()));
+                rect(width-4,82+off,width-2,82+off+size,accent);
+            }
+            renderInterpolationPopup();
+        }
+        finally {GL11.glPopMatrix();}
+        // Numeric input, checkbox clicks, popup options and drag gestures
+        // must use actual screen pixels, not the virtual drawing space.
+        for(int i=0;i<hits.size();i++)
+        {
+            Hit h=hits.get(i);
+            hits.set(i,new Hit(h.key,h.component,
+                    right+Math.round((h.x-right)*uiScale),
+                    82+Math.round((h.y-82)*uiScale),
+                    Math.max(1,Math.round(h.width*uiScale)),
+                    Math.max(1,Math.round(h.height*uiScale)),
+                    h.value,h.keyframe,h.toggle));
+        }
+    }
+
+    private void layout(CameraClipDocument.Key keyframe)
+    {
         y=82;
         section("GENERAL");
-        field("@title","Title",clip.title,false);
-        field("@start","Start",Integer.toString(clip.tick),false);
-        field("@duration","Duration",Integer.toString(clip.duration),false);
-        field("@layer","Layer",Integer.toString(clip.layer),false);
-        field("@enabled","Enabled",Boolean.toString(clip.enabled),false);
+        field("@title","Title",selectedClip.title,false);
+        field("@start","Start",Integer.toString(selectedClip.tick),false);
+        field("@duration","Duration",Integer.toString(selectedClip.duration),false);
+        field("@layer","Layer",Integer.toString(selectedClip.layer),false);
+        field("@enabled","Enabled",Boolean.toString(selectedClip.enabled),false);
         clipSpecific(keyframe);
         envelope();
-        contentHeight=y-82+10;
-        if(maxScroll()>0)
-        {
-            int h=Math.max(12,(bottom-82)*(bottom-82)/
-                    Math.max(1,contentHeight));
-            int off=(int)((long)scroll*Math.max(0,bottom-82-h)/
-                    Math.max(1,maxScroll()));
-            rect(width-4,82+off,width-2,82+off+h,accent);
-        }
-        renderInterpolationPopup();
     }
+
 }
