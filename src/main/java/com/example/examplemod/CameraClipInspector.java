@@ -261,24 +261,39 @@ public final class CameraClipInspector
         }
         y+=18;
     }
+    private void keyNav()
+    {
+        int at=y-scroll;
+        if(!measuring&&visible(at,16))
+        {
+            String[] labels={"< key","key >","Delete"};
+            String[] keys={"@key:prev","@key:next","@key:remove"};
+            int bx=right+10,w=(width-right-24)/3;
+            for(int i=0;i<3;i++)
+            {
+                int x=bx+i*(w+2);
+                rect(x,at,x+w,at+16,0xFF30383F);
+                text(labels[i],x+3,at+4,0xFFC7DBE5,w-5);
+                hits.add(new Hit(keys[i],-1,x,at,w,16,"",false,false));
+            }
+        }
+        y+=18;
+    }
     private void keyEditor(CameraClipDocument.Key key,boolean point)
     {
         section(point?"PATH POINTS":"KEYFRAME CHANNELS");
-        int countAt=y-scroll;
-        if(visible(countAt,18))
-            text("Keys: "+selectedClip.keys.size(),right+12,countAt+5,
+        int at=y-scroll;
+        if(!measuring&&visible(at,13))
+            text("Keys: "+selectedClip.keys.size(),right+12,at+2,
                     0xFFB7C5CC,width-right-24);
-        y+=21;
+        y+=14;
         button("Add key at playhead","@key:add");
         if(key==null)return;
-        button("Previous key","@key:prev");
-        button("Next key","@key:next");
-        button("Delete selected key","@key:remove");
+        keyNav();
+        if(!foldSection("SELECTED KEY",true))return;
         keyField(key,"tick","Frame",Integer.toString(key.tick));
         if(!point)
-        {
             keyField(key,"mask","Channel mask",Integer.toString(key.mask));
-        }
         cameraPose(key);
         interpolation("@key","Key interpolation",
                 key.interpolation==null||key.interpolation.isEmpty()?
@@ -288,15 +303,13 @@ public final class CameraClipInspector
     {
         section(title);
         int at=y-scroll;
-        if(visible(at,18))
-            text("Keys: "+selectedClip.keys.size(),right+12,at+5,
+        if(!measuring&&visible(at,13))
+            text("Keys: "+selectedClip.keys.size(),right+12,at+2,
                     0xFFB7C5CC,width-right-24);
-        y+=21;
+        y+=14;
         button("Add key at playhead","@key:add");
         if(key==null)return;
-        button("Previous key","@key:prev");
-        button("Next key","@key:next");
-        button("Delete selected key","@key:remove");
+        keyNav();
         keyField(key,"tick","Frame",Integer.toString(key.tick));
         keyField(key,"x","Value",Double.toString(key.x));
         interpolation("@key","Interpolation",
@@ -306,17 +319,18 @@ public final class CameraClipInspector
     private void interpolation(String key,String title,String value)
     {
         int at=y-scroll;
-        if(visible(at,78))
+        if(!measuring&&visible(at,49))
         {
             text(title,right+12,at+1,0xFFC6D5DE,width-right-24);
-            int bx=right+11,by=at+15,bw=width-right-22;
-            rect(bx,by,bx+bw,by+21,0xFF242A30);
-            rect(bx,by+20,bx+bw,by+21,0xFF414D56);
-            text(CameraInterpolation.displayName(value),bx+7,by+6,
+            int bx=right+11,by=at+12,bw=width-right-22;
+            rect(bx,by,bx+bw,by+16,0xFF242A30);
+            rect(bx,by+15,bx+bw,by+16,0xFF414D56);
+            text(CameraInterpolation.displayName(value),bx+7,by+4,
                     0xFFE5EFF2,bw-25);
-            text("v",bx+bw-13,by+5,0xFF6BC9F4,12);
-            hits.add(new Hit("@interp:open:"+key,-1,bx,by,bw,value,false,false));
-            int gx=bx+1,gy=by+25,gw=bw-2,gh=35;
+            text("v",bx+bw-13,by+3,0xFF6BC9F4,12);
+            hits.add(new Hit("@interp:open:"+key,-1,bx,by,bw,16,
+                    value,false,false));
+            int gx=bx+1,gy=by+18,gw=bw-2,gh=19;
             rect(gx,gy,gx+gw,gy+gh,0xFF13191E);
             for(int i=1;i<4;i++)
             {
@@ -333,11 +347,11 @@ public final class CameraClipInspector
                 rect(gx+x,py,gx+x+1,py+1,accent);
             }
         }
-        y+=83;
+        y+=51;
     }
     private void envelope()
     {
-        section("APPEARANCE");
+        if(!foldSection("APPEARANCE",true))return;
         setting("envelope.enabled","Enabled");
         setting("envelope.mode","Mode");
         setting("envelope.fadeIn","Fade in");
@@ -349,7 +363,7 @@ public final class CameraClipInspector
     }
     private void placement()
     {
-        section("PLACEMENT");
+        if(!foldSection("PLACEMENT",true))return;
         setting("placement","Anchor");
         setting("x","X");
         setting("y","Y");
@@ -359,7 +373,7 @@ public final class CameraClipInspector
     }
     private void transform()
     {
-        section("TRANSFORM");
+        if(!foldSection("TRANSFORM",true))return;
         setting("rotation","Rotation");
         setting("scaleX","Scale X");
         setting("scaleY","Scale Y");
