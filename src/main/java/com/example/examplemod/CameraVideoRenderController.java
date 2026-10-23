@@ -26,17 +26,26 @@ import net.minecraft.client.Minecraft;
 public final class CameraVideoRenderController
 {
     public static final int INITIAL_VIDEO_FPS=20;
+    private CameraExportPlan.Sample activeSample;
 
     public static final class Options
     {
-        public final int width,height,crf;
+        public final int width,height,crf,fps;
         public final String preset;
         public final File ffmpeg,output;
 
         public Options(int width,int height,int crf,String preset,
                 File ffmpeg,File output)
         {
-            this.width=width;this.height=height;
+            this(width,height,20,crf,preset,ffmpeg,output);
+        }
+
+        public Options(int width,int height,int fps,int crf,String preset,
+                File ffmpeg,File output)
+        {
+            if(fps!=20&&fps!=30&&fps!=60)
+                throw new IllegalArgumentException("Choose 20, 30 or 60 FPS");
+            this.width=width;this.height=height;this.fps=fps;
             this.crf=crf;this.preset=preset;
             this.ffmpeg=ffmpeg;this.output=output;
         }
@@ -61,7 +70,7 @@ public final class CameraVideoRenderController
     public String status()
     {
         if(session==null)return message;
-        return "CAMERA MP4 20 FPS  "+session.getEncodedFrames()+"/"+
+        return "CAMERA MP4 "+session.getPlan().fps+" FPS  "+session.getEncodedFrames()+"/"+
                 session.getPlan().frameCount+" frames (captured "+
                 session.getCapturedFrames()+") — Cancel from Export dialog";
     }
@@ -94,6 +103,10 @@ public final class CameraVideoRenderController
     {
         return media;
     }
+
+    /** True output timestamp owned by the current Minecraft render pass. */
+    public CameraExportPlan.Sample currentSample(){return activeSample;}
+    public CameraExportPlan currentPlan(){return session==null?null:session.getPlan();}
 
     /**
      * Starts an actual MP4 render, not a PNG capture. Called by Ctrl+Shift+F8
@@ -138,7 +151,7 @@ public final class CameraVideoRenderController
         {
             int sceneTicks=editor.getSceneLength();
             CameraExportPlan plan=new CameraExportPlan(options.width,
-                    options.height,INITIAL_VIDEO_FPS,sceneTicks);
+                    options.height,options.fps,sceneTicks);
             if(!editor.isCameraMode())
                 throw new IllegalStateException("Switch to CAMERA to export");
             if(options.output==null||options.ffmpeg==null)
@@ -242,7 +255,7 @@ public final class CameraVideoRenderController
             // paused; this *same* native output timestamp will be retried.
             if(media!=null&&!media.prepare(
                     editor.getSceneState().getCameraClips().clips(),
-                    next.sceneTick))
+                    next))
             {
                 stage="Decoding VIDEO clips at timeline tick "+
                         next.sceneTick+"...";
@@ -250,7 +263,9 @@ public final class CameraVideoRenderController
             }
             stage="Rendering native film frame "+
                     (next.outputFrame+1)+"/"+bridge.totalFrames();
-            editor.setCameraWorkspaceExportFrame(next.sceneTick);
+            activeSample=next;
+            CameraExportRenderClock.set(next);
+            editor.setCameraWorkspaceExportFrame(next);
             if(!CameraNativeFrameProbe.requestVideoFrame(bridge,next))
                 throw new IllegalStateException(CameraNativeFrameProbe.status());
         }
@@ -302,6 +317,8 @@ public final class CameraVideoRenderController
         media=null;
         owner=null;
         hasSoundtrack=false;
+        activeSample=null;
+        CameraExportRenderClock.clear();
         if(completed!=null&&!success)completed.cancel();
         if(frames!=null)frames.close();
         if(editor!=null)
