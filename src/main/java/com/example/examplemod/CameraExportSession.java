@@ -148,8 +148,11 @@ public final class CameraExportSession implements AutoCloseable
      */
     public synchronized boolean submitFrame(int index,ByteBuffer pixels)
     {
-        if(canceled||failure!=null||completed)
-            throw new IllegalStateException("CAMERA export is no longer active");
+        // FFmpeg may fail on its worker thread *between* nextSample() and
+        // this GL-thread submit. Report a closed session without throwing
+        // through Minecraft's render callback; the caller can read
+        // getStatus()/getFailure() and abort safely.
+        if(canceled||failure!=null||completed)return false;
         if(index!=captured)
             throw new IllegalArgumentException(
                     "Out-of-order frame "+index+"; expected "+captured);
