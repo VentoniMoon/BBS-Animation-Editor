@@ -76,6 +76,10 @@ public class AnimationEditorScreen extends GuiScreen
     private final CameraVideoRenderController cameraVideoExport=
             new CameraVideoRenderController();
 
+    /** Modal CAMERA export settings/progress, separate from viewport logic. */
+    private final CameraExportDialog cameraExportDialog=
+            new CameraExportDialog();
+
     public CameraVideoRenderController getCameraVideoExport()
     {
         return cameraVideoExport;
@@ -1967,6 +1971,9 @@ public class AnimationEditorScreen extends GuiScreen
                     getAccentColor()
             );
         }
+        if(this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA)
+            cameraExportDialog.draw(this,mouseX,mouseY);
     }
 
     private void drawTopBar()
@@ -3232,7 +3239,7 @@ public class AnimationEditorScreen extends GuiScreen
     private int previewExtraCount()
     {
         return this.editorModeController.getMode()
-                ==EditorModeController.EditorMode.CAMERA?3:4;
+                ==EditorModeController.EditorMode.CAMERA?4:4;
     }
 
     private int previewPlaybackX(int left,int right)
@@ -3280,7 +3287,8 @@ public class AnimationEditorScreen extends GuiScreen
         boolean[] checked=cameraMode
                 ?new boolean[]{cameraWorkspace.shot(),
                         cameraWorkspace.recordingPreview(),
-                        cameraOutputPopup.isOpen()}
+                        cameraOutputPopup.isOpen(),
+                        cameraExportDialog.isOpen()}
                 :new boolean[]{multiActorPreview.isShowAllActors(),
                         previewAutoFocus.isEnabled(),
                         navigation==EditorCamera.Mode.ORBIT,
@@ -3288,7 +3296,8 @@ public class AnimationEditorScreen extends GuiScreen
         int[] icons=cameraMode
                 ?new int[]{PreviewToolbarIcons.SHOT,
                         PreviewToolbarIcons.RECORD,
-                        PreviewToolbarIcons.OUTPUT_FORMAT}
+                        PreviewToolbarIcons.OUTPUT_FORMAT,
+                        PreviewToolbarIcons.EXPORT_VIDEO}
                 :new int[]{PreviewToolbarIcons.ALL_ACTORS,
                         PreviewToolbarIcons.AUTOFOCUS,
                         PreviewToolbarIcons.NAVIGATION,
@@ -3302,7 +3311,8 @@ public class AnimationEditorScreen extends GuiScreen
                                 :"Record camera movement to selected clip key",
                         "Output format ("+
                                 sceneState.getCameraOutput().getWidth()+" x "+
-                                sceneState.getCameraOutput().getHeight()+")"}
+                                sceneState.getCameraOutput().getHeight()+")",
+                        "Export video (MP4 / FFmpeg)"}
                 :new String[]{"Show all actors","Auto-focus selected key",
                         navigation==EditorCamera.Mode.ORBIT
                                 ?"Orbit camera (switch to free)"
@@ -3361,7 +3371,12 @@ public class AnimationEditorScreen extends GuiScreen
             else if(which==1)
                 cameraWorkspace.togglePreviewRecordingFromToolbar(
                         this,this.playbackController.getCurrentFrame());
-            else cameraOutputPopup.toggle();
+            else if(which==2)cameraOutputPopup.toggle();
+            else
+            {
+                cameraOutputPopup.close();
+                cameraExportDialog.open(this);
+            }
             return true;
         }
         if(which==0)multiActorPreview.toggleShowAllActors();
@@ -3705,8 +3720,13 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws java.io.IOException
     {
-        // Keep the scene frozen while a native video frame is in flight.
-        // Cancel remains available through the keyboard shortcut.
+        // Modal Export must intercept clicks before the timeline, preview or
+        // normal editor toolbars; cancellation stays available in this panel.
+        if(cameraExportDialog.isOpen())
+        {
+            cameraExportDialog.mouseClicked(this,mouseX,mouseY,mouseButton);
+            return;
+        }
         if(cameraVideoExport.isExporting())return;
         // Output popup consumes clicks before the camera timeline and gizmos.
         if(cameraOutputPopup.isOpen()
@@ -3747,7 +3767,7 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
-        if(cameraVideoExport.isExporting())return;
+        if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && clickedMouseButton == 0)
@@ -3772,7 +3792,7 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             int state)
     {
-        if(cameraVideoExport.isExporting())return;
+        if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
             this.cameraWorkspace.release();
@@ -3790,7 +3810,7 @@ public class AnimationEditorScreen extends GuiScreen
     public void handleMouseInput()
             throws java.io.IOException
     {
-        if(cameraVideoExport.isExporting())
+        if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())
         {
             // Keep the authored scene immutable while native frames are
             // being encoded; especially ignore timeline/zoom wheel input.
@@ -3825,14 +3845,20 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
-        // Experimental real MP4 capture: one complete Minecraft film frame
-        // per 20 TPS scene tick. The same shortcut cancels a running export.
+        // Keep the legacy shortcut, but open an actual settings/progress
+        // window instead of silently starting a hidden 20 FPS job.
         if(editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA
                 &&keyCode==org.lwjgl.input.Keyboard.KEY_F8
                 &&isCtrlKeyDown()&&isShiftKeyDown())
         {
-            cameraVideoExport.start(this);
+            if(!cameraExportDialog.isOpen())
+                cameraExportDialog.open(this);
+            return;
+        }
+        if(cameraExportDialog.isOpen())
+        {
+            cameraExportDialog.keyTyped(this,typedChar,keyCode);
             return;
         }
         if(cameraVideoExport.isExporting())
@@ -4111,6 +4137,7 @@ public class AnimationEditorScreen extends GuiScreen
     public void onGuiClosed()
     {
         cameraVideoExport.close();
+        cameraExportDialog.close();
         /* Never leave the detached preview camera as Minecraft's view. */
         if (this.sceneViewport != null)
         {
