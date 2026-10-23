@@ -2538,10 +2538,12 @@ public class BodyPartsPreviewRenderer
                     ? physicsFrames.forBakeRender(data,frame)
                     : JOLT_VISUAL_INTERPOLATION &&
                     BodyPartJoltPreviewAdapter.isRequested() &&
-                    BlockbusterPreviewAnimationState.isPlaying()
+                    (BlockbusterPreviewAnimationState.isPlaying()||
+                            CameraExportRenderClock.current()!=null)
                         ? physicsFrames.forRenderInterpolated(data,frame,
-                                net.minecraft.client.Minecraft.getMinecraft()
-                                        .getRenderPartialTicks())
+                                CameraExportRenderClock.partialTick(frame,
+                                    net.minecraft.client.Minecraft.getMinecraft()
+                                            .getRenderPartialTicks()))
                         : physicsFrames.forRender(data,frame);
             if (swings != null)
             {
@@ -2731,7 +2733,7 @@ public class BodyPartsPreviewRenderer
                     continue;
                 }
 
-                AnimationTransform transform = bone.getTransformAt(frame);
+                AnimationTransform transform = bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
 
                 if (transform == null)
                 {
@@ -2890,7 +2892,7 @@ public class BodyPartsPreviewRenderer
                 }
 
                 AnimationTransform transform =
-                        bone.getTransformAt(frame);
+                        bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
 
                 if (transform == null)
                 {
@@ -3129,7 +3131,7 @@ public class BodyPartsPreviewRenderer
                 }
 
                 AnimationTransform transform =
-                        bone.getTransformAt(frame);
+                        bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
 
                 if (transform == null)
                 {
