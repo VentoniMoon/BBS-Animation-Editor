@@ -57,9 +57,10 @@ public final class CameraExportSession implements AutoCloseable
             java.io.File ffmpeg,java.io.File output,int crf,String preset)
             throws IOException
     {
+        final java.io.File ffprobe=CameraExportVerifier.companionProbe(ffmpeg);
+        CameraExportVerifier.requireAvailable(ffprobe);
         final CameraFfmpegEncoder encoder=CameraFfmpegEncoder.start(
                 ffmpeg,output,plan,crf,preset);
-        final java.io.File ffprobe=CameraExportVerifier.companionProbe(ffmpeg);
         try
         {
             return new CameraExportSession(plan,new FrameSink()
