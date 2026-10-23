@@ -245,6 +245,12 @@ public final class BbsFsWorldFrameCapture
         }
     }
 
+    /** True only after the clean native world color was copied before GUI. */
+    public static boolean isNativeFrameReady()
+    {
+        return ready && capturedThisNativeFrame;
+    }
+
     public static boolean isDepthValid()
     {
         return ready && depthValid;

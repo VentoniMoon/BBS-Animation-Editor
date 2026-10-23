@@ -27,6 +27,10 @@ repositories {
     // CI can compile against the exact public 1.12.2 McHorse mod releases
     // when the user's local run/mods directory is intentionally absent.
     if (project.hasProperty('ciDependencies')) {
+        // Forge's public Scala/Java transitive dependencies should resolve
+        // from Maven Central, not through CurseMaven (which can time out).
+        mavenCentral()
+        // McHorse runtime mod artifacts are available through CurseMaven.
         maven { url 'https://cursemaven.com/' }
     }
 }
@@ -42,6 +46,19 @@ minecraft {
             // Chameleon Weld preview. Defaults OFF for normal sessions.
             property 'bbs.editor.weld.preview',
                     System.getProperty('bbs.editor.weld.preview', 'false')
+
+            // OFF by default: enables Ctrl+Shift+F9 single-frame native
+            // output-resolution PNG probe in CAMERA for render diagnostics.
+            property 'bbs.editor.export.probe',
+                    System.getProperty('bbs.editor.export.probe', 'false')
+            // Optional full-pixel IMAGE/SUBTITLE compositing test.
+            // This remains disabled unless the user explicitly opts in.
+            property 'bbs.editor.export.probe.media',
+                    System.getProperty('bbs.editor.export.probe.media', 'false')
+            // Experiment: the external FFmpeg 7.1 essentials executable,
+            // or the system PATH "ffmpeg" default. Never bundled in the JAR.
+            property 'bbs.editor.export.ffmpeg',
+                    System.getProperty('bbs.editor.export.ffmpeg', 'ffmpeg')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'

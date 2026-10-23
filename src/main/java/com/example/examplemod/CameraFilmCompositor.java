@@ -23,6 +23,121 @@ import org.lwjgl.opengl.GL30;
  */
 public final class CameraFilmCompositor
 {
+    /**
+     * Native output-pixel film compositor for offline rendering and its PNG
+     * diagnostic. Unlike composite(), this uses physical FBO coordinates,
+     * with the frame origin at (0,0), not GUI-scale coordinates.
+     *
+     * IMAGE and SUBTITLE use the existing BBS-compatible clip transforms.
+     * VIDEO needs a separate exact timestamp decoder: explicitly reject it
+     * rather than silently reuse an asynchronously decoded preview frame.
+     *
+     * Must run on the Minecraft GL thread after native-world capture and
+     * BEFORE readback. No mouse frames, editor selection or gizmos are drawn.
+     */
+    public static void compositeNative(Minecraft mc,Framebuffer film,
+            List<CameraClipDocument.Clip> clips,int tick)
+    {
+        if(mc==null||film==null||clips==null)
+            throw new IllegalArgumentException("Missing native film target");
+        int width=film.framebufferWidth;
+        int height=film.framebufferHeight;
+        if(width<1||height<1)
+            throw new IllegalArgumentException("Invalid native film size");
+
+        List<CameraClipDocument.Clip> overlays=
+                new ArrayList<CameraClipDocument.Clip>();
+        for(CameraClipDocument.Clip clip:clips)
+        {
+            if(!clip.enabled||!clip.contains(tick))continue;
+            if(clip.kind==CameraClipDocument.Kind.VIDEO)
+                throw new IllegalStateException(
+                        "VIDEO export requires frame-exact decoding; "+
+                        "preview frame cache is not safe for offline rendering");
+            if(clip.kind==CameraClipDocument.Kind.IMAGE)
+            {
+                String path=clip.settings.get("texture");
+                java.io.File image=CameraImageCache.resolve(path);
+                if(image==null||!image.isFile())
+                    throw new IllegalStateException(
+                            "Missing export IMAGE source: "+path);
+                overlays.add(clip);
+            }
+            else if(clip.kind==CameraClipDocument.Kind.SUBTITLE)
+                overlays.add(clip);
+        }
+        if(overlays.isEmpty())return;
+        Collections.sort(overlays,new Comparator<CameraClipDocument.Clip>()
+        {
+            @Override public int compare(CameraClipDocument.Clip a,
+                    CameraClipDocument.Clip b)
+            {return Integer.compare(a.layer,b.layer);}
+        });
+
+        int read=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int draw=GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int matrixMode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        int textureUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        java.nio.IntBuffer viewport=org.lwjgl.BufferUtils.createIntBuffer(16);
+        GL11.glGetInteger(GL11.GL_VIEWPORT,viewport);
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+        GL11.glOrtho(0,width,height,0,-1,1);
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+        try
+        {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,film.framebufferObject);
+            GL11.glViewport(0,0,width,height);
+            GL11.glScissor(0,0,width,height);
+            GL11.glEnable(GL11.GL_SCISSOR_TEST);
+            GL20.glUseProgram(0);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(false);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_ALPHA_TEST);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA,
+                    GL11.GL_ONE_MINUS_SRC_ALPHA);
+
+            for(CameraClipDocument.Clip clip:overlays)
+            {
+                if(clip.kind==CameraClipDocument.Kind.IMAGE)
+                {
+                    if(CameraImageCache.get(clip.settings.get("texture"))==null)
+                        throw new IllegalStateException(
+                                "Cannot decode export IMAGE: "+
+                                clip.settings.get("texture"));
+                    drawImage(clip,0,0,width,height,tick);
+                }
+                else
+                    drawSubtitle(mc,clip,0,0,width,height,tick);
+            }
+        }
+        finally
+        {
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(matrixMode);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,read);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,draw);
+            GL11.glViewport(viewport.get(0),viewport.get(1),
+                    viewport.get(2),viewport.get(3));
+            GL11.glPopAttrib();
+            GL13.glActiveTexture(textureUnit);
+            GL20.glUseProgram(program);
+        }
+    }
+
     public static void composite(Minecraft mc,Framebuffer film,
             int previewX,int previewY,int previewWidth,int previewHeight,
             List<CameraClipDocument.Clip> clips,int tick)

@@ -97,6 +97,17 @@ public final class CameraWorkspace
         return (inCameraMode?shot:crossModeShot)
                 ?document.sample(sceneFrame,editorPose,resolver):editorPose;
     }
+    /**
+     * A rendered MP4 must always use the authored film camera. The FREE/SHOT
+     * toolbar toggle is an editor navigation aid and may not decide which
+     * camera is encoded in the output video.
+     */
+    public PreviewCameraPose sampleForExport(PreviewCameraPose free,
+            int frame,CameraClipDocument.TargetResolver resolver)
+    {
+        return document.sample(frame,free,resolver);
+    }
+
     public boolean shot(){return shot;}
     public void toggleShotView()
     {

@@ -81,6 +81,13 @@ public final class BbsFsWorldCameraDriver
     {
         if (event.phase == TickEvent.Phase.END)
         {
+            // Fail-safe: never leave an export-size world target active after
+            // a skipped/failed GUI pass.
+            CameraNativeFrameProbe.afterRenderTick(Minecraft.getMinecraft());
+            Minecraft endMc=Minecraft.getMinecraft();
+            if(endMc.currentScreen instanceof AnimationEditorScreen)
+                ((AnimationEditorScreen)endMc.currentScreen)
+                        .getCameraVideoExport().afterWorld();
             restoreHud();
             return;
         }
@@ -100,8 +107,12 @@ public final class BbsFsWorldCameraDriver
         if (previousWorld != null && previousWorld != mc.world)
             release();
 
-        PreviewCameraPose pose =
-                ((AnimationEditorScreen)mc.currentScreen).getCameraWorkspaceNativePose();
+        AnimationEditorScreen editor=(AnimationEditorScreen)mc.currentScreen;
+        // Offline VIDEO (when explicitly started) owns each exact scene
+        // tick BEFORE the native camera entity and recorded actor pass sample
+        // their poses. Normal CAMERA preview remains completely unchanged.
+        editor.getCameraVideoExport().beforeWorld(editor);
+        PreviewCameraPose pose=editor.getCameraWorkspaceNativePose();
         if (view == null || view.world != mc.world)
             view = new PreviewCameraEntity(mc.world);
 
@@ -140,6 +151,10 @@ public final class BbsFsWorldCameraDriver
         activePose = pose;
         mc.gameSettings.thirdPersonView = 0;
         mc.setRenderViewEntity(view);
+
+        // Normally a no-op. The one-frame diagnostic is guarded by an
+        // explicit JVM flag and uses the native Minecraft world pass.
+        CameraNativeFrameProbe.beforeWorld(mc);
     }
 
     /**
@@ -172,6 +187,8 @@ public final class BbsFsWorldCameraDriver
                         org.lwjgl.opengl.GL11.GL_VIEWPORT, glViewport);
                 int worldWidth = Math.max(1, glViewport.get(2));
                 int worldHeight = Math.max(1, glViewport.get(3));
+                CameraNativeFrameProbe.noteNativeWorld(
+                        worldWidth,worldHeight,source);
                 BbsFsWorldProjection.capture(worldWidth, worldHeight);
 
                 /*
