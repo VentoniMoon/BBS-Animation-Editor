@@ -68,6 +68,49 @@ public final class CameraNativeFrameProbeSmokeTest
                 "image must contain RGBA readback, not editor GUI");
         check(image.delete(),"remove test PNG");
 
+        // The optional film pass must composite IMAGE/SUBTITLE only AFTER
+        // native world snapshot and BEFORE RGBA readback, without touching
+        // the Minecraft GUI or leaving its FBO rebound.
+        System.setProperty("bbs.editor.export.probe.media","true");
+        check(CameraNativeFrameProbe.request(128,128),
+                "arm film overlay probe");
+        CameraNativeFrameProbe.beforeWorld(mc);
+        CameraNativeFrameProbe.noteNativeWorld(128,128,mc.getFramebuffer());
+        CameraNativeFrameProbe.beforeGui(mc);
+        check(CameraFilmCompositor.nativeCalls==1,
+                "film compositor called once at native output resolution");
+        check(mc.getFramebuffer()==original&&mc.displayWidth==800,
+                "film composition restored original Minecraft renderer");
+        File composited=null;
+        timeout=System.currentTimeMillis()+8000L;
+        while(System.currentTimeMillis()<timeout)
+        {
+            File[] files=folder.listFiles();
+            if(files!=null&&files.length==1&&
+                    CameraNativeFrameProbe.status().startsWith("Native film PNG:"))
+            {
+                composited=files[0];break;
+            }
+            Thread.sleep(25L);
+        }
+        check(composited!=null&&composited.getName().startsWith("film-"),
+                "composited PNG is clearly distinct from clean world PNG");
+        check(composited.delete(),"remove composited PNG");
+
+        // A video-clip exact-timestamp failure must not falsely report
+        // successful PNG export or leave the substituted GPU FBO active.
+        CameraFilmCompositor.failNext=true;
+        check(CameraNativeFrameProbe.request(128,128),
+                "arm unsupported VIDEO test");
+        CameraNativeFrameProbe.beforeWorld(mc);
+        CameraNativeFrameProbe.noteNativeWorld(128,128,mc.getFramebuffer());
+        CameraNativeFrameProbe.beforeGui(mc);
+        check(CameraNativeFrameProbe.status().contains("failed"),
+                "missing exact VIDEO decoder explicitly fails offline film");
+        check(mc.getFramebuffer()==original&&mc.displayHeight==600,
+                "VIDEO failure restores native world FBO");
+        System.clearProperty("bbs.editor.export.probe.media");
+
         check(CameraNativeFrameProbe.request(128,128),"arm second frame");
         CameraNativeFrameProbe.beforeWorld(mc);
         check(mc.getFramebuffer()!=original,"second native FBO");
