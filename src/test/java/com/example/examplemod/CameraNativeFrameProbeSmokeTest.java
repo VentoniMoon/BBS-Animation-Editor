@@ -129,6 +129,76 @@ public final class CameraNativeFrameProbeSmokeTest
         check(CameraNativeFrameProbe.status().contains("failed"),
                 "unexpected world framebuffer is not claimed as rendered");
 
+        // Simulate two actual CAMERA output frames, using the SAME native
+        // FBO redirection/readback that will feed FFmpeg during real gameplay.
+        // A fake sink lets us verify FBO/timeline ownership with no GPU.
+        final java.util.concurrent.atomic.AtomicInteger encoded=
+                new java.util.concurrent.atomic.AtomicInteger();
+        CameraExportPlan videoPlan=new CameraExportPlan(128,128,20,2);
+        CameraExportSession.FrameSink sink=new CameraExportSession.FrameSink()
+        {
+            @Override public void writeFrame(java.nio.ByteBuffer rgba)
+            {
+                check(rgba.remaining()==128*128*4,
+                        "MP4 receives full-resolution native RGBA pixels");
+                check((rgba.get(0)&255)==200,
+                        "MP4 frame is real world pixels, not a GUI frame");
+                encoded.incrementAndGet();
+            }
+            @Override public void finish(){}
+            @Override public void cancel(){}
+        };
+        try(CameraExportSession video=new CameraExportSession(videoPlan,sink))
+        {
+            CameraExportFrameBridge bridge=new CameraExportFrameBridge(video);
+            for(int index=0;index<2;index++)
+            {
+                long deadline=System.currentTimeMillis()+5000L;
+                CameraExportPlan.Sample frame=bridge.nextFrame();
+                while(frame==null&&
+                        System.currentTimeMillis()<deadline)
+                {
+                    Thread.sleep(5L);
+                    frame=bridge.nextFrame();
+                }
+                check(frame!=null&&frame.outputFrame==index,
+                        "exporter requests each expected scene frame");
+                check(CameraNativeFrameProbe.requestVideoFrame(bridge,frame),
+                        "video frame uses the native framebuffer owner");
+                CameraNativeFrameProbe.beforeWorld(mc);
+                check(mc.getFramebuffer()!=original&&mc.displayWidth==128,
+                        "MP4 uses real output-size native FBO");
+                CameraNativeFrameProbe.noteNativeWorld(128,128,
+                        mc.getFramebuffer());
+                CameraNativeFrameProbe.beforeGui(mc);
+                check(mc.getFramebuffer()==original&&mc.displayWidth==800,
+                        "MP4 restores Minecraft FBO before GUI");
+                check(!CameraNativeFrameProbe.isBusy(),
+                        "native framebuffer released after video capture");
+            }
+            check(video.await(5,java.util.concurrent.TimeUnit.SECONDS),
+                    "video worker finishes two scene frames");
+            check(video.getStatus()==CameraExportSession.Status.COMPLETED,
+                    "two native frames completed successfully");
+            check(encoded.get()==2,
+                    "native world film produced exactly two encoded frames");
+            check(folder.listFiles()!=null&&folder.listFiles().length==0,
+                    "MP4 render never creates PNG intermediates");
+        }
+
+        CameraExportSession canceledVideo=new CameraExportSession(
+                new CameraExportPlan(128,128,20,2),sink);
+        CameraExportFrameBridge abortBridge=new CameraExportFrameBridge(
+                canceledVideo);
+        check(CameraNativeFrameProbe.requestVideoFrame(abortBridge,
+                abortBridge.nextFrame()),"arm failed native video pass");
+        CameraNativeFrameProbe.beforeWorld(mc);
+        CameraNativeFrameProbe.afterRenderTick(mc);
+        check(mc.getFramebuffer()==original&&
+                canceledVideo.getStatus()==CameraExportSession.Status.CANCELED,
+                "skipped GUI pass cancels video and restores Minecraft");
+        canceledVideo.close();
+
         check(!CameraNativeFrameProbe.request(8192,8192),
                 "reject unsafe large single-frame allocations");
         OpenGlHelper.enabled=false;
