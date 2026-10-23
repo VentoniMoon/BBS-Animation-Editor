@@ -30,6 +30,11 @@ public final class CameraExportFrameBridge
         this.readback=new CameraExportReadback(session.getPlan());
     }
 
+    public CameraExportPlan getPlan()
+    {
+        return session.getPlan();
+    }
+
     public CameraExportPlan.Sample nextFrame()
     {
         return session.nextSample();
