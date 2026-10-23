@@ -1,10 +1,9 @@
 package com.example.examplemod;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -34,30 +33,23 @@ public final class CameraExportVerifier
                 "-show_entries","stream=width,height,avg_frame_rate,nb_read_frames",
                 "-of","default=noprint_wrappers=1",
                 video.getAbsolutePath());
-        cmd.redirectErrorStream(true);
-        Process process=cmd.start();
-        StringBuilder result=new StringBuilder();
+        // Avoid an unbounded pipe read blocking before the wait timeout.
+        File log=File.createTempFile("bbs-camera-probe-",".txt");
+        Process process=null;
         try
         {
-            // ffprobe normally responds immediately to a complete local MP4.
-            // Read bounded output while the worker is running. We request
-            // only four small keys; a huge response is a broken probe.
-            try(BufferedReader in=new BufferedReader(new InputStreamReader(
-                    process.getInputStream(),StandardCharsets.UTF_8)))
-            {
-                String line;
-                while((line=in.readLine())!=null)
-                {
-                    if(result.length()>16384)
-                        throw new IOException("Unexpectedly large FFprobe output");
-                    result.append(line).append('\n');
-                }
-            }
+            cmd.redirectErrorStream(true);
+            cmd.redirectOutput(log);
+            process=cmd.start();
             if(!process.waitFor(30,TimeUnit.SECONDS))
                 throw new IOException("FFprobe verification timed out");
+            if(log.length()>16384L)
+                throw new IOException("Unexpectedly large FFprobe output");
+            String result=new String(Files.readAllBytes(log.toPath()),
+                    StandardCharsets.UTF_8);
             if(process.exitValue()!=0)
-                throw new IOException("FFprobe failed: "+result.toString().trim());
-            validate(result.toString(),plan);
+                throw new IOException("FFprobe failed: "+result.trim());
+            validate(result,plan);
         }
         catch(InterruptedException stop)
         {
@@ -66,7 +58,8 @@ public final class CameraExportVerifier
         }
         finally
         {
-            if(process.isAlive())process.destroyForcibly();
+            if(process!=null&&process.isAlive())process.destroyForcibly();
+            if(log.isFile())log.delete();
         }
     }
 
