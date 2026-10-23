@@ -72,6 +72,7 @@ jobs:
             src/main/java/com/example/examplemod/CameraExportFrameBridge.java \
             src/main/java/com/example/examplemod/CameraExportSession.java \
             src/main/java/com/example/examplemod/CameraFfmpegEncoder.java \
+            src/main/java/com/example/examplemod/CameraExportVerifier.java \
             src/test/camera-export-stubs/org/lwjgl/BufferUtils.java \
             src/test/camera-export-stubs/org/lwjgl/opengl/GL11.java \
             src/test/camera-export-stubs/org/lwjgl/opengl/GL30.java \
@@ -87,6 +88,7 @@ jobs:
             src/main/java/com/example/examplemod/CameraExportPlan.java \
             src/main/java/com/example/examplemod/CameraExportSession.java \
             src/main/java/com/example/examplemod/CameraFfmpegEncoder.java \
+            src/main/java/com/example/examplemod/CameraExportVerifier.java \
             src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java
           java -ea -cp build/camera/session \
             com.example.examplemod.CameraExportSessionSmokeTest
