@@ -97,6 +97,11 @@ public final class CameraExportDialog
         Gui.drawRect(x-2,y-2,x+w+2,y+h+2,0xEB071017);
         Gui.drawRect(x,y,x+w,y+h,PANEL);
         Gui.drawRect(x,y,x+w,y+2,BLUE);
+        // Rebind the real GL texture state immediately before painting the
+        // modal text. This is needed even if START RENDER fails its FFmpeg /
+        // ffprobe preflight and no native frame is ever captured. It also
+        // protects the dialog from texture mutations later in drawPreview.
+        CameraNativeFrameProbe.resyncDefaultTextureForGui();
         font.drawString("CAMERA  /  EXPORT VIDEO",x+15,y+13,BLUE);
         font.drawString("x",x+w-20,y+13,WHITE);
         Gui.drawRect(x+12,y+32,x+w-12,y+33,BORDER);
