@@ -29,8 +29,20 @@ On Windows, extract FFmpeg 7.1 essentials containing both `ffmpeg.exe` and
 5. On completion use the exact path entered in the dialog. By default this
    is `run/config/bbs-editor/exports/camera-<timestamp>.mp4`.
 
-The screen deliberately shows **20 FPS, H.264 MP4**. It does not
-pretend 30/60 FPS is available: that requires sub-tick actor and Jolt physics.
+The export dialog now offers **20, 30 and 60 FPS** H.264 MP4. The film
+timestamp is evaluated as `outputFrame * 20 / FPS`, without advancing the
+Minecraft world or Jolt solver multiple times at the same 20 TPS tick.
+Camera paths, Record actor positions/angles, authored animation bones,
+Body Parts keys and VIDEO source timestamps are sampled at fractional time.
+Discrete Character actions and vanilla world events remain at 20 TPS.
+Jolt remains a **20 TPS solver** with render-only swing interpolation;
+high-FPS output must not be interpreted as 60 Hz physical simulation.
+Full OptiFine/Jolt visual parity at 30/60 FPS requires a live client test.
+
+Sanity check a 150-tick (7.5-second) scene: 150 frames at 20 FPS, 225
+at 30 FPS and 450 at 60 FPS. Verify a moving actor/camera stays smooth
+rather than repeating 20 TPS images. Test 60 FPS with hair/Jolt and
+a moving VIDEO overlay, then export 20 FPS again to catch regressions.
 AUDIO clips now mix into 48 kHz stereo AAC in a separate offline pass. VIDEO
 clips use their explicit Audio track when supplied, otherwise their embedded
 sound if present; silent VIDEO is valid. The sound pass trims, delays, loops,
