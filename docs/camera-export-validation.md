@@ -29,11 +29,16 @@ On Windows, extract FFmpeg 7.1 essentials containing both `ffmpeg.exe` and
 5. On completion use the exact path entered in the dialog. By default this
    is `run/config/bbs-editor/exports/camera-<timestamp>.mp4`.
 
-The screen deliberately shows **20 FPS, H.264, silent MP4**. It does not
-pretend 30/60 FPS is already available: doing that properly requires
-sub-tick actor and Jolt physics integration. A separate sound-mixing pass
-is also pending. Therefore active AUDIO clips are explicitly rejected;
-VIDEO clip *images* render but their embedded sound is not yet included.
+The screen deliberately shows **20 FPS, H.264 MP4**. It does not
+pretend 30/60 FPS is available: that requires sub-tick actor and Jolt physics.
+AUDIO clips now mix into 48 kHz stereo AAC in a separate offline pass. VIDEO
+clips use their explicit Audio track when supplied, otherwise their embedded
+sound if present; silent VIDEO is valid. The sound pass trims, delays, loops,
+applies volume and basic linear fades. Curved BBS FS envelope parity remains
+future work. Video pixels are copied into the muxed MP4 without re-encoding.
+FFmpeg's selected executable path is remembered in the machine-local
+`config/bbs-editor/camera-export.properties` file on closing or starting
+the dialog, including between client launches.
 
 ### VIDEO clip semantics
 
