@@ -6,6 +6,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraExport*.java'
       - 'src/main/java/com/example/examplemod/CameraFfmpegEncoder.java'
       - 'src/main/java/com/example/examplemod/CameraExportReadback.java'
+      - 'src/main/java/com/example/examplemod/CameraExportFrameBridge.java'
       - 'src/test/camera-export-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraExportSession.java'
@@ -18,6 +19,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraExport*.java'
       - 'src/main/java/com/example/examplemod/CameraFfmpegEncoder.java'
       - 'src/main/java/com/example/examplemod/CameraExportReadback.java'
+      - 'src/main/java/com/example/examplemod/CameraExportFrameBridge.java'
       - 'src/test/camera-export-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraExportSession.java'
@@ -58,6 +60,9 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 -d build/camera/readback \
             src/main/java/com/example/examplemod/CameraExportPlan.java \
             src/main/java/com/example/examplemod/CameraExportReadback.java \
+            src/main/java/com/example/examplemod/CameraExportFrameBridge.java \
+            src/main/java/com/example/examplemod/CameraExportSession.java \
+            src/main/java/com/example/examplemod/CameraFfmpegEncoder.java \
             src/test/camera-export-stubs/org/lwjgl/BufferUtils.java \
             src/test/camera-export-stubs/org/lwjgl/opengl/GL11.java \
             src/test/camera-export-stubs/org/lwjgl/opengl/GL30.java \
