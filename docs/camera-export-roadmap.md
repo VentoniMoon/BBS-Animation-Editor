@@ -45,7 +45,11 @@ The initial frame-queue half is implemented in this branch:
 - `CameraExportSession` has a bounded two-frame queue and separate FFmpeg
   writer thread, exact monotonically increasing output frame indices,
   error propagation, progress and cancellation. Its `openFfmpeg()` entry
-  connects the worker to `CameraFfmpegEncoder`.
+  connects the worker to `CameraFfmpegEncoder`. Two RGBA arrays are
+  allocated once and recycled, avoiding a new ~32 MiB Java heap allocation
+  on each 4K export frame. The per-frame safety cap is 64 MiB. After
+  encoding, FFprobe validates actual decoded frame count, resolution and FPS
+  before the session can become COMPLETED.
 - `CameraExportReadback` only accepts an exact native-resolution framebuffer
   region; it restores GL read bindings, read-buffer state and pixel packing.
 - `CameraExportFrameBridge` requests an explicit timestamp, then allows a
@@ -62,8 +66,11 @@ Remaining work:
   explicit errors. Persist no editor state or partially written MP4 after
   cancellation, always restore Minecraft view/timer/GL ownership.
 - Sampling at 30/60 FPS is genuinely fractional: do not duplicate 20 TPS
-  frames. Interpolate camera, actor poses and baked Jolt results only when
-  the needed samples are available. Any unsupported effect fails visibly.
+  frames. `CameraExportCameraSampler` now interpolates adjacent evaluated
+  camera poses and preserves hard clip activation cuts. This is an interim
+  camera-only solution, not a replacement for continuous procedural clip
+  evaluation. Actor poses and baked Jolt results still need independent
+  fractional input data. Any unsupported effect fails visibly.
 - Test short scenes, scene endings, pause/seek, duplicate renders,
   cancellation and exception-driven cleanup.
 
@@ -110,8 +117,11 @@ framebuffer; resizing or stretching that frame is not real 1080p/4K output.
 
 ### 3a. Native output-resolution single-frame probe (this PR)
 
-A **disabled-by-default, world-only** proof-of-render experiment is now
-available. It is intentionally not the final Export button.
+A **disabled-by-default** proof-of-render experiment is now available.
+The default mode captures only the native world. A second, explicitly
+enabled mode composites IMAGE and SUBTITLE at native output resolution,
+while refusing unsafe asynchronous VIDEO frames. Neither mode is the final
+Export button.
 
 For a local Windows Forge development client:
 
@@ -132,9 +142,14 @@ world viewport and whether the native actor stage completed. The
 window dimensions and GL read/draw bindings before drawing GUI. It also
 restores on RenderTick END, screen close or capture failure.
 
-This experiment **does not** include Image/Video/Subtitle, clip audio,
-fractional 60 FPS timeline stepping, or H.264 encoding of the Minecraft
-scene. It may still expose issues with a particular shaderpack: PNG output
+The default experiment **does not** composite film clips. To test
+native output-pixel IMAGE/SUBTITLE overlays after world capture, add
+`-Dbbs.editor.export.probe.media=true` to the dev client command above.
+Those files are named `film-<width>x<height>-<timestamp>.png`. VIDEO clips
+are rejected until deterministic timestamp decoding is implemented.
+
+Neither PNG probe includes clip audio, actor/Jolt fractional 60 FPS sampling,
+or H.264 encoding of the live Minecraft scene. It may still expose issues with a particular shaderpack: PNG output
 and window restoration must be visually checked on the user's machine.
 When the flag is unset, no export-frame replacement is attempted.
 
