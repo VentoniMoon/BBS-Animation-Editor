@@ -54,6 +54,16 @@ public final class CameraExportCoreSmokeTest
         try{new CameraExportPlan(3840,2160,60,2000000);}
         catch(IllegalArgumentException expected){rejected=true;}
         check(rejected,"reject excessive frame count");
+        // Allow real 4K, but reject frame sizes that would exhaust Minecraft
+        // heap when two encoder slots and a native readback are allocated.
+        CameraExportPlan uhd=new CameraExportPlan(3840,2160,60,20);
+        check(uhd.frameBytes==3840*2160*4,"4K RGBA is supported");
+        rejected=false;
+        try{new CameraExportPlan(8192,8192,30,20);}
+        catch(IllegalArgumentException expected){rejected=true;}
+        check(rejected,"reject unsafe 8K-square memory footprint");
+        check(CameraExportVerifier.companionProbe(null)==null,
+                "PATH ffprobe detection for default binary");
 
         String metadata="width=128\nheight=128\navg_frame_rate=60/3\nnb_read_frames=10\n";
         CameraExportVerifier.validate(metadata,
@@ -93,6 +103,14 @@ public final class CameraExportCoreSmokeTest
         }
 
         File temp=Files.createTempDirectory("bbs-camera-encoder-test").toFile();
+        File ffmpegTool=new File(temp,"ffmpeg.exe");
+        File probeTool=new File(temp,"ffprobe.exe");
+        check(ffmpegTool.createNewFile(),"create pretend Windows ffmpeg.exe");
+        check(probeTool.createNewFile(),"create pretend Windows ffprobe.exe");
+        check(probeTool.equals(CameraExportVerifier.companionProbe(ffmpegTool)),
+                "prefer bundled FFmpeg 7.1 companion probe, not system PATH");
+        check(ffmpegTool.delete()&&probeTool.delete(),
+                "remove executable fixture");
         File output=new File(temp,"test clip with spaces.mp4");
         CameraExportPlan tiny=new CameraExportPlan(128,128,20,4);
         try(CameraFfmpegEncoder encoder=
