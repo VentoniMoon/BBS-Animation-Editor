@@ -35,6 +35,46 @@ public final class CameraExportVerifier
         return companion.isFile()?companion:null;
     }
 
+    /**
+     * Fail before an expensive Minecraft render if ffprobe is unavailable.
+     * A bare command resolves via PATH, while an explicitly selected FFmpeg
+     * 7.1 executable prefers the companion utility in the same bin folder.
+     */
+    public static void requireAvailable(File ffprobe) throws IOException
+    {
+        String probe=ffprobe==null?"ffprobe":ffprobe.getPath();
+        File discard=new File(System.getProperty("os.name","")
+                .toLowerCase(java.util.Locale.ROOT).contains("win")
+                ?"NUL":"/dev/null");
+        Process process=null;
+        try
+        {
+            process=new ProcessBuilder(probe,"-version")
+                    .redirectErrorStream(true)
+                    .redirectOutput(discard)
+                    .start();
+            if(!process.waitFor(5,TimeUnit.SECONDS))
+                throw new IOException("FFprobe did not respond within five seconds");
+            if(process.exitValue()!=0)
+                throw new IOException("FFprobe could not start: "+probe);
+        }
+        catch(InterruptedException interrupted)
+        {
+            Thread.currentThread().interrupt();
+            throw new IOException("FFprobe availability check interrupted",
+                    interrupted);
+        }
+        catch(IOException problem)
+        {
+            throw new IOException("FFprobe unavailable ("+probe+"): "+
+                    problem.getMessage(),problem);
+        }
+        finally
+        {
+            if(process!=null&&process.isAlive())process.destroyForcibly();
+        }
+    }
+
     public static void verify(File ffprobe,File video,CameraExportPlan plan)
             throws IOException
     {
