@@ -4,7 +4,7 @@ package com.example.examplemod;
 final class BlockbusterRecordFrame
 {
     double x,y,z;
-    float yaw,pitch,yawHead,bodyYaw,mountYaw,mountPitch,motionX,motionY,motionZ;
+    float yaw,pitch,yawHead,bodyYaw,mountYaw,mountPitch,motionX,motionY,motionZ,roll;
     boolean hasBodyYaw;
     int discreteAction;
     Object toNBT()
@@ -14,7 +14,7 @@ final class BlockbusterRecordFrame
         copy.yaw=yaw;copy.pitch=pitch;copy.yawHead=yawHead;
         copy.bodyYaw=bodyYaw;copy.mountYaw=mountYaw;copy.mountPitch=mountPitch;
         copy.motionX=motionX;copy.motionY=motionY;copy.motionZ=motionZ;
-        copy.hasBodyYaw=hasBodyYaw;copy.discreteAction=discreteAction;
+        copy.hasBodyYaw=hasBodyYaw;copy.discreteAction=discreteAction;copy.roll=roll;
         return copy;
     }
     static BlockbusterRecordFrame fromNBT(Object tag)
@@ -28,6 +28,7 @@ final class BlockbusterRecordFrame
     boolean hasBodyYaw(){return hasBodyYaw;}
     float getBodyYaw(){return bodyYaw;}
     void setBodyYaw(float v){bodyYaw=v;hasBodyYaw=true;}
+    float getRoll(){return roll;} void setRoll(float v){roll=v;}
     float getMountYaw(){return mountYaw;} void setMountYaw(float v){mountYaw=v;}
     float getMountPitch(){return mountPitch;}
     void setMountPitch(float v){mountPitch=v;}
