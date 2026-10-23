@@ -7,6 +7,8 @@ import javax.imageio.ImageIO;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
+import net.minecraft.client.renderer.GlStateManager;
+import org.lwjgl.opengl.GL13;
 import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
@@ -37,7 +39,18 @@ public final class CameraNativeFrameProbeSmokeTest
         check(target.framebufferWidth==128&&target.framebufferHeight==128,
                 "world FBO is not a scaled-up display screenshot");
         CameraNativeFrameProbe.noteNativeWorld(128,128,target);
+        // Simulate a font atlas cached by GlStateManager while a film
+        // overlay binds a different GL texture without informing that cache.
+        GlStateManager.bindTexture(42);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D,51);
+        GL13.glActiveTexture(33985);
         CameraNativeFrameProbe.beforeGui(mc);
+        check(GL13.active==OpenGlHelper.defaultTexUnit&&
+                GL11.boundTexture==0&&GlStateManager.cachedTexture==0,
+                "native export must restore real and cached font texture state");
+        GlStateManager.bindTexture(42);
+        check(GL11.boundTexture==42,
+                "FontRenderer must rebind its atlas after CAMERA render");
         check(mc.getFramebuffer()==original,"original Minecraft FBO restored");
         check(mc.displayWidth==800&&mc.displayHeight==600,
                 "Minecraft window dimensions restored");
