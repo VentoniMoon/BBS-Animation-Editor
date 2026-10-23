@@ -37,6 +37,8 @@ import org.lwjgl.opengl.GL30;
 public final class CameraNativeFrameProbe
 {
     private static final String FLAG="bbs.editor.export.probe";
+    /** Optional IMAGE/SUBTITLE composition after native world snapshot. */
+    private static final String MEDIA_FLAG="bbs.editor.export.probe.media";
     /** Bound CPU/GPU memory when diagnostic screenshots use custom 8K sizes. */
     private static final int MAX_PROBE_RGBA_BYTES=128*1024*1024;
     private static Field framebufferField;
@@ -232,6 +234,7 @@ public final class CameraNativeFrameProbe
         if(!active)return;
         byte[] rgba=null;
         int width=0,height=0;
+        boolean withMedia=false;
         try
         {
             if(mc==null||mc.getFramebuffer()!=exportTarget||
@@ -247,6 +250,19 @@ public final class CameraNativeFrameProbe
                     exportTarget.framebufferHeight!=plan.height)
                 throw new IllegalStateException(
                         "Native frame does not match selected output resolution");
+
+            // A separate, explicitly enabled test of output-size
+            // overlays. The default PNG remains a clean WORLD capture.
+            // No video placeholder frames or GUI selection chrome are allowed.
+            withMedia=Boolean.getBoolean(MEDIA_FLAG);
+            if(withMedia)
+            {
+                AnimationEditorScreen editor=(AnimationEditorScreen)
+                        mc.currentScreen;
+                CameraFilmCompositor.compositeNative(mc,exportTarget,
+                        editor.getSceneState().getCameraClips().clips(),
+                        editor.getCurrentFrame());
+            }
 
             ByteBuffer pixels=new CameraExportReadback(plan).capture(
                     exportTarget,0,0,plan.width,plan.height);
@@ -273,7 +289,7 @@ public final class CameraNativeFrameProbe
             original=null;
         }
         if(rgba!=null)
-            saveImageAsync(mc,rgba,width,height);
+            saveImageAsync(mc,rgba,width,height,withMedia);
     }
 
     /**
@@ -337,11 +353,12 @@ public final class CameraNativeFrameProbe
     }
 
     private static void saveImageAsync(Minecraft mc,final byte[] rgba,
-            final int width,final int height)
+            final int width,final int height,boolean composited)
     {
         final File game=mc==null?new File("."):mc.mcDataDir;
         final File folder=new File(game,"config/bbs-editor/export-probes");
-        final File output=new File(folder,"world-"+width+"x"+height+
+        final File output=new File(folder,(composited?"film-":"world-")+
+                width+"x"+height+
                 "-"+System.currentTimeMillis()+".png");
         writerRunning=true;
         Thread writer=new Thread(new Runnable()
