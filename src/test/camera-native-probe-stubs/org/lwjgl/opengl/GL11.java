@@ -8,6 +8,7 @@ public final class GL11 {
     GL_TEXTURE_2D=3553;
   public static int[] viewport={0,0,800,600};
   public static int textureLimit=4096,pack=4,attribDepth,boundTexture=0;
+  public static boolean texture2dEnabled=true;
   public static int glGetInteger(int key) {
     if(key==GL_MAX_TEXTURE_SIZE)return textureLimit;
     if(key==GL_PACK_ALIGNMENT)return pack;
@@ -49,6 +50,9 @@ public final class GL11 {
   public static void glBindTexture(int target,int texture) {
     if(target!=GL_TEXTURE_2D)throw new AssertionError("Expected 2D texture");
     boundTexture=texture;
+  }
+  public static void glEnable(int cap) {
+    if(cap==GL_TEXTURE_2D)texture2dEnabled=true;
   }
   public static int glGetError(){return GL_NO_ERROR;}
 }
