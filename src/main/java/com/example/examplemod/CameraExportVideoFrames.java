@@ -204,7 +204,7 @@ public final class CameraExportVideoFrames implements AutoCloseable
             double value=Double.parseDouble(clip.settings.get("offset"));
             if(!Double.isFinite(value)||Math.abs(value)>1000000D)
                 return 0;
-            return (int)Math.round(value);
+            return (int)value; // Match CameraFilmCompositor preview offset semantics.
         }
         catch(RuntimeException invalid){return 0;}
     }
