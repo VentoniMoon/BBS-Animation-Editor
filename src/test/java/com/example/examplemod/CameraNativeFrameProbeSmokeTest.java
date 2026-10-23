@@ -30,6 +30,21 @@ public final class CameraNativeFrameProbeSmokeTest
         Framebuffer original=mc.framebufferMc;
         GL30.read=GL30.draw=original.framebufferObject;
         GL11.glViewport(0,0,800,600);
+        // Regression: START RENDER preflight fails before native FBO capture.
+        // The CAMERA export modal must still force a fresh atlas binding.
+        GlStateManager.cachedTexture=17;
+        GL11.boundTexture=73;
+        GL11.texture2dEnabled=false;
+        GlStateManager.cachedTexture2dEnabled=false;
+        GL13.glActiveTexture(33985);
+        CameraNativeFrameProbe.resyncDefaultTextureForGui();
+        check(GL13.active==OpenGlHelper.defaultTexUnit&&
+                GlStateManager.cachedTexture==0&&GL11.boundTexture==0&&
+                GlStateManager.cachedTexture2dEnabled&&GL11.texture2dEnabled,
+                "GUI font must be restored even without starting native capture");
+        GlStateManager.bindTexture(42);
+        check(GL11.boundTexture==42,
+                "font glyph atlas must rebind after a failed encoder preflight");
         check(CameraNativeFrameProbe.request(128,128),"enable a valid probe");
         CameraNativeFrameProbe.beforeWorld(mc);
         check(mc.getFramebuffer()!=original,"native output framebuffer swapped");
