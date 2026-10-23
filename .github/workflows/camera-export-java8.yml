@@ -13,6 +13,12 @@ on:
       - 'src/main/java/com/example/examplemod/CameraExportSession.java'
       - 'src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraNativeFrameProbe.java'
+      - 'src/main/java/com/example/examplemod/CameraVideoRenderController.java'
+      - 'src/main/java/com/example/examplemod/CameraFilmCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
+      - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
+      - 'src/main/java/com/example/examplemod/PreviewToolbarIcons.java'
+      - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
@@ -31,6 +37,12 @@ on:
       - 'src/main/java/com/example/examplemod/CameraExportSession.java'
       - 'src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraNativeFrameProbe.java'
+      - 'src/main/java/com/example/examplemod/CameraVideoRenderController.java'
+      - 'src/main/java/com/example/examplemod/CameraFilmCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
+      - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
+      - 'src/main/java/com/example/examplemod/PreviewToolbarIcons.java'
+      - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
@@ -139,3 +151,12 @@ jobs:
             src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java
           java -ea -cp build/camera/fractional \
             com.example.examplemod.CameraExportCameraSamplerSmokeTest
+
+      - name: Verify frame-exact export VIDEO decode with real FFmpeg
+        run: |
+          mkdir -p build/camera/video-decode
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/video-decode \
+            src/main/java/com/example/examplemod/CameraExportVideoDecoder.java \
+            src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java
+          java -ea -Djava.awt.headless=true -cp build/camera/video-decode \
+            com.example.examplemod.CameraExportVideoDecoderSmokeTest
