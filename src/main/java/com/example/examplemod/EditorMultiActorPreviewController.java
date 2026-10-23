@@ -45,6 +45,18 @@ public final class EditorMultiActorPreviewController
             int frame,
             BodyPartsEditorController bodyPartsController)
     {
+        drawBackgroundActors(mc,viewport,scene,selected,frame,
+                bodyPartsController,frame);
+    }
+
+    public void drawBackgroundActors(
+            Minecraft mc,
+            EditorSceneViewport viewport,
+            EditorSceneState scene,
+            BlockbusterSceneActorData selected,
+            int frame,
+            BodyPartsEditorController bodyPartsController,double sceneTime)
+    {
         if(scene!=previousScene ||
                 (scene!=null && scene.getSelectedScene()!=previousSceneIndex))
         {
@@ -85,6 +97,9 @@ public final class EditorMultiActorPreviewController
             BlockbusterRecordFrame current = record.getFrame(
                     Math.max(0, Math.min(frame, record.getFrames().size() - 1)));
             if (current == null) continue;
+            CameraExportPlan.Sample exact=CameraExportRenderClock.current();
+            if(exact!=null&&exact.sceneTick==frame)
+                current=CameraExportActorFrameSampler.sample(record,exact);
 
             BlockbusterActorPreviewRenderer renderer = renderers.get(data.getId());
             if (renderer == null)
@@ -107,7 +122,7 @@ public final class EditorMultiActorPreviewController
                 for (AnimationBone bone : actorAnimation.getBones())
                 {
                     if (bone == null) continue;
-                    AnimationTransform value = bone.getTransformAt(frame);
+                    AnimationTransform value = bone.getTransformAt((float)sceneTime);
                     if (value == null) continue;
                     String parent = bone.getParent() == null ? null
                             : bone.getParent().getName();
