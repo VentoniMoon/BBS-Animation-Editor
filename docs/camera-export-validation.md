@@ -1,7 +1,59 @@
-# CAMERA Export: native PNG probe and video verification
+# CAMERA Export: real MP4 experimental test and validation
 
 The export pipeline is still experimental. Do not interpret a passing Forge
 compile as proof that OptiFine, Jolt or cinematic media renders correctly.
+
+## 0. First actual CAMERA MP4 (not a PNG diagnostic)
+
+**The first end-to-end native Minecraft-to-MP4 loop is now wired.** It renders
+one native world/actor/IMAGE/SUBTITLE frame for each 20 TPS scene tick, captures
+the clean output-resolution film FBO and feeds FFmpeg's H.264 encoder directly.
+No PNG files are produced. The encoder and ffprobe run off the GL thread.
+
+On Windows, install/extract FFmpeg 7.1 essentials so that both `ffmpeg.exe`
+and `ffprobe.exe` are in the same `bin` folder. Either place this folder
+in the system PATH or configure the actual executable location:
+
+```powershell
+git fetch origin
+git switch camera-export-foundation
+git pull origin camera-export-foundation
+.\gradlew.bat -Dbbs.editor.export.ffmpeg="C:\tools\ffmpeg-7.1-essentials_build\bin\ffmpeg.exe" runClient
+```
+
+Replace the example folder with your *actual* FFmpeg installation path.
+When FFmpeg is already available through PATH, simply run
+`.\gradlew.bat runClient` without any special properties.
+
+1. Open a recorded scene in **CAMERA**.
+2. Choose the output aspect/resolution (start with 1920×1080).
+3. Disable AUDIO and VIDEO clips for this first **silent** export mode;
+   IMAGE and SUBTITLE overlays can be included.
+4. Press **Ctrl+Shift+F8**. Video export begins at scene frame 0, continues
+   through the full scene at **20 FPS**, and automatically pauses playback.
+   The toolbar shows encoded/total frame progress.
+5. Press **Ctrl+Shift+F8** or **Esc** to cancel the export. Cancellation
+   deletes the incomplete MP4 and restores the previous editor timeline.
+6. On success check
+   `run/config/bbs-editor/exports/camera-<width>x<height>-*.mp4`.
+   FFprobe validates actual decoded frame count, FPS and resolution before
+   the export reports completed. No PNG preflight is required.
+
+This initial output uses CAMERA clip positions regardless of FREE vs SHOT
+preview mode. It is intentionally limited to **20 FPS**: while sub-tick camera
+sampling exists, full 30/60 FPS export also requires continuous actor/Jolt
+sampling; repeating a 20 TPS pose would not be real 60 FPS. Audio mux and
+frame-exact VIDEO decoding are still future stages. Native Minecraft world
+ticks (including environmental motion) have not yet been isolated from the
+real-time game clock: complex time-dependent scenes require special care.
+
+The experimental MP4 should first be visually checked with one simple actor,
+a moving camera and a subtitle. Check camera position, output-size pixels,
+proper actor movement, GL/FBO restoration and correct length. In particular,
+test whether OptiFine shaderpacks respect the temporary native framebuffer.
+If any frame is black or stretched, do not merge the branch into main.
+
+---
 
 ## 1. Native output-resolution probe (Windows / Forge 1.12.2)
 
