@@ -108,6 +108,45 @@ framebuffer; resizing or stretching that frame is not real 1080p/4K output.
   4K (only if hardware supports target), OptiFine enabled/disabled, and
   shaderpack variants. Handle unsupported FBO sizes explicitly.
 
+### 3a. Native output-resolution single-frame probe (this PR)
+
+A **disabled-by-default, world-only** proof-of-render experiment is now
+available. It is intentionally not the final Export button.
+
+For a local Windows Forge development client:
+
+```powershell
+.\\gradlew.bat runClient -Dbbs.editor.export.probe=true
+```
+
+In CAMERA, select an output format (e.g. 1920x1080 or 1080x1920), then
+press **Ctrl+Shift+F9** once. The next normal native Minecraft render pass
+temporarily uses a matching framebuffer. The probe captures the completed
+world before GUI and writes a PNG asynchronously into:
+
+`run/config/bbs-editor/export-probes/world-<width>x<height>-<timestamp>.png`
+
+Console diagnostics include requested FBO resolution, actual OptiFine/native
+world viewport and whether the native actor stage completed. The
+`CameraNativeFrameProbe` restores Minecraft's previous framebuffer,
+window dimensions and GL read/draw bindings before drawing GUI. It also
+restores on RenderTick END, screen close or capture failure.
+
+This experiment **does not** include Image/Video/Subtitle, clip audio,
+fractional 60 FPS timeline stepping, or H.264 encoding of the Minecraft
+scene. It may still expose issues with a particular shaderpack: PNG output
+and window restoration must be visually checked on the user's machine.
+When the flag is unset, no export-frame replacement is attempted.
+
+**Stop/go criteria before enabling a video export UI:**
+- PNG has exactly the selected pixel dimensions and contains the native
+  world/record actors (not GUI, sky-only or scaled-up preview).
+- 16:9 and 9:16 framing matches SHOT composition reasonably.
+- OptiFine on/off and shaderpacks do not leave stale FBOs, GL errors,
+  inverted depth or broken lightmaps.
+- A failed frame restores window size and framebuffer; normal preview,
+  timeline, gizmos and Jolt continue to work.
+
 ### 4. Deterministic clip media and sound
 
 - Export mode must decode each active Video overlay at the exact output
