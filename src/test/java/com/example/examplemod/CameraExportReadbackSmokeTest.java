@@ -46,6 +46,43 @@ public final class CameraExportReadbackSmokeTest
         catch(IllegalArgumentException error){rejected=true;}
         check(rejected,"crop must stay inside source framebuffer");
 
-        System.out.println("CAMERA offline native readback dimensions/GL cleanup PASS");
+        // Bridge also must never reuse the wrong output timestamp, and it
+        // must forward native film pixels into the encoder without GUI work.
+        final java.util.concurrent.atomic.AtomicInteger writes=
+                new java.util.concurrent.atomic.AtomicInteger();
+        CameraExportPlan bridgePlan=new CameraExportPlan(128,128,20,2);
+        CameraExportSession.FrameSink sink=
+                new CameraExportSession.FrameSink()
+        {
+            @Override public void writeFrame(ByteBuffer frame)
+            {
+                check(frame.remaining()==128*128*4,"encoded film bytes");
+                writes.incrementAndGet();
+            }
+            @Override public void finish(){}
+            @Override public void cancel(){}
+        };
+        try(CameraExportSession session=new CameraExportSession(bridgePlan,sink))
+        {
+            CameraExportFrameBridge bridge=new CameraExportFrameBridge(session);
+            CameraExportPlan.Sample first=bridge.nextFrame();
+            check(first!=null&&first.outputFrame==0,"first sample requested");
+            check(bridge.commit(first,exact,0,0,128,128),
+                    "first true resolution FBO is accepted");
+            boolean wrongOrder=false;
+            try{bridge.commit(first,exact,0,0,128,128);}
+            catch(IllegalArgumentException expected){wrongOrder=true;}
+            check(wrongOrder,"rendering stale scene timestamp is rejected");
+            CameraExportPlan.Sample second=bridge.nextFrame();
+            check(second!=null&&second.outputFrame==1,"next scene sample");
+            check(bridge.commit(second,exact,0,0,128,128),
+                    "second film frame accepted");
+            check(session.await(5,java.util.concurrent.TimeUnit.SECONDS),
+                    "bridge export finishes");
+            check(bridge.status()==CameraExportSession.Status.COMPLETED,
+                    "bridge completes only after video sink completes");
+            check(writes.get()==2,"no dropped or duplicated film frames");
+        }
+        System.out.println("CAMERA offline native readback, FBO state and frame bridge PASS");
     }
 }
