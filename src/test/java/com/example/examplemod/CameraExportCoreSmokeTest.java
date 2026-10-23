@@ -116,6 +116,41 @@ public final class CameraExportCoreSmokeTest
             encoder.cancel();
         }
         check(!abort.exists(),"cancel deletes incomplete MP4");
+
+        // End-to-end GPU-frame queue -> writer thread -> real FFmpeg MP4.
+        File queuedOutput=new File(temp,"async-export.mp4");
+        CameraExportPlan queuedPlan=new CameraExportPlan(128,128,30,10);
+        try(CameraExportSession async=CameraExportSession.openFfmpeg(
+                queuedPlan,null,queuedOutput,18,"ultrafast"))
+        {
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
+            while(async.getStatus()==CameraExportSession.Status.RENDERING)
+            {
+                if(System.nanoTime()>deadline)
+                    throw new AssertionError("Async MP4 encode timeout");
+                CameraExportPlan.Sample next=async.nextSample();
+                if(next==null){Thread.sleep(2L);continue;}
+                byte[] bytes=new byte[queuedPlan.frameBytes];
+                for(int pixel=0;pixel<bytes.length;pixel+=4)
+                {
+                    bytes[pixel]=(byte)(next.sceneTick*18);
+                    bytes[pixel+1]=(byte)(next.outputFrame*13);
+                    bytes[pixel+2]=(byte)100;
+                    bytes[pixel+3]=(byte)255;
+                }
+                check(async.submitFrame(next.outputFrame,ByteBuffer.wrap(bytes)),
+                        "Submit deterministic RGBA into FFmpeg worker");
+            }
+            check(async.await(20,TimeUnit.SECONDS),
+                    "FFmpeg writer finishes without blocking render thread");
+            check(async.getStatus()==CameraExportSession.Status.COMPLETED,
+                    "Async encoder status is success: "+async.getFailure());
+            check(async.getEncodedFrames()==queuedPlan.frameCount,
+                    "Every queued output frame must be encoded");
+        }
+        check(queuedOutput.isFile()&&queuedOutput.length()>100L,
+                "Asynchronous full-video MP4 exists");
+        check(queuedOutput.delete(),"cleanup async MP4");
         check(output.delete(),"cleanup exported MP4");
         check(temp.delete(),"cleanup test directory");
         System.out.println("CAMERA export 20TPS/FPS mapping and real FFmpeg H.264 PASS");
