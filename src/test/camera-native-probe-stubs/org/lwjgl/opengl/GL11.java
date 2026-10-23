@@ -4,9 +4,10 @@ import java.nio.IntBuffer;
 public final class GL11 {
   public static final int GL_VIEWPORT=2978,GL_MAX_TEXTURE_SIZE=3379,
     GL_PACK_ALIGNMENT=3333,GL_READ_BUFFER=3074,GL_RGBA=6408,
-    GL_UNSIGNED_BYTE=5121,GL_NO_ERROR=0,GL_ALL_ATTRIB_BITS=1048575;
+    GL_UNSIGNED_BYTE=5121,GL_NO_ERROR=0,GL_ALL_ATTRIB_BITS=1048575,
+    GL_TEXTURE_2D=3553;
   public static int[] viewport={0,0,800,600};
-  public static int textureLimit=4096,pack=4,attribDepth;
+  public static int textureLimit=4096,pack=4,attribDepth,boundTexture=0;
   public static int glGetInteger(int key) {
     if(key==GL_MAX_TEXTURE_SIZE)return textureLimit;
     if(key==GL_PACK_ALIGNMENT)return pack;
@@ -44,6 +45,10 @@ public final class GL11 {
       pixels.put(offset+2,(byte)80);
       pixels.put(offset+3,(byte)255);
     }
+  }
+  public static void glBindTexture(int target,int texture) {
+    if(target!=GL_TEXTURE_2D)throw new AssertionError("Expected 2D texture");
+    boundTexture=texture;
   }
   public static int glGetError(){return GL_NO_ERROR;}
 }
