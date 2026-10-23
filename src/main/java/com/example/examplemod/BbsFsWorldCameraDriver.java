@@ -179,6 +179,8 @@ public final class BbsFsWorldCameraDriver
                         org.lwjgl.opengl.GL11.GL_VIEWPORT, glViewport);
                 int worldWidth = Math.max(1, glViewport.get(2));
                 int worldHeight = Math.max(1, glViewport.get(3));
+                CameraNativeFrameProbe.noteNativeWorld(
+                        worldWidth,worldHeight,source);
                 BbsFsWorldProjection.capture(worldWidth, worldHeight);
 
                 /*
