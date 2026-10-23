@@ -8,9 +8,15 @@ compile as proof that OptiFine, Jolt or cinematic media renders correctly.
 The current CAMERA branch contains an *opt-in* single-frame native-world
 probe. It does not produce a video and should not be used for production.
 
-1. In `gradle.properties` or your run JVM arguments, enable the system
-   property `-Dbbs.editor.export.probe=true`.
-2. Launch the normal dev client using `.\gradlew.bat runClient`.
+1. Launch the Forge dev client with the explicit diagnostic flag:
+
+   ```powershell
+   .\gradlew.bat runClient -Dbbs.editor.export.probe=true
+   ```
+
+   The client configuration forwards the flag to Minecraft. Without it,
+   no native world framebuffer replacement takes place.
+2. Confirm the normal modpack loads as before.
 3. Enter a scene and switch the editor to CAMERA / SHOT. Keep the same
    animation frame visible.
 4. Choose **1920×1080** in the Output Format popup.
