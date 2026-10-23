@@ -3746,6 +3746,7 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        if(cameraVideoExport.isExporting())return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && clickedMouseButton == 0)
@@ -3770,6 +3771,7 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             int state)
     {
+        if(cameraVideoExport.isExporting())return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
             this.cameraWorkspace.release();
@@ -3787,6 +3789,13 @@ public class AnimationEditorScreen extends GuiScreen
     public void handleMouseInput()
             throws java.io.IOException
     {
+        if(cameraVideoExport.isExporting())
+        {
+            // Keep the authored scene immutable while native frames are
+            // being encoded; especially ignore timeline/zoom wheel input.
+            super.handleMouseInput();
+            return;
+        }
         if (this.editorInput != null)
         {
             this.editorInput.handleMouseInput();
