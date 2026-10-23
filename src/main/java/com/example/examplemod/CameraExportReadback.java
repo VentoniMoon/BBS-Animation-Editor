@@ -51,11 +51,14 @@ public final class CameraExportReadback
 
         int oldRead=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int oldPack=GL11.glGetInteger(GL11.GL_PACK_ALIGNMENT);
-        int oldReadBuffer=GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        boolean sourceBound=false;
+        int sourceReadBuffer=GL30.GL_COLOR_ATTACHMENT0;
         try
         {
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,
                     source.framebufferObject);
+            sourceBound=true;
+            sourceReadBuffer=GL11.glGetInteger(GL11.GL_READ_BUFFER);
             GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT,1);
             pixels.clear();
@@ -72,9 +75,9 @@ public final class CameraExportReadback
         finally
         {
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT,oldPack);
-            // Restore readBuffer on the SOURCE framebuffer before rebinding
-            // the original one: READ_BUFFER is framebuffer-object state.
-            GL11.glReadBuffer(oldReadBuffer);
+            // READ_BUFFER belongs to the bound framebuffer. Do not restore
+            // the original FBO's value into the source's attachment state.
+            if(sourceBound)GL11.glReadBuffer(sourceReadBuffer);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,oldRead);
         }
     }
