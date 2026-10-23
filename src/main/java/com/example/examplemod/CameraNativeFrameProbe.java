@@ -11,6 +11,7 @@ import javax.imageio.ImageIO;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraftforge.fml.relauncher.ReflectionHelper;
 import org.lwjgl.BufferUtils;
@@ -234,6 +235,7 @@ public final class CameraNativeFrameProbe
                 GL11.glViewport(originalViewport.get(0),
                         originalViewport.get(1),originalViewport.get(2),
                         originalViewport.get(3));
+                resyncDefaultTextureForGui();
             }
 
             if(exportTarget.framebufferWidth!=plan.width||
@@ -417,6 +419,7 @@ public final class CameraNativeFrameProbe
             exportTarget=null;
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,read);
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,draw);
+            resyncDefaultTextureForGui();
         }
     }
 
@@ -445,7 +448,30 @@ public final class CameraNativeFrameProbe
                     originalViewport.get(1),originalViewport.get(2),
                     originalViewport.get(3));
             GL13.glActiveTexture(originalTexture);
+            resyncDefaultTextureForGui();
         }
+    }
+
+    /**
+     * GL push/pop and native FBO operations can change texture bindings
+     * without updating Minecraft 1.12's GlStateManager texture cache.
+     * Leaving the cache stale lets FontRenderer skip an atlas bind, which
+     * renders scrambled glyphs in CAMERA's Export Video modal.
+     *
+     * Run only at the native-to-editor GUI boundary (or after allocating a
+     * probe FBO) so both the actual GL texture-0 binding and Minecraft's
+     * Java-side state agree before fonts and text fields are drawn.
+     */
+    private static void resyncDefaultTextureForGui()
+    {
+        // Force the real unit before the cache-aware state manager call:
+        // other renderers may have changed it using raw GL13 calls.
+        GL13.glActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.bindTexture(0);
+        // If GlStateManager already thought 0 was bound, it skips glBind.
+        // Explicitly enforce 0 to bring the GL driver back into agreement.
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D,0);
     }
 
     private static void saveImageAsync(Minecraft mc,final byte[] rgba,
