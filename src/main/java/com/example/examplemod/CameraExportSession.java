@@ -64,6 +64,8 @@ public final class CameraExportSession implements AutoCloseable
         {
             return new CameraExportSession(plan,new FrameSink()
             {
+                private volatile boolean verified;
+
                 @Override public void writeFrame(ByteBuffer frame)
                         throws IOException
                 {encoder.writeFrame(frame);}
@@ -76,6 +78,7 @@ public final class CameraExportSession implements AutoCloseable
                         // "MP4 exists" is not success until decoded width,
                         // height, FPS and *actual frames* match our plan.
                         CameraExportVerifier.verify(ffprobe,output,plan);
+                        verified=true;
                     }
                     catch(IOException invalid)
                     {
@@ -89,7 +92,13 @@ public final class CameraExportSession implements AutoCloseable
                 }
 
                 @Override public void cancel()
-                {encoder.cancel();}
+                {
+                    encoder.cancel();
+                    // FFmpeg may already have closed and finalized its MP4,
+                    // while ffprobe is still checking it. Cancellation at
+                    // that stage must not leave a falsely successful file.
+                    if(!verified&&output.isFile())output.delete();
+                }
             });
         }
         catch(RuntimeException failure)
