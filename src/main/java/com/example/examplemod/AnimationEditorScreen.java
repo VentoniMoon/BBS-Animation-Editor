@@ -1800,6 +1800,10 @@ public class AnimationEditorScreen extends GuiScreen
          * Otherwise the world texture would contain our dark editor panels.
          */
         BbsFsWorldFrameCapture.beginFrame(this.mc);
+        // The world was rendered at native output resolution when the
+        // optional diagnostic is armed. Restore the original screen FBO
+        // before any editor GUI pixels or panels are drawn.
+        CameraNativeFrameProbe.beforeGui(this.mc);
 
         drawRect(
                 0,
@@ -3739,6 +3743,18 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        // Hidden opt-in diagnostic only; never intercept normal F9/editor
+        // input unless the developer explicitly enabled this world probe.
+        if(CameraNativeFrameProbe.isEnabled()
+                &&editorModeController.getMode()
+                    ==EditorModeController.EditorMode.CAMERA
+                &&keyCode==org.lwjgl.input.Keyboard.KEY_F9
+                &&isCtrlKeyDown()&&isShiftKeyDown())
+        {
+            CameraOutputSettings out=sceneState.getCameraOutput();
+            CameraNativeFrameProbe.request(out.getWidth(),out.getHeight());
+            return;
+        }
         if(cameraOutputPopup.keyTyped(typedChar,keyCode,
                     sceneState.getCameraOutput(),
                     () -> saveCameraOutputSettings()))return;
@@ -4002,6 +4018,7 @@ public class AnimationEditorScreen extends GuiScreen
             BbsFsWorldCameraDriver.detach(this.sceneViewport);
             this.sceneViewport.disposePreviewResources();
         }
+        CameraNativeFrameProbe.close(this.mc);
         BbsFsWorldFrameCapture.release();
         this.cameraWorkspace.dispose();
 
