@@ -47,6 +47,10 @@ minecraft {
             // output-resolution PNG probe in CAMERA for render diagnostics.
             property 'bbs.editor.export.probe',
                     System.getProperty('bbs.editor.export.probe', 'false')
+            // Optional full-pixel IMAGE/SUBTITLE compositing test.
+            // This remains disabled unless the user explicitly opts in.
+            property 'bbs.editor.export.probe.media',
+                    System.getProperty('bbs.editor.export.probe.media', 'false')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
