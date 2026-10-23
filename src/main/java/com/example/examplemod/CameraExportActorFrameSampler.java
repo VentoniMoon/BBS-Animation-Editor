@@ -24,6 +24,7 @@ public final class CameraExportActorFrameSampler
         result.setYaw(angle(a.getYaw(),b.getYaw(),t));
         result.setPitch(angle(a.getPitch(),b.getPitch(),t));
         result.setYawHead(angle(a.getYawHead(),b.getYawHead(),t));
+        result.setRoll(angle(a.getRoll(),b.getRoll(),t));
         if(a.hasBodyYaw()&&b.hasBodyYaw())
             result.setBodyYaw(angle(a.getBodyYaw(),b.getBodyYaw(),t));
         result.setMountYaw(angle(a.getMountYaw(),b.getMountYaw(),t));
