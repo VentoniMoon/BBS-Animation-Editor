@@ -43,6 +43,11 @@ minecraft {
             property 'bbs.editor.weld.preview',
                     System.getProperty('bbs.editor.weld.preview', 'false')
 
+            // OFF by default: enables Ctrl+Shift+F9 single-frame native
+            // output-resolution PNG probe in CAMERA for render diagnostics.
+            property 'bbs.editor.export.probe',
+                    System.getProperty('bbs.editor.export.probe', 'false')
+
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
         }
