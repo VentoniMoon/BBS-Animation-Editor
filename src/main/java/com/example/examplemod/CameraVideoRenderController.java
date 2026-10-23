@@ -235,8 +235,10 @@ public final class CameraVideoRenderController
             if(!CameraNativeFrameProbe.requestVideoFrame(bridge,next))
                 throw new IllegalStateException(CameraNativeFrameProbe.status());
         }
-        catch(RuntimeException error)
+        catch(Exception error)
         {
+            // Exact VIDEO decode readiness reports IOException; do not let
+            // it escape the Minecraft render callback and crash the client.
             fail("Cannot prepare scene frame: "+error.getMessage());
         }
     }
