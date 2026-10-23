@@ -1,8 +1,8 @@
 # CAMERA 3.0 — offline render implementation roadmap
 
-Status as of PR #96: **experimental silent 20 FPS MP4 export, a visible
-Export Video dialog, and frame-exact visual VIDEO clips** have been
-implemented. Forge and Java 8 tests are necessary but NOT evidence that
+Status as of the AAC/export-preferences work: **experimental 20 FPS MP4
+export, an Export Video dialog, frame-exact visual VIDEO clips and a
+48 kHz AAC audio mix pass** have been implemented. Forge and Java 8 tests are necessary but NOT evidence that
 OptiFine/shaderpack rendering has been verified in a live Minecraft client.
 
 The Export dialog selects output resolution, H.264 quality, ffmpeg.exe and
