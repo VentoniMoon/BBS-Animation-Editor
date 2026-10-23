@@ -40,7 +40,8 @@ public final class CameraNativeFrameProbe
     /** Optional IMAGE/SUBTITLE composition after native world snapshot. */
     private static final String MEDIA_FLAG="bbs.editor.export.probe.media";
     /** Bound CPU/GPU memory when diagnostic screenshots use custom 8K sizes. */
-    private static final int MAX_PROBE_RGBA_BYTES=128*1024*1024;
+    private static final long MAX_PROBE_RGBA_BYTES=
+            CameraExportPlan.MAX_RGBA_FRAME_BYTES;
     private static Field framebufferField;
     private static CameraExportPlan pending;
     private static CameraExportPlan running;
@@ -86,7 +87,7 @@ public final class CameraNativeFrameProbe
             CameraExportPlan requested=new CameraExportPlan(width,height,20,1);
             if(requested.frameBytes>MAX_PROBE_RGBA_BYTES)
                 throw new IllegalArgumentException(
-                        "Single-frame probe exceeds 128 MiB RGBA limit");
+                        "Single-frame probe exceeds 64 MiB RGBA limit");
             pending=requested;
             lastStatus="Native output probe armed: "+width+"x"+height;
             System.out.println("[BBS Editor][Export Probe] "+lastStatus);
