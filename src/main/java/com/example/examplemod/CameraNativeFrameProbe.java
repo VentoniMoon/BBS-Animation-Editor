@@ -335,7 +335,9 @@ public final class CameraNativeFrameProbe
                         mc.currentScreen;
                 CameraFilmCompositor.compositeNative(mc,exportTarget,
                         editor.getSceneState().getCameraClips().clips(),
-                        editor.getCurrentFrame());
+                        editor.getCurrentFrame(),
+                        video==null?null:
+                                editor.getCameraVideoExport().videoFrames());
             }
 
             if(video!=null)

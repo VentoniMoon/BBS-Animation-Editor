@@ -1,7 +1,19 @@
 # CAMERA 3.0 — offline render implementation roadmap
 
-Status: **export foundation only**. This document is a work plan, not a
-statement that the editor already exports its scenes.
+Status as of PR #96: **experimental silent 20 FPS MP4 export, a visible
+Export Video dialog, and frame-exact visual VIDEO clips** have been
+implemented. Forge and Java 8 tests are necessary but NOT evidence that
+OptiFine/shaderpack rendering has been verified in a live Minecraft client.
+
+The Export dialog selects output resolution, H.264 quality, ffmpeg.exe and
+MP4 destination and shows native frame/VIDEO/encoding progress. The current
+film renderer uses IMAGE, VIDEO and SUBTITLE clips in saved layer order.
+VIDEO decoding is asynchronous and exact to a scene tick: no fallback to
+preview's previous-frame cache; FFmpeg loops a source only if Loop is enabled.
+
+Remaining major work: offline AUDIO and embedded VIDEO sound mux, continuous
+actor/Jolt/world 30/60 FPS frame-time evaluation, performance optimization of
+per-frame VIDEO decode, and real OptiFine in-game visual regression.
 
 ## Existing, verified ownership boundaries (do not break)
 
@@ -35,9 +47,9 @@ statement that the editor already exports its scenes.
 - Java 8 smoke tests run without Forge/OpenGL and optionally verify an
   actual encoded MP4 when FFmpeg is available.
 
-This first PR deliberately **does not** add a GUI Export button, change
-Minecraft rendering, render camera actors, or claim real 1080p/4K exports.
-The encoder is ready to receive clean frames when the renderer is implemented.
+Historical foundation milestone (#95): this stage initially supplied
+only an encoder, with GUI/native game-frame integration added later.
+The current PR #96 adds the Export UI and frame-exact VIDEO overlay pipeline.
 
 ### 2. Export Session + exact frame ownership
 

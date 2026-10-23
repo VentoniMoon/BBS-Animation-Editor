@@ -3,50 +3,62 @@
 The export pipeline is still experimental. Do not interpret a passing Forge
 compile as proof that OptiFine, Jolt or cinematic media renders correctly.
 
-## 0. First actual CAMERA MP4 (not a PNG diagnostic)
+## 0. First CAMERA MP4 with VIDEO clips and the Export dialog
 
-**The first end-to-end native Minecraft-to-MP4 loop is now wired.** It renders
-one native world/actor/IMAGE/SUBTITLE frame for each 20 TPS scene tick, captures
-the clean output-resolution film FBO and feeds FFmpeg's H.264 encoder directly.
-No PNG files are produced. The encoder and ffprobe run off the GL thread.
+**The second integration stage adds an actual Export Video screen and
+frame-exact visual VIDEO clip compositing.** The scene goes from the native
+Minecraft world/actor render to the output-resolution FBO, where IMAGE,
+VIDEO and SUBTITLE clips are composited in layer order. Raw pixels pass to
+FFmpeg's H.264 encoder; FFprobe verifies the resulting MP4. No intermediate
+PNG sequence is produced.
 
-On Windows, install/extract FFmpeg 7.1 essentials so that both `ffmpeg.exe`
-and `ffprobe.exe` are in the same `bin` folder. Either place this folder
-in the system PATH or configure the actual executable location:
+### Open the Export Video screen
 
-```powershell
-git fetch origin
-git switch camera-export-foundation
-git pull origin camera-export-foundation
-.\gradlew.bat -Dbbs.editor.export.ffmpeg="C:\tools\ffmpeg-7.1-essentials_build\bin\ffmpeg.exe" runClient
-```
+On Windows, extract FFmpeg 7.1 essentials containing both `ffmpeg.exe` and
+`ffprobe.exe`. They should be together in the same `bin` directory.
 
-Replace the example folder with your *actual* FFmpeg installation path.
-When FFmpeg is already available through PATH, simply run
-`.\gradlew.bat runClient` without any special properties.
+1. Open CAMERA and click the **fourth mini-icon** beside SHOT / REC / Output
+   Format. It shows a small outgoing film arrow. **Ctrl+Shift+F8** opens the
+   same dialog; it no longer immediately begins recording.
+2. Enter the output width/height (even values), quality (CRF 18/22/26),
+   external FFmpeg executable (or `ffmpeg` if in PATH) and MP4 path.
+3. Click **START RENDER**. Watch the encoded frame count and the progress
+   bar. The dialog remains open while encoding.
+4. Click **CANCEL EXPORT** or press **Esc** to cancel. Partial MP4 output is
+   deleted and the original editor timeline position restored.
+5. On completion use the exact path entered in the dialog. By default this
+   is `run/config/bbs-editor/exports/camera-<timestamp>.mp4`.
 
-1. Open a recorded scene in **CAMERA**.
-2. Choose the output aspect/resolution (start with 1920×1080).
-3. Disable AUDIO and VIDEO clips for this first **silent** export mode;
-   IMAGE and SUBTITLE overlays can be included.
-4. Press **Ctrl+Shift+F8**. Video export begins at scene frame 0, continues
-   through the full scene at **20 FPS**, and automatically pauses playback.
-   The toolbar shows encoded/total frame progress.
-5. Press **Ctrl+Shift+F8** or **Esc** to cancel the export. Cancellation
-   deletes the incomplete MP4 and restores the previous editor timeline.
-6. On success check
-   `run/config/bbs-editor/exports/camera-<width>x<height>-*.mp4`.
-   FFprobe validates actual decoded frame count, FPS and resolution before
-   the export reports completed. No PNG preflight is required.
+The screen deliberately shows **20 FPS, H.264, silent MP4**. It does not
+pretend 30/60 FPS is already available: doing that properly requires
+sub-tick actor and Jolt physics integration. A separate sound-mixing pass
+is also pending. Therefore active AUDIO clips are explicitly rejected;
+VIDEO clip *images* render but their embedded sound is not yet included.
 
-This initial output uses CAMERA clip positions regardless of FREE vs SHOT
-preview mode. It is intentionally limited to **20 FPS**: while sub-tick camera
-sampling exists, full 30/60 FPS export also requires continuous actor/Jolt
-sampling; repeating a 20 TPS pose would not be real 60 FPS. Audio mux and
-frame-exact VIDEO decoding are still future stages. Native Minecraft world
-ticks (including environmental motion) have not yet been isolated from the
-real-time game clock: complex time-dependent scenes require special care.
+### VIDEO clip semantics
 
+- VIDEO time is `(sceneTick - clip.tick + clip.offset) / 20` seconds.
+- The FFmpeg decoder runs on a background worker, not in OpenGL. The
+  native export loop waits for the exact decoded timestamp of **every**
+  active VIDEO layer, rather than showing the preview decoder's earlier
+  fallback frame.
+- VIDEO obeys the clip layer, normalized x/y/width/height, opacity,
+  transform, tint, fullscreen and smooth settings, as IMAGE does.
+- With **Loop=true**, FFmpeg repeats the source until the clip ends.
+  Without Loop, a clip that outlives its source produces an actionable
+  error instead of silently duplicating an outdated video image.
+- Missing source files are rejected before encoding starts. A negative
+  offset produces transparent video until the source's starting frame.
+- Exact frame decoding currently creates one FFmpeg process per requested
+  VIDEO frame. This is correct but may be **slow** for long source videos;
+  a persistent decoder stream remains a later performance optimization.
+
+### Limits that still need live in-game validation
+
+OptiFine world/FBO behavior, real multi-actor and Jolt rendering, complex
+world-dependent timing, shaderpacks, subtitle font sizing and the visual
+parity of vertical 9:16 clips have not been verified in the actual
+Minecraft dev client. No PNG preflight is required to reach the MP4 dialog.
 The experimental MP4 should first be visually checked with one simple actor,
 a moving camera and a subtitle. Check camera position, output-size pixels,
 proper actor movement, GL/FBO restoration and correct length. In particular,

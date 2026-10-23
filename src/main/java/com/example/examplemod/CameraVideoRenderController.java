@@ -26,13 +26,30 @@ public final class CameraVideoRenderController
 {
     public static final int INITIAL_VIDEO_FPS=20;
 
+    public static final class Options
+    {
+        public final int width,height,crf;
+        public final String preset;
+        public final File ffmpeg,output;
+
+        public Options(int width,int height,int crf,String preset,
+                File ffmpeg,File output)
+        {
+            this.width=width;this.height=height;
+            this.crf=crf;this.preset=preset;
+            this.ffmpeg=ffmpeg;this.output=output;
+        }
+    }
+
     private CameraExportSession session;
     private CameraExportFrameBridge bridge;
+    private CameraExportVideoFrames media;
     private AnimationEditorScreen owner;
     private int previousFrame;
     private boolean previousPlaying;
     private File output;
     private String message="";
+    private String stage="Ready";
 
     public boolean isExporting()
     {
@@ -44,7 +61,36 @@ public final class CameraVideoRenderController
         if(session==null)return message;
         return "CAMERA MP4 20 FPS  "+session.getEncodedFrames()+"/"+
                 session.getPlan().frameCount+" frames (captured "+
-                session.getCapturedFrames()+") — Ctrl+Shift+F8 cancels";
+                session.getCapturedFrames()+") — Cancel from Export dialog";
+    }
+
+    public String getStage()
+    {
+        return stage;
+    }
+
+    public int getEncodedFrames()
+    {
+        return session==null?0:session.getEncodedFrames();
+    }
+
+    public int getCapturedFrames()
+    {
+        return session==null?0:session.getCapturedFrames();
+    }
+
+    public int getTotalFrames()
+    {
+        return session==null?0:session.getPlan().frameCount;
+    }
+
+    /**
+     * Export VIDEO overlays are evaluated at the exact film timestamp.
+     * The preview cache and all GL operations remain outside the FFmpeg worker.
+     */
+    public CameraExportVideoFrames videoFrames()
+    {
+        return media;
     }
 
     /**
@@ -52,79 +98,81 @@ public final class CameraVideoRenderController
      * while the CAMERA editor is open. The first frame is requested on the
      * NEXT native Minecraft render tick, never by reentering renderWorld().
      */
+    /** Legacy shortcut starts with sensible defaults; modal UI supplies Options. */
     public void start(AnimationEditorScreen editor)
+    {
+        if(editor==null||editor.getSceneState()==null)return;
+        CameraOutputSettings size=editor.getCameraOutputSettings();
+        Minecraft mc=Minecraft.getMinecraft();
+        String name="camera-"+new SimpleDateFormat("yyyyMMdd-HHmmss-SSS",
+                Locale.ROOT).format(new Date())+".mp4";
+        File folder=new File(mc.mcDataDir,"config/bbs-editor/exports");
+        start(editor,new Options(size.getWidth(),size.getHeight(),18,"medium",
+                new File(System.getProperty("bbs.editor.export.ffmpeg",
+                        "ffmpeg")),new File(folder,name)));
+    }
+
+    /** Start a user-configured CAMERA MP4 session from the Export dialog. */
+    public boolean start(AnimationEditorScreen editor,Options options)
     {
         if(isExporting())
         {
-            cancel("CAMERA export canceled");
-            return;
+            message="Another CAMERA export is already active";
+            return false;
         }
-        if(editor==null||editor.getSceneState()==null)
+        if(editor==null||editor.getSceneState()==null||options==null)
         {
             message="Open a CAMERA scene before exporting";
-            return;
+            return false;
         }
         if(CameraNativeFrameProbe.isBusy())
         {
-            message="A native export probe is already active";
-            return;
+            message="A native export frame is already active";
+            return false;
         }
+        CameraExportSession started=null;
+        CameraExportVideoFrames exactMedia=null;
         try
         {
             int sceneTicks=editor.getSceneLength();
-            CameraOutputSettings size=editor.getCameraOutputSettings();
-            CameraExportPlan plan=new CameraExportPlan(
-                    size.getWidth(),size.getHeight(),INITIAL_VIDEO_FPS,
-                    sceneTicks);
+            CameraExportPlan plan=new CameraExportPlan(options.width,
+                    options.height,INITIAL_VIDEO_FPS,sceneTicks);
             if(!editor.isCameraMode())
                 throw new IllegalStateException("Switch to CAMERA to export");
+            if(options.output==null||options.ffmpeg==null)
+                throw new IllegalArgumentException("Select output and FFmpeg");
 
-            // Don't silently omit an AUDIO track or export stale cached VIDEO
-            // images. These clips require deterministic timestamp decoding/
-            // sound mixing in the next video-export stage.
+            // Audio remains an explicit future stage; never silently omit
+            // tracks. VIDEO imagery, however, is now timestamp-accurate.
             for(CameraClipDocument.Clip clip:
                     editor.getSceneState().getCameraClips().clips())
             {
                 if(!clip.enabled||clip.tick>=sceneTicks)continue;
-                if(clip.kind==CameraClipDocument.Kind.AUDIO||
-                        clip.kind==CameraClipDocument.Kind.VIDEO)
+                if(clip.kind==CameraClipDocument.Kind.AUDIO)
                     throw new IllegalStateException(
-                            clip.kind.label+" clips need exact media export; "+
-                            "disable them for the first silent MP4 test");
+                            "AUDIO mixing is not ready; mute AUDIO clips "+
+                            "before exporting this silent MP4");
             }
-
+            CameraExportVideoFrames.validateSources(
+                    editor.getSceneState().getCameraClips().clips(),
+                    sceneTicks);
             Minecraft mc=Minecraft.getMinecraft();
             if(mc==null||mc.world==null)
                 throw new IllegalStateException(
                         "Minecraft world must be loaded for CAMERA export");
 
-            File folder=new File(mc.mcDataDir,"config/bbs-editor/exports");
-            if(!folder.isDirectory()&&!folder.mkdirs())
-                throw new IOException("Cannot create "+folder);
-            String stamp=new SimpleDateFormat("yyyyMMdd-HHmmss-SSS",
-                    Locale.ROOT).format(new Date());
-            File file=new File(folder,"camera-"+size.getWidth()+"x"+
-                    size.getHeight()+"-"+stamp+".mp4");
+            File file=options.output.getAbsoluteFile();
+            File folder=file.getParentFile();
+            if(folder!=null&&!folder.isDirectory()&&!folder.mkdirs())
+                throw new IOException("Cannot create output folder "+folder);
             if(file.exists())
                 throw new IOException("Output already exists: "+file);
-
-            String executable=System.getProperty(
-                    "bbs.editor.export.ffmpeg","ffmpeg").trim();
-            if(executable.isEmpty())executable="ffmpeg";
-            // Companion ffprobe resolution and availability are checked in
-            // openFfmpeg BEFORE the encoder or frame buffers are allocated.
-            CameraExportSession started=CameraExportSession.openFfmpeg(
-                    plan,new File(executable),file,18,"medium");
-            CameraExportFrameBridge frameBridge;
-            try
-            {
-                frameBridge=new CameraExportFrameBridge(started);
-            }
-            catch(RuntimeException allocationFailure)
-            {
-                started.close();
-                throw allocationFailure;
-            }
+            // The MP4 pipeline checks availability of both ffmpeg/ffprobe.
+            started=CameraExportSession.openFfmpeg(
+                    plan,options.ffmpeg,file,options.crf,options.preset);
+            exactMedia=new CameraExportVideoFrames(options.ffmpeg);
+            CameraExportFrameBridge frameBridge=new CameraExportFrameBridge(
+                    started);
 
             previousFrame=editor.getCurrentFrame();
             previousPlaying=editor.isCameraPlaying();
@@ -132,14 +180,20 @@ public final class CameraVideoRenderController
             output=file;
             bridge=frameBridge;
             session=started;
+            media=exactMedia;
             editor.pauseForCameraVideoExport();
+            stage="Preparing first native film frame...";
             message="Export started: "+file.getName();
             System.out.println("[BBS Editor][Video Export] "+message);
+            return true;
         }
         catch(Exception error)
         {
+            if(exactMedia!=null)exactMedia.close();
+            if(started!=null)started.cancel();
             message="Export cannot start: "+error.getMessage();
             System.err.println("[BBS Editor][Video Export] "+message);
+            return false;
         }
     }
 
@@ -175,15 +229,36 @@ public final class CameraVideoRenderController
 
         if(CameraNativeFrameProbe.isBusy())return;
         CameraExportPlan.Sample next=bridge.nextFrame();
-        if(next==null)return; // FFmpeg backpressure / finalizing.
+        if(next==null)
+        {
+            stage=session.getStatus()==CameraExportSession.Status.FINALIZING
+                    ?"Finalizing and validating MP4..."
+                    :"Waiting for FFmpeg encoder queue...";
+            return;
+        }
         try
         {
+            // Never capture stale preview VIDEO textures. If a requested
+            // FFmpeg VIDEO frame is not decoded yet, leave the timeline
+            // paused; this *same* native output timestamp will be retried.
+            if(media!=null&&!media.prepare(
+                    editor.getSceneState().getCameraClips().clips(),
+                    next.sceneTick))
+            {
+                stage="Decoding VIDEO clips at timeline tick "+
+                        next.sceneTick+"...";
+                return;
+            }
+            stage="Rendering native film frame "+
+                    (next.outputFrame+1)+"/"+bridge.totalFrames();
             editor.setCameraWorkspaceExportFrame(next.sceneTick);
             if(!CameraNativeFrameProbe.requestVideoFrame(bridge,next))
                 throw new IllegalStateException(CameraNativeFrameProbe.status());
         }
-        catch(RuntimeException error)
+        catch(Exception error)
         {
+            // Exact VIDEO decode readiness reports IOException; do not let
+            // it escape the Minecraft render callback and crash the client.
             fail("Cannot prepare scene frame: "+error.getMessage());
         }
     }
@@ -221,11 +296,14 @@ public final class CameraVideoRenderController
     private void finish(boolean success,String result)
     {
         CameraExportSession completed=session;
+        CameraExportVideoFrames frames=media;
         AnimationEditorScreen editor=owner;
         session=null;
         bridge=null;
+        media=null;
         owner=null;
         if(completed!=null&&!success)completed.cancel();
+        if(frames!=null)frames.close();
         if(editor!=null)
         {
             try
@@ -239,6 +317,7 @@ public final class CameraVideoRenderController
             }
         }
         message=result;
+        stage=success?"Export completed":"Export stopped";
         System.out.println("[BBS Editor][Video Export] "+message);
     }
 }

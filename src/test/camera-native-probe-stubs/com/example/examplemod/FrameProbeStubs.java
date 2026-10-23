@@ -8,6 +8,9 @@ class AnimationEditorScreen extends net.minecraft.client.gui.GuiScreen
   final EditorSceneState scene=new EditorSceneState();
   EditorSceneState getSceneState(){return scene;}
   int getCurrentFrame(){return 4;}
+  CameraVideoRenderController getCameraVideoExport(){
+    return new CameraVideoRenderController();
+  }
 }
 final class EditorSceneState
 {
@@ -19,6 +22,10 @@ final class CameraClipDocument
   static final class Clip {}
   List<Clip> clips(){return Collections.emptyList();}
 }
+final class CameraExportVideoFrames {}
+final class CameraVideoRenderController {
+  CameraExportVideoFrames videoFrames(){return null;}
+}
 final class CameraFilmCompositor
 {
   static int nativeCalls;
@@ -26,6 +33,13 @@ final class CameraFilmCompositor
   static void compositeNative(net.minecraft.client.Minecraft mc,
       net.minecraft.client.shader.Framebuffer film,
       List<CameraClipDocument.Clip> clips,int tick)
+  {
+    compositeNative(mc,film,clips,tick,null);
+  }
+  static void compositeNative(net.minecraft.client.Minecraft mc,
+      net.minecraft.client.shader.Framebuffer film,
+      List<CameraClipDocument.Clip> clips,int tick,
+      CameraExportVideoFrames frames)
   {
     nativeCalls++;
     if(tick!=4)throw new AssertionError("Wrong film scene tick");

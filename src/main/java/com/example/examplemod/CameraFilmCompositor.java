@@ -38,6 +38,18 @@ public final class CameraFilmCompositor
     public static void compositeNative(Minecraft mc,Framebuffer film,
             List<CameraClipDocument.Clip> clips,int tick)
     {
+        compositeNative(mc,film,clips,tick,null);
+    }
+
+    /**
+     * Explicit offline VIDEO textures are provided by the export session.
+     * A null decoder is used by legacy native PNG diagnostics, where VIDEO
+     * intentionally still fails instead of rendering stale preview frames.
+     */
+    public static void compositeNative(Minecraft mc,Framebuffer film,
+            List<CameraClipDocument.Clip> clips,int tick,
+            CameraExportVideoFrames exactFrames)
+    {
         if(mc==null||film==null||clips==null)
             throw new IllegalArgumentException("Missing native film target");
         int width=film.framebufferWidth;
@@ -51,9 +63,14 @@ public final class CameraFilmCompositor
         {
             if(!clip.enabled||!clip.contains(tick))continue;
             if(clip.kind==CameraClipDocument.Kind.VIDEO)
-                throw new IllegalStateException(
-                        "VIDEO export requires frame-exact decoding; "+
-                        "preview frame cache is not safe for offline rendering");
+            {
+                if(exactFrames==null)
+                    throw new IllegalStateException(
+                            "VIDEO export requires frame-exact decoding; "+
+                            "preview frame cache is not safe for offline rendering");
+                overlays.add(clip);
+                continue;
+            }
             if(clip.kind==CameraClipDocument.Kind.IMAGE)
             {
                 String path=clip.settings.get("texture");
@@ -115,7 +132,15 @@ public final class CameraFilmCompositor
                         throw new IllegalStateException(
                                 "Cannot decode export IMAGE: "+
                                 clip.settings.get("texture"));
-                    drawImage(clip,0,0,width,height,tick);
+                    drawImage(clip,0,0,width,height,tick,null,true);
+                }
+                else if(clip.kind==CameraClipDocument.Kind.VIDEO)
+                {
+                    // exactFrames.get() either returns the source's precise
+                    // timestamp, transparent before an offset, or throws.
+                    // Never ask CameraVideoFrames for an older preview frame.
+                    drawImage(clip,0,0,width,height,tick,
+                            exactFrames.get(clip,tick),true);
                 }
                 else
                     drawSubtitle(mc,clip,0,0,width,height,tick);
@@ -221,12 +246,23 @@ public final class CameraFilmCompositor
     private static void drawImage(CameraClipDocument.Clip clip,
             int px,int py,int pw,int ph,int tick)
     {
+        drawImage(clip,px,py,pw,ph,tick,null,false);
+    }
+
+    private static void drawImage(CameraClipDocument.Clip clip,
+            int px,int py,int pw,int ph,int tick,
+            DynamicTexture exactVideo,boolean offline)
+    {
         DynamicTexture texture;
         if(clip.kind==CameraClipDocument.Kind.VIDEO)
         {
-            int offset=(int)number(clip,"offset",0D);
-            int local=tick-clip.tick+offset;
-            texture=CameraVideoFrames.get(clip.settings.get("video"),local);
+            if(offline)texture=exactVideo;
+            else
+            {
+                int offset=(int)number(clip,"offset",0D);
+                int local=tick-clip.tick+offset;
+                texture=CameraVideoFrames.get(clip.settings.get("video"),local);
+            }
         }
         else texture=CameraImageCache.get(clip.settings.get("texture"));
         if(texture==null)return;
