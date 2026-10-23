@@ -19,6 +19,8 @@ on:
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
       - 'src/main/java/com/example/examplemod/PreviewToolbarIcons.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java'
+      - 'src/test/camera-video-export-stubs/**'
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
@@ -43,6 +45,8 @@ on:
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
       - 'src/main/java/com/example/examplemod/PreviewToolbarIcons.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java'
+      - 'src/test/camera-video-export-stubs/**'
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
@@ -160,3 +164,15 @@ jobs:
             src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java
           java -ea -Djava.awt.headless=true -cp build/camera/video-decode \
             com.example.examplemod.CameraExportVideoDecoderSmokeTest
+
+      - name: Test exact VIDEO readiness and GL-thread texture ownership
+        run: |
+          mkdir -p build/camera/video-frames
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/video-frames \
+            src/main/java/com/example/examplemod/CameraExportVideoDecoder.java \
+            src/main/java/com/example/examplemod/CameraExportVideoFrames.java \
+            src/test/camera-video-export-stubs/net/minecraft/client/renderer/texture/DynamicTexture.java \
+            src/test/camera-video-export-stubs/com/example/examplemod/VideoClipStubs.java \
+            src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java
+          java -ea -Djava.awt.headless=true -cp build/camera/video-frames \
+            com.example.examplemod.CameraExportVideoFramesSmokeTest
