@@ -53,8 +53,7 @@ public final class CameraExportDialog
         outputField.setMaxStringLength(1024);
         widthField.setText(Integer.toString(format.getWidth()));
         heightField.setText(Integer.toString(format.getHeight()));
-        ffmpegField.setText(System.getProperty(
-                "bbs.editor.export.ffmpeg","ffmpeg"));
+        ffmpegField.setText(CameraExportPreferences.loadFfmpeg(mc.mcDataDir));
         File folder=new File(mc.mcDataDir,"config/bbs-editor/exports");
         String name="camera-"+new SimpleDateFormat("yyyyMMdd-HHmmss",
                 Locale.ROOT).format(new Date())+".mp4";
@@ -64,9 +63,27 @@ public final class CameraExportDialog
 
     public void close()
     {
+        if(open&&ffmpegField!=null)saveFfmpegPreference();
         open=false;
         widthField=heightField=ffmpegField=outputField=null;
         error=null;
+    }
+
+    private void saveFfmpegPreference()
+    {
+        if(ffmpegField==null)return;
+        String path=ffmpegField.getText().trim();
+        if(path.isEmpty())return;
+        try
+        {
+            CameraExportPreferences.saveFfmpeg(
+                    Minecraft.getMinecraft().mcDataDir,path);
+        }
+        catch(IOException badPreference)
+        {
+            System.err.println("[BBS CAMERA] Cannot save FFmpeg path: "+
+                    badPreference.getMessage());
+        }
     }
 
     private void bounds(AnimationEditorScreen screen)
@@ -243,6 +260,8 @@ public final class CameraExportDialog
             String ff=ffmpegField.getText().trim();
             if(ff.isEmpty())throw new IllegalArgumentException(
                     "Enter FFmpeg executable location");
+            // Save even if a later encoder/source preflight fails.
+            saveFfmpegPreference();
             String destination=outputField.getText().trim();
             if(destination.isEmpty()||
                     !destination.toLowerCase(Locale.ROOT).endsWith(".mp4"))
