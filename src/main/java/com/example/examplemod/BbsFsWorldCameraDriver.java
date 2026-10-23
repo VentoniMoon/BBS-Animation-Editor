@@ -81,6 +81,9 @@ public final class BbsFsWorldCameraDriver
     {
         if (event.phase == TickEvent.Phase.END)
         {
+            // Fail-safe: never leave an export-size world target active after
+            // a skipped/failed GUI pass.
+            CameraNativeFrameProbe.afterRenderTick(Minecraft.getMinecraft());
             restoreHud();
             return;
         }
@@ -140,6 +143,10 @@ public final class BbsFsWorldCameraDriver
         activePose = pose;
         mc.gameSettings.thirdPersonView = 0;
         mc.setRenderViewEntity(view);
+
+        // Normally a no-op. The one-frame diagnostic is guarded by an
+        // explicit JVM flag and uses the native Minecraft world pass.
+        CameraNativeFrameProbe.beforeWorld(mc);
     }
 
     /**
