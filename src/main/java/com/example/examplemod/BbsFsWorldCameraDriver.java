@@ -221,17 +221,43 @@ public final class BbsFsWorldCameraDriver
     }
 
     /**
-     * hideGUI is only a temporary rendering hint. Other mods/shaderpacks
-     * may draw their overlay while the world texture is being captured.
-     * Explicitly suppress the VANILLA crosshair during our editor render.
+     * Every CAMERA preview and offline MP4 is copied from the NATIVE
+     * Minecraft framebuffer, before the editor UI. hideGUI alone is not
+     * enough: Forge renders chat (including OptiFine's OpenGL error text)
+     * through a dedicated RenderGameOverlayEvent.Chat even while a GuiScreen
+     * is open, and other mods may bypass the hideGUI hint.
+     *
+     * Drop the entire in-game HUD pass, not the messages themselves.
+     * CAMERA's own SUBTITLE film clips are composited independently AFTER
+     * this world snapshot and must remain visible. The guard restricts
+     * suppression to the current editor-controlled world render, and the
+     * original GUI setting is restored at RenderTick.END/on close.
      */
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
-    public void hideVanillaCrosshair(RenderGameOverlayEvent.Pre event)
+    private boolean isCapturingCleanFilm()
     {
         Minecraft mc = Minecraft.getMinecraft();
-        if (controlling && mc.currentScreen instanceof AnimationEditorScreen
-                && event.getType() == RenderGameOverlayEvent.ElementType.CROSSHAIRS)
+        return hidHudThisFrame && controlling && view != null
+                && mc.currentScreen instanceof AnimationEditorScreen
+                && mc.getRenderViewEntity() == view && mc.world != null;
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void suppressNativeHud(RenderGameOverlayEvent.Pre event)
+    {
+        if (isCapturingCleanFilm())
+        {
+            // ALL cancels GuiIngameForge's HUD entry point, including chat,
+            // debug strings, notification overlays and the vanilla crosshair.
+            // Cancel nested events too if another renderer calls them alone.
             event.setCanceled(true);
+        }
+    }
+
+    /** GuiIngameForge sends Chat as its own cancellable Pre subclass. */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public void suppressNativeChat(RenderGameOverlayEvent.Chat event)
+    {
+        if (isCapturingCleanFilm()) event.setCanceled(true);
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)

@@ -60,6 +60,31 @@ the dialog, including between client launches.
   checks that frames match the previous from-start decoder, including loops.
   Reusing a persistent decoder remains a later optimization.
 
+### Clean film preview: no Minecraft chat or diagnostic HUD
+
+Both the CAMERA preview and the MP4 reuse the native Minecraft world pass.
+The film camera now cancels `RenderGameOverlayEvent.Pre` (including ALL)
+and the dedicated Forge `RenderGameOverlayEvent.Chat` event while the
+editor owns that world render. `hideGUI` alone did not remove chat or
+OptiFine's `OpenGL Error: 1282 (Invalid operation)` message.
+
+In a live client, test with a recently printed chat message still visible,
+and, when available, a mod/debug message:
+
+1. Open CAMERA / SHOT and verify the world inside the preview frame has no
+   game chat, OpenGL error overlay, F3 text or crosshair.
+2. Export 20 FPS MP4 and check first/middle/last frames are equally clean.
+3. Add a CAMERA SUBTITLE clip and verify it **remains** in preview and MP4;
+   cinematic subtitles are composited after native HUD suppression.
+4. Close CAMERA and verify Minecraft chat history is intact and ordinary
+   game HUD/chat settings resume (without deleting received messages).
+5. Check the editor's own panels, export progress/errors and modal text
+   remain visible: only the native game overlay is suppressed.
+
+This intentionally hides the chat's **rendering**; it does not fix the
+underlying OpenGL error, nor does it block overlays drawn independently by
+other mods outside Forge's in-game HUD events.
+
 ### Limits that still need live in-game validation
 
 OptiFine world/FBO behavior, real multi-actor and Jolt rendering, complex
