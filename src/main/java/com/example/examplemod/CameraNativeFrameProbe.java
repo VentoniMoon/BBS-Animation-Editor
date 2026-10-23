@@ -45,6 +45,11 @@ public final class CameraNativeFrameProbe
     private static Field framebufferField;
     private static CameraExportPlan pending;
     private static CameraExportPlan running;
+    /** Experimental MP4 frames use the SAME native target as PNG diagnostics. */
+    private static CameraExportFrameBridge pendingVideo;
+    private static CameraExportFrameBridge activeVideo;
+    private static CameraExportPlan.Sample pendingVideoSample;
+    private static CameraExportPlan.Sample activeVideoSample;
     private static Framebuffer original;
     private static Framebuffer exportTarget;
     private static boolean active;
@@ -69,6 +74,58 @@ public final class CameraNativeFrameProbe
         return lastStatus;
     }
 
+    public static boolean isBusy()
+    {
+        return active||pending!=null||writerRunning;
+    }
+
+    /**
+     * Arm one real 20 FPS MP4 output frame. Requires an explicitly started
+     * session from CAMERA, never invoked by a normal editor draw.
+     */
+    public static boolean requestVideoFrame(CameraExportFrameBridge bridge,
+            CameraExportPlan.Sample frame)
+    {
+        if(bridge==null||frame==null)
+            throw new IllegalArgumentException("Missing video export frame");
+        if(isBusy())
+        {
+            lastStatus="Native film framebuffer is already occupied";
+            return false;
+        }
+        if(frame.outputFrame>=bridge.totalFrames())
+            throw new IllegalArgumentException("Video frame beyond end");
+        pending=bridge.getPlan();
+        pendingVideo=bridge;
+        pendingVideoSample=frame;
+        return true;
+    }
+
+    /**
+     * Cancel an in-flight MP4 capture without changing the independent PNG
+     * probe. The active native framebuffer must be restored BEFORE the
+     * normal Minecraft GUI draws.
+     */
+    public static void cancelVideoFrame()
+    {
+        CameraExportFrameBridge video=activeVideo!=null?activeVideo:
+                pendingVideo;
+        if(video==null)return;
+        activeVideo=null;
+        activeVideoSample=null;
+        pendingVideo=null;
+        pendingVideoSample=null;
+        pending=null;
+        if(active)
+        {
+            restore(Minecraft.getMinecraft());
+            active=false;
+            original=null;
+            running=null;
+        }
+        video.cancel();
+    }
+
     /** Only called by an intentional CAMERA debug shortcut. */
     public static boolean request(int width,int height)
     {
@@ -77,7 +134,7 @@ public final class CameraNativeFrameProbe
             lastStatus="Enable -D"+FLAG+"=true to test native export";
             return false;
         }
-        if(active||pending!=null||writerRunning)
+        if(isBusy())
         {
             lastStatus="A native export probe is already running";
             return false;
@@ -111,11 +168,18 @@ public final class CameraNativeFrameProbe
         if(mc==null||mc.world==null||
                 !(mc.currentScreen instanceof AnimationEditorScreen))
         {
+            if(pendingVideo!=null)pendingVideo.cancel();
+            pendingVideo=null;
+            pendingVideoSample=null;
             pending=null;
             return;
         }
         CameraExportPlan plan=pending;
+        CameraExportFrameBridge video=pendingVideo;
+        CameraExportPlan.Sample videoSample=pendingVideoSample;
         pending=null;
+        pendingVideo=null;
+        pendingVideoSample=null;
         Framebuffer previous=mc.getFramebuffer();
         sawNativeWorld=false;
         wasCorrectWorldTarget=false;
@@ -123,6 +187,7 @@ public final class CameraNativeFrameProbe
         if(previous==null)
         {
             lastStatus="Minecraft has no world framebuffer";
+            if(video!=null)video.cancel();
             return;
         }
         original=previous;
@@ -184,9 +249,12 @@ public final class CameraNativeFrameProbe
                 throw new IllegalStateException("Native export FBO incomplete");
 
             running=plan;
+            activeVideo=video;
+            activeVideoSample=videoSample;
             active=true;
-            lastStatus="Rendering native "+plan.width+"x"+plan.height+
-                    " world frame";
+            lastStatus=(video==null?"Rendering native ":"Encoding MP4 frame ")+
+                    (video==null?plan.width+"x"+plan.height:
+                        (videoSample.outputFrame+1)+"/"+video.totalFrames());
             System.out.println("[BBS Editor][Export Probe] "+lastStatus);
         }
         catch(Throwable error)
@@ -208,6 +276,9 @@ public final class CameraNativeFrameProbe
             original=null;
             running=null;
             active=false;
+            if(video!=null)video.cancel();
+            activeVideo=null;
+            activeVideoSample=null;
         }
     }
 
@@ -235,6 +306,8 @@ public final class CameraNativeFrameProbe
         if(!active)return;
         byte[] rgba=null;
         int width=0,height=0;
+        CameraExportFrameBridge video=activeVideo;
+        CameraExportPlan.Sample sample=activeVideoSample;
         boolean withMedia=false;
         try
         {
@@ -255,7 +328,7 @@ public final class CameraNativeFrameProbe
             // A separate, explicitly enabled test of output-size
             // overlays. The default PNG remains a clean WORLD capture.
             // No video placeholder frames or GUI selection chrome are allowed.
-            withMedia=Boolean.getBoolean(MEDIA_FLAG);
+            withMedia=video!=null||Boolean.getBoolean(MEDIA_FLAG);
             if(withMedia)
             {
                 AnimationEditorScreen editor=(AnimationEditorScreen)
@@ -265,22 +338,33 @@ public final class CameraNativeFrameProbe
                         editor.getCurrentFrame());
             }
 
-            ByteBuffer pixels=new CameraExportReadback(plan).capture(
-                    exportTarget,0,0,plan.width,plan.height);
-            rgba=new byte[plan.frameBytes];
-            pixels.get(rgba);
-            width=plan.width;height=plan.height;
-            System.out.println("[BBS Editor][Export Probe] FBO "+
-                    width+"x"+height+", world viewport "+
-                    actualWorldViewportWidth+"x"+actualWorldViewportHeight+
-                    ", actors rendered="+
-                    BbsFsNativeActorPass.didRenderThisFrame());
+            if(video!=null)
+            {
+                if(sample==null||!video.commit(sample,exportTarget,0,0,
+                        plan.width,plan.height))
+                    throw new IllegalStateException(
+                            "MP4 frame could not enter the encoder queue");
+            }
+            else
+            {
+                ByteBuffer pixels=new CameraExportReadback(plan).capture(
+                        exportTarget,0,0,plan.width,plan.height);
+                rgba=new byte[plan.frameBytes];
+                pixels.get(rgba);
+                width=plan.width;height=plan.height;
+                System.out.println("[BBS Editor][Export Probe] FBO "+
+                        width+"x"+height+", world viewport "+
+                        actualWorldViewportWidth+"x"+actualWorldViewportHeight+
+                        ", actors rendered="+
+                        BbsFsNativeActorPass.didRenderThisFrame());
+            }
         }
         catch(Throwable error)
         {
             lastStatus="Native readback failed: "+
                     error.getClass().getSimpleName()+": "+error.getMessage();
             System.err.println("[BBS Editor][Export Probe] "+lastStatus);
+            if(video!=null)video.cancel();
         }
         finally
         {
@@ -288,6 +372,8 @@ public final class CameraNativeFrameProbe
             active=false;
             running=null;
             original=null;
+            activeVideo=null;
+            activeVideoSample=null;
         }
         if(rgba!=null)
             saveImageAsync(mc,rgba,width,height,withMedia);
@@ -302,17 +388,24 @@ public final class CameraNativeFrameProbe
         if(!active)return;
         lastStatus="Native probe aborted: editor GUI pass did not finish";
         System.err.println("[BBS Editor][Export Probe] "+lastStatus);
+        CameraExportFrameBridge video=activeVideo;
         restore(mc);
         active=false;
         original=null;
         running=null;
+        activeVideo=null;
+        activeVideoSample=null;
+        if(video!=null)video.cancel();
     }
 
     /** Called on editor close, never while a target is still active. */
     public static void close(Minecraft mc)
     {
         if(active)afterRenderTick(mc);
+        if(pendingVideo!=null)pendingVideo.cancel();
         pending=null;
+        pendingVideo=null;
+        pendingVideoSample=null;
         if(exportTarget==null)return;
         int read=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int draw=GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
