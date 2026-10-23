@@ -27,6 +27,10 @@ repositories {
     // CI can compile against the exact public 1.12.2 McHorse mod releases
     // when the user's local run/mods directory is intentionally absent.
     if (project.hasProperty('ciDependencies')) {
+        // Forge's public Scala/Java transitive dependencies should resolve
+        // from Maven Central, not through CurseMaven (which can time out).
+        mavenCentral()
+        // McHorse runtime mod artifacts are available through CurseMaven.
         maven { url 'https://cursemaven.com/' }
     }
 }
