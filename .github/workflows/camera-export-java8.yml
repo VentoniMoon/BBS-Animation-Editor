@@ -5,6 +5,9 @@ on:
     paths:
       - 'src/main/java/com/example/examplemod/CameraExport*.java'
       - 'src/main/java/com/example/examplemod/CameraFfmpegEncoder.java'
+      - 'src/main/java/com/example/examplemod/CameraExportReadback.java'
+      - 'src/test/camera-export-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   push:
@@ -12,6 +15,9 @@ on:
     paths:
       - 'src/main/java/com/example/examplemod/CameraExport*.java'
       - 'src/main/java/com/example/examplemod/CameraFfmpegEncoder.java'
+      - 'src/main/java/com/example/examplemod/CameraExportReadback.java'
+      - 'src/test/camera-export-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   workflow_dispatch:
@@ -40,3 +46,17 @@ jobs:
             src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java
           java -ea -cp build/camera/export \
             com.example.examplemod.CameraExportCoreSmokeTest
+
+      - name: Test exact native FBO readback and GL state restoration
+        run: |
+          mkdir -p build/camera/readback
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/readback \
+            src/main/java/com/example/examplemod/CameraExportPlan.java \
+            src/main/java/com/example/examplemod/CameraExportReadback.java \
+            src/test/camera-export-stubs/org/lwjgl/BufferUtils.java \
+            src/test/camera-export-stubs/org/lwjgl/opengl/GL11.java \
+            src/test/camera-export-stubs/org/lwjgl/opengl/GL30.java \
+            src/test/camera-export-stubs/net/minecraft/client/shader/Framebuffer.java \
+            src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java
+          java -ea -cp build/camera/readback \
+            com.example.examplemod.CameraExportReadbackSmokeTest
