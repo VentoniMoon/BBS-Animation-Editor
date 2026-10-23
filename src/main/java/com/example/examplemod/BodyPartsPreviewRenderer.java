@@ -2140,8 +2140,12 @@ public class BodyPartsPreviewRenderer
         physicsFrames.beginFrame(frame);
         // The Jolt bridge needs the current playback mode but should not
         // depend on editor/GUI classes in its standalone Java 8 build.
+        // Fractional export renders the SAME 20 TPS physics tick multiple
+        // times. Treat that as playback, not as an edited paused pose:
+        // otherwise subframe changes can trigger a false Jolt reseed.
         joltPreview.setTimelinePlaying(
-                BlockbusterPreviewAnimationState.isPlaying());
+                BlockbusterPreviewAnimationState.isPlaying()||
+                CameraExportRenderClock.current()!=null);
         manager.parts.clear();
         this.preparedMorphs.clear();
         this.previewEulerDeltas.clear();
