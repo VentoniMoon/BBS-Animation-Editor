@@ -37,6 +37,8 @@ import org.lwjgl.opengl.GL30;
 public final class CameraNativeFrameProbe
 {
     private static final String FLAG="bbs.editor.export.probe";
+    /** Bound CPU/GPU memory when diagnostic screenshots use custom 8K sizes. */
+    private static final int MAX_PROBE_RGBA_BYTES=128*1024*1024;
     private static Field framebufferField;
     private static CameraExportPlan pending;
     private static CameraExportPlan running;
@@ -79,7 +81,11 @@ public final class CameraNativeFrameProbe
         }
         try
         {
-            pending=new CameraExportPlan(width,height,20,1);
+            CameraExportPlan requested=new CameraExportPlan(width,height,20,1);
+            if(requested.frameBytes>MAX_PROBE_RGBA_BYTES)
+                throw new IllegalArgumentException(
+                        "Single-frame probe exceeds 128 MiB RGBA limit");
+            pending=requested;
             lastStatus="Native output probe armed: "+width+"x"+height;
             System.out.println("[BBS Editor][Export Probe] "+lastStatus);
             return true;
