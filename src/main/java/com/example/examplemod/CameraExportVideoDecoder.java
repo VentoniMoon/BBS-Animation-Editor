@@ -58,11 +58,22 @@ public final class CameraExportVideoDecoder
             cmd.add("-stream_loop");
             cmd.add("-1");
         }
+        // Avoid decoding the entire movie from frame zero on *every*
+        // output frame. The input-side seek locates an earlier keyframe,
+        // while the remaining output-side seek still decodes/discards the
+        // intervening B/P frames for exact final timestamp ownership.
+        // Keep two seconds of pre-roll, rather than seeking directly to t
+        // (which could select a preceding keyframe as the output frame).
+        int coarseSecond=Math.max(0,localTick/20-2);
+        if(coarseSecond>0)
+        {
+            cmd.add("-ss");
+            cmd.add(String.format(Locale.ROOT,"%.6f",(double)coarseSecond));
+        }
         cmd.add("-i");cmd.add(source.getAbsolutePath());
-        // Output-side -ss makes FFmpeg actually decode up to this timestamp,
-        // including B/P frames. Never select the nearest keyframe only.
         cmd.add("-ss");
-        cmd.add(String.format(Locale.ROOT,"%.6f",localTick/20D));
+        cmd.add(String.format(Locale.ROOT,"%.6f",
+                localTick/20D-coarseSecond));
         cmd.add("-map");cmd.add("0:v:0");
         cmd.add("-frames:v");cmd.add("1");
         cmd.add("-an");cmd.add("-sn");cmd.add("-dn");

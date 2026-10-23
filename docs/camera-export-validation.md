@@ -54,9 +54,11 @@ the dialog, including between client launches.
   error instead of silently duplicating an outdated video image.
 - Missing source files are rejected before encoding starts. A negative
   offset produces transparent video until the source's starting frame.
-- Exact frame decoding currently creates one FFmpeg process per requested
-  VIDEO frame. This is correct but may be **slow** for long source videos;
-  a persistent decoder stream remains a later performance optimization.
+- Exact frame decoding still creates one FFmpeg process per requested VIDEO
+  frame, but now fast-seeks to two seconds before the requested timestamp,
+  then decodes the remainder accurately. A pixel-by-pixel FFmpeg regression
+  checks that frames match the previous from-start decoder, including loops.
+  Reusing a persistent decoder remains a later optimization.
 
 ### Limits that still need live in-game validation
 

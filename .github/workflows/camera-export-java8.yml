@@ -25,6 +25,7 @@ on:
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
       - 'src/main/java/com/example/examplemod/PreviewToolbarIcons.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraExportVideoSeekSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java'
       - 'src/test/camera-video-export-stubs/**'
       - 'src/test/camera-native-probe-stubs/**'
@@ -57,6 +58,7 @@ on:
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
       - 'src/main/java/com/example/examplemod/PreviewToolbarIcons.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraExportVideoSeekSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java'
       - 'src/test/camera-video-export-stubs/**'
       - 'src/test/camera-native-probe-stubs/**'
@@ -197,9 +199,12 @@ jobs:
           mkdir -p build/camera/video-decode
           javac -source 8 -target 8 -encoding UTF-8 -d build/camera/video-decode \
             src/main/java/com/example/examplemod/CameraExportVideoDecoder.java \
-            src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java
+            src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java \
+            src/test/java/com/example/examplemod/CameraExportVideoSeekSmokeTest.java
           java -ea -Djava.awt.headless=true -cp build/camera/video-decode \
             com.example.examplemod.CameraExportVideoDecoderSmokeTest
+          java -ea -Djava.awt.headless=true -cp build/camera/video-decode \
+            com.example.examplemod.CameraExportVideoSeekSmokeTest
 
       - name: Test exact VIDEO readiness and GL-thread texture ownership
         run: |
