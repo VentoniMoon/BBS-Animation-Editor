@@ -462,16 +462,25 @@ public final class CameraNativeFrameProbe
      * probe FBO) so both the actual GL texture-0 binding and Minecraft's
      * Java-side state agree before fonts and text fields are drawn.
      */
-    private static void resyncDefaultTextureForGui()
+    /**
+     * May also be called at the final CAMERA export-dialog paint boundary:
+     * failed encoder preflight never enters native FBO capture, and the
+     * editor preview can mutate texture bindings after beforeGui() returns.
+     */
+    public static void resyncDefaultTextureForGui()
     {
-        // Force the real unit before the cache-aware state manager call:
-        // other renderers may have changed it using raw GL13 calls.
+        // Force the actual GL unit 0 before touching Minecraft's cache.
         GL13.glActiveTexture(OpenGlHelper.defaultTexUnit);
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        // Keep both the Java cached binding and the actual driver binding
+        // consistent. FontRenderer uses TextureManager, which can otherwise
+        // skip an atlas bind if it trusts a stale GlStateManager texture ID.
         GlStateManager.bindTexture(0);
-        // If GlStateManager already thought 0 was bound, it skips glBind.
-        // Explicitly enforce 0 to bring the GL driver back into agreement.
         GL11.glBindTexture(GL11.GL_TEXTURE_2D,0);
+        // A viewport/film preview may likewise leave GL_TEXTURE_2D disabled
+        // behind Minecraft's boolean texture-enable cache.
+        GlStateManager.enableTexture2D();
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
     }
 
     private static void saveImageAsync(Minecraft mc,final byte[] rgba,
