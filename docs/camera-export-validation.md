@@ -32,10 +32,27 @@ probe. It does not produce a video and should not be used for production.
 9. In the console search for `[BBS Editor][Export Probe]`. Report the
    complete diagnostic line on failure.
 
-**Important:** The PNG is the *world pass only*, captured before the CAMERA
-GUI and screen-space FilmCompositor. Image, Video and Subtitle overlays are
-not yet included in this probe. A clean native-world image establishes only
-the high-resolution render milestone.
+**Important:** Without additional flags, this probe captures the
+*clean native world pass only*, before the CAMERA GUI. That is intentional:
+it proves high-resolution world rendering independently of media overlays.
+
+An additional, still-experimental mode can be enabled for IMAGE/SUBTITLE:
+
+```powershell
+.\gradlew.bat -Dbbs.editor.export.probe=true -Dbbs.editor.export.probe.media=true runClient
+```
+
+Then repeat **Ctrl+Shift+F9**; results are named
+`film-<width>x<height>-*.png`, rather than `world-*.png`.
+IMAGE and SUBTITLE are composited in native *output pixels*, independent of
+GUI scale, and no mouse selection chrome is included. If an active VIDEO
+clip exists, this mode fails visibly rather than exporting a stale frame:
+the old async preview decoder is not frame-exact. Audio is not written to
+either PNG. Subtitle font sizing and parity with the GUI must still be
+checked at 1080p and vertical 9:16 in a real Minecraft client.
+
+A clean native-world image establishes only the high-resolution render
+milestone; a film PNG establishes the next static-media layer milestone.
 
 ### Acceptance checks
 
