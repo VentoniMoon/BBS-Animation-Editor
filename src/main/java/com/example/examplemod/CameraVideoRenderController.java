@@ -49,6 +49,7 @@ public final class CameraVideoRenderController
     private boolean previousPlaying;
     private File output;
     private String message="";
+    private String stage="Ready";
 
     public boolean isExporting()
     {
@@ -61,6 +62,11 @@ public final class CameraVideoRenderController
         return "CAMERA MP4 20 FPS  "+session.getEncodedFrames()+"/"+
                 session.getPlan().frameCount+" frames (captured "+
                 session.getCapturedFrames()+") — Cancel from Export dialog";
+    }
+
+    public String getStage()
+    {
+        return stage;
     }
 
     public int getEncodedFrames()
@@ -176,6 +182,7 @@ public final class CameraVideoRenderController
             session=started;
             media=exactMedia;
             editor.pauseForCameraVideoExport();
+            stage="Preparing first native film frame...";
             message="Export started: "+file.getName();
             System.out.println("[BBS Editor][Video Export] "+message);
             return true;
@@ -222,7 +229,13 @@ public final class CameraVideoRenderController
 
         if(CameraNativeFrameProbe.isBusy())return;
         CameraExportPlan.Sample next=bridge.nextFrame();
-        if(next==null)return; // FFmpeg backpressure / finalizing.
+        if(next==null)
+        {
+            stage=session.getStatus()==CameraExportSession.Status.FINALIZING
+                    ?"Finalizing and validating MP4..."
+                    :"Waiting for FFmpeg encoder queue...";
+            return;
+        }
         try
         {
             // Never capture stale preview VIDEO textures. If a requested
@@ -230,7 +243,14 @@ public final class CameraVideoRenderController
             // paused; this *same* native output timestamp will be retried.
             if(media!=null&&!media.prepare(
                     editor.getSceneState().getCameraClips().clips(),
-                    next.sceneTick))return;
+                    next.sceneTick))
+            {
+                stage="Decoding VIDEO clips at timeline tick "+
+                        next.sceneTick+"...";
+                return;
+            }
+            stage="Rendering native film frame "+
+                    (next.outputFrame+1)+"/"+bridge.totalFrames();
             editor.setCameraWorkspaceExportFrame(next.sceneTick);
             if(!CameraNativeFrameProbe.requestVideoFrame(bridge,next))
                 throw new IllegalStateException(CameraNativeFrameProbe.status());
@@ -297,6 +317,7 @@ public final class CameraVideoRenderController
             }
         }
         message=result;
+        stage=success?"Export completed":"Export stopped";
         System.out.println("[BBS Editor][Video Export] "+message);
     }
 }
