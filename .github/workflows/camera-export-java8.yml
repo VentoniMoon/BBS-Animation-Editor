@@ -8,6 +8,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraExportReadback.java'
       - 'src/test/camera-export-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraExportSession.java'
+      - 'src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   push:
@@ -18,6 +20,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraExportReadback.java'
       - 'src/test/camera-export-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraExportSession.java'
+      - 'src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   workflow_dispatch:
@@ -60,3 +64,13 @@ jobs:
             src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java
           java -ea -cp build/camera/readback \
             com.example.examplemod.CameraExportReadbackSmokeTest
+
+      - name: Test buffered export session order, backpressure and cancellation
+        run: |
+          mkdir -p build/camera/session
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/session \
+            src/main/java/com/example/examplemod/CameraExportPlan.java \
+            src/main/java/com/example/examplemod/CameraExportSession.java \
+            src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java
+          java -ea -cp build/camera/session \
+            com.example.examplemod.CameraExportSessionSmokeTest
