@@ -186,6 +186,45 @@ public final class CameraNativeFrameProbeSmokeTest
                     "MP4 render never creates PNG intermediates");
         }
 
+        // Complete native FBO -> glReadPixels -> bounded Java queue ->
+        // real FFmpeg/libx264 -> verified MP4. No PNG files are involved.
+        File mp4=new File(mc.mcDataDir,"native-world.mp4");
+        try(CameraExportSession actualVideo=CameraExportSession.openFfmpeg(
+                videoPlan,null,mp4,18,"ultrafast"))
+        {
+            CameraExportFrameBridge actualBridge=
+                    new CameraExportFrameBridge(actualVideo);
+            for(int i=0;i<2;i++)
+            {
+                long deadline=System.currentTimeMillis()+5000L;
+                CameraExportPlan.Sample next=actualBridge.nextFrame();
+                while(next==null&&System.currentTimeMillis()<deadline)
+                {
+                    Thread.sleep(5L);
+                    next=actualBridge.nextFrame();
+                }
+                check(next!=null&&next.outputFrame==i,
+                        "real MP4 step requests exact native world frame");
+                check(CameraNativeFrameProbe.requestVideoFrame(
+                        actualBridge,next),"arm real FFmpeg frame");
+                CameraNativeFrameProbe.beforeWorld(mc);
+                CameraNativeFrameProbe.noteNativeWorld(128,128,
+                        mc.getFramebuffer());
+                CameraNativeFrameProbe.beforeGui(mc);
+                check(mc.getFramebuffer()==original,
+                        "real FFmpeg step restores world framebuffer");
+            }
+            check(actualVideo.await(20,java.util.concurrent.TimeUnit.SECONDS),
+                    "native-FBO-to-FFmpeg MP4 finalizes");
+            check(actualVideo.getStatus()==CameraExportSession.Status.COMPLETED,
+                    "native MP4 export completes with FFprobe validation: "+
+                            actualVideo.getFailure());
+        }
+        check(mp4.isFile()&&mp4.length()>100L,
+                "real video bytes written from native world pixels");
+        CameraExportVerifier.verify(null,mp4,videoPlan);
+        check(mp4.delete(),"remove actual native MP4 fixture");
+
         CameraExportSession canceledVideo=new CameraExportSession(
                 new CameraExportPlan(128,128,20,2),sink);
         CameraExportFrameBridge abortBridge=new CameraExportFrameBridge(
