@@ -95,6 +95,7 @@ public class AnimationEditorScreen extends GuiScreen
     /** Render-thread ownership of CAMERA's 20 TPS timeline during MP4 export. */
     public void pauseForCameraVideoExport()
     {
+        cameraWorkspace.stopPreviewRecording();
         playbackController.pause();
         cameraWorkspace.pauseAudio();
         wavAudio.update(playbackController.getCurrentFrame(),false);
