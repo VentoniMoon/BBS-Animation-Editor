@@ -264,6 +264,10 @@ public final class CameraExportDialog
         catch(RuntimeException invalid)
         {
             error=invalid.getMessage();
+            // The GUI can be unreadable during a GL/font failure: always
+            // preserve the real START RENDER failure in latest.log.
+            System.err.println("[BBS Editor][Video Export] Start failed: "+
+                    invalid);
         }
     }
 
