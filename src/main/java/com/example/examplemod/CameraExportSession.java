@@ -40,6 +40,39 @@ public final class CameraExportSession implements AutoCloseable
     private volatile boolean canceled;
     private volatile IOException failure;
 
+    /**
+     * Start a bounded scene-video export using the supplied FFmpeg executable.
+     * The caller must still render each requested Sample into a real native
+     * output-resolution film framebuffer. This is not a screen recorder.
+     */
+    public static CameraExportSession openFfmpeg(CameraExportPlan plan,
+            java.io.File ffmpeg,java.io.File output,int crf,String preset)
+            throws IOException
+    {
+        final CameraFfmpegEncoder encoder=CameraFfmpegEncoder.start(
+                ffmpeg,output,plan,crf,preset);
+        try
+        {
+            return new CameraExportSession(plan,new FrameSink()
+            {
+                @Override public void writeFrame(ByteBuffer frame)
+                        throws IOException
+                {encoder.writeFrame(frame);}
+
+                @Override public void finish() throws IOException
+                {encoder.finish();}
+
+                @Override public void cancel()
+                {encoder.cancel();}
+            });
+        }
+        catch(RuntimeException failure)
+        {
+            encoder.cancel();
+            throw failure;
+        }
+    }
+
     public CameraExportSession(CameraExportPlan plan,FrameSink sink)
     {
         if(plan==null||sink==null)
