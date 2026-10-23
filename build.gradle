@@ -55,6 +55,10 @@ minecraft {
             // This remains disabled unless the user explicitly opts in.
             property 'bbs.editor.export.probe.media',
                     System.getProperty('bbs.editor.export.probe.media', 'false')
+            // Experiment: the external FFmpeg 7.1 essentials executable,
+            // or the system PATH "ffmpeg" default. Never bundled in the JAR.
+            property 'bbs.editor.export.ffmpeg',
+                    System.getProperty('bbs.editor.export.ffmpeg', 'ffmpeg')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
