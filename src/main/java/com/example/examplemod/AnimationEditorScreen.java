@@ -72,6 +72,56 @@ public class AnimationEditorScreen extends GuiScreen
     /** Popup is accessible from one icon beside the playback controls. */
     private final CameraOutputPopup cameraOutputPopup=new CameraOutputPopup();
 
+    /** Explicit, experimental CAMERA video renderer; normal preview is untouched. */
+    private final CameraVideoRenderController cameraVideoExport=
+            new CameraVideoRenderController();
+
+    public CameraVideoRenderController getCameraVideoExport()
+    {
+        return cameraVideoExport;
+    }
+
+    public boolean isCameraMode()
+    {
+        return editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA;
+    }
+
+    public boolean isCameraPlaying()
+    {
+        return playbackController.isPlaying();
+    }
+
+    /** Render-thread ownership of CAMERA's 20 TPS timeline during MP4 export. */
+    public void pauseForCameraVideoExport()
+    {
+        playbackController.pause();
+        cameraWorkspace.pauseAudio();
+        wavAudio.update(playbackController.getCurrentFrame(),false);
+    }
+
+    /**
+     * Called before native world rendering, not from GuiScreen's world
+     * framebuffer compositing callback. Camera and actors use the same tick.
+     */
+    public void setCameraWorkspaceExportFrame(int sceneTick)
+    {
+        playbackController.setCurrentFrame(sceneTick);
+        applyRecordFrame();
+        applyAdapters();
+        applyCharacterState();
+    }
+
+    public void restoreAfterCameraVideoExport(int frame,boolean wasPlaying)
+    {
+        playbackController.pause();
+        playbackController.setCurrentFrame(frame);
+        applyRecordFrame();
+        applyAdapters();
+        applyCharacterState();
+        if(wasPlaying)playbackController.togglePlayback();
+    }
+
     public CameraOutputSettings getCameraOutputSettings()
     {
         return this.sceneState.getCameraOutput();
@@ -1814,6 +1864,21 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         drawTopBar();
+        if(this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA)
+        {
+            String exportStatus=cameraVideoExport.status();
+            if(exportStatus!=null&&!exportStatus.isEmpty())
+            {
+                int bannerWidth=Math.min(width-16,Math.max(120,
+                        fontRenderer.getStringWidth(exportStatus)+15));
+                drawRect(8,32,8+bannerWidth,49,0xEB192732);
+                fontRenderer.drawString(
+                        fontRenderer.trimStringToWidth(exportStatus,
+                                bannerWidth-12),
+                        14,37,0xFF8CD9FB);
+            }
+        }
         if (this.editorModeController.getMode()
                 != EditorModeController.EditorMode.CAMERA)
             drawActorPanel();
@@ -3635,6 +3700,9 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws java.io.IOException
     {
+        // Keep the scene frozen while a native video frame is in flight.
+        // Cancel remains available through the keyboard shortcut.
+        if(cameraVideoExport.isExporting())return;
         // Output popup consumes clicks before the camera timeline and gizmos.
         if(cameraOutputPopup.isOpen()
                 &&cameraOutputPopup.mouseClicked(mouseX,mouseY,mouseButton,
@@ -3743,6 +3811,22 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        // Experimental real MP4 capture: one complete Minecraft film frame
+        // per 20 TPS scene tick. The same shortcut cancels a running export.
+        if(editorModeController.getMode()
+                ==EditorModeController.EditorMode.CAMERA
+                &&keyCode==org.lwjgl.input.Keyboard.KEY_F8
+                &&isCtrlKeyDown()&&isShiftKeyDown())
+        {
+            cameraVideoExport.start(this);
+            return;
+        }
+        if(cameraVideoExport.isExporting())
+        {
+            if(keyCode==org.lwjgl.input.Keyboard.KEY_ESCAPE)
+                cameraVideoExport.cancel("MP4 export canceled");
+            return;
+        }
         // Hidden opt-in diagnostic only; never intercept normal F9/editor
         // input unless the developer explicitly enabled this world probe.
         if(CameraNativeFrameProbe.isEnabled()
@@ -4012,6 +4096,7 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
+        cameraVideoExport.close();
         /* Never leave the detached preview camera as Minecraft's view. */
         if (this.sceneViewport != null)
         {
