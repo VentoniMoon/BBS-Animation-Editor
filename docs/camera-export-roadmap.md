@@ -41,7 +41,20 @@ The encoder is ready to receive clean frames when the renderer is implemented.
 
 ### 2. Export Session + exact frame ownership
 
-- Introduce a finite-state `CameraExportSession` that snapshots playback,
+The initial frame-queue half is implemented in this branch:
+- `CameraExportSession` has a bounded two-frame queue and separate FFmpeg
+  writer thread, exact monotonically increasing output frame indices,
+  error propagation, progress and cancellation. Its `openFfmpeg()` entry
+  connects the worker to `CameraFfmpegEncoder`.
+- `CameraExportReadback` only accepts an exact native-resolution framebuffer
+  region; it restores GL read bindings, read-buffer state and pixel packing.
+- `CameraExportFrameBridge` requests an explicit timestamp, then allows a
+  GL-thread `glReadPixels` + queue submission *only* for that same frame.
+  The existing GUI-sized framebuffer fails with an explicit mismatch instead
+  of being scaled to match the requested resolution.
+
+Remaining work:
+- Introduce a game-facing render driver that snapshots playback,
   selected scene, camera, view entity, GUI/HUD state and output settings.
 - The export loop must *request* one output timestamp and *wait* for one
   completed native world/actor/clip frame. No GPU calls on worker threads.
@@ -57,6 +70,26 @@ The encoder is ready to receive clean frames when the renderer is implemented.
 ### 3. Native high-resolution offscreen film render
 
 **Highest risk / next experiment before promising output quality.**
+
+Direct bytecode inspection of the user-supplied
+`bbs-fs-2.8-1.12.2-alpha.1.jar` identifies the relevant BBS FS mechanism:
+`BBSRendering.onWorldRenderBegin(float)` saves
+`Minecraft.displayWidth/displayHeight`, the existing client framebuffer
+and OpenGL viewport, validates `GL_MAX_TEXTURE_SIZE`, creates/reuses a
+dedicated output-size `Framebuffer`, temporarily replaces the render
+dimensions, and binds it before the native world render. BBS FS also has
+`BBSRendering.renderFramebuffer(Framebuffer)` as an interception hook,
+`onRenderBeforeScreen()` to restore state before drawing UI, and
+`updateTimer(Timer)` to advance exactly `20/FPS` ticks per encoded frame.
+Its `WorldVideoExportSession.applyExportTarget()` activates
+`setCustomSize(true,width,height)`. Resizing the OS window is optional,
+not the fundamental output-resolution mechanism.
+
+**Therefore the next integration must hook Minecraft's native world pass
+before the GUI, not re-run `EntityRenderer.renderWorld()` inside GUI.**
+The current `BbsFsWorldFrameCapture` copies a finished *display-size*
+world image and cannot be an authentic high-resolution export source by
+itself. Replacing it with a scaled bitmap would be a regression.
 The existing native world capture uses Minecraft's current display
 framebuffer; resizing or stretching that frame is not real 1080p/4K output.
 
@@ -109,6 +142,12 @@ framebuffer; resizing or stretching that frame is not real 1080p/4K output.
 - Encode bytes as **bottom-up RGBA**, length
   `outputWidth*outputHeight*4`; the x264 backend applies one vertical flip.
 - The UI and mouse overlays must never be read into the exported image.
+- A slow FFmpeg process must delay the NEXT scene frame request rather than
+  duplicate/drop a sampled timestamp; the current queue enforces this.
+- The render driver MUST NOT reuse the regular editor FBO when its native
+  resolution does not exactly match `CameraExportPlan`.
+- Before enabling the real export UI, wire a native world-render hook with
+  exception-safe restoration, and test the resulting OptiFine world target.
 - The original project, source record data, viewport, selected actor,
   camera state and Minecraft game timer are restored even on failure.
 - Export is a user-driven blocking job with explicit progress, not an
