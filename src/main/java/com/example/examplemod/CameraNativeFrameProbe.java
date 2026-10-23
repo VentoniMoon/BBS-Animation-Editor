@@ -387,7 +387,8 @@ public final class CameraNativeFrameProbe
                     }
                     if(!ImageIO.write(image,"png",output))
                         throw new IOException("PNG writer unavailable");
-                    lastStatus="Native world PNG: "+output.getAbsolutePath();
+                    lastStatus=(composited?"Native film PNG: ":"Native world PNG: ")+
+                            output.getAbsolutePath();
                     System.out.println("[BBS Editor][Export Probe] "+lastStatus);
                 }
                 catch(Throwable error)
