@@ -20,7 +20,8 @@ A separate settings screen is intentionally deferred.
 
 Remaining major work: continuous actor/Jolt/world 30/60 FPS frame-time
 evaluation, BBS FS curve-accurate audio envelopes, performance optimization of
-per-frame VIDEO decode, and real OptiFine/audio in-game regression.
+per-frame VIDEO process startup (the bounded input-side preroll has removed
+the growing decode-from-start cost), and real OptiFine/audio in-game regression.
 
 ## Existing, verified ownership boundaries (do not break)
 
