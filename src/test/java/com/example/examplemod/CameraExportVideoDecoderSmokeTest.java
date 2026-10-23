@@ -51,6 +51,10 @@ public final class CameraExportVideoDecoderSmokeTest
                     "VIDEO seeks after input for frame-exact decoding");
             check(!seeking.contains("-stream_loop"),
                     "nonlooping source is not silently repeated");
+            List<String> subframe=CameraExportVideoDecoder.command(
+                    null,source,1D/3D,false);
+            check(subframe.contains("0.016667"),
+                    "60 FPS VIDEO frame seeks at 1/60 second, not floor tick");
             List<String> looping=CameraExportVideoDecoder.command(
                     null,source,25,true);
             check(looping.contains("-stream_loop")&&looping.contains("-1"),
