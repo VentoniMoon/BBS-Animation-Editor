@@ -46,8 +46,11 @@ public final class CameraNativeFrameProbe
     private static int originalWidth,originalHeight;
     private static int originalRead,originalDraw,originalTexture;
     private static final IntBuffer originalViewport=BufferUtils.createIntBuffer(16);
-    private static String lastStatus="No export probe requested";
-    private static boolean writerRunning;
+    private static volatile String lastStatus="No export probe requested";
+    private static volatile boolean writerRunning;
+    private static boolean sawNativeWorld;
+    private static boolean wasCorrectWorldTarget;
+    private static int actualWorldViewportWidth,actualWorldViewportHeight;
 
     private CameraNativeFrameProbe(){}
 
@@ -105,6 +108,9 @@ public final class CameraNativeFrameProbe
         CameraExportPlan plan=pending;
         pending=null;
         Framebuffer previous=mc.getFramebuffer();
+        sawNativeWorld=false;
+        wasCorrectWorldTarget=false;
+        actualWorldViewportWidth=actualWorldViewportHeight=0;
         if(previous==null)
         {
             lastStatus="Minecraft has no world framebuffer";
@@ -197,6 +203,20 @@ public final class CameraNativeFrameProbe
     }
 
     /**
+     * Report the world render viewport from RenderWorldLast, independent of
+     * the output pixel size (OptiFine shaders may use internal scaling).
+     */
+    public static void noteNativeWorld(int viewportWidth,int viewportHeight,
+            Framebuffer source)
+    {
+        if(!active)return;
+        sawNativeWorld=true;
+        wasCorrectWorldTarget=source==exportTarget;
+        actualWorldViewportWidth=viewportWidth;
+        actualWorldViewportHeight=viewportHeight;
+    }
+
+    /**
      * Call AFTER the regular pre-GUI native frame snapshot, but BEFORE any
      * editor GUI rectangles/ScaledResolution are drawn. On errors, restore
      * even if the game rendered to an unexpected source FBO.
@@ -208,9 +228,10 @@ public final class CameraNativeFrameProbe
         int width=0,height=0;
         try
         {
-            if(mc==null||mc.getFramebuffer()!=exportTarget)
+            if(mc==null||mc.getFramebuffer()!=exportTarget||
+                    !sawNativeWorld||!wasCorrectWorldTarget)
                 throw new IllegalStateException(
-                        "Native Minecraft world did not use our export FBO");
+                        "Native world render did not use our output FBO");
             if(!BbsFsWorldFrameCapture.isNativeFrameReady())
                 throw new IllegalStateException(
                         "No complete pre-GUI world frame to capture");
@@ -226,6 +247,11 @@ public final class CameraNativeFrameProbe
             rgba=new byte[plan.frameBytes];
             pixels.get(rgba);
             width=plan.width;height=plan.height;
+            System.out.println("[BBS Editor][Export Probe] FBO "+
+                    width+"x"+height+", world viewport "+
+                    actualWorldViewportWidth+"x"+actualWorldViewportHeight+
+                    ", actors rendered="+
+                    BbsFsNativeActorPass.didRenderThisFrame());
         }
         catch(Throwable error)
         {
@@ -312,7 +338,7 @@ public final class CameraNativeFrameProbe
         final File output=new File(folder,"world-"+width+"x"+height+
                 "-"+System.currentTimeMillis()+".png");
         writerRunning=true;
-        new Thread(new Runnable()
+        Thread writer=new Thread(new Runnable()
         {
             @Override public void run()
             {
@@ -348,6 +374,8 @@ public final class CameraNativeFrameProbe
                 }
                 finally {writerRunning=false;}
             }
-        },"BBS-CAMERA-png-probe").start();
+        },"BBS-CAMERA-png-probe");
+        writer.setDaemon(true);
+        writer.start();
     }
 }
