@@ -233,8 +233,7 @@ public final class CameraExportDialog
                 throw new IllegalArgumentException(
                         "Use even dimensions from 128 to 8192");
             // Resolution changes remain part of the CAMERA scene format.
-            CameraExportPlan plan=new CameraExportPlan(
-                    width,height,20,editor.getSceneLength());
+            new CameraExportPlan(width,height,20,editor.getSceneLength());
             String ff=ffmpegField.getText().trim();
             if(ff.isEmpty())throw new IllegalArgumentException(
                     "Enter FFmpeg executable location");
@@ -254,10 +253,12 @@ public final class CameraExportDialog
                     new CameraVideoRenderController.Options(
                             width,height,QUALITY[quality],"medium",
                             new File(ff),target);
+            // The film viewport needs this aspect before the very first
+            // native export pass, and the scene should remember the choice.
+            editor.applyCameraExportOutputSize(width,height);
             if(!editor.getCameraVideoExport().start(editor,opts))
                 throw new IllegalArgumentException(
                         editor.getCameraVideoExport().status());
-            editor.getCameraOutputSettings().set(width,height);
         }
         catch(RuntimeException invalid)
         {
