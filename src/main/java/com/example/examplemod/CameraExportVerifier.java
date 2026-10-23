@@ -19,6 +19,22 @@ public final class CameraExportVerifier
 {
     private CameraExportVerifier(){}
 
+    /**
+     * Windows FFmpeg essentials ships ffmpeg.exe and ffprobe.exe together.
+     * If the user selected an absolute executable, prefer its sibling instead
+     * of assuming that system PATH also contains that build's ffprobe.
+     * Bare executable names still resolve through PATH.
+     */
+    public static File companionProbe(File ffmpeg)
+    {
+        if(ffmpeg==null||ffmpeg.getParent()==null)return null;
+        File folder=ffmpeg.getAbsoluteFile().getParentFile();
+        String executable=ffmpeg.getName().toLowerCase(java.util.Locale.ROOT)
+                .endsWith(".exe")?"ffprobe.exe":"ffprobe";
+        File companion=new File(folder,executable);
+        return companion.isFile()?companion:null;
+    }
+
     public static void verify(File ffprobe,File video,CameraExportPlan plan)
             throws IOException
     {
