@@ -150,17 +150,18 @@ public final class CameraExportDialog
         font.drawString("Save MP4 as",x+15,y+201,MUTED);
         outputField.drawTextBox();
 
-        int videoCount=0,mediaCount=0;
+        int videoCount=0,mediaCount=0,audioCount=0;
         for(CameraClipDocument.Clip clip:editor.getSceneState()
                 .getCameraClips().clips())
         {
             if(!clip.enabled)continue;
             if(clip.kind==CameraClipDocument.Kind.VIDEO)videoCount++;
+            if(clip.kind==CameraClipDocument.Kind.AUDIO)audioCount++;
             if(clip.kind==CameraClipDocument.Kind.IMAGE||
                     clip.kind==CameraClipDocument.Kind.SUBTITLE)mediaCount++;
         }
         String capability="VIDEO: "+videoCount+"  |  Images/Subtitles: "+
-                mediaCount+"  |  Audio: not yet mixed";
+                mediaCount+"  |  Audio clips: "+audioCount+" (AAC)";
         font.drawString(font.trimStringToWidth(
                     video.isExporting()?video.getStage():capability,w-30),
                 x+15,y+239,video.isExporting()?BLUE:MUTED);
