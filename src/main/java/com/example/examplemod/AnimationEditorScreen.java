@@ -2139,6 +2139,20 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         /*
+         * CAMERA has no actor selector in the top bar. Use the now-free
+         * actor slot for a labelled Export Video control when space permits;
+         * the small EXPORT icon in the preview remains usable on narrow UI.
+         */
+        if(isCameraMode()&&editorThemeController.getButtonX(width)-actorX>=120)
+        {
+            drawToolbarButton(actorX,3,111,TOP_BAR_HEIGHT-6,
+                    cameraExportDialog.isOpen());
+            drawString(fontRenderer,"EXPORT VIDEO",actorX+10,8,
+                    cameraExportDialog.isOpen()?getAccentBrightColor():
+                            COLOR_TEXT);
+        }
+
+        /*
          * =========================================================
          * THEME
          * =========================================================
@@ -3732,6 +3746,18 @@ public class AnimationEditorScreen extends GuiScreen
         {
             cameraExportDialog.mouseClicked(this,mouseX,mouseY,mouseButton);
             return;
+        }
+        if(isCameraMode()&&mouseButton==0)
+        {
+            int cameraExportX=175+180+15;
+            if(editorThemeController.getButtonX(width)-cameraExportX>=120&&
+                    mouseX>=cameraExportX&&mouseX<cameraExportX+111&&
+                    mouseY>=3&&mouseY<TOP_BAR_HEIGHT-3)
+            {
+                cameraOutputPopup.close();
+                cameraExportDialog.open(this);
+                return;
+            }
         }
         if(cameraVideoExport.isExporting())return;
         // Output popup consumes clicks before the camera timeline and gizmos.
