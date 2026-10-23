@@ -15,6 +15,7 @@ public final class PreviewToolbarIcons
     public static final int NAVIGATION=4;
     public static final int FILM_CAMERA=5;
     public static final int OUTPUT_FORMAT=6;
+    public static final int EXPORT_VIDEO=7;
 
     private static void pixel(int x,int y,int w,int h,int c)
     {
@@ -90,6 +91,16 @@ public final class PreviewToolbarIcons
                 pixel(ox+1,oy+3,1,3,color);
                 pixel(ox+10,oy+11,3,1,color);
                 pixel(ox+12,oy+9,1,3,color);
+                break;
+            case EXPORT_VIDEO:
+                // Small film frame with outgoing encode arrow.
+                pixel(ox+1,oy+3,9,9,color);
+                pixel(ox+3,oy+5,5,5,0xFF151C21);
+                pixel(ox+7,oy+1,3,1,color);
+                pixel(ox+9,oy+2,3,1,color);
+                pixel(ox+11,oy+3,2,1,color);
+                pixel(ox+10,oy+4,2,1,color);
+                pixel(ox+9,oy+5,2,1,color);
                 break;
             default: break;
         }
