@@ -139,6 +139,13 @@ public class AnimationEditorScreen extends GuiScreen
         cameraWorkspace.saveScene();
     }
 
+    /** Keep the Export dialog's target aspect persistent in the CAMERA scene. */
+    public void applyCameraExportOutputSize(int width,int height)
+    {
+        if(sceneState!=null&&sceneState.getCameraOutput().set(width,height))
+            saveCameraOutputSettings();
+    }
+
     public PreviewCameraPose getCameraWorkspacePose()
     {
         return this.sceneViewport.getCamera().sample();
@@ -3238,8 +3245,7 @@ public class AnimationEditorScreen extends GuiScreen
 
     private int previewExtraCount()
     {
-        return this.editorModeController.getMode()
-                ==EditorModeController.EditorMode.CAMERA?4:4;
+        return 4; // CAMERA now has SHOT / REC / FORMAT / EXPORT.
     }
 
     private int previewPlaybackX(int left,int right)
