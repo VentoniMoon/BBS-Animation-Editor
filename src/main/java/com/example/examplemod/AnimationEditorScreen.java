@@ -117,6 +117,15 @@ public class AnimationEditorScreen extends GuiScreen
         applyCharacterState();
     }
 
+    public void setCameraWorkspaceExportFrame(CameraExportPlan.Sample sample)
+    {
+        if(sample==null)throw new IllegalArgumentException("Missing film sample");
+        playbackController.setCurrentFrame(sample.sceneTick);
+        applyRecordFrame();
+        applyAdapters((float)sample.sceneTime());
+        applyCharacterState(); // Discrete Character actions stay at 20 TPS.
+    }
+
     public void restoreAfterCameraVideoExport(int frame,boolean wasPlaying)
     {
         playbackController.pause();
@@ -220,8 +229,15 @@ public class AnimationEditorScreen extends GuiScreen
                     }
                 };
         if(cameraVideoExport.isExporting())
+        {
+            CameraExportPlan.Sample sample=cameraVideoExport.currentSample();
+            CameraExportPlan plan=cameraVideoExport.currentPlan();
+            if(sample!=null&&plan!=null)
+                return CameraExportCameraSampler.sample(
+                        cameraWorkspace.document,plan,sample,free,resolver);
             return cameraWorkspace.sampleForExport(free,
                     playbackController.getCurrentFrame(),resolver);
+        }
         return cameraWorkspace.sample(free,
                 playbackController.getCurrentFrame(),resolver,inCamera);
     }
@@ -2953,7 +2969,10 @@ public class AnimationEditorScreen extends GuiScreen
                 this.sceneViewport.getHeight() <= 0)
             return false;
 
-        if (this.playbackController.isPlaying())
+        CameraExportPlan.Sample film=cameraVideoExport.currentSample();
+        if(film!=null)
+            applyAdapters((float)film.sceneTime());
+        else if (this.playbackController.isPlaying())
             applyAdapters(this.playbackController.getCurrentAnimationFrame());
 
         final int frame = this.playbackController.getCurrentFrame();
@@ -2964,10 +2983,15 @@ public class AnimationEditorScreen extends GuiScreen
          * state. This ordering is the same as PreviewSceneRenderCoordinator. */
         this.multiActorPreview.drawBackgroundActors(
                 mc, this.sceneViewport, this.sceneState,
-                selected, frame, this.bodyPartsController);
+                selected, frame, this.bodyPartsController,
+                film==null?frame:film.sceneTime());
 
+        BlockbusterRecordFrame selectedFrame=film==null
+                ?getCurrentRecordFrame()
+                :CameraExportActorFrameSampler.sample(
+                        getSelectedActorRecord(),film);
         this.sceneViewport.drawActor(
-                mc, selected, getCurrentRecordFrame());
+                mc, selected, selectedFrame);
         return true;
     }
 

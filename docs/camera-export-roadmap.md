@@ -18,8 +18,16 @@ FFmpeg's path is saved in the machine-local
 `run/config/bbs-editor/camera-export.properties` file and reloaded automatically.
 A separate settings screen is intentionally deferred.
 
-Remaining major work: continuous actor/Jolt/world 30/60 FPS frame-time
-evaluation, BBS FS curve-accurate audio envelopes, performance optimization of
+Fractional render sampling is now plumbed through the 20/30/60 FPS film clock,
+camera paths, Record actor transforms, keyframed skeleton/Body Parts poses and
+VIDEO timestamp decoder. Jolt remains a strictly 20 TPS solver: its visible
+swings are interpolated between available fixed-tick snapshots, never
+re-simulated on every output frame. Character actions and native world events
+remain discrete at 20 TPS. Live shaderpack/Jolt visual QA is required before
+claiming full 60 FPS film parity.
+
+Remaining major work: sub-tick parity for additional procedural world/actor
+effects, BBS FS curve-accurate audio envelopes, performance optimization of
 per-frame VIDEO process startup (the bounded input-side preroll has removed
 the growing decode-from-start cost), and real OptiFine/audio in-game regression.
 

@@ -2140,8 +2140,12 @@ public class BodyPartsPreviewRenderer
         physicsFrames.beginFrame(frame);
         // The Jolt bridge needs the current playback mode but should not
         // depend on editor/GUI classes in its standalone Java 8 build.
+        // Fractional export renders the SAME 20 TPS physics tick multiple
+        // times. Treat that as playback, not as an edited paused pose:
+        // otherwise subframe changes can trigger a false Jolt reseed.
         joltPreview.setTimelinePlaying(
-                BlockbusterPreviewAnimationState.isPlaying());
+                BlockbusterPreviewAnimationState.isPlaying()||
+                CameraExportRenderClock.current()!=null);
         manager.parts.clear();
         this.preparedMorphs.clear();
         this.previewEulerDeltas.clear();
@@ -2538,10 +2542,12 @@ public class BodyPartsPreviewRenderer
                     ? physicsFrames.forBakeRender(data,frame)
                     : JOLT_VISUAL_INTERPOLATION &&
                     BodyPartJoltPreviewAdapter.isRequested() &&
-                    BlockbusterPreviewAnimationState.isPlaying()
+                    (BlockbusterPreviewAnimationState.isPlaying()||
+                            CameraExportRenderClock.current()!=null)
                         ? physicsFrames.forRenderInterpolated(data,frame,
-                                net.minecraft.client.Minecraft.getMinecraft()
-                                        .getRenderPartialTicks())
+                                CameraExportRenderClock.partialTick(frame,
+                                    net.minecraft.client.Minecraft.getMinecraft()
+                                            .getRenderPartialTicks()))
                         : physicsFrames.forRender(data,frame);
             if (swings != null)
             {
@@ -2731,7 +2737,7 @@ public class BodyPartsPreviewRenderer
                     continue;
                 }
 
-                AnimationTransform transform = bone.getTransformAt(frame);
+                AnimationTransform transform = bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
 
                 if (transform == null)
                 {
@@ -2890,7 +2896,7 @@ public class BodyPartsPreviewRenderer
                 }
 
                 AnimationTransform transform =
-                        bone.getTransformAt(frame);
+                        bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
 
                 if (transform == null)
                 {
@@ -3129,7 +3135,7 @@ public class BodyPartsPreviewRenderer
                 }
 
                 AnimationTransform transform =
-                        bone.getTransformAt(frame);
+                        bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
 
                 if (transform == null)
                 {

@@ -32,6 +32,10 @@ on:
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
+      - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
+      - 'src/test/camera-fps-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraExportActorFrameSamplerSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   push:
     branches: [main]
@@ -65,6 +69,10 @@ on:
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
+      - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
+      - 'src/test/camera-fps-stubs/**'
+      - 'src/test/java/com/example/examplemod/CameraExportActorFrameSamplerSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   workflow_dispatch:
 
@@ -194,6 +202,18 @@ jobs:
           java -ea -cp build/camera/fractional \
             com.example.examplemod.CameraExportCameraSamplerSmokeTest
 
+      - name: Verify 30/60 FPS native actor and Jolt render clock
+        run: |
+          mkdir -p build/camera/fps
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/fps \
+            src/main/java/com/example/examplemod/CameraExportPlan.java \
+            src/main/java/com/example/examplemod/CameraExportRenderClock.java \
+            src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java \
+            src/test/camera-fps-stubs/com/example/examplemod/CameraExportActorFrameStubs.java \
+            src/test/java/com/example/examplemod/CameraExportActorFrameSamplerSmokeTest.java
+          java -ea -cp build/camera/fps \
+            com.example.examplemod.CameraExportActorFrameSamplerSmokeTest
+
       - name: Verify frame-exact export VIDEO decode with real FFmpeg
         run: |
           mkdir -p build/camera/video-decode
@@ -212,6 +232,7 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 -d build/camera/video-frames \
             src/main/java/com/example/examplemod/CameraExportVideoDecoder.java \
             src/main/java/com/example/examplemod/CameraExportVideoFrames.java \
+            src/main/java/com/example/examplemod/CameraExportPlan.java \
             src/test/camera-video-export-stubs/net/minecraft/client/renderer/texture/DynamicTexture.java \
             src/test/camera-video-export-stubs/com/example/examplemod/VideoClipStubs.java \
             src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java

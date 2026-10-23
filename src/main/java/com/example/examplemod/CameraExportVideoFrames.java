@@ -49,14 +49,16 @@ public final class CameraExportVideoFrames implements AutoCloseable
 
     private static final class Frame
     {
-        final int localTick;
+        final int sceneTick;
+        final double localTick;
         final File source;
         final boolean transparent;
         final long startedAt;
         Future<BufferedImage> pending;
         DynamicTexture texture;
-        Frame(int localTick,File source,boolean transparent)
+        Frame(int sceneTick,double localTick,File source,boolean transparent)
         {
+            this.sceneTick=sceneTick;
             this.localTick=localTick;
             this.source=source;
             this.transparent=transparent;
@@ -92,6 +94,19 @@ public final class CameraExportVideoFrames implements AutoCloseable
     public boolean prepare(List<CameraClipDocument.Clip> clips,int tick)
             throws IOException
     {
+        return prepareAt(clips,tick,(double)tick);
+    }
+
+    public boolean prepare(List<CameraClipDocument.Clip> clips,
+            CameraExportPlan.Sample sample) throws IOException
+    {
+        if(sample==null)throw new IOException("Missing VIDEO film timestamp");
+        return prepareAt(clips,sample.sceneTick,sample.sceneTime());
+    }
+
+    private boolean prepareAt(List<CameraClipDocument.Clip> clips,int tick,
+            double sceneTime) throws IOException
+    {
         if(closed)throw new IOException("Exact VIDEO decoder closed");
         List<CameraClipDocument.Clip> active=
                 new ArrayList<CameraClipDocument.Clip>();
@@ -110,26 +125,26 @@ public final class CameraExportVideoFrames implements AutoCloseable
         for(final CameraClipDocument.Clip clip:active)
         {
             int offset=offset(clip);
-            final int local=tick-clip.tick+offset;
+            final double local=sceneTime-clip.tick+offset;
             final File source=CameraImageCache.resolve(
                     clip.settings.get("video"));
             if(source==null||!source.isFile())
                 throw new IOException("Missing VIDEO clip: "+
                         clip.settings.get("video"));
             Frame prior=frames.get(clip);
-            if(prior!=null&&prior.localTick==local&&
+            if(prior!=null&&Double.compare(prior.localTick,local)==0&&
                     source.equals(prior.source))continue;
             if(prior!=null)dispose(prior);
 
             if(local<0)
             {
-                frames.put(clip,new Frame(local,source,true));
+                frames.put(clip,new Frame(tick,local,source,true));
                 continue; // Source not started yet: transparent background.
             }
 
             final boolean loop=Boolean.parseBoolean(
                     clip.settings.get("loop"));
-            Frame request=new Frame(local,source,false);
+            Frame request=new Frame(tick,local,source,false);
             request.pending=worker.submit(new Callable<BufferedImage>()
             {
                 @Override public BufferedImage call() throws IOException
@@ -187,7 +202,7 @@ public final class CameraExportVideoFrames implements AutoCloseable
     public DynamicTexture get(CameraClipDocument.Clip clip,int tick)
     {
         Frame frame=frames.get(clip);
-        if(frame==null||frame.localTick!=tick-clip.tick+offset(clip))
+        if(frame==null||frame.sceneTick!=tick)
             throw new IllegalStateException(
                     "VIDEO export frame was not prepared at tick "+tick);
         if(frame.transparent)return null;

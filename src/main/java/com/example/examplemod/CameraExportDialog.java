@@ -14,9 +14,8 @@ import net.minecraft.client.gui.GuiTextField;
  * CAMERA Export dialog, intentionally separate from the 4000-line editor GUI.
  * The panel is a non-GL film overlay and is NEVER captured into the MP4.
  *
- * First integrated backend: 20 FPS H.264 MP4; quality/output file/FFmpeg/
- * resolution are user-selectable. Unsupported high-FPS and sound are labelled
- * explicitly instead of making controls appear functional when they aren't.
+ * 20/30/60 FPS H.264 MP4 export with precise fractional CAMERA scene
+ * timestamps; quality/output file/FFmpeg/resolution are user-selectable.
  */
 public final class CameraExportDialog
 {
@@ -26,10 +25,11 @@ public final class CameraExportDialog
     private static final int MUTED=0xFFAABCCA;
     private static final int WHITE=0xFFE5EFF4;
     private static final int[] QUALITY={18,22,26};
+    private static final int[] FPS={20,30,60};
     private static final String[] QUALITY_LABELS={
             "High (CRF 18)","Balanced (22)","Smaller (26)"};
     private boolean open;
-    private int x,y,w,h,quality=0;
+    private int x,y,w,h,quality=0,fpsIndex=0;
     private GuiTextField widthField,heightField,ffmpegField,outputField;
     private String error;
 
@@ -59,6 +59,7 @@ public final class CameraExportDialog
                 Locale.ROOT).format(new Date())+".mp4";
         outputField.setText(new File(folder,name).getAbsolutePath());
         quality=0;
+        fpsIndex=0;
     }
 
     public void close()
@@ -128,8 +129,17 @@ public final class CameraExportDialog
         font.drawString("x",x+179,y+58,MUTED);
         heightField.drawTextBox();
         font.drawString("MP4  -  H.264 / yuv420p",x+15,y+83,WHITE);
-        font.drawString("20 FPS  (30/60 FPS: future Jolt sync)",
-                x+15,y+99,MUTED);
+        font.drawString("FPS",x+15,y+101,MUTED);
+        int fpsStart=x+85;
+        for(int i=0;i<FPS.length;i++)
+        {
+            int bx=fpsStart+i*66;
+            Gui.drawRect(bx,y+96,bx+60,y+116,
+                    i==fpsIndex?0xFF31586C:0xFF293540);
+            if(i==fpsIndex)Gui.drawRect(bx,y+114,bx+60,y+116,BLUE);
+            font.drawString(Integer.toString(FPS[i]),bx+18,y+102,
+                    i==fpsIndex?BLUE:WHITE);
+        }
 
         font.drawString("Encoding quality",x+15,y+120,MUTED);
         int gap=6,bw=Math.max(58,(w-30-2*gap)/3);
@@ -228,6 +238,14 @@ public final class CameraExportDialog
         heightField.mouseClicked(mx,my,mouseButton);
         ffmpegField.mouseClicked(mx,my,mouseButton);
         outputField.mouseClicked(mx,my,mouseButton);
+        if(my>=y+96&&my<y+116)
+        {
+            for(int i=0;i<FPS.length;i++)
+            {
+                int bx=x+85+i*66;
+                if(mx>=bx&&mx<bx+60){fpsIndex=i;return true;}
+            }
+        }
         if(my>=y+133&&my<y+155)
         {
             int gap=6,bw=Math.max(58,(w-30-2*gap)/3);
@@ -257,7 +275,8 @@ public final class CameraExportDialog
                 throw new IllegalArgumentException(
                         "Use even dimensions from 128 to 8192");
             // Resolution changes remain part of the CAMERA scene format.
-            new CameraExportPlan(width,height,20,editor.getSceneLength());
+            new CameraExportPlan(width,height,FPS[fpsIndex],
+                    editor.getSceneLength());
             String ff=ffmpegField.getText().trim();
             if(ff.isEmpty())throw new IllegalArgumentException(
                     "Enter FFmpeg executable location");
@@ -277,7 +296,8 @@ public final class CameraExportDialog
                         "File already exists; choose another name");
             CameraVideoRenderController.Options opts=
                     new CameraVideoRenderController.Options(
-                            width,height,QUALITY[quality],"medium",
+                            width,height,FPS[fpsIndex],QUALITY[quality],
+                            "medium",
                             new File(ff),target);
             // The film viewport needs this aspect before the very first
             // native export pass, and the scene should remember the choice.

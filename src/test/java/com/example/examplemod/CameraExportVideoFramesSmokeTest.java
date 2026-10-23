@@ -29,6 +29,19 @@ public final class CameraExportVideoFramesSmokeTest
         }
         return false;
     }
+    private static boolean prepareSubframe(CameraExportVideoFrames media,
+            CameraClipDocument.Clip clip,CameraExportPlan.Sample sample)
+            throws Exception
+    {
+        long limit=System.nanoTime()+TimeUnit.SECONDS.toNanos(25);
+        while(System.nanoTime()<limit)
+        {
+            if(media.prepare(Collections.singletonList(clip),sample))
+                return true;
+            Thread.sleep(10L);
+        }
+        return false;
+    }
     public static void main(String[] args) throws Exception
     {
         File dir=Files.createTempDirectory("bbs-video-gl-safe-").toFile();
@@ -65,6 +78,15 @@ public final class CameraExportVideoFramesSmokeTest
                 catch(IllegalStateException expected){oldRejected=true;}
                 check(oldRejected,
                         "Strict exact timestamp rejects stale texture");
+                // 60 FPS: the next frame shares tick 0 but must request a
+                // NEW timestamp and must never silently reuse its texture.
+                CameraExportPlan plan60=new CameraExportPlan(128,128,60,40);
+                CameraExportPlan.Sample next60=plan60.sample(1);
+                check(prepareSubframe(media,clip,next60),
+                        "Fractional VIDEO frame 1/60 sec decoded");
+                DynamicTexture subframe=media.get(clip,0);
+                check(subframe!=null&&subframe!=t0&&t0.deleted,
+                        "60 FPS VIDEO requests distinct sub-tick decode");
                 check(prepare(media,clip,10),
                         "Async FFmpeg decodes next requested clip timestamp");
                 t10=media.get(clip,10);
