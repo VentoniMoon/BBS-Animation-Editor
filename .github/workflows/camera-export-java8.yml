@@ -16,6 +16,7 @@ on:
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   push:
     branches: [main]
@@ -33,6 +34,7 @@ on:
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
   workflow_dispatch:
 
@@ -113,3 +115,23 @@ jobs:
             src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java
           java -ea -Djava.awt.headless=true -cp build/camera/native-probe \
             com.example.examplemod.CameraNativeFrameProbeSmokeTest
+
+      - name: Check 20TPS clip camera motion at fractional output FPS
+        run: |
+          mkdir -p build/camera/fractional
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/fractional \
+            src/test/camera-stubs/com/google/gson/JsonElement.java \
+            src/test/camera-stubs/com/google/gson/JsonObject.java \
+            src/test/camera-stubs/com/google/gson/JsonArray.java \
+            src/main/java/com/example/examplemod/PreviewCameraPose.java \
+            src/main/java/com/example/examplemod/CameraMathExpression.java \
+            src/main/java/com/example/examplemod/CameraClipDocument.java \
+            src/main/java/com/example/examplemod/CameraClipChannels.java \
+            src/main/java/com/example/examplemod/CameraInterpolation.java \
+            src/main/java/com/example/examplemod/CameraClipEnvelope.java \
+            src/main/java/com/example/examplemod/CameraClipEvaluator.java \
+            src/main/java/com/example/examplemod/CameraExportPlan.java \
+            src/main/java/com/example/examplemod/CameraExportCameraSampler.java \
+            src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java
+          java -ea -cp build/camera/fractional \
+            com.example.examplemod.CameraExportCameraSamplerSmokeTest
