@@ -14,6 +14,12 @@ public final class CameraExportPlan
 {
     public static final int TICKS_PER_SECOND=20;
     public static final int MAX_FRAMES=3_600_000;
+    /**
+     * One 4K RGBA frame is ~32 MiB. The encoder keeps two CPU frame slots,
+     * in addition to a GPU texture and one direct readback buffer. Bound the
+     * frame footprint before allocating queues or native OpenGL storage.
+     */
+    public static final long MAX_RGBA_FRAME_BYTES=64L*1024L*1024L;
 
     public static final class Sample
     {
@@ -65,8 +71,10 @@ public final class CameraExportPlan
             throw new IllegalArgumentException("Export exceeds frame limit");
 
         long bytes=(long)width*height*4L;
-        if(bytes>Integer.MAX_VALUE)
-            throw new IllegalArgumentException("RGBA frame too large");
+        if(bytes>MAX_RGBA_FRAME_BYTES)
+            throw new IllegalArgumentException(
+                    "Export RGBA frame exceeds 64 MiB safety limit; "+
+                    "reduce the requested resolution");
 
         this.width=width;
         this.height=height;
