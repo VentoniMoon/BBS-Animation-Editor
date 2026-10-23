@@ -84,6 +84,10 @@ public final class BbsFsWorldCameraDriver
             // Fail-safe: never leave an export-size world target active after
             // a skipped/failed GUI pass.
             CameraNativeFrameProbe.afterRenderTick(Minecraft.getMinecraft());
+            Minecraft endMc=Minecraft.getMinecraft();
+            if(endMc.currentScreen instanceof AnimationEditorScreen)
+                ((AnimationEditorScreen)endMc.currentScreen)
+                        .getCameraVideoExport().afterWorld();
             restoreHud();
             return;
         }
@@ -103,8 +107,12 @@ public final class BbsFsWorldCameraDriver
         if (previousWorld != null && previousWorld != mc.world)
             release();
 
-        PreviewCameraPose pose =
-                ((AnimationEditorScreen)mc.currentScreen).getCameraWorkspaceNativePose();
+        AnimationEditorScreen editor=(AnimationEditorScreen)mc.currentScreen;
+        // Offline VIDEO (when explicitly started) owns each exact scene
+        // tick BEFORE the native camera entity and recorded actor pass sample
+        // their poses. Normal CAMERA preview remains completely unchanged.
+        editor.getCameraVideoExport().beforeWorld(editor);
+        PreviewCameraPose pose=editor.getCameraWorkspaceNativePose();
         if (view == null || view.world != mc.world)
             view = new PreviewCameraEntity(mc.world);
 
