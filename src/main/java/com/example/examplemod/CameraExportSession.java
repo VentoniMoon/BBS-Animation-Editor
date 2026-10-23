@@ -31,8 +31,16 @@ public final class CameraExportSession implements AutoCloseable
 
     private final CameraExportPlan plan;
     private final FrameSink sink;
+    private static final int FRAME_SLOTS=2;
     private final ArrayBlockingQueue<byte[]> pending=
-            new ArrayBlockingQueue<byte[]>(2);
+            new ArrayBlockingQueue<byte[]>(FRAME_SLOTS);
+    /**
+     * Recycle two preallocated frame arrays. At 4K a single RGBA frame is
+     * ~32 MiB; allocating a new one for every 60 FPS frame would continuously
+     * pressure the Minecraft heap and cause severe GC pauses.
+     */
+    private final ArrayBlockingQueue<byte[]> available=
+            new ArrayBlockingQueue<byte[]>(FRAME_SLOTS);
     private final Thread worker;
     private volatile int captured;
     private volatile int encoded;
@@ -79,6 +87,8 @@ public final class CameraExportSession implements AutoCloseable
             throw new IllegalArgumentException("Missing CAMERA export input");
         this.plan=plan;
         this.sink=sink;
+        for(int i=0;i<FRAME_SLOTS;i++)
+            available.add(new byte[plan.frameBytes]);
         this.worker=new Thread(new Runnable()
         {
             @Override public void run(){runEncoder();}
@@ -95,7 +105,7 @@ public final class CameraExportSession implements AutoCloseable
     public synchronized CameraExportPlan.Sample nextSample()
     {
         if(completed||canceled||failure!=null||
-                captured>=plan.frameCount||pending.remainingCapacity()==0)
+                captured>=plan.frameCount||available.isEmpty())
             return null;
         return plan.sample(captured);
     }
@@ -117,13 +127,24 @@ public final class CameraExportSession implements AutoCloseable
                     "Out-of-order frame "+index+"; expected "+captured);
         if(pixels==null||pixels.remaining()!=plan.frameBytes)
             throw new IllegalArgumentException("Invalid RGBA frame byte length");
-        if(pending.remainingCapacity()==0)return false;
-
-        byte[] copy=new byte[plan.frameBytes];
-        pixels.asReadOnlyBuffer().get(copy);
-        if(!pending.offer(copy))return false;
-        captured++;
-        return true;
+        byte[] copy=available.poll();
+        if(copy==null)return false;
+        try
+        {
+            pixels.asReadOnlyBuffer().get(copy);
+            if(!pending.offer(copy))
+            {
+                available.offer(copy);
+                return false;
+            }
+            captured++;
+            return true;
+        }
+        catch(RuntimeException failure)
+        {
+            available.offer(copy);
+            throw failure;
+        }
     }
 
     private void runEncoder()
@@ -135,9 +156,16 @@ public final class CameraExportSession implements AutoCloseable
                 if(canceled)return;
                 byte[] bytes=pending.poll(250L,TimeUnit.MILLISECONDS);
                 if(bytes==null)continue;
-                if(canceled)return;
-                sink.writeFrame(ByteBuffer.wrap(bytes));
-                encoded=++frame;
+                try
+                {
+                    if(canceled)return;
+                    sink.writeFrame(ByteBuffer.wrap(bytes));
+                    encoded=++frame;
+                }
+                finally
+                {
+                    available.offer(bytes);
+                }
             }
             if(canceled)return;
             sink.finish();
