@@ -130,6 +130,7 @@ jobs:
             src/test/camera-native-probe-stubs/net/minecraft/client/shader/Framebuffer.java \
             src/test/camera-native-probe-stubs/net/minecraft/client/gui/GuiScreen.java \
             src/test/camera-native-probe-stubs/net/minecraft/client/renderer/OpenGlHelper.java \
+            src/test/camera-native-probe-stubs/net/minecraft/client/renderer/GlStateManager.java \
             src/test/camera-native-probe-stubs/net/minecraftforge/fml/relauncher/ReflectionHelper.java \
             src/test/camera-native-probe-stubs/com/example/examplemod/FrameProbeStubs.java \
             src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java
