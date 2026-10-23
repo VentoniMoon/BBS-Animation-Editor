@@ -2,6 +2,9 @@ package com.example.examplemod;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Collections;
+import java.io.File;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -54,18 +57,38 @@ public final class CameraExportSession implements AutoCloseable
      * output-resolution film framebuffer. This is not a screen recorder.
      */
     public static CameraExportSession openFfmpeg(CameraExportPlan plan,
-            java.io.File ffmpeg,java.io.File output,int crf,String preset)
+            File ffmpeg,File output,int crf,String preset) throws IOException
+    {
+        return openFfmpeg(plan,ffmpeg,output,crf,preset,
+                Collections.<CameraExportAudioMuxer.Track>emptyList());
+    }
+
+    /**
+     * AUDIO and VIDEO sound clips are mixed in an offline second pass.
+     * When no soundtrack exists, preserve the original silent path. For
+     * sound projects the first encoded video has a private filename and is
+     * never mistaken for the final user-requested MP4.
+     */
+    public static CameraExportSession openFfmpeg(final CameraExportPlan plan,
+            final File ffmpeg,final File output,int crf,String preset,
+            final List<CameraExportAudioMuxer.Track> tracks)
             throws IOException
     {
-        final java.io.File ffprobe=CameraExportVerifier.companionProbe(ffmpeg);
+        if(tracks==null)throw new IllegalArgumentException("Missing sound plan");
+        final File ffprobe=CameraExportVerifier.companionProbe(ffmpeg);
         CameraExportVerifier.requireAvailable(ffprobe);
+        final boolean withAudio=!tracks.isEmpty();
+        final File video=withAudio?new File(output.getAbsoluteFile().getParentFile(),
+                output.getName()+".silent-"+System.nanoTime()+".mp4"):output;
+        final CameraExportAudioMuxer muxer=new CameraExportAudioMuxer();
         final CameraFfmpegEncoder encoder=CameraFfmpegEncoder.start(
-                ffmpeg,output,plan,crf,preset);
+                ffmpeg,video,plan,crf,preset);
         try
         {
             return new CameraExportSession(plan,new FrameSink()
             {
                 private volatile boolean verified;
+                private volatile boolean stopped;
 
                 @Override public void writeFrame(ByteBuffer frame)
                         throws IOException
@@ -74,37 +97,51 @@ public final class CameraExportSession implements AutoCloseable
                 @Override public void finish() throws IOException
                 {
                     encoder.finish();
+                    if(stopped)throw new IOException("Export canceled");
                     try
                     {
-                        // "MP4 exists" is not success until decoded width,
-                        // height, FPS and *actual frames* match our plan.
-                        CameraExportVerifier.verify(ffprobe,output,plan);
+                        CameraExportVerifier.verify(ffprobe,video,plan);
+                        if(withAudio)
+                        {
+                            muxer.mux(ffmpeg,video,output,plan.sceneTicks,
+                                    tracks);
+                            if(stopped)throw new IOException("Audio mux canceled");
+                            CameraExportVerifier.verify(ffprobe,output,plan);
+                            if(!CameraExportAudioMuxer.hasAudioStream(
+                                    ffprobe,output))
+                                throw new IOException(
+                                        "Muxed MP4 has no audio stream");
+                            video.delete();
+                        }
                         verified=true;
                     }
                     catch(IOException invalid)
                     {
-                        // This file was created solely by the current export:
-                        // never leave a corrupt video at its final name.
-                        if(output.isFile())output.delete();
-                        throw new IOException(
-                                "FFprobe export validation failed: "+
+                        output.delete();
+                        if(withAudio)video.delete();
+                        throw new IOException("FFprobe/FFmpeg export validation: "+
                                 invalid.getMessage(),invalid);
                     }
                 }
 
                 @Override public void cancel()
                 {
+                    stopped=true;
+                    muxer.cancel();
                     encoder.cancel();
-                    // FFmpeg may already have closed and finalized its MP4,
-                    // while ffprobe is still checking it. Cancellation at
-                    // that stage must not leave a falsely successful file.
-                    if(!verified&&output.isFile())output.delete();
+                    if(!verified)
+                    {
+                        output.delete();
+                        if(withAudio)video.delete();
+                    }
                 }
             });
         }
         catch(RuntimeException failure)
         {
+            muxer.cancel();
             encoder.cancel();
+            if(withAudio)video.delete();
             throw failure;
         }
     }

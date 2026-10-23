@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.List;
 
 import net.minecraft.client.Minecraft;
 
@@ -50,6 +51,7 @@ public final class CameraVideoRenderController
     private File output;
     private String message="";
     private String stage="Ready";
+    private boolean hasSoundtrack;
 
     public boolean isExporting()
     {
@@ -108,8 +110,8 @@ public final class CameraVideoRenderController
                 Locale.ROOT).format(new Date())+".mp4";
         File folder=new File(mc.mcDataDir,"config/bbs-editor/exports");
         start(editor,new Options(size.getWidth(),size.getHeight(),18,"medium",
-                new File(System.getProperty("bbs.editor.export.ffmpeg",
-                        "ffmpeg")),new File(folder,name)));
+                new File(CameraExportPreferences.loadFfmpeg(mc.mcDataDir)),
+                new File(folder,name)));
     }
 
     /** Start a user-configured CAMERA MP4 session from the Export dialog. */
@@ -142,20 +144,15 @@ public final class CameraVideoRenderController
             if(options.output==null||options.ffmpeg==null)
                 throw new IllegalArgumentException("Select output and FFmpeg");
 
-            // Audio remains an explicit future stage; never silently omit
-            // tracks. VIDEO imagery, however, is now timestamp-accurate.
-            for(CameraClipDocument.Clip clip:
-                    editor.getSceneState().getCameraClips().clips())
-            {
-                if(!clip.enabled||clip.tick>=sceneTicks)continue;
-                if(clip.kind==CameraClipDocument.Kind.AUDIO)
-                    throw new IllegalStateException(
-                            "AUDIO mixing is not ready; mute AUDIO clips "+
-                            "before exporting this silent MP4");
-            }
             CameraExportVideoFrames.validateSources(
                     editor.getSceneState().getCameraClips().clips(),
                     sceneTicks);
+            // Resolve and validate AUDIO clips and embedded VIDEO sound
+            // once, before the expensive native world rendering begins.
+            List<CameraExportAudioMuxer.Track> sound=
+                    CameraExportAudioTracks.collect(
+                    editor.getSceneState().getCameraClips().clips(),
+                    sceneTicks,CameraExportVerifier.companionProbe(options.ffmpeg));
             Minecraft mc=Minecraft.getMinecraft();
             if(mc==null||mc.world==null)
                 throw new IllegalStateException(
@@ -169,7 +166,7 @@ public final class CameraVideoRenderController
                 throw new IOException("Output already exists: "+file);
             // The MP4 pipeline checks availability of both ffmpeg/ffprobe.
             started=CameraExportSession.openFfmpeg(
-                    plan,options.ffmpeg,file,options.crf,options.preset);
+                    plan,options.ffmpeg,file,options.crf,options.preset,sound);
             exactMedia=new CameraExportVideoFrames(options.ffmpeg);
             CameraExportFrameBridge frameBridge=new CameraExportFrameBridge(
                     started);
@@ -181,6 +178,7 @@ public final class CameraVideoRenderController
             bridge=frameBridge;
             session=started;
             media=exactMedia;
+            hasSoundtrack=!sound.isEmpty();
             editor.pauseForCameraVideoExport();
             stage="Preparing first native film frame...";
             message="Export started: "+file.getName();
@@ -232,7 +230,8 @@ public final class CameraVideoRenderController
         if(next==null)
         {
             stage=session.getStatus()==CameraExportSession.Status.FINALIZING
-                    ?"Finalizing and validating MP4..."
+                    ?(hasSoundtrack?"Encoding AAC soundtrack and validating MP4...":
+                      "Finalizing and validating MP4...")
                     :"Waiting for FFmpeg encoder queue...";
             return;
         }
@@ -302,6 +301,7 @@ public final class CameraVideoRenderController
         bridge=null;
         media=null;
         owner=null;
+        hasSoundtrack=false;
         if(completed!=null&&!success)completed.cancel();
         if(frames!=null)frames.close();
         if(editor!=null)

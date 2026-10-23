@@ -1,8 +1,8 @@
 # CAMERA 3.0 — offline render implementation roadmap
 
-Status as of PR #96: **experimental silent 20 FPS MP4 export, a visible
-Export Video dialog, and frame-exact visual VIDEO clips** have been
-implemented. Forge and Java 8 tests are necessary but NOT evidence that
+Status as of the AAC/export-preferences work: **experimental 20 FPS MP4
+export, an Export Video dialog, frame-exact visual VIDEO clips and a
+48 kHz AAC audio mix pass** have been implemented. Forge and Java 8 tests are necessary but NOT evidence that
 OptiFine/shaderpack rendering has been verified in a live Minecraft client.
 
 The Export dialog selects output resolution, H.264 quality, ffmpeg.exe and
@@ -11,9 +11,16 @@ film renderer uses IMAGE, VIDEO and SUBTITLE clips in saved layer order.
 VIDEO decoding is asynchronous and exact to a scene tick: no fallback to
 preview's previous-frame cache; FFmpeg loops a source only if Loop is enabled.
 
-Remaining major work: offline AUDIO and embedded VIDEO sound mux, continuous
-actor/Jolt/world 30/60 FPS frame-time evaluation, performance optimization of
-per-frame VIDEO decode, and real OptiFine in-game visual regression.
+AUDIO clips and AUDIO/VIDEO sound sources now use FFprobe preflight and an
+offline FFmpeg mix into AAC (with baseline linear fades, volume, offsets,
+trim, and loops). 20 FPS silent projects keep the previous encoding path.
+FFmpeg's path is saved in the machine-local
+`run/config/bbs-editor/camera-export.properties` file and reloaded automatically.
+A separate settings screen is intentionally deferred.
+
+Remaining major work: continuous actor/Jolt/world 30/60 FPS frame-time
+evaluation, BBS FS curve-accurate audio envelopes, performance optimization of
+per-frame VIDEO decode, and real OptiFine/audio in-game regression.
 
 ## Existing, verified ownership boundaries (do not break)
 

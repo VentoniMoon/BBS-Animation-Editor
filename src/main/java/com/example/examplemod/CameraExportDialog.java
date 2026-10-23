@@ -53,8 +53,7 @@ public final class CameraExportDialog
         outputField.setMaxStringLength(1024);
         widthField.setText(Integer.toString(format.getWidth()));
         heightField.setText(Integer.toString(format.getHeight()));
-        ffmpegField.setText(System.getProperty(
-                "bbs.editor.export.ffmpeg","ffmpeg"));
+        ffmpegField.setText(CameraExportPreferences.loadFfmpeg(mc.mcDataDir));
         File folder=new File(mc.mcDataDir,"config/bbs-editor/exports");
         String name="camera-"+new SimpleDateFormat("yyyyMMdd-HHmmss",
                 Locale.ROOT).format(new Date())+".mp4";
@@ -64,9 +63,27 @@ public final class CameraExportDialog
 
     public void close()
     {
+        if(open&&ffmpegField!=null)saveFfmpegPreference();
         open=false;
         widthField=heightField=ffmpegField=outputField=null;
         error=null;
+    }
+
+    private void saveFfmpegPreference()
+    {
+        if(ffmpegField==null)return;
+        String path=ffmpegField.getText().trim();
+        if(path.isEmpty())return;
+        try
+        {
+            CameraExportPreferences.saveFfmpeg(
+                    Minecraft.getMinecraft().mcDataDir,path);
+        }
+        catch(IOException badPreference)
+        {
+            System.err.println("[BBS CAMERA] Cannot save FFmpeg path: "+
+                    badPreference.getMessage());
+        }
     }
 
     private void bounds(AnimationEditorScreen screen)
@@ -133,17 +150,18 @@ public final class CameraExportDialog
         font.drawString("Save MP4 as",x+15,y+201,MUTED);
         outputField.drawTextBox();
 
-        int videoCount=0,mediaCount=0;
+        int videoCount=0,mediaCount=0,audioCount=0;
         for(CameraClipDocument.Clip clip:editor.getSceneState()
                 .getCameraClips().clips())
         {
             if(!clip.enabled)continue;
             if(clip.kind==CameraClipDocument.Kind.VIDEO)videoCount++;
+            if(clip.kind==CameraClipDocument.Kind.AUDIO)audioCount++;
             if(clip.kind==CameraClipDocument.Kind.IMAGE||
                     clip.kind==CameraClipDocument.Kind.SUBTITLE)mediaCount++;
         }
         String capability="VIDEO: "+videoCount+"  |  Images/Subtitles: "+
-                mediaCount+"  |  Audio: not yet mixed";
+                mediaCount+"  |  Audio clips: "+audioCount+" (AAC)";
         font.drawString(font.trimStringToWidth(
                     video.isExporting()?video.getStage():capability,w-30),
                 x+15,y+239,video.isExporting()?BLUE:MUTED);
@@ -243,6 +261,8 @@ public final class CameraExportDialog
             String ff=ffmpegField.getText().trim();
             if(ff.isEmpty())throw new IllegalArgumentException(
                     "Enter FFmpeg executable location");
+            // Save even if a later encoder/source preflight fails.
+            saveFfmpegPreference();
             String destination=outputField.getText().trim();
             if(destination.isEmpty()||
                     !destination.toLowerCase(Locale.ROOT).endsWith(".mp4"))
