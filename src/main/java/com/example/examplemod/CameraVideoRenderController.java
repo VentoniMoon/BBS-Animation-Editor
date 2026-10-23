@@ -110,8 +110,8 @@ public final class CameraVideoRenderController
                 Locale.ROOT).format(new Date())+".mp4";
         File folder=new File(mc.mcDataDir,"config/bbs-editor/exports");
         start(editor,new Options(size.getWidth(),size.getHeight(),18,"medium",
-                new File(System.getProperty("bbs.editor.export.ffmpeg",
-                        "ffmpeg")),new File(folder,name)));
+                new File(CameraExportPreferences.loadFfmpeg(mc.mcDataDir)),
+                new File(folder,name)));
     }
 
     /** Start a user-configured CAMERA MP4 session from the Export dialog. */
