@@ -55,6 +55,18 @@ public final class CameraExportCoreSmokeTest
         catch(IllegalArgumentException expected){rejected=true;}
         check(rejected,"reject excessive frame count");
 
+        String metadata="width=128\nheight=128\navg_frame_rate=60/3\nnb_read_frames=10\n";
+        CameraExportVerifier.validate(metadata,
+                new CameraExportPlan(128,128,20,10));
+        boolean verifyRejected=false;
+        try
+        {
+            CameraExportVerifier.validate(metadata.replace(
+                    "nb_read_frames=10","nb_read_frames=9"),
+                    new CameraExportPlan(128,128,20,10));
+        }
+        catch(IOException expected){verifyRejected=true;}
+        check(verifyRejected,"detect missing encoded video frame");
         File path=new File("camera-export-test.mp4");
         List<String> cmd=CameraFfmpegEncoder.command(new File("ffmpeg"),path,
                 plan,18,"medium");
@@ -107,6 +119,7 @@ public final class CameraExportCoreSmokeTest
         }
         check(output.isFile()&&output.length()>100L,
                 "tiny H.264 MP4 exists and is not empty");
+        CameraExportVerifier.verify(null,output,tiny);
 
         File abort=new File(temp,"partial.mp4");
         try(CameraFfmpegEncoder encoder=
@@ -150,6 +163,7 @@ public final class CameraExportCoreSmokeTest
         }
         check(queuedOutput.isFile()&&queuedOutput.length()>100L,
                 "Asynchronous full-video MP4 exists");
+        CameraExportVerifier.verify(null,queuedOutput,queuedPlan);
         check(queuedOutput.delete(),"cleanup async MP4");
         check(output.delete(),"cleanup exported MP4");
         check(temp.delete(),"cleanup test directory");
