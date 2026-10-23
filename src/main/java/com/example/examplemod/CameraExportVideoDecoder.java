@@ -43,9 +43,16 @@ public final class CameraExportVideoDecoder
     public static List<String> command(File ffmpeg,File source,int localTick,
             boolean loop)
     {
+        return command(ffmpeg,source,(double)localTick,loop);
+    }
+
+    /** A fractional output frame requests a fractional source timestamp. */
+    public static List<String> command(File ffmpeg,File source,double localTick,
+            boolean loop)
+    {
         if(source==null||!source.isFile())
             throw new IllegalArgumentException("Missing VIDEO source: "+source);
-        if(localTick<0)
+        if(!Double.isFinite(localTick)||localTick<0D)
             throw new IllegalArgumentException("Negative VIDEO local tick");
         String executable=ffmpeg==null?"ffmpeg":ffmpeg.getPath();
         List<String> cmd=new ArrayList<String>();
@@ -64,7 +71,7 @@ public final class CameraExportVideoDecoder
         // intervening B/P frames for exact final timestamp ownership.
         // Keep two seconds of pre-roll, rather than seeking directly to t
         // (which could select a preceding keyframe as the output frame).
-        int coarseSecond=Math.max(0,localTick/20-2);
+        int coarseSecond=Math.max(0,(int)Math.floor(localTick/20D)-2);
         if(coarseSecond>0)
         {
             cmd.add("-ss");
@@ -84,6 +91,12 @@ public final class CameraExportVideoDecoder
     }
 
     public BufferedImage decode(File source,int localTick,boolean loop)
+            throws IOException
+    {
+        return decode(source,(double)localTick,loop);
+    }
+
+    public BufferedImage decode(File source,double localTick,boolean loop)
             throws IOException
     {
         List<String> argv;
