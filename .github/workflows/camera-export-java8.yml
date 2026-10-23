@@ -11,6 +11,10 @@ on:
       - 'src/test/camera-export-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraExportSession.java'
+      - 'src/main/java/com/example/examplemod/CameraExportAudioMuxer.java'
+      - 'src/main/java/com/example/examplemod/CameraExportAudioTracks.java'
+      - 'src/main/java/com/example/examplemod/CameraExportPreferences.java'
+      - 'src/test/java/com/example/examplemod/CameraExportAudioMuxerSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraNativeFrameProbe.java'
       - 'src/main/java/com/example/examplemod/CameraVideoRenderController.java'
@@ -37,6 +41,10 @@ on:
       - 'src/test/camera-export-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportReadbackSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraExportSession.java'
+      - 'src/main/java/com/example/examplemod/CameraExportAudioMuxer.java'
+      - 'src/main/java/com/example/examplemod/CameraExportAudioTracks.java'
+      - 'src/main/java/com/example/examplemod/CameraExportPreferences.java'
+      - 'src/test/java/com/example/examplemod/CameraExportAudioMuxerSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraNativeFrameProbe.java'
       - 'src/main/java/com/example/examplemod/CameraVideoRenderController.java'
@@ -77,9 +85,22 @@ jobs:
             src/main/java/com/example/examplemod/CameraFfmpegEncoder.java \
             src/main/java/com/example/examplemod/CameraExportVerifier.java \
             src/main/java/com/example/examplemod/CameraExportSession.java \
+            src/main/java/com/example/examplemod/CameraExportAudioMuxer.java \
             src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java
           java -ea -cp build/camera/export \
             com.example.examplemod.CameraExportCoreSmokeTest
+
+      - name: Test offline AAC audio mux and remembered FFmpeg preference
+        run: |
+          mkdir -p build/camera/audio
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/audio \
+            src/main/java/com/example/examplemod/CameraExportAudioMuxer.java \
+            src/main/java/com/example/examplemod/CameraExportPreferences.java \
+            src/main/java/com/example/examplemod/CameraExportPlan.java \
+            src/main/java/com/example/examplemod/CameraExportVerifier.java \
+            src/test/java/com/example/examplemod/CameraExportAudioMuxerSmokeTest.java
+          java -ea -cp build/camera/audio \
+            com.example.examplemod.CameraExportAudioMuxerSmokeTest
 
       - name: Test exact native FBO readback and GL state restoration
         run: |
@@ -89,6 +110,7 @@ jobs:
             src/main/java/com/example/examplemod/CameraExportReadback.java \
             src/main/java/com/example/examplemod/CameraExportFrameBridge.java \
             src/main/java/com/example/examplemod/CameraExportSession.java \
+            src/main/java/com/example/examplemod/CameraExportAudioMuxer.java \
             src/main/java/com/example/examplemod/CameraFfmpegEncoder.java \
             src/main/java/com/example/examplemod/CameraExportVerifier.java \
             src/test/camera-export-stubs/org/lwjgl/BufferUtils.java \
@@ -105,6 +127,7 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 -d build/camera/session \
             src/main/java/com/example/examplemod/CameraExportPlan.java \
             src/main/java/com/example/examplemod/CameraExportSession.java \
+            src/main/java/com/example/examplemod/CameraExportAudioMuxer.java \
             src/main/java/com/example/examplemod/CameraFfmpegEncoder.java \
             src/main/java/com/example/examplemod/CameraExportVerifier.java \
             src/test/java/com/example/examplemod/CameraExportSessionSmokeTest.java
@@ -119,6 +142,7 @@ jobs:
             src/main/java/com/example/examplemod/CameraExportReadback.java \
             src/main/java/com/example/examplemod/CameraExportFrameBridge.java \
             src/main/java/com/example/examplemod/CameraExportSession.java \
+            src/main/java/com/example/examplemod/CameraExportAudioMuxer.java \
             src/main/java/com/example/examplemod/CameraFfmpegEncoder.java \
             src/main/java/com/example/examplemod/CameraExportVerifier.java \
             src/main/java/com/example/examplemod/CameraNativeFrameProbe.java \
