@@ -11,9 +11,16 @@ film renderer uses IMAGE, VIDEO and SUBTITLE clips in saved layer order.
 VIDEO decoding is asynchronous and exact to a scene tick: no fallback to
 preview's previous-frame cache; FFmpeg loops a source only if Loop is enabled.
 
-Remaining major work: offline AUDIO and embedded VIDEO sound mux, continuous
-actor/Jolt/world 30/60 FPS frame-time evaluation, performance optimization of
-per-frame VIDEO decode, and real OptiFine in-game visual regression.
+AUDIO clips and AUDIO/VIDEO sound sources now use FFprobe preflight and an
+offline FFmpeg mix into AAC (with baseline linear fades, volume, offsets,
+trim, and loops). 20 FPS silent projects keep the previous encoding path.
+FFmpeg's path is saved in the machine-local
+`run/config/bbs-editor/camera-export.properties` file and reloaded automatically.
+A separate settings screen is intentionally deferred.
+
+Remaining major work: continuous actor/Jolt/world 30/60 FPS frame-time
+evaluation, BBS FS curve-accurate audio envelopes, performance optimization of
+per-frame VIDEO decode, and real OptiFine/audio in-game regression.
 
 ## Existing, verified ownership boundaries (do not break)
 
