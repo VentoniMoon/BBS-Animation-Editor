@@ -13,7 +13,7 @@ public final class CameraExportReadbackSmokeTest
         if(!ok)throw new AssertionError(message);
     }
 
-    public static void main(String[] args)
+    public static void main(String[] args) throws Exception
     {
         CameraExportPlan plan=new CameraExportPlan(128,128,20,10);
         CameraExportReadback reader=new CameraExportReadback(plan);
