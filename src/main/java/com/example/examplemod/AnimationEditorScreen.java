@@ -186,8 +186,7 @@ public class AnimationEditorScreen extends GuiScreen
                 ==EditorModeController.EditorMode.CAMERA;
         if(!inCamera&&!this.cameraWorkspace.crossModeShot())return free;
         this.cameraWorkspace.syncScene(this.sceneState);
-        return this.cameraWorkspace.sample(free,
-                this.playbackController.getCurrentFrame(),
+        CameraClipDocument.TargetResolver resolver=
                 new CameraClipDocument.TargetResolver()
                 {
                     @Override
@@ -207,7 +206,12 @@ public class AnimationEditorScreen extends GuiScreen
                         }
                         return null;
                     }
-                },inCamera);
+                };
+        if(cameraVideoExport.isExporting())
+            return cameraWorkspace.sampleForExport(free,
+                    playbackController.getCurrentFrame(),resolver);
+        return cameraWorkspace.sample(free,
+                playbackController.getCurrentFrame(),resolver,inCamera);
     }
 
     private final EditorThemeController editorThemeController =
