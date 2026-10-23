@@ -139,8 +139,9 @@ public final class CameraExportDialog
         }
         String capability="VIDEO: "+videoCount+"  |  Images/Subtitles: "+
                 mediaCount+"  |  Audio: not yet mixed";
-        font.drawString(font.trimStringToWidth(capability,w-30),
-                x+15,y+239,MUTED);
+        font.drawString(font.trimStringToWidth(
+                    video.isExporting()?video.getStage():capability,w-30),
+                x+15,y+239,video.isExporting()?BLUE:MUTED);
 
         int buttonY=y+h-34;
         if(video.isExporting())
