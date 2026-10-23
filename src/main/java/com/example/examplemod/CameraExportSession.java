@@ -59,6 +59,7 @@ public final class CameraExportSession implements AutoCloseable
     {
         final CameraFfmpegEncoder encoder=CameraFfmpegEncoder.start(
                 ffmpeg,output,plan,crf,preset);
+        final java.io.File ffprobe=CameraExportVerifier.companionProbe(ffmpeg);
         try
         {
             return new CameraExportSession(plan,new FrameSink()
@@ -68,7 +69,24 @@ public final class CameraExportSession implements AutoCloseable
                 {encoder.writeFrame(frame);}
 
                 @Override public void finish() throws IOException
-                {encoder.finish();}
+                {
+                    encoder.finish();
+                    try
+                    {
+                        // "MP4 exists" is not success until decoded width,
+                        // height, FPS and *actual frames* match our plan.
+                        CameraExportVerifier.verify(ffprobe,output,plan);
+                    }
+                    catch(IOException invalid)
+                    {
+                        // This file was created solely by the current export:
+                        // never leave a corrupt video at its final name.
+                        if(output.isFile())output.delete();
+                        throw new IOException(
+                                "FFprobe export validation failed: "+
+                                invalid.getMessage(),invalid);
+                    }
+                }
 
                 @Override public void cancel()
                 {encoder.cancel();}
