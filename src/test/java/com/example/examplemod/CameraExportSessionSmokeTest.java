@@ -113,6 +113,9 @@ public final class CameraExportSessionSmokeTest
             check(failure.getStatus()==CameraExportSession.Status.FAILED,
                     "backend error must be reported instead of success");
             check(failure.getFailure()!=null,"preserve encoding error");
+            check(!failure.submitFrame(failure.getCapturedFrames(),
+                            ByteBuffer.wrap(new byte[plan.frameBytes])),
+                    "late GPU frame after encoder failure must reject safely");
             check(failureSink.cancels.get()>0,"failed output cleaned");
         }
         finally{failure.close();}
