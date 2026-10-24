@@ -21,9 +21,11 @@ public final class CameraImageCache
     {
         final long modified;
         final DynamicTexture texture;
-        Entry(long modified,DynamicTexture texture)
+        final int width,height;
+        Entry(long modified,DynamicTexture texture,int width,int height)
         {
             this.modified=modified;this.texture=texture;
+            this.width=width;this.height=height;
         }
     }
     public static DynamicTexture get(String source)
@@ -46,7 +48,8 @@ public final class CameraImageCache
         if(image==null||image.getWidth()<1||image.getHeight()<1||
                 image.getWidth()>4096||image.getHeight()>4096)return null;
         DynamicTexture texture=new DynamicTexture(image);
-        CACHE.put(key,new Entry(file.lastModified(),texture));
+        CACHE.put(key,new Entry(file.lastModified(),texture,
+                image.getWidth(),image.getHeight()));
         while(CACHE.size()>LIMIT)
         {
             String first=CACHE.keySet().iterator().next();
@@ -55,6 +58,15 @@ public final class CameraImageCache
         }
         return texture;
     }
+    /** Dimensions of the ORIGINAL decoded source, not the preview or FBO. */
+    public static int[] size(String source)
+    {
+        if(get(source)==null)return null;
+        File file=resolve(source);
+        Entry entry=file==null?null:CACHE.get(file.getAbsolutePath());
+        return entry==null?null:new int[]{entry.width,entry.height};
+    }
+
     public static File resolve(String source)
     {
         if(source==null||source.trim().isEmpty())return null;
