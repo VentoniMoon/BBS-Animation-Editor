@@ -170,7 +170,8 @@ public final class CameraClipDocument
             if(k.has("mask"))key.mask=k.get("mask").getAsInt()&127;
             if(k.has("interpolation"))
                 key.interpolation=k.get("interpolation").getAsString();
-            if(k.has("media")&&k.get("media").isJsonObject())
+            if(k.has("media")&&
+                    k.get("media") instanceof com.google.gson.JsonObject)
                 for(Map.Entry<String,com.google.gson.JsonElement> item:
                         k.getAsJsonObject("media").entrySet())
                 {
