@@ -56,6 +56,7 @@ public final class CameraExportVideoFrames implements AutoCloseable
         final long startedAt;
         Future<BufferedImage> pending;
         DynamicTexture texture;
+        int width,height;
         Frame(int sceneTick,double localTick,File source,boolean transparent)
         {
             this.sceneTick=sceneTick;
@@ -180,6 +181,7 @@ public final class CameraExportVideoFrames implements AutoCloseable
                 if(image==null)
                     throw new IOException("VIDEO decoded a null image");
                 // Only this render-thread call touches Minecraft/OpenGL.
+                frame.width=image.getWidth();frame.height=image.getHeight();
                 frame.texture=new DynamicTexture(image);
                 frame.pending=null;
             }
@@ -210,6 +212,14 @@ public final class CameraExportVideoFrames implements AutoCloseable
             throw new IllegalStateException(
                     "VIDEO frame is not ready; do not reuse a stale texture");
         return frame.texture;
+    }
+
+    /** Exact VIDEO source geometry to preserve its native aspect in MP4. */
+    public int[] size(CameraClipDocument.Clip clip,int sceneTick)
+    {
+        Frame frame=frames.get(clip);
+        return frame!=null&&frame.sceneTick==sceneTick&&frame.width>0
+                ?new int[]{frame.width,frame.height}:null;
     }
 
     private static int offset(CameraClipDocument.Clip clip)
