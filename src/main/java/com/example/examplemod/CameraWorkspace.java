@@ -324,6 +324,19 @@ public final class CameraWorkspace
         Double parsed=finiteDouble(value);
         if(parsed==null)return false;
         double n=parsed;
+        if(name.startsWith("media."))
+        {
+            if(!CameraMediaAnimation.supports(keyOwner))return false;
+            String channel=name.substring(6);
+            boolean allowed=false;
+            for(String field:CameraMediaAnimation.FIELDS)
+                if(field.equals(channel)){allowed=true;break;}
+            if(!allowed||("opacity".equals(channel)&&(n<0D||n>1D))||
+                    (("width".equals(channel)||"height".equals(channel))&&
+                            n<=0D))return false;
+            selectedKey.media.put(channel,n);
+            saveScene();return true;
+        }
         if("mask".equals(name))
         {
             if(n<0D||n>127D)return false;
@@ -579,7 +592,8 @@ public final class CameraWorkspace
         trackedCameraClip=null;trackedCameraKey=null;
         lastNavigationPose=null;navigationDirty=false;
         groupSelection.clear();
-        mediaDragged=null;mediaDirty=false;
+        mediaDragged=null;mediaDraggedKey=null;
+        mediaNeedsKeyOnMove=false;mediaDirty=false;
         resizeEdge=0;dragged=null;draggedKey=null;
         layerScroll=0;inspectorScroll=0;editField=null;
         choosingTarget=false;actorTargets.clear();
@@ -760,6 +774,9 @@ public final class CameraWorkspace
     private int dragStartDuration;
     private int dragStartX,dragStartTick,dragStartLayer;
     private CameraClipDocument.Clip mediaDragged;
+    private CameraClipDocument.Key mediaDraggedKey;
+    private boolean mediaNeedsKeyOnMove;
+    private int mediaDragFrame;
     private int mediaMouseX,mediaMouseY,mediaFrameWidth,mediaFrameHeight;
     private double mediaStartX,mediaStartY;
     private boolean mediaDirty;
@@ -1053,7 +1070,7 @@ public final class CameraWorkspace
         CameraClipDocument.Clip selected=document.selected();
         if(selected!=null&&selected.enabled&&selected.contains(frame)
                 &&CameraMediaPlacement.contains(selected,mc.fontRenderer,
-                        filmX,filmY,filmW,filmH,mouseX,mouseY))
+                        filmX,filmY,filmW,filmH,mouseX,mouseY,frame))
             target=selected;
         else
         {
@@ -1061,7 +1078,7 @@ public final class CameraWorkspace
             {
                 if(!c.enabled||!c.contains(frame)||
                         !CameraMediaPlacement.contains(c,mc.fontRenderer,
-                                filmX,filmY,filmW,filmH,mouseX,mouseY))
+                                filmX,filmY,filmW,filmH,mouseX,mouseY,frame))
                     continue;
                 if(target==null||c.layer>=target.layer)target=c;
             }
@@ -1074,10 +1091,24 @@ public final class CameraWorkspace
             groupSelection.clear();groupSelection.add(target);
         }
         mediaDragged=target;
+        mediaDraggedKey=null;
+        mediaNeedsKeyOnMove=false;
+        mediaDragFrame=frame;
+        if(CameraMediaAnimation.supports(target)&&!target.keys.isEmpty())
+        {
+            // Merely selecting an overlay must NOT add a keyframe.
+            // A real drag authors a new key at the current playhead.
+            for(CameraClipDocument.Key key:target.keys)
+                if(key.tick==frame-target.tick){mediaDraggedKey=key;break;}
+            if(mediaDraggedKey==null)mediaNeedsKeyOnMove=true;
+            else {selectedKey=mediaDraggedKey;keyOwner=target;}
+        }
         mediaMouseX=mouseX;mediaMouseY=mouseY;
         mediaFrameWidth=filmW;mediaFrameHeight=filmH;
-        mediaStartX=CameraMediaPlacement.x(target);
-        mediaStartY=CameraMediaPlacement.y(target);
+        java.util.Map<String,Double> visible=
+                CameraMediaAnimation.sample(target,frame);
+        mediaStartX=visible.get("x");
+        mediaStartY=visible.get("y");
         mediaDirty=false;
         return true;
     }
@@ -1091,7 +1122,7 @@ public final class CameraWorkspace
         Minecraft mc=Minecraft.getMinecraft();
         if(mc==null)return;
         int[] rect=CameraMediaPlacement.outline(selected,mc.fontRenderer,
-                filmX,filmY,filmW,filmH);
+                filmX,filmY,filmW,filmH,frame);
         if(rect==null)return;
         int left=Math.max(filmX,rect[0]),top=Math.max(filmY,rect[1]);
         int right=Math.min(filmX+filmW,rect[2]);
@@ -1547,7 +1578,35 @@ public final class CameraWorkspace
             // Off-frame positioning is intentionally allowed for transitions.
             x=Math.max(-2D,Math.min(3D,x));
             y=Math.max(-2D,Math.min(3D,y));
-            if(!Double.toString(x).equals(mediaDragged.settings.get("x"))||
+            if(mediaNeedsKeyOnMove&&
+                    (mouseX!=mediaMouseX||mouseY!=mediaMouseY))
+            {
+                CameraClipDocument.Key basis=mediaDragged.keys.get(0);
+                CameraClipDocument.Key created=
+                        new CameraClipDocument.Key(
+                                mediaDragFrame-mediaDragged.tick,
+                                new PreviewCameraPose(basis.x,basis.y,basis.z,
+                                        basis.yaw,basis.pitch,basis.roll,
+                                        basis.fov,0.05F,512F));
+                CameraMediaAnimation.capture(mediaDragged,created,mediaDragFrame);
+                mediaDragged.keys.add(created);
+                java.util.Collections.sort(mediaDragged.keys,
+                    new java.util.Comparator<CameraClipDocument.Key>(){
+                        @Override public int compare(CameraClipDocument.Key a,
+                                CameraClipDocument.Key b)
+                        {return Integer.compare(a.tick,b.tick);}
+                    });
+                mediaDraggedKey=created;
+                selectedKey=created;keyOwner=mediaDragged;
+                mediaNeedsKeyOnMove=false;
+            }
+            if(mediaDraggedKey!=null)
+            {
+                mediaDraggedKey.media.put("x",x);
+                mediaDraggedKey.media.put("y",y);
+                mediaDirty=true;
+            }
+            else if(!Double.toString(x).equals(mediaDragged.settings.get("x"))||
                     !Double.toString(y).equals(mediaDragged.settings.get("y")))
             {
                 mediaDragged.settings.put("x",Double.toString(x));
@@ -1579,7 +1638,16 @@ public final class CameraWorkspace
             CameraClipInspector.Hit field=numericDragCandidate;
             if(field.keyframe&&numericDragKey!=null)
             {
-                if("x".equals(field.key))numericDragKey.x=value;
+                if(field.key.startsWith("media."))
+                {
+                    String channel=field.key.substring(6);
+                    if("opacity".equals(channel))
+                        value=Math.max(0D,Math.min(1D,value));
+                    if("width".equals(channel)||"height".equals(channel))
+                        value=Math.max(0.001D,value);
+                    numericDragKey.media.put(channel,value);
+                }
+                else if("x".equals(field.key))numericDragKey.x=value;
                 else if("y".equals(field.key))numericDragKey.y=value;
                 else if("z".equals(field.key))numericDragKey.z=value;
                 else if("yaw".equals(field.key))numericDragKey.yaw=(float)value;
@@ -1635,7 +1703,7 @@ public final class CameraWorkspace
     public void release()
     {
         if(mediaDirty)saveScene();
-        mediaDragged=null;mediaDirty=false;
+        mediaDragged=null;mediaDraggedKey=null;mediaDirty=false;
         scrubbingTimeline=false;
         if(numericDragging)saveScene();
         numericDragCandidate=null;numericDragClip=null;

@@ -270,10 +270,17 @@ public final class CameraFilmCompositor
         if(texture==null)return;
 
         boolean fullscreen=Boolean.parseBoolean(clip.settings.get("fullscreen"));
-        double x=number(clip,"x",0.5D);
-        double y=number(clip,"y",0.5D);
-        double w=number(clip,"width",1D);
-        double h=number(clip,"height",1D);
+        // One source of truth for preview and native MP4. Fractional export
+        // timestamps never duplicate the preceding 20 TPS media key.
+        CameraExportPlan.Sample exact=offline?
+                CameraExportRenderClock.current():null;
+        double sceneTime=exact==null?tick:exact.sceneTime();
+        java.util.Map<String,Double> animated=
+                CameraMediaAnimation.sample(clip,sceneTime);
+        double x=animated.get("x");
+        double y=animated.get("y");
+        double w=animated.get("width");
+        double h=animated.get("height");
         // Placement coordinates use normalized fractions relative to the
         // film viewport; half/center values place the overlay at the center.
         double left=fullscreen?px:px+(x-w/2D)*pw;
@@ -304,7 +311,7 @@ public final class CameraFilmCompositor
         left=rect.left;top=rect.top;
         right=rect.right;bottom=rect.bottom;
 
-        float alpha=(float)clamp(number(clip,"opacity",1D),0D,1D);
+        float alpha=(float)clamp(animated.get("opacity"),0D,1D);
         alpha*=CameraClipEnvelope.factor(clip,tick);
         int rgba=color(clip.settings.get("color"));
         alpha*=((rgba>>>24)&255)/255F;
@@ -321,9 +328,9 @@ public final class CameraFilmCompositor
         try
         {
             GL11.glTranslated(cx,cy,0D);
-            GL11.glRotated(number(clip,"rotation",0D),0D,0D,1D);
-            GL11.glScaled(number(clip,"scaleX",1D),
-                    number(clip,"scaleY",1D),1D);
+            GL11.glRotated(animated.get("rotation"),0D,0D,1D);
+            GL11.glScaled(animated.get("scaleX"),
+                    animated.get("scaleY"),1D);
             GL11.glBegin(GL11.GL_QUADS);
             GL11.glTexCoord2d(rect.u0,rect.v0);GL11.glVertex2d(left-cx,top-cy);
             GL11.glTexCoord2d(rect.u1,rect.v0);GL11.glVertex2d(right-cx,top-cy);

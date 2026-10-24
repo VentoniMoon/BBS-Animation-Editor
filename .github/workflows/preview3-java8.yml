@@ -24,6 +24,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
       - 'src/main/java/com/example/examplemod/CameraClip*.java'
       - 'src/main/java/com/example/examplemod/CameraClipChannels.java'
+      - 'src/main/java/com/example/examplemod/CameraMediaAnimation.java'
       - 'src/main/java/com/example/examplemod/CameraInterpolation.java'
       - 'src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java'
       - 'src/test/camera-stubs/**'
@@ -56,6 +57,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
       - 'src/main/java/com/example/examplemod/CameraClip*.java'
       - 'src/main/java/com/example/examplemod/CameraClipChannels.java'
+      - 'src/main/java/com/example/examplemod/CameraMediaAnimation.java'
       - 'src/main/java/com/example/examplemod/CameraInterpolation.java'
       - 'src/test/java/com/example/examplemod/CameraClipDocumentSmokeTest.java'
       - 'src/test/camera-stubs/**'
@@ -167,6 +169,7 @@ jobs:
             src/main/java/com/example/examplemod/PreviewCameraPose.java \
             src/main/java/com/example/examplemod/CameraMathExpression.java \
             src/main/java/com/example/examplemod/CameraClipDocument.java \
+            src/main/java/com/example/examplemod/CameraMediaAnimation.java \
             src/main/java/com/example/examplemod/CameraClipChannels.java \
             src/main/java/com/example/examplemod/CameraInterpolation.java \
             src/main/java/com/example/examplemod/CameraClipEnvelope.java \
