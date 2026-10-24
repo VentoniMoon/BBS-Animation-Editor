@@ -376,6 +376,7 @@ public class AnimationEditorScreen extends GuiScreen
     public void initGui()
     {
         super.initGui();
+        this.wavAudio.restoreAudible();
         this.wavAudio.restoreLastLoaded();
 
         /*
@@ -3627,6 +3628,31 @@ public class AnimationEditorScreen extends GuiScreen
         this.wavWaveform.draw(width, timelineTop + 1,
                 LEFT_PANEL_WIDTH, this.timeline,
                 this.playbackController.getCurrentFrame());
+        // Always accessible above the waveform in CHARACTER, POSE and BODY
+        // PARTS. Do not replace or mute CAMERA clips or the film export.
+        int right=width-7;
+        int left=Math.max(LEFT_PANEL_WIDTH+4,right-83);
+        int top=timelineTop+2;
+        drawRect(left-2,top-1,right+1,top+16,0xEB122630);
+        drawRect(left,top,right,top+14,
+                this.wavAudio.isAudible()?0xFF315567:0xFF564245);
+        fontRenderer.drawString(this.wavAudio.isAudible()
+                        ?"WAV SOUND ON":"WAV MUTED",
+                left+5,top+3,0xFFE6EFF5);
+    }
+
+    /** Only intercept the tiny WAV monitor button above the sound waveform. */
+    private boolean clickWavMonitor(int mouseX,int mouseY,int button)
+    {
+        if(button!=0||!wavAudio.isLoaded()||isCameraMode())return false;
+        int timelineTop=height-getBaseTimelineHeight();
+        int right=width-7;
+        int left=Math.max(LEFT_PANEL_WIDTH+4,right-83);
+        if(mouseX<left-2||mouseX>right+1||
+                mouseY<timelineTop+1||mouseY>timelineTop+18)
+            return false;
+        wavAudio.toggleAudible();
+        return true;
     }
 
     private void drawTimeline()
@@ -3784,6 +3810,7 @@ public class AnimationEditorScreen extends GuiScreen
             }
         }
         if(cameraVideoExport.isExporting())return;
+        if(clickWavMonitor(mouseX,mouseY,mouseButton))return;
         // Output popup consumes clicks before the camera timeline and gizmos.
         if(cameraOutputPopup.isOpen()
                 &&cameraOutputPopup.mouseClicked(mouseX,mouseY,mouseButton,
@@ -4162,7 +4189,8 @@ public class AnimationEditorScreen extends GuiScreen
         this.wavWaveform.sync(this.wavAudio.getLoadedFile());
         this.wavAudio.update(
                 this.playbackController.getCurrentFrame(),
-                this.playbackController.isPlaying()
+                this.playbackController.isPlaying() &&
+                        !this.cameraVideoExport.isExporting()
         );
 
         BlockbusterPreviewAnimationState.setPlaying(
