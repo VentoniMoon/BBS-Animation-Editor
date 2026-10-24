@@ -380,6 +380,33 @@ public final class CameraClipInspector
         setting("scaleY","Scale Y");
     }
 
+    private void mediaKeyEditor(CameraClipDocument.Key key)
+    {
+        section("MEDIA ANIMATION");
+        int at=y-scroll;
+        if(!measuring&&visible(at,13))
+            text("Transform keys: "+selectedClip.keys.size(),
+                    right+12,at+2,0xFFB7C5CC,width-right-24);
+        y+=14;
+        button("Add media key at playhead","@key:add");
+        if(key==null)return;
+        keyNav();
+        if(!foldSection("SELECTED MEDIA KEY",true))return;
+        keyField(key,"tick","Frame",Integer.toString(key.tick));
+        String[] labels={"X","Y","Width","Height","Rotation",
+                "Scale X","Scale Y","Opacity"};
+        for(int i=0;i<CameraMediaAnimation.FIELDS.length;i++)
+        {
+            String field=CameraMediaAnimation.FIELDS[i];
+            Double value=key.media.get(field);
+            if(value==null)value=CameraMediaAnimation.base(selectedClip,field);
+            keyField(key,"media."+field,labels[i],value.toString());
+        }
+        interpolation("@key","Key interpolation",
+                key.interpolation==null||key.interpolation.isEmpty()
+                        ?"linear":key.interpolation);
+    }
+
     /** Deliberately explicit per-type layouts; no settings-map reflection. */
     private void clipSpecific(CameraClipDocument.Key key)
     {
@@ -515,6 +542,7 @@ public final class CameraClipInspector
                 setting("color","Tint");
                 placement();
                 transform();
+                mediaKeyEditor(key);
                 break;
             case AUDIO:
                 section("AUDIO");
@@ -541,6 +569,7 @@ public final class CameraClipInspector
                 setting("color","Tint");
                 placement();
                 transform();
+                mediaKeyEditor(key);
                 break;
             case SUBTITLE:
                 section("SUBTITLE");
