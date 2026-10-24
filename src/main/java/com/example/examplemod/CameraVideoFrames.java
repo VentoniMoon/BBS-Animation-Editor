@@ -39,11 +39,30 @@ public final class CameraVideoFrames
                     },new ThreadPoolExecutor.AbortPolicy());
     private static final Map<String,Frame> frames=
             new LinkedHashMap<String,Frame>(32,0.75F,true);
-    private static boolean warnedFFmpeg;
+    private static volatile String lastFailure;
+    private static volatile String lastFailureSource;
+
+    /** Visible in CAMERA so failed FFmpeg decoding never looks like an empty quad. */
+    public static String failureFor(String video)
+    {
+        File file=CameraImageCache.resolve(video);
+        if(file==null||!file.isFile())return "VIDEO source missing: browse for a file";
+        return file.getAbsolutePath().equals(lastFailureSource)?lastFailure:null;
+    }
+
+    private static void report(File file,String reason)
+    {
+        String source=file.getAbsolutePath();
+        if(!source.equals(lastFailureSource)||!reason.equals(lastFailure))
+            System.err.println("[BBS CAMERA] VIDEO preview: "+file.getName()+": "+reason);
+        lastFailureSource=source;
+        lastFailure=reason;
+    }
     private static class Frame
     {
         Future<BufferedImage> job;
         DynamicTexture texture;
+        int width,height;
     }
 
     /** A GPU upload happens only when the async decoded result is ready. */
@@ -90,11 +109,22 @@ public final class CameraVideoFrames
         try
         {
             BufferedImage image=cached.job.get();
-            if(image!=null)cached.texture=new DynamicTexture(image);
+            if(image!=null)
+            {
+                cached.width=image.getWidth();cached.height=image.getHeight();
+                cached.texture=new DynamicTexture(image);
+                if(file.getAbsolutePath().equals(lastFailureSource))
+                {lastFailureSource=null;lastFailure=null;}
+            }
+            else report(file,"FFmpeg returned no video frame at tick "+frame);
             cached.job=null;
             return cached.texture;
         }
-        catch(Exception ignored){cached.job=null;return null;}
+        catch(Exception invalid)
+        {
+            report(file,"Cannot upload decoded frame: "+invalid.getMessage());
+            cached.job=null;return null;
+        }
     }
 
     /**
@@ -114,53 +144,42 @@ public final class CameraVideoFrames
         return null;
     }
 
+    /**
+     * Preview uses the SAME saved FFmpeg executable as offline export, not
+     * the system PATH. Offline's exact decoder gives us useful errors rather
+     * than a silent black preview when the executable is not installed.
+     */
     private static BufferedImage decode(File file,int frame)
     {
-        Process process=null;
         try
         {
-            // Accurate input seeking: -ss after -i, not before it.
-            String seconds=String.format(java.util.Locale.ROOT,"%.6f",
-                    frame/20D);
-            ProcessBuilder command=new ProcessBuilder(
-                    "ffmpeg","-hide_banner","-loglevel","quiet",
-                    "-nostdin","-i",file.getAbsolutePath(),"-ss",seconds,
-                    "-frames:v","1","-f","image2pipe","-vcodec","png","-");
-            // FFmpeg's stderr must not fill its pipe while stdout is decoded.
-            // Java 8 supports DISCARD only in newer JDKs; redirect to the
-            // platform null device instead (Windows and CI Linux).
-            command.redirectError(new File(System.getProperty("os.name","")
-                    .toLowerCase(java.util.Locale.ROOT).contains("win")
-                    ? "NUL" : "/dev/null"));
-            process=command.start();
-            BufferedImage image;
-            try(InputStream stream=process.getInputStream())
-            {
-                image=ImageIO.read(stream);
-            }
-            if(!process.waitFor(15,TimeUnit.SECONDS))
-            {
-                process.destroyForcibly();return null;
-            }
-            if(image!=null && image.getWidth()>=1 &&
-                    image.getHeight()>=1 && image.getWidth()<=4096 &&
-                    image.getHeight()<=4096)return image;
+            net.minecraft.client.Minecraft mc=
+                    net.minecraft.client.Minecraft.getMinecraft();
+            File gameDir=mc==null?null:mc.mcDataDir;
+            String ffmpeg=CameraExportPreferences.loadFfmpeg(gameDir);
+            return new CameraExportVideoDecoder(new File(ffmpeg))
+                    .decode(file,frame,false);
         }
-        catch(Exception error)
+        catch(Exception failure)
         {
-            if(!warnedFFmpeg)
-            {
-                warnedFFmpeg=true;
-                System.err.println("[BBS CAMERA] FFmpeg video decode unavailable: "
-                        +error.getMessage());
-            }
+            report(file,"FFmpeg could not decode tick "+frame+": "+
+                    (failure.getMessage()==null?
+                            failure.getClass().getSimpleName():failure.getMessage()));
+            return null;
         }
-        finally
-        {
-            if(process!=null)process.destroy();
-        }
-        return null;
     }
+
+    /** Original VIDEO pixel dimensions available after an async frame decode. */
+    public static int[] size(String video,int frame)
+    {
+        File source=CameraImageCache.resolve(video);
+        if(source==null)return null;
+        Frame cached=frames.get(source.getAbsolutePath()+"#"+
+                source.lastModified()+"#"+frame);
+        return cached!=null&&cached.width>0&&cached.height>0
+                ?new int[]{cached.width,cached.height}:null;
+    }
+
     public static void clear()
     {
         for(Frame frame:frames.values())
@@ -169,6 +188,7 @@ public final class CameraVideoFrames
             if(frame.texture!=null)frame.texture.deleteGlTexture();
         }
         frames.clear();
+        lastFailure=null;lastFailureSource=null;
     }
     private CameraVideoFrames(){}
 }

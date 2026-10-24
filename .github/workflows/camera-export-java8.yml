@@ -27,6 +27,8 @@ on:
       - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoSeekSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraVideoFrames.java'
+      - 'src/test/java/com/example/examplemod/CameraVideoFramesPreviewSmokeTest.java'
       - 'src/test/camera-video-export-stubs/**'
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
@@ -74,6 +76,8 @@ on:
       - 'src/test/java/com/example/examplemod/CameraExportVideoDecoderSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoSeekSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportVideoFramesSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraVideoFrames.java'
+      - 'src/test/java/com/example/examplemod/CameraVideoFramesPreviewSmokeTest.java'
       - 'src/test/camera-video-export-stubs/**'
       - 'src/test/camera-native-probe-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
@@ -252,6 +256,20 @@ jobs:
             src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java
           java -ea -cp build/camera/image-layout \
             com.example.examplemod.CameraImagePlacementSmokeTest
+
+      - name: Verify VIDEO preview reads saved FFmpeg path
+        run: |
+          mkdir -p build/camera/video-preview
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/video-preview \
+            src/test/wav-audio-monitor-stubs/net/minecraft/client/Minecraft.java \
+            src/test/camera-video-export-stubs/net/minecraft/client/renderer/texture/DynamicTexture.java \
+            src/test/camera-video-export-stubs/com/example/examplemod/VideoClipStubs.java \
+            src/main/java/com/example/examplemod/CameraExportPreferences.java \
+            src/main/java/com/example/examplemod/CameraExportVideoDecoder.java \
+            src/main/java/com/example/examplemod/CameraVideoFrames.java \
+            src/test/java/com/example/examplemod/CameraVideoFramesPreviewSmokeTest.java
+          java -ea -cp build/camera/video-preview \
+            com.example.examplemod.CameraVideoFramesPreviewSmokeTest
 
       - name: Verify frame-exact export VIDEO decode with real FFmpeg
         run: |

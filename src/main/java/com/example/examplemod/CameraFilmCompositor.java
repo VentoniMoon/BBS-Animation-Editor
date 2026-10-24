@@ -132,7 +132,8 @@ public final class CameraFilmCompositor
                         throw new IllegalStateException(
                                 "Cannot decode export IMAGE: "+
                                 clip.settings.get("texture"));
-                    drawImage(clip,0,0,width,height,tick,null,true);
+                    drawImage(clip,0,0,width,height,tick,null,true,
+                            exactFrames);
                 }
                 else if(clip.kind==CameraClipDocument.Kind.VIDEO)
                 {
@@ -140,7 +141,7 @@ public final class CameraFilmCompositor
                     // timestamp, transparent before an offset, or throws.
                     // Never ask CameraVideoFrames for an older preview frame.
                     drawImage(clip,0,0,width,height,tick,
-                            exactFrames.get(clip,tick),true);
+                            exactFrames.get(clip,tick),true,exactFrames);
                 }
                 else
                     drawSubtitle(mc,clip,0,0,width,height,tick);
@@ -246,12 +247,13 @@ public final class CameraFilmCompositor
     private static void drawImage(CameraClipDocument.Clip clip,
             int px,int py,int pw,int ph,int tick)
     {
-        drawImage(clip,px,py,pw,ph,tick,null,false);
+        drawImage(clip,px,py,pw,ph,tick,null,false,null);
     }
 
     private static void drawImage(CameraClipDocument.Clip clip,
             int px,int py,int pw,int ph,int tick,
-            DynamicTexture exactVideo,boolean offline)
+            DynamicTexture exactVideo,boolean offline,
+            CameraExportVideoFrames exactFrames)
     {
         DynamicTexture texture;
         if(clip.kind==CameraClipDocument.Kind.VIDEO)
@@ -283,14 +285,17 @@ public final class CameraFilmCompositor
         // Source pixels remain at full image resolution in DynamicTexture;
         // geometry must respect their native aspect ratio when the editor
         // is switched from 16:9 to 9:16. Treat Width/Height as a box.
-        // VIDEO keeps its old stretch semantics until its intrinsic stream
-        // dimensions are available to this renderer.
+        // IMAGE and VIDEO now share source-aspect fitting in both preview
+        // and offline output, including TikTok 9:16 compositions.
         int[] size=clip.kind==CameraClipDocument.Kind.IMAGE
-                ?CameraImageCache.size(clip.settings.get("texture")):null;
+                ?CameraImageCache.size(clip.settings.get("texture"))
+                :clip.kind==CameraClipDocument.Kind.VIDEO
+                ?(offline?exactFrames==null?null:exactFrames.size(clip,tick)
+                         :CameraVideoFrames.size(clip.settings.get("video"),
+                                 tick-clip.tick+(int)number(clip,"offset",0D)))
+                :null;
         String fit=clip.settings.get("fit");
-        if(fit==null)
-            fit=clip.kind==CameraClipDocument.Kind.IMAGE?
-                    "contain":"stretch";
+        if(fit==null)fit="contain";
         CameraImagePlacement.Rect rect=CameraImagePlacement.calculate(
                 left,top,right,bottom,
                 size==null?0:size[0],size==null?0:size[1],
