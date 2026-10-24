@@ -36,8 +36,8 @@ public final class CameraClipDocument
         AUDIO("Audio",Family.MISC,0xFFFFC825,false),
         CURVE("Curve",Family.MISC,0xFFFF1493,true),
         SUBTITLE("Subtitle",Family.MISC,0xFF888899,false),
-        IMAGE("Image",Family.MISC,0xFF5278CD,false),
-        VIDEO("Video",Family.MISC,0xFFD21F3C,false);
+        IMAGE("Image",Family.MISC,0xFF5278CD,true),
+        VIDEO("Video",Family.MISC,0xFFD21F3C,true);
 
         public final String label;
         public final Family family;
@@ -58,6 +58,8 @@ public final class CameraClipDocument
         public int mask=127;
         /** Interpolation following this key; empty delegates to clip setting. */
         public String interpolation="";
+        /** IMAGE/VIDEO visual transform channels, independent from camera pose. */
+        public final Map<String,Double> media=new LinkedHashMap<String,Double>();
         public Key(int tick, PreviewCameraPose p)
         {
             this.tick=tick; this.x=p.x; this.y=p.y; this.z=p.z;
@@ -68,6 +70,7 @@ public final class CameraClipDocument
             Key c=new Key(tick,new PreviewCameraPose(x,y,z,yaw,pitch,roll,fov,0.05F,512F));
             c.mask=this.mask;
             c.interpolation=this.interpolation;
+            c.media.putAll(this.media);
             return c;
         }
     }
@@ -132,6 +135,14 @@ public final class CameraClipDocument
             k.addProperty("roll",key.roll);k.addProperty("fov",key.fov);
             k.addProperty("mask",key.mask);
             k.addProperty("interpolation",key.interpolation);
+            if(!key.media.isEmpty())
+            {
+                com.google.gson.JsonObject visual=new com.google.gson.JsonObject();
+                for(Map.Entry<String,Double> item:key.media.entrySet())
+                    if(Double.isFinite(item.getValue()))
+                        visual.addProperty(item.getKey(),item.getValue());
+                k.add("media",visual);
+            }
             keys.add(k);
         }
         j.add("keys",keys);
@@ -159,6 +170,21 @@ public final class CameraClipDocument
             if(k.has("mask"))key.mask=k.get("mask").getAsInt()&127;
             if(k.has("interpolation"))
                 key.interpolation=k.get("interpolation").getAsString();
+            if(k.has("media")&&k.get("media").isJsonObject())
+                for(Map.Entry<String,com.google.gson.JsonElement> item:
+                        k.getAsJsonObject("media").entrySet())
+                {
+                    try
+                    {
+                        double value=item.getValue().getAsDouble();
+                        if(Double.isFinite(value)&&
+                                java.util.Arrays.asList(
+                                        CameraMediaAnimation.FIELDS)
+                                        .contains(item.getKey()))
+                            key.media.put(item.getKey(),value);
+                    }
+                    catch(RuntimeException ignored){}
+                }
             if(key.tick>=0&&key.tick<clip.duration)clip.keys.add(key);
         }
         Collections.sort(clip.keys,new Comparator<Key>(){
@@ -295,8 +321,13 @@ public final class CameraClipDocument
     {
         if(clip==null||!clip.kind.keyed||!clip.contains(absoluteFrame)||pose==null)return;
         int relative=absoluteFrame-clip.tick;
-        for(int i=0;i<clip.keys.size();i++)if(clip.keys.get(i).tick==relative){clip.keys.set(i,new Key(relative,pose));return;}
-        clip.keys.add(new Key(relative,pose));
+        Key created=new Key(relative,pose);
+        if(CameraMediaAnimation.supports(clip))
+            CameraMediaAnimation.capture(clip,created,absoluteFrame);
+        for(int i=0;i<clip.keys.size();i++)
+            if(clip.keys.get(i).tick==relative)
+            {clip.keys.set(i,created);return;}
+        clip.keys.add(created);
         Collections.sort(clip.keys,new Comparator<Key>(){
             @Override public int compare(Key a,Key b){return Integer.compare(a.tick,b.tick);}
         });
