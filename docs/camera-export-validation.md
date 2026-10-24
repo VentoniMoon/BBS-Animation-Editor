@@ -72,6 +72,29 @@ the dialog, including between client launches.
   checks that frames match the previous from-start decoder, including loops.
   Reusing a persistent decoder remains a later optimization.
 
+### Keyframed IMAGE / VIDEO motion in preview and MP4
+
+Both IMAGE and VIDEO now support their own **media transform** keys, independent
+of camera position keys. Select a media clip in CAMERA, expand Media Animation
+and click **Add media key at playhead**. Edit X/Y, Width/Height, Rotation,
+Scale X/Y and Opacity for each key, and choose a per-key interpolation curve.
+The keys appear on the clip's timeline and can be dragged, duplicated and
+deleted using the same timeline gestures as camera pose keys.
+
+A preview drag with existing keys creates a media key at the current scene
+frame when the mouse actually moves, rather than overwriting the base image
+transform. For old clips without media keys, the existing static transform
+controls continue to work. Media values are saved with the editor scene and
+survive restarting the client. Fractional 30/60 FPS output evaluates the
+key curve at each output timestamp.
+
+Regression: create two IMAGE or VIDEO keys at frame 0 and 20 with x=0.2
+then 0.8, opacity=0 then 1 and rotation 0 then 90. Scrub the preview to
+frames 0/10/20 and compare with a 60 FPS export at times 0/0.5/1.0s.
+Check click-selection outline follows the animated frame and that a simple
+click without dragging does not silently create a key. Verify Ctrl+S and
+reopen preserve media key values and interpolation.
+
 ### Avoid duplicated audio while testing Lip Sync and CAMERA
 
 A WAV loaded in the normal editor (Character > LIP SYNC) is a **separate
