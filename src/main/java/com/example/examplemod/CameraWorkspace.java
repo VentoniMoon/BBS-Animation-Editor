@@ -1067,7 +1067,7 @@ public final class CameraWorkspace
         CameraClipDocument.Clip selected=document.selected();
         if(selected!=null&&selected.enabled&&selected.contains(frame)
                 &&CameraMediaPlacement.contains(selected,mc.fontRenderer,
-                        filmX,filmY,filmW,filmH,mouseX,mouseY))
+                        filmX,filmY,filmW,filmH,mouseX,mouseY,frame))
             target=selected;
         else
         {
@@ -1075,7 +1075,7 @@ public final class CameraWorkspace
             {
                 if(!c.enabled||!c.contains(frame)||
                         !CameraMediaPlacement.contains(c,mc.fontRenderer,
-                                filmX,filmY,filmW,filmH,mouseX,mouseY))
+                                filmX,filmY,filmW,filmH,mouseX,mouseY,frame))
                     continue;
                 if(target==null||c.layer>=target.layer)target=c;
             }
@@ -1134,7 +1134,7 @@ public final class CameraWorkspace
         Minecraft mc=Minecraft.getMinecraft();
         if(mc==null)return;
         int[] rect=CameraMediaPlacement.outline(selected,mc.fontRenderer,
-                filmX,filmY,filmW,filmH);
+                filmX,filmY,filmW,filmH,frame);
         if(rect==null)return;
         int left=Math.max(filmX,rect[0]),top=Math.max(filmY,rect[1]);
         int right=Math.min(filmX+filmW,rect[2]);
