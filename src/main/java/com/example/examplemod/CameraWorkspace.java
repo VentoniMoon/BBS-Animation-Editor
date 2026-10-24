@@ -592,7 +592,8 @@ public final class CameraWorkspace
         trackedCameraClip=null;trackedCameraKey=null;
         lastNavigationPose=null;navigationDirty=false;
         groupSelection.clear();
-        mediaDragged=null;mediaDraggedKey=null;mediaDirty=false;
+        mediaDragged=null;mediaDraggedKey=null;
+        mediaNeedsKeyOnMove=false;mediaDirty=false;
         resizeEdge=0;dragged=null;draggedKey=null;
         layerScroll=0;inspectorScroll=0;editField=null;
         choosingTarget=false;actorTargets.clear();
@@ -774,6 +775,8 @@ public final class CameraWorkspace
     private int dragStartX,dragStartTick,dragStartLayer;
     private CameraClipDocument.Clip mediaDragged;
     private CameraClipDocument.Key mediaDraggedKey;
+    private boolean mediaNeedsKeyOnMove;
+    private int mediaDragFrame;
     private int mediaMouseX,mediaMouseY,mediaFrameWidth,mediaFrameHeight;
     private double mediaStartX,mediaStartY;
     private boolean mediaDirty;
@@ -1089,31 +1092,16 @@ public final class CameraWorkspace
         }
         mediaDragged=target;
         mediaDraggedKey=null;
+        mediaNeedsKeyOnMove=false;
+        mediaDragFrame=frame;
         if(CameraMediaAnimation.supports(target)&&!target.keys.isEmpty())
         {
-            // Do not silently overwrite every key's static base placement.
-            // On drag, author/replace a key at the exact playhead instead.
-            CameraClipDocument.Key existing=null;
+            // Merely selecting an overlay must NOT add a keyframe.
+            // A real drag authors a new key at the current playhead.
             for(CameraClipDocument.Key key:target.keys)
-                if(key.tick==frame-target.tick){existing=key;break;}
-            if(existing==null)
-            {
-                CameraClipDocument.Key basis=target.keys.get(0);
-                existing=new CameraClipDocument.Key(frame-target.tick,
-                        new PreviewCameraPose(basis.x,basis.y,basis.z,
-                                basis.yaw,basis.pitch,basis.roll,basis.fov,
-                                0.05F,512F));
-                CameraMediaAnimation.capture(target,existing,frame);
-                target.keys.add(existing);
-                java.util.Collections.sort(target.keys,
-                    new java.util.Comparator<CameraClipDocument.Key>(){
-                        @Override public int compare(CameraClipDocument.Key a,
-                                CameraClipDocument.Key b)
-                        {return Integer.compare(a.tick,b.tick);}
-                    });
-            }
-            mediaDraggedKey=existing;
-            selectedKey=existing;keyOwner=target;
+                if(key.tick==frame-target.tick){mediaDraggedKey=key;break;}
+            if(mediaDraggedKey==null)mediaNeedsKeyOnMove=true;
+            else {selectedKey=mediaDraggedKey;keyOwner=target;}
         }
         mediaMouseX=mouseX;mediaMouseY=mouseY;
         mediaFrameWidth=filmW;mediaFrameHeight=filmH;
@@ -1590,6 +1578,28 @@ public final class CameraWorkspace
             // Off-frame positioning is intentionally allowed for transitions.
             x=Math.max(-2D,Math.min(3D,x));
             y=Math.max(-2D,Math.min(3D,y));
+            if(mediaNeedsKeyOnMove&&
+                    (mouseX!=mediaMouseX||mouseY!=mediaMouseY))
+            {
+                CameraClipDocument.Key basis=mediaDragged.keys.get(0);
+                CameraClipDocument.Key created=
+                        new CameraClipDocument.Key(
+                                mediaDragFrame-mediaDragged.tick,
+                                new PreviewCameraPose(basis.x,basis.y,basis.z,
+                                        basis.yaw,basis.pitch,basis.roll,
+                                        basis.fov,0.05F,512F));
+                CameraMediaAnimation.capture(mediaDragged,created,mediaDragFrame);
+                mediaDragged.keys.add(created);
+                java.util.Collections.sort(mediaDragged.keys,
+                    new java.util.Comparator<CameraClipDocument.Key>(){
+                        @Override public int compare(CameraClipDocument.Key a,
+                                CameraClipDocument.Key b)
+                        {return Integer.compare(a.tick,b.tick);}
+                    });
+                mediaDraggedKey=created;
+                selectedKey=created;keyOwner=mediaDragged;
+                mediaNeedsKeyOnMove=false;
+            }
             if(mediaDraggedKey!=null)
             {
                 mediaDraggedKey.media.put("x",x);
