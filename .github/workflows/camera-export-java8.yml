@@ -32,6 +32,12 @@ on:
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraImagePlacement.java'
+      - 'src/main/java/com/example/examplemod/CameraImageCache.java'
+      - 'src/main/java/com/example/examplemod/CameraFilmCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraClipParameters.java'
+      - 'src/main/java/com/example/examplemod/CameraClipInspector.java'
+      - 'src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
       - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
       - 'src/test/camera-fps-stubs/**'
@@ -69,6 +75,12 @@ on:
       - 'src/test/java/com/example/examplemod/CameraNativeFrameProbeSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCoreSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraExportCameraSamplerSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/CameraImagePlacement.java'
+      - 'src/main/java/com/example/examplemod/CameraImageCache.java'
+      - 'src/main/java/com/example/examplemod/CameraFilmCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraClipParameters.java'
+      - 'src/main/java/com/example/examplemod/CameraClipInspector.java'
+      - 'src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
       - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
       - 'src/test/camera-fps-stubs/**'
@@ -213,6 +225,15 @@ jobs:
             src/test/java/com/example/examplemod/CameraExportActorFrameSamplerSmokeTest.java
           java -ea -cp build/camera/fps \
             com.example.examplemod.CameraExportActorFrameSamplerSmokeTest
+
+      - name: Verify IMAGE original aspect in horizontal and TikTok frames
+        run: |
+          mkdir -p build/camera/image-layout
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/image-layout \
+            src/main/java/com/example/examplemod/CameraImagePlacement.java \
+            src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java
+          java -ea -cp build/camera/image-layout \
+            com.example.examplemod.CameraImagePlacementSmokeTest
 
       - name: Verify frame-exact export VIDEO decode with real FFmpeg
         run: |
