@@ -528,6 +528,9 @@ public final class CameraClipInspector
                 section("VIDEO");
                 setting("video","Video file");
                 button("Browse videos","@media:browse:video");
+                setting("fit","Fit (contain/cover/stretch)");
+                setting("flipX","Mirror horizontally");
+                setting("flipY","Mirror vertically");
                 setting("audio","Audio track");
                 setting("offset","Offset");
                 setting("volume","Volume");
