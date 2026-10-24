@@ -221,6 +221,62 @@ public final class CameraClipDocumentSmokeTest
                 .settings.get("x")),0.72D,"media X persists");
         near(Double.parseDouble(mediaRestored.clips().get(2)
                 .settings.get("y")),0.42D,"media Y persists");
+        // IMAGE and VIDEO: source transform keys must be independent of
+        // camera pose channels and resolve at *fractional* 60 FPS timestamps.
+        CameraClipDocument clipsWithKeys=new CameraClipDocument();
+        CameraClipDocument.Clip image=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.IMAGE,10,60,1);
+        image.settings.put("x","0.2");
+        image.settings.put("y","0.3");
+        image.settings.put("width","0.4");
+        image.settings.put("height","0.6");
+        image.settings.put("opacity","1");
+        image.settings.put("scaleX","1");
+        image.settings.put("scaleY","1");
+        image.settings.put("rotation","0");
+        check(clipsWithKeys.add(image),"IMAGE accepts media keys");
+        clipsWithKeys.keyAt(image,10,BASE);
+        check(image.keys.size()==1,"Capture initial IMAGE media key");
+        near(image.keys.get(0).media.get("x"),0.2D,
+                "IMAGE media key captures displayed x");
+        clipsWithKeys.keyAt(image,40,BASE);
+        image.keys.get(1).media.put("x",0.8D);
+        image.keys.get(1).media.put("opacity",0D);
+        image.keys.get(1).media.put("rotation",90D);
+        near(CameraMediaAnimation.sample(image,25D).get("x"),0.5D,
+                "IMAGE position interpolated halfway");
+        near(CameraMediaAnimation.sample(image,25D).get("opacity"),0.5D,
+                "IMAGE opacity interpolated halfway");
+        near(CameraMediaAnimation.sample(image,25D).get("rotation"),45D,
+                "IMAGE rotation interpolated halfway");
+        near(CameraMediaAnimation.sample(image,10D+1D/3D).get("x"),
+                0.2D+0.6D/(3D*30D),
+                "60 FPS samples media keys between scene ticks");
+
+        CameraClipDocument.Clip deep=image.copy();
+        deep.keys.get(0).media.put("x",99D);
+        near(image.keys.get(0).media.get("x"),0.2D,
+                "Deep copying a clip must not share media key values");
+        CameraClipDocument persisted=new CameraClipDocument();
+        persisted.readJson(clipsWithKeys.toJson());
+        CameraClipDocument.Clip loadedImage=persisted.clips().get(0);
+        near(CameraMediaAnimation.sample(loadedImage,25D).get("x"),0.5D,
+                "IMAGE media curves survive editor.dat JSON save/reopen");
+        check(loadedImage.keys.size()==2,"Media keys count persisted");
+
+        CameraClipDocument.Clip video=new CameraClipDocument.Clip(
+                CameraClipDocument.Kind.VIDEO,0,30,2);
+        video.settings.put("x","0.5");
+        check(clipsWithKeys.add(video),"VIDEO also supports media keys");
+        clipsWithKeys.keyAt(video,0,BASE);
+        clipsWithKeys.keyAt(video,15,BASE);
+        video.keys.get(0).interpolation="step";
+        video.keys.get(1).media.put("x",0.9D);
+        near(CameraMediaAnimation.sample(video,10).get("x"),0.5D,
+                "Step VIDEO transform holds first placement");
+        near(CameraMediaAnimation.sample(video,15).get("x"),0.9D,
+                "Step VIDEO transform switches at target key");
+
         System.out.println("CAMERA clip layering, channels, trim, media persistence PASS");
     }
 }
