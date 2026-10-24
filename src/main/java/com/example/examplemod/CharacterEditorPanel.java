@@ -850,6 +850,17 @@ public class CharacterEditorPanel
                     Math.max(40, this.width - 18), 20,
                     mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
                     mouseY >= cursorY + 25 && mouseY < cursorY + 45);
+            // Monitoring is independent of lip-sync analysis and CAMERA
+            // audio tracks. Mute the loaded WAV, not the rendered film.
+            boolean monitorReady=this.wavAudio!=null&&this.wavAudio.isLoaded();
+            String monitorLabel=!monitorReady?"WAV MONITOR: NO FILE"
+                    :this.wavAudio.isAudible()?"WAV MONITOR: ON (click to mute)"
+                    :"WAV MONITOR: MUTED (click to hear)";
+            drawButton(mc,monitorLabel,this.x+9,cursorY+50,
+                    Math.max(40,this.width-18),20,
+                    monitorReady&&mouseX>=this.x+9&&
+                    mouseX<this.x+this.width-9&&
+                    mouseY>=cursorY+50&&mouseY<cursorY+70);
         }
 
         /*
@@ -857,7 +868,7 @@ public class CharacterEditorPanel
          * so lower Character sections can never cover it.
          */
         // Calculate scroll range from actual laid-out section content.
-        int bottomOfSections = cursorY + (this.openedSection == Section.LIP_SYNC ? 50 : 0);
+        int bottomOfSections = cursorY + (this.openedSection == Section.LIP_SYNC ? 75 : 0);
         int originalY = this.y + this.sectionScrollOffset;
         this.maxSectionScroll = Math.max(0,
                 bottomOfSections + this.sectionScrollOffset -
@@ -2837,6 +2848,16 @@ public class CharacterEditorPanel
             mc.displayGuiScreen(new LipSyncTextScreen(
                     (AnimationEditorScreen) mc.currentScreen,
                     this.selectedBodyPartModel, this.currentFrame));
+            return true;
+        }
+
+        if (this.openedSection == Section.LIP_SYNC &&
+                this.wavAudio != null && this.wavAudio.isLoaded() &&
+                mouseX >= this.x + 9 && mouseX < this.x + this.width - 9 &&
+                mouseY >= currentY + SECTION_HEIGHT + 54 &&
+                mouseY < currentY + SECTION_HEIGHT + 74)
+        {
+            this.wavAudio.toggleAudible();
             return true;
         }
 

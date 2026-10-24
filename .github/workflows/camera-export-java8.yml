@@ -38,6 +38,10 @@ on:
       - 'src/main/java/com/example/examplemod/CameraClipParameters.java'
       - 'src/main/java/com/example/examplemod/CameraClipInspector.java'
       - 'src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/EditorWavAudioController.java'
+      - 'src/main/java/com/example/examplemod/CharacterEditorPanel.java'
+      - 'src/test/java/com/example/examplemod/EditorWavAudioMuteSmokeTest.java'
+      - 'src/test/wav-audio-monitor-stubs/**'
       - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
       - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
       - 'src/test/camera-fps-stubs/**'
@@ -81,6 +85,10 @@ on:
       - 'src/main/java/com/example/examplemod/CameraClipParameters.java'
       - 'src/main/java/com/example/examplemod/CameraClipInspector.java'
       - 'src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/EditorWavAudioController.java'
+      - 'src/main/java/com/example/examplemod/CharacterEditorPanel.java'
+      - 'src/test/java/com/example/examplemod/EditorWavAudioMuteSmokeTest.java'
+      - 'src/test/wav-audio-monitor-stubs/**'
       - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
       - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
       - 'src/test/camera-fps-stubs/**'
@@ -105,6 +113,16 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
           ffmpeg -hide_banner -encoders | grep libx264
+      - name: Verify editor-only WAV monitoring mute and persistence
+        run: |
+          mkdir -p build/camera/wav-mute
+          javac -source 8 -target 8 -encoding UTF-8 -d build/camera/wav-mute \
+            src/test/wav-audio-monitor-stubs/net/minecraft/client/Minecraft.java \
+            src/main/java/com/example/examplemod/EditorWavAudioController.java \
+            src/test/java/com/example/examplemod/EditorWavAudioMuteSmokeTest.java
+          java -ea -cp build/camera/wav-mute \
+            com.example.examplemod.EditorWavAudioMuteSmokeTest
+
       - name: Compile export pipeline and run frame/MP4 tests
         run: |
           mkdir -p build/camera/export

@@ -11,6 +11,8 @@ public final class EditorWavAudioController
     private File file;
     private boolean wasPlaying;
     private int lastFrame = -1;
+    /** Monitoring only: does not affect WAV loading, lip-sync or CAMERA MP4. */
+    private boolean audible = true;
 
     public String getFileName()
     {
@@ -20,6 +22,73 @@ public final class EditorWavAudioController
     public boolean isLoaded() { return clip != null; }
 
     public synchronized File getLoadedFile() { return file; }
+
+    public synchronized boolean isAudible() { return audible; }
+
+    /**
+     * Mute only the editor's local WAV monitoring. It must not unload the
+     * sample or change the scene's independent CAMERA AUDIO clips.
+     * Restoring sound resumes at the CURRENT timeline frame, never where
+     * the Java Sound clip had been stopped.
+     */
+    public synchronized void setAudible(boolean enabled)
+    {
+        if(audible==enabled)return;
+        audible=enabled;
+        if(clip!=null && clip.isRunning())clip.stop();
+        wasPlaying=false;
+        lastFrame=-1;
+        rememberAudible();
+    }
+
+    public synchronized void toggleAudible()
+    {
+        setAudible(!audible);
+    }
+
+    private File monitorSetting()
+    {
+        return new File(net.minecraft.client.Minecraft.getMinecraft().mcDataDir,
+                "config/bbs-editor/wav-monitor-muted.txt");
+    }
+
+    /** Machine-local monitoring preference, intentionally not scene data. */
+    public synchronized void restoreAudible()
+    {
+        File setting=monitorSetting();
+        if(!setting.isFile())return;
+        try
+        {
+            byte[] bytes=java.nio.file.Files.readAllBytes(setting.toPath());
+            String value=new String(bytes,
+                    java.nio.charset.StandardCharsets.UTF_8).trim();
+            if("true".equalsIgnoreCase(value))setAudible(false);
+            else if("false".equalsIgnoreCase(value))setAudible(true);
+        }
+        catch(IOException failure)
+        {
+            System.err.println("[BBS Editor] Cannot read WAV monitor state: "+
+                    failure.getMessage());
+        }
+    }
+
+    private void rememberAudible()
+    {
+        try
+        {
+            File setting=monitorSetting();
+            File folder=setting.getParentFile();
+            if(!folder.isDirectory()&&!folder.mkdirs())return;
+            java.nio.file.Files.write(setting.toPath(),
+                    Boolean.toString(!audible).getBytes(
+                            java.nio.charset.StandardCharsets.UTF_8));
+        }
+        catch(IOException failure)
+        {
+            System.err.println("[BBS Editor] Cannot save WAV monitor state: "+
+                    failure.getMessage());
+        }
+    }
 
     private File selectionFile()
     {
@@ -102,6 +171,13 @@ public final class EditorWavAudioController
     public synchronized void update(int frame, boolean playing)
     {
         if (clip == null) return;
+        if (!audible)
+        {
+            if (clip.isRunning())clip.stop();
+            wasPlaying=false;
+            lastFrame=-1;
+            return;
+        }
         long desired = Math.max(0L, (long)frame * 50000L);
         long limited = Math.min(clip.getMicrosecondLength(), desired);
         int target = (int)Math.min(Integer.MAX_VALUE, limited);

@@ -72,6 +72,28 @@ the dialog, including between client launches.
   checks that frames match the previous from-start decoder, including loops.
   Reusing a persistent decoder remains a later optimization.
 
+### Avoid duplicated audio while testing Lip Sync and CAMERA
+
+A WAV loaded in the normal editor (Character > LIP SYNC) is a **separate
+local Java Sound monitoring source** from CAMERA's AUDIO/VIDEO film clips.
+Playing both with the same file previously made the audio sound doubled.
+
+- In the normal editor, click **WAV SOUND ON / WAV MUTED** on the waveform
+  (available in Character, Pose and Body Parts), or click **WAV MONITOR**
+  in Character > LIP SYNC. This immediately mutes/unmutes only local WAV
+  monitoring while keeping the file loaded, its waveform and viseme keys.
+- The toggle persists in `config/bbs-editor/wav-monitor-muted.txt`
+  independently of the scene and the FFmpeg encoder.
+- Muted WAV monitoring resumes at the current timeline position when
+  enabled; it never resumes from an old audio position.
+- During offline MP4 export local WAV monitoring pauses automatically,
+  regardless of its toggle. CAMERA AUDIO/VIDEO clips are mixed as before
+  by FFmpeg and are never muted by this editor-only preference.
+- Regression: use the same WAV in Lip Sync and an AUDIO clip. When WAV
+  monitor is off, only the CAMERA clip should be heard during editor
+  preview and the final MP4 must still include the soundtrack. Re-enable
+  monitor and verify lip sync still works without reloading or rebaking.
+
 ### IMAGE overlay aspect-ratio and orientation check
 
 IMAGE clips previously treated Width/Height as independent screen-space
