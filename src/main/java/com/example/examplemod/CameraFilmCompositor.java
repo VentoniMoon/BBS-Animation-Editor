@@ -280,6 +280,25 @@ public final class CameraFilmCompositor
         double bottom=fullscreen?py+ph:top+h*ph;
         if(right<=left||bottom<=top)return;
 
+        // Source pixels remain at full image resolution in DynamicTexture;
+        // geometry must respect their native aspect ratio when the editor
+        // is switched from 16:9 to 9:16. Treat Width/Height as a box.
+        // VIDEO keeps its old stretch semantics until its intrinsic stream
+        // dimensions are available to this renderer.
+        int[] size=clip.kind==CameraClipDocument.Kind.IMAGE
+                ?CameraImageCache.size(clip.settings.get("texture")):null;
+        String fit=clip.settings.get("fit");
+        if(fit==null)
+            fit=clip.kind==CameraClipDocument.Kind.IMAGE?
+                    "contain":"stretch";
+        CameraImagePlacement.Rect rect=CameraImagePlacement.calculate(
+                left,top,right,bottom,
+                size==null?0:size[0],size==null?0:size[1],
+                fit,Boolean.parseBoolean(clip.settings.get("flipX")),
+                Boolean.parseBoolean(clip.settings.get("flipY")));
+        left=rect.left;top=rect.top;
+        right=rect.right;bottom=rect.bottom;
+
         float alpha=(float)clamp(number(clip,"opacity",1D),0D,1D);
         alpha*=CameraClipEnvelope.factor(clip,tick);
         int rgba=color(clip.settings.get("color"));
@@ -301,10 +320,10 @@ public final class CameraFilmCompositor
             GL11.glScaled(number(clip,"scaleX",1D),
                     number(clip,"scaleY",1D),1D);
             GL11.glBegin(GL11.GL_QUADS);
-            GL11.glTexCoord2d(0D,1D);GL11.glVertex2d(left-cx,top-cy);
-            GL11.glTexCoord2d(1D,1D);GL11.glVertex2d(right-cx,top-cy);
-            GL11.glTexCoord2d(1D,0D);GL11.glVertex2d(right-cx,bottom-cy);
-            GL11.glTexCoord2d(0D,0D);GL11.glVertex2d(left-cx,bottom-cy);
+            GL11.glTexCoord2d(rect.u0,rect.v0);GL11.glVertex2d(left-cx,top-cy);
+            GL11.glTexCoord2d(rect.u1,rect.v0);GL11.glVertex2d(right-cx,top-cy);
+            GL11.glTexCoord2d(rect.u1,rect.v1);GL11.glVertex2d(right-cx,bottom-cy);
+            GL11.glTexCoord2d(rect.u0,rect.v1);GL11.glVertex2d(left-cx,bottom-cy);
             GL11.glEnd();
         }
         finally {GL11.glPopMatrix();}

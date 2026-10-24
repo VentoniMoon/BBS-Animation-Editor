@@ -508,6 +508,9 @@ public final class CameraClipInspector
                 setting("texture","Texture");
                 button("Browse images","@media:browse:texture");
                 setting("fullscreen","Fullscreen");
+                setting("fit","Fit (contain/cover/stretch)");
+                setting("flipX","Mirror horizontally");
+                setting("flipY","Mirror vertically");
                 setting("smooth","Smooth");
                 setting("color","Tint");
                 placement();

@@ -72,6 +72,28 @@ the dialog, including between client launches.
   checks that frames match the previous from-start decoder, including loops.
   Reusing a persistent decoder remains a later optimization.
 
+### IMAGE overlay aspect-ratio and orientation check
+
+IMAGE clips previously treated Width/Height as independent screen-space
+fractions, so an ordinary source was stretched differently in horizontal and
+vertical frames. Now both preview and offline MP4 use the same pixel-based
+source dimensions and **contain** the original image in that bounding box by
+default. Image pixels are uploaded at original resolution (subject to the
+existing 4096-pixel maximum per side); any downscaling is only due to the
+chosen display size. `fit=stretch` remains an explicit distortion option;
+`fit=cover` crops the edges within the box. New and older IMAGE clips
+without a fit field use contain.
+
+The IMAGE inspector also exposes independent `flipX` and `flipY` options
+to diagnose/correct an explicitly mirrored source without affecting the
+world, subtitles or other clips. The default is no added reflection.
+
+Regression: add a recognizable asymmetrical PNG with readable text and
+known source dimensions. Confirm its aspect and orientation in a 16:9 preview
+and native MP4, then change the output to 1080x1920 and repeat. Compare
+image orientation to the ORIGINAL source, not only preview vs MP4.
+Check fullscreen/cover, nontrivial rotation, opacity, and old saved scenes.
+
 ### Clean film preview: no Minecraft chat or diagnostic HUD
 
 Both the CAMERA preview and the MP4 reuse the native Minecraft world pass.
