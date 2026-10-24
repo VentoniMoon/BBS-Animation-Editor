@@ -793,6 +793,16 @@ public final class CameraWorkspace
     }
     private int timelineW;
 
+    private String selectedVideoProblem()
+    {
+        CameraClipDocument.Clip clip=document.selected();
+        if(clip==null||clip.kind!=CameraClipDocument.Kind.VIDEO)return null;
+        String source=clip.settings.get("video");
+        if(source==null||source.trim().isEmpty())
+            return "VIDEO: choose a source";
+        return CameraVideoFrames.failureFor(source);
+    }
+
     public void draw(AnimationEditorScreen screen,int frame,int length)
     {
         Minecraft mc=Minecraft.getMinecraft();
@@ -815,6 +825,11 @@ public final class CameraWorkspace
             mc.fontRenderer.drawString(presetNames.get(presetScroll+i),
                     12,95+i*17,0xFFD1DAE0);
         if(lastError!=null)mc.fontRenderer.drawString(lastError,10,top-12,0xFFFF8888);
+        if(selectedVideoProblem()!=null)
+            mc.fontRenderer.drawString(
+                    mc.fontRenderer.trimStringToWidth(
+                            selectedVideoProblem(),Math.max(50,width-right-12)),
+                    right+6,top-11,0xFFFF9494);
         CameraClipDocument.Clip selected=document.selected();
         CameraClipDocument.Key displayedKey=selectedKey;
         boolean activeKey=selectedKey!=null&&keyOwner==selected;
@@ -1117,6 +1132,7 @@ public final class CameraWorkspace
                     String file=root.toURI().relativize(
                             mediaFiles.get(index).toURI()).getPath();
                     document.selected().settings.put(mediaProperty,file);
+                    lastError=null;
                     saveScene();
                 }
             }
@@ -1168,7 +1184,14 @@ public final class CameraWorkspace
                             ||kind==CameraClipDocument.Kind.DOLLY)
                         made.keys.add(new CameraClipDocument.Key(0,
                                 screen.getCameraWorkspacePose()));
-                    if(document.add(made))saveScene();
+                    if(document.add(made))
+                    {
+                        saveScene();
+                        // A bare VIDEO layer is only its editing outline,
+                        // not media. Prompt for its source immediately.
+                        if(kind==CameraClipDocument.Kind.VIDEO)
+                            openMediaPicker("video");
+                    }
                     palette=false;return true;
                 }
             }
