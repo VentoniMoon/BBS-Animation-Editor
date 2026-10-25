@@ -83,6 +83,7 @@ public final class BbsFsWorldCameraDriver
         {
             // Fail-safe: never leave an export-size world target active after
             // a skipped/failed GUI pass.
+            CameraVisualFrameClock.clearPreview();
             CameraNativeFrameProbe.afterRenderTick(Minecraft.getMinecraft());
             Minecraft endMc=Minecraft.getMinecraft();
             if(endMc.currentScreen instanceof AnimationEditorScreen)
@@ -112,6 +113,10 @@ public final class BbsFsWorldCameraDriver
         // tick BEFORE the native camera entity and recorded actor pass sample
         // their poses. Normal CAMERA preview remains completely unchanged.
         editor.getCameraVideoExport().beforeWorld(editor);
+        BodyPartPhysicsBakeController bake=editor.getPhysicsBakeController();
+        CameraVisualFrameClock.beginPreview(editor.getCurrentFrame(),
+                event.renderTickTime,editor.isCameraPlaying(),
+                bake!=null&&bake.isRecording());
         PreviewCameraPose pose=editor.getCameraWorkspaceNativePose();
         if (view == null || view.world != mc.world)
             view = new PreviewCameraEntity(mc.world);
@@ -331,6 +336,7 @@ public final class BbsFsWorldCameraDriver
 
     private void release()
     {
+        CameraVisualFrameClock.clearPreview();
         restoreHud();
         if (!controlling) return;
 
