@@ -1892,6 +1892,7 @@ public class AnimationEditorScreen extends GuiScreen
          * BBS FS native capture MUST happen before drawing any GUI pixel.
          * Otherwise the world texture would contain our dark editor panels.
          */
+        BetterLightsRig.bind(this.sceneState);
         BbsFsWorldFrameCapture.beginFrame(this.mc);
         // During CAMERA output a Minecraft world pass uses the *film* FBO
         // dimensions (e.g. 3840x2160, or 1080x1920). Vanilla may configure
