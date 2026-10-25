@@ -277,7 +277,7 @@ public final class CameraSceneLightsPanel
             if(my>=yy&&my<yy+22)
             {
                 fieldAxis=i;
-                field=new GuiTextField(18618,screen.getMinecraft().fontRenderer,
+                field=new GuiTextField(18618,Minecraft.getMinecraft().fontRenderer,
                         leftRight+35,yy+2,130,17);
                 field.setText(String.format(Locale.ROOT,"%.5f",
                         component(light,tab,i)));
@@ -360,7 +360,7 @@ public final class CameraSceneLightsPanel
             int color=i==0?0xFFFF6060:i==1?0xFF63ED85:0xFF679DFF;
             int ex=(int)next.x,ey=(int)next.y;
             Gui.drawRect(ex-5,ey-5,ex+6,ey+6,color);
-            screen.getMinecraft().fontRenderer.drawString(
+            Minecraft.getMinecraft().fontRenderer.drawString(
                     i==0?"X":i==1?"Y":"Z",ex-2,ey-4,0xFF0B1220);
         }
     }
