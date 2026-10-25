@@ -64,6 +64,13 @@ public final class CameraSceneLightsPanel
     {
         if(chosen==null||nativeActor==null)return;
         nativeSettings.flush(screen);
+        syncNative(screen);
+    }
+
+    /** Pull only committed NBT; don't close a newly opened text field. */
+    private void syncNative(AnimationEditorScreen screen)
+    {
+        if(chosen==null||nativeActor==null)return;
         if(nativeActor.getActor().getMorph()!=null)
         {
             String before=chosen.morph.toString();
@@ -259,10 +266,9 @@ public final class CameraSceneLightsPanel
         if(light==null)return true;
         if(tab==2)
         {
-            boolean hit=nativeSettings.mouseClicked(screen,nativeActor,
-                    mx,my,button);
-            persistNative(screen);
-            return hit||true;
+            nativeSettings.mouseClicked(screen,nativeActor,mx,my,button);
+            syncNative(screen);
+            return true;
         }
         if(my>=303&&my<328)
         {
@@ -299,7 +305,7 @@ public final class CameraSceneLightsPanel
         }
         if(tab==2&&nativeSettings.keyTyped(screen,c,key))
         {
-            persistNative(screen);
+            syncNative(screen);
             return true;
         }
         return false;
