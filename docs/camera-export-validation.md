@@ -113,6 +113,41 @@ Check saved/reopened scene, SHOT vs FREE navigation, and 60 FPS native
 MP4 against the film preview. Visual parity with every BBS FS legacy
 parameter is not guaranteed by Java8 smoke tests.
 
+### BetterLights actor — non-skeletal POSE and native light settings
+
+A `betterLights` actor in Blockbuster is a LightCaster, **not** a
+CustomMorph with Steve bones. Old versions of the standalone editor
+silently used its cached/default Steve model as an animation skeleton.
+Now a BetterLightsMorph actor loads zero POSE bones. Erroneous previously
+created Steve bones on that selected light actor are cleared from
+editor animation data, without modifying normal character animations.
+Its world-space position and rotation are still defined by the original
+Blockbuster actor **Record**, not imaginary skeletal roots.
+
+In POSE's right-side Transform slot the light instead gets
+**LIGHT / TRANSFORM**. It reads the actual Blockbuster
+`BetterLightsMorph.getValueManager()` `ValueSerializer` values and
+exposes number, boolean and color attributes provided by the installed
+BetterLights version. Click a field to edit, Enter to apply, Escape to
+cancel; scroll the right panel for additional light settings. Hex colors
+support `#RRGGBB` and `#AARRGGBB`. Changes are serialized directly to
+the scene actor's morph NBT and marked dirty; **Ctrl+S** saves them in
+the scene `.dat`. This is not an invented copy of BetterLights settings.
+
+Live regression:
+- Select the `betterLights` scene actor and confirm no Steve limbs or
+  Pose keyframes are displayed. LIGHT / TRANSFORM must show enabled,
+  brightness/range/color/direction values that are actually supported by
+  BetterLightsMorph.
+- Change color, radius and cone attributes. On Enter, check light output
+  updates. Ctrl+S, reopen scene and verify values survive.
+- Change back to a normal Blockbuster, Emoticons or Chameleon actor: its
+  real skeleton and ordinary keyframe Transform must be preserved.
+- With BetterLights missing, the editor must start and any scene with
+  a missing light dependency must fail gracefully, not link-crash.
+- Actor XYZ/yaw/pitch are still Record-owned. A separate light-object
+  gizmo and timeline dedicated to CAMERA will be implemented later.
+
 ### BetterLights 1.0.3 — fixed light position when CAMERA moves
 
 A separate original BetterLights 1.0.3 issue manifests with a **static
