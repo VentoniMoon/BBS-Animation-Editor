@@ -1221,6 +1221,25 @@ public final class CameraWorkspace
                             ||kind==CameraClipDocument.Kind.DOLLY)
                         made.keys.add(new CameraClipDocument.Key(0,
                                 screen.getCameraWorkspacePose()));
+                    if(kind==CameraClipDocument.Kind.SPLINE)
+                    {
+                        // A new Spline needs two distinct editable control
+                        // points, otherwise it displays no camera motion.
+                        PreviewCameraPose pose=screen.getCameraWorkspacePose();
+                        made.keys.add(new CameraClipDocument.Key(0,pose));
+                        double a=Math.toRadians(pose.yaw);
+                        double b=Math.toRadians(pose.pitch);
+                        double distance=4D;
+                        PreviewCameraPose next=new PreviewCameraPose(
+                            pose.x-Math.sin(a)*Math.cos(b)*distance,
+                            pose.y-Math.sin(b)*distance,
+                            pose.z+Math.cos(a)*Math.cos(b)*distance,
+                            pose.yaw,pose.pitch,pose.roll,pose.fov,
+                            pose.nearPlane,pose.farPlane);
+                        made.keys.add(new CameraClipDocument.Key(
+                                made.duration-1,next));
+                        shot=true;
+                    }
                     if(document.add(made))
                     {
                         saveScene();
