@@ -3271,10 +3271,10 @@ public class AnimationEditorScreen extends GuiScreen
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
-            if(BetterLightsActorInspector.isLightActor(getSelectedActor()))
+            boolean lightActor=BetterLightsActorInspector.isLightActor(
+                    getSelectedActor());
+            if(lightActor&&!betterLightsInspector.rigTab())
             {
-                // A LightCaster has no humanoid bones. Show the genuine
-                // Blockbuster BetterLights values in the Transform slot.
                 this.betterLightsInspector.draw(mc,panelX,top,bottom,
                         getSelectedActor(),
                         this.playbackController.getCurrentFrame());
@@ -3298,7 +3298,12 @@ public class AnimationEditorScreen extends GuiScreen
                             this.playbackController
                                     .getCurrentFrame()
                     );
+                if(lightActor&&keyframeController.getSelectedKeyframe()==null)
+                    fontRenderer.drawString("Select a key on Origin / Target",
+                            panelX+9,top+42,0xFF98BFCE);
             }
+            if(lightActor)
+                betterLightsInspector.drawTabs(mc,panelX,bottom);
         }
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
@@ -3926,9 +3931,15 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.POSE &&
-                BetterLightsActorInspector.isLightActor(getSelectedActor()) &&
-                betterLightsInspector.mouseClicked(this,
+                BetterLightsActorInspector.isLightActor(getSelectedActor()))
+        {
+            if(mouseButton==0&&betterLightsInspector.selectTab(
+                    mouseX,mouseY,width-185,
+                    height-getTimelineHeight()))return;
+            if(!betterLightsInspector.rigTab()&&
+                    betterLightsInspector.mouseClicked(this,
                         mouseX,mouseY,mouseButton))return;
+        }
         if (this.editorInput != null)
         {
             this.editorInput.mouseClicked(
@@ -4081,6 +4092,8 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.POSE &&
+                BetterLightsActorInspector.isLightActor(getSelectedActor())&&
+                !betterLightsInspector.rigTab()&&
                 betterLightsInspector.keyTyped(this,typedChar,keyCode))
             return;
         if (this.editorInput != null)
