@@ -82,7 +82,7 @@ public final class CameraExportCameraSamplerSmokeTest
         // Procedural modifiers must be evaluated at 60 Hz rather than
         // linearly interpolating two 20 Hz results (aliasing).
         CameraClipDocument curve=new CameraClipDocument();
-        CameraClipDocument.Clip shake=CameraClipParameters.create(
+        CameraClipDocument.Clip shake=new CameraClipDocument.Clip(
                 CameraClipDocument.Kind.SHAKE,0,40,0);
         shake.settings.put("shake","0.5");
         shake.settings.put("shakeAmount","8");
