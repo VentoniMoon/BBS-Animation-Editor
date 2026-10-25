@@ -295,6 +295,9 @@ public final class BetterLightsActorInspector
     {
         if(mx<x||mx>=x+185||my<top||my>=bottom||wheel==0)
             return false;
+        // Don't detach a focused field from its value by scrolling while
+        // the user is still editing the text.
+        if(editing!=null)return true;
         int visible=Math.max(1,Math.max(0,bottom-(top+90)-8)/ROW_HEIGHT);
         scroll=Math.max(0,Math.min(Math.max(0,entries.size()-visible),
                 scroll+(wheel>0?-1:1)));
