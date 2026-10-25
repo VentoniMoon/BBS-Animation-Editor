@@ -620,6 +620,7 @@ public final class CameraWorkspace
         if(id.equals(activeSceneId)&&activeState==state)return;
         stopPreviewRecording();
         activeSceneId=id;
+        lightPanel.reset();
         activeState=state;
         activeSceneFile=scene==null?null:sceneDocument(scene);
         document=state.getCameraClips();
