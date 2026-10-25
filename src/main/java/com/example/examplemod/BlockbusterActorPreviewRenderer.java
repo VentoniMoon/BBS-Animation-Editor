@@ -1187,6 +1187,20 @@ public class BlockbusterActorPreviewRenderer
          * here once per 20 TPS tick. Render positions are still supplied
          * by Blockbuster's native morph render below.
          */
+        ActorAnimationData lightRig=BetterLightsRig.forActor(actorData);
+        if(lightRig!=null)
+        {
+            // Keyframed Origin is a world-space displacement from Record.
+            // Never mutate the original Record or synthetic Steve limbs.
+            double time=CameraVisualFrameClock.sceneTime(previewFrame);
+            float[] delta=BetterLightsRig.offset(lightRig,time);
+            entityActor.posX+=delta[0];
+            entityActor.posY+=delta[1];
+            entityActor.posZ+=delta[2];
+            entityActor.prevPosX+=delta[0];
+            entityActor.prevPosY+=delta[1];
+            entityActor.prevPosZ+=delta[2];
+        }
         CameraBetterLightsBridge.prepare(entityActor,previewFrame);
 
         /*
@@ -1475,6 +1489,9 @@ public class BlockbusterActorPreviewRenderer
                     actorPartialTicks,
                     true
             );
+            if(lightRig!=null)
+                BetterLightsRig.applyTarget(entityActor.getMorph(),lightRig,
+                        CameraVisualFrameClock.sceneTime(previewFrame));
         }
 
         /*
