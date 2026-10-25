@@ -277,6 +277,79 @@ public final class CameraClipDocumentSmokeTest
         near(CameraMediaAnimation.sample(video,15).get("x"),0.9D,
                 "Step VIDEO transform switches at target key");
 
+        // SPLINE: multi-point curved geometry, tangent-facing vs keyed
+        // rotation, reversed progress, actor transform and channel masks.
+        CameraClipDocument splineDoc=new CameraClipDocument();
+        CameraClipDocument.Clip spline=CameraClipParameters.create(
+                CameraClipDocument.Kind.SPLINE,0,41,0);
+        spline.keys.add(new CameraClipDocument.Key(0,pose(0,0,0)));
+        spline.keys.add(new CameraClipDocument.Key(20,pose(10,0,10)));
+        spline.keys.add(new CameraClipDocument.Key(40,pose(20,0,0)));
+        check(spline.kind.keyed&&splineDoc.add(spline),
+                "Spline supports authored keyframe points");
+        PreviewCameraPose splineStart=splineDoc.sample(0,BASE);
+        PreviewCameraPose splineMid=splineDoc.sample(20,BASE);
+        near(splineStart.x,0,"Spline begins at first knot");
+        near(splineMid.x,10,"Spline passes through middle knot");
+        near(splineMid.z,10,"Spline passes through middle knot Z");
+        check(splineDoc.sample(10,BASE).z>0D,
+                "Hermite produces intermediate path geometry");
+        spline.settings.put("path_rotation","0");
+        near(splineDoc.sample(20,BASE).yaw,0D,
+                "Spline can disable tangent rotation");
+        spline.settings.put("path_rotation","1");
+        check(Math.abs(splineDoc.sample(10,BASE).yaw)>1D,
+                "Spline faces tangent when path_rotation is on");
+        spline.settings.put("start","100");
+        spline.settings.put("end","0");
+        near(splineDoc.sample(0,BASE).x,20D,
+                "Spline progress can run backwards");
+        spline.settings.put("start","0");
+        spline.settings.put("end","100");
+        spline.settings.put("active","7");
+        PreviewCameraPose keepAngles=new PreviewCameraPose(
+                0,0,0,33,10,2,90,0.05F,512F);
+        near(splineDoc.sample(10,keepAngles).yaw,33D,
+                "Spline channel mask preserves original yaw");
+        near(splineDoc.sample(10,keepAngles).fov,90D,
+                "Spline channel mask preserves original FOV");
+        spline.settings.put("selector","actor42");
+        spline.settings.put("active","127");
+        CameraClipDocument.TargetResolver targetSpline=
+                new CameraClipDocument.TargetResolver(){
+            public CameraClipDocument.Target resolve(String id,int tick)
+            {return new CameraClipDocument.Target(tick,2D,5D,0F,0F);}
+        };
+        near(splineDoc.sample(0.5D,BASE,targetSpline).x,0.5D+
+                CameraSplinePath.sample(spline,0.5D,BASE,null).x,
+                "Spline knot world position follows sub-tick actor target");
+        CameraClipDocument restoredSpline=new CameraClipDocument();
+        restoredSpline.readJson(splineDoc.toJson());
+        near(restoredSpline.sample(20,BASE).z,15D,
+                "Spline authored knots and selector survive save/reopen");
+
+        // CURVE: exact float sampling and envelope, no invented external
+        // shaders. A legacy shader channel never becomes silent exposure.
+        CameraClipDocument.Clip curve=CameraClipParameters.create(
+                CameraClipDocument.Kind.CURVE,0,41,1);
+        check("brightness".equals(curve.settings.get("channels")),
+                "Curve defaults to supported visible film channel");
+        curve.keys.add(new CameraClipDocument.Key(0,BASE));
+        curve.keys.add(new CameraClipDocument.Key(40,BASE));
+        curve.keys.get(0).x=0D;
+        curve.keys.get(1).x=0.8D;
+        near(CameraCurveSampler.sample(curve,20D).value,0.4D,
+                "Curve interpolates scalar value");
+        near(CameraCurveSampler.sample(curve,20.5D).value,0.41D,
+                "Curve samples full 60 FPS fractional time");
+        curve.settings.put("envelope.enabled","true");
+        curve.settings.put("envelope.fadeIn","10");
+        near(CameraCurveSampler.sample(curve,5D).value,0.05D,
+                "Curve envelope attenuates film effect");
+        curve.settings.put("channels","sun_rotation");
+        check(CameraCurveSampler.sample(curve,20D)==null,
+                "Unknown legacy shader uniform is not silently faked");
+
         System.out.println("CAMERA clip layering, channels, trim, media persistence PASS");
     }
 }
