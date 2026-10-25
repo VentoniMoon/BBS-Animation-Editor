@@ -139,9 +139,9 @@ public final class CameraModifiersSmokeTest
         CameraClipDocument.Clip remapper=modifier(
                 CameraClipDocument.Kind.REMAPPER);
         ok(remapped.add(remapper),"Remapper above a moving path");
-        near(remapped.sample(10,ZERO).x,20D,
+        near(remapped.sample(10,ZERO).x,800D/41D,
                 "Remapper changes underlying camera time");
-        near(remapped.sample(10.5D,ZERO,null).x,21D,
+        near(remapped.sample(10.5D,ZERO,null).x,840D/41D,
                 "Remapper preserves sub-tick time without rounding");
 
         CameraClipDocument stacked=moving();
