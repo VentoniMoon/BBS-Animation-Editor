@@ -84,6 +84,7 @@ public final class BbsFsWorldCameraDriver
             // Fail-safe: never leave an export-size world target active after
             // a skipped/failed GUI pass.
             CameraVisualFrameClock.clearPreview();
+            CameraBetterLightsCameraOrigin.end();
             CameraNativeFrameProbe.afterRenderTick(Minecraft.getMinecraft());
             Minecraft endMc=Minecraft.getMinecraft();
             if(endMc.currentScreen instanceof AnimationEditorScreen)
@@ -156,6 +157,11 @@ public final class BbsFsWorldCameraDriver
         activePose = pose;
         mc.gameSettings.thirdPersonView = 0;
         mc.setRenderViewEntity(view);
+        // BetterLights' shader offset currently assumes Minecraft.player
+        // is the render viewpoint. CAMERA's detached entity is not that
+        // player; temporarily match their interpolated render positions,
+        // without changing the actual LightCaster world coordinates.
+        CameraBetterLightsCameraOrigin.begin(mc,view);
 
         // Normally a no-op. The one-frame diagnostic is guarded by an
         // explicit JVM flag and uses the native Minecraft world pass.
@@ -336,6 +342,7 @@ public final class BbsFsWorldCameraDriver
 
     private void release()
     {
+        CameraBetterLightsCameraOrigin.end();
         CameraVisualFrameClock.clearPreview();
         restoreHud();
         if (!controlling) return;
