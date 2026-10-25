@@ -1221,6 +1221,14 @@ public final class CameraWorkspace
                             ||kind==CameraClipDocument.Kind.DOLLY)
                         made.keys.add(new CameraClipDocument.Key(0,
                                 screen.getCameraWorkspacePose()));
+                    if(kind==CameraClipDocument.Kind.CURVE)
+                    {
+                        CameraClipDocument.Key initial=
+                                new CameraClipDocument.Key(0,
+                                        screen.getCameraWorkspacePose());
+                        initial.x=0.25D;
+                        made.keys.add(initial);
+                    }
                     if(kind==CameraClipDocument.Kind.SPLINE)
                     {
                         // A new Spline needs two distinct editable control
