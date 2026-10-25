@@ -1354,7 +1354,9 @@ public final class EditorSceneSerializer
                     "LYCurve",
                     keyframe.getLY()
             );
-
+            // Origin tracks may animate all native BetterLights groups.
+            if(keyframe.getLightSettings()!=null)
+                tag.setTag("LightSettings",keyframe.getLightSettings());
 
             list.appendTag(
                     tag
@@ -1626,6 +1628,10 @@ public final class EditorSceneSerializer
                 );
             }
 
+
+            if(tag.hasKey("LightSettings",10))
+                keyframe.setLightSettings(
+                        tag.getCompoundTag("LightSettings"));
 
             target.add(
                     keyframe
