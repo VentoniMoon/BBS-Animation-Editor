@@ -121,6 +121,22 @@ public final class CameraModifiersSmokeTest
         };
         near(aiming.sample(0,ZERO,actor).yaw,0D,
                 "Look follows actor at selected time");
+        CameraClipDocument.TargetResolver movingActor=
+                new CameraClipDocument.TargetResolver(){
+            public CameraClipDocument.Target resolve(String id,int tick)
+            {
+                return new CameraClipDocument.Target(
+                        tick*10D,3D,10D,0F,0F);
+            }
+        };
+        CameraClipDocument.Clip trackingOrbit=modifier(
+                CameraClipDocument.Kind.ORBIT);
+        trackingOrbit.settings.put("selector","person");
+        trackingOrbit.settings.put("yawSpeed","0");
+        trackingOrbit.settings.put("copy","true");
+        CameraClipDocument movingTarget=with(trackingOrbit);
+        near(movingTarget.sample(0.5D,ZERO,movingActor).x,5D,
+                "Orbit target moves at 60 FPS sub-tick, not 20 TPS jumps");
 
         CameraClipDocument.Clip drag=modifier(CameraClipDocument.Kind.DRAG);
         CameraClipDocument smooth=moving();
