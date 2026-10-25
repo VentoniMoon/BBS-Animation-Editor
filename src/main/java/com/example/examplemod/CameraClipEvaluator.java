@@ -430,7 +430,22 @@ public final class CameraClipEvaluator
             double frame,CameraClipDocument.TargetResolver resolver)
     {
         String id=clip.settings.get("selector");
-        return resolver==null||id==null||id.isEmpty()?null:resolver.resolve(id,(int)Math.floor(frame));
+        if(resolver==null||id==null||id.isEmpty())return null;
+        int tick=Math.max(0,(int)Math.floor(frame));
+        CameraClipDocument.Target start=resolver.resolve(id,tick);
+        if(start==null)return null;
+        double alpha=frame-tick;
+        if(alpha<=0D)return start;
+        CameraClipDocument.Target end=resolver.resolve(id,tick+1);
+        if(end==null)return start;
+        double yaw=end.yaw-start.yaw;
+        yaw=(yaw+540D)%360D-180D;
+        return new CameraClipDocument.Target(
+                start.x+(end.x-start.x)*alpha,
+                start.y+(end.y-start.y)*alpha,
+                start.z+(end.z-start.z)*alpha,
+                (float)(start.yaw+yaw*alpha),
+                (float)(start.pitch+(end.pitch-start.pitch)*alpha));
     }
     /** Camera-local right / up / forward translation (including roll). */
     private static double[] localVector(PreviewCameraPose pose,double[] v)
