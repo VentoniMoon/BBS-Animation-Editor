@@ -255,8 +255,16 @@ public final class BetterLightsActorInspector
     public boolean mouseClicked(AnimationEditorScreen screen,
             int mx,int my,int button)
     {
+        return mouseClicked(screen,screen.getSelectedActorForTimeline(),
+                mx,my,button);
+    }
+
+    /** Same native light values for the CAMERA-only synthetic scene source. */
+    public boolean mouseClicked(AnimationEditorScreen screen,
+            BlockbusterSceneActorData lightActor,int mx,int my,int button)
+    {
         if(editing!=null)commit(screen);
-        if(!isLightActor(screen.getSelectedActorForTimeline())||
+        if(!isLightActor(lightActor)||
                 mx<x+8||mx>=x+176||my<top+88||my>=bottom)
             return false;
         if(button!=0)return true;
@@ -271,6 +279,12 @@ public final class BetterLightsActorInspector
         input.setText(text(editing.value));
         input.setFocused(true);
         return true;
+    }
+
+    /** Finish a pending value before changing the source or closing. */
+    public void flush(AnimationEditorScreen screen)
+    {
+        if(editing!=null)commit(screen);
     }
 
     public boolean keyTyped(AnimationEditorScreen screen,
