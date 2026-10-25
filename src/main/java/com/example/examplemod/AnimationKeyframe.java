@@ -7,6 +7,17 @@ public class AnimationKeyframe
 {
     private int frame;
     private final AnimationTransform transform;
+    /** Full BetterLightsMorph settings on an Origin key, optional. */
+    private net.minecraft.nbt.NBTTagCompound lightSettings;
+    public net.minecraft.nbt.NBTTagCompound getLightSettings()
+    {
+        return lightSettings==null?null:lightSettings.copy();
+    }
+    public void setLightSettings(net.minecraft.nbt.NBTTagCompound tag)
+    {
+        lightSettings=tag==null?null:tag.copy();
+    }
+
 
     /*
      * Оригинальная система интерполяции McLib.
