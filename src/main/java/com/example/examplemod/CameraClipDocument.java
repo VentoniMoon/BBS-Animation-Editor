@@ -23,7 +23,7 @@ public final class CameraClipDocument
         PATH("Path",Family.OVERWRITE,0xFF7338AD,true),
         KEYFRAME("Keyframe",Family.OVERWRITE,0xFFBE3B86,true),
         TRACKER("Tracker",Family.OVERWRITE,0xFF47BFC9,false),
-        SPLINE("Spline",Family.OVERWRITE,0xFF4B88CB,false),
+        SPLINE("Spline",Family.OVERWRITE,0xFF4B88CB,true),
         TRANSLATE("Translate",Family.MODIFIER,0xFF4BA03E,false),
         ANGLE("Angle",Family.MODIFIER,0xFFD77A0A,false),
         DRAG("Drag",Family.MODIFIER,0xFF4BAFF7,false),
