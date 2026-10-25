@@ -72,6 +72,47 @@ the dialog, including between client launches.
   checks that frames match the previous from-start decoder, including loops.
   Reusing a persistent decoder remains a later optimization.
 
+### Functional modifier clips and real 60 FPS procedural time
+
+The nine CAMERA **Modifier** types now have visible defaults and inspector
+controls. Creating one switches CAMERA navigation from FREE to SHOT so the
+effect can be inspected immediately. Each modifier acts on the camera
+result from LOWER tracks at that exact scene time, without modifying
+Record data. A clip on layer 0 cannot drag a non-existent lower animation.
+
+- **Translate:** X/Y/Z world offset; optionally `local=On` to use camera
+  right/up/forward and rotate offsets with the current camera orientation.
+- **Angle:** additive yaw/pitch/roll and optional FOV, per-channel mask.
+- **Shake:** shake amount and frequency, deterministic sine or seeded noise;
+  local clip time and per-channel toggles.
+- **Look:** world-point or actor target, camera-relative offsets and optional
+  motion-forward direction (test with a moving Path).
+- **Orbit:** pivot from actor, editable block or forward point; distance,
+  yaw/pitch and yaw/pitch speed (degrees per scene tick). Works without an
+  actor selector and keeps the camera pointed at its pivot.
+- **Drag:** seek-safe low-pass follow of lower-layer camera tracks, with
+  rate, strength and channel mask; remains reproducible on paused scrubs.
+- **Dolly Zoom:** focal distance plus from/to FOV. Increasing focal length
+  is counteracted by backward translation to hold an object near focus.
+- **Math:** deterministic expressions on x/y/z/yaw/pitch/roll/fov with
+  access to lower camera channels and timeline variables; respects mask.
+- **Remapper:** map local time to a new source time or keyframe the mapping;
+  samples the lower stack at fractional times without integer rounding.
+
+A procedural effect (Orbit/Shake/Math/Drag) now evaluates at the exact
+20/30/60 FPS output timestamp. The exporter no longer approximates its
+motion by blending the entire modified 20TPS camera pose at adjacent ticks.
+Camera activation boundaries remain hard cuts, not smooth crossfades.
+
+**Manual QA:** place Path/Keyframe movement on layer 0 and Translate,
+Angle, Shake on layers 1-3. Pause/scrub and verify all combine. Move Shake
+off and on; its effect should disappear/reappear. Next test Orbit with
+no target and with a named actor, Look at a block, Drag inertia,
+Dolly Zoom from 70 to 45 FOV, Math oscillation, and time Remapper.
+Check saved/reopened scene, SHOT vs FREE navigation, and 60 FPS native
+MP4 against the film preview. Visual parity with every BBS FS legacy
+parameter is not guaranteed by Java8 smoke tests.
+
 ### Export modal: no duplicate CAMERA interface at native film resolutions
 
 When **START RENDER** succeeds, the setup controls are replaced with one
