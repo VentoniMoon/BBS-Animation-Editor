@@ -80,7 +80,8 @@ public final class CameraFilmCompositor
                             "Missing export IMAGE source: "+path);
                 overlays.add(clip);
             }
-            else if(clip.kind==CameraClipDocument.Kind.SUBTITLE)
+            else if(clip.kind==CameraClipDocument.Kind.SUBTITLE||
+                    clip.kind==CameraClipDocument.Kind.CURVE)
                 overlays.add(clip);
         }
         if(overlays.isEmpty())return;
@@ -143,6 +144,8 @@ public final class CameraFilmCompositor
                     drawImage(clip,0,0,width,height,tick,
                             exactFrames.get(clip,tick),true,exactFrames);
                 }
+                else if(clip.kind==CameraClipDocument.Kind.CURVE)
+                    drawCurve(clip,0,0,width,height,tick);
                 else
                     drawSubtitle(mc,clip,0,0,width,height,tick);
             }
@@ -175,7 +178,8 @@ public final class CameraFilmCompositor
             if(clip.enabled&&clip.contains(tick)&&
                     (clip.kind==CameraClipDocument.Kind.IMAGE||
                     clip.kind==CameraClipDocument.Kind.VIDEO||
-                    clip.kind==CameraClipDocument.Kind.SUBTITLE))
+                    clip.kind==CameraClipDocument.Kind.SUBTITLE||
+                    clip.kind==CameraClipDocument.Kind.CURVE))
                 images.add(clip);
         if(images.isEmpty())return;
         Collections.sort(images,new Comparator<CameraClipDocument.Clip>(){
@@ -227,6 +231,9 @@ public final class CameraFilmCompositor
                 else if(clip.kind==CameraClipDocument.Kind.SUBTITLE)
                     drawSubtitle(mc,clip,previewX,previewY,previewWidth,
                             previewHeight,tick);
+                else if(clip.kind==CameraClipDocument.Kind.CURVE)
+                    drawCurve(clip,previewX,previewY,previewWidth,
+                            previewHeight,tick);
             }
         }
         finally
@@ -244,6 +251,53 @@ public final class CameraFilmCompositor
             GL20.glUseProgram(oldProgram);
         }
     }
+    /**
+     * Keyframed film-space Curve channels, layered with IMAGE/VIDEO/SUBTITLE.
+     * Multiplicative color channels and simple brightness/fade effects are
+     * independent of optional OptiFine shader uniforms and BetterLights.
+     * Render only into the existing native film framebuffer.
+     */
+    private static void drawCurve(CameraClipDocument.Clip clip,
+            int px,int py,int pw,int ph,int tick)
+    {
+        CameraCurveSampler.Sample sample=CameraCurveSampler.sample(clip,
+                CameraVisualFrameClock.sceneTime(tick));
+        if(sample==null||Math.abs(sample.value)<1E-6D)return;
+        double value=sample.value;
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glEnable(GL11.GL_BLEND);
+        String channel=sample.channel;
+        if("red".equals(channel)||"green".equals(channel)||
+                "blue".equals(channel))
+        {
+            GL11.glBlendFunc(GL11.GL_DST_COLOR,GL11.GL_ZERO);
+            double factor=Math.max(0D,Math.min(2D,1D+value));
+            // Add/subtract one color channel without affecting the others.
+            GL11.glColor4d("red".equals(channel)?factor:1D,
+                    "green".equals(channel)?factor:1D,
+                    "blue".equals(channel)?factor:1D,1D);
+        }
+        else
+        {
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA,
+                    GL11.GL_ONE_MINUS_SRC_ALPHA);
+            double alpha=Math.min(1D,Math.abs(value));
+            double c=value>0D&&"brightness".equals(channel)?1D:0D;
+            GL11.glColor4d(c,c,c,alpha);
+        }
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2d(px,py);
+        GL11.glVertex2d(px+pw,py);
+        GL11.glVertex2d(px+pw,py+ph);
+        GL11.glVertex2d(px,py+ph);
+        GL11.glEnd();
+        GL11.glColor4f(1F,1F,1F,1F);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA,
+                GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+    }
+
     private static void drawImage(CameraClipDocument.Clip clip,
             int px,int py,int pw,int ph,int tick)
     {
