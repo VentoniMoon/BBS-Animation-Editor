@@ -271,9 +271,11 @@ public class BodyPartsPreviewRenderer
     {
         if (actor == null || actor.getMorph() == null) return;
         Object morph = actor.getMorph();
-        float partial = BlockbusterPreviewAnimationState.isPlaying()
-                ? net.minecraft.client.Minecraft.getMinecraft().getRenderPartialTicks()
-                : 0F;
+        float partial = (BlockbusterPreviewAnimationState.isPlaying()||
+                CameraVisualFrameClock.hasSample(frame))
+                ?CameraVisualFrameClock.partialTick(frame,
+                        net.minecraft.client.Minecraft.getMinecraft()
+                            .getRenderPartialTicks()):0F;
         float yaw = actor.prevRenderYawOffset +
                 (actor.renderYawOffset - actor.prevRenderYawOffset)*partial;
         joltActorWorldFrame=BodyPartJoltActorSpace.worldFromActor(
@@ -2545,7 +2547,7 @@ public class BodyPartsPreviewRenderer
                     (BlockbusterPreviewAnimationState.isPlaying()||
                             CameraExportRenderClock.current()!=null)
                         ? physicsFrames.forRenderInterpolated(data,frame,
-                                CameraExportRenderClock.partialTick(frame,
+                                CameraVisualFrameClock.partialTick(frame,
                                     net.minecraft.client.Minecraft.getMinecraft()
                                             .getRenderPartialTicks()))
                         : physicsFrames.forRender(data,frame);
@@ -2737,7 +2739,7 @@ public class BodyPartsPreviewRenderer
                     continue;
                 }
 
-                AnimationTransform transform = bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
+                AnimationTransform transform = bone.getTransformAt(CameraVisualFrameClock.animationFrame(frame));
 
                 if (transform == null)
                 {
@@ -2896,7 +2898,7 @@ public class BodyPartsPreviewRenderer
                 }
 
                 AnimationTransform transform =
-                        bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
+                        bone.getTransformAt(CameraVisualFrameClock.animationFrame(frame));
 
                 if (transform == null)
                 {
@@ -3135,7 +3137,7 @@ public class BodyPartsPreviewRenderer
                 }
 
                 AnimationTransform transform =
-                        bone.getTransformAt(CameraExportRenderClock.animationFrame(frame));
+                        bone.getTransformAt(CameraVisualFrameClock.animationFrame(frame));
 
                 if (transform == null)
                 {
