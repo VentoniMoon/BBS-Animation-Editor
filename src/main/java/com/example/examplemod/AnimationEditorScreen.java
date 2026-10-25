@@ -3043,6 +3043,12 @@ public class AnimationEditorScreen extends GuiScreen
                     :getCurrentRecordFrame();
         this.sceneViewport.drawActor(
                 mc, selected, selectedFrame);
+        // CAMERA-native static lights participate in the same world pass
+        // that is captured to film and encoded as MP4. They have no keys
+        // and are never added to Blockbuster's actor/Record data.
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            CameraSceneLightsRenderer.render(mc,this.sceneViewport,
+                    this.sceneState.getCameraLights());
         return true;
     }
 
