@@ -3273,6 +3273,16 @@ public class AnimationEditorScreen extends GuiScreen
         {
             boolean lightActor=BetterLightsActorInspector.isLightActor(
                     getSelectedActor());
+            if(lightActor)
+            {
+                AnimationBone bone=actorPreviewController.getSelectedBone(
+                        keyframeController);
+                betterLightsInspector.setOriginKey(
+                        bone!=null&&BetterLightsRig.ORIGIN.equals(
+                                bone.getName())
+                        ?keyframeController.getSelectedKeyframe():null);
+            }
+            else betterLightsInspector.setOriginKey(null);
             if(lightActor&&!betterLightsInspector.rigTab())
             {
                 this.betterLightsInspector.draw(mc,panelX,top,bottom,
