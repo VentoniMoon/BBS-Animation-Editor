@@ -107,7 +107,9 @@ public final class BetterLightsRig
     public static void applyTarget(AbstractMorph morph,
             ActorAnimationData data,double frame)
     {
-        if(morph==null||data==null||!morph.getClass().getName()
+        if(morph==null||data==null||data.getBone(TARGET)==null||
+                data.getBone(TARGET).getKeyframes().isEmpty()||
+                !morph.getClass().getName()
                 .endsWith(".BetterLightsMorph"))return;
         try
         {
