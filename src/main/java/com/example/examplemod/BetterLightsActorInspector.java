@@ -49,6 +49,20 @@ public final class BetterLightsActorInspector
     }
 
     private BlockbusterSceneActorData actor;
+    private AnimationKeyframe originKey;
+
+    /**
+     * Select an Origin key to edit its native Light/Shadows/Flare/Fog values.
+     * No selected Origin key means editing the scene actor's base properties.
+     */
+    public void setOriginKey(AnimationKeyframe key)
+    {
+        if(originKey!=key)
+        {
+            originKey=key;
+            signature=null; // identical values on different keys must reload
+        }
+    }
     private AbstractMorph morph;
     private String signature;
     private String error;
@@ -99,6 +113,8 @@ public final class BetterLightsActorInspector
     {
         NBTTagCompound tag=current!=null && current.getActor()!=null
                 ?current.getActor().getMorph():null;
+        if(originKey!=null&&originKey.getLightSettings()!=null)
+            tag=originKey.getLightSettings();
         String sig=tag==null?"":tag.toString();
         if(actor==current&&sig.equals(signature))return;
 
@@ -153,7 +169,9 @@ public final class BetterLightsActorInspector
         Gui.drawRect(left+4,top+9,left+181,top+33,0xFF303C45);
         Gui.drawRect(left+4,top+9,left+7,top+33,ACCENT);
         FontRenderer font=mc.fontRenderer;
-        font.drawString("LIGHT / TRANSFORM",left+13,top+16,TEXT);
+        font.drawString(originKey==null?"LIGHT / TRANSFORM":
+                "LIGHT / KEY "+originKey.getFrame(),
+                left+13,top+16,TEXT);
         font.drawString("Position / rotation: Record",left+12,top+43,LABEL);
         BlockbusterRecordFrame currentFrame=current==null||
                 current.getRecord()==null?null:current.getRecord().getFrame(frame);
@@ -264,7 +282,9 @@ public final class BetterLightsActorInspector
             NBTTagCompound source=actor.getActor().getMorph();
             NBTTagCompound updated=source.copy();
             morph.toNBT(updated);
-            actor.getActor().setMorph(updated);
+            if(originKey!=null)
+                originKey.setLightSettings(updated);
+            else actor.getActor().setMorph(updated);
             signature=updated.toString();
             if(screen!=null)screen.markEditorDirty();
             error=null;
