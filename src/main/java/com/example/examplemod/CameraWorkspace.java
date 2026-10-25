@@ -1218,6 +1218,15 @@ public final class CameraWorkspace
                     if(document.add(made))
                     {
                         saveScene();
+                        if(kind.family==CameraClipDocument.Family.MODIFIER)
+                        {
+                            // Camera modifiers have no visible effect in
+                            // FREE navigation. Switch to SHOT as soon as one
+                            // is authored so the user sees the real result,
+                            // while still allowing FREE to be chosen later.
+                            if(recordingPreview)stopPreviewRecording();
+                            shot=true;
+                        }
                         // A bare VIDEO layer is only its editing outline,
                         // not media. Prompt for its source immediately.
                         if(kind==CameraClipDocument.Kind.VIDEO)
