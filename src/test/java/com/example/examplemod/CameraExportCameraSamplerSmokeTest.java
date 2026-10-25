@@ -78,6 +78,31 @@ public final class CameraExportCameraSamplerSmokeTest
         PreviewCameraPose held=CameraExportCameraSampler.sample(
                 timeline,last,last.sample(2),fallback,null);
         near(held.x,0D,"last output subframe holds final valid scene tick");
+
+        // Procedural modifiers must be evaluated at 60 Hz rather than
+        // linearly interpolating two 20 Hz results (aliasing).
+        CameraClipDocument curve=new CameraClipDocument();
+        CameraClipDocument.Clip shake=CameraClipParameters.create(
+                CameraClipDocument.Kind.SHAKE,0,40,0);
+        shake.settings.put("shake","0.5");
+        shake.settings.put("shakeAmount","8");
+        check(curve.add(shake),"procedural Shake clip");
+        CameraExportPlan fps60=new CameraExportPlan(128,128,60,40);
+        CameraExportPlan.Sample sub=fps60.sample(1);
+        near(sub.sceneTime(),1D/3D,"first 60fps subframe");
+        PreviewCameraPose actual=CameraExportCameraSampler.sample(
+                curve,fps60,sub,fallback,null);
+        PreviewCameraPose exact=curve.sample(1D/3D,fallback,null);
+        near(actual.yaw,exact.yaw,
+                "60fps SHAKE samples true fractional angle");
+        near(actual.pitch,exact.pitch,
+                "60fps SHAKE samples true fractional pitch");
+        PreviewCameraPose blended=PreviewCameraPose.interpolate(
+                curve.sample(0,fallback),curve.sample(1,fallback),1D/3D);
+        check(Math.abs(actual.yaw-blended.yaw)>0.1D ||
+                Math.abs(actual.pitch-blended.pitch)>0.1D,
+                "do not repeat the old interpolated 20TPS procedural result");
+
         System.out.println("CAMERA export fractional camera interpolation/cuts PASS");
     }
 }
