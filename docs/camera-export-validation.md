@@ -72,6 +72,33 @@ the dialog, including between client launches.
   checks that frames match the previous from-start decoder, including loops.
   Reusing a persistent decoder remains a later optimization.
 
+### True render-time preview sampling (20 TPS, 60 FPS visuals)
+
+The editor timeline and Blockbuster Record remain at 20 logical ticks/sec.
+When **playing** (and not recording a physics bake), CAMERA now samples
+Minecraft's per-render partial tick and applies the same fractional timestamp
+to selected/background Record motion, keyed Pose and Body Parts, and the
+visible camera. MP4 export uses the exact output-frame timestamp instead
+of assuming Minecraft render partial ticks (which are unrelated to 60 FPS
+offline frame order). A 60 FPS video must have distinct visual actor poses
+at 20.0, 20.333 and 20.667 scene ticks.
+
+The Record sampler creates temporary render-only poses and does NOT mutate
+original .dat frames. A sampled actor never blends its translation/rotation
+again in the native morph renderer. The Emoticons Animator advances only
+on the original integer Record ticks, but its pose is rendered using the
+fractional scene time. Jolt solver/baking retain their fixed 20 TPS stepping
+and paused/seeked scene poses use whole ticks.
+
+**Visual QA**: compare the same moving arm, full-body run and background
+actor in ordinary Blockbuster playback, CAMERA preview and native MP4 at
+20 FPS/60 FPS. Pause and scrub: bones must remain still. Record/bake hair:
+no extra Jolt steps, skipped keys or interpolated simulation input. Test a
+camera hard-cut at the same time; the cut must stay instantaneous. Repeat
+using an Emoticons walking actor and a Chameleon Body Part, including a
+portrait 9:16 export. Forge and Java 8 CI do not establish visual parity
+of installed client mods, especially shaderpacks.
+
 ### Keyframed IMAGE / VIDEO motion in preview and MP4
 
 Both IMAGE and VIDEO now support their own **media transform** keys, independent

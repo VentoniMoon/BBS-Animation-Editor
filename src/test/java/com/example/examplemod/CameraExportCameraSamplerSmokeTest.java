@@ -39,6 +39,10 @@ public final class CameraExportCameraSamplerSmokeTest
         p=CameraExportCameraSampler.sample(timeline,
                 clock,clock.sample(2),fallback,null);
         near(p.x,1D,"exact integer frame not modified");
+        PreviewCameraPose realTime=CameraExportCameraSampler.sampleAt(
+                timeline,clock.sceneTicks,0,0.5D,fallback,null);
+        near(realTime.x,p.x*0.5D,"preview's half-tick camera is smooth");
+        near(realTime.x,0.5D,"preview and 40fps film have identical pose");
 
         // A second on/off clip is an intentional hard camera cut: do not
         // invent an intermediate camera position between different shots.

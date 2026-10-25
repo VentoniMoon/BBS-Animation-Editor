@@ -24,13 +24,20 @@ public final class CameraExportCameraSampler
         if(document==null||plan==null||frame==null||fallback==null)
             throw new IllegalArgumentException(
                     "Missing offline CAMERA sampling inputs");
-        int tick=frame.sceneTick;
-        if(tick<0||tick>=plan.sceneTicks)
-            throw new IllegalArgumentException(
-                    "Requested camera tick outside the export scene");
+        return sampleAt(document,plan.sceneTicks,frame.sceneTick,
+                frame.tickFraction,fallback,targets);
+    }
+
+    /** Same cut-safe camera sampling for the live preview render tick. */
+    public static PreviewCameraPose sampleAt(CameraClipDocument document,
+            int sceneTicks,int tick,double fraction,
+            PreviewCameraPose fallback,
+            CameraClipDocument.TargetResolver targets)
+    {
+        if(document==null||fallback==null||tick<0||tick>=sceneTicks)
+            throw new IllegalArgumentException("Invalid CAMERA visual time");
         PreviewCameraPose start=document.sample(tick,fallback,targets);
-        if(frame.tickFraction<=0D||tick+1>=plan.sceneTicks)
-            return start;
+        if(fraction<=0D||tick+1>=sceneTicks)return start;
 
         // A changed active camera stack is an intentional cut or modifier
         // onset/off-switch, not a continuous motion. Never tween across it.
@@ -41,7 +48,8 @@ public final class CameraExportCameraSampler
                 return start;
         }
         PreviewCameraPose end=document.sample(tick+1,fallback,targets);
-        return PreviewCameraPose.interpolate(start,end,frame.tickFraction);
+        return PreviewCameraPose.interpolate(start,end,
+                Math.max(0D,Math.min(1D,fraction)));
     }
 
     private static boolean changesCamera(CameraClipDocument.Kind kind)

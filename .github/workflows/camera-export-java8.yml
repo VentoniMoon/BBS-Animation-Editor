@@ -47,6 +47,7 @@ on:
       - 'src/test/wav-audio-monitor-stubs/**'
       - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
       - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
+      - 'src/main/java/com/example/examplemod/CameraVisualFrameClock.java'
       - 'src/test/camera-fps-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportActorFrameSamplerSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
@@ -97,6 +98,7 @@ on:
       - 'src/test/wav-audio-monitor-stubs/**'
       - 'src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java'
       - 'src/main/java/com/example/examplemod/CameraExportRenderClock.java'
+      - 'src/main/java/com/example/examplemod/CameraVisualFrameClock.java'
       - 'src/test/camera-fps-stubs/**'
       - 'src/test/java/com/example/examplemod/CameraExportActorFrameSamplerSmokeTest.java'
       - '.github/workflows/camera-export-java8.yml'
@@ -245,6 +247,7 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 -d build/camera/fps \
             src/main/java/com/example/examplemod/CameraExportPlan.java \
             src/main/java/com/example/examplemod/CameraExportRenderClock.java \
+            src/main/java/com/example/examplemod/CameraVisualFrameClock.java \
             src/main/java/com/example/examplemod/CameraExportActorFrameSampler.java \
             src/test/camera-fps-stubs/com/example/examplemod/CameraExportActorFrameStubs.java \
             src/test/java/com/example/examplemod/CameraExportActorFrameSamplerSmokeTest.java

@@ -229,15 +229,16 @@ public class BlockbusterActorPreviewRenderer
 
         float partialTicks;
 
-        if (BlockbusterPreviewAnimationState.isPlaying())
+        int visualTick=BlockbusterPreviewAnimationState.getFrame();
+        if (BlockbusterPreviewAnimationState.isPlaying()||
+                CameraVisualFrameClock.hasSample(visualTick))
         {
-            partialTicks =
-                    mc.getRenderPartialTicks();
+            partialTicks=CameraVisualFrameClock.partialTick(
+                    visualTick,mc.getRenderPartialTicks());
         }
         else
         {
-            partialTicks =
-                    0.0F;
+            partialTicks=0F;
         }
 
         ModelPose basePose =
@@ -835,8 +836,8 @@ public class BlockbusterActorPreviewRenderer
         entityActor.isDead = false;
         entityActor.noClip = true;
 
-        boolean playing =
-                BlockbusterPreviewAnimationState.isPlaying();
+        boolean playing=BlockbusterPreviewAnimationState.isPlaying() ||
+                CameraExportRenderClock.current()!=null;
 
         /*
          * =====================================================
@@ -852,16 +853,11 @@ public class BlockbusterActorPreviewRenderer
 
         float actorPartialTicks;
 
-        if (playing)
-        {
-            actorPartialTicks =
-                    mc.getRenderPartialTicks();
-        }
-        else
-        {
-            actorPartialTicks =
-                    0.0F;
-        }
+        int visualTick=BlockbusterPreviewAnimationState.getFrame();
+        boolean preSampled=CameraVisualFrameClock.hasSample(visualTick);
+        actorPartialTicks=playing||preSampled
+                ?CameraVisualFrameClock.partialTick(
+                        visualTick,mc.getRenderPartialTicks()):0F;
 
         int previewFrame =
                 BlockbusterPreviewAnimationState
@@ -901,7 +897,16 @@ public class BlockbusterActorPreviewRenderer
         entityActor.posZ =
                 frame.getZ();
 
-        if (playing)
+        if(preSampled)
+        {
+            // Record already sampled at tick + alpha. Let morph/limb
+            // animation use alpha without interpolating entity translation
+            // a second time from this renderer's previous frame.
+            entityActor.prevPosX=entityActor.posX;
+            entityActor.prevPosY=entityActor.posY;
+            entityActor.prevPosZ=entityActor.posZ;
+        }
+        else if (playing)
         {
             if (this.hasPreviousPosition)
             {
@@ -954,7 +959,13 @@ public class BlockbusterActorPreviewRenderer
         // Record playback clock below. Its native Animator must not inherit
         // an accumulated limbSwing from whichever frame the user last saw.
         if(!(entityActor.getMorph() instanceof AnimatedMorph))
-            updateMovementState(entityActor,frame,previewFrame);
+        {
+            BlockbusterRecord record=actorData.getRecord();
+            BlockbusterRecordFrame source=record==null
+                    ?null:record.getFrame(previewFrame);
+            updateMovementState(entityActor,
+                    source==null?frame:source,previewFrame);
+        }
 
         /*
          * При паузе полностью фиксируем интенсивность
@@ -1010,7 +1021,7 @@ public class BlockbusterActorPreviewRenderer
          * На паузе никакой интерполяции быть не должно.
          */
 
-        if (!playing)
+        if (!playing||preSampled)
         {
             entityActor.rotationYaw =
                     newYaw;
@@ -1152,6 +1163,22 @@ public class BlockbusterActorPreviewRenderer
                 actorData,
                 previewFrame
         );
+
+        if(preSampled && entityActor.getMorph() instanceof AnimatedMorph)
+        {
+            // Deterministic Emoticons history playback restores the *integer*
+            // record state to advance the Animator exactly once per tick.
+            // Put the render-only subframe pose back afterward.
+            entityActor.posX=entityActor.prevPosX=frame.getX();
+            entityActor.posY=entityActor.prevPosY=frame.getY();
+            entityActor.posZ=entityActor.prevPosZ=frame.getZ();
+            entityActor.rotationYaw=entityActor.prevRotationYaw=frame.getYaw();
+            entityActor.rotationPitch=entityActor.prevRotationPitch=frame.getPitch();
+            entityActor.rotationYawHead=entityActor.prevRotationYawHead=
+                    frame.getYawHead();
+            entityActor.renderYawOffset=entityActor.prevRenderYawOffset=
+                    frame.hasBodyYaw()?frame.getBodyYaw():frame.getYaw();
+        }
 
         /*
          * =====================================================
