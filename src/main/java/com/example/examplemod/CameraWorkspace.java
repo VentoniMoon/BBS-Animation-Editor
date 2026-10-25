@@ -1184,6 +1184,12 @@ public final class CameraWorkspace
                     String target=actorTargets.get(index);
                     document.selected().settings.put("selector",
                             "<none>".equals(target)?"":target);
+                    // LOOK starts with a usable fixed block; choosing an
+                    // actor must actually switch it to actor targeting.
+                    if(!"<none>".equals(target)&&
+                            (document.selected().kind==CameraClipDocument.Kind.LOOK||
+                             document.selected().kind==CameraClipDocument.Kind.ORBIT))
+                        document.selected().settings.put("atBlock","false");
                     saveScene();
                 }
             }
