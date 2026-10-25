@@ -100,6 +100,97 @@ public final class BetterLightsRig
     }
 
     /**
+     * Sample keyed BetterLights settings from Origin without changing the
+     * Blockbuster actor's saved base morph. Continuous number/color settings
+     * interpolate; switches remain discrete and UUID metadata is skipped.
+     */
+    public static net.minecraft.nbt.NBTTagCompound settingsAt(
+            ActorAnimationData data,double frame,
+            net.minecraft.nbt.NBTTagCompound base)
+    {
+        if(base==null)return null;
+        AnimationBone origin=data==null?null:data.getBone(ORIGIN);
+        if(origin==null)return base.copy();
+        AnimationKeyframe prev=null,next=null;
+        for(AnimationKeyframe key:origin.getKeyframes())
+        {
+            if(key==null||key.getLightSettings()==null)continue;
+            if(key.getFrame()<=frame&&
+                    (prev==null||key.getFrame()>prev.getFrame()))prev=key;
+            if(key.getFrame()>frame&&
+                    (next==null||key.getFrame()<next.getFrame()))next=key;
+        }
+        if(prev==null)return base.copy();
+        net.minecraft.nbt.NBTTagCompound before=prev.getLightSettings();
+        if(next==null)return before;
+        net.minecraft.nbt.NBTTagCompound after=next.getLightSettings();
+        double alpha=Math.max(0D,Math.min(1D,
+                (frame-prev.getFrame())/
+                Math.max(1D,next.getFrame()-prev.getFrame())));
+        if(prev.getInterpolation()!=null &&
+                (prev.getInterpolation().name().contains("HOLD")||
+                 prev.getInterpolation().name().contains("CONSTANT")))
+            alpha=0D;
+        net.minecraft.nbt.NBTTagCompound result=before.copy();
+        for(String path:before.getKeySet())
+        {
+            if(!after.hasKey(path)||"UUID".equals(path)||"Name".equals(path))
+                continue;
+            net.minecraft.nbt.NBTBase from=before.getTag(path);
+            net.minecraft.nbt.NBTBase to=after.getTag(path);
+            if(!(from instanceof net.minecraft.nbt.NBTPrimitive)||
+                    !(to instanceof net.minecraft.nbt.NBTPrimitive)||
+                    from.getId()!=to.getId())continue;
+            // Boolean (NBT byte) properties are stepped at the key.
+            if(from.getId()==1)continue;
+            net.minecraft.nbt.NBTPrimitive v=
+                    (net.minecraft.nbt.NBTPrimitive)from;
+            net.minecraft.nbt.NBTPrimitive w=
+                    (net.minecraft.nbt.NBTPrimitive)to;
+            if(from.getId()==3&&path.toLowerCase(
+                    java.util.Locale.ROOT).contains("color"))
+            {
+                int ac=v.getInt(),bc=w.getInt(),rgb=0;
+                for(int shift=0;shift<=24;shift+=8)
+                {
+                    int a=(ac>>>shift)&255,b=(bc>>>shift)&255;
+                    rgb|=Math.max(0,Math.min(255,
+                            (int)Math.round(a+(b-a)*alpha)))<<shift;
+                }
+                result.setInteger(path,rgb);
+            }
+            else if(from.getId()==3)
+                result.setInteger(path,(int)Math.round(v.getDouble()+
+                        (w.getDouble()-v.getDouble())*alpha));
+            else if(from.getId()==5)
+                result.setFloat(path,(float)(v.getDouble()+
+                        (w.getDouble()-v.getDouble())*alpha));
+            else if(from.getId()==6)
+                result.setDouble(path,v.getDouble()+
+                        (w.getDouble()-v.getDouble())*alpha);
+        }
+        return result;
+    }
+
+    public static void applySettings(AbstractMorph morph,
+            ActorAnimationData data,double frame,
+            net.minecraft.nbt.NBTTagCompound base)
+    {
+        if(morph==null||data==null||base==null||
+                !morph.getClass().getName()
+                    .endsWith(".BetterLightsMorph"))return;
+        try
+        {
+            Object values=morph.getClass().getMethod("getValueManager")
+                    .invoke(morph);
+            if(values instanceof mchorse.mclib.utils.ValueSerializer)
+                ((mchorse.mclib.utils.ValueSerializer)values).fromNBT(
+                        settingsAt(data,frame,base));
+        }
+        catch(ReflectiveOperationException ignored){}
+    }
+
+    /**
      * BetterLightsMorph.render recomputes world space position and direction.
      * Apply Target after that native render. The LightCaster belongs to the
      * underlying Blockbuster morph, no fake texture/posteffect is used.
