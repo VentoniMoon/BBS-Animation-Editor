@@ -238,8 +238,14 @@ public class AnimationEditorScreen extends GuiScreen
             return cameraWorkspace.sampleForExport(free,
                     playbackController.getCurrentFrame(),resolver);
         }
-        return cameraWorkspace.sample(free,
-                playbackController.getCurrentFrame(),resolver,inCamera);
+        int previewTick=playbackController.getCurrentFrame();
+        if((inCamera?cameraWorkspace.shot():cameraWorkspace.crossModeShot())
+                &&playbackController.isPlaying()&&
+                CameraVisualFrameClock.hasSample(previewTick))
+            return CameraExportCameraSampler.sampleAt(
+                    cameraWorkspace.document,getSceneLength(),previewTick,
+                    CameraVisualFrameClock.fraction(previewTick),free,resolver);
+        return cameraWorkspace.sample(free,previewTick,resolver,inCamera);
     }
 
     private final EditorThemeController editorThemeController =
@@ -2971,9 +2977,10 @@ public class AnimationEditorScreen extends GuiScreen
             return false;
 
         CameraExportPlan.Sample film=cameraVideoExport.currentSample();
-        if(film!=null)
-            applyAdapters((float)film.sceneTime());
-        else if (this.playbackController.isPlaying())
+        final int previewTick=playbackController.getCurrentFrame();
+        if(CameraVisualFrameClock.hasSample(previewTick))
+            applyAdapters(CameraVisualFrameClock.animationFrame(previewTick));
+        else if(this.playbackController.isPlaying())
             applyAdapters(this.playbackController.getCurrentAnimationFrame());
 
         final int frame = this.playbackController.getCurrentFrame();
@@ -2984,13 +2991,15 @@ public class AnimationEditorScreen extends GuiScreen
          * state. This ordering is the same as PreviewSceneRenderCoordinator. */
         this.multiActorPreview.drawBackgroundActors(
                 mc, this.sceneViewport, this.sceneState,
-                selected, frame, this.bodyPartsController,
-                film==null?frame:film.sceneTime());
+                selected,frame,this.bodyPartsController,
+                CameraVisualFrameClock.sceneTime(frame));
 
-        BlockbusterRecordFrame selectedFrame=film==null
-                ?getCurrentRecordFrame()
-                :CameraExportActorFrameSampler.sample(
-                        getSelectedActorRecord(),film);
+        BlockbusterRecordFrame selectedFrame=
+                CameraVisualFrameClock.hasSample(frame)
+                    ?CameraExportActorFrameSampler.sample(
+                            getSelectedActorRecord(),frame,
+                            CameraVisualFrameClock.fraction(frame))
+                    :getCurrentRecordFrame();
         this.sceneViewport.drawActor(
                 mc, selected, selectedFrame);
         return true;
@@ -3067,10 +3076,11 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.playbackController.isPlaying() &&
                 !BbsFsNativeActorPass.didRenderThisFrame())
         {
-            applyAdapters(
-                    this.playbackController
-                            .getCurrentAnimationFrame()
-            );
+            applyAdapters(CameraVisualFrameClock.hasSample(
+                    this.playbackController.getCurrentFrame())
+                ?CameraVisualFrameClock.animationFrame(
+                        this.playbackController.getCurrentFrame())
+                :this.playbackController.getCurrentAnimationFrame());
         }
 
         updatePreviewAutoFocus();
