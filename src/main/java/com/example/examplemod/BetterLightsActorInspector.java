@@ -167,11 +167,8 @@ public final class BetterLightsActorInspector
             Gui.drawRect(left+12,cy+12,left+172,cy+32,FIELD);
             if(entry==editing&&input!=null)
             {
-                input.x=left+17;
-                input.y=cy+13;
-                input.width=149;
-                input.height=17;
-                inputY=cy;
+                // GuiTextField dimensions are constructor-owned in 1.12.2.
+                // The field is placed in this same row when clicked.
                 input.drawTextBox();
             }
             else
@@ -268,7 +265,7 @@ public final class BetterLightsActorInspector
         if(idx<0||idx>=entries.size()||my<cy+12||my>=cy+32)
             return true;
         editing=entries.get(idx);
-        input=new GuiTextField(17431,screen.mc.fontRenderer,
+        input=new GuiTextField(17431,Minecraft.getMinecraft().fontRenderer,
                 x+17,cy+13,149,17);
         input.setMaxStringLength(80);
         input.setText(text(editing.value));
