@@ -19,6 +19,30 @@ public final class CameraWorkspace
 {
     /** Bound to EditorSceneState, persisted within <scene>.editor.dat. */
     public CameraClipDocument document=new CameraClipDocument();
+
+    /** Scene-only LIGHTS tab; never creates timeline clips. */
+    private final CameraSceneLightsPanel lightPanel=
+            new CameraSceneLightsPanel();
+
+    public boolean beginLightGizmo(AnimationEditorScreen screen,
+            int mx,int my,int button,int filmX,int filmY,int filmW,int filmH)
+    {
+        return lightPanel.beginGizmo(screen,mx,my,button,
+                filmX,filmY,filmW,filmH);
+    }
+    public boolean dragLightGizmo(AnimationEditorScreen screen,int mx,int my)
+    {
+        return lightPanel.drag(screen,mx,my);
+    }
+    public void releaseLightGizmo(AnimationEditorScreen screen)
+    {
+        lightPanel.release(screen);
+    }
+    public void drawLightGizmo(AnimationEditorScreen screen,
+            int filmX,int filmY,int filmW,int filmH)
+    {
+        lightPanel.drawGizmo(screen,filmX,filmY,filmW,filmH);
+    }
     private EditorSceneState activeState;
     private final CameraAudioClips soundtrack=new CameraAudioClips();
 
@@ -208,6 +232,12 @@ public final class CameraWorkspace
     }
     public boolean keyTyped(char typedChar,int keyCode)
     {
+        Minecraft currentMinecraft=Minecraft.getMinecraft();
+        if(currentMinecraft!=null&&currentMinecraft.currentScreen
+                instanceof AnimationEditorScreen&&
+                lightPanel.keyTyped((AnimationEditorScreen)
+                    currentMinecraft.currentScreen,typedChar,keyCode))
+            return true;
         if(editField==null)
         {
             if(keyCode==1&&choosingMedia)
@@ -508,6 +538,12 @@ public final class CameraWorkspace
 
     public boolean mouseScrolled(int mouseX,int mouseY,int direction)
     {
+        Minecraft currentMinecraft=Minecraft.getMinecraft();
+        if(currentMinecraft!=null&&currentMinecraft.currentScreen
+                instanceof AnimationEditorScreen&&
+                lightPanel.scroll((AnimationEditorScreen)
+                    currentMinecraft.currentScreen,mouseX,mouseY,direction))
+            return true;
         if(editField!=null||palette)return true;
         if(choosingMedia)
         {
@@ -852,9 +888,14 @@ public final class CameraWorkspace
         boolean activeKey=selectedKey!=null&&keyOwner==selected;
         if(!activeKey&&selected!=null&&!selected.keys.isEmpty())
             displayedKey=selected.keys.get(0);
-        inspector.draw(screen,selected,displayedKey,
-                activeKey,inspectorScroll,right,top);
-        inspectorScroll=inspector.clampedScroll();
+        if(!lightPanel.opened())
+        {
+            inspector.draw(screen,selected,displayedKey,
+                    activeKey,inspectorScroll,right,top);
+            inspectorScroll=inspector.clampedScroll();
+        }
+        else lightPanel.drawRight(screen,top);
+        lightPanel.drawLeft(screen,top);
         // Same exact dark accent-derived palette as CharacterTimeline.
         int accent=EditorThemeManager.get().getAccent();
         GuiScreen.drawRect(0,top,width,bottom,trackTheme(0.07F));
@@ -1145,6 +1186,7 @@ public final class CameraWorkspace
 
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        if(lightPanel.click(screen,mouseX,mouseY,button))return true;
         if(choosingMedia)
         {
             int menuWidth=Math.min(340,Math.max(185,right-timelineX-20));
