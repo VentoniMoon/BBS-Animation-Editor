@@ -207,6 +207,7 @@ public final class EditorSceneSerializer
         // Render resolution belongs to the whole scene, not individual clips.
         // Optional tag keeps all older editor.dat scenes readable.
         scene.setTag("CameraOutput",state.getCameraOutput().toNBT());
+        scene.setTag("CameraSceneLights",state.getCameraLights().save());
 
         root.setTag(
                 "Scene",
@@ -378,6 +379,11 @@ public final class EditorSceneSerializer
         state.getCameraOutput().readNBT(
                 scene.hasKey("CameraOutput",10)
                         ?scene.getCompoundTag("CameraOutput"):null);
+
+        // Scene light objects are optional. Old editor.dat remains readable.
+        state.getCameraLights().load(
+                scene.hasKey("CameraSceneLights",10)
+                    ?scene.getCompoundTag("CameraSceneLights"):null);
 
         /* CAMERA is optional for all existing editor.dat files. */
         state.getCameraClips().clear();
