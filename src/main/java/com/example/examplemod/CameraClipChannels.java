@@ -17,8 +17,14 @@ public final class CameraClipChannels
     public static PreviewCameraPose sample(CameraClipDocument.Clip clip,
             int absoluteFrame,PreviewCameraPose underneath)
     {
+        return sample(clip,(double)absoluteFrame,underneath);
+    }
+
+    public static PreviewCameraPose sample(CameraClipDocument.Clip clip,
+            double absoluteFrame,PreviewCameraPose underneath)
+    {
         if(clip==null||clip.keys.isEmpty())return underneath;
-        final int local=absoluteFrame-clip.tick;
+        final double local=absoluteFrame-clip.tick;
         double[] previous={underneath.x,underneath.y,underneath.z,
                 underneath.yaw,underneath.pitch,underneath.roll,underneath.fov};
         boolean additive=clip.kind==CameraClipDocument.Kind.KEYFRAME&&
