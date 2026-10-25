@@ -303,9 +303,15 @@ public final class CameraNativeFrameProbe
      * editor GUI rectangles/ScaledResolution are drawn. On errors, restore
      * even if the game rendered to an unexpected source FBO.
      */
-    public static void beforeGui(Minecraft mc)
+    /**
+     * @return true when a native output-sized world pass was restored.
+     * The caller MUST rebuild the Minecraft GUI orthographic projection
+     * after this: EntityRenderer may already have prepared the overlay
+     * matrix with the temporary 4K/portrait display dimensions.
+     */
+    public static boolean beforeGui(Minecraft mc)
     {
-        if(!active)return;
+        if(!active)return false;
         byte[] rgba=null;
         int width=0,height=0;
         CameraExportFrameBridge video=activeVideo;
@@ -381,6 +387,7 @@ public final class CameraNativeFrameProbe
         }
         if(rgba!=null)
             saveImageAsync(mc,rgba,width,height,withMedia);
+        return true;
     }
 
     /**
