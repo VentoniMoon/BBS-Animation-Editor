@@ -11,6 +11,11 @@ public final class CameraClipEnvelope
 {
     public static double factor(CameraClipDocument.Clip clip,int frame)
     {
+        return factor(clip,(double)frame);
+    }
+
+    public static double factor(CameraClipDocument.Clip clip,double frame)
+    {
         if(clip==null||!Boolean.parseBoolean(
                 clip.settings.get("envelope.enabled")))return 1D;
         double time=frame-clip.tick;
