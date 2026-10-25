@@ -329,34 +329,7 @@ public final class CameraClipEvaluator
                         fallback,resolver,clip.layer,depth+1);
             }
             case SPLINE:
-            {
-                /*
-                 * In the standalone editor a Spline clip can follow the
-                 * control points stored with the camera clip itself.
-                 * The BBS FS Form-spine attachment will need a separate
-                 * world-to-bone transform adapter for exact parity.
-                 */
-                if(clip.keys.isEmpty())return current;
-                CameraClipDocument.Key prev=clip.keys.get(0);
-                CameraClipDocument.Key next=clip.keys.get(clip.keys.size()-1);
-                double local=(frame-clip.tick)/(double)Math.max(1,clip.duration);
-                local=clamp(local,0D,1D);
-                double start=number(clip,"start",0D)/100D;
-                double end=number(clip,"end",100D)/100D;
-                double progress=clamp(start+(end-start)*easing(local,
-                        clip.settings.get("interp")),0D,1D);
-                int min=prev.tick,max=next.tick;
-                double sample=min+(max-min)*progress;
-                for(CameraClipDocument.Key key:clip.keys)
-                {
-                    if(key.tick<=sample)prev=key;
-                    if(key.tick>=sample){next=key;break;}
-                }
-                double t=prev==next?0D:(sample-prev.tick)/
-                        Math.max(1,next.tick-prev.tick);
-                return PreviewCameraPose.interpolate(
-                        pose(prev,current),pose(next,current),t);
-            }
+                return CameraSplinePath.sample(clip,frame,current,resolver);
             case MATH:
             {
                 PreviewCameraPose math=CameraMathExpression.apply(

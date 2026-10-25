@@ -23,7 +23,7 @@ public final class CameraClipDocument
         PATH("Path",Family.OVERWRITE,0xFF7338AD,true),
         KEYFRAME("Keyframe",Family.OVERWRITE,0xFFBE3B86,true),
         TRACKER("Tracker",Family.OVERWRITE,0xFF47BFC9,false),
-        SPLINE("Spline",Family.OVERWRITE,0xFF4B88CB,false),
+        SPLINE("Spline",Family.OVERWRITE,0xFF4B88CB,true),
         TRANSLATE("Translate",Family.MODIFIER,0xFF4BA03E,false),
         ANGLE("Angle",Family.MODIFIER,0xFFD77A0A,false),
         DRAG("Drag",Family.MODIFIER,0xFF4BAFF7,false),
@@ -325,6 +325,17 @@ public final class CameraClipDocument
         Key created=new Key(relative,pose);
         if(CameraMediaAnimation.supports(clip))
             CameraMediaAnimation.capture(clip,created,absoluteFrame);
+        else if(clip.kind==Kind.CURVE)
+        {
+            created.x=settingNumber(clip,"value",0.25D);
+            for(Key previous:clip.keys)
+                if(previous.tick==relative)
+                {
+                    created.x=previous.x;
+                    created.interpolation=previous.interpolation;
+                    break;
+                }
+        }
         else if(clip.kind==Kind.REMAPPER)
         {
             // Remapper's sole channel stores SOURCE TIME in key.x,
