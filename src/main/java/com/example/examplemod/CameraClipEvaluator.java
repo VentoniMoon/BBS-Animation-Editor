@@ -147,6 +147,8 @@ public final class CameraClipEvaluator
                 else
                 {
                     double[] offset=point(clip,"offset");
+                    if(Boolean.parseBoolean(clip.settings.get("relative")))
+                        offset=localVector(current,offset);
                     dx=(atBlock?point[0]:target.x)+offset[0]-current.x;
                     dy=(atBlock?point[1]:target.y)+offset[1]-current.y;
                     dz=(atBlock?point[2]:target.z)+offset[2]-current.z;
@@ -356,8 +358,21 @@ public final class CameraClipEvaluator
                         pose(prev,current),pose(next,current),t);
             }
             case MATH:
-                return CameraMathExpression.apply(clip.settings.get("expression"),
-                        current,frame,clip.tick,clip.duration);
+            {
+                PreviewCameraPose math=CameraMathExpression.apply(
+                        clip.settings.get("expression"),current,
+                        frame,clip.tick,clip.duration);
+                int mask=(int)number(clip,"active",127D);
+                return new PreviewCameraPose(
+                    (mask&1)!=0?math.x:current.x,
+                    (mask&2)!=0?math.y:current.y,
+                    (mask&4)!=0?math.z:current.z,
+                    (mask&8)!=0?math.yaw:current.yaw,
+                    (mask&16)!=0?math.pitch:current.pitch,
+                    (mask&32)!=0?math.roll:current.roll,
+                    (mask&64)!=0?math.fov:current.fov,
+                    current.nearPlane,current.farPlane);
+            }
             case AUDIO:
             case CURVE:
             case SUBTITLE:
