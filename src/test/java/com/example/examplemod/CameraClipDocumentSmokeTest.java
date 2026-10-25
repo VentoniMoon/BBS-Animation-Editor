@@ -325,7 +325,7 @@ public final class CameraClipDocumentSmokeTest
                 "Spline knot world position follows sub-tick actor target");
         CameraClipDocument restoredSpline=new CameraClipDocument();
         restoredSpline.readJson(splineDoc.toJson());
-        near(restoredSpline.sample(20,BASE).z,15D,
+        near(restoredSpline.sample(20,BASE,targetSpline).z,15D,
                 "Spline authored knots and selector survive save/reopen");
 
         // CURVE: exact float sampling and envelope, no invented external
