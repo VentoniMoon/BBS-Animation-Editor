@@ -32,6 +32,12 @@ public final class CameraSceneLightsPanel
     private boolean dirty;
 
     public boolean opened(){return opened;}
+    public void reset()
+    {
+        opened=false;chosen=null;nativeActor=null;
+        field=null;fieldAxis=-1;dragAxis=-1;dirty=false;
+        tab=0;
+    }
     public void close(AnimationEditorScreen editor)
     {
         persistNative(editor);
