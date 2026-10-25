@@ -325,6 +325,17 @@ public final class CameraClipDocument
         Key created=new Key(relative,pose);
         if(CameraMediaAnimation.supports(clip))
             CameraMediaAnimation.capture(clip,created,absoluteFrame);
+        else if(clip.kind==Kind.CURVE)
+        {
+            created.x=settingNumber(clip,"value",0.25D);
+            for(Key previous:clip.keys)
+                if(previous.tick==relative)
+                {
+                    created.x=previous.x;
+                    created.interpolation=previous.interpolation;
+                    break;
+                }
+        }
         else if(clip.kind==Kind.REMAPPER)
         {
             // Remapper's sole channel stores SOURCE TIME in key.x,
