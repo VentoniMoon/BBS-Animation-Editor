@@ -568,6 +568,7 @@ public class EditorKeyframeController
         copy.setRY(source.getRY());
         copy.setLX(source.getLX());
         copy.setLY(source.getLY());
+        copy.setLightSettings(source.getLightSettings());
         return copy;
     }
 
