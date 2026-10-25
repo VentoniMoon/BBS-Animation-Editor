@@ -165,6 +165,16 @@ public class EditorActorPreviewController
 
         if (data != null)
         {
+            // Older editor versions treated BetterLightsMorph as an unknown
+            // Blockbuster model and accidentally generated Steve's limbs.
+            // A light has no skeleton: remove only this invalid cached data
+            // (never affect actual CustomMorph/Chameleon animations).
+            BlockbusterSceneActorData selected=sceneState.getSelectedActorData();
+            if(selected!=null&&actorId.equals(selected.getId())&&
+                    selected.getActor()!=null&&
+                    BetterLightsActorInspector.isLightMorph(
+                            selected.getActor().getMorph()))
+                data.getBones().clear();
             return data;
         }
 
@@ -215,6 +225,15 @@ public class EditorActorPreviewController
 
         NBTTagCompound morphNBT =
                 sceneActor.getMorph();
+
+        // BetterLightsMorph is a light source, not a humanoid or a
+        // Blockbuster CustomMorph. It has no bones to animate in POSE.
+        // Actor placement still belongs to its Record track.
+        if(BetterLightsActorInspector.isLightMorph(morphNBT))
+        {
+            this.currentActorIsChameleon=false;
+            return new ActorAnimationData(actorId);
+        }
 
         AbstractMorph morph = null;
 

@@ -319,6 +319,10 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorRecordController recordController =
             new EditorRecordController(playbackController);
 
+    /** Only selected BetterLightsMorph actors use this POSE inspector. */
+    private final BetterLightsActorInspector betterLightsInspector =
+            new BetterLightsActorInspector();
+
     private final InterpolationPanel interpolationPanel =
             new InterpolationPanel();
 
@@ -3251,6 +3255,16 @@ public class AnimationEditorScreen extends GuiScreen
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
+            if(BetterLightsActorInspector.isLightActor(getSelectedActor()))
+            {
+                // A LightCaster has no humanoid bones. Show the genuine
+                // Blockbuster BetterLights values in the Transform slot.
+                this.betterLightsInspector.draw(mc,panelX,top,bottom,
+                        getSelectedActor(),
+                        this.playbackController.getCurrentFrame());
+            }
+            else
+            {
             this.actorPreviewController
                     .getTransformPanel()
                     .setPosition(
@@ -3268,6 +3282,7 @@ public class AnimationEditorScreen extends GuiScreen
                             this.playbackController
                                     .getCurrentFrame()
                     );
+            }
         }
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
@@ -3885,6 +3900,11 @@ public class AnimationEditorScreen extends GuiScreen
                 && this.cameraWorkspace.click(this,mouseX,mouseY,mouseButton,
                     this.playbackController.getCurrentFrame(),getSceneLength()))
             return;
+        if(this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.POSE &&
+                BetterLightsActorInspector.isLightActor(getSelectedActor()) &&
+                betterLightsInspector.mouseClicked(this,
+                        mouseX,mouseY,mouseButton))return;
         if (this.editorInput != null)
         {
             this.editorInput.mouseClicked(
@@ -3952,6 +3972,16 @@ public class AnimationEditorScreen extends GuiScreen
             super.handleMouseInput();
             return;
         }
+        if(this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.POSE &&
+                BetterLightsActorInspector.isLightActor(getSelectedActor()) &&
+                betterLightsInspector.scroll(
+                    org.lwjgl.input.Mouse.getEventX()*width/
+                        Math.max(1,mc.displayWidth),
+                    height-org.lwjgl.input.Mouse.getEventY()*height/
+                        Math.max(1,mc.displayHeight)-1,
+                    org.lwjgl.input.Mouse.getEventDWheel()))
+            return;
         if (this.editorInput != null)
         {
             this.editorInput.handleMouseInput();
@@ -4020,6 +4050,10 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && this.cameraWorkspace.keyTyped(typedChar,keyCode))
+            return;
+        if(this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.POSE &&
+                betterLightsInspector.keyTyped(this,typedChar,keyCode))
             return;
         if (this.editorInput != null)
             this.editorInput.keyTyped(typedChar,keyCode);
