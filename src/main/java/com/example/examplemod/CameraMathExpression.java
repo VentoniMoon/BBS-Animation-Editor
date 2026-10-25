@@ -138,6 +138,12 @@ public final class CameraMathExpression
     public static PreviewCameraPose apply(String expression,PreviewCameraPose initial,
             int absolute,int clipTick,int duration)
     {
+        return apply(expression,initial,(double)absolute,clipTick,duration);
+    }
+
+    public static PreviewCameraPose apply(String expression,PreviewCameraPose initial,
+            double absolute,int clipTick,int duration)
+    {
         if(expression==null||expression.trim().isEmpty())return initial;
         double x=initial.x,y=initial.y,z=initial.z;
         double yaw=initial.yaw,pitch=initial.pitch,roll=initial.roll,fov=initial.fov;
