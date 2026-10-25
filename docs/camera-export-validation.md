@@ -113,6 +113,43 @@ Check saved/reopened scene, SHOT vs FREE navigation, and 60 FPS native
 MP4 against the film preview. Visual parity with every BBS FS legacy
 parameter is not guaranteed by Java8 smoke tests.
 
+### BetterLights 1.0.3 integration — preview-only actor light lifecycle
+
+BetterLights 1.0.3.PREVIEW is an **optional** Forge 1.12.2 mod. The installed
+Blockbuster 2.7.1 already implements BetterLightsMorph lightcaster creation,
+world registration and positional updates. Its source registers a LightCaster
+in `BetterLightsMorph.update(EntityLivingBase)` and updates position in
+`render(...)`. CAMERA uses a detached editor-only EntityActor that does not
+normally tick in the world; drawing the morph alone could show its cone/icon
+without the actual registered light.
+
+`CameraBetterLightsBridge` now calls Blockbuster's own LightMorph `update`
+once per distinct *logical* scene frame, so the lightcaster can register
+without advancing its animation three times when recording 60 FPS. While
+the same tick is drawn repeatedly (paused scene or fractional export), the
+bridge maintains Blockbuster's already-created dummy's lifespan without
+ticking its animation. The compatibility adapter does **not** link directly
+against dz.betterlights classes and is inert when `better_lights` isn't
+loaded. The ordinary native RenderWorldLast world frame and OptiFine
+entity shader path remain unchanged.
+
+Current verified scope: **top-level Blockbuster BetterLightsMorph actors**.
+Morphs attached through Body Parts, nested/sequencer morphs, accurate
+shadow-map ordering in BetterLights, and first-frame lighting in exact
+offline MP4 are **not yet verified** and may require extending lifecycle
+ownership beyond preview-only actor preparation. This is a safe first
+integration step, not full BetterLights parity.
+
+Live regression with BetterLights 1.0.3 and Blockbuster 2.7.1:
+- place a standalone BetterLightsMorph into a recorded actor, verify its
+  registered point/spot lighting (not just the debug cone) in SHOT preview;
+- pause/seek and resume after several seconds; check no light leaks or
+  accumulation when reopening the editor or selecting a different actor;
+- export 20 and 60 FPS with a moving light/actor; compare source brightness
+  and shadows on the walls and actors with the in-game scene;
+- repeat with BetterLights absent: CAMERA must launch/preview/export
+  without linkage or class-loading errors.
+
 ### Export modal: no duplicate CAMERA interface at native film resolutions
 
 When **START RENDER** succeeds, the setup controls are replaced with one
