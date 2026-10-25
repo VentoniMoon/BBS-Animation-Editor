@@ -20,6 +20,29 @@ public final class BetterLightsRig
     public static final String ORIGIN="Origin";
     public static final String TARGET="Target";
 
+    private static java.lang.ref.WeakReference<EditorSceneState> active=
+            new java.lang.ref.WeakReference<EditorSceneState>(null);
+
+    public static void bind(EditorSceneState state)
+    {
+        active=new java.lang.ref.WeakReference<EditorSceneState>(state);
+    }
+    public static ActorAnimationData forActor(BlockbusterSceneActorData actor)
+    {
+        EditorSceneState state=active.get();
+        if(state==null||actor==null||!isLight(
+                actor.getActor()==null?null:actor.getActor().getMorph()))
+            return null;
+        ActorAnimationData data=state.getAnimationData().getActor(actor.getId());
+        if(data==null)
+        {
+            data=new ActorAnimationData(actor.getId());
+            state.getAnimationData().putActor(actor.getId(),data);
+        }
+        ensure(data);
+        return data;
+    }
+
     public static boolean isLight(NBTTagCompound tag)
     {
         return tag!=null&&"betterLights".equals(tag.getString("Name"));
