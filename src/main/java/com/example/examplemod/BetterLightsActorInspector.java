@@ -58,6 +58,31 @@ public final class BetterLightsActorInspector
     private Entry editing;
     private int inputY;
     private int previousFrame=-1;
+    /** Light-actor POSE displays both real light properties and keyable rig. */
+    private boolean rigTab;
+    public boolean rigTab(){return rigTab;}
+
+    public boolean selectTab(int mx,int my,int panelX,int panelBottom)
+    {
+        int y=panelBottom-32;
+        if(mx<panelX+7||mx>=panelX+180||my<y||my>=y+25)
+            return false;
+        rigTab=mx<panelX+95;
+        return true;
+    }
+
+    public void drawTabs(Minecraft mc,int panelX,int panelBottom)
+    {
+        int y=panelBottom-32;
+        Gui.drawRect(panelX+7,y,panelX+95,y+25,
+                rigTab?0xFF3A7898:0xFF283841);
+        Gui.drawRect(panelX+96,y,panelX+180,y+25,
+                !rigTab?0xFF3A7898:0xFF283841);
+        mc.fontRenderer.drawString("RIG KEYS",panelX+16,y+8,
+                0xFFFFFFFF);
+        mc.fontRenderer.drawString("LIGHT",panelX+118,y+8,
+                0xFFFFFFFF);
+    }
 
     public static boolean isLightMorph(NBTTagCompound nbt)
     {
