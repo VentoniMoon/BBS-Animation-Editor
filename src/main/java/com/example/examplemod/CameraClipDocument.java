@@ -341,6 +341,13 @@ public final class CameraClipDocument
     public PreviewCameraPose sample(int frame,PreviewCameraPose fallback,
             TargetResolver resolver)
     {
+        return sample((double)frame,fallback,resolver);
+    }
+
+    /** Continuous camera time used by both SHOT preview and offline MP4. */
+    public PreviewCameraPose sample(double frame,PreviewCameraPose fallback,
+            TargetResolver resolver)
+    {
         return CameraClipEvaluator.evaluate(clips,frame,fallback,resolver);
     }
 }
