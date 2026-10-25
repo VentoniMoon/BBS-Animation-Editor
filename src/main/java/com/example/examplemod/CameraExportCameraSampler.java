@@ -47,9 +47,11 @@ public final class CameraExportCameraSampler
             if(clip.contains(tick)!=clip.contains(tick+1))
                 return start;
         }
-        PreviewCameraPose end=document.sample(tick+1,fallback,targets);
-        return PreviewCameraPose.interpolate(start,end,
-                Math.max(0D,Math.min(1D,fraction)));
+        // Sample the MODIFIER itself at the sub-tick timestamp. Blending
+        // whole-tick results smooths linear paths but aliases procedural
+        // Shake/Math/Orbit and remapped timelines at 60 FPS.
+        return document.sample(tick+
+                Math.max(0D,Math.min(0.999999999D,fraction)),fallback,targets);
     }
 
     private static boolean changesCamera(CameraClipDocument.Kind kind)
