@@ -3085,13 +3085,19 @@ public class AnimationEditorScreen extends GuiScreen
 
         updatePreviewAutoFocus();
 
+        BlockbusterRecordFrame displayedRecord=CameraVisualFrameClock.hasSample(
+                playbackController.getCurrentFrame())
+                ?CameraExportActorFrameSampler.sample(
+                        getSelectedActorRecord(),playbackController.getCurrentFrame(),
+                        CameraVisualFrameClock.fraction(playbackController.getCurrentFrame()))
+                :getCurrentRecordFrame();
         this.preview3.draw(
                 mc,
                 this.sceneViewport,
                 this.multiActorPreview,
                 this.sceneState,
                 getSelectedActor(),
-                getCurrentRecordFrame(),
+                displayedRecord,
                 this.bodyPartsController,
                 this.recordController.getCurrentActorPose(),
                 this.actorPreviewController.getBones(),
