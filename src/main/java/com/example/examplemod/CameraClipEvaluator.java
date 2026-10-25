@@ -22,17 +22,28 @@ public final class CameraClipEvaluator
             int frame,PreviewCameraPose editorPose,
             CameraClipDocument.TargetResolver resolver)
     {
+        return evaluate(clips,(double)frame,editorPose,resolver);
+    }
+
+    /** Render-only sub-tick camera evaluation for preview and native MP4. */
+    public static PreviewCameraPose evaluate(List<CameraClipDocument.Clip> clips,
+            double frame,PreviewCameraPose editorPose,
+            CameraClipDocument.TargetResolver resolver)
+    {
+        if(clips==null||editorPose==null||!Double.isFinite(frame))
+            throw new IllegalArgumentException("Invalid CAMERA sample");
         return eval(clips,frame,editorPose,resolver,Integer.MAX_VALUE,0);
     }
 
     private static PreviewCameraPose eval(List<CameraClipDocument.Clip> clips,
-            int frame,PreviewCameraPose fallback,
+            double frame,PreviewCameraPose fallback,
             CameraClipDocument.TargetResolver resolver,int maxLayer,int depth)
     {
         if(depth>3)return fallback;
         List<CameraClipDocument.Clip> active=new ArrayList<CameraClipDocument.Clip>();
         for(CameraClipDocument.Clip clip:clips)
-            if(clip.layer<maxLayer&&clip.enabled&&clip.contains(frame))
+            if(clip.layer<maxLayer&&clip.enabled&&frame>=clip.tick&&
+                    frame<clip.tick+clip.duration)
                 active.add(clip);
         Collections.sort(active,new Comparator<CameraClipDocument.Clip>(){
             @Override public int compare(CameraClipDocument.Clip a,
@@ -53,7 +64,7 @@ public final class CameraClipEvaluator
     }
 
     private static PreviewCameraPose apply(List<CameraClipDocument.Clip> clips,
-            CameraClipDocument.Clip clip,int frame,PreviewCameraPose current,
+            CameraClipDocument.Clip clip,double frame,PreviewCameraPose current,
             PreviewCameraPose fallback,CameraClipDocument.TargetResolver resolver,int depth)
     {
         switch(clip.kind)
@@ -80,6 +91,8 @@ public final class CameraClipEvaluator
             case TRANSLATE:
             {
                 double[] delta=point(clip,"translate");
+                if(Boolean.parseBoolean(clip.settings.get("local")))
+                    delta=localVector(current,delta);
                 int bits=(int)number(clip,"active",7);
                 return withPosition(current,
                         current.x+(((bits&1)!=0)?delta[0]:0D),
@@ -102,7 +115,7 @@ public final class CameraClipEvaluator
             {
                 double intensity=number(clip,"shakeAmount",0D);
                 double period=Math.max(0.05D,Math.abs(number(clip,"shake",1D)));
-                double x=frame/period;
+                double x=(frame-clip.tick)/period;
                 boolean noise=Boolean.parseBoolean(clip.settings.get("noise"));
                 int active=(int)number(clip,"active",24);
                 double[] delta=new double[7];
@@ -127,13 +140,15 @@ public final class CameraClipEvaluator
                 double dx,dy,dz;
                 if(forward)
                 {
-                    PreviewCameraPose past=eval(clips,Math.max(0,frame-1),
+                    PreviewCameraPose past=eval(clips,Math.max(0D,frame-1D),
                             fallback,resolver,clip.layer,depth+1);
                     dx=current.x-past.x;dy=current.y-past.y;dz=current.z-past.z;
                 }
                 else
                 {
                     double[] offset=point(clip,"offset");
+                    if(Boolean.parseBoolean(clip.settings.get("relative")))
+                        offset=localVector(current,offset);
                     dx=(atBlock?point[0]:target.x)+offset[0]-current.x;
                     dy=(atBlock?point[1]:target.y)+offset[1]-current.y;
                     dz=(atBlock?point[2]:target.z)+offset[2]-current.z;
@@ -183,20 +198,36 @@ public final class CameraClipEvaluator
             {
                 CameraClipDocument.Target target=target(clip,frame,resolver);
                 boolean atBlock=Boolean.parseBoolean(clip.settings.get("atBlock"));
-                if(target==null&&!atBlock)return current;
                 double[] center=point(clip,"block");
                 double[] offset=point(clip,"offset");
-                double tx=(target==null?center[0]:target.x)+offset[0];
-                double ty=(target==null?center[1]:target.y)+offset[1];
-                double tz=(target==null?center[2]:target.z)+offset[2];
-                double yaw=number(clip,"yaw",0D);
-                double pitch=number(clip,"pitch",0D);
-                if(target!=null&&Boolean.parseBoolean(clip.settings.get("copy")))
+                double distance=Math.max(0.01D,Math.abs(number(clip,"distance",4D)));
+                // Orbit can be used without setting a target: pivot is
+                // in front of the underlying camera when no block is chosen.
+                if(target==null&&!atBlock)
                 {
-                    yaw+=target.yaw;pitch+=target.pitch;
+                    double[] forward=lookVector(current.yaw,current.pitch);
+                    center=new double[]{current.x+distance*forward[0],
+                            current.y+distance*forward[1],
+                            current.z+distance*forward[2]};
+                }
+                else if(target!=null&&!atBlock)
+                    center=new double[]{target.x,target.y,target.z};
+                double tx=center[0]+offset[0];
+                double ty=center[1]+offset[1];
+                double tz=center[2]+offset[2];
+                double elapsed=frame-clip.tick;
+                boolean absolute=Boolean.parseBoolean(clip.settings.get("absolute"));
+                double yaw=number(clip,"yaw",0D)+number(clip,"yawSpeed",0D)*elapsed;
+                double pitch=number(clip,"pitch",0D)+
+                        number(clip,"pitchSpeed",0D)*elapsed;
+                if(!absolute)
+                {
+                    yaw+=(target!=null&&Boolean.parseBoolean(
+                            clip.settings.get("copy")))?target.yaw:current.yaw;
+                    pitch+=(target!=null&&Boolean.parseBoolean(
+                            clip.settings.get("copy")))?target.pitch:current.pitch;
                 }
                 double[] direction=lookVector(yaw,pitch);
-                double distance=number(clip,"distance",0D);
                 double ex=tx-direction[0]*distance;
                 double ey=ty-direction[1]*distance;
                 double ez=tz-direction[2]*distance;
@@ -208,34 +239,49 @@ public final class CameraClipEvaluator
             }
             case DOLLY_ZOOM:
             {
-                PreviewCameraPose start=eval(clips,clip.tick,
+                double focus=Math.max(0.01D,Math.abs(number(clip,"focus",5D)));
+                PreviewCameraPose atStart=eval(clips,clip.tick,
                         fallback,resolver,clip.layer,depth+1);
-                double focus=-number(clip,"focus",0D);
-                double a=Math.tan(Math.toRadians(Math.max(0.01F,start.fov))/2D);
-                double b=Math.tan(Math.toRadians(Math.max(0.01F,current.fov))/2D);
-                if(Math.abs(b)<EPS)return current;
-                double distance=focus-focus*a/b;
-                double[] look=lookVector(current.yaw,current.pitch);
-                return withPosition(current,current.x+distance*look[0],
-                    current.y+distance*look[1],current.z+distance*look[2]);
+                double from=number(clip,"fromFov",atStart.fov);
+                double to=number(clip,"toFov",45D);
+                double phase=clamp((frame-clip.tick)/
+                        Math.max(1D,clip.duration-1D),0D,1D);
+                double fov=clamp(from+(to-from)*easing(phase,
+                        clip.settings.get("interp")),1D,170D);
+                double initialTan=Math.tan(Math.toRadians(
+                        clamp(from,1D,170D))*0.5D);
+                double currentTan=Math.tan(Math.toRadians(fov)*0.5D);
+                if(currentTan<EPS)return current;
+                double backwards=focus*(initialTan/currentTan-1D);
+                double[] direction=lookVector(current.yaw,current.pitch);
+                return new PreviewCameraPose(
+                    current.x-direction[0]*backwards,
+                    current.y-direction[1]*backwards,
+                    current.z-direction[2]*backwards,
+                    current.yaw,current.pitch,current.roll,(float)fov,
+                    current.nearPlane,current.farPlane);
             }
             case DRAG:
             {
                 if(clip.layer==0)return current;
-                boolean deterministic=Boolean.parseBoolean(clip.settings.get("deterministic"));
-                if(!deterministic)return current; // no mutable physics during seeking
                 int active=(int)number(clip,"active",127);
-                double factor=clamp(number(clip,"factor",0.5),0D,1D);
-                int rate=(int)clamp(number(clip,"rate",60),1,300);
-                int steps=Math.min(512,Math.max(1,(frame-clip.tick)*rate/20));
+                double factor=clamp(number(clip,"factor",0.5D),0D,1D);
+                int rate=(int)clamp(number(clip,"rate",20D),1D,120D);
+                double elapsed=Math.max(0D,frame-clip.tick);
+                int steps=Math.max(1,(int)Math.min(512D,
+                        Math.ceil(elapsed*rate/20D)));
+                double dt=elapsed/steps;
+                double smoothing=1D-Math.pow(1D-factor,dt*rate/20D);
                 PreviewCameraPose smoothed=eval(clips,clip.tick,fallback,
                         resolver,clip.layer,depth+1);
+                // Pure evaluation: seeking/export is repeatable, no
+                // incremental mutable physics history across render frames.
                 for(int i=1;i<=steps;i++)
                 {
-                    int at=clip.tick+(int)((double)i*20D/rate);
-                    PreviewCameraPose desired=eval(clips,at,fallback,resolver,
-                            clip.layer,depth+1);
-                    smoothed=PreviewCameraPose.interpolate(smoothed,desired,factor);
+                    PreviewCameraPose desired=eval(clips,clip.tick+i*dt,
+                            fallback,resolver,clip.layer,depth+1);
+                    smoothed=PreviewCameraPose.interpolate(
+                            smoothed,desired,smoothing);
                 }
                 return new PreviewCameraPose(
                     (active&1)!=0?smoothed.x:current.x,
@@ -251,8 +297,8 @@ public final class CameraClipEvaluator
             {
                 // BBS FS Remapper owns a single keyframe channel. Keys store
                 // local clip time in tick and remapped global frame in x.
-                int from=(int)number(clip,"from",clip.tick);
-                int to=(int)number(clip,"to",clip.tick+clip.duration);
+                double from=number(clip,"from",clip.tick);
+                double to=number(clip,"to",clip.tick+clip.duration);
                 double local=frame-clip.tick;
                 double remapped;
                 if(clip.keys.isEmpty())
@@ -279,7 +325,7 @@ public final class CameraClipEvaluator
                         remapped=previous.x+(next.x-previous.x)*phase;
                     }
                 }
-                return eval(clips,Math.max(0,(int)Math.round(remapped)),
+                return eval(clips,Math.max(0D,remapped),
                         fallback,resolver,clip.layer,depth+1);
             }
             case SPLINE:
@@ -312,8 +358,21 @@ public final class CameraClipEvaluator
                         pose(prev,current),pose(next,current),t);
             }
             case MATH:
-                return CameraMathExpression.apply(clip.settings.get("expression"),
-                        current,frame,clip.tick,clip.duration);
+            {
+                PreviewCameraPose math=CameraMathExpression.apply(
+                        clip.settings.get("expression"),current,
+                        frame,clip.tick,clip.duration);
+                int mask=(int)number(clip,"active",127D);
+                return new PreviewCameraPose(
+                    (mask&1)!=0?math.x:current.x,
+                    (mask&2)!=0?math.y:current.y,
+                    (mask&4)!=0?math.z:current.z,
+                    (mask&8)!=0?math.yaw:current.yaw,
+                    (mask&16)!=0?math.pitch:current.pitch,
+                    (mask&32)!=0?math.roll:current.roll,
+                    (mask&64)!=0?math.fov:current.fov,
+                    current.nearPlane,current.farPlane);
+            }
             case AUDIO:
             case CURVE:
             case SUBTITLE:
@@ -368,11 +427,44 @@ public final class CameraClipEvaluator
         return out;
     }
     private static CameraClipDocument.Target target(CameraClipDocument.Clip clip,
-            int frame,CameraClipDocument.TargetResolver resolver)
+            double frame,CameraClipDocument.TargetResolver resolver)
     {
         String id=clip.settings.get("selector");
-        return resolver==null||id==null||id.isEmpty()?null:resolver.resolve(id,frame);
+        if(resolver==null||id==null||id.isEmpty())return null;
+        int tick=Math.max(0,(int)Math.floor(frame));
+        CameraClipDocument.Target start=resolver.resolve(id,tick);
+        if(start==null)return null;
+        double alpha=frame-tick;
+        if(alpha<=0D)return start;
+        CameraClipDocument.Target end=resolver.resolve(id,tick+1);
+        if(end==null)return start;
+        double yaw=end.yaw-start.yaw;
+        yaw=(yaw+540D)%360D-180D;
+        return new CameraClipDocument.Target(
+                start.x+(end.x-start.x)*alpha,
+                start.y+(end.y-start.y)*alpha,
+                start.z+(end.z-start.z)*alpha,
+                (float)(start.yaw+yaw*alpha),
+                (float)(start.pitch+(end.pitch-start.pitch)*alpha));
     }
+    /** Camera-local right / up / forward translation (including roll). */
+    private static double[] localVector(PreviewCameraPose pose,double[] v)
+    {
+        double yaw=Math.toRadians(pose.yaw);
+        double pitch=Math.toRadians(pose.pitch);
+        double roll=Math.toRadians(pose.roll);
+        double[] forward=lookVector(pose.yaw,pose.pitch);
+        double[] right={Math.cos(yaw),0D,Math.sin(yaw)};
+        double[] up={-Math.sin(yaw)*Math.sin(pitch),
+                Math.cos(pitch),Math.cos(yaw)*Math.sin(pitch)};
+        double c=Math.cos(roll),t=Math.sin(roll);
+        double[] result=new double[3];
+        for(int i=0;i<3;i++)
+            result[i]=v[0]*(right[i]*c+up[i]*t)+
+                    v[1]*(up[i]*c-right[i]*t)+v[2]*forward[i];
+        return result;
+    }
+
     private static double[] lookVector(double yaw,double pitch)
     {
         double a=Math.toRadians(yaw),b=Math.toRadians(pitch);

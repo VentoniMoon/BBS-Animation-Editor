@@ -466,6 +466,7 @@ public final class CameraClipInspector
                 break;
             case TRANSLATE:
                 point("translate","TRANSLATE","X","Y","Z");
+                setting("local","Camera-local coordinates");
                 channels(0,2);
                 break;
             case ANGLE:
@@ -503,7 +504,11 @@ public final class CameraClipInspector
                 setting("copy","Copy");
                 setting("yaw","Yaw");
                 setting("pitch","Pitch");
+                setting("yawSpeed","Yaw / tick");
+                setting("pitchSpeed","Pitch / tick");
                 setting("distance","Distance");
+                setting("atBlock","Use fixed center");
+                point("block","CENTER","X","Y","Z");
                 point("offset","OFFSET","X","Y","Z");
                 break;
             case DRAG:
@@ -515,7 +520,11 @@ public final class CameraClipInspector
                 break;
             case DOLLY_ZOOM:
                 section("DOLLY ZOOM");
-                setting("focus","Focus");
+                setting("focus","Focus distance");
+                setting("fromFov","Start FOV");
+                setting("toFov","End FOV");
+                interpolation("interp","Interpolation",
+                        value("interp","linear"));
                 break;
             case MATH:
                 section("EXPRESSION");
@@ -523,6 +532,11 @@ public final class CameraClipInspector
                 channels(0,6);
                 break;
             case REMAPPER:
+                section("REMAP TIME");
+                setting("from","Source start tick");
+                setting("to","Source end tick");
+                interpolation("interp","Interpolation",
+                        value("interp","linear"));
                 singleChannelEditor(key,"TIME REMAPPING");
                 break;
             case CURVE:

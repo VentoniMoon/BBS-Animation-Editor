@@ -18,11 +18,14 @@ public final class CameraMathExpression
     {
         private final String s;
         private final double t,ticks,duration;
+        private final PreviewCameraPose camera;
         private int index;
         private int operations;
-        private Parser(String s,double t,double ticks,double duration)
+        private Parser(String s,double t,double ticks,double duration,
+                PreviewCameraPose camera)
         {
             this.s=s;this.t=t;this.ticks=ticks;this.duration=duration;
+            this.camera=camera;
         }
         private void space()
         {
@@ -109,6 +112,16 @@ public final class CameraMathExpression
                     if("duration".equals(name))return duration;
                     if("pi".equals(name))return Math.PI;
                     if("e".equals(name))return Math.E;
+                    // Read the incoming pose from lower-layer clips. Allows
+                    // MATH to modify a moving Path instead of replacing it
+                    // with absolute world coordinates.
+                    if("x".equals(name))return camera.x;
+                    if("y".equals(name))return camera.y;
+                    if("z".equals(name))return camera.z;
+                    if("yaw".equals(name))return camera.yaw;
+                    if("pitch".equals(name))return camera.pitch;
+                    if("roll".equals(name))return camera.roll;
+                    if("fov".equals(name))return camera.fov;
                     throw new IllegalArgumentException("Unknown variable");
                 }
                 double a=expression(),b=0D,d=0D;
@@ -138,6 +151,12 @@ public final class CameraMathExpression
     public static PreviewCameraPose apply(String expression,PreviewCameraPose initial,
             int absolute,int clipTick,int duration)
     {
+        return apply(expression,initial,(double)absolute,clipTick,duration);
+    }
+
+    public static PreviewCameraPose apply(String expression,PreviewCameraPose initial,
+            double absolute,int clipTick,int duration)
+    {
         if(expression==null||expression.trim().isEmpty())return initial;
         double x=initial.x,y=initial.y,z=initial.z;
         double yaw=initial.yaw,pitch=initial.pitch,roll=initial.roll,fov=initial.fov;
@@ -152,7 +171,7 @@ public final class CameraMathExpression
                 if(eq<0)throw new IllegalArgumentException("Missing =");
                 String name=assignment.substring(0,eq).trim().toLowerCase(Locale.ROOT);
                 double value=new Parser(assignment.substring(eq+1),
-                        absolute-clipTick,absolute,duration).parse();
+                        absolute-clipTick,absolute,duration,initial).parse();
                 if("x".equals(name))x=value;
                 else if("y".equals(name))y=value;
                 else if("z".equals(name))z=value;
