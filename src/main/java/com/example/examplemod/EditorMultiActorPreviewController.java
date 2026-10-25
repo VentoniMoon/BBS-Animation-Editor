@@ -97,9 +97,9 @@ public final class EditorMultiActorPreviewController
             BlockbusterRecordFrame current = record.getFrame(
                     Math.max(0, Math.min(frame, record.getFrames().size() - 1)));
             if (current == null) continue;
-            CameraExportPlan.Sample exact=CameraExportRenderClock.current();
-            if(exact!=null&&exact.sceneTick==frame)
-                current=CameraExportActorFrameSampler.sample(record,exact);
+            if(CameraVisualFrameClock.hasSample(frame))
+                current=CameraExportActorFrameSampler.sample(
+                        record,frame,CameraVisualFrameClock.fraction(frame));
 
             BlockbusterActorPreviewRenderer renderer = renderers.get(data.getId());
             if (renderer == null)
