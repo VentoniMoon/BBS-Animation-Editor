@@ -216,8 +216,14 @@ public final class BetterLightsActorInspector
             }
             else
             {
-                font.drawString(font.trimStringToWidth(text(entry.value),146),
-                        left+17,cy+18,TEXT);
+                Object property=entry.value.getValue();
+                String contents=property instanceof Boolean
+                        ?(((Boolean)property)?"[X] ON":"[ ] OFF")
+                        :text(entry.value);
+                font.drawString(font.trimStringToWidth(contents,146),
+                        left+17,cy+18,
+                        property instanceof Boolean&&((Boolean)property)
+                                ?0xFF8DE7AC:TEXT);
             }
         }
         if(entries.size()>visible)
@@ -276,18 +282,7 @@ public final class BetterLightsActorInspector
                     !Double.isFinite(((Number)next).doubleValue()))
                 throw new IllegalArgumentException("Not a finite value");
             old.value.setValue(next);
-            // Save into the original scene actor's morph tag. The standard
-            // editor Ctrl+S writes that scene, and the actor renderer picks
-            // up the modified morph NBT from CharacterMorphResolver.
-            NBTTagCompound source=actor.getActor().getMorph();
-            NBTTagCompound updated=source.copy();
-            morph.toNBT(updated);
-            if(originKey!=null)
-                originKey.setLightSettings(updated);
-            else actor.getActor().setMorph(updated);
-            signature=updated.toString();
-            if(screen!=null)screen.markEditorDirty();
-            error=null;
+            saveNativeValue(screen);
             return true;
         }
         catch(RuntimeException problem)
@@ -295,6 +290,22 @@ public final class BetterLightsActorInspector
             error="Light value: "+problem.getMessage();
             return true;
         }
+    }
+
+    private void saveNativeValue(AnimationEditorScreen screen)
+    {
+        NBTTagCompound source=originKey!=null&&
+                originKey.getLightSettings()!=null
+                ?originKey.getLightSettings()
+                :actor.getActor().getMorph();
+        NBTTagCompound updated=source.copy();
+        morph.toNBT(updated);
+        if(originKey!=null)
+            originKey.setLightSettings(updated);
+        else actor.getActor().setMorph(updated);
+        signature=updated.toString();
+        if(screen!=null)screen.markEditorDirty();
+        error=null;
     }
 
     public boolean mouseClicked(AnimationEditorScreen screen,
@@ -318,6 +329,15 @@ public final class BetterLightsActorInspector
         if(idx<0||idx>=entries.size()||my<cy+12||my>=cy+32)
             return true;
         editing=entries.get(idx);
+        if(editing.value.getValue() instanceof Boolean)
+        {
+            Boolean checked=(Boolean)editing.value.getValue();
+            editing.value.setValue(!checked);
+            saveNativeValue(screen);
+            editing=null;
+            input=null;
+            return true;
+        }
         input=new GuiTextField(17431,Minecraft.getMinecraft().fontRenderer,
                 x+17,cy+13,149,17);
         input.setMaxStringLength(80);
