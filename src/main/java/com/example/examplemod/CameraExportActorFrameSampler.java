@@ -11,12 +11,19 @@ public final class CameraExportActorFrameSampler
     public static BlockbusterRecordFrame sample(BlockbusterRecord record,
             CameraExportPlan.Sample time)
     {
-        if(record==null||time==null)return null;
-        BlockbusterRecordFrame a=record.getFrame(time.sceneTick);
-        if(a==null||time.tickFraction<=0D)return a;
-        BlockbusterRecordFrame b=record.getFrame(time.sceneTick+1);
+        return time==null?null:sample(record,time.sceneTick,time.tickFraction);
+    }
+
+    /** A render-only Record sample for both GUI Preview and offline output. */
+    public static BlockbusterRecordFrame sample(BlockbusterRecord record,
+            int tick,double fraction)
+    {
+        if(record==null)return null;
+        BlockbusterRecordFrame a=record.getFrame(tick);
+        if(a==null||fraction<=0D)return a;
+        BlockbusterRecordFrame b=record.getFrame(tick+1);
         if(b==null)return a;
-        double t=time.tickFraction;
+        double t=Math.max(0D,Math.min(1D,fraction));
         BlockbusterRecordFrame result=BlockbusterRecordFrame.fromNBT(a.toNBT());
         result.setX(lerp(a.getX(),b.getX(),t));
         result.setY(lerp(a.getY(),b.getY(),t));
