@@ -1181,6 +1181,15 @@ public class BlockbusterActorPreviewRenderer
         }
 
         /*
+         * BetterLightsMorph normally registers its LightCaster from the
+         * entity's logical update. Our detached record actors never enter
+         * Minecraft's entity tick list, so maintain that optional morph
+         * here once per 20 TPS tick. Render positions are still supplied
+         * by Blockbuster's native morph render below.
+         */
+        CameraBetterLightsBridge.prepare(entityActor,previewFrame);
+
+        /*
          * =====================================================
          * RENDER MANAGER
          * =====================================================
