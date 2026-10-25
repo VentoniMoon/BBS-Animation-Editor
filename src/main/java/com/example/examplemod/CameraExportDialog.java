@@ -104,13 +104,70 @@ public final class CameraExportDialog
         outputField.width=fieldWidth;
     }
 
+    /**
+     * The render progress panel has no controls from the setup dialog.
+     * Only the logical GUI dimensions determine placement; 4K/portrait
+     * output sizes NEVER affect the progress window's position or scale.
+     */
+    private void progressBounds(AnimationEditorScreen screen)
+    {
+        w=Math.min(426,Math.max(270,screen.width-14));
+        h=Math.min(186,Math.max(145,screen.height-14));
+        x=Math.max(4,(screen.width-w)/2);
+        y=Math.max(4,(screen.height-h)/2);
+    }
+
+    private void drawProgress(AnimationEditorScreen editor)
+    {
+        progressBounds(editor);
+        CameraVideoRenderController video=editor.getCameraVideoExport();
+        CameraExportPlan plan=video.currentPlan();
+        FontRenderer font=Minecraft.getMinecraft().fontRenderer;
+        // The regular editor is deliberately not painted during export.
+        // The native world renderer still runs outside of the GUI pass.
+        Gui.drawRect(0,0,editor.width,editor.height,0xD9080E15);
+        Gui.drawRect(x-3,y-3,x+w+3,y+h+3,0xF6071017);
+        Gui.drawRect(x,y,x+w,y+h,PANEL);
+        Gui.drawRect(x,y,x+w,y+2,BLUE);
+        CameraNativeFrameProbe.resyncDefaultTextureForGui();
+        font.drawString("CAMERA  /  RENDERING VIDEO",x+15,y+13,BLUE);
+        Gui.drawRect(x+12,y+32,x+w-12,y+33,BORDER);
+        String format=plan==null?"MP4 / H.264":
+                plan.width+" x "+plan.height+"  |  "+plan.fps+
+                " FPS  |  H.264 / MP4";
+        font.drawString(font.trimStringToWidth(format,w-30),
+                x+15,y+42,WHITE);
+        String phase=video.getStage();
+        if(phase==null||phase.isEmpty())phase="Rendering film...";
+        font.drawString(font.trimStringToWidth(phase,w-30),
+                x+15,y+60,MUTED);
+        int total=Math.max(1,video.getTotalFrames());
+        int captured=Math.max(0,Math.min(total,video.getCapturedFrames()));
+        int encoded=Math.max(0,Math.min(total,video.getEncodedFrames()));
+        font.drawString("Frames captured: "+captured+" / "+total,
+                x+15,y+79,WHITE);
+        font.drawString("Encoded: "+encoded+" / "+total,
+                x+15,y+94,MUTED);
+        int barY=y+h-61;
+        Gui.drawRect(x+15,barY,x+w-15,barY+8,0xFF243846);
+        int fill=(int)((long)(w-30)*encoded/total);
+        Gui.drawRect(x+15,barY,x+15+fill,barY+8,BLUE);
+        int buttonY=y+h-34;
+        drawButton(font,x+15,buttonY,w-30,"CANCEL EXPORT",true);
+    }
+
     public void draw(AnimationEditorScreen editor,int mx,int my)
     {
         if(!open||editor==null)return;
+        CameraVideoRenderController video=editor.getCameraVideoExport();
+        if(video.isExporting())
+        {
+            drawProgress(editor);
+            return;
+        }
         bounds(editor);
         Minecraft mc=Minecraft.getMinecraft();
         FontRenderer font=mc.fontRenderer;
-        CameraVideoRenderController video=editor.getCameraVideoExport();
         Gui.drawRect(0,0,editor.width,editor.height,0xA900070C);
         Gui.drawRect(x-2,y-2,x+w+2,y+h+2,0xEB071017);
         Gui.drawRect(x,y,x+w,y+h,PANEL);
@@ -225,8 +282,10 @@ public final class CameraExportDialog
         CameraVideoRenderController video=editor.getCameraVideoExport();
         if(video.isExporting())
         {
-            if(mx>=x+w-30&&my<y+32)video.cancel("MP4 export canceled");
-            if(mx>=x+15&&mx<=x+w-15&&my>=y+h-34&&my<y+h-11)
+            progressBounds(editor);
+            // Exactly one active progress screen; only its Cancel action
+            // (and Escape handled by keyTyped) may affect export.
+            if(mx>=x+15&&mx<x+w-15&&my>=y+h-34&&my<y+h-11)
                 video.cancel("MP4 export canceled");
             return true;
         }
