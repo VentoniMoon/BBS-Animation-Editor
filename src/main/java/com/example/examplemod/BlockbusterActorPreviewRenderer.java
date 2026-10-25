@@ -788,6 +788,16 @@ public class BlockbusterActorPreviewRenderer
                 actorData,
                 entityActor
         );
+        // Native light settings are sampled separately from the morph's
+        // identity. Never recreate LightCaster on every fractional 60 FPS
+        // property sample (which would flicker/remove temporary lights).
+        if(actorData.getActor()!=null&&BetterLightsRig.isLight(
+                actorData.getActor().getMorph()))
+            BetterLightsRig.applySettings(entityActor.getMorph(),
+                    BetterLightsRig.forActor(actorData),
+                    CameraVisualFrameClock.sceneTime(
+                            BlockbusterPreviewAnimationState.getFrame()),
+                    actorData.getActor().getMorph());
 
         /*
          * A recorded actor may already contain Metamorph Body Parts in
