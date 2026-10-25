@@ -1624,6 +1624,11 @@ public class AnimationEditorScreen extends GuiScreen
         return this.sceneState;
     }
 
+    public CameraWorkspace getCameraWorkspace()
+    {
+        return this.cameraWorkspace;
+    }
+
     /*
      * =========================================================
      * RECORD / ANIMATION
@@ -3174,9 +3179,13 @@ public class AnimationEditorScreen extends GuiScreen
         }
         this.sceneViewport.renderPreviewToScreen();
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+        {
             cameraWorkspace.drawMediaSelection(
                     playbackController.getCurrentFrame(),
                     filmX,filmY,filmW,filmH);
+            cameraWorkspace.drawLightGizmo(this,
+                    filmX,filmY,filmW,filmH);
+        }
 
         /*
          * The GUI pass only draws the three gizmo mode buttons.
@@ -3893,6 +3902,14 @@ public class AnimationEditorScreen extends GuiScreen
         // CAMERA's toolbar uses the same hitboxes as all other modes.
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
                 &&clickStage8PreviewButton(mouseX,mouseY,mouseButton))return;
+        // The CAMERA light gizmo gets first chance at its three handles.
+        // It must not accidentally scrub the scene or drag a VIDEO layer.
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                &&sceneViewport!=null&&
+                cameraWorkspace.beginLightGizmo(this,mouseX,mouseY,
+                        mouseButton,sceneViewport.getX(),
+                        sceneViewport.getY(),sceneViewport.getWidth(),
+                        sceneViewport.getHeight()))return;
         // Topmost visible Image/Video/Subtitle can be dragged inside the
         // current output-format frame, even when portrait (9:16).
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
@@ -3934,6 +3951,7 @@ public class AnimationEditorScreen extends GuiScreen
                 == EditorModeController.EditorMode.CAMERA
                 && clickedMouseButton == 0)
         {
+            if(cameraWorkspace.dragLightGizmo(this,mouseX,mouseY))return;
             this.cameraWorkspace.move(mouseX,mouseY,getSceneLength());
             return;
         }
@@ -3957,7 +3975,10 @@ public class AnimationEditorScreen extends GuiScreen
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
+        {
+            this.cameraWorkspace.releaseLightGizmo(this);
             this.cameraWorkspace.release();
+        }
         if (this.editorInput != null)
         {
             this.editorInput.mouseReleased(
