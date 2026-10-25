@@ -1889,10 +1889,42 @@ public class AnimationEditorScreen extends GuiScreen
          * Otherwise the world texture would contain our dark editor panels.
          */
         BbsFsWorldFrameCapture.beginFrame(this.mc);
-        // The world was rendered at native output resolution when the
-        // optional diagnostic is armed. Restore the original screen FBO
-        // before any editor GUI pixels or panels are drawn.
-        CameraNativeFrameProbe.beforeGui(this.mc);
+        // During CAMERA output a Minecraft world pass uses the *film* FBO
+        // dimensions (e.g. 3840x2160, or 1080x1920). Vanilla may configure
+        // its GUI orthographic matrix while those temporary dimensions are
+        // still active. Merely restoring displayWidth/FBO is insufficient:
+        // it creates a second, scaled editor GUI with a different layout.
+        boolean restoredNativeFilm=CameraNativeFrameProbe.beforeGui(this.mc);
+        if(restoredNativeFilm && this.mc!=null &&
+                this.mc.entityRenderer!=null)
+        {
+            if(this.mc.getFramebuffer()!=null)
+                this.mc.getFramebuffer().bindFramebuffer(true);
+            this.mc.entityRenderer.setupOverlayRendering();
+            CameraNativeFrameProbe.resyncDefaultTextureForGui();
+        }
+
+        if(cameraVideoExport.isExporting())
+        {
+            // The native world, actors, media and encoder STILL advance via
+            // RenderTick START / beforeGui above. Never paint the live GUI
+            // a second time over an output-sized target; it can inherit
+            // residual viewport/scissor state and creates resolution-
+            // dependent duplicate toolbars, timelines and inspector panels.
+            org.lwjgl.opengl.GL11.glDisable(
+                    org.lwjgl.opengl.GL11.GL_SCISSOR_TEST);
+            net.minecraft.client.renderer.GlStateManager.colorMask(
+                    true,true,true,true);
+            net.minecraft.client.renderer.GlStateManager.color(1F,1F,1F,1F);
+            net.minecraft.client.renderer.GlStateManager.disableDepth();
+            net.minecraft.client.renderer.GlStateManager.enableBlend();
+            net.minecraft.client.renderer.GlStateManager.tryBlendFuncSeparate(
+                    org.lwjgl.opengl.GL11.GL_SRC_ALPHA,
+                    org.lwjgl.opengl.GL11.GL_ONE_MINUS_SRC_ALPHA,1,0);
+            drawRect(0,0,width,height,0xFF080E15);
+            cameraExportDialog.draw(this,mouseX,mouseY);
+            return;
+        }
 
         drawRect(
                 0,
