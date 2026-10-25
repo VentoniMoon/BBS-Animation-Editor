@@ -18,6 +18,10 @@ public class EditorSceneState
 
     /** Scene-wide camera clips are editor data, never a selected actor. */
     private final CameraClipDocument cameraClips=new CameraClipDocument();
+    /** Keyless CAMERA scene sources, never regular Blockbuster actors. */
+    private final CameraSceneLights cameraLights=new CameraSceneLights();
+    public CameraSceneLights getCameraLights(){return cameraLights;}
+
 
     /** Output aspect/resolution is shared by CAMERA and film preview modes. */
     private final CameraOutputSettings cameraOutput=new CameraOutputSettings();
@@ -378,6 +382,7 @@ public class EditorSceneState
          */
         this.animationData.clear();
         this.cameraClips.clear();
+        this.cameraLights.clear();
         this.cameraOutput.reset();
 
 
