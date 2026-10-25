@@ -343,6 +343,7 @@ public final class BbsFsWorldCameraDriver
     private void release()
     {
         CameraBetterLightsCameraOrigin.end();
+        CameraSceneLightsRenderer.reset();
         CameraVisualFrameClock.clearPreview();
         restoreHud();
         if (!controlling) return;

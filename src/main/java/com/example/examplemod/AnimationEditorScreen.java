@@ -1624,6 +1624,11 @@ public class AnimationEditorScreen extends GuiScreen
         return this.sceneState;
     }
 
+    public CameraWorkspace getCameraWorkspace()
+    {
+        return this.cameraWorkspace;
+    }
+
     /*
      * =========================================================
      * RECORD / ANIMATION
@@ -1892,6 +1897,7 @@ public class AnimationEditorScreen extends GuiScreen
          * BBS FS native capture MUST happen before drawing any GUI pixel.
          * Otherwise the world texture would contain our dark editor panels.
          */
+        BetterLightsRig.bind(this.sceneState);
         BbsFsWorldFrameCapture.beginFrame(this.mc);
         // During CAMERA output a Minecraft world pass uses the *film* FBO
         // dimensions (e.g. 3840x2160, or 1080x1920). Vanilla may configure
@@ -3042,6 +3048,12 @@ public class AnimationEditorScreen extends GuiScreen
                     :getCurrentRecordFrame();
         this.sceneViewport.drawActor(
                 mc, selected, selectedFrame);
+        // CAMERA-native static lights participate in the same world pass
+        // that is captured to film and encoded as MP4. They have no keys
+        // and are never added to Blockbuster's actor/Record data.
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+            CameraSceneLightsRenderer.render(mc,this.sceneViewport,
+                    this.sceneState.getCameraLights());
         return true;
     }
 
@@ -3167,9 +3179,13 @@ public class AnimationEditorScreen extends GuiScreen
         }
         this.sceneViewport.renderPreviewToScreen();
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
+        {
             cameraWorkspace.drawMediaSelection(
                     playbackController.getCurrentFrame(),
                     filmX,filmY,filmW,filmH);
+            cameraWorkspace.drawLightGizmo(this,
+                    filmX,filmY,filmW,filmH);
+        }
 
         /*
          * The GUI pass only draws the three gizmo mode buttons.
@@ -3255,10 +3271,20 @@ public class AnimationEditorScreen extends GuiScreen
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
-            if(BetterLightsActorInspector.isLightActor(getSelectedActor()))
+            boolean lightActor=BetterLightsActorInspector.isLightActor(
+                    getSelectedActor());
+            if(lightActor)
             {
-                // A LightCaster has no humanoid bones. Show the genuine
-                // Blockbuster BetterLights values in the Transform slot.
+                AnimationBone bone=actorPreviewController.getSelectedBone(
+                        keyframeController);
+                betterLightsInspector.setOriginKey(
+                        bone!=null&&BetterLightsRig.ORIGIN.equals(
+                                bone.getName())
+                        ?keyframeController.getSelectedKeyframe():null);
+            }
+            else betterLightsInspector.setOriginKey(null);
+            if(lightActor&&!betterLightsInspector.rigTab())
+            {
                 this.betterLightsInspector.draw(mc,panelX,top,bottom,
                         getSelectedActor(),
                         this.playbackController.getCurrentFrame());
@@ -3282,7 +3308,12 @@ public class AnimationEditorScreen extends GuiScreen
                             this.playbackController
                                     .getCurrentFrame()
                     );
+                if(lightActor&&keyframeController.getSelectedKeyframe()==null)
+                    fontRenderer.drawString("Select a key on Origin / Target",
+                            panelX+9,top+42,0xFF98BFCE);
             }
+            if(lightActor)
+                betterLightsInspector.drawTabs(mc,panelX,bottom);
         }
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
@@ -3886,6 +3917,14 @@ public class AnimationEditorScreen extends GuiScreen
         // CAMERA's toolbar uses the same hitboxes as all other modes.
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
                 &&clickStage8PreviewButton(mouseX,mouseY,mouseButton))return;
+        // The CAMERA light gizmo gets first chance at its three handles.
+        // It must not accidentally scrub the scene or drag a VIDEO layer.
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                &&sceneViewport!=null&&
+                cameraWorkspace.beginLightGizmo(this,mouseX,mouseY,
+                        mouseButton,sceneViewport.getX(),
+                        sceneViewport.getY(),sceneViewport.getWidth(),
+                        sceneViewport.getHeight()))return;
         // Topmost visible Image/Video/Subtitle can be dragged inside the
         // current output-format frame, even when portrait (9:16).
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
@@ -3902,9 +3941,15 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.POSE &&
-                BetterLightsActorInspector.isLightActor(getSelectedActor()) &&
-                betterLightsInspector.mouseClicked(this,
+                BetterLightsActorInspector.isLightActor(getSelectedActor()))
+        {
+            if(mouseButton==0&&betterLightsInspector.selectTab(
+                    mouseX,mouseY,width-185,
+                    height-getTimelineHeight()))return;
+            if(!betterLightsInspector.rigTab()&&
+                    betterLightsInspector.mouseClicked(this,
                         mouseX,mouseY,mouseButton))return;
+        }
         if (this.editorInput != null)
         {
             this.editorInput.mouseClicked(
@@ -3927,6 +3972,7 @@ public class AnimationEditorScreen extends GuiScreen
                 == EditorModeController.EditorMode.CAMERA
                 && clickedMouseButton == 0)
         {
+            if(cameraWorkspace.dragLightGizmo(this,mouseX,mouseY))return;
             this.cameraWorkspace.move(mouseX,mouseY,getSceneLength());
             return;
         }
@@ -3950,7 +3996,10 @@ public class AnimationEditorScreen extends GuiScreen
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
+        {
+            this.cameraWorkspace.releaseLightGizmo(this);
             this.cameraWorkspace.release();
+        }
         if (this.editorInput != null)
         {
             this.editorInput.mouseReleased(
@@ -4053,6 +4102,8 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.POSE &&
+                BetterLightsActorInspector.isLightActor(getSelectedActor())&&
+                !betterLightsInspector.rigTab()&&
                 betterLightsInspector.keyTyped(this,typedChar,keyCode))
             return;
         if (this.editorInput != null)
