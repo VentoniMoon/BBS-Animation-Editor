@@ -542,8 +542,11 @@ public final class CameraClipInspector
                 singleChannelEditor(key,"TIME REMAPPING");
                 break;
             case CURVE:
-                section("SHADER CURVE");
-                setting("channels","Channel");
+                section("FILM CURVE");
+                setting("channels","Channel (brightness/red/green/blue/fade)");
+                setting("value","Default value (-1..1)");
+                interpolation("interp","Interpolation",
+                        value("interp","linear"));
                 singleChannelEditor(key,"CURVE KEYS");
                 break;
             case IMAGE:
