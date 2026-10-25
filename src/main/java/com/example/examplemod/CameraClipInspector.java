@@ -449,6 +449,7 @@ public final class CameraClipInspector
                 channels(0,6);
                 break;
             case SPLINE:
+                keyEditor(key,true);
                 section("TARGET");
                 setting("selector","Entity");
                 setting("group","Group");
@@ -457,7 +458,8 @@ public final class CameraClipInspector
                 setting("end","End");
                 interpolation("interp","Interpolation",value("interp","linear"));
                 section("SPLINE");
-                setting("path_rotation","Path rotation");
+                setting("path_rotation","Follow tangent (1/0)");
+                setting("geometry","Geometry (hermite/linear)");
                 point("offset","OFFSET","X","Y","Z");
                 point("angle","ANGLE","Yaw","Pitch","Roll");
                 section("CAMERA");
