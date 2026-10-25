@@ -172,6 +172,11 @@ public final class BetterLightsRig
         return result;
     }
 
+    private static final java.util.WeakHashMap<AbstractMorph,
+            mchorse.mclib.utils.ValueSerializer> baselineValues=
+            new java.util.WeakHashMap<AbstractMorph,
+                    mchorse.mclib.utils.ValueSerializer>();
+
     public static void applySettings(AbstractMorph morph,
             ActorAnimationData data,double frame,
             net.minecraft.nbt.NBTTagCompound base)
@@ -179,13 +184,42 @@ public final class BetterLightsRig
         if(morph==null||data==null||base==null||
                 !morph.getClass().getName()
                     .endsWith(".BetterLightsMorph"))return;
+        AnimationBone origin=data.getBone(ORIGIN);
+        if(origin==null)return;
+        boolean hasSettings=false;
+        for(AnimationKeyframe key:origin.getKeyframes())
+            if(key!=null&&key.getLightSettings()!=null)
+            {hasSettings=true;break;}
+        if(!hasSettings)return;
         try
         {
             Object values=morph.getClass().getMethod("getValueManager")
                     .invoke(morph);
-            if(values instanceof mchorse.mclib.utils.ValueSerializer)
-                ((mchorse.mclib.utils.ValueSerializer)values).fromNBT(
-                        settingsAt(data,frame,base));
+            if(!(values instanceof mchorse.mclib.utils.ValueSerializer))
+                return;
+            mchorse.mclib.utils.ValueSerializer runtime=
+                    (mchorse.mclib.utils.ValueSerializer)values;
+            mchorse.mclib.utils.ValueSerializer baseline=
+                    baselineValues.get(morph);
+            if(baseline==null)
+            {
+                AbstractMorph initial=
+                        mchorse.metamorph.api.MorphManager.INSTANCE
+                                .morphFromNBT(base.copy());
+                if(initial==null)return;
+                Object initialValues=initial.getClass().getMethod(
+                        "getValueManager").invoke(initial);
+                if(!(initialValues instanceof
+                        mchorse.mclib.utils.ValueSerializer))return;
+                baseline=(mchorse.mclib.utils.ValueSerializer)initialValues;
+                baselineValues.put(morph,baseline);
+            }
+            // Reset ALL channels before sampling any arbitrary frame.
+            // NBT writes only changed ValueSerializer properties; a direct
+            // fromNBT() alone would retain unsaved values from a different
+            // frame after seeking backwards.
+            runtime.copyValues(baseline);
+            runtime.fromNBT(settingsAt(data,frame,base));
         }
         catch(ReflectiveOperationException ignored){}
     }
