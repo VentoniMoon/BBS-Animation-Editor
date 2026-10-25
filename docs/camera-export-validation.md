@@ -72,6 +72,34 @@ the dialog, including between client launches.
   checks that frames match the previous from-start decoder, including loops.
   Reusing a persistent decoder remains a later optimization.
 
+### Export modal: no duplicate CAMERA interface at native film resolutions
+
+When **START RENDER** succeeds, the setup controls are replaced with one
+compact progress window (output size/FPS, stage, captured and encoded frames,
+one progress bar and **Cancel Export**). The rest of the editor is covered
+with an opaque dark background and is **not redrawn** during export.
+The native world/actors/media still advance one exact film timestamp each
+render tick, inside CameraNativeFrameProbe.beforeGui(), before GUI drawing.
+
+The native output framebuffer temporarily changes Minecraft.displayWidth
+and displayHeight. In Minecraft 1.12.2 the normal overlay/projection may have
+been prepared while those were set to the output format (e.g. 3840x2160 or
+1080x1920). The editor now restores the original target **and reinitializes
+the GUI orthographic projection** before drawing progress. Restoring only
+the framebuffer/viewport was not enough: it could show a second tiny/stretched
+editor GUI whose shape depended on the film aspect ratio.
+
+Regression in a live client:
+- Start 1920x1080/60, 1080x1920/60 and 3840x2160/60 exports with
+  a VIDEO clip and camera/actor motion. Expect exactly one centered,
+  identically sized progress modal, without timeline or inspector ghosting.
+- Observe the captured/encoded counts changing while editor chrome remains
+  hidden; verify the final MP4 still contains all overlays and audio.
+- Cancel partway and check that no old GUI projection, stretched toolbar,
+  scissor rectangle or altered window resolution remains after restoring
+  CAMERA. Repeat with OptiFine enabled/disabled and an active shaderpack.
+- An export start failure should leave the settings dialog visible and usable.
+
 ### True render-time preview sampling (20 TPS, 60 FPS visuals)
 
 The editor timeline and Blockbuster Record remain at 20 logical ticks/sec.
