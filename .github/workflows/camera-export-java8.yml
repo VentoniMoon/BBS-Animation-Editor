@@ -39,6 +39,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraFilmCompositor.java'
       - 'src/main/java/com/example/examplemod/CameraClipParameters.java'
       - 'src/main/java/com/example/examplemod/CameraClipInspector.java'
+      - 'src/main/java/com/example/examplemod/CameraSplinePath.java'
+      - 'src/main/java/com/example/examplemod/CameraCurveSampler.java'
       - 'src/main/java/com/example/examplemod/CameraMediaAnimation.java'
       - 'src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java'
       - 'src/main/java/com/example/examplemod/EditorWavAudioController.java'
@@ -90,6 +92,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraFilmCompositor.java'
       - 'src/main/java/com/example/examplemod/CameraClipParameters.java'
       - 'src/main/java/com/example/examplemod/CameraClipInspector.java'
+      - 'src/main/java/com/example/examplemod/CameraSplinePath.java'
+      - 'src/main/java/com/example/examplemod/CameraCurveSampler.java'
       - 'src/main/java/com/example/examplemod/CameraMediaAnimation.java'
       - 'src/test/java/com/example/examplemod/CameraImagePlacementSmokeTest.java'
       - 'src/main/java/com/example/examplemod/EditorWavAudioController.java'
@@ -234,6 +238,8 @@ jobs:
             src/main/java/com/example/examplemod/CameraClipChannels.java \
             src/main/java/com/example/examplemod/CameraInterpolation.java \
             src/main/java/com/example/examplemod/CameraClipEnvelope.java \
+            src/main/java/com/example/examplemod/CameraSplinePath.java \
+            src/main/java/com/example/examplemod/CameraCurveSampler.java \
             src/main/java/com/example/examplemod/CameraClipEvaluator.java \
             src/main/java/com/example/examplemod/CameraExportPlan.java \
             src/main/java/com/example/examplemod/CameraExportCameraSampler.java \
