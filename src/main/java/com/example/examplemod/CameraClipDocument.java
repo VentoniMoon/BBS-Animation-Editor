@@ -325,6 +325,25 @@ public final class CameraClipDocument
         Key created=new Key(relative,pose);
         if(CameraMediaAnimation.supports(clip))
             CameraMediaAnimation.capture(clip,created,absoluteFrame);
+        else if(clip.kind==Kind.REMAPPER)
+        {
+            // Remapper's sole channel stores SOURCE TIME in key.x,
+            // not camera X. Capture the current mapping under the cursor
+            // when adding a time key, so it doesn't jump unexpectedly.
+            double from=settingNumber(clip,"from",clip.tick);
+            double to=settingNumber(clip,"to",clip.tick+clip.duration);
+            double phase=CameraInterpolation.sample(
+                    relative/(double)Math.max(1,clip.duration),
+                    clip.settings.get("interp"));
+            created.x=from+(to-from)*phase;
+            for(Key previous:clip.keys)
+                if(previous.tick==relative)
+                {
+                    created.x=previous.x;
+                    created.interpolation=previous.interpolation;
+                    break;
+                }
+        }
         for(int i=0;i<clip.keys.size();i++)
             if(clip.keys.get(i).tick==relative)
             {clip.keys.set(i,created);return;}
@@ -333,6 +352,16 @@ public final class CameraClipDocument
             @Override public int compare(Key a,Key b){return Integer.compare(a.tick,b.tick);}
         });
     }
+    private static double settingNumber(Clip clip,String field,double fallback)
+    {
+        try
+        {
+            double v=Double.parseDouble(clip.settings.get(field));
+            return Double.isFinite(v)?v:fallback;
+        }
+        catch(RuntimeException ignored){return fallback;}
+    }
+
     /** These are the currently supported pose-producing clip types. */
     public PreviewCameraPose sample(int frame,PreviewCameraPose fallback)
     {
