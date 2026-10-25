@@ -39,6 +39,32 @@ public final class CameraExportActorFrameSamplerSmokeTest
         CameraExportPlan fps30=new CameraExportPlan(128,128,30,2);
         near(fps30.sample(1).sceneTime(),2D/3D,"30 FPS fractional clock");
         near(fps60.sample(5).sceneTime(),5D/3D,"60 FPS last subframe");
+        // Normal preview uses render FPS while timeline retains 20 TPS.
+        CameraVisualFrameClock.beginPreview(0,0.5F,true,false);
+        near(CameraVisualFrameClock.sceneTime(0),0.5D,
+                "60 FPS GUI preview samples 20.5 at partial=0.5");
+        near(CameraVisualFrameClock.animationFrame(0),0.5D,
+                "selected bones receive the same fractional frame");
+        near(CameraVisualFrameClock.partialTick(0,0F),0.5D,
+                "native model renderer receives preview sub-tick");
+        near(CameraExportActorFrameSampler.sample(record,0,
+                CameraVisualFrameClock.fraction(0)).getX(),6D,
+                "actor Record position interpolates in the GUI preview");
+        CameraVisualFrameClock.beginPreview(0,0.9F,true,true);
+        check(!CameraVisualFrameClock.hasSample(0),
+                "Jolt bake disables render fractional timing");
+        CameraVisualFrameClock.beginPreview(0,0.9F,false,false);
+        check(!CameraVisualFrameClock.hasSample(0),
+                "paused scrub still resolves whole Record tick");
+        CameraVisualFrameClock.beginPreview(0,0.7F,true,false);
+        CameraExportRenderClock.set(fps60.sample(1));
+        near(CameraVisualFrameClock.sceneTime(0),1D/3D,
+                "export exact sample overrides realtime partial");
+        CameraExportRenderClock.clear();
+        CameraVisualFrameClock.clearPreview();
+        check(!CameraVisualFrameClock.hasSample(0),
+                "preview render clock restored at RenderTick END");
+
         record.frames[1]=null;
         check(CameraExportActorFrameSampler.sample(record,midway)==a,
                 "missing record successor holds last valid frame");
