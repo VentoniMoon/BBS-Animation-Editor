@@ -165,16 +165,13 @@ public class EditorActorPreviewController
 
         if (data != null)
         {
-            // Older editor versions treated BetterLightsMorph as an unknown
-            // Blockbuster model and accidentally generated Steve's limbs.
-            // A light has no skeleton: remove only this invalid cached data
-            // (never affect actual CustomMorph/Chameleon animations).
+            // Light actors have two virtual controllers, never Steve bones.
+            // Existing Origin/Target keys survive every actor selection.
             BlockbusterSceneActorData selected=sceneState.getSelectedActorData();
             if(selected!=null&&actorId.equals(selected.getId())&&
                     selected.getActor()!=null&&
-                    BetterLightsActorInspector.isLightMorph(
-                            selected.getActor().getMorph()))
-                data.getBones().clear();
+                    BetterLightsRig.isLight(selected.getActor().getMorph()))
+                BetterLightsRig.ensure(data);
             return data;
         }
 
@@ -226,13 +223,14 @@ public class EditorActorPreviewController
         NBTTagCompound morphNBT =
                 sceneActor.getMorph();
 
-        // BetterLightsMorph is a light source, not a humanoid or a
-        // Blockbuster CustomMorph. It has no bones to animate in POSE.
-        // Actor placement still belongs to its Record track.
-        if(BetterLightsActorInspector.isLightMorph(morphNBT))
+        // A light has its own Origin and Target tracks (no Steve limbs).
+        // The actor Record remains the world-space position baseline.
+        if(BetterLightsRig.isLight(morphNBT))
         {
             this.currentActorIsChameleon=false;
-            return new ActorAnimationData(actorId);
+            ActorAnimationData light=new ActorAnimationData(actorId);
+            BetterLightsRig.ensure(light);
+            return light;
         }
 
         AbstractMorph morph = null;
