@@ -113,6 +113,42 @@ Check saved/reopened scene, SHOT vs FREE navigation, and 60 FPS native
 MP4 against the film preview. Visual parity with every BBS FS legacy
 parameter is not guaranteed by Java8 smoke tests.
 
+### BetterLights 1.0.3 — fixed light position when CAMERA moves
+
+A separate original BetterLights 1.0.3 issue manifests with a **static
+world-space light moving together with the CAMERA preview camera**.
+We inspected the user's installed BetterLights JAR bytecode. Its
+`dz.betterlights.handlers.OptifineShaderUniformsHandler.uploadLightUniforms`
+reads `Minecraft.player.prevPosX/posX` etc., subtracting the interpolated
+*player* position from the LightCaster's world position before applying
+BetterLights' shader view matrix. In ordinary gameplay the player is
+the camera; CAMERA explicitly uses `PreviewCameraEntity`, which may be
+hundreds of blocks away from the actual player.
+
+`CameraBetterLightsCameraOrigin` addresses this integration mismatch:
+only with BetterLights installed and during the active CAMERA native world
+pass, temporarily mirror the detached view's interpolated XYZ values into
+the player's positional fields *read by BetterLights*. Nothing changes
+the LightCaster world position or the player's collision box, world
+registration or chunks. Immediately after world capture, the GUI restores
+the real player coordinates; `RenderTick.END` and camera detach also
+restore them on failed/skipped frames. The scope is constrained to CAMERA;
+normal game rendering is untouched. Without BetterLights installed, the
+adapter is inert.
+
+Java 8 regression simulates stationary caster at X=112 and a camera
+moving from X=100 to 106: shader-space light offset changes from +12 to
++6 while the light source retains world X=112, with all player positional
+fields restored after both samples.
+
+Live visual check: hold a Point Light stationary on the ground and move
+CAMERA ±5 blocks and rotate around it; the illuminated **world spot**
+must remain on the same blocks. Repeat with 20/60 FPS film output, a
+stationary camera with an animated light, and CAMERA close/reopen. Confirm
+no temporary player movement survives the render frame, and also verify
+playback with BetterLights absent. Effects on BetterLights shadows and
+OptiFine shaders still require live client validation.
+
 ### BetterLights 1.0.3 integration — preview-only actor light lifecycle
 
 BetterLights 1.0.3.PREVIEW is an **optional** Forge 1.12.2 mod. The installed

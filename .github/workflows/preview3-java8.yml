@@ -13,6 +13,8 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsNativeActorPass.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java'
       - 'src/main/java/com/example/examplemod/CameraBetterLightsBridge.java'
+      - 'src/main/java/com/example/examplemod/CameraBetterLightsCameraOrigin.java'
+      - 'src/test/java/com/example/examplemod/CameraBetterLightsCameraOriginSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraBetterLightsBridgeSmokeTest.java'
       - 'src/test/betterlights-bridge-stubs/**'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
@@ -50,6 +52,8 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsNativeActorPass.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java'
       - 'src/main/java/com/example/examplemod/CameraBetterLightsBridge.java'
+      - 'src/main/java/com/example/examplemod/CameraBetterLightsCameraOrigin.java'
+      - 'src/test/java/com/example/examplemod/CameraBetterLightsCameraOriginSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraBetterLightsBridgeSmokeTest.java'
       - 'src/test/betterlights-bridge-stubs/**'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
@@ -165,10 +169,16 @@ jobs:
             src/test/betterlights-bridge-stubs/mchorse/metamorph/api/morphs/AbstractMorph.java \
             src/test/betterlights-bridge-stubs/mchorse/blockbuster/common/entity/EntityActor.java \
             src/test/betterlights-bridge-stubs/mchorse/blockbuster_pack/morphs/BetterLightsMorph.java \
+            src/test/betterlights-bridge-stubs/net/minecraft/entity/Entity.java \
+            src/test/betterlights-bridge-stubs/net/minecraft/client/Minecraft.java \
             src/main/java/com/example/examplemod/CameraBetterLightsBridge.java \
-            src/test/java/com/example/examplemod/CameraBetterLightsBridgeSmokeTest.java
+            src/main/java/com/example/examplemod/CameraBetterLightsCameraOrigin.java \
+            src/test/java/com/example/examplemod/CameraBetterLightsBridgeSmokeTest.java \
+            src/test/java/com/example/examplemod/CameraBetterLightsCameraOriginSmokeTest.java
           java -ea -cp build/preview3/betterlights \
             com.example.examplemod.CameraBetterLightsBridgeSmokeTest
+          java -ea -cp build/preview3/betterlights \
+            com.example.examplemod.CameraBetterLightsCameraOriginSmokeTest
 
       - name: CAMERA deterministic procedural math clips
         run: |
