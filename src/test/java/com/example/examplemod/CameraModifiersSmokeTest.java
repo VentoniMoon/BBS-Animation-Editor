@@ -159,6 +159,13 @@ public final class CameraModifiersSmokeTest
                 "Remapper changes underlying camera time");
         near(remapped.sample(10.5D,ZERO,null).x,840D/41D,
                 "Remapper preserves sub-tick time without rounding");
+        remapped.keyAt(remapper,10,ZERO);
+        near(remapper.keys.get(0).x,800D/41D,
+                "Adding a Remapper key captures source TIME, not camera X");
+        remapper.keys.get(0).x=27D;
+        remapped.keyAt(remapper,10,ZERO);
+        near(remapper.keys.get(0).x,27D,
+                "Replacing an existing Remapper key retains its authored value");
 
         CameraClipDocument stacked=moving();
         CameraClipDocument.Clip move=modifier(
