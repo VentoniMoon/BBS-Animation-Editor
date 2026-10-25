@@ -1895,6 +1895,10 @@ public class AnimationEditorScreen extends GuiScreen
         // still active. Merely restoring displayWidth/FBO is insufficient:
         // it creates a second, scaled editor GUI with a different layout.
         boolean restoredNativeFilm=CameraNativeFrameProbe.beforeGui(this.mc);
+        // BetterLights' temporary player shader origin must end after the
+        // completed native world frame, before any UI/record editing. The
+        // RenderTick.END callback is a failsafe if this GUI pass is skipped.
+        CameraBetterLightsCameraOrigin.end();
         if(restoredNativeFilm && this.mc!=null &&
                 this.mc.entityRenderer!=null)
         {
