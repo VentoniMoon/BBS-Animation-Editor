@@ -19,7 +19,7 @@ public final class CameraClipParameters
         add(CameraClipDocument.Kind.PATH,"points","[]","interpPoint","hermite","interpAngle","hermite");
         add(CameraClipDocument.Kind.KEYFRAME,"additive","false","interpolation","linear","channels","XYZ Yaw Pitch Roll FOV Distance");
         add(CameraClipDocument.Kind.TRACKER,"selector","","offset","0,0,0","angle","0,0,0","fov","70","group","","look_at","false","relative","false","active","127");
-        add(CameraClipDocument.Kind.SPLINE,"selector","","group","","start","0","end","100","interp","linear","path_rotation","1","offset","0,0,0","angle","0,0,0","fov","70","active","127");
+        add(CameraClipDocument.Kind.SPLINE,"selector","","group","","start","0","end","100","interp","linear","path_rotation","1","geometry","hermite","offset","0,0,0","angle","0,0,0","fov","70","active","127");
         add(CameraClipDocument.Kind.TRANSLATE,"translate","1,0,0","local","false","active","7");
         add(CameraClipDocument.Kind.ANGLE,"angle","5,0,0","fov","0","active","120");
         add(CameraClipDocument.Kind.DRAG,"deterministic","true","factor","0.2","rate","20","active","127");
