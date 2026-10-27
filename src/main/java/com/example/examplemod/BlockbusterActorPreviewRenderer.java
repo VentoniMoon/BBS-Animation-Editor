@@ -783,6 +783,18 @@ public class BlockbusterActorPreviewRenderer
             return;
         }
 
+        // A BetterLights source is NOT an actor to draw in RenderWorldLast.
+        // Its one persistent native LightCaster was already synchronized
+        // at RenderTick.START, before OptiFine's world lighting pass.
+        // Rendering a BetterLightsMorph here would overwrite the caster
+        // position with an entity matrix and create a second temporary light.
+        if(actorData.getActor()!=null&&BetterLightsRig.isLight(
+                actorData.getActor().getMorph()))
+        {
+            if(this.actor!=null)reset();
+            return;
+        }
+
         EntityActor entityActor =
                 getOrCreateActor(mc);
 
