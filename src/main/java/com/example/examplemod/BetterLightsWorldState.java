@@ -21,10 +21,8 @@ public final class BetterLightsWorldState
         this.x=x;this.y=y;this.z=z;
         double dx=tx-x,dy=ty-y,dz=tz-z;
         double len=Math.sqrt(dx*dx+dy*dy+dz*dz);
-        if(!Double.isFinite(len)||len<1E-7D)
-        {
-            dx=0D;dy=0D;dz=4D;len=4D;
-        }
+        // Constructor only receives validated nondegenerate pairs.
+        // Never silently rotate a broken Target toward arbitrary world +Z.
         this.targetX=x+dx;this.targetY=y+dy;this.targetZ=z+dz;
         this.directionX=(float)(dx/len);
         this.directionY=(float)(dy/len);
@@ -37,6 +35,9 @@ public final class BetterLightsWorldState
         if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z)||
                 !Double.isFinite(tx)||!Double.isFinite(ty)||
                 !Double.isFinite(tz))return null;
+        double dx=tx-x,dy=ty-y,dz=tz-z;
+        double len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(!Double.isFinite(len)||len<1E-7D)return null;
         return new BetterLightsWorldState(x,y,z,tx,ty,tz);
     }
 
