@@ -29,15 +29,17 @@ public final class BetterLightsWorldStateSmokeTest
         eq(actor.targetZ,-954.4D);
         eq(actor.directionZ,1D);
 
-        // Origin moves target along with source; Target keys are deltas from
-        // the source rather than from the camera, skeleton model or chunk.
+        // Origin and Target keys are independent Record-rooted world points.
+        // Moving the source must not automatically move the aim target.
         BetterLightsWorldState moved=BetterLightsWorldState.actor(
                 657D,9.5D,-958.4D,new float[]{3F,2F,-1F},
                 new float[]{-6F,0F,8F});
         eq(moved.x,660D);eq(moved.y,11.5D);eq(moved.z,-959.4D);
-        eq(moved.targetX,654D);eq(moved.targetZ,-951.4D);
-        eq(moved.directionX,-0.6D);
-        eq(moved.directionZ,0.8D);
+        eq(moved.targetX,651D);eq(moved.targetZ,-950.4D);
+        double dx=651D-660D,dz=-950.4D-(-959.4D);
+        double norm=Math.sqrt(dx*dx+2D*2D+dz*dz);
+        eq(moved.directionX,dx/norm);
+        eq(moved.directionZ,dz/norm);
 
         // A coincident Target is invalid; it must not inject NaNs into the
         // native shader. A visible +Z default is stable and deterministic.
