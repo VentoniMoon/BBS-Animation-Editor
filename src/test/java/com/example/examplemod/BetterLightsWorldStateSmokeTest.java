@@ -41,12 +41,12 @@ public final class BetterLightsWorldStateSmokeTest
         eq(moved.directionX,dx/norm);
         eq(moved.directionZ,dz/norm);
 
-        // A coincident Target is invalid; it must not inject NaNs into the
-        // native shader. A visible +Z default is stable and deterministic.
+        // A coincident Target is invalid. Don't invent a direction and
+        // illuminate an arbitrary area when the user merges both points.
         BetterLightsWorldState collapsed=BetterLightsWorldState.points(
                 4D,5D,6D,4D,5D,6D);
-        eq(collapsed.directionZ,1D);
-        eq(collapsed.targetZ,10D);
+        if(collapsed!=null)
+            throw new AssertionError("coincident source/aim must be rejected");
 
         if(BetterLightsWorldState.points(Double.NaN,0,0,1,0,0)!=null)
             throw new AssertionError("invalid source should be ignored");
