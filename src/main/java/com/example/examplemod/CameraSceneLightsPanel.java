@@ -90,16 +90,16 @@ public final class CameraSceneLightsPanel
         leftRight=screen.width-185;
         top=25;bottom=panelBottom;
         Minecraft mc=Minecraft.getMinecraft();
-        Gui.drawRect(0,25,166,54,0xFF1D303B);
+        Gui.drawRect(0,25,163,54,0xFF1D303B);
         mc.fontRenderer.drawString("PRESETS",8,36,
                 opened?0xFF899DAA:0xFF60C8FA);
         mc.fontRenderer.drawString("LIGHTS",92,36,
                 opened?0xFF60C8FA:0xFF899DAA);
         if(!opened)return;
         CameraSceneLights.Light selected=sync(screen);
-        Gui.drawRect(0,54,166,panelBottom,0xFF19232C);
+        Gui.drawRect(0,54,163,panelBottom,0xFF19232C);
         Gui.drawRect(6,61,80,82,0xFF31495D);
-        Gui.drawRect(85,61,160,82,0xFF31495D);
+        Gui.drawRect(83,61,158,82,0xFF31495D);
         mc.fontRenderer.drawString("+ ADD",21,68,0xFFFFFFFF);
         mc.fontRenderer.drawString("REMOVE",96,68,0xFFFFFFFF);
         int index=0;
@@ -109,7 +109,7 @@ public final class CameraSceneLightsPanel
             int row=92+index++*21;
             if(row+20>=panelBottom)break;
             if(l==selected)
-                Gui.drawRect(4,row-2,162,row+18,0xFF34536A);
+                Gui.drawRect(4,row-2,159,row+18,0xFF34536A);
             mc.fontRenderer.drawString(l.name,12,row+3,
                     l.enabled?0xFFE0F2FE:0xFF82919C);
         }
@@ -215,7 +215,7 @@ public final class CameraSceneLightsPanel
     public boolean click(AnimationEditorScreen screen,int mx,int my,
             int button)
     {
-        if(my>=25&&my<54&&mx>=0&&mx<166&&button==0)
+        if(my>=25&&my<54&&mx>=0&&mx<163&&button==0)
         {
             if(mx>=83)
             {
@@ -226,7 +226,7 @@ public final class CameraSceneLightsPanel
             return true;
         }
         if(!opened)return false;
-        if(mx<166&&my>=54&&my<bottom)
+        if(mx<163&&my>=54&&my<bottom)
         {
             if(button!=0)return true;
             CameraSceneLights list=screen.getSceneState().getCameraLights();
@@ -321,7 +321,7 @@ public final class CameraSceneLightsPanel
         if(!opened)return false;
         if(mx>=leftRight&&my>=54&&my<bottom&&tab==2)
             return nativeSettings.scroll(mx,my,d);
-        return mx<166&&my>=54&&my<bottom;
+        return mx<163&&my>=54&&my<bottom;
     }
 
     private static final class ScreenPoint
