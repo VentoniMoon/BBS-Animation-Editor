@@ -72,6 +72,14 @@ public final class BetterLightsActorInspector
     private Entry editing;
     private int inputY;
     private int previousFrame=-1;
+    /**
+     * CAMERA's narrow inspector shares the CameraClipInspector palette.
+     * This layout is independent of the larger POSE actor layout.
+     */
+    private boolean cameraLayout;
+    private static final int CAMERA_ROW_HEIGHT=32;
+    private static final int CAMERA_VALUES_OFFSET=25;
+
     /** Light-actor POSE displays both real light properties and keyable rig. */
     private boolean rigTab;
     public boolean rigTab(){return rigTab;}
@@ -161,6 +169,7 @@ public final class BetterLightsActorInspector
             BlockbusterSceneActorData current,int frame)
     {
         if(mc==null)return;
+        cameraLayout=false;
         load(current);
         x=left;
         this.top=top;
@@ -233,6 +242,80 @@ public final class BetterLightsActorInspector
             font.drawString(paging,left+126,top+73,ACCENT);
         }
         previousFrame=frame;
+    }
+
+    /**
+     * Draw native BetterLights values within CAMERA's standard properties
+     * panel: no nested POSE header/card, no Record position, and no extra
+     * backdrop beyond the CameraClipInspector-like section / rows.
+     *
+     * The same ValueSerializer entries and save path are reused unchanged.
+     */
+    public void drawCamera(Minecraft mc,int left,int top,int bottom,
+            BlockbusterSceneActorData current)
+    {
+        if(mc==null)return;
+        load(current);
+        cameraLayout=true;
+        x=left;
+        this.top=top;
+        this.bottom=bottom;
+        int accent=EditorThemeManager.get().getAccent();
+        FontRenderer font=mc.fontRenderer;
+        Gui.drawRect(left+7,top+2,left+178,top+18,0xFF2B2D30);
+        Gui.drawRect(left+7,top+2,left+10,top+18,accent);
+        font.drawString("BETTERLIGHTS",left+15,top+6,0xFFE2E5E6);
+        if(error!=null)
+        {
+            font.drawString(font.trimStringToWidth(error,165),
+                    left+10,top+26,0xFFFF9797);
+            return;
+        }
+        if(morph==null)
+        {
+            font.drawString("BetterLights unavailable",
+                    left+10,top+26,0xFFFF9797);
+            return;
+        }
+        int start=top+CAMERA_VALUES_OFFSET;
+        int visible=Math.max(0,(bottom-start-7)/CAMERA_ROW_HEIGHT);
+        scroll=Math.max(0,Math.min(scroll,
+                Math.max(0,entries.size()-visible)));
+        for(int slot=0;slot<visible&&slot+scroll<entries.size();slot++)
+        {
+            int cy=start+slot*CAMERA_ROW_HEIGHT;
+            if(cy+CAMERA_ROW_HEIGHT>bottom-4)break;
+            Entry entry=entries.get(scroll+slot);
+            font.drawString(font.trimStringToWidth(
+                    entry.title,161),left+11,cy+1,0xFFADBBC1);
+            Gui.drawRect(left+10,cy+12,left+175,cy+29,0xFF10151A);
+            Gui.drawRect(left+10,cy+28,left+175,cy+29,0xFF384148);
+            if(entry==editing&&input!=null)
+                input.drawTextBox();
+            else
+            {
+                Object property=entry.value.getValue();
+                if(property instanceof Boolean)
+                {
+                    boolean enabled=(Boolean)property;
+                    font.drawString(enabled?"On":"Off",left+15,
+                            cy+16,0xFFE6F0F3);
+                    Gui.drawRect(left+155,cy+15,left+168,cy+26,
+                            enabled?accent:0xFF58626A);
+                }
+                else
+                    font.drawString(font.trimStringToWidth(
+                            text(entry.value),145),left+15,cy+16,
+                            0xFFE6F0F3);
+            }
+        }
+        if(entries.size()>visible)
+        {
+            String paging=(scroll+1)+"-"+
+                    Math.min(entries.size(),scroll+visible)+"/"+entries.size();
+            font.drawString(paging,left+174-font.getStringWidth(paging),
+                    top+6,EditorThemeManager.get().getAccentBright());
+        }
     }
 
     private static String text(GenericBaseValue<?> value)
@@ -320,13 +403,16 @@ public final class BetterLightsActorInspector
             BlockbusterSceneActorData lightActor,int mx,int my,int button)
     {
         if(editing!=null)commit(screen);
+        int start=cameraLayout?top+CAMERA_VALUES_OFFSET:top+90;
+        int rowHeight=cameraLayout?CAMERA_ROW_HEIGHT:ROW_HEIGHT;
         if(!isLightActor(lightActor)||
-                mx<x+8||mx>=x+176||my<top+88||my>=bottom)
+                mx<x+8||mx>=x+176||my<start||my>=bottom)
             return false;
         if(button!=0)return true;
-        int idx=scroll+(my-(top+90))/ROW_HEIGHT;
-        int cy=top+90+(idx-scroll)*ROW_HEIGHT;
-        if(idx<0||idx>=entries.size()||my<cy+12||my>=cy+32)
+        int idx=scroll+(my-start)/rowHeight;
+        int cy=start+(idx-scroll)*rowHeight;
+        if(idx<0||idx>=entries.size()||my<cy+12||
+                my>=cy+(cameraLayout?29:32))
             return true;
         editing=entries.get(idx);
         if(editing.value.getValue() instanceof Boolean)
@@ -339,7 +425,8 @@ public final class BetterLightsActorInspector
             return true;
         }
         input=new GuiTextField(17431,Minecraft.getMinecraft().fontRenderer,
-                x+17,cy+13,149,17);
+                cameraLayout?x+15:x+17,cy+13,
+                cameraLayout?150:149,cameraLayout?15:17);
         input.setMaxStringLength(80);
         input.setText(text(editing.value));
         input.setFocused(true);
@@ -377,7 +464,9 @@ public final class BetterLightsActorInspector
         // Don't detach a focused field from its value by scrolling while
         // the user is still editing the text.
         if(editing!=null)return true;
-        int visible=Math.max(1,Math.max(0,bottom-(top+90)-8)/ROW_HEIGHT);
+        int start=cameraLayout?top+CAMERA_VALUES_OFFSET:top+90;
+        int step=cameraLayout?CAMERA_ROW_HEIGHT:ROW_HEIGHT;
+        int visible=Math.max(1,Math.max(0,bottom-start-8)/step);
         scroll=Math.max(0,Math.min(Math.max(0,entries.size()-visible),
                 scroll+(wheel>0?-1:1)));
         return true;
