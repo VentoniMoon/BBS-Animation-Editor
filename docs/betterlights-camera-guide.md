@@ -96,6 +96,30 @@ TARGET, and LIGHT properties. ORIGIN and TARGET are independent *absolute*
 world coordinates, editable through axis handles or numeric fields.
 No source creates a Record actor or a CAMERA timeline clip.
 
+**Workflow:** click **+ ADD** to create a source six world blocks in front
+of the actual film camera; it aims four blocks further along the camera view.
+Select an item in the LIGHTS list (scroll the list if needed) and edit:
+
+- **ORIGIN**: world position of the light. Move its three X/Y/Z arrows
+  directly inside the film viewport or type precise XYZ in the right panel.
+- **TARGET**: an *independent* world point for the beam. Switch with the
+  TARGET tab or click the cyan **T** marker in the viewport. The source's
+  **O** marker switches back to Origin.
+- **LIGHT**: all native BetterLights settings, preserved as NBT, including
+  nested shadows, flare and volumetric effects. The O/T markers and beam
+  guide remain available to inspect positions.
+- **REMOVE** / **TOGGLE LIGHT**: immediately disable or dispose the
+  matching native LightCaster without creating any additional actors.
+
+The new CAMERA move gizmo uses the same world-block coordinate contract
+as POSE. Its X/Y/Z shafts/arrows are projected from the *actual cinematic
+camera pose*, and dragging resolves the closest point on a world axis using
+the camera ray. It is a screen-drawn editor overlay rather than the
+actor's native GL limb gizmo; neither overlays nor source markers enter
+the output video. Move operations persist on mouse release; numeric edits
+are committed when switching panels. Coincident Origin/Target points
+are rejected because they have no valid beam direction.
+
 Static lights remain saved in scene editor.dat under
 `CameraSceneLights` with stable IDs, enabled state, NBT settings and
 world points. The rendering engine now consumes these saved values

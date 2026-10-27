@@ -25,23 +25,28 @@ public final class CameraSceneLightsPanel
     private GuiTextField field;
     private int fieldAxis=-1;
     private int leftRight,top,bottom;
-    private int dragAxis=-1;
+    // CAMERA and POSE use the same absolute world BLOCK coordinate contract.
+    // A drag holds the camera/anchor frozen to avoid chasing a moving gizmo.
+    private CameraLightWorldGizmo.Drag drag;
+    private CameraSceneLights.Light draggedLight;
     private int dragComponent=-1;
-    private int startMouseX,startMouseY;
-    private double oldCoord,dx,dy;
+    private double dragStart;
     private boolean dirty;
+    private int listScroll;
+    private String warning;
 
     public boolean opened(){return opened;}
     public void reset()
     {
         opened=false;chosen=null;nativeActor=null;
-        field=null;fieldAxis=-1;dragAxis=-1;dirty=false;
-        tab=0;
+        field=null;fieldAxis=-1;drag=null;draggedLight=null;
+        dirty=false;listScroll=0;tab=0;warning=null;
     }
     public void close(AnimationEditorScreen editor)
     {
+        commit(editor);
         persistNative(editor);
-        opened=false;field=null;dragAxis=-1;
+        opened=false;field=null;drag=null;draggedLight=null;
     }
     private void choose(AnimationEditorScreen screen,
             CameraSceneLights.Light next)
@@ -49,7 +54,8 @@ public final class CameraSceneLightsPanel
         persistNative(screen);
         chosen=next;
         nativeActor=null;
-        field=null;
+        field=null;fieldAxis=-1;
+        drag=null;draggedLight=null;warning=null;
         if(next!=null)
         {
             BlockbusterSceneActor actor=new BlockbusterSceneActor();
@@ -85,34 +91,55 @@ public final class CameraSceneLightsPanel
                 screen.getCameraWorkspace().saveScene();
         }
     }
+    // The CAMERA column is narrower than Character's actor sidebar.
+    private static final int LEFT=CameraWorkspace.CAMERA_LEFT_WIDTH;
+    private int visibleLights()
+    {
+        // Leave room for the scroll-count footer at the bottom.
+        return Math.max(0,(bottom-92-19)/21);
+    }
+    private void clampList(int count)
+    {
+        listScroll=Math.max(0,Math.min(listScroll,
+                Math.max(0,count-visibleLights())));
+    }
     public void drawLeft(AnimationEditorScreen screen,int panelBottom)
     {
         leftRight=screen.width-185;
         top=25;bottom=panelBottom;
         Minecraft mc=Minecraft.getMinecraft();
-        Gui.drawRect(0,25,163,54,0xFF1D303B);
-        mc.fontRenderer.drawString("PRESETS",8,36,
+        Gui.drawRect(0,25,LEFT,54,0xFF1D303B);
+        mc.fontRenderer.drawString("PRESETS",7,36,
                 opened?0xFF899DAA:0xFF60C8FA);
-        mc.fontRenderer.drawString("LIGHTS",92,36,
+        mc.fontRenderer.drawString("LIGHTS",LEFT/2+7,36,
                 opened?0xFF60C8FA:0xFF899DAA);
         if(!opened)return;
         CameraSceneLights.Light selected=sync(screen);
-        Gui.drawRect(0,54,163,panelBottom,0xFF19232C);
-        Gui.drawRect(6,61,80,82,0xFF31495D);
-        Gui.drawRect(83,61,158,82,0xFF31495D);
-        mc.fontRenderer.drawString("+ ADD",21,68,0xFFFFFFFF);
-        mc.fontRenderer.drawString("REMOVE",96,68,0xFFFFFFFF);
-        int index=0;
-        for(CameraSceneLights.Light l:screen.getSceneState()
-                .getCameraLights().all())
+        Gui.drawRect(0,54,LEFT,panelBottom,0xFF19232C);
+        Gui.drawRect(4,61,LEFT/2-2,82,0xFF31495D);
+        Gui.drawRect(LEFT/2+2,61,LEFT-4,82,0xFF31495D);
+        mc.fontRenderer.drawString("+ ADD",11,68,0xFFFFFFFF);
+        mc.fontRenderer.drawString("REMOVE",LEFT/2+5,68,0xFFFFFFFF);
+        java.util.List<CameraSceneLights.Light> lights=
+                screen.getSceneState().getCameraLights().all();
+        clampList(lights.size());
+        for(int i=listScroll;i<lights.size();i++)
         {
-            int row=92+index++*21;
+            int row=92+(i-listScroll)*21;
             if(row+20>=panelBottom)break;
-            if(l==selected)
-                Gui.drawRect(4,row-2,159,row+18,0xFF34536A);
-            mc.fontRenderer.drawString(l.name,12,row+3,
-                    l.enabled?0xFFE0F2FE:0xFF82919C);
+            CameraSceneLights.Light light=lights.get(i);
+            if(light==selected)
+                Gui.drawRect(4,row-2,LEFT-4,row+18,0xFF34536A);
+            String label=mc.fontRenderer.trimStringToWidth(
+                    (light.enabled?"":"[ ] ")+light.name,LEFT-16);
+            mc.fontRenderer.drawString(label,9,row+3,
+                    light.enabled?0xFFE0F2FE:0xFF82919C);
         }
+        if(lights.size()>visibleLights())
+            mc.fontRenderer.drawString(
+                    (listScroll+1)+"-"+Math.min(lights.size(),
+                        listScroll+visibleLights())+"/"+lights.size(),
+                    7,bottom-12,0xFF7A93A3);
     }
     public void drawRight(AnimationEditorScreen screen,int panelBottom)
     {
@@ -145,7 +172,7 @@ public final class CameraSceneLightsPanel
         }
         mc.fontRenderer.drawString("WORLD "+captions[tab],
                 x+12,68,0xFF70CFFF);
-        mc.fontRenderer.drawString("Move: axis gizmo or XYZ values",
+        mc.fontRenderer.drawString("Drag arrows; click O/T to switch",
                 x+10,89,0xFFB7C2C9);
         String[] axis={"X","Y","Z"};
         for(int i=0;i<3;i++)
@@ -170,6 +197,10 @@ public final class CameraSceneLightsPanel
         mc.fontRenderer.drawString("TOGGLE LIGHT",x+38,311,0xFFFFFFFF);
         mc.fontRenderer.drawString(
                 "Ctrl+S saves; no keys created",x+10,346,0xFFB0BDC6);
+        if(warning!=null)
+            mc.fontRenderer.drawString(
+                    mc.fontRenderer.trimStringToWidth(warning,167),
+                    x+10,366,0xFFFF9999);
     }
 
     private static double component(CameraSceneLights.Light l,int part,int axis)
@@ -204,8 +235,20 @@ public final class CameraSceneLightsPanel
             CameraSceneLights.Light l=sync(screen);
             if(l!=null)
             {
+                double previous=component(l,tab,fieldAxis);
                 set(l,tab,fieldAxis,value);
-                screen.getCameraWorkspace().saveScene();
+                if(BetterLightsWorldState.points(
+                        l.x,l.y,l.z,l.targetX,l.targetY,l.targetZ)==null)
+                {
+                    set(l,tab,fieldAxis,previous);
+                    warning="Origin and Target cannot coincide";
+                }
+                else
+                {
+                    warning=null;
+                    if(Math.abs(previous-value)>1E-7D)
+                        screen.getCameraWorkspace().saveScene();
+                }
             }
         }
         catch(NumberFormatException ignored){}
@@ -215,9 +258,10 @@ public final class CameraSceneLightsPanel
     public boolean click(AnimationEditorScreen screen,int mx,int my,
             int button)
     {
-        if(my>=25&&my<54&&mx>=0&&mx<163&&button==0)
+        if(my>=25&&my<54&&mx>=0&&mx<LEFT&&button==0)
         {
-            if(mx>=83)
+            commit(screen);
+            if(mx>=LEFT/2)
             {
                 opened=true;
                 sync(screen);
@@ -226,22 +270,35 @@ public final class CameraSceneLightsPanel
             return true;
         }
         if(!opened)return false;
-        if(mx<163&&my>=54&&my<bottom)
+        if(mx<LEFT&&my>=54&&my<bottom)
         {
             if(button!=0)return true;
+            commit(screen);
             CameraSceneLights list=screen.getSceneState().getCameraLights();
             if(my>=61&&my<84)
             {
-                if(mx<83)
+                if(mx<LEFT/2)
                 {
                     PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
-                    double yaw=Math.toRadians(pose.yaw);
-                    double pitch=Math.toRadians(pose.pitch);
-                    CameraSceneLights.Light l=list.add("Light "+(list.all().size()+1),
-                            pose.x-Math.sin(yaw)*Math.cos(pitch)*4D,
-                            pose.y-Math.sin(pitch)*4D,
-                            pose.z+Math.cos(yaw)*Math.cos(pitch)*4D);
-                    if(l!=null)choose(screen,l);
+                    // A source must spawn IN FRONT of the real film camera,
+                    // not on the old +Z side (behind a default -Z view).
+                    double[] forward=PreviewCameraProjection.ray(
+                            pose,0.5D,0.5D,0,0,1,1);
+                    CameraSceneLights.Light light=list.add(
+                            "Light "+(list.all().size()+1),
+                            pose.x+forward[0]*6D,
+                            pose.y+forward[1]*6D,
+                            pose.z+forward[2]*6D);
+                    if(light!=null)
+                    {
+                        // Keep the newly selected source in the visible list.
+                        listScroll=Math.max(0,list.all().size()-visibleLights());
+                        light.targetX=light.x+forward[0]*4D;
+                        light.targetY=light.y+forward[1]*4D;
+                        light.targetZ=light.z+forward[2]*4D;
+                        choose(screen,light);
+                        tab=0;
+                    }
                 }
                 else
                 {
@@ -252,7 +309,7 @@ public final class CameraSceneLightsPanel
                 screen.getCameraWorkspace().saveScene();
                 return true;
             }
-            int index=(my-92)/21;
+            int index=listScroll+(my-92)/21;
             if(my>=92&&index>=0&&index<list.all().size())
             {
                 list.select(list.all().get(index).id);
@@ -321,119 +378,186 @@ public final class CameraSceneLightsPanel
         if(!opened)return false;
         if(mx>=leftRight&&my>=54&&my<bottom&&tab==2)
             return nativeSettings.scroll(mx,my,d);
-        return mx<163&&my>=54&&my<bottom;
+        if(mx>=0&&mx<LEFT&&my>=54&&my<bottom)
+        {
+            int count=screen.getSceneState().getCameraLights().all().size();
+            listScroll+=d>0?-1:1;
+            clampList(count);
+            return true;
+        }
+        return false;
     }
 
-    private static final class ScreenPoint
+    /** The source and aiming point remain two independent world positions. */
+    private static boolean inside(double x,double y,int left,int top,int w,int h)
     {
-        final double x,y;
-        ScreenPoint(double x,double y){this.x=x;this.y=y;}
-    }
-    /**
-     * Project world XYZ through the exact native preview camera convention.
-     * The old independent +Z-forward projection was inverted relative to
-     * PreviewWorldRenderer (-Z view space), causing screen-locked handles.
-     */
-    private static ScreenPoint project(PreviewCameraPose camera,
-            double x,double y,double z,int left,int top,int w,int h)
-    {
-        float[] p=PreviewCameraProjection.project(x,y,z,camera,
-                left,top,w,h);
-        return p==null?null:new ScreenPoint(p[0],p[1]);
+        return x>=left+7&&x<left+w-7&&y>=top+7&&y<top+h-7;
     }
 
-    /** Size a world-space axis so it stays usable across zoom distances. */
-    private static double axisLength(PreviewCameraPose camera,
-            double x,double y,double z)
+    private static void marker(PreviewCameraPose camera,
+            double wx,double wy,double wz,
+            String label,int color,boolean selected,
+            int x,int y,int w,int h)
     {
-        double a=x-camera.x,b=y-camera.y,c=z-camera.z;
-        return Math.max(0.4D,Math.min(12D,
-                Math.sqrt(a*a+b*b+c*c)*0.075D));
+        float[] p=PreviewCameraProjection.project(wx,wy,wz,camera,
+                x,y,w,h);
+        if(p==null||!inside(p[0],p[1],x,y,w,h))return;
+        int px=(int)p[0],py=(int)p[1];
+        Gui.drawRect(px-5,py-5,px+6,py+6,selected?0xFFFFFFFF:color);
+        Gui.drawRect(px-3,py-3,px+4,py+4,selected?color:0xFF12202B);
+        Minecraft.getMinecraft().fontRenderer.drawString(
+                label,px+9,py-4,color);
     }
 
     public void drawGizmo(AnimationEditorScreen screen,int x,int y,int w,int h)
     {
-        if(!opened||sync(screen)==null)return;
-        CameraSceneLights.Light l=chosen;
-        PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
-        // Preview-only outline; the native film framebuffer is already
-        // composited before this GUI overlay is drawn.
+        if(!opened||sync(screen)==null||w<1||h<1)return;
+        CameraSceneLights.Light light=chosen;
+        PreviewCameraPose camera=screen.getCameraWorkspaceNativePose();
+        if(camera==null)return;
         BetterLightsWorldState world=BetterLightsWorldState.points(
-                l.x,l.y,l.z,l.targetX,l.targetY,l.targetZ);
+                light.x,light.y,light.z,
+                light.targetX,light.targetY,light.targetZ);
         if(world!=null)
-            BetterLightsWireOverlay.draw(pose,l.morph,
+        {
+            BetterLightsWireOverlay.draw(camera,light.morph,
                     world.x,world.y,world.z,
                     world.targetX,world.targetY,world.targetZ,
                     x,y,w,h);
-        if(tab==2)return;
-        double ox=component(l,tab,0),oy=component(l,tab,1),
-                oz=component(l,tab,2);
-        ScreenPoint p=project(pose,ox,oy,oz,x,y,w,h);
-        if(p==null)return;
-        double length=axisLength(pose,ox,oy,oz);
-        Gui.drawRect((int)p.x-4,(int)p.y-4,
-                (int)p.x+5,(int)p.y+5,0xFFFFFFFF);
-        for(int i=0;i<3;i++)
-        {
-            ScreenPoint tip=project(pose,
-                    ox+(i==0?length:0D),
-                    oy+(i==1?length:0D),
-                    oz+(i==2?length:0D),x,y,w,h);
-            if(tip==null)continue;
-            int color=i==0?0xFFFF6060:i==1?0xFF63ED85:0xFF679DFF;
-            BetterLightsWireOverlay.line(p.x,p.y,tip.x,tip.y,
-                    color,x,y,w,h);
-            int ex=(int)tip.x,ey=(int)tip.y;
-            if(ex<x+7||ex>=x+w-7||ey<y+7||ey>=y+h-7)continue;
-            Gui.drawRect(ex-6,ey-6,ex+7,ey+7,color);
-            Minecraft.getMinecraft().fontRenderer.drawString(
-                    i==0?"X":i==1?"Y":"Z",ex-2,ey-4,0xFF0B1220);
         }
+        float[] source=PreviewCameraProjection.project(
+                light.x,light.y,light.z,camera,x,y,w,h);
+        float[] target=PreviewCameraProjection.project(
+                light.targetX,light.targetY,light.targetZ,camera,x,y,w,h);
+        if(source!=null&&target!=null)
+            BetterLightsWireOverlay.line(source[0],source[1],
+                    target[0],target[1],0x9983DBF3,x,y,w,h);
+
+        // The two anchors stay visible even when the LIGHT tab is active.
+        // Select either O/T marker directly in the preview to edit it.
+        marker(camera,light.x,light.y,light.z,"O",
+                0xFFFFD16F,tab==0,x,y,w,h);
+        marker(camera,light.targetX,light.targetY,light.targetZ,"T",
+                0xFF70D9FF,tab==1,x,y,w,h);
+        if(tab==2)return;
+
+        double wx=component(light,tab,0),wy=component(light,tab,1),
+                wz=component(light,tab,2);
+        CameraLightWorldGizmo.Handle handle=CameraLightWorldGizmo.project(
+                camera,wx,wy,wz,x,y,w,h);
+        if(handle==null)return;
+        int[] colors={0xFFFF6565,0xFF69E994,0xFF66A7FF};
+        for(int axis=0;axis<3;axis++)
+        {
+            double[] p=handle.tips[axis];
+            if(p==null)continue;
+            int color=colors[axis];
+            BetterLightsWireOverlay.line(handle.x,handle.y,
+                    p[0],p[1],color,x,y,w,h);
+            double vx=p[0]-handle.x,vy=p[1]-handle.y;
+            double distance=Math.sqrt(vx*vx+vy*vy);
+            if(distance<8D)continue;
+            double ux=vx/distance,uy=vy/distance;
+            // POSE-style directional arrow rather than screen-space boxes.
+            BetterLightsWireOverlay.line(p[0],p[1],
+                    p[0]-ux*11D-uy*5D,p[1]-uy*11D+ux*5D,
+                    color,x,y,w,h);
+            BetterLightsWireOverlay.line(p[0],p[1],
+                    p[0]-ux*11D+uy*5D,p[1]-uy*11D-ux*5D,
+                    color,x,y,w,h);
+            if(inside(p[0],p[1],x,y,w,h))
+                Minecraft.getMinecraft().fontRenderer.drawString(
+                        axis==0?"X":axis==1?"Y":"Z",
+                        (int)p[0]+5,(int)p[1]-8,color);
+        }
+    }
+
+    private static boolean near(PreviewCameraPose camera,
+            double wx,double wy,double wz,int mx,int my,
+            int x,int y,int w,int h)
+    {
+        float[] p=PreviewCameraProjection.project(wx,wy,wz,camera,
+                x,y,w,h);
+        if(p==null||!inside(p[0],p[1],x,y,w,h))return false;
+        double dx=p[0]-mx,dy=p[1]-my;
+        return dx*dx+dy*dy<=121D;
     }
 
     public boolean beginGizmo(AnimationEditorScreen screen,
             int mx,int my,int button,int x,int y,int w,int h)
     {
-        if(button!=0||!opened||tab==2||sync(screen)==null||
+        if(button!=0||!opened||sync(screen)==null||
                 mx<x||mx>=x+w||my<y||my>=y+h)return false;
-        PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
-        double ox=component(chosen,tab,0),oy=component(chosen,tab,1),
-                oz=component(chosen,tab,2);
-        double length=axisLength(pose,ox,oy,oz);
-        ScreenPoint start=project(pose,ox,oy,oz,x,y,w,h);
-        if(start==null)return false;
-        for(int i=0;i<3;i++)
+        PreviewCameraPose camera=screen.getCameraWorkspaceNativePose();
+        if(camera==null)return false;
+        CameraSceneLights.Light light=chosen;
+
+        // Clicking the other anchor swaps editor control, like choosing a
+        // different light rig bone in POSE, but does NOT create a keyframe.
+        int opposite=tab==0?1:0;
+        if(near(camera,component(light,opposite,0),
+                component(light,opposite,1),component(light,opposite,2),
+                mx,my,x,y,w,h))
         {
-            ScreenPoint end=project(pose,
-                    ox+(i==0?length:0D),
-                    oy+(i==1?length:0D),
-                    oz+(i==2?length:0D),x,y,w,h);
-            if(end==null||
-                    Math.abs(mx-end.x)>12||Math.abs(my-end.y)>12)continue;
-            dragAxis=i;dragComponent=tab;
-            startMouseX=mx;startMouseY=my;
-            oldCoord=component(chosen,tab,i);
-            dx=(end.x-start.x)/length;
-            dy=(end.y-start.y)/length;
-            dirty=false;return true;
+            commit(screen);
+            persistNative(screen);
+            tab=opposite;
+            drag=null;draggedLight=null;
+            return true;
         }
-        return false;
+        if(tab==2)
+        {
+            if(near(camera,light.x,light.y,light.z,mx,my,x,y,w,h))
+            {tab=0;return true;}
+            if(near(camera,light.targetX,light.targetY,light.targetZ,
+                    mx,my,x,y,w,h))
+            {tab=1;return true;}
+            return false;
+        }
+        double wx=component(light,tab,0),wy=component(light,tab,1),
+                wz=component(light,tab,2);
+        CameraLightWorldGizmo.Handle handle=CameraLightWorldGizmo.project(
+                camera,wx,wy,wz,x,y,w,h);
+        int axis=CameraLightWorldGizmo.hitAxis(handle,mx,my);
+        if(axis<0)
+            return near(camera,wx,wy,wz,mx,my,x,y,w,h);
+        commit(screen);
+        drag=new CameraLightWorldGizmo.Drag(axis,camera,
+                wx,wy,wz,x,y,w,h,mx,my);
+        draggedLight=light;
+        dragStart=component(light,tab,axis);
+        dragComponent=tab;
+        dirty=false;
+        return true;
     }
 
     public boolean drag(AnimationEditorScreen screen,int mx,int my)
     {
-        if(dragAxis<0||chosen==null)return false;
-        double length=dx*dx+dy*dy;
-        double steps=length<1E-4D?(startMouseY-my)*0.025D:
-                ((mx-startMouseX)*dx+(my-startMouseY)*dy)/length;
-        set(chosen,dragComponent,dragAxis,oldCoord+steps);
-        dirty=true;return true;
+        if(drag==null||draggedLight==null)return false;
+        if(chosen!=draggedLight){drag=null;return false;}
+        double next=dragStart+drag.delta(mx,my);
+        if(!Double.isFinite(next)||Math.abs(next)>29999999D)return true;
+        int axis=drag.axis;
+        double previous=component(draggedLight,dragComponent,axis);
+        set(draggedLight,dragComponent,axis,next);
+        if(BetterLightsWorldState.points(
+                draggedLight.x,draggedLight.y,draggedLight.z,
+                draggedLight.targetX,draggedLight.targetY,
+                draggedLight.targetZ)==null)
+        {
+            set(draggedLight,dragComponent,axis,previous);
+            return true;
+        }
+        dirty|=Math.abs(previous-next)>1E-7D;
+        return true;
     }
+
     public boolean release(AnimationEditorScreen screen)
     {
-        if(dragAxis<0)return false;
-        dragAxis=-1;
+        if(drag==null)return false;
+        drag=null;draggedLight=null;
         if(dirty)screen.getCameraWorkspace().saveScene();
         dirty=false;return true;
     }
+
 }
