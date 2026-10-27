@@ -30,6 +30,9 @@ public final class BetterLightsRig
     public static ActorAnimationData forActor(BlockbusterSceneActorData actor)
     {
         EditorSceneState state=active.get();
+        // CAMERA statics are separate scene objects, not keyed actors.
+        if(actor!=null && actor.getId()!=null &&
+                actor.getId().startsWith("camera-light-"))return null;
         if(state==null||actor==null||!isLight(
                 actor.getActor()==null?null:actor.getActor().getMorph()))
             return null;
@@ -80,9 +83,14 @@ public final class BetterLightsRig
         return vector(data,ORIGIN,tick,0F,0F,0F);
     }
 
+    public static float[] targetOffset(ActorAnimationData data,double tick)
+    {
+        return vector(data,TARGET,tick,0F,0F,4F);
+    }
+
     public static float[] direction(ActorAnimationData data,double tick)
     {
-        float[] v=vector(data,TARGET,tick,0F,0F,4F);
+        float[] v=targetOffset(data,tick);
         float length=(float)Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
         if(length<1E-6F)return new float[]{0F,0F,1F};
         return new float[]{v[0]/length,v[1]/length,v[2]/length};
@@ -225,31 +233,50 @@ public final class BetterLightsRig
     }
 
     /**
-     * BetterLightsMorph.render recomputes world space position and direction.
-     * Apply Target after that native render. The LightCaster belongs to the
-     * underlying Blockbuster morph, no fake texture/posteffect is used.
+     * Blockbuster's BetterLightsMorph.render() recomputes the world position
+     * from its OpenGL matrix, and applies its native local direction through
+     * the entity rotation. The two editor bones have a different contract:
+     * Origin is a WORLD displacement in blocks and Target is a WORLD vector.
+     *
+     * Synchronize the single already-registered caster after native render,
+     * overriding both values together (not only direction as before).
+     * Never allocate a second LightCaster or mutate a saved Record.
      */
-    public static void applyTarget(AbstractMorph morph,
-            ActorAnimationData data,double frame)
+    public static void syncNativeCaster(AbstractMorph morph,
+            ActorAnimationData data,double frame,
+            double worldX,double worldY,double worldZ)
     {
-        if(morph==null||data==null||data.getBone(TARGET)==null||
-                data.getBone(TARGET).getKeyframes().isEmpty()||
-                !morph.getClass().getName()
+        boolean keyedAim=data!=null&&data.getBone(TARGET)!=null&&
+                !data.getBone(TARGET).getKeyframes().isEmpty();
+        syncNativeCaster(morph,worldX,worldY,worldZ,
+                keyedAim?direction(data,frame):null);
+    }
+
+    public static void syncNativeCaster(AbstractMorph morph,
+            double worldX,double worldY,double worldZ,float[] direction)
+    {
+        if(morph==null||!morph.getClass().getName()
                 .endsWith(".BetterLightsMorph"))return;
         try
         {
-            Object light=morph.getClass().getMethod("getLightcaster")
+            Object caster=morph.getClass().getMethod("getLightcaster")
                     .invoke(morph);
-            if(light==null)return;
-            float[] dir=direction(data,frame);
-            Method setter=light.getClass().getMethod(
-                    "direction",float.class,float.class,float.class);
-            setter.invoke(light,dir[0],dir[1],dir[2]);
+            if(caster==null)return;
+            // Public LightCaster.pos(float,float,float), not the morph's
+            // matrix-derived cached position or render-side model offset.
+            caster.getClass().getMethod("pos",
+                    float.class,float.class,float.class).invoke(caster,
+                    (float)worldX,(float)worldY,(float)worldZ);
+            if(direction!=null&&direction.length>=3)
+                caster.getClass().getMethod("direction",
+                        float.class,float.class,float.class).invoke(caster,
+                        direction[0],direction[1],direction[2]);
         }
         catch(ReflectiveOperationException ignored)
         {
-            // Optional BetterLights ABI; editor remains usable without it.
+            // BetterLights is optional; don't interfere with other morphs.
         }
+        catch(LinkageError ignored){}
     }
 
     private BetterLightsRig(){}
