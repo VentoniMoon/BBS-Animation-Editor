@@ -368,116 +368,176 @@ public final class CameraSceneLightsPanel
         return false;
     }
 
-    private static final class ScreenPoint
+    /** The source and aiming point remain two independent world positions. */
+    private static boolean inside(double x,double y,int left,int top,int w,int h)
     {
-        final double x,y;
-        ScreenPoint(double x,double y){this.x=x;this.y=y;}
-    }
-    /**
-     * Project world XYZ through the exact native preview camera convention.
-     * The old independent +Z-forward projection was inverted relative to
-     * PreviewWorldRenderer (-Z view space), causing screen-locked handles.
-     */
-    private static ScreenPoint project(PreviewCameraPose camera,
-            double x,double y,double z,int left,int top,int w,int h)
-    {
-        float[] p=PreviewCameraProjection.project(x,y,z,camera,
-                left,top,w,h);
-        return p==null?null:new ScreenPoint(p[0],p[1]);
+        return x>=left+7&&x<left+w-7&&y>=top+7&&y<top+h-7;
     }
 
-    /** Size a world-space axis so it stays usable across zoom distances. */
-    private static double axisLength(PreviewCameraPose camera,
-            double x,double y,double z)
+    private static void marker(PreviewCameraPose camera,
+            double wx,double wy,double wz,
+            String label,int color,boolean selected,
+            int x,int y,int w,int h)
     {
-        double a=x-camera.x,b=y-camera.y,c=z-camera.z;
-        return Math.max(0.4D,Math.min(12D,
-                Math.sqrt(a*a+b*b+c*c)*0.075D));
+        float[] p=PreviewCameraProjection.project(wx,wy,wz,camera,
+                x,y,w,h);
+        if(p==null||!inside(p[0],p[1],x,y,w,h))return;
+        int px=(int)p[0],py=(int)p[1];
+        Gui.drawRect(px-5,py-5,px+6,py+6,selected?0xFFFFFFFF:color);
+        Gui.drawRect(px-3,py-3,px+4,py+4,selected?color:0xFF12202B);
+        Minecraft.getMinecraft().fontRenderer.drawString(
+                label,px+9,py-4,color);
     }
 
     public void drawGizmo(AnimationEditorScreen screen,int x,int y,int w,int h)
     {
-        if(!opened||sync(screen)==null)return;
-        CameraSceneLights.Light l=chosen;
-        PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
-        // Preview-only outline; the native film framebuffer is already
-        // composited before this GUI overlay is drawn.
+        if(!opened||sync(screen)==null||w<1||h<1)return;
+        CameraSceneLights.Light light=chosen;
+        PreviewCameraPose camera=screen.getCameraWorkspaceNativePose();
+        if(camera==null)return;
         BetterLightsWorldState world=BetterLightsWorldState.points(
-                l.x,l.y,l.z,l.targetX,l.targetY,l.targetZ);
+                light.x,light.y,light.z,
+                light.targetX,light.targetY,light.targetZ);
         if(world!=null)
-            BetterLightsWireOverlay.draw(pose,l.morph,
+        {
+            BetterLightsWireOverlay.draw(camera,light.morph,
                     world.x,world.y,world.z,
                     world.targetX,world.targetY,world.targetZ,
                     x,y,w,h);
-        if(tab==2)return;
-        double ox=component(l,tab,0),oy=component(l,tab,1),
-                oz=component(l,tab,2);
-        ScreenPoint p=project(pose,ox,oy,oz,x,y,w,h);
-        if(p==null)return;
-        double length=axisLength(pose,ox,oy,oz);
-        Gui.drawRect((int)p.x-4,(int)p.y-4,
-                (int)p.x+5,(int)p.y+5,0xFFFFFFFF);
-        for(int i=0;i<3;i++)
-        {
-            ScreenPoint tip=project(pose,
-                    ox+(i==0?length:0D),
-                    oy+(i==1?length:0D),
-                    oz+(i==2?length:0D),x,y,w,h);
-            if(tip==null)continue;
-            int color=i==0?0xFFFF6060:i==1?0xFF63ED85:0xFF679DFF;
-            BetterLightsWireOverlay.line(p.x,p.y,tip.x,tip.y,
-                    color,x,y,w,h);
-            int ex=(int)tip.x,ey=(int)tip.y;
-            if(ex<x+7||ex>=x+w-7||ey<y+7||ey>=y+h-7)continue;
-            Gui.drawRect(ex-6,ey-6,ex+7,ey+7,color);
-            Minecraft.getMinecraft().fontRenderer.drawString(
-                    i==0?"X":i==1?"Y":"Z",ex-2,ey-4,0xFF0B1220);
         }
+        float[] source=PreviewCameraProjection.project(
+                light.x,light.y,light.z,camera,x,y,w,h);
+        float[] target=PreviewCameraProjection.project(
+                light.targetX,light.targetY,light.targetZ,camera,x,y,w,h);
+        if(source!=null&&target!=null)
+            BetterLightsWireOverlay.line(source[0],source[1],
+                    target[0],target[1],0x9983DBF3,x,y,w,h);
+
+        // The two anchors stay visible even when the LIGHT tab is active.
+        // Select either O/T marker directly in the preview to edit it.
+        marker(camera,light.x,light.y,light.z,"O",
+                0xFFFFD16F,tab==0,x,y,w,h);
+        marker(camera,light.targetX,light.targetY,light.targetZ,"T",
+                0xFF70D9FF,tab==1,x,y,w,h);
+        if(tab==2)return;
+
+        double wx=component(light,tab,0),wy=component(light,tab,1),
+                wz=component(light,tab,2);
+        CameraLightWorldGizmo.Handle handle=CameraLightWorldGizmo.project(
+                camera,wx,wy,wz,x,y,w,h);
+        if(handle==null)return;
+        int[] colors={0xFFFF6565,0xFF69E994,0xFF66A7FF};
+        for(int axis=0;axis<3;axis++)
+        {
+            double[] p=handle.tips[axis];
+            if(p==null)continue;
+            int color=colors[axis];
+            BetterLightsWireOverlay.line(handle.x,handle.y,
+                    p[0],p[1],color,x,y,w,h);
+            double vx=p[0]-handle.x,vy=p[1]-handle.y;
+            double distance=Math.sqrt(vx*vx+vy*vy);
+            if(distance<8D)continue;
+            double ux=vx/distance,uy=vy/distance;
+            // POSE-style directional arrow rather than screen-space boxes.
+            BetterLightsWireOverlay.line(p[0],p[1],
+                    p[0]-ux*11D-uy*5D,p[1]-uy*11D+ux*5D,
+                    color,x,y,w,h);
+            BetterLightsWireOverlay.line(p[0],p[1],
+                    p[0]-ux*11D+uy*5D,p[1]-uy*11D-ux*5D,
+                    color,x,y,w,h);
+            if(inside(p[0],p[1],x,y,w,h))
+                Minecraft.getMinecraft().fontRenderer.drawString(
+                        axis==0?"X":axis==1?"Y":"Z",
+                        (int)p[0]+5,(int)p[1]-8,color);
+        }
+    }
+
+    private static boolean near(PreviewCameraPose camera,
+            double wx,double wy,double wz,int mx,int my,
+            int x,int y,int w,int h)
+    {
+        float[] p=PreviewCameraProjection.project(wx,wy,wz,camera,
+                x,y,w,h);
+        if(p==null||!inside(p[0],p[1],x,y,w,h))return false;
+        double dx=p[0]-mx,dy=p[1]-my;
+        return dx*dx+dy*dy<=121D;
     }
 
     public boolean beginGizmo(AnimationEditorScreen screen,
             int mx,int my,int button,int x,int y,int w,int h)
     {
-        if(button!=0||!opened||tab==2||sync(screen)==null||
+        if(button!=0||!opened||sync(screen)==null||
                 mx<x||mx>=x+w||my<y||my>=y+h)return false;
-        PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
-        double ox=component(chosen,tab,0),oy=component(chosen,tab,1),
-                oz=component(chosen,tab,2);
-        double length=axisLength(pose,ox,oy,oz);
-        ScreenPoint start=project(pose,ox,oy,oz,x,y,w,h);
-        if(start==null)return false;
-        for(int i=0;i<3;i++)
+        PreviewCameraPose camera=screen.getCameraWorkspaceNativePose();
+        if(camera==null)return false;
+        CameraSceneLights.Light light=chosen;
+
+        // Clicking the other anchor swaps editor control, like choosing a
+        // different light rig bone in POSE, but does NOT create a keyframe.
+        int opposite=tab==0?1:0;
+        if(near(camera,component(light,opposite,0),
+                component(light,opposite,1),component(light,opposite,2),
+                mx,my,x,y,w,h))
         {
-            ScreenPoint end=project(pose,
-                    ox+(i==0?length:0D),
-                    oy+(i==1?length:0D),
-                    oz+(i==2?length:0D),x,y,w,h);
-            if(end==null||
-                    Math.abs(mx-end.x)>12||Math.abs(my-end.y)>12)continue;
-            dragAxis=i;dragComponent=tab;
-            startMouseX=mx;startMouseY=my;
-            oldCoord=component(chosen,tab,i);
-            dx=(end.x-start.x)/length;
-            dy=(end.y-start.y)/length;
-            dirty=false;return true;
+            commit(screen);
+            persistNative(screen);
+            tab=opposite;
+            drag=null;draggedLight=null;
+            return true;
         }
-        return false;
+        if(tab==2)
+        {
+            if(near(camera,light.x,light.y,light.z,mx,my,x,y,w,h))
+            {tab=0;return true;}
+            if(near(camera,light.targetX,light.targetY,light.targetZ,
+                    mx,my,x,y,w,h))
+            {tab=1;return true;}
+            return false;
+        }
+        double wx=component(light,tab,0),wy=component(light,tab,1),
+                wz=component(light,tab,2);
+        CameraLightWorldGizmo.Handle handle=CameraLightWorldGizmo.project(
+                camera,wx,wy,wz,x,y,w,h);
+        int axis=CameraLightWorldGizmo.hitAxis(handle,mx,my);
+        if(axis<0)
+            return near(camera,wx,wy,wz,mx,my,x,y,w,h);
+        commit(screen);
+        drag=new CameraLightWorldGizmo.Drag(axis,camera,
+                wx,wy,wz,x,y,w,h,mx,my);
+        draggedLight=light;
+        dragStart=component(light,tab,axis);
+        dragComponent=tab;
+        dirty=false;
+        return true;
     }
 
     public boolean drag(AnimationEditorScreen screen,int mx,int my)
     {
-        if(dragAxis<0||chosen==null)return false;
-        double length=dx*dx+dy*dy;
-        double steps=length<1E-4D?(startMouseY-my)*0.025D:
-                ((mx-startMouseX)*dx+(my-startMouseY)*dy)/length;
-        set(chosen,dragComponent,dragAxis,oldCoord+steps);
-        dirty=true;return true;
+        if(drag==null||draggedLight==null)return false;
+        if(chosen!=draggedLight){drag=null;return false;}
+        double next=dragStart+drag.delta(mx,my);
+        if(!Double.isFinite(next)||Math.abs(next)>29999999D)return true;
+        int axis=drag.axis;
+        double previous=component(draggedLight,dragComponent,axis);
+        set(draggedLight,dragComponent,axis,next);
+        if(BetterLightsWorldState.points(
+                draggedLight.x,draggedLight.y,draggedLight.z,
+                draggedLight.targetX,draggedLight.targetY,
+                draggedLight.targetZ)==null)
+        {
+            set(draggedLight,dragComponent,axis,previous);
+            return true;
+        }
+        dirty|=Math.abs(previous-next)>1E-7D;
+        return true;
     }
+
     public boolean release(AnimationEditorScreen screen)
     {
-        if(dragAxis<0)return false;
-        dragAxis=-1;
+        if(drag==null)return false;
+        drag=null;draggedLight=null;
         if(dirty)screen.getCameraWorkspace().saveScene();
         dirty=false;return true;
     }
+
 }
