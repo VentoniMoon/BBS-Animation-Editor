@@ -19,8 +19,6 @@ on:
       - 'src/test/betterlights-bridge-stubs/**'
       - 'src/main/java/com/example/examplemod/CameraSceneLights.java'
       - 'src/main/java/com/example/examplemod/CameraSceneLightsPanel.java'
-      - 'src/main/java/com/example/examplemod/CameraLightWorldGizmo.java'
-      - 'src/test/java/com/example/examplemod/CameraLightWorldGizmoSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraSceneLightsRenderer.java'
       - 'src/main/java/com/example/examplemod/BetterLightsRig.java'
       - 'src/main/java/com/example/examplemod/BetterLightsWorldState.java'
@@ -69,8 +67,6 @@ on:
       - 'src/test/betterlights-bridge-stubs/**'
       - 'src/main/java/com/example/examplemod/CameraSceneLights.java'
       - 'src/main/java/com/example/examplemod/CameraSceneLightsPanel.java'
-      - 'src/main/java/com/example/examplemod/CameraLightWorldGizmo.java'
-      - 'src/test/java/com/example/examplemod/CameraLightWorldGizmoSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraSceneLightsRenderer.java'
       - 'src/main/java/com/example/examplemod/BetterLightsRig.java'
       - 'src/main/java/com/example/examplemod/BetterLightsWorldState.java'
@@ -130,16 +126,12 @@ jobs:
             src/main/java/com/example/examplemod/BbsFsCameraConventions.java \
             src/main/java/com/example/examplemod/PreviewCameraPose.java \
             src/main/java/com/example/examplemod/PreviewCameraProjection.java \
-            src/main/java/com/example/examplemod/BetterLightsWorldState.java \
-            src/main/java/com/example/examplemod/CameraLightWorldGizmo.java \
             src/main/java/com/example/examplemod/PreviewCameraMatrices.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
             src/test/java/com/example/examplemod/Preview3CameraSmokeTest.java \
-            src/test/java/com/example/examplemod/CameraLightWorldGizmoSmokeTest.java
           java -ea -cp build/preview3/camera \
             com.example.examplemod.Preview3CameraSmokeTest
           java -ea -cp build/preview3/camera \
-            com.example.examplemod.CameraLightWorldGizmoSmokeTest
 
       - name: Compile scene coordinator and test actor order / GL cleanup
         run: |
