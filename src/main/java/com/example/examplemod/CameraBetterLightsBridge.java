@@ -139,7 +139,7 @@ public final class CameraBetterLightsBridge
     }
 
     public static void retireMorph(AbstractMorph morph,
-            net.minecraft.world.World world)
+            Object world)
     {
         if(morph==null||world==null||
                 !LIGHT_MORPH.equals(morph.getClass().getName())||
