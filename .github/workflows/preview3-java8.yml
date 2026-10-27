@@ -130,6 +130,7 @@ jobs:
             src/main/java/com/example/examplemod/BbsFsCameraConventions.java \
             src/main/java/com/example/examplemod/PreviewCameraPose.java \
             src/main/java/com/example/examplemod/PreviewCameraProjection.java \
+            src/main/java/com/example/examplemod/BetterLightsWorldState.java \
             src/main/java/com/example/examplemod/CameraLightWorldGizmo.java \
             src/main/java/com/example/examplemod/PreviewCameraMatrices.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
