@@ -25,28 +25,81 @@ public final class CameraSceneLightsPanel
     private GuiTextField field;
     private int fieldAxis=-1;
     private int leftRight,top,bottom;
-    // CAMERA and POSE use the same absolute world BLOCK coordinate contract.
-    // A drag holds the camera/anchor frozen to avoid chasing a moving gizmo.
-    private CameraLightWorldGizmo.Drag drag;
+    /**
+     * The same 3D arrow-and-plane controller used by POSE. This control rig
+     * never joins scene data; no static keyframes or actor morphs are added.
+     */
+    private final EditorGizmoController moveGizmo=new EditorGizmoController();
+    private final EditorCamera moveCamera=new EditorCamera();
+    private final ActorAnimationData moveRig=
+            new ActorAnimationData("camera-static-light-gizmo");
+    private final AnimationBone moveBone=new AnimationBone(BetterLightsRig.ORIGIN);
+    private final AnimationKeyframe moveKey=new AnimationKeyframe(0);
     private CameraSceneLights.Light draggedLight;
     private int dragComponent=-1;
-    private double dragStart;
+    private double dragStartX,dragStartY,dragStartZ;
     private boolean dirty;
     private int listScroll;
     private String warning;
+
+    public CameraSceneLightsPanel()
+    {
+        moveRig.getBones().add(moveBone);
+        moveGizmo.setLightRigTarget(moveRig);
+        moveGizmo.setMode(EditorGizmoController.Mode.POSITION);
+    }
+
+    private BlockbusterRecordFrame gizmoFrame(CameraSceneLights.Light light)
+    {
+        if(light==null)return null;
+        BlockbusterRecordFrame frame=new BlockbusterRecordFrame();
+        int point=tab==1?1:0;
+        frame.setX(component(light,point,0));
+        frame.setY(component(light,point,1));
+        frame.setZ(component(light,point,2));
+        return frame;
+    }
+
+    private EditorCamera cameraForGizmo(AnimationEditorScreen screen)
+    {
+        PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
+        if(pose==null)return null;
+        moveCamera.apply(pose);
+        return moveCamera;
+    }
+
+    /** Draw 3D arrows and gray move planes into the actual Preview FBO. */
+    public void drawNativeGizmo(AnimationEditorScreen screen,Minecraft mc,
+            int x,int y,int w,int h)
+    {
+        if(!opened||tab==2||sync(screen)==null||
+                screen.getCameraVideoExport().isExporting())return;
+        EditorCamera camera=cameraForGizmo(screen);
+        if(camera==null)return;
+        moveGizmo.draw3D(mc,x,y,w,h,
+                moveBone,moveKey,gizmoFrame(chosen),camera,true);
+    }
+
+    private void resetMove()
+    {
+        moveGizmo.mouseReleased();
+        moveKey.getTransform().setPosition(0F,0F,0F);
+        draggedLight=null;
+        dirty=false;
+    }
 
     public boolean opened(){return opened;}
     public void reset()
     {
         opened=false;chosen=null;nativeActor=null;
-        field=null;fieldAxis=-1;drag=null;draggedLight=null;
-        dirty=false;listScroll=0;tab=0;warning=null;
+        field=null;fieldAxis=-1;resetMove();
+        listScroll=0;tab=0;warning=null;
     }
     public void close(AnimationEditorScreen editor)
     {
         commit(editor);
         persistNative(editor);
-        opened=false;field=null;drag=null;draggedLight=null;
+        opened=false;field=null;resetMove();
     }
     private void choose(AnimationEditorScreen screen,
             CameraSceneLights.Light next)
@@ -55,7 +108,7 @@ public final class CameraSceneLightsPanel
         chosen=next;
         nativeActor=null;
         field=null;fieldAxis=-1;
-        drag=null;draggedLight=null;warning=null;
+        resetMove();warning=null;
         if(next!=null)
         {
             BlockbusterSceneActor actor=new BlockbusterSceneActor();
