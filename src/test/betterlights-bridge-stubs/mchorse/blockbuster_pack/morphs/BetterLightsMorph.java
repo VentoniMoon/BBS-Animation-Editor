@@ -9,6 +9,8 @@ public class BetterLightsMorph extends AbstractMorph {
         public void setLifetime(int limit){lifetime=limit;}
     }
     private Dummy dummy=new Dummy();
+    private Object lightCaster=new Object();
+    public Object caster(){return lightCaster;}
     public int getKeepAliveUntil(){return dummy.lifetime;}
     @Override public void update(EntityActor actor){super.update(actor);}
 }
