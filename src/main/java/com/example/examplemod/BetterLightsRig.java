@@ -85,7 +85,15 @@ public final class BetterLightsRig
 
     public static float[] targetOffset(ActorAnimationData data,double tick)
     {
-        return vector(data,TARGET,tick,0F,0F,4F);
+        // Target's rest tip is four WORLD blocks ahead. AnimationBone's
+        // getTransformAt() returns only the keyed delta, not its local/rest
+        // pivot. The old sampler dropped this rest offset as soon as the
+        // first key was created, collapsing the Target gizmo into Origin.
+        AnimationBone bone=data==null?null:data.getBone(TARGET);
+        float[] v=vector(data,TARGET,tick,0F,0F,0F);
+        return new float[]{v[0]+(bone==null?0F:bone.getLocalX()),
+                v[1]+(bone==null?0F:bone.getLocalY()),
+                v[2]+(bone==null?4F:bone.getLocalZ())};
     }
 
     public static float[] direction(ActorAnimationData data,double tick)
