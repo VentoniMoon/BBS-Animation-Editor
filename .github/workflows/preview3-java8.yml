@@ -21,6 +21,9 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneLightsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneLightsRenderer.java'
       - 'src/main/java/com/example/examplemod/BetterLightsRig.java'
+      - 'src/main/java/com/example/examplemod/BetterLightsWorldState.java'
+      - 'src/main/java/com/example/examplemod/BetterLightsWorldEngine.java'
+      - 'src/test/java/com/example/examplemod/BetterLightsWorldStateSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraSceneLightsSmokeTest.java'
       - 'src/test/camera-light-stubs/**'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
@@ -66,6 +69,9 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneLightsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneLightsRenderer.java'
       - 'src/main/java/com/example/examplemod/BetterLightsRig.java'
+      - 'src/main/java/com/example/examplemod/BetterLightsWorldState.java'
+      - 'src/main/java/com/example/examplemod/BetterLightsWorldEngine.java'
+      - 'src/test/java/com/example/examplemod/BetterLightsWorldStateSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraSceneLightsSmokeTest.java'
       - 'src/test/camera-light-stubs/**'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
@@ -102,6 +108,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
+
+      - name: Shared BetterLights world coordinates (no Minecraft stubs)
+        run: |
+          mkdir -p build/preview3/lights-world
+          javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/lights-world \
+            src/main/java/com/example/examplemod/BetterLightsWorldState.java \
+            src/test/java/com/example/examplemod/BetterLightsWorldStateSmokeTest.java
+          java -ea -cp build/preview3/lights-world \
+            com.example.examplemod.BetterLightsWorldStateSmokeTest
 
       - name: Compile camera math and run pixel/ray tests
         run: |
