@@ -783,6 +783,18 @@ public class BlockbusterActorPreviewRenderer
             return;
         }
 
+        // A BetterLights source is NOT an actor to draw in RenderWorldLast.
+        // Its one persistent native LightCaster was already synchronized
+        // at RenderTick.START, before OptiFine's world lighting pass.
+        // Rendering a BetterLightsMorph here would overwrite the caster
+        // position with an entity matrix and create a second temporary light.
+        if(actorData.getActor()!=null&&BetterLightsRig.isLight(
+                actorData.getActor().getMorph()))
+        {
+            if(this.actor!=null)reset();
+            return;
+        }
+
         EntityActor entityActor =
                 getOrCreateActor(mc);
 
@@ -796,17 +808,6 @@ public class BlockbusterActorPreviewRenderer
                 actorData,
                 entityActor
         );
-        // Native light settings are sampled separately from the morph's
-        // identity. Never recreate LightCaster on every fractional 60 FPS
-        // property sample (which would flicker/remove temporary lights).
-        if(actorData.getActor()!=null&&BetterLightsRig.isLight(
-                actorData.getActor().getMorph()))
-            BetterLightsRig.applySettings(entityActor.getMorph(),
-                    BetterLightsRig.forActor(actorData),
-                    CameraVisualFrameClock.sceneTime(
-                            BlockbusterPreviewAnimationState.getFrame()),
-                    actorData.getActor().getMorph());
-
         /*
          * A recorded actor may already contain Metamorph Body Parts in
          * its original morph NBT. Import them once into the editor's
@@ -1199,29 +1200,6 @@ public class BlockbusterActorPreviewRenderer
         }
 
         /*
-         * BetterLightsMorph normally registers its LightCaster from the
-         * entity's logical update. Our detached record actors never enter
-         * Minecraft's entity tick list, so maintain that optional morph
-         * here once per 20 TPS tick. Render positions are still supplied
-         * by Blockbuster's native morph render below.
-         */
-        ActorAnimationData lightRig=BetterLightsRig.forActor(actorData);
-        if(lightRig!=null)
-        {
-            // Keyframed Origin is a world-space displacement from Record.
-            // Never mutate the original Record or synthetic Steve limbs.
-            double time=CameraVisualFrameClock.sceneTime(previewFrame);
-            float[] delta=BetterLightsRig.offset(lightRig,time);
-            entityActor.posX+=delta[0];
-            entityActor.posY+=delta[1];
-            entityActor.posZ+=delta[2];
-            entityActor.prevPosX+=delta[0];
-            entityActor.prevPosY+=delta[1];
-            entityActor.prevPosZ+=delta[2];
-        }
-        CameraBetterLightsBridge.prepare(entityActor,previewFrame);
-
-        /*
          * =====================================================
          * RENDER MANAGER
          * =====================================================
@@ -1507,10 +1485,6 @@ public class BlockbusterActorPreviewRenderer
                     actorPartialTicks,
                     true
             );
-            if(lightRig!=null)
-                BetterLightsRig.syncNativeCaster(entityActor.getMorph(),
-                        lightRig,CameraVisualFrameClock.sceneTime(previewFrame),
-                        entityActor.posX,entityActor.posY,entityActor.posZ);
         }
 
         /*

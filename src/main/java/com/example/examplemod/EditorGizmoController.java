@@ -2482,8 +2482,12 @@ public class EditorGizmoController
             double z=recordFrame.getZ()+origin[2];
             if(BetterLightsRig.TARGET.equals(bone.getName()))
             {
+                // Target is an independent world-space aiming point rooted
+                // at Record, NOT a child of the Origin animated offset.
                 float[] aim=BetterLightsRig.targetOffset(lightRigTarget,frame);
-                x+=aim[0];y+=aim[1];z+=aim[2];
+                x=recordFrame.getX()+aim[0];
+                y=recordFrame.getY()+aim[1];
+                z=recordFrame.getZ()+aim[2];
             }
             return new double[]{x,y,z};
         }

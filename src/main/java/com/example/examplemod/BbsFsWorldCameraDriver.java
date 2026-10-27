@@ -163,6 +163,11 @@ public final class BbsFsWorldCameraDriver
         // without changing the actual LightCaster world coordinates.
         CameraBetterLightsCameraOrigin.begin(mc,view);
 
+        // The editor's light state MUST be uploaded before vanilla/OptiFine
+        // render the world. RenderWorldLast is too late for shader lighting,
+        // and historically left actor and CAMERA lights one frame behind.
+        BetterLightsWorldEngine.prepare(mc,editor);
+
         // Normally a no-op. The one-frame diagnostic is guarded by an
         // explicit JVM flag and uses the native Minecraft world pass.
         CameraNativeFrameProbe.beforeWorld(mc);

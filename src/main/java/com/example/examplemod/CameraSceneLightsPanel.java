@@ -358,9 +358,13 @@ public final class CameraSceneLightsPanel
         PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
         // Preview-only outline; the native film framebuffer is already
         // composited before this GUI overlay is drawn.
-        BetterLightsWireOverlay.draw(pose,l.morph,
-                l.x,l.y,l.z,l.targetX,l.targetY,l.targetZ,
-                x,y,w,h);
+        BetterLightsWorldState world=BetterLightsWorldState.points(
+                l.x,l.y,l.z,l.targetX,l.targetY,l.targetZ);
+        if(world!=null)
+            BetterLightsWireOverlay.draw(pose,l.morph,
+                    world.x,world.y,world.z,
+                    world.targetX,world.targetY,world.targetZ,
+                    x,y,w,h);
         if(tab==2)return;
         double ox=component(l,tab,0),oy=component(l,tab,1),
                 oz=component(l,tab,2);
