@@ -41,8 +41,9 @@ public final class BetterLightsWorldState
     }
 
     /**
-     * Origin and Target keys are offsets in WORLD blocks from the sampled
-     * Record XYZ. Target offset includes its rest point (+Z 4 blocks).
+     * Origin and Target keys are INDEPENDENT offsets in WORLD blocks from
+     * the sampled Record XYZ. Moving Origin does not drag the aiming point.
+     * Target offset includes its rest point (+Z 4 blocks).
      */
     public static BetterLightsWorldState actor(double recordX,
             double recordY,double recordZ,
@@ -52,6 +53,7 @@ public final class BetterLightsWorldState
             return null;
         double x=recordX+origin[0],y=recordY+origin[1],
                 z=recordZ+origin[2];
-        return points(x,y,z,x+target[0],y+target[1],z+target[2]);
+        return points(x,y,z,recordX+target[0],
+                recordY+target[1],recordZ+target[2]);
     }
 }
