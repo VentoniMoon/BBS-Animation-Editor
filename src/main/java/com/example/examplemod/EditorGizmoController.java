@@ -138,6 +138,9 @@ public class EditorGizmoController
     public void setLightRigTarget(ActorAnimationData rig)
     {
         this.lightRigTarget=rig;
+        // Direction is authored by translating Target; lighting morphs have
+        // no skeletal rotation or scale channels to manipulate.
+        if(rig!=null&&mode!=Mode.POSITION)setMode(Mode.POSITION);
     }
 
     private boolean isWorldLightBone(AnimationBone bone)
@@ -239,6 +242,8 @@ public class EditorGizmoController
                     && mouseY >= y
                     && mouseY < y + BUTTON_SIZE)
             {
+                if(lightRigTarget!=null&&i!=0)
+                    return true; // no rotation/scale for a light-control point
                 if (i == 0)
                 {
                     setMode(Mode.POSITION);
