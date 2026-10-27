@@ -1,8 +1,5 @@
 package com.example.examplemod;
 
-import java.lang.reflect.Method;
-import net.minecraft.entity.Entity;
-import mchorse.metamorph.api.morphs.AbstractMorph;
 import net.minecraft.nbt.NBTTagCompound;
 
 /**
@@ -186,105 +183,6 @@ public final class BetterLightsRig
                         (w.getDouble()-v.getDouble())*alpha);
         }
         return result;
-    }
-
-    private static final java.util.WeakHashMap<AbstractMorph,
-            mchorse.mclib.utils.ValueSerializer> baselineValues=
-            new java.util.WeakHashMap<AbstractMorph,
-                    mchorse.mclib.utils.ValueSerializer>();
-
-    public static void applySettings(AbstractMorph morph,
-            ActorAnimationData data,double frame,
-            net.minecraft.nbt.NBTTagCompound base)
-    {
-        if(morph==null||data==null||base==null||
-                !morph.getClass().getName()
-                    .endsWith(".BetterLightsMorph"))return;
-        AnimationBone origin=data.getBone(ORIGIN);
-        if(origin==null)return;
-        boolean hasSettings=false;
-        for(AnimationKeyframe key:origin.getKeyframes())
-            if(key!=null&&key.getLightSettings()!=null)
-            {hasSettings=true;break;}
-        if(!hasSettings)return;
-        try
-        {
-            Object values=morph.getClass().getMethod("getValueManager")
-                    .invoke(morph);
-            if(!(values instanceof mchorse.mclib.utils.ValueSerializer))
-                return;
-            mchorse.mclib.utils.ValueSerializer runtime=
-                    (mchorse.mclib.utils.ValueSerializer)values;
-            mchorse.mclib.utils.ValueSerializer baseline=
-                    baselineValues.get(morph);
-            if(baseline==null)
-            {
-                AbstractMorph initial=
-                        mchorse.metamorph.api.MorphManager.INSTANCE
-                                .morphFromNBT(base.copy());
-                if(initial==null)return;
-                Object initialValues=initial.getClass().getMethod(
-                        "getValueManager").invoke(initial);
-                if(!(initialValues instanceof
-                        mchorse.mclib.utils.ValueSerializer))return;
-                baseline=(mchorse.mclib.utils.ValueSerializer)initialValues;
-                baselineValues.put(morph,baseline);
-            }
-            // Reset ALL channels before sampling any arbitrary frame.
-            // NBT writes only changed ValueSerializer properties; a direct
-            // fromNBT() alone would retain unsaved values from a different
-            // frame after seeking backwards.
-            runtime.copyValues(baseline);
-            runtime.fromNBT(settingsAt(data,frame,base));
-        }
-        catch(ReflectiveOperationException ignored){}
-    }
-
-    /**
-     * Blockbuster's BetterLightsMorph.render() recomputes the world position
-     * from its OpenGL matrix, and applies its native local direction through
-     * the entity rotation. The two editor bones have a different contract:
-     * Origin is a WORLD displacement in blocks and Target is a WORLD vector.
-     *
-     * Synchronize the single already-registered caster after native render,
-     * overriding both values together (not only direction as before).
-     * Never allocate a second LightCaster or mutate a saved Record.
-     */
-    public static void syncNativeCaster(AbstractMorph morph,
-            ActorAnimationData data,double frame,
-            double worldX,double worldY,double worldZ)
-    {
-        boolean keyedAim=data!=null&&data.getBone(TARGET)!=null&&
-                !data.getBone(TARGET).getKeyframes().isEmpty();
-        syncNativeCaster(morph,worldX,worldY,worldZ,
-                keyedAim?direction(data,frame):null);
-    }
-
-    public static void syncNativeCaster(AbstractMorph morph,
-            double worldX,double worldY,double worldZ,float[] direction)
-    {
-        if(morph==null||!morph.getClass().getName()
-                .endsWith(".BetterLightsMorph"))return;
-        try
-        {
-            Object caster=morph.getClass().getMethod("getLightcaster")
-                    .invoke(morph);
-            if(caster==null)return;
-            // Public LightCaster.pos(float,float,float), not the morph's
-            // matrix-derived cached position or render-side model offset.
-            caster.getClass().getMethod("pos",
-                    float.class,float.class,float.class).invoke(caster,
-                    (float)worldX,(float)worldY,(float)worldZ);
-            if(direction!=null&&direction.length>=3)
-                caster.getClass().getMethod("direction",
-                        float.class,float.class,float.class).invoke(caster,
-                        direction[0],direction[1],direction[2]);
-        }
-        catch(ReflectiveOperationException ignored)
-        {
-            // BetterLights is optional; don't interfere with other morphs.
-        }
-        catch(LinkageError ignored){}
     }
 
     private BetterLightsRig(){}
