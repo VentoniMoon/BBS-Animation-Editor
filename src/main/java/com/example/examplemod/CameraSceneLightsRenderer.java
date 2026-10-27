@@ -42,6 +42,7 @@ public final class CameraSceneLightsRenderer
         // Existing BetterLights temporary casters expire through the
         // Blockbuster morph lifecycle once the preview-only entities stop
         // updating. No generated source is a real Minecraft entity.
+        for(Slot slot:slots.values())slot.renderer.reset();
         slots.clear();current=null;world=null;
     }
 
@@ -62,8 +63,14 @@ public final class CameraSceneLightsRenderer
         java.util.HashSet<String> retained=new java.util.HashSet<String>();
         for(CameraSceneLights.Light l:lights.all())
         {
+            if(!l.enabled)
+            {
+                // An invisible static source must stop illuminating now.
+                Slot obsolete=slots.remove(l.id);
+                if(obsolete!=null)obsolete.renderer.reset();
+                continue;
+            }
             retained.add(l.id);
-            if(!l.enabled)continue;
             Slot slot=slots.get(l.id);
             if(slot==null){slot=new Slot(l);slots.put(l.id,slot);}
             slot.scene.setName(l.name);
@@ -88,7 +95,15 @@ public final class CameraSceneLightsRenderer
         }
         // Drop removed editor-only lights rather than pinning their morphs
         // indefinitely in the Java session.
-        slots.keySet().retainAll(retained);
+        java.util.Iterator<Map.Entry<String,Slot>> iterator=
+                slots.entrySet().iterator();
+        while(iterator.hasNext())
+        {
+            Map.Entry<String,Slot> entry=iterator.next();
+            if(retained.contains(entry.getKey()))continue;
+            entry.getValue().renderer.reset();
+            iterator.remove();
+        }
     }
     private CameraSceneLightsRenderer(){}
 }
