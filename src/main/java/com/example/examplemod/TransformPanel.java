@@ -331,7 +331,7 @@ public class TransformPanel
         {
             // Source and aim are animated in actual world blocks. A
             // skeleton's Rotation and Scale fields do not control this light.
-            font.drawString("World XYZ / blocks",x+10,y+105,TEXT_SECONDARY);
+            font.drawString("XYZ offset / blocks",x+10,y+105,TEXT_SECONDARY);
             return;
         }
 
