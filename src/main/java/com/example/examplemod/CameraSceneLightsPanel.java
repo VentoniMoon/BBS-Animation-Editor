@@ -33,13 +33,14 @@ public final class CameraSceneLightsPanel
     private double dragStart;
     private boolean dirty;
     private int listScroll;
+    private String warning;
 
     public boolean opened(){return opened;}
     public void reset()
     {
         opened=false;chosen=null;nativeActor=null;
         field=null;fieldAxis=-1;drag=null;draggedLight=null;
-        dirty=false;listScroll=0;tab=0;
+        dirty=false;listScroll=0;tab=0;warning=null;
     }
     public void close(AnimationEditorScreen editor)
     {
@@ -54,7 +55,7 @@ public final class CameraSceneLightsPanel
         chosen=next;
         nativeActor=null;
         field=null;fieldAxis=-1;
-        drag=null;draggedLight=null;
+        drag=null;draggedLight=null;warning=null;
         if(next!=null)
         {
             BlockbusterSceneActor actor=new BlockbusterSceneActor();
@@ -94,7 +95,8 @@ public final class CameraSceneLightsPanel
     private static final int LEFT=CameraWorkspace.CAMERA_LEFT_WIDTH;
     private int visibleLights()
     {
-        return Math.max(0,(bottom-92-2)/21);
+        // Leave room for the scroll-count footer at the bottom.
+        return Math.max(0,(bottom-92-19)/21);
     }
     private void clampList(int count)
     {
@@ -170,7 +172,7 @@ public final class CameraSceneLightsPanel
         }
         mc.fontRenderer.drawString("WORLD "+captions[tab],
                 x+12,68,0xFF70CFFF);
-        mc.fontRenderer.drawString("Move: axis gizmo or XYZ values",
+        mc.fontRenderer.drawString("Drag arrows; click O/T to switch",
                 x+10,89,0xFFB7C2C9);
         String[] axis={"X","Y","Z"};
         for(int i=0;i<3;i++)
@@ -195,6 +197,10 @@ public final class CameraSceneLightsPanel
         mc.fontRenderer.drawString("TOGGLE LIGHT",x+38,311,0xFFFFFFFF);
         mc.fontRenderer.drawString(
                 "Ctrl+S saves; no keys created",x+10,346,0xFFB0BDC6);
+        if(warning!=null)
+            mc.fontRenderer.drawString(
+                    mc.fontRenderer.trimStringToWidth(warning,167),
+                    x+10,366,0xFFFF9999);
     }
 
     private static double component(CameraSceneLights.Light l,int part,int axis)
@@ -229,8 +235,20 @@ public final class CameraSceneLightsPanel
             CameraSceneLights.Light l=sync(screen);
             if(l!=null)
             {
+                double previous=component(l,tab,fieldAxis);
                 set(l,tab,fieldAxis,value);
-                screen.getCameraWorkspace().saveScene();
+                if(BetterLightsWorldState.points(
+                        l.x,l.y,l.z,l.targetX,l.targetY,l.targetZ)==null)
+                {
+                    set(l,tab,fieldAxis,previous);
+                    warning="Origin and Target cannot coincide";
+                }
+                else
+                {
+                    warning=null;
+                    if(Math.abs(previous-value)>1E-7D)
+                        screen.getCameraWorkspace().saveScene();
+                }
             }
         }
         catch(NumberFormatException ignored){}
@@ -273,6 +291,8 @@ public final class CameraSceneLightsPanel
                             pose.z+forward[2]*6D);
                     if(light!=null)
                     {
+                        // Keep the newly selected source in the visible list.
+                        listScroll=Math.max(0,list.all().size()-visibleLights());
                         light.targetX=light.x+forward[0]*4D;
                         light.targetY=light.y+forward[1]*4D;
                         light.targetZ=light.z+forward[2]*4D;
