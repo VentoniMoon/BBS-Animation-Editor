@@ -43,6 +43,12 @@ public final class CameraWorkspace
     {
         lightPanel.drawGizmo(screen,filmX,filmY,filmW,filmH);
     }
+    /** Native POSE-style 3D arrows and plane handles inside the Preview FBO. */
+    public void drawNativeLightGizmo(AnimationEditorScreen screen,
+            Minecraft mc,int filmX,int filmY,int filmW,int filmH)
+    {
+        lightPanel.drawNativeGizmo(screen,mc,filmX,filmY,filmW,filmH);
+    }
     private EditorSceneState activeState;
     private final CameraAudioClips soundtrack=new CameraAudioClips();
 
