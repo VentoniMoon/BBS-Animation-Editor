@@ -61,6 +61,10 @@ public class BlockbusterActorPreviewRenderer
                 this.actor.world != mc.world ||
                 this.actor.isDead)
         {
+            // Old preview morphs may still own a live native BetterLights
+            // caster even though the detached EntityActor has stopped.
+            if(this.actor!=null)
+                CameraBetterLightsBridge.retire(this.actor);
             this.actor =
                     new EntityActor(
                             mc.world
@@ -140,6 +144,10 @@ public class BlockbusterActorPreviewRenderer
 
             if (morph != null)
             {
+                // The old morph's caster lives outside the Minecraft entity.
+                // Retire it BEFORE replacing the actor's morph reference.
+                if(entityActor.getMorph()!=morph)
+                    CameraBetterLightsBridge.retire(entityActor);
                 /*
                  * Mirror CharacterStateResolver: attach the morph to the
                  * runtime actor BEFORE creating its Emoticons animator.
@@ -1604,6 +1612,7 @@ public class BlockbusterActorPreviewRenderer
     {
         if (this.actor != null)
         {
+            CameraBetterLightsBridge.retire(this.actor);
             this.actor.setDead();
         }
 
