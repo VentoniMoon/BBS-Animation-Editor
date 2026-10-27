@@ -32,57 +32,78 @@ none. The properties list, boolean switches and hexadecimal color values
 come from native Blockbuster `ValueSerializer`. This also preserves unknown
 settings and nested configuration fields in the original morph NBT.
 
+## Single native lighting engine (new architecture)
+
+Both editors now drive **BetterLightsWorldEngine** in
+`BbsFsWorldCameraDriver.renderTick(START)`. It owns one
+BetterLights `LightCaster` per stable source ID (actor or CAMERA static).
+Sources are prepared **before** the native Minecraft/OptiFine world pass
+and its shader uniforms, not during `RenderWorldLast`.
+
+- Actor and CAMERA lights use the same `BetterLightsWorldState`: world
+  Origin, world Target, normalized direction, all in Minecraft blocks.
+- Native Blockbuster/MCLib `ValueSerializer` applies **every installed
+  BetterLights property**, including optional shadow, flare and fog values.
+  Only position/direction are overridden with editor-owned world geometry.
+- Source slots do **not** create an `EntityActor`, call
+  `BetterLightsMorph.update`, create Blockbuster dummy runnables, or draw
+  the light morph a second time. They register the caster through the
+  provider's own temporary-light manager once per stable source.
+- Changing native settings updates the one slot; switching world/scenes,
+  deleting/disabling a light, or closing the editor unregisters it.
+  Shader/BetterLights API access is isolated behind reflection, allowing
+  the editor to load without BetterLights installed.
+- The wireframe and movement gizmos are editorial overlays, not exported
+  footage; for POSE they consume the same `BetterLightsWorldState` as the
+  lighting backend.
+
+**World coordinate contract:** no model pixels (no division by 16),
+Steve skeleton offset, actor-facing yaw flip, or camera-relative transform.
+
 ## POSE — actor light rig
 
-Select a real BetterLightsMorph actor and open **Pose**. The ordinary Steve
-skeleton is not used. Two virtual tracks are available:
+Select a BetterLightsMorph actor in **POSE**. Instead of a Steve skeleton,
+the editor presents two independent control tracks, both rooted at the
+actor's Record XYZ sampled at the current scene time:
 
-- `Origin`: keyframe-controlled XYZ *offset* from the actor's Blockbuster
-  Record world location. The original Record is not modified. Selecting an
-  Origin key and opening **LIGHT** edits the full native settings on *that
-  key*. Floats/ints/colors interpolate between keyed snapshots; enabled
-  feature switches change discretely. Without an Origin key selected, LIGHT
-  edits the base scene actor morph and is saved with Ctrl+S.
-- `Target`: keyframe-controlled direction vector. When no Target key exists,
-  the source's original BetterLights direction is untouched. Creating a
-  Target key (default +Z) makes the vector control the spotlight's native
-  LightCaster direction. Move XYZ through the ordinary keyframe Transform.
+- `Origin` — editable world-block **offset** for the light source.
+- `Target` — editable world-block offset for a separate **aiming point**
+  (initially four blocks along world +Z from Record). Moving Origin does
+  not automatically move Target. The light always aims from current Origin
+  toward current Target.
 
-The POSE inspector has **RIG KEYS** (ordinary Transform for the selected
-Origin/Target key) and **LIGHT** (full native morph settings). Existing
-key duplication, interpolation, numeric editing and timeline persistence
-are reused. Per-key light settings are saved as optional
-`LightSettings` compounds on `AnimationKeyframe` in editor.dat, and are
-copied when Ctrl-dragging a key. Keys sampled during 20/30/60 FPS preview
-never recreate the native LightCaster per output frame.
+The original Record `.dat` is never modified by either track.
+Keyframe interpolation and duplication work through existing AnimationBone
+tracks. **RIG KEYS** shows XYZ controls for the selected light key (no
+fake skeletal rotation or scale). **LIGHT** shows the native provider
+properties; selecting an Origin key edits native settings on that key,
+otherwise it edits the actor's base BetterLights morph.
+
+`LightSettings` compounds are preserved in the scene editor.dat and
+numeric light properties are interpolated by the existing settings sampler.
+Switches are discrete. Pausing, seeking or rendering fractional 60 FPS
+samples must update the **same** caster rather than spawning a new one.
+
+**Migration:** old `Target` keys from the earlier Origin-relative
+implementation may need manual repositioning. Existing key data is not
+silently rewritten, since it is ambiguous whether it represented a point
+or a direction vector.
 
 ## CAMERA — static light editor, no keys
 
-In CAMERA, select the **LIGHTS** tab in the left sidebar. Use **+ ADD** to
-create an editor-only light in front of the current film camera. It is NOT
-added to the Blockbuster actors list or Record folder. A light can be
-selected, disabled, removed, and saved automatically with the scene.
+CAMERA's **LIGHTS** tab retains the ADD/REMOVE source list, ORIGIN,
+TARGET, and LIGHT properties. ORIGIN and TARGET are independent *absolute*
+world coordinates, editable through axis handles or numeric fields.
+No source creates a Record actor or a CAMERA timeline clip.
 
-The right-side tabs:
-- **ORIGIN**: world X/Y/Z of the source.
-- **TARGET**: world X/Y/Z the source points toward.
-- **LIGHT**: the same native BetterLights settings as for light actors,
-  including Light, Shadows, Flare effect and Volumetric Fog nested values.
+Static lights remain saved in scene editor.dat under
+`CameraSceneLights` with stable IDs, enabled state, NBT settings and
+world points. The rendering engine now consumes these saved values
+**directly** instead of synthesizing an actor/Record each frame.
 
-Origin and Target each display projected X/Y/Z move handles in CAMERA
-preview. Drag an axis square to change the selected world coordinate, or
-enter a precise numeric value. These are editing overlays only and must
-not appear in output video.
-
-Static scene lights are persisted under the optional
-`CameraSceneLights` NBT tag in the scene's editor.dat, with stable UUIDs,
-original morph NBT and world Origin/Target values. This does not touch
-Minecraft world blocks or standalone BetterLights static sources placed
-outside the editor. Scene-owned light objects are rendered by persistent
-preview-only BetterLightsMorph instances in the native OptiFine world pass,
-so the original light shader also participates in the recorded film pass.
-The renderer drops cached preview morphs on world/camera detach and relies
-on Blockbuster's temporary-caster lifecycle for final cleanup.
+When the editor is not in CAMERA, scene-only static sources are not
+registered. Animated light actors remain available in POSE and other
+normal scene preview modes (subject to actor visibility settings).
 
 ## Acceptance checks requiring real Minecraft/BetterLights
 
@@ -103,9 +124,8 @@ on Blockbuster's temporary-caster lifecycle for final cleanup.
    Compare the native MP4 with SHOT preview; watch for a one-frame
    LightCaster activation delay, shader shadow instability or unexpected
    light following the camera.
-7. Delete or disable sources, close CAMERA and wait for the temporary
-   BetterLights caster lifecycle; ensure sources disappear rather than
-   accumulating on scene changes. Repeat without BetterLights loaded.
+7. Delete or disable sources, close CAMERA; verify immediate caster unregistration and that
+   sources do not accumulate on scene changes. Repeat without BetterLights loaded.
 8. Test an extreme FOV/9:16 preview; the lightweight projected XYZ
    handles may require tighter native-matrix alignment in future. They
    are not the skeletal EditorGizmoController and have no Rotate ring.
