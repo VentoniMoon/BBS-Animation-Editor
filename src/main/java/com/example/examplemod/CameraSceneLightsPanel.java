@@ -25,23 +25,27 @@ public final class CameraSceneLightsPanel
     private GuiTextField field;
     private int fieldAxis=-1;
     private int leftRight,top,bottom;
-    private int dragAxis=-1;
+    // CAMERA and POSE use the same absolute world BLOCK coordinate contract.
+    // A drag holds the camera/anchor frozen to avoid chasing a moving gizmo.
+    private CameraLightWorldGizmo.Drag drag;
+    private CameraSceneLights.Light draggedLight;
     private int dragComponent=-1;
-    private int startMouseX,startMouseY;
-    private double oldCoord,dx,dy;
+    private double dragStart;
     private boolean dirty;
+    private int listScroll;
 
     public boolean opened(){return opened;}
     public void reset()
     {
         opened=false;chosen=null;nativeActor=null;
-        field=null;fieldAxis=-1;dragAxis=-1;dirty=false;
-        tab=0;
+        field=null;fieldAxis=-1;drag=null;draggedLight=null;
+        dirty=false;listScroll=0;tab=0;
     }
     public void close(AnimationEditorScreen editor)
     {
+        commit(editor);
         persistNative(editor);
-        opened=false;field=null;dragAxis=-1;
+        opened=false;field=null;drag=null;draggedLight=null;
     }
     private void choose(AnimationEditorScreen screen,
             CameraSceneLights.Light next)
@@ -49,7 +53,8 @@ public final class CameraSceneLightsPanel
         persistNative(screen);
         chosen=next;
         nativeActor=null;
-        field=null;
+        field=null;fieldAxis=-1;
+        drag=null;draggedLight=null;
         if(next!=null)
         {
             BlockbusterSceneActor actor=new BlockbusterSceneActor();
@@ -85,34 +90,54 @@ public final class CameraSceneLightsPanel
                 screen.getCameraWorkspace().saveScene();
         }
     }
+    // The CAMERA column is narrower than Character's actor sidebar.
+    private static final int LEFT=CameraWorkspace.CAMERA_LEFT_WIDTH;
+    private int visibleLights()
+    {
+        return Math.max(0,(bottom-92-2)/21);
+    }
+    private void clampList(int count)
+    {
+        listScroll=Math.max(0,Math.min(listScroll,
+                Math.max(0,count-visibleLights())));
+    }
     public void drawLeft(AnimationEditorScreen screen,int panelBottom)
     {
         leftRight=screen.width-185;
         top=25;bottom=panelBottom;
         Minecraft mc=Minecraft.getMinecraft();
-        Gui.drawRect(0,25,163,54,0xFF1D303B);
-        mc.fontRenderer.drawString("PRESETS",8,36,
+        Gui.drawRect(0,25,LEFT,54,0xFF1D303B);
+        mc.fontRenderer.drawString("PRESETS",7,36,
                 opened?0xFF899DAA:0xFF60C8FA);
-        mc.fontRenderer.drawString("LIGHTS",92,36,
+        mc.fontRenderer.drawString("LIGHTS",LEFT/2+7,36,
                 opened?0xFF60C8FA:0xFF899DAA);
         if(!opened)return;
         CameraSceneLights.Light selected=sync(screen);
-        Gui.drawRect(0,54,163,panelBottom,0xFF19232C);
-        Gui.drawRect(6,61,80,82,0xFF31495D);
-        Gui.drawRect(83,61,158,82,0xFF31495D);
-        mc.fontRenderer.drawString("+ ADD",21,68,0xFFFFFFFF);
-        mc.fontRenderer.drawString("REMOVE",96,68,0xFFFFFFFF);
-        int index=0;
-        for(CameraSceneLights.Light l:screen.getSceneState()
-                .getCameraLights().all())
+        Gui.drawRect(0,54,LEFT,panelBottom,0xFF19232C);
+        Gui.drawRect(4,61,LEFT/2-2,82,0xFF31495D);
+        Gui.drawRect(LEFT/2+2,61,LEFT-4,82,0xFF31495D);
+        mc.fontRenderer.drawString("+ ADD",11,68,0xFFFFFFFF);
+        mc.fontRenderer.drawString("REMOVE",LEFT/2+5,68,0xFFFFFFFF);
+        java.util.List<CameraSceneLights.Light> lights=
+                screen.getSceneState().getCameraLights().all();
+        clampList(lights.size());
+        for(int i=listScroll;i<lights.size();i++)
         {
-            int row=92+index++*21;
+            int row=92+(i-listScroll)*21;
             if(row+20>=panelBottom)break;
-            if(l==selected)
-                Gui.drawRect(4,row-2,159,row+18,0xFF34536A);
-            mc.fontRenderer.drawString(l.name,12,row+3,
-                    l.enabled?0xFFE0F2FE:0xFF82919C);
+            CameraSceneLights.Light light=lights.get(i);
+            if(light==selected)
+                Gui.drawRect(4,row-2,LEFT-4,row+18,0xFF34536A);
+            String label=mc.fontRenderer.trimStringToWidth(
+                    (light.enabled?"":"[ ] ")+light.name,LEFT-16);
+            mc.fontRenderer.drawString(label,9,row+3,
+                    light.enabled?0xFFE0F2FE:0xFF82919C);
         }
+        if(lights.size()>visibleLights())
+            mc.fontRenderer.drawString(
+                    (listScroll+1)+"-"+Math.min(lights.size(),
+                        listScroll+visibleLights())+"/"+lights.size(),
+                    7,bottom-12,0xFF7A93A3);
     }
     public void drawRight(AnimationEditorScreen screen,int panelBottom)
     {
@@ -215,9 +240,10 @@ public final class CameraSceneLightsPanel
     public boolean click(AnimationEditorScreen screen,int mx,int my,
             int button)
     {
-        if(my>=25&&my<54&&mx>=0&&mx<163&&button==0)
+        if(my>=25&&my<54&&mx>=0&&mx<LEFT&&button==0)
         {
-            if(mx>=83)
+            commit(screen);
+            if(mx>=LEFT/2)
             {
                 opened=true;
                 sync(screen);
@@ -226,22 +252,33 @@ public final class CameraSceneLightsPanel
             return true;
         }
         if(!opened)return false;
-        if(mx<163&&my>=54&&my<bottom)
+        if(mx<LEFT&&my>=54&&my<bottom)
         {
             if(button!=0)return true;
+            commit(screen);
             CameraSceneLights list=screen.getSceneState().getCameraLights();
             if(my>=61&&my<84)
             {
-                if(mx<83)
+                if(mx<LEFT/2)
                 {
                     PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
-                    double yaw=Math.toRadians(pose.yaw);
-                    double pitch=Math.toRadians(pose.pitch);
-                    CameraSceneLights.Light l=list.add("Light "+(list.all().size()+1),
-                            pose.x-Math.sin(yaw)*Math.cos(pitch)*4D,
-                            pose.y-Math.sin(pitch)*4D,
-                            pose.z+Math.cos(yaw)*Math.cos(pitch)*4D);
-                    if(l!=null)choose(screen,l);
+                    // A source must spawn IN FRONT of the real film camera,
+                    // not on the old +Z side (behind a default -Z view).
+                    double[] forward=PreviewCameraProjection.ray(
+                            pose,0.5D,0.5D,0,0,1,1);
+                    CameraSceneLights.Light light=list.add(
+                            "Light "+(list.all().size()+1),
+                            pose.x+forward[0]*6D,
+                            pose.y+forward[1]*6D,
+                            pose.z+forward[2]*6D);
+                    if(light!=null)
+                    {
+                        light.targetX=light.x+forward[0]*4D;
+                        light.targetY=light.y+forward[1]*4D;
+                        light.targetZ=light.z+forward[2]*4D;
+                        choose(screen,light);
+                        tab=0;
+                    }
                 }
                 else
                 {
@@ -252,7 +289,7 @@ public final class CameraSceneLightsPanel
                 screen.getCameraWorkspace().saveScene();
                 return true;
             }
-            int index=(my-92)/21;
+            int index=listScroll+(my-92)/21;
             if(my>=92&&index>=0&&index<list.all().size())
             {
                 list.select(list.all().get(index).id);
@@ -321,7 +358,14 @@ public final class CameraSceneLightsPanel
         if(!opened)return false;
         if(mx>=leftRight&&my>=54&&my<bottom&&tab==2)
             return nativeSettings.scroll(mx,my,d);
-        return mx<163&&my>=54&&my<bottom;
+        if(mx>=0&&mx<LEFT&&my>=54&&my<bottom)
+        {
+            int count=screen.getSceneState().getCameraLights().all().size();
+            listScroll+=d>0?-1:1;
+            clampList(count);
+            return true;
+        }
+        return false;
     }
 
     private static final class ScreenPoint
