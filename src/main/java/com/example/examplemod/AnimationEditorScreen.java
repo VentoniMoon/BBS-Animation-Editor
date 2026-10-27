@@ -3228,10 +3228,14 @@ public class AnimationEditorScreen extends GuiScreen
             net.minecraft.nbt.NBTTagCompound lightSettings=
                     BetterLightsRig.settingsAt(rig,tick,
                             lightActor.getActor().getMorph());
-            BetterLightsWireOverlay.draw(getCameraWorkspaceNativePose(),
-                    lightSettings,lx,ly,lz,lx+directionX,
-                    ly+directionY,lz+directionZ,
-                    filmX,filmY,filmW,filmH);
+            // Without a keyed Target, BetterLights retains its native
+            // local Direction property and actor rotation. A guessed yaw
+            // would display a misleading beam, so draw only keyed guides.
+            if(target!=null&&!target.getKeyframes().isEmpty())
+                BetterLightsWireOverlay.draw(getCameraWorkspaceNativePose(),
+                        lightSettings,lx,ly,lz,lx+directionX,
+                        ly+directionY,lz+directionZ,
+                        filmX,filmY,filmW,filmH);
         }
 
         /*
