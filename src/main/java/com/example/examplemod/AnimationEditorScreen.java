@@ -90,6 +90,11 @@ public class AnimationEditorScreen extends GuiScreen
         return editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA;
     }
+    /** Match the native stage's selected-vs-background actor visibility. */
+    public boolean showAllActorsInPreview()
+    {
+        return multiActorPreview.isShowAllActors();
+    }
 
     public boolean isCameraPlaying()
     {
@@ -3053,15 +3058,9 @@ public class AnimationEditorScreen extends GuiScreen
                     :getCurrentRecordFrame();
         this.sceneViewport.drawActor(
                 mc, selected, selectedFrame);
-        // CAMERA-native static lights participate in the same world pass
-        // that is captured to film and encoded as MP4. They have no keys
-        // and are never added to Blockbuster's actor/Record data.
-        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
-            CameraSceneLightsRenderer.render(mc,this.sceneViewport,
-                    this.sceneState.getCameraLights());
-        else
-            // Switching out of CAMERA must remove its scene-only casters.
-            CameraSceneLightsRenderer.reset();
+        // Light casters (POSE and CAMERA) were prepared at RenderTick.START
+        // before OptiFine rendered the WORLD. Do not create light entities
+        // or update light uniforms from RenderWorldLast a second time.
         return true;
     }
 
@@ -4413,7 +4412,7 @@ public class AnimationEditorScreen extends GuiScreen
     {
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
-        CameraSceneLightsRenderer.reset();
+        BetterLightsWorldEngine.reset();
         cameraVideoExport.close();
         cameraExportDialog.close();
         /* Never leave the detached preview camera as Minecraft's view. */
