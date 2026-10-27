@@ -3186,6 +3186,45 @@ public class AnimationEditorScreen extends GuiScreen
             cameraWorkspace.drawLightGizmo(this,
                     filmX,filmY,filmW,filmH);
         }
+        // Actor lights share the same world-space cone guide as CAMERA
+        // statics. The guide is drawn after film compositing, so it cannot
+        // leak into screenshots or the exported video.
+        if(editorModeController.getMode()==EditorModeController.EditorMode.POSE
+                &&BetterLightsActorInspector.isLightActor(getSelectedActor())
+                &&displayedRecord!=null)
+        {
+            BlockbusterSceneActorData lightActor=getSelectedActor();
+            ActorAnimationData rig=BetterLightsRig.forActor(lightActor);
+            double tick=CameraVisualFrameClock.sceneTime(
+                    playbackController.getCurrentFrame());
+            float[] offset=BetterLightsRig.offset(rig,tick);
+            double lx=displayedRecord.getX()+offset[0];
+            double ly=displayedRecord.getY()+offset[1];
+            double lz=displayedRecord.getZ()+offset[2];
+            double directionX,directionY,directionZ;
+            AnimationBone target=rig==null?null:
+                    rig.getBone(BetterLightsRig.TARGET);
+            if(target!=null&&!target.getKeyframes().isEmpty())
+            {
+                float[] d=BetterLightsRig.direction(rig,tick);
+                directionX=d[0];directionY=d[1];directionZ=d[2];
+            }
+            else
+            {
+                double yaw=Math.toRadians(displayedRecord.getYaw());
+                double pitch=Math.toRadians(displayedRecord.getPitch());
+                directionX=-Math.sin(yaw)*Math.cos(pitch);
+                directionY=-Math.sin(pitch);
+                directionZ=Math.cos(yaw)*Math.cos(pitch);
+            }
+            net.minecraft.nbt.NBTTagCompound lightSettings=
+                    BetterLightsRig.settingsAt(rig,tick,
+                            lightActor.getActor().getMorph());
+            BetterLightsWireOverlay.draw(getCameraWorkspaceNativePose(),
+                    lightSettings,lx,ly,lz,lx+directionX,
+                    ly+directionY,lz+directionZ,
+                    filmX,filmY,filmW,filmH);
+        }
 
         /*
          * The GUI pass only draws the three gizmo mode buttons.
