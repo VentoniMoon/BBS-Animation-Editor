@@ -111,14 +111,23 @@ Select an item in the LIGHTS list (scroll the list if needed) and edit:
 - **REMOVE** / **TOGGLE LIGHT**: immediately disable or dispose the
   matching native LightCaster without creating any additional actors.
 
-The new CAMERA move gizmo uses the same world-block coordinate contract
-as POSE. Its X/Y/Z shafts/arrows are projected from the *actual cinematic
-camera pose*, and dragging resolves the closest point on a world axis using
-the camera ray. It is a screen-drawn editor overlay rather than the
-actor's native GL limb gizmo; neither overlays nor source markers enter
-the output video. Move operations persist on mouse release; numeric edits
-are committed when switching panels. Coincident Origin/Target points
-are rejected because they have no valid beam direction.
+CAMERA now uses **the same native 3D Move gizmo as POSE**. The active
+Origin or Target is drawn by `EditorGizmoController.draw3D` inside the
+Preview framebuffer with the same red/green/blue solid arrows, perspective
+and gray XY/XZ/YZ plane handles as the working actor light rig. Input also
+uses that controller's hit-test/axis/plane drag logic.
+
+A private, unsaved control Bone/Key provides the movement delta; it is NOT
+a Blockbuster scene actor, recorded bone, or persisted key. The delta is
+applied directly to the selected static light's absolute world XYZ and
+saved in editor.dat on mouse release. The LIGHTS inspector keeps numeric
+coordinate editing and all native BetterLights settings.
+
+The old 2D GUI arrow/letter renderer and its separate `CameraLightWorldGizmo`
+logic have been removed. Only the light-beam outline and a small marker for
+the *other* anchor remain in the GUI preview. Neither the native gizmo
+nor the markers are part of final rendered footage. A coincident Origin/
+Target pair is rejected because a spotlight direction would be undefined.
 
 Static lights remain saved in scene editor.dat under
 `CameraSceneLights` with stable IDs, enabled state, NBT settings and
