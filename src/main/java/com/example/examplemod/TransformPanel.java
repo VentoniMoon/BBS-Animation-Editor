@@ -585,6 +585,9 @@ public class TransformPanel
             return true;
         }
 
+        // Invisible skeleton channels must not capture input in LIGHT rig.
+        if(lightRigMode)return false;
+
         if (
                 this.rotationXControl.contains(
                         mouseX,
