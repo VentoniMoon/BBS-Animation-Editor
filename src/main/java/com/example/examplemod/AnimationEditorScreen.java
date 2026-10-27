@@ -3340,6 +3340,9 @@ public class AnimationEditorScreen extends GuiScreen
             {
             this.actorPreviewController
                     .getTransformPanel()
+                    .setLightRigMode(lightActor);
+            this.actorPreviewController
+                    .getTransformPanel()
                     .setPosition(
                             panelX,
                             top + 10
