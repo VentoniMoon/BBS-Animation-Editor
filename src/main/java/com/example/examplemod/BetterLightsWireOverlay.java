@@ -47,11 +47,12 @@ public final class BetterLightsWireOverlay
                         .replace("_","").toLowerCase(Locale.ROOT);
                 double number=((Number)value.getValue()).doubleValue();
                 if(name.equals("distance"))distance=number;
-                else if(name.equals("outerangle"))outer=number;
-                else if(name.equals("innerangle"))inner=number;
+                else if(name.endsWith("outerangle"))outer=number;
+                else if(name.endsWith("innerangle"))inner=number;
             }
         }
         catch(ReflectiveOperationException ignored){}
+        catch(RuntimeException ignored){}
         catch(LinkageError ignored){}
     }
 
