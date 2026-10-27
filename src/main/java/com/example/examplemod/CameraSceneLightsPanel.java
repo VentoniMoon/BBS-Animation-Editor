@@ -25,28 +25,81 @@ public final class CameraSceneLightsPanel
     private GuiTextField field;
     private int fieldAxis=-1;
     private int leftRight,top,bottom;
-    // CAMERA and POSE use the same absolute world BLOCK coordinate contract.
-    // A drag holds the camera/anchor frozen to avoid chasing a moving gizmo.
-    private CameraLightWorldGizmo.Drag drag;
+    /**
+     * The same 3D arrow-and-plane controller used by POSE. This control rig
+     * never joins scene data; no static keyframes or actor morphs are added.
+     */
+    private final EditorGizmoController moveGizmo=new EditorGizmoController();
+    private final EditorCamera moveCamera=new EditorCamera();
+    private final ActorAnimationData moveRig=
+            new ActorAnimationData("camera-static-light-gizmo");
+    private final AnimationBone moveBone=new AnimationBone(BetterLightsRig.ORIGIN);
+    private final AnimationKeyframe moveKey=new AnimationKeyframe(0);
     private CameraSceneLights.Light draggedLight;
     private int dragComponent=-1;
-    private double dragStart;
+    private double dragStartX,dragStartY,dragStartZ;
     private boolean dirty;
     private int listScroll;
     private String warning;
+
+    public CameraSceneLightsPanel()
+    {
+        moveRig.getBones().add(moveBone);
+        moveGizmo.setLightRigTarget(moveRig);
+        moveGizmo.setMode(EditorGizmoController.Mode.POSITION);
+    }
+
+    private BlockbusterRecordFrame gizmoFrame(CameraSceneLights.Light light)
+    {
+        if(light==null)return null;
+        BlockbusterRecordFrame frame=new BlockbusterRecordFrame();
+        int point=tab==1?1:0;
+        frame.setX(component(light,point,0));
+        frame.setY(component(light,point,1));
+        frame.setZ(component(light,point,2));
+        return frame;
+    }
+
+    private EditorCamera cameraForGizmo(AnimationEditorScreen screen)
+    {
+        PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
+        if(pose==null)return null;
+        moveCamera.apply(pose);
+        return moveCamera;
+    }
+
+    /** Draw 3D arrows and gray move planes into the actual Preview FBO. */
+    public void drawNativeGizmo(AnimationEditorScreen screen,Minecraft mc,
+            int x,int y,int w,int h)
+    {
+        if(!opened||tab==2||sync(screen)==null||
+                screen.getCameraVideoExport().isExporting())return;
+        EditorCamera camera=cameraForGizmo(screen);
+        if(camera==null)return;
+        moveGizmo.draw3D(mc,x,y,w,h,
+                moveBone,moveKey,gizmoFrame(chosen),camera,true);
+    }
+
+    private void resetMove()
+    {
+        moveGizmo.mouseReleased();
+        moveKey.getTransform().setPosition(0F,0F,0F);
+        draggedLight=null;
+        dirty=false;
+    }
 
     public boolean opened(){return opened;}
     public void reset()
     {
         opened=false;chosen=null;nativeActor=null;
-        field=null;fieldAxis=-1;drag=null;draggedLight=null;
-        dirty=false;listScroll=0;tab=0;warning=null;
+        field=null;fieldAxis=-1;resetMove();
+        listScroll=0;tab=0;warning=null;
     }
     public void close(AnimationEditorScreen editor)
     {
         commit(editor);
         persistNative(editor);
-        opened=false;field=null;drag=null;draggedLight=null;
+        opened=false;field=null;resetMove();
     }
     private void choose(AnimationEditorScreen screen,
             CameraSceneLights.Light next)
@@ -55,7 +108,7 @@ public final class CameraSceneLightsPanel
         chosen=next;
         nativeActor=null;
         field=null;fieldAxis=-1;
-        drag=null;draggedLight=null;warning=null;
+        resetMove();warning=null;
         if(next!=null)
         {
             BlockbusterSceneActor actor=new BlockbusterSceneActor();
@@ -409,6 +462,11 @@ public final class CameraSceneLightsPanel
                 label,px+9,py-4,color);
     }
 
+    /**
+     * GUI guides are deliberately limited to the beam and the two point
+     * selectors. The MOVE gizmo is 3D geometry, drawn separately in the
+     * same FBO/pass as the already working POSE actor light gizmo.
+     */
     public void drawGizmo(AnimationEditorScreen screen,int x,int y,int w,int h)
     {
         if(!opened||sync(screen)==null||w<1||h<1)return;
@@ -419,12 +477,9 @@ public final class CameraSceneLightsPanel
                 light.x,light.y,light.z,
                 light.targetX,light.targetY,light.targetZ);
         if(world!=null)
-        {
             BetterLightsWireOverlay.draw(camera,light.morph,
                     world.x,world.y,world.z,
-                    world.targetX,world.targetY,world.targetZ,
-                    x,y,w,h);
-        }
+                    world.targetX,world.targetY,world.targetZ,x,y,w,h);
         float[] source=PreviewCameraProjection.project(
                 light.x,light.y,light.z,camera,x,y,w,h);
         float[] target=PreviewCameraProjection.project(
@@ -432,44 +487,12 @@ public final class CameraSceneLightsPanel
         if(source!=null&&target!=null)
             BetterLightsWireOverlay.line(source[0],source[1],
                     target[0],target[1],0x9983DBF3,x,y,w,h);
-
-        // The two anchors stay visible even when the LIGHT tab is active.
-        // Select either O/T marker directly in the preview to edit it.
-        marker(camera,light.x,light.y,light.z,"O",
-                0xFFFFD16F,tab==0,x,y,w,h);
-        marker(camera,light.targetX,light.targetY,light.targetZ,"T",
-                0xFF70D9FF,tab==1,x,y,w,h);
-        if(tab==2)return;
-
-        double wx=component(light,tab,0),wy=component(light,tab,1),
-                wz=component(light,tab,2);
-        CameraLightWorldGizmo.Handle handle=CameraLightWorldGizmo.project(
-                camera,wx,wy,wz,x,y,w,h);
-        if(handle==null)return;
-        int[] colors={0xFFFF6565,0xFF69E994,0xFF66A7FF};
-        for(int axis=0;axis<3;axis++)
-        {
-            double[] p=handle.tips[axis];
-            if(p==null)continue;
-            int color=colors[axis];
-            BetterLightsWireOverlay.line(handle.x,handle.y,
-                    p[0],p[1],color,x,y,w,h);
-            double vx=p[0]-handle.x,vy=p[1]-handle.y;
-            double distance=Math.sqrt(vx*vx+vy*vy);
-            if(distance<8D)continue;
-            double ux=vx/distance,uy=vy/distance;
-            // POSE-style directional arrow rather than screen-space boxes.
-            BetterLightsWireOverlay.line(p[0],p[1],
-                    p[0]-ux*11D-uy*5D,p[1]-uy*11D+ux*5D,
-                    color,x,y,w,h);
-            BetterLightsWireOverlay.line(p[0],p[1],
-                    p[0]-ux*11D+uy*5D,p[1]-uy*11D-ux*5D,
-                    color,x,y,w,h);
-            if(inside(p[0],p[1],x,y,w,h))
-                Minecraft.getMinecraft().fontRenderer.drawString(
-                        axis==0?"X":axis==1?"Y":"Z",
-                        (int)p[0]+5,(int)p[1]-8,color);
-        }
+        // Keep the opposite anchor selectable even while dragging the
+        // 3D gizmo. Do not paint 2D axis labels over the native 3D arrows.
+        if(tab!=0)marker(camera,light.x,light.y,light.z,"O",
+                0xFFFFD16F,false,x,y,w,h);
+        if(tab!=1)marker(camera,light.targetX,light.targetY,light.targetZ,
+                "T",0xFF70D9FF,false,x,y,w,h);
     }
 
     private static boolean near(PreviewCameraPose camera,
@@ -492,8 +515,7 @@ public final class CameraSceneLightsPanel
         if(camera==null)return false;
         CameraSceneLights.Light light=chosen;
 
-        // Clicking the other anchor swaps editor control, like choosing a
-        // different light rig bone in POSE, but does NOT create a keyframe.
+        // Origin/Target are independently editable world anchors.
         int opposite=tab==0?1:0;
         if(near(camera,component(light,opposite,0),
                 component(light,opposite,1),component(light,opposite,2),
@@ -501,8 +523,8 @@ public final class CameraSceneLightsPanel
         {
             commit(screen);
             persistNative(screen);
+            resetMove();
             tab=opposite;
-            drag=null;draggedLight=null;
             return true;
         }
         if(tab==2)
@@ -514,50 +536,74 @@ public final class CameraSceneLightsPanel
             {tab=1;return true;}
             return false;
         }
-        double wx=component(light,tab,0),wy=component(light,tab,1),
-                wz=component(light,tab,2);
-        CameraLightWorldGizmo.Handle handle=CameraLightWorldGizmo.project(
-                camera,wx,wy,wz,x,y,w,h);
-        int axis=CameraLightWorldGizmo.hitAxis(handle,mx,my);
-        if(axis<0)
-            return near(camera,wx,wy,wz,mx,my,x,y,w,h);
+
+        EditorCamera view=cameraForGizmo(screen);
+        if(view==null)return false;
         commit(screen);
-        drag=new CameraLightWorldGizmo.Drag(axis,camera,
-                wx,wy,wz,x,y,w,h,mx,my);
+        // The native gizmo owns the same ray/plane hit test as POSE.
+        // A transient Bone/Key is just a writable move delta, never saved.
+        resetMove();
+        if(!moveGizmo.mouseClicked(mx,my,button,x,y,w,h,
+                moveBone,moveKey,gizmoFrame(light),view,true))
+            return near(camera,component(light,tab,0),
+                    component(light,tab,1),component(light,tab,2),
+                    mx,my,x,y,w,h);
+        if(!moveGizmo.isDragging())return true;
         draggedLight=light;
-        dragStart=component(light,tab,axis);
         dragComponent=tab;
+        dragStartX=component(light,tab,0);
+        dragStartY=component(light,tab,1);
+        dragStartZ=component(light,tab,2);
         dirty=false;
         return true;
     }
 
     public boolean drag(AnimationEditorScreen screen,int mx,int my)
     {
-        if(drag==null||draggedLight==null)return false;
-        if(chosen!=draggedLight){drag=null;return false;}
-        double next=dragStart+drag.delta(mx,my);
-        if(!Double.isFinite(next)||Math.abs(next)>29999999D)return true;
-        int axis=drag.axis;
-        double previous=component(draggedLight,dragComponent,axis);
-        set(draggedLight,dragComponent,axis,next);
+        if(draggedLight==null||!moveGizmo.isDragging())return false;
+        if(chosen!=draggedLight){resetMove();return false;}
+        if(!moveGizmo.mouseDragged(mx,my))return false;
+
+        AnimationTransform change=moveKey.getTransform();
+        double x=dragStartX+change.getPositionX();
+        double y=dragStartY+change.getPositionY();
+        double z=dragStartZ+change.getPositionZ();
+        if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z)
+                ||Math.max(Math.max(Math.abs(x),Math.abs(y)),Math.abs(z))
+                    >29999999D)return true;
+
+        int selected=dragComponent;
+        double oldX=component(draggedLight,selected,0);
+        double oldY=component(draggedLight,selected,1);
+        double oldZ=component(draggedLight,selected,2);
+        set(draggedLight,selected,0,x);
+        set(draggedLight,selected,1,y);
+        set(draggedLight,selected,2,z);
+
         if(BetterLightsWorldState.points(
                 draggedLight.x,draggedLight.y,draggedLight.z,
                 draggedLight.targetX,draggedLight.targetY,
                 draggedLight.targetZ)==null)
         {
-            set(draggedLight,dragComponent,axis,previous);
+            set(draggedLight,selected,0,oldX);
+            set(draggedLight,selected,1,oldY);
+            set(draggedLight,selected,2,oldZ);
+            warning="Origin and Target cannot coincide";
             return true;
         }
-        dirty|=Math.abs(previous-next)>1E-7D;
+        warning=null;
+        dirty|=Math.abs(oldX-x)>1E-7D||
+                Math.abs(oldY-y)>1E-7D||Math.abs(oldZ-z)>1E-7D;
         return true;
     }
 
     public boolean release(AnimationEditorScreen screen)
     {
-        if(drag==null)return false;
-        drag=null;draggedLight=null;
-        if(dirty)screen.getCameraWorkspace().saveScene();
-        dirty=false;return true;
+        if(!moveGizmo.isDragging())return false;
+        boolean changed=dirty;
+        resetMove();
+        if(changed)screen.getCameraWorkspace().saveScene();
+        return true;
     }
 
 }

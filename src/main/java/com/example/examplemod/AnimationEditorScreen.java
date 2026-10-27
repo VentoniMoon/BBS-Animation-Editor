@@ -3166,11 +3166,16 @@ public class AnimationEditorScreen extends GuiScreen
                     prepareGizmoTarget();
                     this.gizmoController.setPreviewActor(findRuntimeActor());
                 },
-                () -> this.gizmoController.draw3D(
-                        mc, filmX, filmY, filmW, filmH,
-                        getGizmoBone(), getGizmoKeyframe(),
-                        getCurrentRecordFrame(),
-                        getPreviewInteractionCamera(), isGizmoEnabled())
+                () -> {
+                    this.gizmoController.draw3D(
+                            mc, filmX, filmY, filmW, filmH,
+                            getGizmoBone(), getGizmoKeyframe(),
+                            getCurrentRecordFrame(),
+                            getPreviewInteractionCamera(), isGizmoEnabled());
+                    if(isCameraMode())
+                        this.cameraWorkspace.drawNativeLightGizmo(
+                                this,mc,filmX,filmY,filmW,filmH);
+                }
         );
         if(this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
