@@ -118,5 +118,59 @@ public final class CameraBetterLightsBridge
         catch(SecurityException ignored){}
     }
 
+    /**
+     * Detach only the LightCaster owned by this preview entity. Native
+     * BetterLightsMorph leaves a temporary light registered until its
+     * separate WorldClientTickEvent runnable expires. That is too late for
+     * editor scrubbing, changing morphs or deleting a CAMERA light, because
+     * the old source continues illuminating its previous world position.
+     *
+     * Never ask getLightcaster() for cleanup: it lazily creates a caster.
+     * Reflection keeps BetterLights optional at both compile and runtime.
+     */
+    public static void retire(EntityActor actor)
+    {
+        if(actor==null)return;
+        synchronized(STATES)
+        {
+            STATES.remove(actor);
+        }
+        retireMorph(actor.getMorph(),actor.world);
+    }
+
+    public static void retireMorph(AbstractMorph morph,
+            net.minecraft.world.World world)
+    {
+        if(morph==null||world==null||
+                !LIGHT_MORPH.equals(morph.getClass().getName())||
+                !Loader.isModLoaded("better_lights"))return;
+        try
+        {
+            Field casterField=morph.getClass().getDeclaredField("lightCaster");
+            casterField.setAccessible(true);
+            Object caster=casterField.get(morph);
+            if(caster==null)return;
+            Class<?> api=Class.forName("dz.betterlights.BetterLightsMod");
+            Object manager=api.getMethod("getLightManager").invoke(null);
+            for(Method method:manager.getClass().getMethods())
+            {
+                if(!"removeLightCaster".equals(method.getName())||
+                        method.getParameterTypes().length!=3)continue;
+                Class<?>[] args=method.getParameterTypes();
+                if(!args[0].isInstance(world)||!args[1].isInstance(caster)
+                        ||args[2]!=boolean.class)continue;
+                method.invoke(manager,world,caster,false);
+                // The native runnable can still expire naturally; it must
+                // not keep a second rendered source alive after detaching.
+                break;
+            }
+        }
+        catch(ReflectiveOperationException ignored)
+        {
+            // Optional BetterLights ABI; the native TTL is the fallback.
+        }
+        catch(SecurityException ignored){}
+    }
+
     private CameraBetterLightsBridge(){}
 }
