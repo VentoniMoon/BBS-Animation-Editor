@@ -3054,6 +3054,9 @@ public class AnimationEditorScreen extends GuiScreen
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
             CameraSceneLightsRenderer.render(mc,this.sceneViewport,
                     this.sceneState.getCameraLights());
+        else
+            // Switching out of CAMERA must remove its scene-only casters.
+            CameraSceneLightsRenderer.reset();
         return true;
     }
 
@@ -4396,6 +4399,9 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
+        // Preview-only lights are not Minecraft entities: release them
+        // explicitly even if no further native world pass is rendered.
+        CameraSceneLightsRenderer.reset();
         cameraVideoExport.close();
         cameraExportDialog.close();
         /* Never leave the detached preview camera as Minecraft's view. */
