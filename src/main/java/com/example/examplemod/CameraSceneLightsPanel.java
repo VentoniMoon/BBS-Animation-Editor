@@ -194,66 +194,117 @@ public final class CameraSceneLightsPanel
                         listScroll+visibleLights())+"/"+lights.size(),
                     7,bottom-12,0xFF7A93A3);
     }
+    // CameraClipInspector's visual metrics. Only this editor's appearance
+    // changes; stored light values, gizmos and scene persistence do not.
+    private static final int RIGHT_WIDTH=185;
+    private static final int HEADER_BOTTOM=68;
+    private static final int TAB_Y=71;
+    private static final int TAB_HEIGHT=19;
+    private static final int FIRST_FIELD_Y=123;
+    private static final int FIELD_SPACING=23;
+    private static final int TOGGLE_Y=246;
+    private static final int INSPECTOR_BG=0xFF191D21;
+    private static final int SECTION_BG=0xFF2B2D30;
+    private static final int FIELD_BG=0xFF10151A;
+
+    private static int tabX(int x,int index)
+    {
+        return x+7+index*58;
+    }
+    private void section(Minecraft mc,int x,int y,String title)
+    {
+        int accent=EditorThemeManager.get().getAccent();
+        Gui.drawRect(x+7,y,x+178,y+16,SECTION_BG);
+        Gui.drawRect(x+7,y,x+10,y+16,accent);
+        mc.fontRenderer.drawString(title,x+15,y+4,0xFFE2E5E6);
+    }
+
     public void drawRight(AnimationEditorScreen screen,int panelBottom)
     {
         if(!opened)return;
         CameraSceneLights.Light light=sync(screen);
-        int x=screen.width-185;
+        int x=screen.width-RIGHT_WIDTH;
         top=25;bottom=panelBottom;leftRight=x;
-        Gui.drawRect(x,25,screen.width,panelBottom,0xFF1C252E);
         Minecraft mc=Minecraft.getMinecraft();
-        String[] captions={"ORIGIN","TARGET","LIGHT"};
-        for(int i=0;i<3;i++)
-        {
-            int xx=x+5+i*60;
-            Gui.drawRect(xx,28,xx+57,51,
-                    tab==i?0xFF3D7391:0xFF273943);
-            mc.fontRenderer.drawString(captions[i],xx+4,36,
-                    tab==i?0xFFFFFFFF:0xFFB3C3CC);
-        }
+        int accent=EditorThemeManager.get().getAccent();
+        int bright=EditorThemeManager.get().getAccentBright();
+        Gui.drawRect(x,25,screen.width,panelBottom,INSPECTOR_BG);
+        Gui.drawRect(x,25,x+2,panelBottom,0xFF30383E);
+        mc.fontRenderer.drawString("LIGHT PROPERTIES",x+10,34,bright);
+
         if(light==null)
         {
-            mc.fontRenderer.drawString("Create a light with +",x+9,67,
-                    0xFFE0E0E0);
+            mc.fontRenderer.drawString("Create a static light",x+10,53,
+                    0xFF8C999F);
             return;
+        }
+        Gui.drawRect(x+7,46,x+178,63,0xFF272E34);
+        Gui.drawRect(x+7,46,x+10,63,accent);
+        String name=mc.fontRenderer.trimStringToWidth(light.name,119);
+        mc.fontRenderer.drawString(name,x+15,50,0xFFE8F1F3);
+        String status=light.enabled?"ON":"OFF";
+        mc.fontRenderer.drawString(status,
+                x+171-mc.fontRenderer.getStringWidth(status),
+                50,light.enabled?bright:0xFF969EA4);
+
+        String[] tabs={"ORIGIN","TARGET","LIGHT"};
+        for(int i=0;i<3;i++)
+        {
+            int tx=tabX(x,i);
+            Gui.drawRect(tx,TAB_Y,tx+55,TAB_Y+TAB_HEIGHT,
+                    tab==i?SECTION_BG:0xFF21262B);
+            Gui.drawRect(tx,TAB_Y+TAB_HEIGHT-2,tx+55,
+                    TAB_Y+TAB_HEIGHT,tab==i?accent:0xFF343C43);
+            int textX=tx+(55-mc.fontRenderer.getStringWidth(tabs[i]))/2;
+            mc.fontRenderer.drawString(tabs[i],textX,TAB_Y+5,
+                    tab==i?0xFFE9F5F8:0xFF9CAAB0);
         }
         if(tab==2)
         {
-            nativeSettings.draw(mc,x,54,panelBottom,nativeActor,
-                    screen.getCurrentFrame());
+            nativeSettings.drawCamera(mc,x,96,panelBottom,nativeActor);
             return;
         }
-        mc.fontRenderer.drawString("WORLD "+captions[tab],
-                x+12,68,0xFF70CFFF);
-        mc.fontRenderer.drawString("Drag arrows; click O/T to switch",
-                x+10,89,0xFFB7C2C9);
-        String[] axis={"X","Y","Z"};
+
+        section(mc,x,98,tab==0?"WORLD ORIGIN":"WORLD TARGET");
+        String[] axes={"X","Y","Z"};
         for(int i=0;i<3;i++)
         {
-            int yy=112+i*41;
-            mc.fontRenderer.drawString(axis[i],x+11,yy+6,
-                    i==0?0xFFFF7777:i==1?0xFF80E68E:0xFF8FB9FF);
-            Gui.drawRect(x+29,yy,x+176,yy+22,0xFF101A22);
+            int yy=FIRST_FIELD_Y+i*FIELD_SPACING;
+            mc.fontRenderer.drawString(axes[i],x+13,yy+4,
+                    0xFFADBBC1);
+            Gui.drawRect(x+48,yy,x+175,yy+17,FIELD_BG);
+            Gui.drawRect(x+48,yy+16,x+175,yy+17,0xFF384148);
             if(field!=null&&fieldAxis==i)
                 field.drawTextBox();
             else
                 mc.fontRenderer.drawString(
-                        String.format(Locale.ROOT,"%.3f",
-                            component(light,tab,i)),x+37,yy+7,
-                        0xFFE7EFF4);
+                        mc.fontRenderer.trimStringToWidth(
+                            String.format(Locale.ROOT,"%.3f",
+                                component(light,tab,i)),116),
+                        x+53,yy+4,0xFFE6F0F3);
         }
-        mc.fontRenderer.drawString("WORLD POINT (blocks)",x+10,251,
-                0xFF8094A3);
-        mc.fontRenderer.drawString("Light enabled: "+(light.enabled?"YES":"NO"),
-                x+11,279,light.enabled?0xFF80EEAA:0xFFF0A0A0);
-        Gui.drawRect(x+10,303,x+175,327,0xFF324D64);
-        mc.fontRenderer.drawString("TOGGLE LIGHT",x+38,311,0xFFFFFFFF);
-        mc.fontRenderer.drawString(
-                "Ctrl+S saves; no keys created",x+10,346,0xFFB0BDC6);
+
+        mc.fontRenderer.drawString("WORLD COORDINATES / BLOCKS",
+                x+11,201,0xFF8C999F);
+        mc.fontRenderer.drawString("Drag 3D gizmo to reposition",
+                x+11,216,0xFFAABAC2);
+
+        section(mc,x,229,"SOURCE");
+        Gui.drawRect(x+11,TOGGLE_Y,x+175,TOGGLE_Y+17,FIELD_BG);
+        Gui.drawRect(x+11,TOGGLE_Y+16,x+175,TOGGLE_Y+17,
+                0xFF384148);
+        mc.fontRenderer.drawString("Enabled",x+17,TOGGLE_Y+4,
+                0xFFCFD9DC);
+        mc.fontRenderer.drawString(light.enabled?"On":"Off",
+                x+113,TOGGLE_Y+4,0xFFE6F0F3);
+        Gui.drawRect(x+156,TOGGLE_Y+3,x+169,TOGGLE_Y+14,
+                light.enabled?accent:0xFF58626A);
+        mc.fontRenderer.drawString("No keys - saved with the scene",
+                x+11,279,0xFF879AA4);
         if(warning!=null)
             mc.fontRenderer.drawString(
-                    mc.fontRenderer.trimStringToWidth(warning,167),
-                    x+10,366,0xFFFF9999);
+                    mc.fontRenderer.trimStringToWidth(warning,163),
+                    x+11,299,0xFFFF9999);
     }
 
     private static double component(CameraSceneLights.Light l,int part,int axis)
@@ -372,10 +423,19 @@ public final class CameraSceneLightsPanel
         }
         if(mx<leftRight||my<25||my>=bottom)return false;
         if(button!=0)return true;
-        if(my>=28&&my<53)
+        if(my>=TAB_Y&&my<TAB_Y+TAB_HEIGHT)
         {
-            commit(screen);persistNative(screen);
-            tab=Math.max(0,Math.min(2,(mx-leftRight-5)/60));
+            for(int i=0;i<3;i++)
+            {
+                int tx=tabX(leftRight,i);
+                if(mx>=tx&&mx<tx+55)
+                {
+                    commit(screen);
+                    persistNative(screen);
+                    tab=i;
+                    return true;
+                }
+            }
             return true;
         }
         CameraSceneLights.Light light=sync(screen);
@@ -386,7 +446,8 @@ public final class CameraSceneLightsPanel
             syncNative(screen);
             return true;
         }
-        if(my>=303&&my<328)
+        if(mx>=leftRight+11&&mx<leftRight+175&&
+                my>=TOGGLE_Y&&my<TOGGLE_Y+17)
         {
             light.enabled=!light.enabled;
             screen.getCameraWorkspace().saveScene();
@@ -395,12 +456,13 @@ public final class CameraSceneLightsPanel
         commit(screen);
         for(int i=0;i<3;i++)
         {
-            int yy=112+i*41;
-            if(my>=yy&&my<yy+22)
+            int yy=FIRST_FIELD_Y+i*FIELD_SPACING;
+            if(mx>=leftRight+48&&mx<leftRight+175&&
+                    my>=yy&&my<yy+17)
             {
                 fieldAxis=i;
                 field=new GuiTextField(18618,Minecraft.getMinecraft().fontRenderer,
-                        leftRight+35,yy+2,130,17);
+                        leftRight+52,yy+1,117,15);
                 field.setText(String.format(Locale.ROOT,"%.5f",
                         component(light,tab,i)));
                 field.setFocused(true);
