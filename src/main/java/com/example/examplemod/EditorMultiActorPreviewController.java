@@ -87,7 +87,17 @@ public final class EditorMultiActorPreviewController
         {
             if (data == null || data.getId() == null) continue;
             active.add(data.getId());
-            if (data == selected || !data.hasRecord()) continue;
+            if (data == selected)
+            {
+                // Selected actors belong to EditorSceneViewport's renderer.
+                // A previously background-rendered light may otherwise keep
+                // an independent LightCaster alive at its stale position.
+                BlockbusterActorPreviewRenderer obsolete=
+                        renderers.remove(data.getId());
+                if(obsolete!=null)obsolete.reset();
+                continue;
+            }
+            if(!data.hasRecord())continue;
 
             BlockbusterRecord record = data.getRecord();
             if (record == null || record.getFrames() == null

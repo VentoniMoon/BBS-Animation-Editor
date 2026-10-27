@@ -141,6 +141,13 @@ public class TransformPanel
      */
 
     private AnimationValueControl activeControl;
+    private boolean lightRigMode;
+
+    /** Two BetterLights control tracks have XYZ only; rotation/scale are not bones. */
+    public void setLightRigMode(boolean enabled)
+    {
+        lightRigMode=enabled;
+    }
 
     private int x;
     private int y;
@@ -189,7 +196,7 @@ public class TransformPanel
                 x - 1,
                 y - 1,
                 x + PANEL_WIDTH + 1,
-                y + PANEL_HEIGHT + 1,
+                y + (lightRigMode?132:PANEL_HEIGHT) + 1,
                 PANEL_BORDER
         );
 
@@ -198,7 +205,7 @@ public class TransformPanel
                 x,
                 y,
                 x + PANEL_WIDTH,
-                y + PANEL_HEIGHT,
+                y + (lightRigMode?132:PANEL_HEIGHT),
                 PANEL_BACKGROUND
         );
 
@@ -320,6 +327,13 @@ public class TransformPanel
                 y + 97,
                 SECTION_LINE
         );
+        if(lightRigMode)
+        {
+            // Source and aim are animated in actual world blocks. A
+            // skeleton's Rotation and Scale fields do not control this light.
+            font.drawString("XYZ offset / blocks",x+10,y+105,TEXT_SECONDARY);
+            return;
+        }
 
         /*
          * =====================================================
@@ -570,6 +584,9 @@ public class TransformPanel
 
             return true;
         }
+
+        // Invisible skeleton channels must not capture input in LIGHT rig.
+        if(lightRigMode)return false;
 
         if (
                 this.rotationXControl.contains(

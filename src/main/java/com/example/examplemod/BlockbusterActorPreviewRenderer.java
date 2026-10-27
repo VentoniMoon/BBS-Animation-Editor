@@ -1508,8 +1508,9 @@ public class BlockbusterActorPreviewRenderer
                     true
             );
             if(lightRig!=null)
-                BetterLightsRig.applyTarget(entityActor.getMorph(),lightRig,
-                        CameraVisualFrameClock.sceneTime(previewFrame));
+                BetterLightsRig.syncNativeCaster(entityActor.getMorph(),
+                        lightRig,CameraVisualFrameClock.sceneTime(previewFrame),
+                        entityActor.posX,entityActor.posY,entityActor.posZ);
         }
 
         /*

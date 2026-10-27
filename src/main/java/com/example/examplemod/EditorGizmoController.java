@@ -105,6 +105,7 @@ public class EditorGizmoController
     private AnimationBone bodyPartAttachmentBone;
     private AnimationBone gizmoAttachmentBone;
     private AnimationTransform globalTransformTarget;
+    private ActorAnimationData lightRigTarget;
     private int gizmoFrame;
     private boolean chameleonCoordinateSpace;
     private EntityActor previewActor;
@@ -131,6 +132,22 @@ public class EditorGizmoController
     public void setGlobalTransformTarget(AnimationTransform transform)
     {
         this.globalTransformTarget = transform;
+    }
+
+    /** Light bones use world BLOCKS, never anatomical model pixels. */
+    public void setLightRigTarget(ActorAnimationData rig)
+    {
+        this.lightRigTarget=rig;
+        // Direction is authored by translating Target; lighting morphs have
+        // no skeletal rotation or scale channels to manipulate.
+        if(rig!=null&&mode!=Mode.POSITION)setMode(Mode.POSITION);
+    }
+
+    private boolean isWorldLightBone(AnimationBone bone)
+    {
+        return lightRigTarget!=null && bone!=null &&
+                (BetterLightsRig.ORIGIN.equals(bone.getName()) ||
+                 BetterLightsRig.TARGET.equals(bone.getName()));
     }
 
     public void setPreviewActor(EntityActor actor)
@@ -225,6 +242,8 @@ public class EditorGizmoController
                     && mouseY >= y
                     && mouseY < y + BUTTON_SIZE)
             {
+                if(lightRigTarget!=null&&i!=0)
+                    return true; // no rotation/scale for a light-control point
                 if (i == 0)
                 {
                     setMode(Mode.POSITION);
@@ -2454,6 +2473,21 @@ public class EditorGizmoController
 
     private double[] getNativeBoneWorldPosition(AnimationBone bone, AnimationKeyframe keyframe, BlockbusterRecordFrame recordFrame)
     {
+        if(isWorldLightBone(bone) && recordFrame!=null)
+        {
+            float frame=keyframe==null?gizmoFrame:keyframe.getFrame();
+            float[] origin=BetterLightsRig.offset(lightRigTarget,frame);
+            double x=recordFrame.getX()+origin[0];
+            double y=recordFrame.getY()+origin[1];
+            double z=recordFrame.getZ()+origin[2];
+            if(BetterLightsRig.TARGET.equals(bone.getName()))
+            {
+                float[] aim=BetterLightsRig.targetOffset(lightRigTarget,frame);
+                x+=aim[0];y+=aim[1];z+=aim[2];
+            }
+            return new double[]{x,y,z};
+        }
+
         /*
          * Body Parts use a separate transform hierarchy from the actor.
          * Always resolve their gizmo pivot through that hierarchy before
@@ -5218,6 +5252,7 @@ public class EditorGizmoController
 
     private double getBodyPartPositionDelta(int axisId, double worldDelta)
     {
+        if(isWorldLightBone(this.activeBone))return worldDelta;
         if (this.globalTransformTarget != null)
         {
             /*
@@ -5282,6 +5317,10 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
+        if(isWorldLightBone(bone))
+            return new double[][]{
+                    {1D,0D,0D},{0D,1D,0D},{0D,0D,1D}};
+
         /*
          * Body Parts must never borrow native matrices from the parent
          * actor morph. Their pivot and orientation belong to the selected
