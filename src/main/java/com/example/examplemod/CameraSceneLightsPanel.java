@@ -329,83 +329,98 @@ public final class CameraSceneLightsPanel
         final double x,y;
         ScreenPoint(double x,double y){this.x=x;this.y=y;}
     }
+    /**
+     * Project world XYZ through the exact native preview camera convention.
+     * The old independent +Z-forward projection was inverted relative to
+     * PreviewWorldRenderer (-Z view space), causing screen-locked handles.
+     */
     private static ScreenPoint project(PreviewCameraPose camera,
             double x,double y,double z,int left,int top,int w,int h)
     {
-        double yaw=Math.toRadians(camera.yaw);
-        double pitch=Math.toRadians(camera.pitch);
-        double[] f={-Math.sin(yaw)*Math.cos(pitch),-Math.sin(pitch),
-                Math.cos(yaw)*Math.cos(pitch)};
-        double[] r={Math.cos(yaw),0,Math.sin(yaw)};
-        double[] u={-Math.sin(yaw)*Math.sin(pitch),Math.cos(pitch),
-                Math.cos(yaw)*Math.sin(pitch)};
-        double vx=x-camera.x,vy=y-camera.y,vz=z-camera.z;
-        double depth=vx*f[0]+vy*f[1]+vz*f[2];
-        if(depth<=0.02D)return null;
-        double halfHeight=depth*Math.tan(Math.toRadians(camera.fov)*0.5D);
-        if(halfHeight<1E-5D)return null;
-        double scale=(h*0.5D)/halfHeight;
-        return new ScreenPoint(left+w*0.5D+
-                (vx*r[0]+vy*r[1]+vz*r[2])*scale,
-                top+h*0.5D-
-                (vx*u[0]+vy*u[1]+vz*u[2])*scale);
+        float[] p=PreviewCameraProjection.project(x,y,z,camera,
+                left,top,w,h);
+        return p==null?null:new ScreenPoint(p[0],p[1]);
+    }
+
+    /** Size a world-space axis so it stays usable across zoom distances. */
+    private static double axisLength(PreviewCameraPose camera,
+            double x,double y,double z)
+    {
+        double a=x-camera.x,b=y-camera.y,c=z-camera.z;
+        return Math.max(0.4D,Math.min(12D,
+                Math.sqrt(a*a+b*b+c*c)*0.075D));
     }
 
     public void drawGizmo(AnimationEditorScreen screen,int x,int y,int w,int h)
     {
-        if(!opened||tab==2||sync(screen)==null)return;
+        if(!opened||sync(screen)==null)return;
         CameraSceneLights.Light l=chosen;
         PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
-        ScreenPoint p=project(pose,
-                component(l,tab,0),component(l,tab,1),
-                component(l,tab,2),x,y,w,h);
+        // Preview-only outline; the native film framebuffer is already
+        // composited before this GUI overlay is drawn.
+        BetterLightsWireOverlay.draw(pose,l.morph,
+                l.x,l.y,l.z,l.targetX,l.targetY,l.targetZ,
+                x,y,w,h);
+        if(tab==2)return;
+        double ox=component(l,tab,0),oy=component(l,tab,1),
+                oz=component(l,tab,2);
+        ScreenPoint p=project(pose,ox,oy,oz,x,y,w,h);
         if(p==null)return;
-        int px=(int)p.x,py=(int)p.y;
-        Gui.drawRect(px-3,py-3,px+4,py+4,0xFFFFFFFF);
+        double length=axisLength(pose,ox,oy,oz);
+        Gui.drawRect((int)p.x-4,(int)p.y-4,
+                (int)p.x+5,(int)p.y+5,0xFFFFFFFF);
         for(int i=0;i<3;i++)
         {
-            double ax=component(l,tab,0)+(i==0?1D:0D);
-            double ay=component(l,tab,1)+(i==1?1D:0D);
-            double az=component(l,tab,2)+(i==2?1D:0D);
-            ScreenPoint next=project(pose,ax,ay,az,x,y,w,h);
-            if(next==null)continue;
+            ScreenPoint tip=project(pose,
+                    ox+(i==0?length:0D),
+                    oy+(i==1?length:0D),
+                    oz+(i==2?length:0D),x,y,w,h);
+            if(tip==null)continue;
             int color=i==0?0xFFFF6060:i==1?0xFF63ED85:0xFF679DFF;
-            int ex=(int)next.x,ey=(int)next.y;
-            Gui.drawRect(ex-5,ey-5,ex+6,ey+6,color);
+            BetterLightsWireOverlay.line(p.x,p.y,tip.x,tip.y,
+                    color,x,y,w,h);
+            int ex=(int)tip.x,ey=(int)tip.y;
+            if(ex<x+7||ex>=x+w-7||ey<y+7||ey>=y+h-7)continue;
+            Gui.drawRect(ex-6,ey-6,ex+7,ey+7,color);
             Minecraft.getMinecraft().fontRenderer.drawString(
                     i==0?"X":i==1?"Y":"Z",ex-2,ey-4,0xFF0B1220);
         }
     }
+
     public boolean beginGizmo(AnimationEditorScreen screen,
             int mx,int my,int button,int x,int y,int w,int h)
     {
         if(button!=0||!opened||tab==2||sync(screen)==null||
                 mx<x||mx>=x+w||my<y||my>=y+h)return false;
         PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
+        double ox=component(chosen,tab,0),oy=component(chosen,tab,1),
+                oz=component(chosen,tab,2);
+        double length=axisLength(pose,ox,oy,oz);
+        ScreenPoint start=project(pose,ox,oy,oz,x,y,w,h);
+        if(start==null)return false;
         for(int i=0;i<3;i++)
         {
-            double ax=component(chosen,tab,0)+(i==0?1D:0D);
-            double ay=component(chosen,tab,1)+(i==1?1D:0D);
-            double az=component(chosen,tab,2)+(i==2?1D:0D);
-            ScreenPoint end=project(pose,ax,ay,az,x,y,w,h);
-            ScreenPoint start=project(pose,
-                    component(chosen,tab,0),component(chosen,tab,1),
-                    component(chosen,tab,2),x,y,w,h);
-            if(end==null||start==null||
-                    Math.abs(mx-end.x)>11||Math.abs(my-end.y)>11)continue;
+            ScreenPoint end=project(pose,
+                    ox+(i==0?length:0D),
+                    oy+(i==1?length:0D),
+                    oz+(i==2?length:0D),x,y,w,h);
+            if(end==null||
+                    Math.abs(mx-end.x)>12||Math.abs(my-end.y)>12)continue;
             dragAxis=i;dragComponent=tab;
             startMouseX=mx;startMouseY=my;
             oldCoord=component(chosen,tab,i);
-            dx=end.x-start.x;dy=end.y-start.y;
+            dx=(end.x-start.x)/length;
+            dy=(end.y-start.y)/length;
             dirty=false;return true;
         }
         return false;
     }
+
     public boolean drag(AnimationEditorScreen screen,int mx,int my)
     {
         if(dragAxis<0||chosen==null)return false;
         double length=dx*dx+dy*dy;
-        double steps=length<3D?(startMouseY-my)*0.025D:
+        double steps=length<1E-4D?(startMouseY-my)*0.025D:
                 ((mx-startMouseX)*dx+(my-startMouseY)*dy)/length;
         set(chosen,dragComponent,dragAxis,oldCoord+steps);
         dirty=true;return true;
