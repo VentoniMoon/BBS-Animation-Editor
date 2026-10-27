@@ -92,6 +92,22 @@ public final class CameraSceneLightsRenderer
                     viewport.getCameraForPreviewInteractions(),
                     0,0,BbsFsNativeActorPass.worldViewportWidth(),
                     BbsFsNativeActorPass.worldViewportHeight());
+            // The actor renderer's native BetterLightsMorph rewrites direction
+            // from its local yaw/pitch on every render. CAMERA Target is a
+            // WORLD point, so explicitly bind the already-registered caster
+            // to these same persisted world-space XYZ and aim values.
+            mchorse.blockbuster.common.entity.EntityActor active=
+                    slot.renderer.getActor();
+            if(active!=null)
+            {
+                double length=Math.sqrt(dx*dx+dy*dy+dz*dz);
+                if(length<1E-8D)length=1D;
+                BetterLightsRig.syncNativeCaster(active.getMorph(),
+                        l.x,l.y,l.z,new float[]{
+                                (float)(dx/length),
+                                (float)(dy/length),
+                                (float)(dz/length)});
+            }
         }
         // Drop removed editor-only lights rather than pinning their morphs
         // indefinitely in the Java session.
