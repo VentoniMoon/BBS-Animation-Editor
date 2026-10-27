@@ -854,6 +854,11 @@ public class AnimationEditorScreen extends GuiScreen
         this.gizmoController.setGizmoFrame(
                 this.playbackController.getCurrentFrame()
         );
+        // Light rig tracks store WORLD blocks rather than model pixels.
+        this.gizmoController.setLightRigTarget(
+                editorModeController.getMode()==EditorModeController.EditorMode.POSE
+                && BetterLightsActorInspector.isLightActor(getSelectedActor())
+                    ?BetterLightsRig.forActor(getSelectedActor()):null);
 
         boolean chameleonGizmoTarget =
                 this.actorPreviewController.isCurrentActorChameleon();
