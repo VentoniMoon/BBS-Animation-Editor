@@ -3204,36 +3204,18 @@ public class AnimationEditorScreen extends GuiScreen
             ActorAnimationData rig=BetterLightsRig.forActor(lightActor);
             double tick=CameraVisualFrameClock.sceneTime(
                     playbackController.getCurrentFrame());
-            float[] offset=BetterLightsRig.offset(rig,tick);
-            double lx=displayedRecord.getX()+offset[0];
-            double ly=displayedRecord.getY()+offset[1];
-            double lz=displayedRecord.getZ()+offset[2];
-            double directionX,directionY,directionZ;
-            AnimationBone target=rig==null?null:
-                    rig.getBone(BetterLightsRig.TARGET);
-            if(target!=null&&!target.getKeyframes().isEmpty())
-            {
-                float[] d=BetterLightsRig.direction(rig,tick);
-                directionX=d[0];directionY=d[1];directionZ=d[2];
-            }
-            else
-            {
-                double yaw=Math.toRadians(displayedRecord.getYaw());
-                double pitch=Math.toRadians(displayedRecord.getPitch());
-                directionX=-Math.sin(yaw)*Math.cos(pitch);
-                directionY=-Math.sin(pitch);
-                directionZ=Math.cos(yaw)*Math.cos(pitch);
-            }
+            BetterLightsWorldState light=BetterLightsWorldState.actor(
+                    displayedRecord.getX(),displayedRecord.getY(),
+                    displayedRecord.getZ(),
+                    BetterLightsRig.offset(rig,tick),
+                    BetterLightsRig.targetOffset(rig,tick));
             net.minecraft.nbt.NBTTagCompound lightSettings=
                     BetterLightsRig.settingsAt(rig,tick,
                             lightActor.getActor().getMorph());
-            // Without a keyed Target, BetterLights retains its native
-            // local Direction property and actor rotation. A guessed yaw
-            // would display a misleading beam, so draw only keyed guides.
-            if(target!=null&&!target.getKeyframes().isEmpty())
+            if(light!=null)
                 BetterLightsWireOverlay.draw(getCameraWorkspaceNativePose(),
-                        lightSettings,lx,ly,lz,lx+directionX,
-                        ly+directionY,lz+directionZ,
+                        lightSettings,light.x,light.y,light.z,
+                        light.targetX,light.targetY,light.targetZ,
                         filmX,filmY,filmW,filmH);
         }
 
