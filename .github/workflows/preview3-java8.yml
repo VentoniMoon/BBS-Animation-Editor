@@ -128,10 +128,9 @@ jobs:
             src/main/java/com/example/examplemod/PreviewCameraProjection.java \
             src/main/java/com/example/examplemod/PreviewCameraMatrices.java \
             src/main/java/com/example/examplemod/JoltContactScreenProjection.java \
-            src/test/java/com/example/examplemod/Preview3CameraSmokeTest.java \
+            src/test/java/com/example/examplemod/Preview3CameraSmokeTest.java
           java -ea -cp build/preview3/camera \
             com.example.examplemod.Preview3CameraSmokeTest
-          java -ea -cp build/preview3/camera \
 
       - name: Compile scene coordinator and test actor order / GL cleanup
         run: |
