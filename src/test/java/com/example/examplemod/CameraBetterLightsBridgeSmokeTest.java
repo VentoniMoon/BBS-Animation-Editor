@@ -3,6 +3,7 @@ package com.example.examplemod;
 import mchorse.blockbuster.common.entity.EntityActor;
 import mchorse.blockbuster_pack.morphs.BetterLightsMorph;
 import net.minecraftforge.fml.common.Loader;
+import dz.betterlights.BetterLightsMod;
 
 /** Synthetic optional-mod lifecycle regression, without a Minecraft client. */
 public final class CameraBetterLightsBridgeSmokeTest {
@@ -36,6 +37,13 @@ public final class CameraBetterLightsBridgeSmokeTest {
         actor.world.isRemote=false;
         CameraBetterLightsBridge.prepare(actor,2);
         check(actor.morph.updates==1,"never mutate server world");
+        Object activeCaster=((BetterLightsMorph)actor.morph).caster();
+        int removed=BetterLightsMod.INSTANCE.removals;
+        CameraBetterLightsBridge.retire(actor);
+        check(BetterLightsMod.INSTANCE.removals==removed+1,
+                "replacing/deleting a preview light must unregister its caster now");
+        check(BetterLightsMod.INSTANCE.last==activeCaster,
+                "only this actor's caster may be removed");
         System.out.println("CAMERA optional BetterLights morph lifecycle PASS");
     }
 }
