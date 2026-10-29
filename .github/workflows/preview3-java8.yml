@@ -195,6 +195,7 @@ jobs:
             src/test/preview3-fs-bridge-stubs/net/minecraft/client/shader/Framebuffer.java \
             src/test/preview3-fs-bridge-stubs/net/minecraft/client/renderer/entity/RenderManager.java \
             src/test/preview3-fs-bridge-stubs/com/example/examplemod/BbsFsBridgeStubs.java \
+            src/main/java/com/example/examplemod/EditorGuiScale.java \
             src/main/java/com/example/examplemod/BbsFsPreviewTarget.java \
             src/main/java/com/example/examplemod/BbsFsWorldFrameCapture.java \
             src/main/java/com/example/examplemod/BbsFsWorldProjection.java \
