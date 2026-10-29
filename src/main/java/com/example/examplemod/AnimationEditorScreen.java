@@ -387,6 +387,22 @@ public class AnimationEditorScreen extends GuiScreen
      * =========================================================
      */
 
+    /**
+     * Vanilla supplies GuiScreen size according to gameSettings.guiScale.
+     * Replace only this editor's logical canvas dimensions with a scale
+     * derived from the physical window, WITHOUT changing Minecraft settings.
+     * All normal GuiScreen input methods then use these matching dimensions.
+     */
+    @Override
+    public void setWorldAndResolution(Minecraft minecraft,int width,int height)
+    {
+        super.setWorldAndResolution(minecraft,
+                EditorGuiScale.width(minecraft.displayWidth,
+                        minecraft.displayHeight),
+                EditorGuiScale.height(minecraft.displayWidth,
+                        minecraft.displayHeight));
+    }
+
     @Override
     public void initGui()
     {
@@ -1928,6 +1944,47 @@ public class AnimationEditorScreen extends GuiScreen
             CameraNativeFrameProbe.resyncDefaultTextureForGui();
         }
 
+        // Minecraft passes mouse positions in its user-selected GUI scale.
+        // The editor draws in its own logical pixels, so sample the physical
+        // cursor and map it to precisely the same canvas used by GuiScreen.
+        int editorMouseX=EditorGuiScale.mouseX(
+                org.lwjgl.input.Mouse.getX(),mc.displayWidth,width);
+        int editorMouseY=EditorGuiScale.mouseY(
+                org.lwjgl.input.Mouse.getY(),mc.displayHeight,height);
+
+        // EntityRenderer prepared an overlay projection for the *vanilla*
+        // GUI size. Save that matrix and install the editor-only projection.
+        // Restore both stacks even during CAMERA export or UI failures.
+        int savedMatrixMode=org.lwjgl.opengl.GL11.glGetInteger(
+                org.lwjgl.opengl.GL11.GL_MATRIX_MODE);
+        org.lwjgl.opengl.GL11.glMatrixMode(org.lwjgl.opengl.GL11.GL_PROJECTION);
+        org.lwjgl.opengl.GL11.glPushMatrix();
+        org.lwjgl.opengl.GL11.glLoadIdentity();
+        org.lwjgl.opengl.GL11.glOrtho(0,width,height,0,1000,3000);
+        org.lwjgl.opengl.GL11.glMatrixMode(org.lwjgl.opengl.GL11.GL_MODELVIEW);
+        org.lwjgl.opengl.GL11.glPushMatrix();
+        org.lwjgl.opengl.GL11.glLoadIdentity();
+        org.lwjgl.opengl.GL11.glTranslated(0,0,-2000);
+        try
+        {
+            drawEditorGuiContents(editorMouseX,editorMouseY,partialTicks);
+        }
+        finally
+        {
+            org.lwjgl.opengl.GL11.glMatrixMode(
+                    org.lwjgl.opengl.GL11.GL_MODELVIEW);
+            org.lwjgl.opengl.GL11.glPopMatrix();
+            org.lwjgl.opengl.GL11.glMatrixMode(
+                    org.lwjgl.opengl.GL11.GL_PROJECTION);
+            org.lwjgl.opengl.GL11.glPopMatrix();
+            org.lwjgl.opengl.GL11.glMatrixMode(savedMatrixMode);
+        }
+    }
+
+    /** All editor widgets, including the native film, use one UI canvas. */
+    private void drawEditorGuiContents(int mouseX,int mouseY,
+            float partialTicks)
+    {
         if(cameraVideoExport.isExporting())
         {
             // The native world, actors, media and encoder STILL advance via
