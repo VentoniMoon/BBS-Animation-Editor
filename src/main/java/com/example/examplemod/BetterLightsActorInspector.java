@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 
 import mchorse.mclib.config.values.GenericBaseValue;
+import mchorse.mclib.config.values.GenericNumberValue;
 import mchorse.mclib.utils.Color;
 import mchorse.mclib.utils.ValueSerializer;
 import mchorse.metamorph.api.MorphManager;
@@ -35,7 +36,7 @@ public final class BetterLightsActorInspector
     private static final int LABEL=0xFFA9C0CC;
     private static final int TEXT=0xFFE4EEF2;
     private static final int ACCENT=0xFF54C8EE;
-    private static final int ROW_HEIGHT=37;
+    private static final int ROW_HEIGHT=45;
 
     private static final class Entry
     {
@@ -77,8 +78,15 @@ public final class BetterLightsActorInspector
      * This layout is independent of the larger POSE actor layout.
      */
     private boolean cameraLayout;
-    private static final int CAMERA_ROW_HEIGHT=32;
-    private static final int CAMERA_VALUES_OFFSET=25;
+    private static final int CAMERA_ROW_HEIGHT=45;
+    private static final int CAMERA_VALUES_OFFSET=70;
+    private int section=BetterLightsPanelModel.LIGHT;
+    private Entry sliding;
+    private Entry picking;
+    private float hue,saturation=1F,brightness=1F;
+    private int pickerTop;
+    private int dragColorPart; // 0 none; 1 SV; 2 hue; 3 alpha
+
 
     /** Light-actor POSE displays both real light properties and keyable rig. */
     private boolean rigTab;
@@ -134,6 +142,8 @@ public final class BetterLightsActorInspector
         editing=null;
         input=null;
         scroll=0;
+        sliding=null;
+        picking=null;
         error=null;
         if(!isLightActor(current))return;
 
@@ -165,157 +175,222 @@ public final class BetterLightsActorInspector
         }
     }
 
+    private List<Entry> visibleEntries()
+    {
+        List<Entry> filtered=new ArrayList<Entry>();
+        for(Entry entry:entries)
+            if(BetterLightsPanelModel.section(entry.title)==section)
+                filtered.add(entry);
+        return filtered;
+    }
+
+    private int tabsY(){return cameraLayout?top+23:top+85;}
+    private int rowsY(){return cameraLayout?top+CAMERA_VALUES_OFFSET:top+139;}
+    private int rowHeight(){return cameraLayout?CAMERA_ROW_HEIGHT:ROW_HEIGHT;}
+    private int visibleCount()
+    {
+        return Math.max(0,(bottom-rowsY()-8)/rowHeight());
+    }
+
+    /** The four native nested Value groups, in the same CAMERA theme. */
+    private void drawSections(Minecraft mc)
+    {
+        int accent=EditorThemeManager.get().getAccent();
+        int y=tabsY();
+        for(int i=0;i<4;i++)
+        {
+            int sx=x+9+(i%2)*85, sy=y+(i/2)*21;
+            Gui.drawRect(sx,sy,sx+80,sy+19,
+                    section==i?0xFF333A40:0xFF252A30);
+            Gui.drawRect(sx,sy+17,sx+80,sy+19,
+                    section==i?accent:0xFF3B464D);
+            String label=BetterLightsPanelModel.TITLES[i];
+            int tw=mc.fontRenderer.getStringWidth(label);
+            mc.fontRenderer.drawString(label,
+                    sx+(80-tw)/2,sy+5,
+                    section==i?0xFFF4FBFD:0xFFA2ADB4);
+        }
+    }
+
+    private void drawEntry(Minecraft mc,Entry entry,int cy)
+    {
+        FontRenderer f=mc.fontRenderer;
+        int accent=EditorThemeManager.get().getAccent();
+        Object value=entry.value.getValue();
+        Gui.drawRect(x+9,cy,x+176,cy+42,0xFF20262B);
+        String label=BetterLightsPanelModel.label(entry.title);
+        f.drawString(f.trimStringToWidth(label,154),
+                x+13,cy+3,0xFFABBBC4);
+        if(input!=null&&editing==entry)
+        {
+            input.drawTextBox();
+            return;
+        }
+        if(value instanceof Boolean)
+        {
+            boolean enabled=(Boolean)value;
+            f.drawString(enabled?"ON":"OFF",x+15,cy+24,
+                    enabled?0xFFE7F5F7:0xFF9BA5AD);
+            Gui.drawRect(x+140,cy+19,x+171,cy+33,
+                    enabled?accent:0xFF596167);
+            Gui.drawRect(x+(enabled?156:141),cy+20,
+                    x+(enabled?169:154),cy+32,0xFFF1F5F7);
+        }
+        else if(value instanceof Color)
+        {
+            Color c=(Color)value;
+            f.drawString(String.format(Locale.ROOT,"#%08X",
+                    c.getRGBAColor()),x+14,cy+23,0xFFE5F2F5);
+            Gui.drawRect(x+142,cy+18,x+171,cy+35,0xFF111111);
+            Gui.drawRect(x+144,cy+20,x+169,cy+33,
+                    c.getRGBAColor()|0xFF000000);
+        }
+        else if(value instanceof Number)
+        {
+            String number=String.format(Locale.ROOT,
+                    entry.value.getValue() instanceof Integer?"%.0f":"%.3f",
+                    ((Number)value).doubleValue());
+            int tw=f.getStringWidth(number);
+            f.drawString(number,x+172-tw,cy+3,0xFFE4EFF4);
+            if(entry.value instanceof GenericNumberValue)
+            {
+                GenericNumberValue<?> n=
+                        (GenericNumberValue<?>)entry.value;
+                double min=n.getMin().doubleValue();
+                double max=n.getMax().doubleValue();
+                boolean bounded=Double.isFinite(min)&&
+                        Double.isFinite(max)&&max>min;
+                if(bounded)
+                {
+                    Gui.drawRect(x+15,cy+28,x+169,cy+33,0xFF101519);
+                    int thumb=x+15+(int)Math.round(
+                            146*BetterLightsPanelModel.rangeFraction(
+                            ((Number)value).doubleValue(),min,max));
+                    Gui.drawRect(x+15,cy+29,thumb+3,cy+32,accent);
+                    Gui.drawRect(thumb,cy+24,thumb+8,cy+37,0xFFE3F1F5);
+                }
+                else f.drawString("Click value to edit",x+15,cy+29,
+                        0xFF7D8E98);
+            }
+        }
+    }
+
+    private void drawRows(Minecraft mc)
+    {
+        List<Entry> shown=visibleEntries();
+        int visible=visibleCount();
+        scroll=Math.max(0,Math.min(scroll,
+                Math.max(0,shown.size()-visible)));
+        for(int i=0;i<visible&&i+scroll<shown.size();i++)
+        {
+            int cy=rowsY()+i*rowHeight();
+            drawEntry(mc,shown.get(i+scroll),cy);
+        }
+        if(shown.isEmpty())
+            mc.fontRenderer.drawString("No settings in this section",
+                    x+12,rowsY()+10,0xFF8C9BA5);
+        if(shown.size()>visible)
+        {
+            String paging=(scroll+1)+"-"+
+                    Math.min(shown.size(),scroll+visible)+
+                    "/"+shown.size();
+            mc.fontRenderer.drawString(paging,
+                    x+173-mc.fontRenderer.getStringWidth(paging),
+                    cameraLayout?top+6:top+74,
+                    EditorThemeManager.get().getAccentBright());
+        }
+        if(picking!=null)drawColorPicker(mc);
+    }
+
+    private void drawColorPicker(Minecraft mc)
+    {
+        if(picking==null)return;
+        // Compact native-style hue + saturation/brightness + alpha palette.
+        int px=x+8,py=pickerTop;
+        Gui.drawRect(px,py,px+169,py+146,0xFF3C464D);
+        Gui.drawRect(px+2,py+2,px+167,py+144,0xFF171C21);
+        mc.fontRenderer.drawString("COLOR  [x]",px+8,py+6,0xFFE3F0F4);
+        int rgb=java.awt.Color.HSBtoRGB(hue,1F,1F)&0xFFFFFF;
+        for(int row=0;row<76;row+=4)
+            for(int col=0;col<120;col+=4)
+            {
+                float sat=Math.min(1F,col/119F);
+                float val=Math.max(0F,1F-row/75F);
+                int shade=java.awt.Color.HSBtoRGB(hue,sat,val);
+                Gui.drawRect(px+9+col,py+22+row,
+                        px+13+col,py+26+row,shade|0xFF000000);
+            }
+        for(int row=0;row<76;row+=2)
+            Gui.drawRect(px+136,py+22+row,px+150,py+24+row,
+                    java.awt.Color.HSBtoRGB(row/75F,1F,1F));
+        int cx=px+9+(int)(saturation*119F);
+        int cy=py+22+(int)((1F-brightness)*75F);
+        Gui.drawRect(cx-2,cy-2,cx+3,cy+3,0xFFFFFFFF);
+        int hy=py+22+(int)(hue*75F);
+        Gui.drawRect(px+134,hy-1,px+152,hy+2,0xFFFFFFFF);
+        Color color=(Color)picking.value.getValue();
+        int alpha=(color.getRGBAColor()>>>24)&255;
+        Gui.drawRect(px+10,py+111,px+155,py+117,0xFF57636C);
+        Gui.drawRect(px+10,py+111,px+10+(int)(145*alpha/255F),
+                py+117,EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString("Alpha "+alpha,px+10,py+125,
+                0xFFE0EBEE);
+        mc.fontRenderer.drawString(
+                String.format(Locale.ROOT,"#%08X",color.getRGBAColor()),
+                px+78,py+125,0xFFE0EBEE);
+    }
+
     public void draw(Minecraft mc,int left,int top,int bottom,
             BlockbusterSceneActorData current,int frame)
     {
         if(mc==null)return;
         cameraLayout=false;
         load(current);
-        x=left;
-        this.top=top;
-        this.bottom=bottom;
-        Gui.drawRect(left+4,top+9,left+181,bottom-4,BG);
+        x=left;this.top=top;this.bottom=bottom;
+        Gui.drawRect(left+4,top+9,left+181,bottom-4,0xFF25292F);
         Gui.drawRect(left+4,top+9,left+181,top+33,0xFF303C45);
-        Gui.drawRect(left+4,top+9,left+7,top+33,ACCENT);
-        FontRenderer font=mc.fontRenderer;
-        font.drawString(originKey==null?"LIGHT / TRANSFORM":
-                "LIGHT / KEY "+originKey.getFrame(),
-                left+13,top+16,TEXT);
-        font.drawString("Position / rotation: Record",left+12,top+43,LABEL);
-        BlockbusterRecordFrame currentFrame=current==null||
-                current.getRecord()==null?null:current.getRecord().getFrame(frame);
-        if(currentFrame!=null)
-        {
-            String pos=String.format(Locale.ROOT,"XYZ %.1f / %.1f / %.1f",
-                    currentFrame.getX(),currentFrame.getY(),currentFrame.getZ());
-            font.drawString(font.trimStringToWidth(pos,161),
-                    left+12,top+57,TEXT);
-        }
-        if(error!=null)
-        {
-            font.drawString(font.trimStringToWidth(error,159),
-                    left+12,top+80,0xFFFF9797);
-            return;
-        }
-        if(morph==null)
-        {
-            font.drawString("BetterLights unavailable",left+12,
-                    top+82,0xFFFF9797);
-            return;
-        }
-        Gui.drawRect(left+10,top+83,left+175,top+84,0xFF4A5660);
-        int start=top+90;
-        int available=Math.max(0,bottom-start-8);
-        int visible=Math.max(1,available/ROW_HEIGHT);
-        scroll=Math.max(0,Math.min(scroll,Math.max(0,entries.size()-visible)));
-        for(int slot=0;slot<visible&&slot+scroll<entries.size();slot++)
-        {
-            int cy=start+slot*ROW_HEIGHT;
-            if(cy+ROW_HEIGHT>bottom-5)break;
-            Entry entry=entries.get(scroll+slot);
-            String path=entry.title;
-            font.drawString(font.trimStringToWidth(path,158),
-                    left+13,cy+1,LABEL);
-            Gui.drawRect(left+12,cy+12,left+172,cy+32,FIELD);
-            if(entry==editing&&input!=null)
-            {
-                // GuiTextField dimensions are constructor-owned in 1.12.2.
-                // The field is placed in this same row when clicked.
-                input.drawTextBox();
-            }
-            else
-            {
-                Object property=entry.value.getValue();
-                String contents=property instanceof Boolean
-                        ?(((Boolean)property)?"[X] ON":"[ ] OFF")
-                        :text(entry.value);
-                font.drawString(font.trimStringToWidth(contents,146),
-                        left+17,cy+18,
-                        property instanceof Boolean&&((Boolean)property)
-                                ?0xFF8DE7AC:TEXT);
-            }
-        }
-        if(entries.size()>visible)
-        {
-            String paging=""+(scroll+1)+"-"+Math.min(entries.size(),
-                    scroll+visible)+"/"+entries.size();
-            font.drawString(paging,left+126,top+73,ACCENT);
-        }
+        Gui.drawRect(left+4,top+9,left+7,top+33,
+                EditorThemeManager.get().getAccent());
+        FontRenderer f=mc.fontRenderer;
+        f.drawString(originKey==null?"LIGHT / TRANSFORM":
+                "LIGHT / KEY "+originKey.getFrame(),left+13,top+16,
+                0xFFE4EEF2);
+        f.drawString("Position / rotation: Record",left+12,top+43,
+                0xFFA9C0CC);
+        BlockbusterRecordFrame at=current==null||current.getRecord()==null
+                ?null:current.getRecord().getFrame(frame);
+        if(at!=null)
+            f.drawString(f.trimStringToWidth(String.format(Locale.ROOT,
+                    "XYZ %.1f / %.1f / %.1f",
+                    at.getX(),at.getY(),at.getZ()),159),
+                    left+12,top+57,0xFFE4EEF2);
+        if(error!=null){f.drawString(f.trimStringToWidth(error,163),
+                left+11,top+77,0xFFFF9999);return;}
+        if(morph==null){f.drawString("BetterLights unavailable",
+                left+11,top+79,0xFFFF9999);return;}
+        drawSections(mc);
+        drawRows(mc);
         previousFrame=frame;
     }
 
-    /**
-     * Draw native BetterLights values within CAMERA's standard properties
-     * panel: no nested POSE header/card, no Record position, and no extra
-     * backdrop beyond the CameraClipInspector-like section / rows.
-     *
-     * The same ValueSerializer entries and save path are reused unchanged.
-     */
     public void drawCamera(Minecraft mc,int left,int top,int bottom,
             BlockbusterSceneActorData current)
     {
         if(mc==null)return;
         load(current);
         cameraLayout=true;
-        x=left;
-        this.top=top;
-        this.bottom=bottom;
+        x=left;this.top=top;this.bottom=bottom;
         int accent=EditorThemeManager.get().getAccent();
-        FontRenderer font=mc.fontRenderer;
+        FontRenderer f=mc.fontRenderer;
         Gui.drawRect(left+7,top+2,left+178,top+18,0xFF2B2D30);
         Gui.drawRect(left+7,top+2,left+10,top+18,accent);
-        font.drawString("BETTERLIGHTS",left+15,top+6,0xFFE2E5E6);
-        if(error!=null)
-        {
-            font.drawString(font.trimStringToWidth(error,165),
-                    left+10,top+26,0xFFFF9797);
-            return;
-        }
-        if(morph==null)
-        {
-            font.drawString("BetterLights unavailable",
-                    left+10,top+26,0xFFFF9797);
-            return;
-        }
-        int start=top+CAMERA_VALUES_OFFSET;
-        int visible=Math.max(0,(bottom-start-7)/CAMERA_ROW_HEIGHT);
-        scroll=Math.max(0,Math.min(scroll,
-                Math.max(0,entries.size()-visible)));
-        for(int slot=0;slot<visible&&slot+scroll<entries.size();slot++)
-        {
-            int cy=start+slot*CAMERA_ROW_HEIGHT;
-            if(cy+CAMERA_ROW_HEIGHT>bottom-4)break;
-            Entry entry=entries.get(scroll+slot);
-            font.drawString(font.trimStringToWidth(
-                    entry.title,161),left+11,cy+1,0xFFADBBC1);
-            Gui.drawRect(left+10,cy+12,left+175,cy+29,0xFF10151A);
-            Gui.drawRect(left+10,cy+28,left+175,cy+29,0xFF384148);
-            if(entry==editing&&input!=null)
-                input.drawTextBox();
-            else
-            {
-                Object property=entry.value.getValue();
-                if(property instanceof Boolean)
-                {
-                    boolean enabled=(Boolean)property;
-                    font.drawString(enabled?"On":"Off",left+15,
-                            cy+16,0xFFE6F0F3);
-                    Gui.drawRect(left+155,cy+15,left+168,cy+26,
-                            enabled?accent:0xFF58626A);
-                }
-                else
-                    font.drawString(font.trimStringToWidth(
-                            text(entry.value),145),left+15,cy+16,
-                            0xFFE6F0F3);
-            }
-        }
-        if(entries.size()>visible)
-        {
-            String paging=(scroll+1)+"-"+
-                    Math.min(entries.size(),scroll+visible)+"/"+entries.size();
-            font.drawString(paging,left+174-font.getStringWidth(paging),
-                    top+6,EditorThemeManager.get().getAccentBright());
-        }
+        f.drawString("BETTERLIGHTS",left+15,top+6,0xFFE2E5E6);
+        if(error!=null){f.drawString(f.trimStringToWidth(error,164),
+                left+10,top+26,0xFFFF9999);return;}
+        if(morph==null){f.drawString("BetterLights unavailable",
+                left+10,top+26,0xFFFF9999);return;}
+        drawSections(mc);
+        drawRows(mc);
     }
 
     private static String text(GenericBaseValue<?> value)
