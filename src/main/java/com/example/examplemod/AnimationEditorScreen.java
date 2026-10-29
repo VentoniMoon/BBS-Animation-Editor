@@ -4072,10 +4072,16 @@ public class AnimationEditorScreen extends GuiScreen
             long timeSinceLastClick)
     {
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
+        if(clickedMouseButton==0&&
+                editorModeController.getMode()==EditorModeController.EditorMode.POSE
+                &&BetterLightsActorInspector.isLightActor(getSelectedActor())
+                &&betterLightsInspector.mouseDragged(this,mouseX,mouseY))
+            return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && clickedMouseButton == 0)
         {
+            if(cameraWorkspace.dragLightSetting(this,mouseX,mouseY))return;
             if(cameraWorkspace.dragLightGizmo(this,mouseX,mouseY))return;
             this.cameraWorkspace.move(mouseX,mouseY,getSceneLength());
             return;
@@ -4098,9 +4104,11 @@ public class AnimationEditorScreen extends GuiScreen
             int state)
     {
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
+        betterLightsInspector.mouseReleased();
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
         {
+            this.cameraWorkspace.releaseLightSetting(this);
             this.cameraWorkspace.releaseLightGizmo(this);
             this.cameraWorkspace.release();
         }
