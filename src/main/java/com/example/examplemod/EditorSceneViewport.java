@@ -572,14 +572,11 @@ public class EditorSceneViewport
             return;
         }
 
-        ScaledResolution resolution =
-                new ScaledResolution(mc);
-
-        int scaledWidth =
-                resolution.getScaledWidth();
-
-        int scaledHeight =
-                resolution.getScaledHeight();
+        ScaledResolution resolution=new ScaledResolution(mc);
+        int scaledWidth=mc.currentScreen instanceof AnimationEditorScreen
+                ?mc.currentScreen.width:resolution.getScaledWidth();
+        int scaledHeight=mc.currentScreen instanceof AnimationEditorScreen
+                ?mc.currentScreen.height:resolution.getScaledHeight();
 
         int mouseX =
                 Mouse.getX()
