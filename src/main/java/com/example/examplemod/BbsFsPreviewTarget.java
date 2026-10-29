@@ -59,6 +59,15 @@ public final class BbsFsPreviewTarget
     {
         return this.framebuffer;
     }
+    private int[] editorGuiDimensions()
+    {
+        if(mc.currentScreen instanceof AnimationEditorScreen)
+            return new int[]{Math.max(1,mc.currentScreen.width),
+                    Math.max(1,mc.currentScreen.height)};
+        ScaledResolution sr=new ScaledResolution(mc);
+        return new int[]{sr.getScaledWidth(),sr.getScaledHeight()};
+    }
+
 
     public boolean begin()
     {
@@ -105,15 +114,19 @@ public final class BbsFsPreviewTarget
              * Old PreviewShaderBridge set this viewport implicitly;
              * without it actors receive the wrong projection and depth.
              */
-            ScaledResolution sr = new ScaledResolution(mc);
-            int factor = Math.max(1, sr.getScaleFactor());
-            int vx = Math.max(0, x * factor);
-            int vy = Math.max(0, framebuffer.framebufferHeight -
-                    (y + height) * factor);
-            int vw = Math.min(width * factor,
-                    framebuffer.framebufferWidth - vx);
-            int vh = Math.min(height * factor,
-                    framebuffer.framebufferHeight - vy);
+            int[] size=editorGuiDimensions();
+            int px0=EditorGuiScale.pixelEdge(x,
+                    framebuffer.framebufferWidth,size[0]);
+            int px1=EditorGuiScale.pixelEdge(x+width,
+                    framebuffer.framebufferWidth,size[0]);
+            int py0=EditorGuiScale.pixelEdge(y,
+                    framebuffer.framebufferHeight,size[1]);
+            int py1=EditorGuiScale.pixelEdge(y+height,
+                    framebuffer.framebufferHeight,size[1]);
+            int vx=px0;
+            int vy=framebuffer.framebufferHeight-py1;
+            int vw=px1-px0;
+            int vh=py1-py0;
             if (vw <= 0 || vh <= 0)
                 throw new IllegalArgumentException("Invalid film viewport");
             GL11.glViewport(vx, vy, vw, vh);
@@ -160,14 +173,17 @@ public final class BbsFsPreviewTarget
             return;
         if (framebuffer.framebufferTexture == 0) return;
 
-        ScaledResolution resolution = new ScaledResolution(mc);
-        int scale = resolution.getScaleFactor();
-        float fbWidth = framebuffer.framebufferWidth;
-        float fbHeight = framebuffer.framebufferHeight;
-        float u0 = x * scale / fbWidth;
-        float u1 = (x + width) * scale / fbWidth;
-        float v0 = (fbHeight - (y + height) * scale) / fbHeight;
-        float v1 = (fbHeight - y * scale) / fbHeight;
+        int[] size=editorGuiDimensions();
+        float fbWidth=framebuffer.framebufferWidth;
+        float fbHeight=framebuffer.framebufferHeight;
+        float u0=EditorGuiScale.pixelEdge(x,
+                framebuffer.framebufferWidth,size[0])/fbWidth;
+        float u1=EditorGuiScale.pixelEdge(x+width,
+                framebuffer.framebufferWidth,size[0])/fbWidth;
+        float v0=(fbHeight-EditorGuiScale.pixelEdge(y+height,
+                framebuffer.framebufferHeight,size[1]))/fbHeight;
+        float v1=(fbHeight-EditorGuiScale.pixelEdge(y,
+                framebuffer.framebufferHeight,size[1]))/fbHeight;
 
         int mode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
         int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
@@ -177,8 +193,7 @@ public final class BbsFsPreviewTarget
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
-        GL11.glOrtho(0, resolution.getScaledWidth(),
-                resolution.getScaledHeight(), 0, -1, 1);
+        GL11.glOrtho(0,size[0],size[1],0,-1,1);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
