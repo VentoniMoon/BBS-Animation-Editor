@@ -674,14 +674,11 @@ public class EditorGizmoController
         GL11.glLoadIdentity();
 
         ScaledResolution resolution = new ScaledResolution(mc);
-        GL11.glOrtho(
-                0,
-                resolution.getScaledWidth(),
-                resolution.getScaledHeight(),
-                0,
-                -1,
-                1
-        );
+        int guiWidth=mc.currentScreen instanceof AnimationEditorScreen
+                ?mc.currentScreen.width:resolution.getScaledWidth();
+        int guiHeight=mc.currentScreen instanceof AnimationEditorScreen
+                ?mc.currentScreen.height:resolution.getScaledHeight();
+        GL11.glOrtho(0,guiWidth,guiHeight,0,-1,1);
 
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -1444,45 +1441,29 @@ public class EditorGizmoController
          * into the Preview rectangle inside the Preview FBO. The gizmo
          * must use that exact same OpenGL viewport and aspect ratio.
          */
-        ScaledResolution resolution =
-                new ScaledResolution(mc);
+        ScaledResolution resolution=new ScaledResolution(mc);
+        int guiWidth=mc.currentScreen instanceof AnimationEditorScreen
+                ?mc.currentScreen.width:resolution.getScaledWidth();
+        int guiHeight=mc.currentScreen instanceof AnimationEditorScreen
+                ?mc.currentScreen.height:resolution.getScaledHeight();
+        int framebufferWidth=Math.max(1,mc.displayWidth);
+        int framebufferHeight=Math.max(1,mc.displayHeight);
 
-        int scaleFactor =
-                Math.max(1, resolution.getScaleFactor());
-
-        int framebufferWidth =
-                Math.max(1, mc.displayWidth);
-
-        int framebufferHeight =
-                Math.max(1, mc.displayHeight);
-
-        int glX =
-                Math.max(
-                        0,
-                        viewportX * scaleFactor
-                );
-
-        int glY =
-                Math.max(
-                        0,
-                        framebufferHeight
-                                - (
-                                        viewportY
-                                                + viewportHeight
-                                ) * scaleFactor
-                );
-
-        int glWidth =
-                Math.max(
-                        1,
-                        viewportWidth * scaleFactor
-                );
-
-        int glHeight =
-                Math.max(
-                        1,
-                        viewportHeight * scaleFactor
-                );
+        // Exact same integer pixel edges used by BbsFsPreviewTarget:
+        // Minecraft's global GUI Scale must not move the 3D arrows
+        // away from the actor or static light they're manipulating.
+        int px0=EditorGuiScale.pixelEdge(viewportX,
+                framebufferWidth,guiWidth);
+        int px1=EditorGuiScale.pixelEdge(viewportX+viewportWidth,
+                framebufferWidth,guiWidth);
+        int py0=EditorGuiScale.pixelEdge(viewportY,
+                framebufferHeight,guiHeight);
+        int py1=EditorGuiScale.pixelEdge(viewportY+viewportHeight,
+                framebufferHeight,guiHeight);
+        int glX=px0;
+        int glY=framebufferHeight-py1;
+        int glWidth=px1-px0;
+        int glHeight=py1-py0;
 
         if (glX + glWidth > framebufferWidth)
         {

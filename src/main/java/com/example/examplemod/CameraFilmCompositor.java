@@ -195,13 +195,22 @@ public final class CameraFilmCompositor
         int oldTexture=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         java.nio.IntBuffer vp=org.lwjgl.BufferUtils.createIntBuffer(16);
         GL11.glGetInteger(GL11.GL_VIEWPORT,vp);
-        ScaledResolution sr=new ScaledResolution(mc);
-        int scale=Math.max(1,sr.getScaleFactor());
+        // Film overlays must use the SAME logical GUI coordinates as the
+        // world preview and 3D gizmo. Vanilla ScaledResolution follows the
+        // user's Minecraft setting and used to shift media out of the film.
+        int guiW=EditorGuiScale.width(mc.displayWidth,mc.displayHeight);
+        int guiH=EditorGuiScale.height(mc.displayWidth,mc.displayHeight);
+        int px0=EditorGuiScale.pixelEdge(previewX,film.framebufferWidth,guiW);
+        int px1=EditorGuiScale.pixelEdge(previewX+previewWidth,
+                film.framebufferWidth,guiW);
+        int py0=EditorGuiScale.pixelEdge(previewY,film.framebufferHeight,guiH);
+        int py1=EditorGuiScale.pixelEdge(previewY+previewHeight,
+                film.framebufferHeight,guiH);
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
-        GL11.glOrtho(0,sr.getScaledWidth(),sr.getScaledHeight(),0,-1,1);
+        GL11.glOrtho(0,guiW,guiH,0,-1,1);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
@@ -209,9 +218,8 @@ public final class CameraFilmCompositor
         {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,film.framebufferObject);
             GL11.glViewport(0,0,film.framebufferWidth,film.framebufferHeight);
-            GL11.glScissor(previewX*scale,
-                    film.framebufferHeight-(previewY+previewHeight)*scale,
-                    previewWidth*scale,previewHeight*scale);
+            GL11.glScissor(px0,film.framebufferHeight-py1,
+                    Math.max(1,px1-px0),Math.max(1,py1-py0));
             GL11.glEnable(GL11.GL_SCISSOR_TEST);
             GL20.glUseProgram(0);
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
