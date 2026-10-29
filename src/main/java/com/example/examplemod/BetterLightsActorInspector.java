@@ -374,10 +374,16 @@ public final class BetterLightsActorInspector
                     "XYZ %.1f / %.1f / %.1f",
                     at.getX(),at.getY(),at.getZ()),159),
                     left+12,top+57,0xFFE4EEF2);
-        if(error!=null){f.drawString(f.trimStringToWidth(error,163),
-                left+11,top+77,0xFFFF9999);return;}
-        if(morph==null){f.drawString("BetterLights unavailable",
-                left+11,top+79,0xFFFF9999);return;}
+        if(morph==null)
+        {
+            f.drawString(f.trimStringToWidth(error==null?
+                    "BetterLights unavailable":error,163),
+                    left+11,top+77,0xFFFF9999);
+            return;
+        }
+        // Invalid direct-number input must never hide ALL native controls.
+        if(error!=null)f.drawString(
+                f.trimStringToWidth(error,160),left+11,top+75,0xFFFF9999);
         drawSections(mc);
         drawRows(mc);
         previousFrame=frame;
@@ -395,10 +401,15 @@ public final class BetterLightsActorInspector
         Gui.drawRect(left+7,top+2,left+178,top+18,0xFF2B2D30);
         Gui.drawRect(left+7,top+2,left+10,top+18,accent);
         f.drawString("BETTERLIGHTS",left+15,top+6,0xFFE2E5E6);
-        if(error!=null){f.drawString(f.trimStringToWidth(error,164),
-                left+10,top+26,0xFFFF9999);return;}
-        if(morph==null){f.drawString("BetterLights unavailable",
-                left+10,top+26,0xFFFF9999);return;}
+        if(morph==null)
+        {
+            f.drawString(f.trimStringToWidth(error==null?
+                    "BetterLights unavailable":error,164),
+                    left+10,top+26,0xFFFF9999);
+            return;
+        }
+        if(error!=null)f.drawString(f.trimStringToWidth(error,161),
+                left+10,top+19,0xFFFF9999);
         drawSections(mc);
         drawRows(mc);
     }
