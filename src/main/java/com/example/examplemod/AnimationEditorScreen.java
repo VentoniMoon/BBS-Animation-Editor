@@ -3070,12 +3070,13 @@ public class AnimationEditorScreen extends GuiScreen
     {
         // CAMERA needs only short Layer names and preset labels.
         // Do not alter Character/Pose/Body Parts sidebars.
+        int rightPanelWidth=185;
         EditorPreviewGeometry geometry=EditorPreviewGeometry.calculate(
                 width,height,
                 editorModeController.getMode()
                         ==EditorModeController.EditorMode.CAMERA
                         ?CameraWorkspace.CAMERA_LEFT_WIDTH:LEFT_PANEL_WIDTH,
-                185,TOP_BAR_HEIGHT,getTimelineHeight());
+                rightPanelWidth,TOP_BAR_HEIGHT,getTimelineHeight());
         int left=geometry.left;
         int top=geometry.top;
         int previewRight=geometry.right;
