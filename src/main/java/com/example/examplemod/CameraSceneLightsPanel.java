@@ -620,6 +620,21 @@ public final class CameraSceneLightsPanel
         return true;
     }
 
+    /** Native BetterLights values remain scene-owned even while dragging. */
+    public boolean dragNativeSetting(AnimationEditorScreen screen,int mx,int my)
+    {
+        if(!opened||tab!=2||nativeActor==null)return false;
+        if(!nativeSettings.mouseDragged(screen,mx,my))return false;
+        syncNative(screen);
+        return true;
+    }
+
+    public void releaseNativeSetting(AnimationEditorScreen screen)
+    {
+        nativeSettings.mouseReleased();
+        syncNative(screen);
+    }
+
     public boolean drag(AnimationEditorScreen screen,int mx,int my)
     {
         if(draggedLight==null||!moveGizmo.isDragging())return false;
