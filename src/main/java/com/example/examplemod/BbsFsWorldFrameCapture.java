@@ -3,7 +3,6 @@ package com.example.examplemod;
 import java.nio.IntBuffer;
 import org.lwjgl.BufferUtils;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -141,14 +140,31 @@ public final class BbsFsWorldFrameCapture
         Framebuffer target = backend.getNativeTarget().getFramebuffer();
         if (target == null || target == snapshot) return false;
 
-        ScaledResolution resolution = new ScaledResolution(mc);
-        int scale = resolution.getScaleFactor();
-
-        int dx = x * scale;
-        int dy = target.framebufferHeight - (y + height) * scale;
-        int dw = width * scale;
-        int dh = height * scale;
-        if (dx < 0 || dy < 0 ||
+        /*
+         * IMPORTANT: EditorGuiScale now owns GuiScreen's logical canvas.
+         * Vanilla ScaledResolution can use another factor entirely. Using
+         * that factor here either blits into the WRONG film rectangle or
+         * rejects the source as outside the FBO (especially GUI Scale 3/4).
+         *
+         * Convert the same logical pixel EDGES as BbsFsPreviewTarget.begin()
+         * and EditorGizmoController.draw3D(), including odd display sizes.
+         * This is the common copy path for POSE, CHARACTER, BODY_PARTS and
+         * CAMERA; a failed color blit must not be interpreted as no actors.
+         */
+        int guiWidth=EditorGuiScale.width(mc.displayWidth,mc.displayHeight);
+        int guiHeight=EditorGuiScale.height(mc.displayWidth,mc.displayHeight);
+        int left=EditorGuiScale.pixelEdge(x,target.framebufferWidth,guiWidth);
+        int right=EditorGuiScale.pixelEdge(x+width,
+                target.framebufferWidth,guiWidth);
+        int top=EditorGuiScale.pixelEdge(y,
+                target.framebufferHeight,guiHeight);
+        int bottom=EditorGuiScale.pixelEdge(y+height,
+                target.framebufferHeight,guiHeight);
+        int dx=left;
+        int dy=target.framebufferHeight-bottom;
+        int dw=right-left;
+        int dh=bottom-top;
+        if (dw <= 0 || dh <= 0 || dx < 0 || dy < 0 ||
                 dx + dw > target.framebufferWidth ||
                 dy + dh > target.framebufferHeight)
         {
