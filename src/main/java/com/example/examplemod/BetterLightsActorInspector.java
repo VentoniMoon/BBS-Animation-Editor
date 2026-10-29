@@ -180,8 +180,17 @@ public final class BetterLightsActorInspector
     {
         List<Entry> filtered=new ArrayList<Entry>();
         for(Entry entry:entries)
+        {
+            // The world-space Origin/Target gizmos are authoritative.
+            // BetterLightsWorldEngine intentionally overrides these native
+            // vector components each frame, so showing them as editable
+            // settings would create a misleading "broken" control.
+            if("DirectionX".equals(entry.title)||
+                    "DirectionY".equals(entry.title)||
+                    "DirectionZ".equals(entry.title))continue;
             if(BetterLightsPanelModel.section(entry.title)==section)
                 filtered.add(entry);
+        }
         return filtered;
     }
 
