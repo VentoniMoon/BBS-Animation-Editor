@@ -144,6 +144,7 @@ public final class BetterLightsActorInspector
         scroll=0;
         sliding=null;
         picking=null;
+        dragColorPart=0;
         error=null;
         if(!isLightActor(current))return;
 
@@ -473,39 +474,171 @@ public final class BetterLightsActorInspector
                 mx,my,button);
     }
 
+    private boolean selectSection(int mx,int my)
+    {
+        int start=tabsY();
+        for(int i=0;i<4;i++)
+        {
+            int tx=x+9+(i%2)*85,ty=start+(i/2)*21;
+            if(mx>=tx&&mx<tx+80&&my>=ty&&my<ty+19)
+            {
+                section=i;
+                scroll=0;
+                picking=null;
+                sliding=null;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void adjustNumber(AnimationEditorScreen screen,
+            Entry entry,int mx)
+    {
+        if(entry==null||!(entry.value instanceof GenericNumberValue))
+            return;
+        GenericNumberValue<?> numeric=(GenericNumberValue<?>)entry.value;
+        double min=numeric.getMin().doubleValue(),
+                max=numeric.getMax().doubleValue();
+        if(!Double.isFinite(min)||!Double.isFinite(max)||max<=min)
+            return;
+        double fraction=(mx-(x+15))/154D;
+        double next=BetterLightsPanelModel.rangedValue(fraction,min,max);
+        if(!Double.isFinite(next))return;
+        Object old=entry.value.getValue();
+        if(old instanceof Integer)entry.value.setValue((int)Math.round(next));
+        else if(old instanceof Float)entry.value.setValue((float)next);
+        else if(old instanceof Double)entry.value.setValue(next);
+        else return;
+        if(!old.equals(entry.value.getValue()))saveNativeValue(screen);
+    }
+
+    private void openColor(Entry entry,int rowY)
+    {
+        picking=entry;sliding=null;
+        int rgba=((Color)entry.value.getValue()).getRGBAColor();
+        float[] hsb=java.awt.Color.RGBtoHSB(
+                (rgba>>>16)&255,(rgba>>>8)&255,rgba&255,null);
+        hue=hsb[0];saturation=hsb[1];brightness=hsb[2];
+        pickerTop=Math.max(top+69,Math.min(rowY+43,bottom-147));
+    }
+
+    private boolean colorAt(AnimationEditorScreen screen,int mx,int my,
+            boolean dragging)
+    {
+        if(picking==null)return false;
+        int px=x+8,py=pickerTop;
+        if(!dragging)
+        {
+            if(mx<px||mx>=px+169||my<py||my>=py+146)
+            {
+                picking=null;dragColorPart=0;return false;
+            }
+            if(my<py+19&&mx>px+112)
+            {
+                picking=null;dragColorPart=0;return true;
+            }
+            dragColorPart=mx>=px+9&&mx<px+129&&
+                    my>=py+22&&my<py+99?1:
+                    mx>=px+136&&mx<px+151&&
+                    my>=py+22&&my<py+99?2:
+                    mx>=px+10&&mx<px+155&&
+                    my>=py+108&&my<py+121?3:0;
+        }
+        if(dragColorPart==0)return true;
+        if(dragColorPart==1)
+        {
+            saturation=(float)Math.max(0D,Math.min(1D,
+                    (mx-(px+9))/119D));
+            brightness=(float)Math.max(0D,Math.min(1D,
+                    1D-(my-(py+22))/75D));
+        }
+        else if(dragColorPart==2)
+            hue=(float)Math.max(0D,Math.min(1D,
+                    (my-(py+22))/75D));
+        int rgba=((Color)picking.value.getValue()).getRGBAColor();
+        int alpha=(rgba>>>24)&255;
+        if(dragColorPart==3)
+            alpha=(int)Math.round(255*Math.max(0D,Math.min(1D,
+                    (mx-(px+10))/145D)));
+        int rgb=java.awt.Color.HSBtoRGB(hue,saturation,brightness)&0xFFFFFF;
+        int next=(alpha<<24)|rgb;
+        if(next!=rgba)
+        {
+            picking.value.setValue(new Color(next));
+            saveNativeValue(screen);
+        }
+        return true;
+    }
+
     /** Same native light values for the CAMERA-only synthetic scene source. */
     public boolean mouseClicked(AnimationEditorScreen screen,
             BlockbusterSceneActorData lightActor,int mx,int my,int button)
     {
         if(editing!=null)commit(screen);
-        int start=cameraLayout?top+CAMERA_VALUES_OFFSET:top+90;
-        int rowHeight=cameraLayout?CAMERA_ROW_HEIGHT:ROW_HEIGHT;
-        if(!isLightActor(lightActor)||
-                mx<x+8||mx>=x+176||my<start||my>=bottom)
-            return false;
+        if(!isLightActor(lightActor))return false;
+        if(picking!=null&&colorAt(screen,mx,my,false))return true;
+        if(mx<x+7||mx>=x+179||my<top||my>=bottom)return false;
         if(button!=0)return true;
-        int idx=scroll+(my-start)/rowHeight;
-        int cy=start+(idx-scroll)*rowHeight;
-        if(idx<0||idx>=entries.size()||my<cy+12||
-                my>=cy+(cameraLayout?29:32))
-            return true;
-        editing=entries.get(idx);
-        if(editing.value.getValue() instanceof Boolean)
+        if(selectSection(mx,my))return true;
+        List<Entry> shown=visibleEntries();
+        int offset=my-rowsY();
+        if(offset<0)return true;
+        int slot=offset/rowHeight();
+        int index=scroll+slot;
+        if(index<0||index>=shown.size()||
+                slot>=visibleCount())return true;
+        Entry target=shown.get(index);
+        int cy=rowsY()+slot*rowHeight();
+        Object value=target.value.getValue();
+        if(value instanceof Boolean)
         {
-            Boolean checked=(Boolean)editing.value.getValue();
-            editing.value.setValue(!checked);
+            target.value.setValue(!((Boolean)value));
             saveNativeValue(screen);
-            editing=null;
-            input=null;
             return true;
         }
+        if(value instanceof Color&&mx>=x+140&&my>=cy+15&&my<cy+39)
+        {
+            openColor(target,cy);
+            return true;
+        }
+        if(value instanceof Number&&target.value instanceof GenericNumberValue
+                &&my>=cy+23&&my<cy+42)
+        {
+            GenericNumberValue<?> n=(GenericNumberValue<?>)target.value;
+            double min=n.getMin().doubleValue(),max=n.getMax().doubleValue();
+            if(Double.isFinite(min)&&Double.isFinite(max)&&max>min)
+            {
+                sliding=target;
+                adjustNumber(screen,target,mx);
+                return true;
+            }
+        }
+        editing=target;
         input=new GuiTextField(17431,Minecraft.getMinecraft().fontRenderer,
-                cameraLayout?x+15:x+17,cy+13,
-                cameraLayout?150:149,cameraLayout?15:17);
+                x+14,cy+18,155,16);
         input.setMaxStringLength(80);
         input.setText(text(editing.value));
         input.setFocused(true);
         return true;
+    }
+
+    /** Matches MouseClickMove for both CAMERA statics and POSE actor lights. */
+    public boolean mouseDragged(AnimationEditorScreen screen,int mx,int my)
+    {
+        if(sliding!=null)
+        {
+            adjustNumber(screen,sliding,mx);
+            return true;
+        }
+        return picking!=null&&dragColorPart!=0&&
+                colorAt(screen,mx,my,true);
+    }
+
+    public void mouseReleased()
+    {
+        sliding=null;
+        dragColorPart=0;
     }
 
     /** Finish a pending value before changing the source or closing. */
@@ -539,10 +672,9 @@ public final class BetterLightsActorInspector
         // Don't detach a focused field from its value by scrolling while
         // the user is still editing the text.
         if(editing!=null)return true;
-        int start=cameraLayout?top+CAMERA_VALUES_OFFSET:top+90;
-        int step=cameraLayout?CAMERA_ROW_HEIGHT:ROW_HEIGHT;
-        int visible=Math.max(1,Math.max(0,bottom-start-8)/step);
-        scroll=Math.max(0,Math.min(Math.max(0,entries.size()-visible),
+        int visible=Math.max(1,visibleCount());
+        int count=visibleEntries().size();
+        scroll=Math.max(0,Math.min(Math.max(0,count-visible),
                 scroll+(wheel>0?-1:1)));
         return true;
     }
