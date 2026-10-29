@@ -3070,28 +3070,34 @@ public class AnimationEditorScreen extends GuiScreen
     {
         // CAMERA needs only short Layer names and preset labels.
         // Do not alter Character/Pose/Body Parts sidebars.
-        int left = this.editorModeController.getMode()
-                == EditorModeController.EditorMode.CAMERA
-                ? CameraWorkspace.CAMERA_LEFT_WIDTH : LEFT_PANEL_WIDTH;
-        int top = TOP_BAR_HEIGHT;
-        int rightPanelWidth = 185;
-        int previewRight =
-                width - rightPanelWidth;
+        EditorPreviewGeometry geometry=EditorPreviewGeometry.calculate(
+                width,height,
+                editorModeController.getMode()
+                        ==EditorModeController.EditorMode.CAMERA
+                        ?CameraWorkspace.CAMERA_LEFT_WIDTH:LEFT_PANEL_WIDTH,
+                185,TOP_BAR_HEIGHT,getTimelineHeight());
+        int left=geometry.left;
+        int top=geometry.top;
+        int previewRight=geometry.right;
+        int bottom=geometry.bottom;
+        int previewWidth=geometry.width;
+        int previewHeight=geometry.height;
 
-        int bottom =
-                height - getTimelineHeight();
-
-        int previewWidth =
-                Math.max(
-                        150,
-                        previewRight - left
-                );
-
-        int previewHeight =
-                Math.max(
-                        1,
-                        bottom - top
-                );
+        // Minecraft GUI Scale changes GuiScreen.width/height. Previously
+        // Math.max(150, availableWidth) forcibly drew the PREVIEW across the
+        // right inspector at large GUI scales. The film MUST fit the actual
+        // space between the sidebars; a sub-48px viewport is unusable.
+        if(!geometry.canRender())
+        {
+            if(previewWidth>0&&previewHeight>0)
+                drawRect(left,top,previewRight,bottom,0xFF0E1011);
+            // Keep this fallback inside the real bounds rather than
+            // covering the inspector or creating an invalid FBO.
+            if(previewWidth>=100&&previewHeight>=20)
+                drawString(fontRenderer,"Preview too small",
+                        left+5,top+7,COLOR_TEXT_SECONDARY);
+            return;
+        }
 
         drawRect(
                 left,
