@@ -3,7 +3,6 @@ package com.example.examplemod;
 import java.nio.IntBuffer;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
@@ -61,11 +60,12 @@ public final class BbsFsPreviewTarget
     }
     private int[] editorGuiDimensions()
     {
-        if(mc.currentScreen instanceof AnimationEditorScreen)
-            return new int[]{Math.max(1,mc.currentScreen.width),
-                    Math.max(1,mc.currentScreen.height)};
-        ScaledResolution sr=new ScaledResolution(mc);
-        return new int[]{sr.getScaledWidth(),sr.getScaledHeight()};
+        // This target belongs exclusively to AnimationEditorScreen.
+        // Derive its canvas from physical pixels, without querying vanilla
+        // ScaledResolution or the active GuiScreen (also works in CI stubs).
+        return new int[]{
+                EditorGuiScale.width(mc.displayWidth,mc.displayHeight),
+                EditorGuiScale.height(mc.displayWidth,mc.displayHeight)};
     }
 
 
