@@ -18,6 +18,46 @@ public final class Preview3FsFramebufferSmokeTest
         if (!ok)throw new AssertionError(message);
     }
 
+    /**
+     * Historically CAMERA appeared to work while POSE/CHARACTER/BODY_PARTS
+     * had a blank film: copyWorld used vanilla GUI Scale, but the preview
+     * FBO/presenter and 3D gizmo used EditorGuiScale. At vanilla Scale 4
+     * on a 1920x1080 window, old code even rejected the world copy.
+     */
+    private static void verifyCaptureIgnoresVanillaScale(int sw,int sh,
+            int vanillaScale)
+    {
+        Minecraft editor=new Minecraft(sw,sh);
+        editor.vanillaScaleFactor=vanillaScale;
+        int guiW=EditorGuiScale.width(sw,sh);
+        int guiH=EditorGuiScale.height(sw,sh);
+        int x=guiW/5,y=guiH/8,w=guiW*3/5,h=guiH*2/3;
+
+        PreviewRenderBackend backend=new PreviewRenderBackend(editor);
+        BbsFsPreviewTarget target=backend.getNativeTarget();
+        target.setBounds(x,y,w,h);
+        BbsFsWorldFrameCapture.beginNativeFrame();
+        BbsFsWorldFrameCapture.markNativeWorldRendered();
+        BbsFsWorldFrameCapture.beginFrame(editor);
+        require(target.begin(),"native film FBO begin failed");
+        require(BbsFsWorldFrameCapture.copyWorld(editor,backend,x,y,w,h),
+                "world copy failed at "+sw+"x"+sh+
+                ", vanilla GUI Scale "+vanillaScale);
+
+        int x0=EditorGuiScale.pixelEdge(x,sw,guiW);
+        int x1=EditorGuiScale.pixelEdge(x+w,sw,guiW);
+        int y0=EditorGuiScale.pixelEdge(y,sh,guiH);
+        int y1=EditorGuiScale.pixelEdge(y+h,sh,guiH);
+        int[] actual=GL30.lastColorDestination;
+        require(actual[0]==x0&&actual[1]==sh-y1&&
+                actual[2]==x1&&actual[3]==sh-y0,
+                "world color copy differs from native preview/gizmo bounds");
+        target.end();
+        target.present();
+        target.dispose();
+        BbsFsWorldFrameCapture.release();
+    }
+
     public static void main(String[] args)
     {
         Minecraft mc=new Minecraft();
@@ -102,6 +142,12 @@ public final class Preview3FsFramebufferSmokeTest
         target.dispose();
         require(GL30.read==17 && GL30.draw==19,
                 "FBO deletion corrupted native world target");
+
+        // The real editor uses a fixed scale from the physical window.
+        // The user can independently select any Minecraft GUI Scale.
+        verifyCaptureIgnoresVanillaScale(1920,1080,4);
+        verifyCaptureIgnoresVanillaScale(2560,1440,4);
+        verifyCaptureIgnoresVanillaScale(1366,768,3);
 
         System.out.println("Preview FS framebuffer, native depth, " +
                 "presentation, projection and GL safety PASS");
