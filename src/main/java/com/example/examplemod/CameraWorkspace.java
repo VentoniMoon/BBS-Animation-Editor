@@ -30,6 +30,14 @@ public final class CameraWorkspace
         return lightPanel.beginGizmo(screen,mx,my,button,
                 filmX,filmY,filmW,filmH);
     }
+    public boolean dragLightSetting(AnimationEditorScreen screen,int mx,int my)
+    {
+        return lightPanel.dragNativeSetting(screen,mx,my);
+    }
+    public void releaseLightSetting(AnimationEditorScreen screen)
+    {
+        lightPanel.releaseNativeSetting(screen);
+    }
     public boolean dragLightGizmo(AnimationEditorScreen screen,int mx,int my)
     {
         return lightPanel.drag(screen,mx,my);
