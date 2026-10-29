@@ -35,6 +35,8 @@ on:
       - 'src/main/java/com/example/examplemod/EditorGizmoController.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
+      - 'src/main/java/com/example/examplemod/EditorGuiScale.java'
+      - 'src/test/java/com/example/examplemod/EditorGuiScaleSmokeTest.java'
       - 'src/main/java/com/example/examplemod/EditorPreviewGeometry.java'
       - 'src/test/java/com/example/examplemod/EditorPreviewGeometrySmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
@@ -85,6 +87,8 @@ on:
       - 'src/main/java/com/example/examplemod/EditorGizmoController.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
+      - 'src/main/java/com/example/examplemod/EditorGuiScale.java'
+      - 'src/test/java/com/example/examplemod/EditorGuiScaleSmokeTest.java'
       - 'src/main/java/com/example/examplemod/EditorPreviewGeometry.java'
       - 'src/test/java/com/example/examplemod/EditorPreviewGeometrySmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraMathExpression.java'
@@ -112,6 +116,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
+
+      - name: Editor-owned GUI canvas and mouse/film pixel mapping
+        run: |
+          mkdir -p build/preview3/editor-scale
+          javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/editor-scale \
+            src/main/java/com/example/examplemod/EditorGuiScale.java \
+            src/test/java/com/example/examplemod/EditorGuiScaleSmokeTest.java
+          java -ea -cp build/preview3/editor-scale \
+            com.example.examplemod.EditorGuiScaleSmokeTest
 
       - name: Verify preview geometry across Minecraft GUI scales
         run: |
