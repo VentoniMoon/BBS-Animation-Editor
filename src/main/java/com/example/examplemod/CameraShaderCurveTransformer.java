@@ -28,6 +28,11 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
             byte[] bytes)
     {
         if(bytes==null)return null;
+        // Emergency escape hatch for shaderpacks with unsupported GLSL.
+        // Must be set before launch; no OptiFine modifications are made.
+        if("false".equalsIgnoreCase(
+                System.getProperty("bbs.editor.camera.shaderCurves","true")))
+            return bytes;
         if(!SHADERS.equals(name)&&!SHADERS.equals(transformedName))
             return bytes;
         try
