@@ -314,6 +314,13 @@ public class EditorSceneViewport
     }
 
 
+    /** Mirror replay uses the posed selected actor, never drawActor again. */
+    public void renderPreparedMirrorActor(Minecraft mc,
+            PreviewCameraPose view,int width,int height)
+    {
+        this.actorPreviewRenderer.renderPreparedMirror(mc,view,width,height);
+    }
+
     public void beginNativeActorFrame()
     {
         /* Called BEFORE RenderWorldLastEvent's selected actor draw, not by
