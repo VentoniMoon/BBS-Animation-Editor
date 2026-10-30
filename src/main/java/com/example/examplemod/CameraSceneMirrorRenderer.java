@@ -2,6 +2,8 @@ package com.example.examplemod;
 
 import java.nio.IntBuffer;
 import java.nio.DoubleBuffer;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.shader.Framebuffer;
@@ -37,13 +39,19 @@ public final class CameraSceneMirrorRenderer
     private static boolean warned;
     private static int sourceWidth,sourceHeight;
     private static net.minecraft.world.World lastWorld;
+    private static boolean blockedByShaderpack;
+    private static boolean shaderDiscoveryComplete;
+    private static Method optiFineShadersActive;
+    private static Field optiFineShaderLoaded;
     private CameraSceneMirrorRenderer(){}
 
     public static boolean isCapturing(){return capturing;}
     public static boolean isFailed(){return failed;}
     public static String status()
     {
-        if(failed)return "Mirror renderer unavailable (see latest.log)";
+        if(failed)return "Mirror capture disabled (see latest.log)";
+        if(blockedByShaderpack)
+            return "Shaderpack active - safe mirror fallback";
         return capturedId.isEmpty()?"Mirror world view pending":
                 (clipPlaneInstalled?
                         "Reflection / GL clip requested":
@@ -65,6 +73,7 @@ public final class CameraSceneMirrorRenderer
         // listeners. The editor's normal RenderGlobal remains untouched.
         CameraMirrorWorldIsolation.reset(Minecraft.getMinecraft());
         failed=false;warned=false;
+        blockedByShaderpack=false;
     }
 
     /** Choose one visible mirror; never recursively render N mirrors. */
@@ -75,12 +84,23 @@ public final class CameraSceneMirrorRenderer
         capturedPose=null;
         activeMirror=null;
         clipPlaneInstalled=false;
+        blockedByShaderpack=false;
         if(capturing||failed||mc==null||mirrors==null||
                 mc.world==null||camera==null||pass==null||
                 "false".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrors","true")))return;
         if(lastWorld!=null&&lastWorld!=mc.world)reset();
         lastWorld=mc.world;
+        // OptiFine maintains global shader program, framebuffer, draw-buffer
+        // and shadow-pass state beyond OpenGL's attrib/matrix stacks.
+        // A second renderWorld() cannot safely run alongside a shaderpack.
+        // Opt-in remains available only for targeted shader development.
+        if(shaderpackActive() &&
+                !Boolean.getBoolean("bbs.editor.camera.mirrorUnsafeShaders"))
+        {
+            blockedByShaderpack=true;
+            return;
+        }
         CameraSceneMirrors.Mirror picked=null;
         double closest=Double.POSITIVE_INFINITY;
         for(CameraSceneMirrors.Mirror m:mirrors.all())
@@ -255,6 +275,43 @@ public final class CameraSceneMirrorRenderer
             GL11.glPopMatrix();
             GL11.glMatrixMode(mode);
         }
+    }
+
+    /**
+     * Runtime-safe OptiFine detection: do not import optional OptiFine
+     * classes or depend on a particular Forge mapping at compile time.
+     */
+    private static boolean shaderpackActive()
+    {
+        if(!shaderDiscoveryComplete)
+        {
+            shaderDiscoveryComplete=true;
+            try
+            {
+                Class<?> config=Class.forName("net.optifine.Config");
+                optiFineShadersActive=config.getMethod("isShaders");
+            }
+            catch(Throwable absent){}
+            try
+            {
+                Class<?> shader=Class.forName("net.optifine.shaders.Shaders");
+                optiFineShaderLoaded=shader.getField("shaderPackLoaded");
+            }
+            catch(Throwable absent){}
+        }
+        try
+        {
+            if(optiFineShadersActive!=null &&
+                    Boolean.TRUE.equals(optiFineShadersActive.invoke(null)))
+                return true;
+        }
+        catch(Throwable reflectionProblem){}
+        try
+        {
+            return optiFineShaderLoaded!=null &&
+                    optiFineShaderLoaded.getBoolean(null);
+        }
+        catch(Throwable reflectionProblem){return false;}
     }
 
     private static boolean visible(Minecraft mc,
