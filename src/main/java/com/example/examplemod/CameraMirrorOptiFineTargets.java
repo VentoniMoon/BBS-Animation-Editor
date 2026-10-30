@@ -153,28 +153,73 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
         GL11.glViewport(0,0,width,height);
     }
 
-    /**
-     * Attach one of the private ping-pong textures for a future OptiFine
-     * deferred/composite stage. The compositor will use colorBack() for
-     * feedback while rendering into this target, then call swapColor().
-     */
-    public void bindCompositeOutput(int index)
+    /** Attach only the requested back buffers, in shader output order.
+     * Unused attachments are detached to avoid texture feedback hazards.
+     * The front texture of every channel remains available for sampling. */
+    public void bindCompositeOutputs(CameraMirrorCompositePlan stage)
     {
         checkOpen();
-        if(index<0||index>=colorCount)
-            throw new IllegalArgumentException("Invalid composite target "+index);
+        if(stage==null)throw new IllegalArgumentException("Missing stage");
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,fbo);
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER,
-                GL30.GL_COLOR_ATTACHMENT0,
-                GL11.GL_TEXTURE_2D,colorBack(index),0);
-        GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
-        requireComplete("composite "+index);
+        for(int i=0;i<colorCount;i++)
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER,
+                    GL30.GL_COLOR_ATTACHMENT0+i,GL11.GL_TEXTURE_2D,0,0);
+        IntBuffer draw=BufferUtils.createIntBuffer(stage.targets.length);
+        for(int i=0;i<stage.targets.length;i++)
+        {
+            int slot=stage.targets[i];
+            if(slot<0||slot>=colorCount)
+                throw new IllegalArgumentException("Invalid colortex "+slot);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER,
+                    GL30.GL_COLOR_ATTACHMENT0+slot,GL11.GL_TEXTURE_2D,
+                    colorBack(slot),0);
+            draw.put(GL30.GL_COLOR_ATTACHMENT0+slot);
+        }
+        draw.flip();
+        GL20.glDrawBuffers(draw);
+        requireComplete("composite "+stage.name);
         GL11.glViewport(0,0,width,height);
+    }
+
+    public void commitCompositeOutputs(CameraMirrorCompositePlan stage)
+    {
+        checkOpen();
+        for(int i=0;i<stage.targets.length;i++)
+            if(stage.flip[i])
+                front[stage.targets[i]]=1-front[stage.targets[i]];
+    }
+
+    /** Copy the live mirror depth into OptiFine depthtex1/2 at the normal
+     * opaque/translucent boundary. This modifies PRIVATE textures only. */
+    public void copyDepth(int index)
+    {
+        checkOpen();
+        if(index<=0||index>=depthCount)
+            throw new IllegalArgumentException("Invalid depth snapshot "+index);
+        int oldRead=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int oldActive=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        int oldTexture=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        try
+        {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,fbo);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,depths[index]);
+            GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D,0,
+                    0,0,0,0,width,height);
+        }
+        finally
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,oldTexture);
+            GL13.glActiveTexture(oldActive);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,oldRead);
+        }
     }
 
     public void swapColor(int index)
     {
         checkOpen();
+        if(index<0||index>=colorCount)
+            throw new IllegalArgumentException("Invalid colortex "+index);
         front[index]=1-front[index];
     }
 
