@@ -55,6 +55,8 @@ public final class CameraMirrorOptiFinePreflight
                     CameraMirrorOptiFinePlanning.inspect(colors);
             System.out.println(prefix+"native formats="+
                     Arrays.toString(formats)+" stages="+plans.size());
+            System.out.println(prefix+
+                    CameraMirrorOptiFinePlanning.inspectPreFlips());
             for(CameraMirrorCompositePlan plan:plans)
                 System.out.println(prefix+plan);
             // Verify texture format/GL routing while preserving the main
