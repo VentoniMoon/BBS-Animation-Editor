@@ -10,6 +10,6 @@ public class Minecraft
     public static class RenderManager
     {
         public WorldClient world;
-        public void set(WorldClient world){this.world=world;}
+        public void setWorld(WorldClient world){this.world=world;}
     }
 }
