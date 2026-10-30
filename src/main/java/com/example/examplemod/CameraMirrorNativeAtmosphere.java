@@ -44,6 +44,7 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
             float partialTicks)
     {
         if(mc==null||mc.entityRenderer==null)return null;
+        CameraMirrorNativeAtmosphere scope=null;
         try
         {
             if(!resolved)resolve(mc.entityRenderer.getClass());
@@ -51,8 +52,7 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
                     fogRed==null||fogGreen==null||fogBlue==null)
                 throw new IllegalStateException(
                         "Native EntityRenderer fog methods unavailable");
-            CameraMirrorNativeAtmosphere scope=
-                    new CameraMirrorNativeAtmosphere(mc.entityRenderer);
+            scope=new CameraMirrorNativeAtmosphere(mc.entityRenderer);
             // Compute the same sky/biome/weather fog color from the ACTIVE
             // reflected view entity used by the normal world pipeline.
             updateFogColor.invoke(mc.entityRenderer,partialTicks);
@@ -63,6 +63,12 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
         }
         catch(Throwable failure)
         {
+            // Even a throwing third-party fog handler must not leave the
+            // native EntityRenderer's cached fog colors altered.
+            if(scope!=null)
+                try{scope.close();}
+                catch(Throwable restoreError)
+                {failure.addSuppressed(restoreError);}
             if(!warned)
             {
                 warned=true;
