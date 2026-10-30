@@ -10,14 +10,10 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 
 /**
- * Render the EXISTING WorldClient and the EXISTING RenderGlobal's already
- * compiled chunk buffers from a second view. No extra world, RenderGlobal,
- * chunk compilation, or EntityRenderer frame is created.
- *
- * Called after the normal world pass (RenderWorldLast) so that the normal
- * camera has populated the visible chunks. The reflection shares that
- * draw list: geometry outside the main camera's chunk visibility may be
- * missing, but the primary scene's culling state is never overwritten.
+ * Render the EXISTING WorldClient and EXISTING RenderGlobal's compiled
+ * chunk buffers from a second camera. No extra world or chunk compilation.
+ * CameraMirrorChunkVisibility supplies a temporary reflected frustum list
+ * and restores the main world's list and VBO origin on every return.
  * Recorded actors are drawn using prepared poses in a separate pass.
  */
 public final class CameraMirrorTerrainPass
@@ -26,9 +22,9 @@ public final class CameraMirrorTerrainPass
     private CameraMirrorTerrainPass(){}
 
     public static void render(Minecraft mc,PreviewCameraPose camera,
-            float partialTicks)
+            PreviewCameraPose mainCamera,float partialTicks)
     {
-        if(mc==null||camera==null||mc.world==null||
+        if(mc==null||camera==null||mainCamera==null||mc.world==null||
                 mc.renderGlobal==null||mc.getRenderViewEntity()==null)
             throw new IllegalStateException("Mirror terrain not ready");
         final RenderGlobal world=mc.renderGlobal;
@@ -56,18 +52,36 @@ public final class CameraMirrorTerrainPass
                             skyProblem);
             }
 
-            // RenderGlobal.renderBlockLayer and its VBO render container
-            // perform the -cameraXYZ translation themselves. Vanilla's
-            // EntityRenderer.orientCamera leaves the modelview with camera
-            // rotation only. Translating here double-offsets the chunks,
-            // making the reflection appear displaced/partly empty.
+            // The renderer's VBO container owns the -cameraXYZ translation.
+            // Reflection needs a different renderInfos cull list but NOT
+            // another ViewFrustum, world, chunk rebuild or EntityRenderer.
             setCamera(camera,aspect,false);
-            CameraSceneMirrorRenderer.installFrontClipPlane(camera);
-            // IMPORTANT: do not call setupTerrain(), updateChunks() or
-            // setWorldAndLoadRenderers() here. Those would mutate/replace
-            // the native world frame's culling and render chunks. Reuse the
-            // renderInfo list prepared by vanilla just before WorldLast.
+            try(CameraMirrorChunkVisibility.Scope mirrorChunks=
+                    CameraMirrorChunkVisibility.begin(mc,camera,mainCamera))
+            {
+                if(mirrorChunks==null)
+                    throw new IllegalStateException(
+                            "Mirror RenderGlobal visibility unavailable");
+                CameraSceneMirrorRenderer.installFrontClipPlane(camera);
+                drawWorldLayers(mc,world,eye,partialTicks);
+            }
+            if(!reported)
+            {
+                reported=true;
+                System.out.println("[BBS Editor][Mirror] Shared RenderGlobal "+
+                        "with reflected visibility list: world not duplicated.");
+            }
+        }
+        finally
+        {
+            GL11.glDisable(GL11.GL_CLIP_PLANE0);
+            GL11.glMatrixMode(mode);
+        }
+    }
 
+    private static void drawWorldLayers(Minecraft mc,RenderGlobal world,
+            Entity eye,float partialTicks)
+    {
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDepthMask(true);
@@ -88,18 +102,6 @@ public final class CameraMirrorTerrainPass
             GL11.glDepthMask(true);
             GL11.glDisable(GL11.GL_BLEND);
             GL11.glDisable(GL11.GL_CLIP_PLANE0);
-            if(!reported)
-            {
-                reported=true;
-                System.out.println("[BBS Editor][Mirror] Shared RenderGlobal "+
-                        "draw buffers active; no second world/chunk renderer.");
-            }
-        }
-        finally
-        {
-            GL11.glDisable(GL11.GL_CLIP_PLANE0);
-            GL11.glMatrixMode(mode);
-        }
     }
 
     private static void setCamera(PreviewCameraPose pose,float aspect,
