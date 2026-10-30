@@ -24,9 +24,9 @@ public final class CameraShaderCurveSource
 {
     public static final String PREFIX="bbs_curve_";
     private static final Pattern DEFINE=Pattern.compile(
-            "(?m)^\\s*#\\s*define\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+"+
+            "(?m)^[ \t]*#[ \t]*define[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]+"+
             "([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[Ee][-+]?\\d+)?[fF]?)"+
-            "\\s*(?://[^\\r\\n]*?\\[([^]\\r\\n]*)\\][^\\r\\n]*)?$");
+            "[ \t]*(?://([^\\r\\n]*))?[ \t]*$");
     private static final Pattern DIRECTIVE=Pattern.compile(
             "(?m)^\\s*#\\s*(if|elif|define)\\b([^\\r\\n]*)");
     private static final Pattern ARRAY_OR_CASE=Pattern.compile(
@@ -66,7 +66,11 @@ public final class CameraShaderCurveSource
         while(definitions.find())
         {
             String name=definitions.group(1),literal=definitions.group(2);
-            String allowed=definitions.group(3);
+            String comment=definitions.group(3);
+            int lo=comment==null?-1:comment.indexOf('[');
+            int hi=comment==null?-1:comment.indexOf(']',lo+1);
+            String allowed=lo>=0&&hi>lo?
+                    comment.substring(lo+1,hi):null;
             // Only actual pack options, not arbitrary internal macros. The
             // original option-menu slider annotation is also required.
             boolean integerLiteral=!literal.matches(".*[.eEfF].*");
