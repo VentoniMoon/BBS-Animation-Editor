@@ -2,6 +2,11 @@ package com.example.examplemod;
 
 import java.util.List;
 import java.util.Arrays;
+import java.nio.IntBuffer;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL30;
 
 /**
  * Explicitly opt-in BSL GBuffer preflight. Runs on the normal Minecraft GL
@@ -36,8 +41,13 @@ public final class CameraMirrorOptiFinePreflight
                 System.out.println(prefix+result);
                 return;
             }
-            // This diagnostics-only stage currently targets the confirmed
-            // BSL 8.2.02 BetterLights configuration from the user's log.
+            // Do not probe other incompatible packs using BSL dimensions.
+            if(!support.message.contains("BSL_v8.2.02-BetterLights.zip"))
+            {
+                result="SKIP: not the verified BSL 8.2.02 BetterLights pack";
+                System.out.println(prefix+result);
+                return;
+            }
             int colors=8;
             int depths=3;
             int[] formats=CameraMirrorOptiFineBackend.getColorFormats(colors);
@@ -47,24 +57,42 @@ public final class CameraMirrorOptiFinePreflight
                     Arrays.toString(formats)+" stages="+plans.size());
             for(CameraMirrorCompositePlan plan:plans)
                 System.out.println(prefix+plan);
-            // Allocation only; no shader writes or invocations. Building
-            // the resources must not mutate the normal OptiFine framebuffer.
-            try(CameraMirrorOptiFineTargets targets=
-                    CameraMirrorOptiFineTargets.allocate(
-                            1024,576,colors,depths,formats))
+            // Verify texture format/GL routing while preserving the main
+            // native read/draw FBO and viewport, even if a stage fails.
+            int previousRead=GL11.glGetInteger(
+                    GL30.GL_READ_FRAMEBUFFER_BINDING);
+            int previousDraw=GL11.glGetInteger(
+                    GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+            int previousUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+            IntBuffer previousViewport=BufferUtils.createIntBuffer(4);
+            GL11.glGetInteger(GL11.GL_VIEWPORT,previousViewport);
+            try
             {
-                targets.bindGeometry();
-                // FBO has 8 correct native attachment formats.
-                // Test a transient per-shader routing then restore geometry.
-                for(CameraMirrorCompositePlan plan:plans)
+                try(CameraMirrorOptiFineTargets targets=
+                        CameraMirrorOptiFineTargets.allocate(
+                                1024,576,colors,depths,formats))
                 {
-                    targets.bindCompositeOutputs(plan);
                     targets.bindGeometry();
+                    for(CameraMirrorCompositePlan plan:plans)
+                    {
+                        targets.bindCompositeOutputs(plan);
+                        targets.bindGeometry();
+                    }
+                    result="PASS: private "+targets.width()+"x"+
+                            targets.height()+" MRT 8 colors / 3 depth, "+
+                            plans.size()+" shader stage mappings validated";
+                    System.out.println(prefix+result);
                 }
-                result="PASS: private "+targets.width()+"x"+
-                        targets.height()+" MRT 8 colors / 3 depth, "+
-                        plans.size()+" shader stage mappings validated";
-                System.out.println(prefix+result);
+            }
+            finally
+            {
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,previousRead);
+                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,previousDraw);
+                GL11.glViewport(previousViewport.get(0),
+                        previousViewport.get(1),
+                        previousViewport.get(2),
+                        previousViewport.get(3));
+                GL13.glActiveTexture(previousUnit);
             }
         }
         catch(Throwable error)
