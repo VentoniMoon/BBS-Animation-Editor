@@ -178,11 +178,18 @@ public final class CameraSceneMirrorRenderer
             captureStatus="MIRROR: world framebuffer unavailable";
             return;
         }
+        final boolean experimentalBSL=bslMultiPass;
         int max=Math.max(source.framebufferWidth,source.framebufferHeight);
-        double scale=Math.min(1D,1024D/max);
+        // Every BSL post-processing stage, including final, must use
+        // the same pixel dimensions as the PRIVATE eight-color GBuffer.
+        // Previously geometry/composite rendered at 768px but final ran
+        // into a 1024px Minecraft Framebuffer with viewWidth=768,
+        // causing shader screen-space coordinates to disagree.
+        final double maxResolution=experimentalBSL?
+                CameraMirrorOptiFineTargets.MAX_SIZE:1024D;
+        double scale=Math.min(1D,maxResolution/max);
         int w=Math.max(1,(int)Math.round(source.framebufferWidth*scale));
         int h=Math.max(1,(int)Math.round(source.framebufferHeight*scale));
-        final boolean experimentalBSL=bslMultiPass;
         if(!resolveMinecraftFramebufferField())
         {
             captureStatus="MIRROR: framebuffer field unavailable";
