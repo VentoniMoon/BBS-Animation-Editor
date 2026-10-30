@@ -142,6 +142,9 @@ public final class CameraMirrorTerrainPass
             world.renderBlockLayer(BlockRenderLayer.CUTOUT_MIPPED,
                     partialTicks,0,eye);
             world.renderBlockLayer(BlockRenderLayer.CUTOUT,partialTicks,0,eye);
+            // Save mirror depthtex1 at the native opaque/translucent
+            // boundary; never copy from the main OptiFine depth buffer.
+            CameraMirrorBSLCompositor.beforeTranslucent();
 
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
