@@ -213,7 +213,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
                 GL12.GL_CLAMP_TO_EDGE);
         int channels=(format==32849||format==34843||format==34837)?
                 GL11.GL_RGB:
-                (format==33321||format==33325)?GL30.GL_RED:
+                (format==33321||format==33325)?GL11.GL_RED:
                 (format==33323||format==33327)?GL30.GL_RG:GL11.GL_RGBA;
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,format,width,height,
                 0,channels,GL11.GL_FLOAT,(java.nio.ByteBuffer)null);
