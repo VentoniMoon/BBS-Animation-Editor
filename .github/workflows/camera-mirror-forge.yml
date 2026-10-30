@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/CameraMirrorMath.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
@@ -29,6 +30,7 @@ on:
   pull_request:
     paths:
       - 'src/main/java/com/example/examplemod/CameraMirrorMath.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
@@ -78,6 +80,8 @@ jobs:
           ! grep -q 'Shaders.renderCompositeFinal()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'bbs.editor.camera.mirrorBSLExperimental' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'CameraMirrorOptiFinePreflight.runOnce()' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'installShaderObliqueProjection' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'installShaderObliqueProjection' src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java
       - name: Compile entire editor against pinned Forge and mod dependencies
         run: |
           chmod +x ./gradlew
