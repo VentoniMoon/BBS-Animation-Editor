@@ -6,7 +6,7 @@ public final class BetterLightsPanelModelSmokeTest
     {
         if(!condition)throw new AssertionError(message);
     }
-    public static void main(String[] args)
+    public static void main(String[] args) throws Exception
     {
         check(BetterLightsPanelModel.section("Enabled")==
                 BetterLightsPanelModel.LIGHT,"root enabled");
@@ -43,6 +43,27 @@ public final class BetterLightsPanelModelSmokeTest
         check(Double.isNaN(BetterLightsPanelModel.rangedValue(
                 .5D,Double.NEGATIVE_INFINITY,100)),
                 "unbounded values must use direct number input");
+        /*
+         * The previous implementation passed all classification tests but
+         * displayed every native value under LIGHT: ValueSerializer.getValues()
+         * returns copies whose getPath() has lost their parent Value tree.
+         * Guard the inspector's native hierarchy extraction specifically.
+         * The actual BetterLights runtime is optional and cannot be loaded
+         * in the plain-Java-8 smoke environment.
+         */
+        String inspector=new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get(
+                "src/main/java/com/example/examplemod/BetterLightsActorInspector.java")),
+                java.nio.charset.StandardCharsets.UTF_8);
+        check(inspector.contains("gatherNativeValues(serializer"),
+                "inspector must traverse BetterLights native Value hierarchy");
+        check(inspector.contains("serializer.getValue(path)"),
+                "inspector must look up by canonical full native path");
+        check(inspector.contains("new Entry(value,path)"),
+                "inspector must preserve canonical path on copied value");
+        check(!inspector.contains("serializer.getValues()"),
+                "detached serializer value list cannot classify categories");
+
         System.out.println("BetterLights sections and sliders PASS");
     }
 }
