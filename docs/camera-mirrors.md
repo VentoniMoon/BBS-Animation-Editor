@@ -59,12 +59,25 @@ The mirror never creates a second world, chunk renderer, or chunk cache.
 The mirror sky calls vanilla RenderGlobal.renderSky(partialTicks, 2),
 matching Minecraft's non-anaglyph world pass. Using pass 0 previously
 applied the anaglyph RGB transform and tinted the mirrored sky pink/purple.
-The ordinary CAMERA preview remains the BBS FS-style native world pipeline;
-the mirror still manually assembles sky and terrain passes, so fog, clouds,
-weather, BetterLights and OptiFine shaderpack parity are NOT yet complete.
 
-Shaderpack reflection still requires a dedicated OptiFine-compatible render
-target: the current safe default shows tinted fallback when shaders are on.
+The reflection now delegates weather/biome fog color and the -1 sky /
+0 terrain fog phases to the actual native EntityRenderer methods
+(updateFogColor/setupFog). It renders vanilla clouds with pass=2 and
+the native farther cloud projection. The fog colors are restored after
+capture; the main CAMERA preview uses the unchanged BBS FS native pass.
+Rain/particles, BetterLights and OptiFine shaderpack parity are still not
+fully reproduced by the independent mirror image capture.
+
+Shaderpack reflection still requires a dedicated OptiFine-compatible
+deferred-render target: OptiFine G5 owns global GBuffer/depth attachments,
+shader stages, shadow maps, uniforms and composite passes. A single
+Minecraft Framebuffer with glUseProgram() is NOT a replacement for that
+graph and re-entering full EntityRenderer.renderWorld() corrupted the
+normal world in earlier experiments. This release deliberately keeps the
+tinted fallback with active shaderpacks. True shaderpack parity is tracked
+as a separate backend requiring isolated GBuffer buffers and final composite
+without rerunning the normal actor/physics tick. No runtime shaderpack
+compatibility claim is made yet.
 
 ## First game test
 
