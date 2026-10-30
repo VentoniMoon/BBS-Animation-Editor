@@ -121,11 +121,9 @@ public final class CameraSceneMirrorRenderer
         {
             blockedByShaderpack=true;
             captureStatus="SHADERPACK ON - REFLECTION PAUSED";
-            // Mirror-specific chunks may have been created with shaders OFF
-            // earlier in this editor session. Dispose them after a pack is
-            // enabled; otherwise they keep receiving world block updates.
-            if(CameraMirrorWorldIsolation.ready())
-                CameraMirrorWorldIsolation.reset(mc);
+            // Shared-world reflection owns no secondary chunk renderer
+            // or world listeners. The private framebuffer remains harmless
+            // while the shaderpack guard is active.
             return;
         }
         CameraSceneMirrors.Mirror picked=null;
