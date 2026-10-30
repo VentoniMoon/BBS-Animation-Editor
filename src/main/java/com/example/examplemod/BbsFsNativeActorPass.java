@@ -64,31 +64,12 @@ public final class BbsFsNativeActorPass
      * Preserve actor simulation ownership: the GUI-side coordinator skips
      * both selected/background actors if this pass completed successfully.
      */
-    public static void render(Minecraft mc, AnimationEditorScreen editor,
-            EditorSceneViewport viewport, float partialTicks,
-            int worldWidth, int worldHeight)
-    {
-        renderPass(mc,editor,viewport,partialTicks,worldWidth,worldHeight,false);
-    }
-
-    /**
-     * Auxiliary mirror view. Render recorded actors in the reflected camera
-     * using the SAME scene tick; do not claim ownership of the normal
-     * RenderWorldLast frame. Movement and Jolt use their same-frame caches,
-     * so the main render can reuse the already sampled physics pose.
-     */
-    public static void renderReflected(Minecraft mc,
-            AnimationEditorScreen editor,EditorSceneViewport viewport,
-            float partialTicks,int worldWidth,int worldHeight)
-    {
-        renderPass(mc,editor,viewport,partialTicks,worldWidth,worldHeight,true);
-    }
-
-    private static void renderPass(Minecraft mc,AnimationEditorScreen editor,
+    public static void render(Minecraft mc,AnimationEditorScreen editor,
             EditorSceneViewport viewport,float partialTicks,
-            int worldWidth,int worldHeight,boolean reflection)
+            int worldWidth,int worldHeight)
     {
-        if (rendering || (!reflection && renderedThisFrame) ||
+        // One mutable actor/physics owner per normal Minecraft frame.
+        if (rendering || renderedThisFrame ||
                 mc == null || editor == null || viewport == null ||
                 !BbsFsWorldProjection.isCaptured() || mc.world == null)
             return;
@@ -133,12 +114,9 @@ public final class BbsFsNativeActorPass
                 if (lightmapEnabled)
                     mc.entityRenderer.disableLightmap();
             }
-            if(!reflection)
-            {
-                renderedThisFrame = true;
-                renderedSequence = frameSequence;
-            }
-            if (!reflection && !diagnosed)
+            renderedThisFrame = true;
+            renderedSequence = frameSequence;
+            if (!diagnosed)
             {
                 diagnosed = true;
                 System.out.println("[BBS Editor][FS Preview] Recorded actors "
@@ -149,13 +127,9 @@ public final class BbsFsNativeActorPass
         {
             /* Avoid drawing the same Jolt simulation twice after a partial
              * actor failure. A render exception must stay visible in logs. */
-            if(!reflection)
-            {
-                renderedThisFrame = true;
-                renderedSequence = frameSequence;
-            }
-            System.err.println("[BBS Editor][FS Preview] "+
-                    (reflection?"Mirror":"Native")+" actor render "
+            renderedThisFrame = true;
+            renderedSequence = frameSequence;
+            System.err.println("[BBS Editor][FS Preview] Native actor render "
                     + "failed; aborting pass: " + error);
             error.printStackTrace();
         }
