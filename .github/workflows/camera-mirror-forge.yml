@@ -8,6 +8,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorWorldIsolation.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
       - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
@@ -20,6 +22,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorWorldIsolation.java'
   workflow_dispatch:
 
 jobs:
