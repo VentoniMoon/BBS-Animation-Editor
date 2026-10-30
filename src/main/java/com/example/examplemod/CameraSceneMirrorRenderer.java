@@ -14,7 +14,8 @@ import org.lwjgl.opengl.GL30;
  * Experimental planar world reflection, one camera/framebuffer per editor
  * frame. The auxiliary scene pass is performed before Minecraft's normal
  * world pass, never from the GUI or from inside RenderWorldLast. Reflection
- * passes do not invoke BbsFsNativeActorPass / Jolt simulation a second time.
+ * Recorded actors are re-rendered from the reflected camera using the
+ * existing same-tick pose/Jolt cache; there is no second physics time step.
  *
  * OptiFine packs with incompatible auxiliary rendering are guarded: if a
  * secondary world pass fails, mirror capture is disabled for this session.
@@ -63,7 +64,9 @@ public final class CameraSceneMirrorRenderer
         capturedId="";
         capturedPose=null;
         if(capturing||failed||mc==null||mirrors==null||
-                mc.world==null||camera==null||pass==null)return;
+                mc.world==null||camera==null||pass==null||
+                "false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrors","true")))return;
         if(lastWorld!=null&&lastWorld!=mc.world)reset();
         lastWorld=mc.world;
         CameraSceneMirrors.Mirror picked=null;
@@ -71,6 +74,7 @@ public final class CameraSceneMirrorRenderer
         for(CameraSceneMirrors.Mirror m:mirrors.all())
         {
             if(!m.enabled||m.width<=0D||m.height<=0D)continue;
+            if(!visible(mc,m,camera))continue;
             double side=CameraMirrorMath.side(
                     m.x,m.z,camera.x,camera.z,m.yaw);
             // This mirror is opaque and only reflective on its front.
@@ -121,7 +125,8 @@ public final class CameraSceneMirrorRenderer
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,
                     texture.framebufferObject);
             // Ignore unrelated OptiFine GL errors from earlier passes.
-            while(GL11.glGetError()!=GL11.GL_NO_ERROR){}
+            for(int attempt=0;attempt<16 &&
+                    GL11.glGetError()!=GL11.GL_NO_ERROR;attempt++){}
             GL30.glBlitFramebuffer(0,0,source.framebufferWidth,
                     source.framebufferHeight,0,0,w,h,
                     GL11.GL_COLOR_BUFFER_BIT,GL11.GL_LINEAR);
@@ -157,6 +162,30 @@ public final class CameraSceneMirrorRenderer
             GL13.glActiveTexture(oldTexture);
             GL20.glUseProgram(oldShader);
         }
+    }
+
+    private static boolean visible(Minecraft mc,
+            CameraSceneMirrors.Mirror m,PreviewCameraPose camera)
+    {
+        int w=Math.max(1,mc.displayWidth),h=Math.max(1,mc.displayHeight);
+        float[] center=PreviewCameraProjection.project(
+                m.x,m.y,m.z,camera,0,0,w,h);
+        if(inScreen(center,w,h))return true;
+        double[][] corners=CameraMirrorMath.corners(
+                m.x,m.y,m.z,m.yaw,m.width,m.height);
+        for(double[] p:corners)
+            if(inScreen(PreviewCameraProjection.project(
+                    p[0],p[1],p[2],camera,0,0,w,h),w,h))
+                return true;
+        // A huge nearby rectangle may fully enclose the view although all
+        // of its corners are outside. Keep it rather than flicker.
+        return m.width>8D&&
+                Math.hypot(camera.x-m.x,camera.z-m.z)<6D;
+    }
+    private static boolean inScreen(float[] p,int w,int h)
+    {
+        return p!=null&&p[0]>=-8&&p[0]<=w+8&&
+                p[1]>=-8&&p[1]<=h+8;
     }
 
     /** Render static mirror quads directly into the native world depth. */
@@ -206,6 +235,11 @@ public final class CameraSceneMirrorRenderer
     {
         double[][] corners=CameraMirrorMath.corners(m.x,m.y,m.z,
                 m.yaw,m.width,m.height);
+        // Place the face just ahead of the wall it is mounted on to avoid
+        // coplanar z-fighting with the wooden/stone block behind it.
+        double[] n=CameraMirrorMath.normal(m.yaw);
+        for(double[] p:corners)
+        {p[0]+=n[0]*0.015D;p[2]+=n[2]*0.015D;}
         boolean ready=texture!=null&&texture.framebufferTexture!=0&&
                 capturedPose!=null&&m.id.equals(capturedId);
         float[][] uv=new float[4][];
