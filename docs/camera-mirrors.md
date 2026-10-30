@@ -31,10 +31,13 @@ At RenderWorldLast, after the normal world is ready:
 
 1. BBS FS renders the normal recorded actors and evaluates their timeline,
    Body Parts and Jolt pose exactly once.
-2. Mirror capture creates the reflected camera based on the world-space
-   plane and renders visible main-world chunks from the same RenderGlobal.
-   It does NOT call EntityRenderer.renderWorld(), RenderGlobal.setupTerrain(),
-   updateChunks() or create another RenderGlobal.
+2. Mirror capture creates a reflected camera and builds a temporary
+   **mirror-specific visibility list** from the EXISTING ViewFrustum's
+   compiled RenderChunk objects. The original renderInfos list and VBO
+   camera origin are restored in a finally/AutoCloseable scope. No new
+   WorldClient, RenderGlobal, ViewFrustum, or second EntityRenderer frame
+   is created. Chunks only visible from the mirror may be compiled lazily
+   using the NORMAL Minecraft ChunkRenderDispatcher, budgeted per frame.
 3. The already-prepared selected/background EntityActor objects are drawn
    a second time from that reflected camera using read-only render methods.
    These methods DO NOT call drawActor(), morph update, entity tick, Body
@@ -47,11 +50,11 @@ The reflective viewport uses a static single-sided rectangle; other mirrors
 display a tinted fallback (only one captured reflection per frame). Mirror
 geometry never modifies blocks or changes the selected scene.
 
-**Current limitation:** Because this pass deliberately shares the ordinary
-camera's *already prepared visible-chunk list*, distant terrain behind the
-camera can be incomplete in the reflection. A future visibility-only pass
-should account for the reflected camera without mutating the main renderer,
-rebuilding chunks or creating another world.
+**Current limitation:** The mirror can see any compiled RenderChunk already
+present within the normal ViewFrustum's loaded render-distance area.
+Geometry outside that loaded range is unavailable until Minecraft loads
+it normally. New back-facing chunks can take a few frames to compile.
+The mirror never creates a second world, chunk renderer, or chunk cache.
 
 Shaderpack reflection still requires a dedicated OptiFine-compatible render
 target: the current safe default shows tinted fallback when shaders are on.
@@ -78,19 +81,21 @@ Check `run/logs/latest.log` for `[BBS Editor][Mirror]` if capture stops.
 
 ## Limitations / safety
 
-- This is an **experimental world-only reflection**. Active OptiFine
+- This is an **experimental shared-world reflection**. Active OptiFine
   shaderpacks use the tinted fallback surface by default: second native
   world passes alter OptiFine global shader state outside GL attrib stacks.
   This is intentionally disabled, not yet solved.
 - Full compatibility with OptiFine/BetterLights and Minecraft's depth
   buffers is **not yet visually confirmed**.
-- Rendering a reflection involves an extra draw of the currently visible
-  chunks and posed actors; this costs GPU time but does not duplicate chunks.
+- Rendering a reflection involves an extra draw of mirror-visible chunks
+  and prepared actors; this costs GPU time but does not duplicate chunks.
 - Reflected actors are drawn from prepared runtime poses without calling the
   animation/physics evaluator twice. Native morph/Emoticons renderers may
   still perform their own per-draw visual updates; game validation is needed.
-- Main-camera chunk culling may omit geometry that only the reflected eye
-  would see; that is not a second world but a visibility limitation.
+- Mirror chunks are chosen separately with a reflected frustum; this fixes
+  the previous sky/blue-void reflection caused by reusing the main-camera
+  renderInfos list. Source RenderChunks remain limited to the normal
+  ViewFrustum's loaded area, and missing ones compile progressively.
 - If terrain/reflection capture cannot initialize it fails closed with
   diagnostic status rather than copying the normal camera.
 - Current mirrored FOV/UVs use the CPU viewport camera projection; very
