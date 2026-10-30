@@ -138,6 +138,43 @@ In particular, it must NOT call `Shaders.renderCompositeFinal()` directly
 against the normal BBS FS GBuffer. Doing so would mutate the main world's
 color attachments and flip history.
 
+### Experimental BSL shader reflection (opt-in, NOT production)
+
+The mirror has an experimental private multi-pass executor using the real
+compiled BSL programs and the same posed world/actors:
+
+```
+-Dbbs.editor.camera.mirrorBSLExperimental=true
+```
+
+This is a **separate client JVM argument**. Without it the validated
+non-shader reflection and multipass tinted fallback behave as before.
+
+The experimental implementation allocates/reuses a separate private
+8-colortex/3-depth MRT, renders a reflected geometry pass into it, executes
+the seven active compiled BSL deferred/composite GLSL programs using each
+program's own DRAWBUFFERS mapping, and runs the BSL final GLSL program
+to the mirror surface texture. It snapshots/restores normal-frame GL
+framebuffer, viewport, 16 texture bindings and changed GLSL uniforms.
+It never runs Minecraft/OptiFine beginRender recursively, never constructs
+a new WorldClient, and never steps Jolt a second time.
+
+**Important:** This is the first actual runtime version and has not yet
+been visually verified in-game. OptiFine's custom shader program state,
+nonstandard material samplers, depthtex1/depthtex2 opaque/translucent
+boundaries, temporal shadow history, and pack-specific postprocessing
+may still be incomplete. In particular, depthtex1/depthtex2 are currently
+snapshotted after the combined scene draw, not at the separate vanilla
+opaque/translucent boundaries; this can cause incorrect effects.
+The final image, main-world shader stability, and reflections MUST be
+tested before the flag is used for actual recording.
+
+If the experimental pass fails it logs
+`[BBS Editor][Mirror]` / `[BBS Editor][Mirror][BSL Render]`,
+latches the mirror off for the editor session, and leaves the default
+renderer unchanged. Restart without the experimental flag to go back to
+the safe known-good behavior. Do not enable `mirrorUnsafeShaders`.
+
 Never use the old JVM override `mirrorUnsafeShaders` to force
 unvalidated multi-pass rendering; the normal CAMERA world must remain
 untouched. Full support for this BSL pack is not yet claimed.
