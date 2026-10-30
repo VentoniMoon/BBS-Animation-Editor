@@ -367,6 +367,11 @@ public final class BbsFsWorldCameraDriver
                     BbsFsCameraConventions.cameraSetupPitch(activePose.pitch));
             event.setRoll(
                     BbsFsCameraConventions.cameraSetupRoll(activePose.roll));
+            // The reflected eye is BEHIND the mirror; without the plane,
+            // nearby blocks on the wall side hide the real reflection.
+            // Install before chunks/entities render, not in WorldLast.
+            if(CameraSceneMirrorRenderer.isCapturing())
+                CameraSceneMirrorRenderer.installFrontClipPlane(activePose);
         }
     }
 
