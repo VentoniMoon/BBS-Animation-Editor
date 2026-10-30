@@ -33,6 +33,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
     private int fbo;
     private int width,height,colorCount,depthCount;
     private int[][] colors;
+    private int[] formats;
     private int[] depths;
     private int[] front;
     private boolean closed;
@@ -53,6 +54,19 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
     public static CameraMirrorOptiFineTargets allocate(
             int requestedWidth,int requestedHeight,int colorBuffers,
             int depthBuffers)
+    {
+        return allocate(requestedWidth,requestedHeight,colorBuffers,
+                depthBuffers,null);
+    }
+
+    /**
+     * @param nativeFormats actual OptiFine gbuffersFormat[] enums (null to
+     * use 16-bit float). Matching these matters for BSL lighting/encoding;
+     * the same world does not imply all colortex buffers use RGBA16F.
+     */
+    public static CameraMirrorOptiFineTargets allocate(
+            int requestedWidth,int requestedHeight,int colorBuffers,
+            int depthBuffers,int[] nativeFormats)
     {
         if(requestedWidth<=0||requestedHeight<=0||
                 colorBuffers<1||colorBuffers>8||
@@ -78,6 +92,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
         out.width=w;out.height=h;
         out.colorCount=colorBuffers;out.depthCount=depthBuffers;
         out.colors=new int[colorBuffers][2];
+        out.formats=new int[colorBuffers];
         out.depths=new int[depthBuffers];
         out.front=new int[colorBuffers];
         try
@@ -86,8 +101,17 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,out.fbo);
             for(int i=0;i<colorBuffers;i++)
             {
+                int format=nativeFormats!=null&&i<nativeFormats.length?
+                        nativeFormats[i]:GL30.GL_RGBA16F;
+                // Reject unknown formats instead of silently violating
+                // BSL's shader-specific colortex data encoding.
+                if(!isSupportedColorFormat(format))
+                    throw new IllegalStateException(
+                            "Unsupported OptiFine colortex"+i+
+                            " internal format: "+format);
+                out.formats[i]=format;
                 for(int side=0;side<2;side++)
-                    out.colors[i][side]=makeColorTexture(w,h);
+                    out.colors[i][side]=makeColorTexture(w,h,format);
                 GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER,
                         GL30.GL_COLOR_ATTACHMENT0+i,
                         GL11.GL_TEXTURE_2D,out.colors[i][0],0);
@@ -154,7 +178,28 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
         front[index]=1-front[index];
     }
 
-    private static int makeColorTexture(int width,int height)
+    private static boolean isSupportedColorFormat(int fmt)
+    {
+        // Common OptiFine 1.12.2 shaderpack format enum values.
+        switch(fmt)
+        {
+            case 32849: // RGB8
+            case 32856: // RGBA8
+            case 32859: // RGBA16
+            case 34842: // RGBA16F
+            case 34843: // RGB16F
+            case 34836: // RGBA32F
+            case 34837: // RGB32F
+            case 33321: // R8
+            case 33323: // RG8
+            case 33325: // R16F
+            case 33327: // RG16F
+                return true;
+            default:return false;
+        }
+    }
+
+    private static int makeColorTexture(int width,int height,int format)
     {
         int id=GL11.glGenTextures();
         GL11.glBindTexture(GL11.GL_TEXTURE_2D,id);
@@ -166,8 +211,12 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
                 GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_T,
                 GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,GL30.GL_RGBA16F,width,height,
-                0,GL11.GL_RGBA,GL11.GL_FLOAT,(java.nio.ByteBuffer)null);
+        int channels=(format==32849||format==34843||format==34837)?
+                GL11.GL_RGB:
+                (format==33321||format==33325)?GL30.GL_RED:
+                (format==33323||format==33327)?GL30.GL_RG:GL11.GL_RGBA;
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,format,width,height,
+                0,channels,GL11.GL_FLOAT,(java.nio.ByteBuffer)null);
         return id;
     }
 
