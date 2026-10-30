@@ -55,7 +55,7 @@ public final class CameraSceneMirrorRenderer
     public static String surfaceHint()
     {
         if(!capturedId.isEmpty())return "";
-        if(blockedByShaderpack)return "SHADERPACK ON - REFLECTION PAUSED";
+        if(blockedByShaderpack)return captureStatus;
         if(failed)return "MIRROR ERROR - SEE latest.log";
         return captureStatus;
     }
