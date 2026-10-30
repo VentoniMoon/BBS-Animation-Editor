@@ -251,8 +251,19 @@ public final class CameraSceneMirrorRenderer
                         corners[i][0],corners[i][1],corners[i][2],
                         capturedPose,0,0,sourceWidth,sourceHeight);
                 if(pixel==null){ready=false;break;}
+                // Homogeneous texture coordinates: ordinary 2D UVs would
+                // interpolate incorrectly at oblique mirror angles.
+                double yaw=Math.toRadians(capturedPose.yaw);
+                double pitch=Math.toRadians(capturedPose.pitch);
+                double dz=corners[i][2]-capturedPose.z;
+                double dx=corners[i][0]-capturedPose.x;
+                double localZ=Math.sin(yaw)*dx+Math.cos(yaw)*dz;
+                double depth=Math.sin(pitch)*
+                        (corners[i][1]-capturedPose.y)-
+                        Math.cos(pitch)*localZ;
+                float q=(float)Math.max(0.001D,depth);
                 uv[i]=new float[]{pixel[0]/sourceWidth,
-                        1F-pixel[1]/sourceHeight};
+                        1F-pixel[1]/sourceHeight,q};
             }
         }
         if(ready)
@@ -270,7 +281,8 @@ public final class CameraSceneMirrorRenderer
         GL11.glBegin(GL11.GL_QUADS);
         for(int i=0;i<4;i++)
         {
-            if(ready)GL11.glTexCoord2f(uv[i][0],uv[i][1]);
+            if(ready)GL11.glTexCoord4f(uv[i][0]*uv[i][2],
+                    uv[i][1]*uv[i][2],0F,uv[i][2]);
             GL11.glVertex3d(corners[i][0],corners[i][1],corners[i][2]);
         }
         GL11.glEnd();
