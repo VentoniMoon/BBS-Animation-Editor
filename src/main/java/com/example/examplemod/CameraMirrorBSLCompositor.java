@@ -31,6 +31,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
 {
     private static final String TAG="[BBS Editor][Mirror][BSL Render] ";
     private static CameraMirrorBSLCompositor current;
+    private static boolean firstFrameLogged;
     private final CameraMirrorOptiFineTargets targets;
     private final PreviewCameraPose view;
     private final int mainProgram;
@@ -208,8 +209,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             bindInputs(pid);
             overrideCamera(pid);
             drawQuad();
-            System.out.println(TAG+"PASS: "+
-                    programs.size()+" shader stages + final on private GBuffer");
+            if(!firstFrameLogged)
+            {
+                firstFrameLogged=true;
+                System.out.println(TAG+"PASS: "+
+                        programs.size()+
+                        " shader stages + final on private GBuffer");
+            }
         }
         finally
         {
