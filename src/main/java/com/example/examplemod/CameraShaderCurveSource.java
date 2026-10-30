@@ -180,8 +180,21 @@ public final class CameraShaderCurveSource
         for(Option opt:candidates.values())
             uniforms.append("uniform ").append(opt.integer?"int ":"float ")
                     .append(PREFIX).append(opt.name).append(";\n");
-        result=result.substring(0,newline+1)+uniforms+
-                result.substring(newline+1);
+        // GLSL requires all #extension directives to precede declarations.
+        // Many OptiFine shaderpacks put one or several directly after
+        // #version; inserting uniform there would make the shader invalid.
+        int insertion=newline+1;
+        while(insertion<result.length())
+        {
+            int end=result.indexOf('\n',insertion);
+            if(end<0)end=result.length();
+            String line=result.substring(insertion,end).trim();
+            if(!line.isEmpty()&&!line.startsWith("//")&&
+                    !line.startsWith("#extension"))break;
+            insertion=end<result.length()?end+1:end;
+        }
+        result=result.substring(0,insertion)+uniforms+
+                result.substring(insertion);
         return new Result(result,candidates);
     }
 
