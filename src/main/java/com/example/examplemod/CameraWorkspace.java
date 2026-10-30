@@ -1390,6 +1390,11 @@ public final class CameraWorkspace
                     inspector.toggleCurvePicker();
                     return true;
                 }
+                if("@curve:refresh".equals(hit.key))
+                {
+                    inspector.refreshCurvePicker();
+                    return true;
+                }
                 if(hit.key.startsWith("@curve:set:")&&
                         clip.kind==CameraClipDocument.Kind.CURVE)
                 {
@@ -1397,21 +1402,21 @@ public final class CameraWorkspace
                     boolean valid="brightness".equals(channel)||
                             "red".equals(channel)||"green".equals(channel)||
                             "blue".equals(channel)||"fade".equals(channel);
+                    java.util.Map<String,Float> discovered=
+                            CameraShaderCurves.availableOptions();
                     if(channel.startsWith("curve."))
-                        valid=CameraShaderCurves.options().containsKey(
-                                channel.substring(6))||
+                        valid=discovered.containsKey(channel.substring(6))||
                                 channel.equals(clip.settings.get("channels"));
                     if(valid)
                     {
                         clip.settings.put("channels",channel);
                         if(channel.startsWith("curve."))
                         {
-                            CameraShaderCurveSource.Option option=
-                                    CameraShaderCurves.options().get(
-                                            channel.substring(6));
-                            if(option!=null)
+                            Float starting=discovered.get(
+                                    channel.substring(6));
+                            if(starting!=null)
                                 clip.settings.put("value",
-                                        Float.toString(option.fallback));
+                                        Float.toString(starting));
                         }
                         inspector.closeCurvePicker();
                         saveScene();
