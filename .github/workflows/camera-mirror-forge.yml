@@ -12,6 +12,9 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -32,6 +35,9 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -66,6 +72,8 @@ jobs:
           grep -q 'CameraMirrorOptiFineBackend.inspect()' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           ! grep -q 'Shaders.beginRender(' src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java
           ! grep -q 'Shaders.endRender(' src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java
+          ! grep -q 'renderCompositeFinal()' src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java
+          grep -q 'CameraMirrorOptiFinePreflight.runOnce()' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
       - name: Compile entire editor against pinned Forge and mod dependencies
         run: |
           chmod +x ./gradlew
