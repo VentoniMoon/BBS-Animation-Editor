@@ -1,0 +1,38 @@
+name: CAMERA mirror full Forge Java 8 compile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/java/com/example/examplemod/CameraMirrorMath.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
+      - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
+      - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
+      - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
+      - 'src/main/java/com/example/examplemod/EditorSceneState.java'
+      - 'src/main/java/com/example/examplemod/EditorSceneSerializer.java'
+      - '.github/workflows/camera-mirror-forge.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/com/example/examplemod/CameraMirrorMath.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
+  workflow_dispatch:
+
+jobs:
+  forge-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Compile entire editor against pinned Forge and mod dependencies
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace -PciDependencies compileJava
