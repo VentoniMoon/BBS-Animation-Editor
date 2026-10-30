@@ -2,6 +2,7 @@ package com.example.examplemod;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.lang.reflect.Method;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
@@ -43,7 +44,7 @@ public final class CameraMirrorOptiFineBackend
     }
     private static Class<?> shaders;
     private static Field worldFlag,shadowFlag,activeProgram;
-    private static Field colorCount,depthCount,shaderName;
+    private static Field colorCount,depthCount,shaderName,colorFormats;
     private static Field[] stages;
     private static Field compositePrograms,deferredPrograms,finalProgram;
     private static Method useProgram,getId;
@@ -77,9 +78,11 @@ public final class CameraMirrorOptiFineBackend
             int deferred=countPrograms(deferredPrograms.get(null));
             int composite=countPrograms(compositePrograms.get(null));
             int finalId=programId(finalProgram.get(null));
+            int[] formats=getColorFormats(color);
             String details="pack="+pack+" colors="+color+" depth="+depth+
                     " deferred="+deferred+" composite="+composite+
-                    " final="+(finalId>0);
+                    " final="+(finalId>0)+
+                    " formats="+Arrays.toString(formats);
             if(color!=1||depth!=1||deferred>0||composite>0||
                     finalId>0)
             {
@@ -215,6 +218,24 @@ public final class CameraMirrorOptiFineBackend
     }
     public static boolean active(){return current!=null;}
 
+    /**
+     * Exact attachment formats used by the ACTIVE OptiFine shaderpack.
+     * Returning a copy avoids giving the mirror any write access to
+     * Shaders.gbuffersFormat or the normal BBS FS framebuffer.
+     */
+    public static int[] getColorFormats(int count)throws Exception
+    {
+        if(!lookedUp)resolve();
+        if(colorFormats==null)
+            throw new IllegalStateException(
+                    "OptiFine gbuffersFormat unavailable");
+        int[] live=(int[])colorFormats.get(null);
+        if(live==null||count>live.length)
+            throw new IllegalStateException(
+                    "OptiFine GBuffer layout not initialized");
+        return Arrays.copyOf(live,count);
+    }
+
     private static int countPrograms(Object array)throws Exception
     {
         int count=0;
@@ -240,6 +261,7 @@ public final class CameraMirrorOptiFineBackend
         useProgram=shaders.getMethod("useProgram",type);
         colorCount=hidden("usedColorBuffers");
         depthCount=hidden("usedDepthBuffers");
+        colorFormats=hidden("gbuffersFormat");
         try{shaderName=shaders.getField("currentShaderName");}
         catch(NoSuchFieldException ignored){shaderName=null;}
         compositePrograms=shaders.getField("ProgramsComposite");
