@@ -337,5 +337,31 @@ public final class CameraSceneMirrorsPanel
         for(int i=0;i<4;i++)GL11.glVertex2f(pts[i][0],pts[i][1]);
         GL11.glEnd();
         GL11.glPopAttrib();
+
+        // Explain the tinted surface in the actual viewport, not only in
+        // the right inspector (which may be hidden or cropped). This overlay
+        // is editor chrome and never enters the native world frame/export.
+        String reason=CameraSceneMirrorRenderer.surfaceHint();
+        if(reason.length()>0&&pw>30&&ph>20)
+        {
+            Minecraft mc=Minecraft.getMinecraft();
+            int labelWidth=Math.max(1,Math.min(300,pw-12));
+            String shown=mc.fontRenderer.trimStringToWidth(reason,
+                    labelWidth-8);
+            int textWidth=mc.fontRenderer.getStringWidth(shown);
+            float minX=pts[0][0],minY=pts[0][1];
+            for(int i=1;i<4;i++)
+            {
+                minX=Math.min(minX,pts[i][0]);
+                minY=Math.min(minY,pts[i][1]);
+            }
+            int x=(int)Math.max(px+6,Math.min(px+pw-textWidth-8,
+                    Math.round(minX+4)));
+            int y=(int)Math.max(py+6,Math.min(py+ph-15,
+                    Math.round(minY+5)));
+            Gui.drawRect(x-3,y-3,x+textWidth+4,y+12,0xD9152533);
+            mc.fontRenderer.drawStringWithShadow(shown,x,y,
+                    0xFFFFD087);
+        }
     }
 }
