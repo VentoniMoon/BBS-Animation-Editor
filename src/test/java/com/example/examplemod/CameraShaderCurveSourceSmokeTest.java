@@ -62,6 +62,35 @@ public final class CameraShaderCurveSourceSmokeTest
         check(Math.abs(fallback.options.get("EXPOSURE").fallback-1.3f)
                 <0.0001f,"default pack parameter value");
 
+        // Most real shaderpacks place a tooltip before the selectable
+        // values: // Shadow darkness levels [0.05 0.10 0.20].
+        String realPack="#version 120\\n"+
+                "#define SHADOW_DARKNESS 0.10 "+
+                "// Shadow darkness levels [0.05 0.10 0.20]\\n"+
+                "void main(){float x=SHADOW_DARKNESS;}\\n";
+        CameraShaderCurveSource.Result annotated=
+                CameraShaderCurveSource.convert(realPack,null);
+        check(annotated.options.containsKey("SHADOW_DARKNESS"),
+                "OptiFine tooltip before slider values must parse");
+
+        String noAnnotation="#version 120\\n"+
+                "#define AUTO_EXPOSURE 1.25 // Exposure strength\\n"+
+                "void main(){float x=AUTO_EXPOSURE;}\\n";
+        CameraShaderCurveSource.Result fromApi=
+                CameraShaderCurveSource.convert(noAnnotation,
+                        Collections.singleton("AUTO_EXPOSURE"));
+        check(fromApi.options.containsKey("AUTO_EXPOSURE"),
+                "Active float OptiFine option must work without slider hint");
+
+        String protectedShader="#version 120\\n"+
+                "#define STEPS 8 // Samples [4 8 16]\\n"+
+                "#if STEPS > 4\\nfloat test = 1.;\\n#endif\\n";
+        CameraShaderCurveSource.Result protectedResult=
+                CameraShaderCurveSource.convert(protectedShader,
+                        Collections.singleton("STEPS"));
+        check(!protectedResult.options.containsKey("STEPS"),
+                "Preprocessor constants must never become uniforms");
+
         System.out.println("CAMERA native OptiFine shader curve source PASS");
     }
 }
