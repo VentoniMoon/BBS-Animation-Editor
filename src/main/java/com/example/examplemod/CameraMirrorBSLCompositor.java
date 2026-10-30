@@ -263,7 +263,12 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     {
         int loc=GL20.glGetUniformLocation(program,name);
         if(loc<0)return;
-        int unit=GL20.glGetUniformi(program,loc);
+        // LWJGL 2 exposes glGetUniform(program,loc,IntBuffer), not
+        // the LWJGL 3-style scalar glGetUniformi overload. It also
+        // validates a buffer of at least 16 elements.
+        IntBuffer samplerValue=BufferUtils.createIntBuffer(16);
+        GL20.glGetUniform(program,loc,samplerValue);
+        int unit=samplerValue.get(0);
         // Unit0 also carries the normal texture atlas in the geometry
         // pass; only bind these inputs during fullscreen postprocessing.
         if(unit<0||unit>=16)
