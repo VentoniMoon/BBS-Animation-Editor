@@ -73,6 +73,11 @@ public final class CameraMirrorTerrainPass
                 // RenderGlobal VBO container supplies -cameraXYZ. Reuse
                 // existing chunk buffers, never another world renderer.
                 setCamera(camera,aspect,false,1F);
+                // Programmable BSL shaders ignore fixed GL_CLIP_PLANE0.
+                // The reflected near projection plane must reject every
+                // stone/block BEHIND the mounted mirror instead.
+                CameraSceneMirrorRenderer.installShaderObliqueProjection(
+                        camera);
                 atmosphere.terrain(partialTicks);
                 try(CameraMirrorChunkVisibility.Scope mirrorChunks=
                         CameraMirrorChunkVisibility.begin(mc,camera,mainCamera))
