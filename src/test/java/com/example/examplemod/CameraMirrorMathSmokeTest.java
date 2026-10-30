@@ -44,6 +44,34 @@ public final class CameraMirrorMathSmokeTest
         close(reflected[0],-4D);
         close(reflected[1],2D);
         close(reflected[2],3D);
-        System.out.println("Planar mirror geometry smoke OK");
+        // A wall mounted BEHIND the mirror must disappear from the
+        // reflected world, while the scene on the viewer side stays.
+        checkClip(front,0D,65D,0D,0D);
+        checkClip(new PreviewCameraPose(6D,68D,4D,25F,-12F,9F,
+                72F,0.05F,256F),1D,67D,-1D,45D);
+        checkClip(new PreviewCameraPose(-3D,72D,7D,-28F,17F,-7F,
+                65F,0.05F,256F),-2D,70D,2D,-30D);
+        System.out.println("Planar mirror geometry + clipping smoke OK");
+    }
+
+    private static void checkClip(PreviewCameraPose camera,
+            double x,double y,double z,double yaw)
+    {
+        PreviewCameraPose reflected=CameraMirrorMath.reflect(camera,
+                x,y,z,yaw);
+        double[] plane=CameraMirrorMath.frontClipPlane(reflected,
+                x,y,z,yaw,0.02D);
+        double[] normal=CameraMirrorMath.normal(yaw);
+        double[] front=CameraMirrorMath.viewVector(reflected,
+                x+normal[0]*2D-reflected.x,y-reflected.y,
+                z+normal[2]*2D-reflected.z);
+        double[] back=CameraMirrorMath.viewVector(reflected,
+                x-normal[0]*2D-reflected.x,y-reflected.y,
+                z-normal[2]*2D-reflected.z);
+        close(CameraMirrorMath.clipSide(plane,front),1.98D);
+        close(CameraMirrorMath.clipSide(plane,back),-2.02D);
+        double[] onPlane=CameraMirrorMath.viewVector(reflected,
+                x-reflected.x,y-reflected.y,z-reflected.z);
+        close(CameraMirrorMath.clipSide(plane,onPlane),-0.02D);
     }
 }
