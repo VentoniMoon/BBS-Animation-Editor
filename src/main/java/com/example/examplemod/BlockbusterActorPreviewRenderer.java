@@ -23,6 +23,8 @@ import org.lwjgl.util.glu.GLU;
 public class BlockbusterActorPreviewRenderer
 {
     private EntityActor actor;
+    private boolean preparedForMirror;
+    private float preparedPartialTicks;
 
     private String loadedMorphSignature = "";
 
@@ -772,6 +774,7 @@ public class BlockbusterActorPreviewRenderer
             int viewportWidth,
             int viewportHeight)
     {
+        preparedForMirror=false;
         if (mc == null ||
                 mc.world == null ||
                 actorData == null ||
@@ -1494,6 +1497,10 @@ public class BlockbusterActorPreviewRenderer
          */
         this.bodyPartsPreviewRenderer.captureRenderedAttachmentMatrices(
                 entityActor, previewFrame);
+        // From here the cached actor is ready for a second VIEW ONLY.
+        // The mirror pass must never call drawActor() / prepare() again.
+        preparedPartialTicks=actorPartialTicks;
+        preparedForMirror=true;
 
         /*
          * =====================================================
@@ -1570,6 +1577,68 @@ public class BlockbusterActorPreviewRenderer
         return this.actor;
     }
 
+    /**
+     * Render an already evaluated actor from another camera. Does NOT call
+     * updateMorph, applyAnimationPose, updateEntityTickState,
+     * updateEmoticonsAnimation, BodyParts.prepare, capture matrices,
+     * Weld/Bake or Jolt sampling. Only RenderManager draws its existing pose.
+     * Each normal native frame has already run drawActor() exactly once.
+     */
+    public void renderPreparedMirror(Minecraft mc,PreviewCameraPose view,
+            int targetWidth,int targetHeight)
+    {
+        if(!preparedForMirror||actor==null||actor.world!=mc.world||
+                actor.isDead||actor.getMorph()==null||view==null||
+                targetWidth<=0||targetHeight<=0)return;
+        RenderManager rm=mc.getRenderManager();
+        if(rm==null)return;
+        try(BbsFsWorldGlGuard guard=new BbsFsWorldGlGuard(mc))
+        {
+            rm.viewerPosX=rm.viewerPosY=rm.viewerPosZ=0D;
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glLoadIdentity();
+            GLU.gluPerspective(view.fov,(float)targetWidth/targetHeight,
+                    Math.max(0.02F,view.nearPlane),
+                    Math.max(64F,view.farPlane));
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glLoadIdentity();
+            GL11.glRotatef(-view.roll,0F,0F,1F);
+            GL11.glRotatef(-view.pitch,1F,0F,0F);
+            GL11.glRotatef(-view.yaw,0F,1F,0F);
+            GL11.glTranslated(-view.x,-view.y,-view.z);
+
+            GlStateManager.setActiveTexture(
+                    net.minecraft.client.renderer.OpenGlHelper.defaultTexUnit);
+            GlStateManager.bindTexture(0);
+            GlStateManager.enableDepth();
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            GlStateManager.depthMask(true);
+            GlStateManager.enableTexture2D();
+            GlStateManager.enableAlpha();
+            GlStateManager.enableBlend();
+            int brightness=actor.isBurning()?15728880:
+                    actor.getBrightnessForRender();
+            net.minecraft.client.renderer.OpenGlHelper
+                    .setLightmapTextureCoords(
+                            net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit,
+                            (float)(brightness&65535),
+                            (float)(brightness>>>16));
+            mc.entityRenderer.enableLightmap();
+            try
+            {
+                GlStateManager.enableLighting();
+                RenderHelper.enableStandardItemLighting();
+                rm.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
+                        actor.rotationYaw,preparedPartialTicks,true);
+            }
+            finally
+            {
+                RenderHelper.disableStandardItemLighting();
+                mc.entityRenderer.disableLightmap();
+            }
+        }
+    }
+
     /** The selected actor's opt-in Jolt -> Body Parts key bake session. */
     public BodyPartPhysicsBakeController getPhysicsBakeController()
     {
@@ -1592,6 +1661,7 @@ public class BlockbusterActorPreviewRenderer
         }
 
         this.actor = null;
+        this.preparedForMirror=false;
 
         this.loadedMorphSignature = "";
 
