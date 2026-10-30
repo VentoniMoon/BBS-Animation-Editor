@@ -5,6 +5,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
+import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 
 /**
@@ -29,6 +30,9 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
 
     private final EntityRenderer renderer;
     private final float previousRed,previousGreen,previousBlue;
+    private final boolean previousFogEnabled;
+    private final int previousFogMode;
+    private final float previousFogStart,previousFogEnd,previousFogDensity;
     private boolean closed;
 
     private CameraMirrorNativeAtmosphere(EntityRenderer renderer)
@@ -38,6 +42,11 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
         previousRed=fogRed.getFloat(renderer);
         previousGreen=fogGreen.getFloat(renderer);
         previousBlue=fogBlue.getFloat(renderer);
+        previousFogEnabled=GL11.glIsEnabled(GL11.GL_FOG);
+        previousFogMode=GL11.glGetInteger(GL11.GL_FOG_MODE);
+        previousFogStart=GL11.glGetFloat(GL11.GL_FOG_START);
+        previousFogEnd=GL11.glGetFloat(GL11.GL_FOG_END);
+        previousFogDensity=GL11.glGetFloat(GL11.GL_FOG_DENSITY);
     }
 
     public static CameraMirrorNativeAtmosphere begin(Minecraft mc,
@@ -115,8 +124,21 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
             fogRed.setFloat(renderer,previousRed);
             fogGreen.setFloat(renderer,previousGreen);
             fogBlue.setFloat(renderer,previousBlue);
-            // The enclosing mirror framebuffer guard saves the actual
-            // OpenGL fog/color state with glPushAttrib(GL_ALL_ATTRIB_BITS).
+            // glPopAttrib restores the OpenGL fog bits, but it does NOT
+            // restore GlStateManager's software cache. Restore both here
+            // before the enclosing framebuffer guard pops its attribs,
+            // otherwise the next native frame may skip fog state changes.
+            if(previousFogMode==GL11.GL_LINEAR)
+                GlStateManager.setFog(GlStateManager.FogMode.LINEAR);
+            else if(previousFogMode==GL11.GL_EXP2)
+                GlStateManager.setFog(GlStateManager.FogMode.EXP2);
+            else
+                GlStateManager.setFog(GlStateManager.FogMode.EXP);
+            GlStateManager.setFogStart(previousFogStart);
+            GlStateManager.setFogEnd(previousFogEnd);
+            GlStateManager.setFogDensity(previousFogDensity);
+            if(previousFogEnabled)GlStateManager.enableFog();
+            else GlStateManager.disableFog();
         }
         catch(IllegalAccessException e)
         {
