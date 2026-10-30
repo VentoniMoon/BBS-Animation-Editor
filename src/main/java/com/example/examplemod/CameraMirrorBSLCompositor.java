@@ -427,30 +427,49 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         catch(Throwable t){failure=t;}
         finally
         {
+            // Perform OpenGL restoration even if reflection of one
+            // OptiFine Java state field fails. The original shader frame
+            // must not be left bound to our private FBO.
             try
             {
-                // Restore shared OptiFine Java state BEFORE returning
-                // control to the main RenderWorldLast / final pass.
                 for(int i=0;i<safetyFlags.length;i++)
                     safetyFlags[i].setBoolean(null,originalFlags[i]);
                 activeProgramField.set(null,originalOptiFineProgram);
                 activeProgramIdField.setInt(null,originalOptiFineProgramId);
                 activeDrawBuffersField.set(null,originalOptiFineDrawBuffers);
+            }
+            catch(Throwable t)
+            {
+                if(failure==null)failure=t;else failure.addSuppressed(t);
+            }
+            try
+            {
                 for(int i=0;i<16;i++)
                 {
                     GL13.glActiveTexture(GL13.GL_TEXTURE0+i);
                     GL11.glBindTexture(GL11.GL_TEXTURE_2D,oldTextures[i]);
                 }
-                GL13.glActiveTexture(oldTextureUnit);
-                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,oldRead);
-                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
-                GL11.glViewport(oldViewport[0],oldViewport[1],
-                        oldViewport[2],oldViewport[3]);
-                GL20.glUseProgram(mainProgram);
             }
             catch(Throwable t)
             {
                 if(failure==null)failure=t;else failure.addSuppressed(t);
+            }
+            finally
+            {
+                try
+                {
+                    GL13.glActiveTexture(oldTextureUnit);
+                    GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,oldRead);
+                    GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
+                    GL11.glViewport(oldViewport[0],oldViewport[1],
+                            oldViewport[2],oldViewport[3]);
+                    GL20.glUseProgram(mainProgram);
+                }
+                catch(Throwable t)
+                {
+                    if(failure==null)failure=t;
+                    else failure.addSuppressed(t);
+                }
             }
         }
         if(failure!=null)
