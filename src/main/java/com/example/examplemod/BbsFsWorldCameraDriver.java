@@ -187,6 +187,7 @@ public final class BbsFsWorldCameraDriver
                     new CameraSceneMirrorRenderer.ReflectionPass()
                     {
                         @Override public void draw(PreviewCameraPose reflected)
+                                throws Throwable
                         {
                             activePose=reflected;
                             view.updateCamera(reflected.x,reflected.y,
