@@ -27,6 +27,7 @@ public final class CameraSceneMirrorRenderer
         void draw(PreviewCameraPose pose) throws Throwable;
     }
     private static Framebuffer texture;
+    private static CameraMirrorOptiFineTargets bslTargets;
     private static String capturedId="";
     private static PreviewCameraPose capturedPose;
     private static CameraSceneMirrors.Mirror activeMirror;
@@ -74,6 +75,11 @@ public final class CameraSceneMirrorRenderer
             texture.deleteFramebuffer();
             texture=null;
         }
+        if(bslTargets!=null)
+        {
+            bslTargets.close();
+            bslTargets=null;
+        }
         lastWorld=null;
         // Reflection now shares the original world's existing render chunks.
         // Only release its private color/depth target on editor detach.
@@ -120,6 +126,7 @@ public final class CameraSceneMirrorRenderer
         // A dedicated OptiFine render-target/state backend is required.
         // Do not disable this guard just to hide the tinted fallback.
         final boolean shaderMirror=shaderpackActive();
+        boolean bslMultiPass=false;
         if(shaderMirror)
         {
             // A single GBuffer/forward shaderpack can use a private mirror
@@ -131,13 +138,18 @@ public final class CameraSceneMirrorRenderer
                     CameraMirrorOptiFineBackend.inspect();
             if(!support.usable)
             {
-                // Optional offline-MRT smoke test for BSL. A framebuffer
-                // gets allocated, checked and released without drawing or
-                // changing the normal shader world. Fail closed regardless.
                 CameraMirrorOptiFinePreflight.runOnce();
-                blockedByShaderpack=true;
-                captureStatus="SHADER: "+support.message;
-                return;
+                bslMultiPass=Boolean.getBoolean(
+                        "bbs.editor.camera.mirrorBSLExperimental")&&
+                        support.message.startsWith(
+                            "Multipass shaderpack: "+
+                            "pack=BSL_v8.2.02-BetterLights.zip");
+                if(!bslMultiPass)
+                {
+                    blockedByShaderpack=true;
+                    captureStatus="SHADER: "+support.message;
+                    return;
+                }
             }
         }
         CameraSceneMirrors.Mirror picked=null;
@@ -170,6 +182,7 @@ public final class CameraSceneMirrorRenderer
         double scale=Math.min(1D,1024D/max);
         int w=Math.max(1,(int)Math.round(source.framebufferWidth*scale));
         int h=Math.max(1,(int)Math.round(source.framebufferHeight*scale));
+        final boolean experimentalBSL=bslMultiPass;
         if(!resolveMinecraftFramebufferField())
         {
             captureStatus="MIRROR: framebuffer field unavailable";
@@ -203,6 +216,18 @@ public final class CameraSceneMirrorRenderer
             else if(texture.framebufferWidth!=w||
                     texture.framebufferHeight!=h)
                 texture.createBindFramebuffer(w,h);
+            if(experimentalBSL)
+            {
+                int[] formats=CameraMirrorOptiFineBackend.getColorFormats(8);
+                if(bslTargets==null||
+                        !bslTargets.matches(w,h,8,3,formats))
+                {
+                    if(bslTargets!=null)bslTargets.close();
+                    bslTargets=null;
+                    bslTargets=CameraMirrorOptiFineTargets.allocate(
+                            w,h,8,3,formats);
+                }
+            }
             PreviewCameraPose reflected=CameraMirrorMath.reflect(camera,
                     picked.x,picked.y,picked.z,picked.yaw);
             // Minecraft 1.12 EntityRenderer and RenderGlobal both call
@@ -221,7 +246,21 @@ public final class CameraSceneMirrorRenderer
                 // Define the mirror plane ONLY during the auxiliary pass.
                 // The normal world must never receive this clipping state.
                 installFrontClipPlane(reflected);
-                if(shaderMirror)
+                if(experimentalBSL)
+                {
+                    // All BSL colortex/depthtex attachments are private.
+                    // The normal WorldClient and pose are reused, but the
+                    // main OptiFine GBuffer / FlipTextures are never bound
+                    // as render outputs in this pipeline.
+                    try(CameraMirrorBSLCompositor bsl=
+                            CameraMirrorBSLCompositor.begin(
+                                    bslTargets,reflected))
+                    {
+                        pass.draw(reflected);
+                        bsl.compose(texture.framebufferObject,w,h);
+                    }
+                }
+                else if(shaderMirror)
                 {
                     try(CameraMirrorOptiFineBackend.Scope shaderScope=
                             CameraMirrorOptiFineBackend.begin(reflected,
@@ -253,11 +292,13 @@ public final class CameraSceneMirrorRenderer
                 throw new IllegalStateException("Mirror texture missing");
             capturedId=picked.id;
             capturedPose=reflected;
-            captureStatus=shaderMirror?
-                    "MIRROR: OptiFine forward shader active":
-                    (clipPlaneInstalled?
-                        "MIRROR: captured isolated FBO (clip requested)":
-                        "MIRROR: captured isolated FBO (clip unavailable)");
+            captureStatus=experimentalBSL?
+                    "MIRROR: BSL MULTIPASS EXPERIMENTAL":
+                    (shaderMirror?
+                        "MIRROR: OptiFine forward shader active":
+                        (clipPlaneInstalled?
+                            "MIRROR: captured isolated FBO (clip requested)":
+                            "MIRROR: captured isolated FBO (clip unavailable)"));
             sourceWidth=w;
             sourceHeight=h;
         }
