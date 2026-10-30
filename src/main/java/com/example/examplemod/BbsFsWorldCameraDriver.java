@@ -223,7 +223,30 @@ public final class BbsFsWorldCameraDriver
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void nativeWorldLast(RenderWorldLastEvent event)
     {
-        if(CameraSceneMirrorRenderer.isCapturing())return;
+        if(CameraSceneMirrorRenderer.isCapturing())
+        {
+            // The reflected world is a genuine native pass, with its own
+            // camera projection and actor draw. Same-frame pose/physics
+            // samples are reused in the following normal world pass.
+            Minecraft reflectedMc=Minecraft.getMinecraft();
+            if(controlling&&viewport!=null&&view!=null&&
+                    reflectedMc.currentScreen instanceof AnimationEditorScreen
+                    &&reflectedMc.getRenderViewEntity()==view&&
+                    !"false".equalsIgnoreCase(System.getProperty(
+                            "bbs.editor.camera.mirrorActors","true")))
+            {
+                java.nio.IntBuffer size=org.lwjgl.BufferUtils
+                        .createIntBuffer(16);
+                org.lwjgl.opengl.GL11.glGetInteger(
+                        org.lwjgl.opengl.GL11.GL_VIEWPORT,size);
+                int w=Math.max(1,size.get(2)),h=Math.max(1,size.get(3));
+                BbsFsWorldProjection.capture(w,h);
+                BbsFsNativeActorPass.renderReflected(reflectedMc,
+                        (AnimationEditorScreen)reflectedMc.currentScreen,
+                        viewport,event.getPartialTicks(),w,h);
+            }
+            return;
+        }
         Minecraft mc = Minecraft.getMinecraft();
         if (controlling && viewport != null &&
                 mc.currentScreen instanceof AnimationEditorScreen &&
