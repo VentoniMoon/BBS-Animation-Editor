@@ -49,6 +49,8 @@ jobs:
           ! grep -q 'world.updateChunks(' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           ! grep -q 'new RenderGlobal(' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           ! grep -q 'new ViewFrustum(' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
+          grep -q 'world.renderSky(partialTicks,2)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          ! grep -q 'world.renderSky(partialTicks,0)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'infosField.set(global,original)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'container.initialize(restoreX,restoreY,restoreZ)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'renderPreparedMirror' src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java
