@@ -42,10 +42,10 @@ public final class BetterLightsActorInspector
     {
         final GenericBaseValue<?> value;
         final String title;
-        Entry(GenericBaseValue<?> value)
+        Entry(GenericBaseValue<?> value,String path)
         {
             this.value=value;
-            this.title=value.getPath();
+            this.title=path;
         }
     }
 
@@ -158,21 +158,46 @@ public final class BetterLightsActorInspector
             Object manager=accessor.invoke(morph);
             if(!(manager instanceof ValueSerializer))
                 throw new IllegalStateException("Light values are unavailable");
-            for(GenericBaseValue<?> value:
-                    ((ValueSerializer)manager).getValues())
-            {
-                if(value==null)continue;
-                Object field=value.getValue();
-                if(field instanceof Number||field instanceof Boolean||
-                        field instanceof Color)
-                    entries.add(new Entry(value));
-            }
+            ValueSerializer serializer=(ValueSerializer)manager;
+            // MCLib ValueSerializer.copy() loses the parent Value nodes on
+            // the copied leaves returned by getValues(). Read the canonical
+            // full paths from Blockbuster's original value tree instead.
+            Class<?> treeClass=Class.forName(
+                    "mchorse.blockbuster_pack.morphs."+
+                    "BetterLightsMorph$BetterLightsProperties");
+            Object tree=treeClass.getField("valueTree").get(null);
+            if(!(tree instanceof mchorse.mclib.config.values.Value))
+                throw new IllegalStateException("Native light tree missing");
+            gatherNativeValues(serializer,(mchorse.mclib.config.values.Value)tree);
         }
         catch(Throwable problem)
         {
             error=problem.getClass().getSimpleName()+
                     (problem.getMessage()==null?"":": "+problem.getMessage());
             morph=null;
+        }
+    }
+
+    private void gatherNativeValues(ValueSerializer serializer,
+            mchorse.mclib.config.values.Value node)
+    {
+        for(mchorse.mclib.config.values.Value child:node.getSubValues())
+        {
+            if(child instanceof GenericBaseValue)
+            {
+                String path=child.getPath();
+                java.util.Optional<GenericBaseValue<?>> found=
+                        serializer.getValue(path);
+                if(found.isPresent())
+                {
+                    GenericBaseValue<?> value=found.get();
+                    Object field=value.getValue();
+                    if(field instanceof Number||field instanceof Boolean||
+                            field instanceof Color)
+                        entries.add(new Entry(value,path));
+                }
+            }
+            gatherNativeValues(serializer,child);
         }
     }
 
