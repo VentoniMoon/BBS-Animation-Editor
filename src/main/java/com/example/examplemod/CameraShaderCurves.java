@@ -173,15 +173,51 @@ public final class CameraShaderCurves
         synchronized(OPTIONS)
         {return new LinkedHashMap<String,CameraShaderCurveSource.Option>(OPTIONS);}
     }
+    /**
+     * Numeric options may be known to OptiFine before the source compiler
+     * has exposed their corresponding uniforms (or if an early core hook
+     * was missing). Make these discoverable in the picker, but retain a
+     * separate list of ACTUALLY patched variables for rendering.
+     */
+    public static Map<String,Float> availableOptions()
+    {
+        Map<String,Float> detected=
+                CameraShaderOptionDiscovery.currentNumericValues();
+        Map<String,Float> result=new LinkedHashMap<String,Float>();
+        if(detected!=null)result.putAll(detected);
+        synchronized(OPTIONS)
+        {
+            for(CameraShaderCurveSource.Option option:OPTIONS.values())
+                if(!result.containsKey(option.name))
+                    result.put(option.name,option.fallback);
+        }
+        return result;
+    }
+
+    public static boolean animatable(String name)
+    {
+        synchronized(OPTIONS){return OPTIONS.containsKey(name);}
+    }
+
     public static boolean isReady()
     {
         return sourceHook&&programHook&&!options().isEmpty();
     }
     public static String state()
     {
-        if(!sourceHook)return "Shader hook not active (reload shader pack)";
-        if(options().isEmpty())return "No compatible OptiFine slider variables";
-        if(!programHook)return "Shader uniform hook not active";
-        return "OptiFine shader curves active";
+        String discovery=CameraShaderOptionDiscovery.status();
+        if(discovery.startsWith("No active")||
+                discovery.startsWith("OptiFine Shaders not installed")||
+                discovery.startsWith("OptiFine option API"))
+            return discovery;
+        if(!CameraShaderCurveTransformer.installed())
+            return "OptiFine hook missing; restart Minecraft";
+        if(!sourceHook)
+            return "OptiFine hook ready; reload shader pack (F3+R)";
+        if(options().isEmpty())
+            return "No compatible GLSL variables; "+discovery;
+        if(!programHook)
+            return options().size()+" shader options; uniform hook pending";
+        return options().size()+" shader options animated";
     }
 }
