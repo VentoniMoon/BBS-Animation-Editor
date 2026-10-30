@@ -47,6 +47,11 @@ minecraft {
             property 'bbs.editor.weld.preview',
                     System.getProperty('bbs.editor.weld.preview', 'false')
 
+            // Load the same early shader core plugin used by the packaged JAR.
+            // This must precede OptiFine's first Shaders class load.
+            property 'fml.coreMods.load',
+                    'com.example.examplemod.CameraShaderCurveCorePlugin'
+
             // OFF by default: enables Ctrl+Shift+F9 single-frame native
             // output-resolution PNG probe in CAMERA for render diagnostics.
             property 'bbs.editor.export.probe',
@@ -137,6 +142,8 @@ if (project.hasProperty('enableJoltExperimental')) {
 jar {
     manifest {
         attributes([
+                "FMLCorePlugin": "com.example.examplemod.CameraShaderCurveCorePlugin",
+                "FMLCorePluginContainsFMLMod": "true",
                 "Specification-Title": "bbsanimationeditor",
                 "Specification-Vendor": "examplemod",
                 "Specification-Version": "1",

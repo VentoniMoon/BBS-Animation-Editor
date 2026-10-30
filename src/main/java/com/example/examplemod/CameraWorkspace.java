@@ -574,7 +574,10 @@ public final class CameraWorkspace
         }
         if(mouseY>=25&&mouseY<top&&mouseX>=right)
         {
-            if(inspector.isInterpolationOpen())inspector.scrollInterpolation(direction);
+            if(inspector.isCurvePickerOpen())
+                inspector.scrollCurvePicker(direction);
+            else if(inspector.isInterpolationOpen())
+                inspector.scrollInterpolation(direction);
             else inspectorScroll=Math.max(0,Math.min(inspector.maxScroll(),
                     inspectorScroll+(direction>0?-44:44)));
             return true;
@@ -1369,6 +1372,7 @@ public final class CameraWorkspace
             }
             Double raw=finiteDouble(hit.value);
             if(raw!=null&&!hit.toggle&&!hit.key.startsWith("@interp:")
+                    &&!hit.key.startsWith("@curve:")
                     &&!hit.key.startsWith("@key:")
                     &&!hit.key.startsWith("@media:")
                     &&!"selector".equals(hit.key))
@@ -1378,6 +1382,43 @@ public final class CameraWorkspace
                         (selectedKey!=null&&keyOwner==clip?selectedKey:
                             clip.keys.isEmpty()?null:clip.keys.get(0)):null;
                 numericStartX=mouseX;numericStartValue=raw;
+            }
+            if(hit.key.startsWith("@curve:"))
+            {
+                if("@curve:open".equals(hit.key))
+                {
+                    inspector.toggleCurvePicker();
+                    return true;
+                }
+                if(hit.key.startsWith("@curve:set:")&&
+                        clip.kind==CameraClipDocument.Kind.CURVE)
+                {
+                    String channel=hit.key.substring("@curve:set:".length());
+                    boolean valid="brightness".equals(channel)||
+                            "red".equals(channel)||"green".equals(channel)||
+                            "blue".equals(channel)||"fade".equals(channel);
+                    if(channel.startsWith("curve."))
+                        valid=CameraShaderCurves.options().containsKey(
+                                channel.substring(6))||
+                                channel.equals(clip.settings.get("channels"));
+                    if(valid)
+                    {
+                        clip.settings.put("channels",channel);
+                        if(channel.startsWith("curve."))
+                        {
+                            CameraShaderCurveSource.Option option=
+                                    CameraShaderCurves.options().get(
+                                            channel.substring(6));
+                            if(option!=null)
+                                clip.settings.put("value",
+                                        Float.toString(option.fallback));
+                        }
+                        inspector.closeCurvePicker();
+                        saveScene();
+                    }
+                    return true;
+                }
+                return true;
             }
             if(hit.key.startsWith("@interp:"))
             {

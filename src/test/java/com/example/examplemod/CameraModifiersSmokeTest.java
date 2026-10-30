@@ -186,6 +186,29 @@ public final class CameraModifiersSmokeTest
         reloaded.readJson(stacked.toJson());
         near(reloaded.sample(5,ZERO).x,6D,
                 "Modified camera stack survives scene roundtrip");
+        CameraClipDocument.Clip shader=modifier(
+                CameraClipDocument.Kind.CURVE);
+        shader.settings.put("channels","curve.BLOOM_STRENGTH");
+        shader.settings.put("value","4.25");
+        near(CameraCurveSampler.sampleShader(shader,5D,2D).value,4.25D,
+                "Shader curve must NOT be limited to -1..1 film effects");
+        shader.keys.add(new CameraClipDocument.Key(0,ZERO));
+        shader.keys.get(0).x=10D;
+        shader.keys.add(new CameraClipDocument.Key(40,ZERO));
+        shader.keys.get(1).x=30D;
+        near(CameraCurveSampler.sampleShader(shader,20D,2D).value,20D,
+                "Shader curve keyframes interpolate raw option values");
+        shader.settings.put("envelope.enabled","true");
+        shader.settings.put("envelope.fadeIn","10");
+        near(CameraCurveSampler.sampleShader(shader,0D,2D).value,2D,
+                "Shader envelope must restore actual pack default");
+        shader.enabled=false;
+        ok(CameraCurveSampler.sampleShader(shader,20D,2D)==null,
+                "Disabled shader Curve cannot affect the native world");
+        shader.enabled=true;
+        ok(CameraCurveSampler.sample(shader,20D)==null,
+                "Shader-only curve is not a film-space brightness overlay");
+
         System.out.println("CAMERA all 9 modifier behaviors / 60 FPS PASS");
     }
 }
