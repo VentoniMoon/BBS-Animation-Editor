@@ -42,6 +42,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private final List<UniformBackup> restored=
             new ArrayList<UniformBackup>();
     private final Class<?> shaders;
+    private final Field worldRenderingFlag;
+    private final Field[] safetyFlags;
+    private final boolean[] originalFlags;
+    private final Field activeProgramField;
+    private final Field activeDrawBuffersField;
+    private final Object originalOptiFineProgram;
+    private final Object originalOptiFineDrawBuffers;
     private final Method getId;
     private final Method getDrawBuffers;
     private final Field finalProgram;
@@ -54,6 +61,28 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     {
         this.targets=targets;this.view=view;
         shaders=Class.forName("net.optifine.shaders.Shaders");
+        // OptiFine's beginWater() can invoke GLOBAL renderDeferred() if
+        // isRenderingWorld remains true. That would composite the normal
+        // world in the middle of our reflection. Gate native shader hooks
+        // OFF only for this auxiliary pass; our compiled GLSL programs are
+        // selected explicitly with raw OpenGL. Restore flags in close().
+        worldRenderingFlag=shaders.getField("isRenderingWorld");
+        String[] states={"isRenderingWorld","isRenderingDfb",
+                "isCompositeRendered","isRenderingSky"};
+        safetyFlags=new Field[states.length];
+        originalFlags=new boolean[states.length];
+        for(int i=0;i<states.length;i++)
+        {
+            Field field=shaders.getDeclaredField(states[i]);
+            field.setAccessible(true);
+            safetyFlags[i]=field;
+            originalFlags[i]=field.getBoolean(null);
+        }
+        activeProgramField=shaders.getField("activeProgram");
+        activeDrawBuffersField=shaders.getDeclaredField("activeDrawBuffers");
+        activeDrawBuffersField.setAccessible(true);
+        originalOptiFineProgram=activeProgramField.get(null);
+        originalOptiFineDrawBuffers=activeDrawBuffersField.get(null);
         Class<?> clazz=Class.forName("net.optifine.shaders.Program");
         getId=clazz.getMethod("getId");
         getDrawBuffers=clazz.getMethod("getDrawBuffers");
@@ -88,6 +117,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         current=result;
         try
         {
+            // Prevent the native OptiFine terrain/water hooks from
+            // rendering deferred stages into its SHARED main-world dfb.
+            // The private executor sets the actual GLSL programs itself.
+            result.worldRenderingFlag.setBoolean(null,false);
             result.geometryBegin();
             return result;
         }
@@ -377,6 +410,12 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             try
             {
+                // Restore shared OptiFine Java state BEFORE returning
+                // control to the main RenderWorldLast / final pass.
+                for(int i=0;i<safetyFlags.length;i++)
+                    safetyFlags[i].setBoolean(null,originalFlags[i]);
+                activeProgramField.set(null,originalOptiFineProgram);
+                activeDrawBuffersField.set(null,originalOptiFineDrawBuffers);
                 for(int i=0;i<16;i++)
                 {
                     GL13.glActiveTexture(GL13.GL_TEXTURE0+i);
