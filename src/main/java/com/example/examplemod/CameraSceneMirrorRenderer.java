@@ -44,6 +44,8 @@ public final class CameraSceneMirrorRenderer
     private static boolean shaderDiscoveryComplete;
     private static Method optiFineShadersActive;
     private static Field optiFineShaderLoaded;
+    private static Field minecraftFramebufferField;
+    private static boolean framebufferFieldSearched;
     private CameraSceneMirrorRenderer(){}
 
     public static boolean isCapturing(){return capturing;}
@@ -149,7 +151,7 @@ public final class CameraSceneMirrorRenderer
             return;
         }
 
-        Framebuffer source=mc.getFramebuffer();
+        final Framebuffer source=mc.getFramebuffer();
         if(source==null||source.framebufferObject<=0||
                 source.framebufferWidth<1||source.framebufferHeight<1)
         {
@@ -160,6 +162,11 @@ public final class CameraSceneMirrorRenderer
         double scale=Math.min(1D,1024D/max);
         int w=Math.max(1,(int)Math.round(source.framebufferWidth*scale));
         int h=Math.max(1,(int)Math.round(source.framebufferHeight*scale));
+        if(!resolveMinecraftFramebufferField())
+        {
+            captureStatus="MIRROR: framebuffer field unavailable";
+            return;
+        }
         int oldRead=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int oldDraw=GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int oldShader=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
@@ -190,49 +197,50 @@ public final class CameraSceneMirrorRenderer
                 texture.createBindFramebuffer(w,h);
             PreviewCameraPose reflected=CameraMirrorMath.reflect(camera,
                     picked.x,picked.y,picked.z,picked.yaw);
+            // Minecraft 1.12 EntityRenderer and RenderGlobal both call
+            // mc.getFramebuffer().bindFramebuffer() internally. Binding a
+            // custom FBO with GL alone is NOT enough; they switch back to
+            // Minecraft.framebufferMc during renderWorld(). Temporarily
+            // redirect that private field to our isolated target instead.
             capturing=true;
             activeMirror=picked;
             try
             {
-                // Reject blocks and actors BEHIND the mirror (including
-                // a wall into which the reflected eye may have been placed).
-                // The native camera event reinstalls this after Minecraft
-                // sets up the render view, in case shaders reset GL state.
+                minecraftFramebufferField.set(mc,texture);
+                texture.bindFramebuffer(true);
+                texture.framebufferClear();
+                texture.bindFramebuffer(true);
+                // Define the mirror plane ONLY during the auxiliary pass.
+                // The normal world must never receive this clipping state.
                 installFrontClipPlane(reflected);
-                // The stock Minecraft world renderer still owns all chunk,
-                // fog and shader passes. It renders once into its usual FBO;
-                // the next main world render overwrites those pixels.
                 pass.draw(reflected);
             }
             finally
             {
-                capturing=false;
-                activeMirror=null;
+                try
+                {
+                    // Do not let the next normal render, GUI or film export
+                    // draw into the reflection target.
+                    minecraftFramebufferField.set(mc,source);
+                }
+                finally
+                {
+                    capturing=false;
+                    activeMirror=null;
+                }
             }
-
-            // Snapshot before vanilla overwrites its framebuffer. World
-            // clipping/depth are provided by the main pass later.
-            GL11.glDisable(GL11.GL_SCISSOR_TEST);
-            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,
-                    source.framebufferObject);
-            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,
-                    texture.framebufferObject);
-            // Ignore unrelated OptiFine GL errors from earlier passes.
-            for(int attempt=0;attempt<16 &&
-                    GL11.glGetError()!=GL11.GL_NO_ERROR;attempt++){}
-            GL30.glBlitFramebuffer(0,0,source.framebufferWidth,
-                    source.framebufferHeight,0,0,w,h,
-                    GL11.GL_COLOR_BUFFER_BIT,GL11.GL_LINEAR);
-            int error=GL11.glGetError();
-            if(error!=GL11.GL_NO_ERROR)
-                throw new IllegalStateException("Reflection blit GL "+error);
+            // No blit from Minecraft's primary framebuffer: that would
+            // capture the PREVIOUS or normal camera view (a fake window).
+            // The reflected world has already rendered into texture FBO.
+            if(texture.framebufferTexture<=0)
+                throw new IllegalStateException("Mirror texture missing");
             capturedId=picked.id;
             capturedPose=reflected;
             captureStatus=clipPlaneInstalled?
-                    "MIRROR: captured (clip requested)":
-                    "MIRROR: captured (clip unavailable)";
-            sourceWidth=source.framebufferWidth;
-            sourceHeight=source.framebufferHeight;
+                    "MIRROR: captured isolated FBO (clip requested)":
+                    "MIRROR: captured isolated FBO (clip unavailable)";
+            sourceWidth=w;
+            sourceHeight=h;
         }
         catch(Throwable t)
         {
@@ -294,6 +302,32 @@ public final class CameraSceneMirrorRenderer
             GL11.glPopMatrix();
         if(depth==expectedDepth)
             GL11.glPopMatrix();
+    }
+
+    /**
+     * Forge 1.12.2 Minecraft.framebufferMc is private. The mapped field
+     * name is used in the dev client, SRG is retained as fallback.
+     * A missing field must fail closed; never copy the normal camera as
+     * a pretend reflection.
+     */
+    private static boolean resolveMinecraftFramebufferField()
+    {
+        if(framebufferFieldSearched)return minecraftFramebufferField!=null;
+        framebufferFieldSearched=true;
+        for(String name:new String[]{"framebufferMc","field_147124_at"})
+        {
+            try
+            {
+                Field f=Minecraft.class.getDeclaredField(name);
+                if(!Framebuffer.class.isAssignableFrom(f.getType()))
+                    continue;
+                f.setAccessible(true);
+                minecraftFramebufferField=f;
+                break;
+            }
+            catch(Throwable notFound){}
+        }
+        return minecraftFramebufferField!=null;
     }
 
     /**
