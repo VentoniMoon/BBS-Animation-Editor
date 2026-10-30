@@ -5,11 +5,14 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ChunkRenderContainer;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.ViewFrustum;
+import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 import net.minecraft.client.renderer.chunk.CompiledChunk;
 import net.minecraft.client.renderer.chunk.RenderChunk;
 import net.minecraft.client.renderer.culling.Frustum;
@@ -32,7 +35,10 @@ import net.minecraft.util.math.AxisAlignedBB;
  */
 public final class CameraMirrorChunkVisibility
 {
-    private static Field infosField, frustumField, containerField;
+    private static Field infosField, frustumField, containerField,
+            dispatcherField;
+    private static final Map<RenderChunk,Long> requestedCompilation=
+            new WeakHashMap<RenderChunk,Long>();
     private static Constructor<?> infoConstructor;
     private static boolean initialized;
     private static boolean logged;
@@ -96,6 +102,8 @@ public final class CameraMirrorChunkVisibility
                     (ChunkRenderContainer)containerField.get(global);
             if(source==null||source.renderChunks==null||container==null)
                 return null;
+            ChunkRenderDispatcher dispatcher=dispatcherField==null?null:
+                    (ChunkRenderDispatcher)dispatcherField.get(global);
 
             List<?> old=(List<?>)infosField.get(global);
             if(old==null)return null;
@@ -109,12 +117,11 @@ public final class CameraMirrorChunkVisibility
             final double limit=mc.gameSettings.renderDistanceChunks*16D+32D;
             final double limitSq=limit*limit;
             List<RenderChunk> visible=new ArrayList<RenderChunk>();
+            int scheduled=0;
+            long now=System.nanoTime();
             for(RenderChunk chunk:source.renderChunks)
             {
                 if(chunk==null)continue;
-                CompiledChunk compiled=chunk.getCompiledChunk();
-                if(compiled==null||compiled==CompiledChunk.DUMMY||
-                        compiled.isEmpty())continue;
                 BlockPos pos=chunk.getPosition();
                 double dx=pos.getX()+8D-reflected.x;
                 double dz=pos.getZ()+8D-reflected.z;
@@ -122,6 +129,29 @@ public final class CameraMirrorChunkVisibility
                 AxisAlignedBB bounds=new AxisAlignedBB(pos,
                         pos.add(16,16,16));
                 if(!frustum.isBoundingBoxInFrustum(bounds))continue;
+                CompiledChunk compiled=chunk.getCompiledChunk();
+
+                // The rear-side chunks may never have been drawn or
+                // compiled by the normal camera. Schedule their EXISTING
+                // RenderChunk buffers, at a small budget per frame,
+                // without allocating a second world or chunk renderer.
+                if(dispatcher!=null && scheduled<4 &&
+                        (compiled==null||compiled==CompiledChunk.DUMMY||
+                         chunk.needsUpdate()))
+                {
+                    Long last=requestedCompilation.get(chunk);
+                    if(last==null||now-last.longValue()>1500000000L)
+                    {
+                        requestedCompilation.put(chunk,now);
+                        if(dispatcher.updateChunkLater(chunk))
+                        {
+                            chunk.clearNeedsUpdate();
+                            scheduled++;
+                        }
+                    }
+                }
+                if(compiled==null||compiled==CompiledChunk.DUMMY||
+                        compiled.isEmpty())continue;
                 visible.add(chunk);
             }
             // Solid chunks front-to-back. Translucent chunks are rendered
@@ -202,6 +232,8 @@ public final class CameraMirrorChunkVisibility
         frustumField=findField(cls,"viewFrustum",ViewFrustum.class);
         containerField=findField(cls,"renderContainer",
                 ChunkRenderContainer.class);
+        dispatcherField=findField(cls,"renderDispatcher",
+                ChunkRenderDispatcher.class);
         for(Class<?> nested:RenderGlobal.class.getDeclaredClasses())
         {
             if(!nested.getSimpleName().equals(
