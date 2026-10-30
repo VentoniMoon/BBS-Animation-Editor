@@ -12,6 +12,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
+import org.lwjgl.util.vector.Matrix4f;
 
 /**
  * Experimental independent BSL/OptiFine G5 deferred compositor.
@@ -43,6 +44,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private final Method getId;
     private final Method getDrawBuffers;
     private final Field finalProgram;
+    private FloatBuffer mirrorProjection;
+    private FloatBuffer mirrorView;
     private boolean closed;
 
     private CameraMirrorBSLCompositor(CameraMirrorOptiFineTargets targets,
@@ -116,6 +119,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             if(pid<=0){GL20.glUseProgram(0);return;}
             targets.bindGeometry();
             GL20.glUseProgram(pid);
+            if(mirrorProjection==null)
+                mirrorProjection=currentMatrix(GL11.GL_PROJECTION_MATRIX);
+            if(mirrorView==null)
+                mirrorView=currentMatrix(GL11.GL_MODELVIEW_MATRIX);
             IntBuffer draw=(IntBuffer)getDrawBuffers.invoke(program);
             if(draw!=null)GL20.glDrawBuffers(draw.asReadOnlyBuffer());
             overrideCamera(pid);
@@ -258,6 +265,46 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         write1(pid,"viewHeight",(float)targets.height());
         write1(pid,"aspectRatio",(float)targets.width()/
                 Math.max(1,targets.height()));
+        if(mirrorProjection!=null)
+        {
+            writeMatrix(pid,"gbufferProjection",mirrorProjection,false);
+            writeMatrix(pid,"gbufferProjectionInverse",mirrorProjection,true);
+        }
+        if(mirrorView!=null)
+        {
+            writeMatrix(pid,"gbufferModelView",mirrorView,false);
+            writeMatrix(pid,"gbufferModelViewInverse",mirrorView,true);
+        }
+    }
+
+    private static FloatBuffer currentMatrix(int target)
+    {
+        FloatBuffer b=BufferUtils.createFloatBuffer(16);
+        GL11.glGetFloat(target,b);
+        b.rewind();
+        return b;
+    }
+
+    private void writeMatrix(int pid,String name,FloatBuffer source,
+            boolean inverse)
+    {
+        int loc=GL20.glGetUniformLocation(pid,name);
+        if(loc<0)return;
+        restored.add(UniformBackup.capture(pid,loc,16));
+        FloatBuffer value=BufferUtils.createFloatBuffer(16);
+        source.rewind();
+        if(inverse)
+        {
+            Matrix4f matrix=new Matrix4f();
+            matrix.load(source);
+            Matrix4f inv=Matrix4f.invert(matrix,null);
+            if(inv==null)return;
+            inv.store(value);
+        }
+        else value.put(source);
+        value.flip();
+        source.rewind();
+        GL20.glUniformMatrix4(loc,false,value);
     }
 
     private void write3(int pid,String name,float x,float y,float z)
@@ -350,6 +397,11 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             GL20.glUseProgram(program);
             if(count==1)GL20.glUniform1f(location,value.get(0));
+            else if(count==16)
+            {
+                value.rewind();
+                GL20.glUniformMatrix4(location,false,value);
+            }
             else GL20.glUniform3f(location,value.get(0),
                     value.get(1),value.get(2));
         }
