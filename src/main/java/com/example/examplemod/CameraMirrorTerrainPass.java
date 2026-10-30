@@ -110,7 +110,9 @@ public final class CameraMirrorTerrainPass
         GL11.glLoadIdentity();
         GL11.glRotated(-pose.roll,0,0,1);
         GL11.glRotated(-pose.pitch,1,0,0);
-        GL11.glRotated(pose.yaw,0,1,0);
+        // Match PreviewCameraProjection: world-to-view rotates by
+        // -yaw, -pitch, -roll (the order is right-to-left in OpenGL).
+        GL11.glRotated(-pose.yaw,0,1,0);
         if(translate)
             GL11.glTranslated(-pose.x,-pose.y,-pose.z);
     }
