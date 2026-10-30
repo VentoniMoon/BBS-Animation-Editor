@@ -58,7 +58,10 @@ public final class CameraShaderCurves
         if(!result.options.isEmpty())
             synchronized(OPTIONS)
             {
-                OPTIONS.putAll(result.options);
+                for(Map.Entry<String,CameraShaderCurveSource.Option> option:
+                        result.options.entrySet())
+                    if(!OPTIONS.containsKey(option.getKey()))
+                        OPTIONS.put(option.getKey(),option.getValue());
             }
         sourceHook=true;
         return new BufferedReader(new StringReader(result.source));
