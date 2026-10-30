@@ -334,7 +334,8 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
         final int read=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         final int textureUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         final int texture=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-        final IntBuffer viewport=BufferUtils.createIntBuffer(4);
+        // LWJGL 2 requires at least 16 remaining for glGetInteger.
+        final IntBuffer viewport=BufferUtils.createIntBuffer(16);
         State(){GL11.glGetInteger(GL11.GL_VIEWPORT,viewport);}
         void restore()
         {
