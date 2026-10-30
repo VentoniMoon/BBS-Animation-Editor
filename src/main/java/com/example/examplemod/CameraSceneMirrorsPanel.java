@@ -141,9 +141,20 @@ public final class CameraSceneMirrorsPanel
                 inspectorLeft+10,305,0xFF8C9CA8);
         mc.fontRenderer.drawString("Max 32 / reflection view: 1",
                 inspectorLeft+10,319,0xFF8C9CA8);
-        mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
-                CameraSceneMirrorRenderer.status(),169),
-                inspectorLeft+10,334,0xFF9AD5E5);
+        // A single clipped line used to hide the important shaderpack
+        // diagnostics (buffer count, deferred and composite stages). Wrap
+        // them in the inspector so tests can report the actual blocker.
+        String status=CameraSceneMirrorRenderer.status();
+        int lineY=334;
+        for(int line=0;line<5&&status.length()>0&&
+                lineY+9<panelBottom;line++,lineY+=11)
+        {
+            String portion=mc.fontRenderer.trimStringToWidth(status,164);
+            if(portion.length()==0)break;
+            mc.fontRenderer.drawString(portion,inspectorLeft+10,lineY,
+                    0xFF9AD5E5);
+            status=status.substring(portion.length()).trim();
+        }
     }
     public boolean click(AnimationEditorScreen screen,int mx,int my,int button)
     {
