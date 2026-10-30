@@ -39,6 +39,40 @@ public final class CameraMirrorOptiFinePlanning
         return plans;
     }
 
+    /**
+     * OptiFine applies explicit flip directives on deferred_pre and
+     * composite_pre before running the real shader programs. They do not
+     * correspond to a draw and must be accounted for independently.
+     */
+    public static String inspectPreFlips()throws ReflectiveOperationException
+    {
+        Class<?> shaders=Class.forName("net.optifine.shaders.Shaders");
+        Class<?> program=Class.forName("net.optifine.shaders.Program");
+        Method method=program.getMethod("getBuffersFlip");
+        StringBuilder out=new StringBuilder();
+        for(String field:new String[]{"ProgramDeferredPre",
+                "ProgramCompositePre"})
+        {
+            Object p=shaders.getField(field).get(null);
+            Boolean[] flags=p==null?null:(Boolean[])method.invoke(p);
+            if(out.length()>0)out.append("; ");
+            out.append(field).append("=");
+            if(flags==null){out.append("none");continue;}
+            boolean any=false;
+            for(int i=0;i<flags.length;i++)
+            {
+                if(Boolean.TRUE.equals(flags[i]))
+                {
+                    if(any)out.append(",");
+                    out.append(i);
+                    any=true;
+                }
+            }
+            if(!any)out.append("none");
+        }
+        return out.toString();
+    }
+
     private static void append(List<CameraMirrorCompositePlan> plans,
             Object array,String prefix,Method getId,Method getName,
             Method draw,Method flip,int colorCount)
