@@ -1,0 +1,32 @@
+name: CAMERA mirror BSL composite plan Java 8
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
+      - 'src/test/java/com/example/examplemod/CameraMirrorCompositePlanSmokeTest.java'
+      - '.github/workflows/camera-mirror-composite-plan.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
+      - 'src/test/java/com/example/examplemod/CameraMirrorCompositePlanSmokeTest.java'
+  workflow_dispatch:
+
+jobs:
+  draw-buffer-plans:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Compile and test isolated composite output mappings
+        run: |
+          mkdir -p build/composite-plan
+          javac -source 8 -target 8 -encoding UTF-8 -d build/composite-plan \
+            src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java \
+            src/test/java/com/example/examplemod/CameraMirrorCompositePlanSmokeTest.java
+          java -ea -cp build/composite-plan \
+            com.example.examplemod.CameraMirrorCompositePlanSmokeTest
