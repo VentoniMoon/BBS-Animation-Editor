@@ -91,6 +91,19 @@ public final class CameraShaderCurveSourceSmokeTest
         check(!protectedResult.options.containsKey("STEPS"),
                 "Preprocessor constants must never become uniforms");
 
+        String withExtension="#version 120\n"+
+                "#extension GL_ARB_shader_texture_lod : enable\n"+
+                "#define COLOR_GAIN 1.5 // Color gain [0.5 1.5 2.0]\n"+
+                "void main(){gl_FragColor=vec4(COLOR_GAIN);}\n";
+        CameraShaderCurveSource.Result extensionResult=
+                CameraShaderCurveSource.convert(withExtension,
+                        Collections.singleton("COLOR_GAIN"));
+        check(extensionResult.options.containsKey("COLOR_GAIN"),
+                "GLSL option with #extension must be discovered");
+        check(extensionResult.source.indexOf("#extension")<
+                extensionResult.source.indexOf("uniform float"),
+                "GLSL extensions must precede injected uniforms");
+
         System.out.println("CAMERA native OptiFine shader curve source PASS");
     }
 }
