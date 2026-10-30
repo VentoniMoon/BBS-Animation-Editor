@@ -4,6 +4,8 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
@@ -117,6 +119,7 @@ public final class CameraMirrorOptiFineBackend
         private final Object previous;
         private final PreviewCameraPose pose;
         private final int framebuffer;
+        private final List<SavedUniform> uniforms=new ArrayList<SavedUniform>();
         private boolean closed;
         private Scope(Object previous,PreviewCameraPose pose,int framebuffer)
         {
@@ -143,7 +146,7 @@ public final class CameraMirrorOptiFineBackend
                 GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,framebuffer);
                 GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
                 int id=programId(program);
-                if(id>0)uploadViewUniforms(id,pose);
+                if(id>0)uploadViewUniforms(id,pose,uniforms);
             }
             catch(Throwable e)
             {
@@ -157,15 +160,32 @@ public final class CameraMirrorOptiFineBackend
             if(closed)return;
             closed=true;
             current=null;
+            Throwable failure=null;
             try
             {
-                if(previous!=null)useProgram.invoke(null,previous);
+                // The main OptiFine final/composite pass will run AFTER
+                // RenderWorldLast. It must see the original camera's
+                // program uniforms, not the mirror's camera/projection.
+                for(int i=uniforms.size()-1;i>=0;i--)
+                    uniforms.get(i).restore();
             }
-            catch(Throwable e)
+            catch(Throwable t){failure=t;}
+            finally
             {
-                throw new IllegalStateException(
-                        "Unable to restore OptiFine activeProgram",e);
+                try
+                {
+                    if(previous!=null)useProgram.invoke(null,previous);
+                }
+                catch(Throwable t)
+                {
+                    if(failure==null)failure=t;
+                    else failure.addSuppressed(t);
+                }
             }
+            if(failure!=null)
+                throw new IllegalStateException(
+                        "Unable to restore OptiFine mirror shader state",
+                        failure);
         }
     }
 
@@ -236,29 +256,64 @@ public final class CameraMirrorOptiFineBackend
         return f;
     }
 
+    /** Snapshot GL uniforms before the mirror adjusts them. The original
+     * main-camera values are needed by OptiFine's final composite pass. */
+    private static final class SavedUniform
+    {
+        final int program,location;
+        final boolean matrix;
+        final FloatBuffer value;
+        private SavedUniform(int program,int location,boolean matrix,
+                FloatBuffer value)
+        {
+            this.program=program;this.location=location;
+            this.matrix=matrix;this.value=value;
+        }
+        static SavedUniform capture(int program,int location,
+                boolean matrix)
+        {
+            FloatBuffer val=BufferUtils.createFloatBuffer(matrix?16:4);
+            GL20.glGetUniform(program,location,val);
+            val.rewind();
+            return new SavedUniform(program,location,matrix,val);
+        }
+        void restore()
+        {
+            GL20.glUseProgram(program);
+            value.rewind();
+            if(matrix)GL20.glUniformMatrix4(location,false,value);
+            else GL20.glUniform3(location,value);
+        }
+    }
+
     private static void uploadViewUniforms(int program,
-            PreviewCameraPose pose)
+            PreviewCameraPose pose,List<SavedUniform> previous)
     {
         // Mirror camera position must not inherit the ordinary camera's
         // uniform. Current GL projection/modelview is set by the mirror
         // terrain pass before each stage.
         int loc=GL20.glGetUniformLocation(program,"cameraPosition");
-        if(loc>=0)GL20.glUniform3f(loc,(float)pose.x,
-                (float)pose.y,(float)pose.z);
+        if(loc>=0)
+        {
+            previous.add(SavedUniform.capture(program,loc,false));
+            GL20.glUniform3f(loc,(float)pose.x,
+                    (float)pose.y,(float)pose.z);
+        }
         uploadMatrix(program,"gbufferProjection",
-                GL11.GL_PROJECTION_MATRIX,false);
+                GL11.GL_PROJECTION_MATRIX,false,previous);
         uploadMatrix(program,"gbufferProjectionInverse",
-                GL11.GL_PROJECTION_MATRIX,true);
+                GL11.GL_PROJECTION_MATRIX,true,previous);
         uploadMatrix(program,"gbufferModelView",
-                GL11.GL_MODELVIEW_MATRIX,false);
+                GL11.GL_MODELVIEW_MATRIX,false,previous);
         uploadMatrix(program,"gbufferModelViewInverse",
-                GL11.GL_MODELVIEW_MATRIX,true);
+                GL11.GL_MODELVIEW_MATRIX,true,previous);
     }
     private static void uploadMatrix(int program,String uniform,
-            int matrixType,boolean invert)
+            int matrixType,boolean invert,List<SavedUniform> previous)
     {
         int loc=GL20.glGetUniformLocation(program,uniform);
         if(loc<0)return;
+        previous.add(SavedUniform.capture(program,loc,true));
         FloatBuffer buf=BufferUtils.createFloatBuffer(16);
         GL11.glGetFloat(matrixType,buf);
         buf.rewind();
