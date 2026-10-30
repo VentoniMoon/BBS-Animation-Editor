@@ -15,13 +15,10 @@ import org.lwjgl.opengl.GL30;
 
 /**
  * Experimental planar world reflection, one camera/framebuffer per editor
- * frame. The auxiliary scene pass is performed before Minecraft's normal
- * world pass, never from the GUI or from inside RenderWorldLast. Reflection
- * Recorded actors are re-rendered from the reflected camera using the
- * existing same-tick pose/Jolt cache; there is no second physics time step.
- *
- * OptiFine packs with incompatible auxiliary rendering are guarded: if a
- * secondary world pass fails, mirror capture is disabled for this session.
+ * frame. Captures during RenderWorldLast AFTER the normal world and actor
+ * pass, using the current World's existing chunk draw list and the prepared
+ * actor pose. Only the framebuffer is separate, not the world/chunk renderer.
+ * Active shaderpacks are guarded until a compatible reflection path exists.
  */
 public final class CameraSceneMirrorRenderer
 {
@@ -78,9 +75,8 @@ public final class CameraSceneMirrorRenderer
             texture=null;
         }
         lastWorld=null;
-        // Drop the secondary chunk/view-frustum renderer and its world
-        // listeners. The editor's normal RenderGlobal remains untouched.
-        CameraMirrorWorldIsolation.reset(Minecraft.getMinecraft());
+        // Reflection now shares the original world's existing render chunks.
+        // Only release its private color/depth target on editor detach.
         failed=false;warned=false;
         blockedByShaderpack=false;
         captureStatus="MIRROR: awaiting first frame";
