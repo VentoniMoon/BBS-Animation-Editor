@@ -49,6 +49,8 @@ public final class CameraClipInspector
     private final Set<String> closedSections=new HashSet<String>();
     private String openInterpolation="";
     private int optionScroll;
+    private boolean curvePickerOpen;
+    private int curvePickerScroll;
     private CameraClipDocument.Clip selectedClip;
     private String popupField="";
     public Hit hit(int mouseX,int mouseY)
@@ -71,6 +73,96 @@ public final class CameraClipInspector
                 Math.max(0,CameraInterpolation.OPTIONS.length-6),
                 optionScroll+(direction>0?-1:1)));
     }
+    public boolean isCurvePickerOpen(){return curvePickerOpen;}
+    public void toggleCurvePicker()
+    {
+        curvePickerOpen=!curvePickerOpen;
+        curvePickerScroll=0;
+        closeInterpolation();
+    }
+    public void closeCurvePicker(){curvePickerOpen=false;}
+    public void scrollCurvePicker(int direction)
+    {
+        int total=curvePickerChoices().size();
+        curvePickerScroll=Math.max(0,Math.min(
+                Math.max(0,total-7),curvePickerScroll+
+                (direction>0?-1:1)));
+    }
+
+    private java.util.List<String> curvePickerChoices()
+    {
+        java.util.List<String> choices=new java.util.ArrayList<String>();
+        choices.add("brightness");
+        choices.add("red");
+        choices.add("green");
+        choices.add("blue");
+        choices.add("fade");
+        java.util.List<String> names=new java.util.ArrayList<String>(
+                CameraShaderCurves.options().keySet());
+        java.util.Collections.sort(names);
+        for(String name:names)choices.add("curve."+name);
+        if(selectedClip!=null&&
+                selectedClip.kind==CameraClipDocument.Kind.CURVE)
+        {
+            String selected=selectedClip.settings.get("channels");
+            if(selected!=null&&!choices.contains(selected))
+                choices.add(selected); // retain an imported or inactive pack
+        }
+        return choices;
+    }
+
+    private static String curveTitle(String id)
+    {
+        if("brightness".equals(id))return "Brightness (film)";
+        if("red".equals(id))return "Red (film)";
+        if("green".equals(id))return "Green (film)";
+        if("blue".equals(id))return "Blue (film)";
+        if("fade".equals(id))return "Fade (film)";
+        if(id.startsWith("curve."))return "Shader: "+id.substring(6);
+        return id;
+    }
+
+    private void curveChannelField()
+    {
+        String selected=value("channels","brightness");
+        int at=y-scroll;
+        if(!measuring&&visible(at,20))
+        {
+            int x=right+11,w=width-right-22;
+            text("Channel",x,at,0xFFADBBC1,w);
+            rect(x,at+11,x+w,at+28,0xFF293139);
+            rect(x,at+27,x+w,at+28,accent);
+            text(curveTitle(selected),x+6,at+15,0xFFE6F0F3,w-25);
+            text("v",x+w-15,at+15,0xFF75D1F5,10);
+            hits.add(new Hit("@curve:open",-1,x,at+11,w,17,
+                    selected,false,false));
+        }
+        y+=32;
+    }
+
+    private void renderCurvePicker()
+    {
+        if(!curvePickerOpen||selectedClip==null||
+                selectedClip.kind!=CameraClipDocument.Kind.CURVE)return;
+        java.util.List<String> choices=curvePickerChoices();
+        int lx=right+5,rx=width-6;
+        int topY=Math.max(92,bottom-7*21-15);
+        rect(lx-2,topY-22,rx+2,topY+7*21+3,0xFF080D11);
+        rect(lx,topY-20,rx,topY,0xFF293038);
+        text("CURVE CHANNELS",lx+6,topY-15,0xFF8BE2FF,rx-lx-12);
+        for(int i=0;i<7;i++)
+        {
+            int index=i+curvePickerScroll;
+            if(index>=choices.size())break;
+            String id=choices.get(index);
+            int pos=topY+i*21;
+            rect(lx,pos,rx,pos+20,i%2==0?0xFF222930:0xFF1B2229);
+            text(curveTitle(id),lx+6,pos+5,0xFFE5EDF0,rx-lx-15);
+            hits.add(new Hit("@curve:set:"+id,-1,lx,pos,rx-lx,20,
+                    id,false,false));
+        }
+    }
+
     public int maxScroll(){return Math.max(0,contentHeight-Math.max(1,bottom-CONTENT_TOP));}
     public int clampedScroll(){return clampedScroll;}
     public float scale(){return uiScale;}
@@ -543,7 +635,7 @@ public final class CameraClipInspector
                 break;
             case CURVE:
                 section("FILM CURVE");
-                setting("channels","Channel (brightness/red/green/blue/fade)");
+                curveChannelField();
                 setting("value","Default value (-1..1)");
                 interpolation("interp","Interpolation",
                         value("interp","linear"));
@@ -664,7 +756,10 @@ public final class CameraClipInspector
                     0xFF8C999F,screen.width-right-16);
             contentHeight=0;clampedScroll=0;closeInterpolation();return;
         }
-        if(selectedClip!=clip){closeInterpolation();optionScroll=0;}
+        if(selectedClip!=clip)
+        {
+            closeInterpolation();closeCurvePicker();optionScroll=0;
+        }
         selectedClip=clip;
         rect(right+7,46,screen.width-7,63,0xFF272E34);
         rect(right+7,46,right+10,63,clip.kind.color);
@@ -706,6 +801,7 @@ public final class CameraClipInspector
                 rect(width-4,CONTENT_TOP+off,width-2,CONTENT_TOP+off+size,accent);
             }
             renderInterpolationPopup();
+            renderCurvePicker();
         }
         finally {GL11.glPopMatrix();}
         // Numeric input, checkbox clicks, popup options and drag gestures
