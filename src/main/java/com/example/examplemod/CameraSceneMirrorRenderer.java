@@ -93,6 +93,7 @@ public final class CameraSceneMirrorRenderer
         int oldTexture=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         IntBuffer oldViewport=BufferUtils.createIntBuffer(16);
         GL11.glGetInteger(GL11.GL_VIEWPORT,oldViewport);
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
 
         try
         {
@@ -119,6 +120,8 @@ public final class CameraSceneMirrorRenderer
                     source.framebufferObject);
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,
                     texture.framebufferObject);
+            // Ignore unrelated OptiFine GL errors from earlier passes.
+            while(GL11.glGetError()!=GL11.GL_NO_ERROR){}
             GL30.glBlitFramebuffer(0,0,source.framebufferWidth,
                     source.framebufferHeight,0,0,w,h,
                     GL11.GL_COLOR_BUFFER_BIT,GL11.GL_LINEAR);
@@ -150,6 +153,7 @@ public final class CameraSceneMirrorRenderer
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
             GL11.glViewport(oldViewport.get(0),oldViewport.get(1),
                     oldViewport.get(2),oldViewport.get(3));
+            GL11.glPopAttrib();
             GL13.glActiveTexture(oldTexture);
             GL20.glUseProgram(oldShader);
         }
