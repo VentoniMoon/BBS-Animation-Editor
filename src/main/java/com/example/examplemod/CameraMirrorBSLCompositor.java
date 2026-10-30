@@ -166,6 +166,16 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         targets.bindGeometry();
         GL11.glClearColor(0F,0F,0F,0F);
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);
+        // OptiFine's GBuffer contract clears gdepth / colortex1 to
+        // WHITE, not transparent black. BSL uses this as the neutral
+        // background value for its deferred calculations.
+        if(targets.colorCount()>1)
+        {
+            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0+1);
+            GL11.glClearColor(1F,1F,1F,1F);
+            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
+            targets.bindGeometry();
+        }
     }
 
     /** Use an OptiFine world program, but NOT Shaders.useProgram(). The
@@ -328,7 +338,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         // Shadow/noise images already belong to the active main OptiFine
         // shader frame. They are read-only here; NEVER replace their
         // bindings with mirror textures or alter global shadow FBOs.
-        samplerUnitOnly(program,"shadow",4);
+        int shadowUnit=4;
+        try
+        {
+            Field waterShadow=shaders.getDeclaredField("waterShadowEnabled");
+            waterShadow.setAccessible(true);
+            if(waterShadow.getBoolean(null))shadowUnit=5;
+        }
+        catch(ReflectiveOperationException ignore){}
+        samplerUnitOnly(program,"shadow",shadowUnit);
         samplerUnitOnly(program,"watershadow",4);
         samplerUnitOnly(program,"shadowtex0",4);
         samplerUnitOnly(program,"shadowtex1",5);
