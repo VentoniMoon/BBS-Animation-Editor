@@ -90,13 +90,19 @@ public final class CameraShaderCurves
                         CameraClipDocument.Clip b)
                 {return Integer.compare(a.layer,b.layer);}
             });
+            Map<String,CameraShaderCurveSource.Option> known=options();
             for(CameraClipDocument.Clip clip:sorted)
             {
+                if(clip.kind!=CameraClipDocument.Kind.CURVE)continue;
+                String channel=clip.settings.get("channels");
+                if(channel==null||!channel.startsWith("curve."))continue;
+                String name=channel.substring(6);
+                CameraShaderCurveSource.Option option=known.get(name);
+                if(option==null)continue;
                 CameraCurveSampler.Sample sample=
-                        CameraCurveSampler.sampleShader(clip,time);
-                if(sample!=null)
-                    next.put(sample.channel.substring("curve.".length()),
-                            sample.value);
+                        CameraCurveSampler.sampleShader(clip,time,
+                                option.fallback);
+                if(sample!=null)next.put(name,sample.value);
             }
         }
         synchronized(FRAME)
