@@ -1600,6 +1600,10 @@ public class BlockbusterActorPreviewRenderer
             GLU.gluPerspective(view.fov,(float)targetWidth/targetHeight,
                     Math.max(0.02F,view.nearPlane),
                     Math.max(64F,view.farPlane));
+            // This renderer resets the projection separately from terrain.
+            // Retain exactly the same mirror-side oblique near clip so
+            // prepared actors behind the mirror cannot leak into BSL.
+            CameraSceneMirrorRenderer.installShaderObliqueProjection(view);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glLoadIdentity();
             GL11.glRotatef(-view.roll,0F,0F,1F);
