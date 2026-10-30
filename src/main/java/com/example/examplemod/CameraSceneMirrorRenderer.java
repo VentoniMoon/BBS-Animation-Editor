@@ -445,6 +445,8 @@ public final class CameraSceneMirrorRenderer
      * Call immediately AFTER gluPerspective for each new reflected
      * geometry projection (terrain AND cached actor renderers).
      */
+    private static boolean obliqueClipLogged;
+
     public static void installShaderObliqueProjection(
             PreviewCameraPose virtualCamera)
     {
@@ -468,6 +470,13 @@ public final class CameraSceneMirrorRenderer
             projection.put(oblique);
             projection.flip();
             GL11.glLoadMatrix(projection);
+            if(!obliqueClipLogged)
+            {
+                obliqueClipLogged=true;
+                System.out.println("[BBS Editor][Mirror][BSL Render] "+
+                        "Oblique projection installed: clipping "+
+                        "geometry behind mirror (shader-safe).");
+            }
         }
         finally
         {
