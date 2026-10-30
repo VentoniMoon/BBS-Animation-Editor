@@ -24,16 +24,19 @@ The MIRRORS list supports up to 32 independent objects per scene:
 
 An optional **second native world pass** is performed at RenderTick.START,
 prior to the normal world pass, from the reflected position and direction
-across the selected mirror plane. No world render is issued recursively from
+across the selected mirror plane. Its **isolated RenderGlobal** keeps a
+separate view frustum/visible chunk list and is restored in a finally block.
+No world render is issued recursively from
 RenderWorldLast or the editor GUI. A separate OpenGL framebuffer stores the
 result (maximum dimension 1024 pixels); the normal native world pass then
 overwrites the ordinary game framebuffer.
 
-Recorded Blockbuster actors are rendered from the **reflected camera** in the
-auxiliary RenderWorldLast, then rendered normally afterward. Both calls use
-the SAME timeline tick. Existing movement and Jolt caches are expected to
-reuse already simulated tick poses rather than advancing time twice.
-This must still be verified in the actual game.
+**Recorded Blockbuster/Metamorph/Chameleon actors are intentionally NOT
+rendered in the auxiliary pass.** The mutable Blockbuster actor renderer,
+Body Parts state and Jolt physics must have exactly one render owner per
+normal frame. Only vanilla world terrain/entities are eligible for the
+experimental mirror texture. Actor reflections will return later through a
+read-only, independently sampled pose renderer.
 
 The mirrored world image is mapped onto the 3D surface in the main
 RenderWorldLast with depth-testing so normal blocks can occlude the mirror.
@@ -54,21 +57,25 @@ Mirrors never recursively reflect other mirrors.
    five blocks in front of the camera, vertical and facing the viewer.
 3. Stand in front of it and confirm it shows the world from the reflected
    viewpoint (not merely a flipped camera screenshot).
-4. Move an actor, step keyframes, and check the same actor is visible in the
-   reflection. Test a model with Jolt hair; it should not simulate twice.
+4. Move an actor, step keyframes, and verify its **main-world model** is
+   stable (no duplicated body parts or corrupted morphs). Recorded actors
+   are NOT yet reflected; this is deliberate until a stateless pass exists.
 5. Move and resize the rectangle, rotate yaw, place it in front of a wall,
    and view it at angles. Ensure nearby terrain properly occludes it.
 6. Save editor.dat, reopen the scene, and check all mirror parameters.
-7. Check with shaders enabled and disabled, then a short CAMERA export.
+7. First test with OptiFine shaders **OFF**. With shaders ON the renderer
+   intentionally shows a non-reflective fallback rather than risking global
+   OptiFine state and destroying the normal world. Export remains unverified.
 
 Under MIRROR PROPERTIES an experimental runtime status appears.
 Check `run/logs/latest.log` for `[BBS Editor][Mirror]` if capture stops.
 
 ## Limitations / safety
 
-- This is a **first experimental render**. OptiFine shaderpacks may render
-  their final image through another internal FBO and bypass the ordinary
-  framebuffer used by the mirror copy; test with shaders OFF first.
+- This is an **experimental world-only reflection**. Active OptiFine
+  shaderpacks use the tinted fallback surface by default: second native
+  world passes alter OptiFine global shader state outside GL attrib stacks.
+  This is intentionally disabled, not yet solved.
 - Full compatibility with OptiFine/BetterLights and Minecraft's depth
   buffers is **not yet visually confirmed**.
 - The auxiliary pass is expensive: it renders the world a second time while
@@ -90,12 +97,16 @@ Emergency JVM flags (must be supplied before starting Minecraft):
 
 - `-Dbbs.editor.camera.mirrors=false` disables the auxiliary world pass.
   Mirror objects remain editable, but display their tinted fallback.
-- `-Dbbs.editor.camera.mirrorActors=false` keeps the world reflection but
-  omits the extra recorded-actor draw if Jolt or actor preview has trouble.
+- `-Dbbs.editor.camera.mirrorUnsafeShaders=true` deliberately bypasses
+  the shaderpack guard for debugging, at the risk of renderer corruption.
+  Do not enable for normal scene editing.
+- Actor reflection is disabled in code until a read-only rendering
+  implementation is ready; the old `mirrorActors` flag is obsolete.
 
 ## Future
 
-1. Validate actor, morph, OptiFine and Jolt compatibility in the actual game.
+1. Verify the isolated world-only renderer preserves main-world chunks,
+   block textures, record actors and GL state in the actual game.
 2. Add robust near-plane clipping, improved projected UVs, and render-target
    handling for shaderpacks.
 3. Optionally batch/limit multi-mirror capture and introduce surface presets.
