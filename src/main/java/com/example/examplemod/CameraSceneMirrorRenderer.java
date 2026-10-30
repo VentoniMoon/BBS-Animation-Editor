@@ -432,6 +432,50 @@ public final class CameraSceneMirrorRenderer
     }
 
     /**
+     * Shader-compatible mirror half-space. BSL vertex shaders do not
+     * necessarily output gl_ClipVertex, so GL_CLIP_PLANE0 silently has no
+     * effect on their gl_Position. That allowed the wall mounting the
+     * mirror to render directly into the reflection's GBuffer.
+     *
+     * In the BSL-only auxiliary pass, put the mirror's front half-space
+     * into the hardware near projection plane instead. OpenGL then clips
+     * shader geometry even when it does not implement user clip planes.
+     * Never alter the ordinary camera projection or the shaderless mirror.
+     *
+     * Call immediately AFTER gluPerspective for each new reflected
+     * geometry projection (terrain AND cached actor renderers).
+     */
+    public static void installShaderObliqueProjection(
+            PreviewCameraPose virtualCamera)
+    {
+        if(!CameraMirrorBSLCompositor.active()||
+                !capturing||activeMirror==null||virtualCamera==null)return;
+        CameraSceneMirrors.Mirror mirror=activeMirror;
+        double[] plane=CameraMirrorMath.frontClipPlane(virtualCamera,
+                mirror.x,mirror.y,mirror.z,mirror.yaw,0.02D);
+        int mode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        try
+        {
+            java.nio.FloatBuffer projection=BufferUtils.createFloatBuffer(16);
+            GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX,projection);
+            float[] original=new float[16];
+            projection.rewind();
+            projection.get(original);
+            float[] oblique=CameraMirrorObliqueProjection.clip(
+                    original,plane);
+            projection.clear();
+            projection.put(oblique);
+            projection.flip();
+            GL11.glLoadMatrix(projection);
+        }
+        finally
+        {
+            GL11.glMatrixMode(mode);
+        }
+    }
+
+    /**
      * Runtime-safe OptiFine detection: do not import optional OptiFine
      * classes or depend on a particular Forge mapping at compile time.
      */
