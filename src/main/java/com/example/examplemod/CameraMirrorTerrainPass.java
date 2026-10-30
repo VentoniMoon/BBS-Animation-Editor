@@ -3,7 +3,6 @@ package com.example.examplemod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.RenderHelper;
-import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.BlockRenderLayer;
@@ -11,16 +10,18 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
 
 /**
- * Render only the isolated reflection world's sky and chunk layers.
+ * Render the EXISTING WorldClient and the EXISTING RenderGlobal's already
+ * compiled chunk buffers from a second view. No extra world, RenderGlobal,
+ * chunk compilation, or EntityRenderer frame is created.
  *
- * A second Minecraft.entityRenderer.renderWorld() is NOT reentrant: it
- * overwrites camera/global state belonging to the main frame. Rendering
- * chunk layers directly avoids restarting the game's world/actor pipeline.
- * Only native terrain is reflected at this stage, not recorded actors.
+ * Called after the normal world pass (RenderWorldLast) so that the normal
+ * camera has populated the visible chunks. The reflection shares that
+ * draw list: geometry outside the main camera's chunk visibility may be
+ * missing, but the primary scene's culling state is never overwritten.
+ * Recorded actors are drawn using prepared poses in a separate pass.
  */
 public final class CameraMirrorTerrainPass
 {
-    private static int sequence;
     private static boolean reported;
     private CameraMirrorTerrainPass(){}
 
@@ -62,10 +63,10 @@ public final class CameraMirrorTerrainPass
             // making the reflection appear displaced/partly empty.
             setCamera(camera,aspect,false);
             CameraSceneMirrorRenderer.installFrontClipPlane(camera);
-            Frustum frustum=new Frustum();
-            frustum.setPosition(camera.x,camera.y,camera.z);
-            world.setupTerrain(eye,partialTicks,frustum,++sequence,false);
-            world.updateChunks(System.nanoTime()+3000000L);
+            // IMPORTANT: do not call setupTerrain(), updateChunks() or
+            // setWorldAndLoadRenderers() here. Those would mutate/replace
+            // the native world frame's culling and render chunks. Reuse the
+            // renderInfo list prepared by vanilla just before WorldLast.
 
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
@@ -90,8 +91,8 @@ public final class CameraMirrorTerrainPass
             if(!reported)
             {
                 reported=true;
-                System.out.println("[BBS Editor][Mirror] Isolated terrain "+
-                        "capture active: no second EntityRenderer.renderWorld.");
+                System.out.println("[BBS Editor][Mirror] Shared RenderGlobal "+
+                        "draw buffers active; no second world/chunk renderer.");
             }
         }
         finally
