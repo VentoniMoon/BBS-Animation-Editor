@@ -112,10 +112,12 @@ public final class CameraSceneMirrorRenderer
         captureStatus="MIRROR: waiting for capture";
         if(lastWorld!=null&&lastWorld!=mc.world)reset();
         lastWorld=mc.world;
-        // OptiFine maintains global shader program, framebuffer, draw-buffer
-        // and shadow-pass state beyond OpenGL's attrib/matrix stacks.
-        // A second renderWorld() cannot safely run alongside a shaderpack.
-        // Opt-in remains available only for targeted shader development.
+        // OptiFine G5 owns a multi-attachment deferred GBuffer, shadow
+        // textures and several composite programs. Rebinding only
+        // Minecraft.framebufferMc to our one-color FBO cannot reproduce
+        // those stages and risks overwriting the main shader frame.
+        // A dedicated OptiFine render-target/state backend is required.
+        // Do not disable this guard just to hide the tinted fallback.
         if(shaderpackActive() &&
                 !Boolean.getBoolean("bbs.editor.camera.mirrorUnsafeShaders"))
         {
