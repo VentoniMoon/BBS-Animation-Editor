@@ -415,6 +415,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     {
         write3(pid,"cameraPosition",(float)view.x,
                 (float)view.y,(float)view.z);
+        // BSL temporal reprojection must not use the MAIN camera's
+        // previous position while the mirror uses a reflected camera.
+        // Until mirror-only history is implemented, initialize the
+        // temporal matrices/position to the current reflected view.
+        write3(pid,"previousCameraPosition",(float)view.x,
+                (float)view.y,(float)view.z);
+        write1(pid,"eyeAltitude",(float)view.y);
+        write1(pid,"near",Math.max(0.02F,view.nearPlane));
+        write1(pid,"far",Math.max(64F,view.farPlane));
         write1(pid,"viewWidth",(float)targets.width());
         write1(pid,"viewHeight",(float)targets.height());
         write1(pid,"aspectRatio",(float)targets.width()/
@@ -423,11 +432,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             writeMatrix(pid,"gbufferProjection",mirrorProjection,false);
             writeMatrix(pid,"gbufferProjectionInverse",mirrorProjection,true);
+            writeMatrix(pid,"gbufferPreviousProjection",mirrorProjection,false);
         }
         if(mirrorView!=null)
         {
             writeMatrix(pid,"gbufferModelView",mirrorView,false);
             writeMatrix(pid,"gbufferModelViewInverse",mirrorView,true);
+            writeMatrix(pid,"gbufferPreviousModelView",mirrorView,false);
         }
     }
 
