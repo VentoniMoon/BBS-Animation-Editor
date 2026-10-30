@@ -118,15 +118,22 @@ public final class CameraSceneMirrorRenderer
         // those stages and risks overwriting the main shader frame.
         // A dedicated OptiFine render-target/state backend is required.
         // Do not disable this guard just to hide the tinted fallback.
-        if(shaderpackActive() &&
-                !Boolean.getBoolean("bbs.editor.camera.mirrorUnsafeShaders"))
+        final boolean shaderMirror=shaderpackActive();
+        if(shaderMirror)
         {
-            blockedByShaderpack=true;
-            captureStatus="SHADERPACK ON - REFLECTION PAUSED";
-            // Shared-world reflection owns no secondary chunk renderer
-            // or world listeners. The private framebuffer remains harmless
-            // while the shaderpack guard is active.
-            return;
+            // A single GBuffer/forward shaderpack can use a private mirror
+            // target and the real OptiFine terrain/entity programs without
+            // executing its global deferred/composite graph a second time.
+            // All multi-buffer/deferred packs remain fail-closed until their
+            // ping-pong buffers and composite pipeline can be isolated.
+            CameraMirrorOptiFineBackend.Support support=
+                    CameraMirrorOptiFineBackend.inspect();
+            if(!support.usable)
+            {
+                blockedByShaderpack=true;
+                captureStatus="SHADER: "+support.message;
+                return;
+            }
         }
         CameraSceneMirrors.Mirror picked=null;
         double closest=Double.POSITIVE_INFINITY;
@@ -209,7 +216,16 @@ public final class CameraSceneMirrorRenderer
                 // Define the mirror plane ONLY during the auxiliary pass.
                 // The normal world must never receive this clipping state.
                 installFrontClipPlane(reflected);
-                pass.draw(reflected);
+                if(shaderMirror)
+                {
+                    try(CameraMirrorOptiFineBackend.Scope shaderScope=
+                            CameraMirrorOptiFineBackend.begin(reflected,
+                                    texture.framebufferObject))
+                    {
+                        pass.draw(reflected);
+                    }
+                }
+                else pass.draw(reflected);
             }
             finally
             {
@@ -232,9 +248,11 @@ public final class CameraSceneMirrorRenderer
                 throw new IllegalStateException("Mirror texture missing");
             capturedId=picked.id;
             capturedPose=reflected;
-            captureStatus=clipPlaneInstalled?
-                    "MIRROR: captured isolated FBO (clip requested)":
-                    "MIRROR: captured isolated FBO (clip unavailable)";
+            captureStatus=shaderMirror?
+                    "MIRROR: OptiFine forward shader active":
+                    (clipPlaneInstalled?
+                        "MIRROR: captured isolated FBO (clip requested)":
+                        "MIRROR: captured isolated FBO (clip unavailable)");
             sourceWidth=w;
             sourceHeight=h;
         }
