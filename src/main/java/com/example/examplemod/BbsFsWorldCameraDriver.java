@@ -175,60 +175,10 @@ public final class BbsFsWorldCameraDriver
         // and historically left actor and CAMERA lights one frame behind.
         BetterLightsWorldEngine.prepare(mc,editor);
 
-        // Reflection chunks are rendered BEFORE the ordinary Minecraft world
-        // frame, but the full Minecraft EntityRenderer is NEVER re-entered.
-        // This avoids corrupting the native frame's chunk/actor state.
-        // Only terrain/vanilla entities render in this experimental pass.
-        // Blockbuster preview actors are deliberately drawn ONCE per frame
-        // in the normal world to preserve their mutable morph/Jolt state.
-        if(editor.getSceneState()!=null)
-            CameraSceneMirrorRenderer.capture(mc,
-                    editor.getSceneState().getCameraMirrors(),pose,
-                    new CameraSceneMirrorRenderer.ReflectionPass()
-                    {
-                        @Override public void draw(PreviewCameraPose reflected)
-                                throws Throwable
-                        {
-                            activePose=reflected;
-                            view.updateCamera(reflected.x,reflected.y,
-                                    reflected.z,
-                                    BbsFsCameraConventions.entityYaw(
-                                            reflected.yaw),
-                                    BbsFsCameraConventions.entityPitch(
-                                            reflected.pitch));
-                            try
-                            {
-                                // A second world render MUST NOT mutate the
-                                // main RenderGlobal ViewFrustum/visible chunks.
-                                CameraMirrorWorldIsolation.draw(mc,
-                                        new CameraMirrorWorldIsolation.Pass()
-                                        {
-                                            @Override public void render()
-                                            {
-                                                // Do NOT re-enter the
-                                                // full world renderer: it
-                                                // mutates main-frame culling,
-                                                // entity passes and lighting.
-                                                CameraMirrorTerrainPass.render(
-                                                        mc,reflected,
-                                                        event.renderTickTime);
-                                            }
-                                        });
-                            }
-                            finally
-                            {
-                                activePose=pose;
-                                view.updateCamera(pose.x,pose.y,pose.z,
-                                        BbsFsCameraConventions.entityYaw(
-                                                pose.yaw),
-                                        BbsFsCameraConventions.entityPitch(
-                                                pose.pitch));
-                            }
-                        }
-                    });
-
-        // Fail closed if any auxiliary render retained a legacy clipping
-        // plane. It may never affect the upcoming main native world frame.
+        // The main frame owns camera setup and actor simulation; mirrored
+        // world rendering is deferred to WorldLast, after native actor poses
+        // have been evaluated and the main chunk draw list is ready.
+        // Clear a legacy clip state in case a previous frame failed.
         if(!CameraSceneMirrorRenderer.isCapturing())
             org.lwjgl.opengl.GL11.glDisable(
                     org.lwjgl.opengl.GL11.GL_CLIP_PLANE0);
@@ -282,19 +232,59 @@ public final class BbsFsWorldCameraDriver
                  * the native world pass BEFORE BBS FS captures its texture.
                  * Never recursively render the world or touch the GUI FBO.
                  */
-                // The mirror is world geometry. Draw it before the
-                // custom recorded-actor pass, not over the actor's final
-                // pixels. When an actor stands in front of the glass its
-                // native depth test must be able to occlude the mirror.
                 AnimationEditorScreen editor=
                         (AnimationEditorScreen)mc.currentScreen;
-                if(editor.getSceneState()!=null)
-                    CameraSceneMirrorRenderer.render(mc,
+                // Sample/move/animate actors and Jolt ONCE in the ordinary
+                // Minecraft world, then reuse the PREPARED objects in the
+                // reflection pass without re-running their animation.
+                BbsFsNativeActorPass.render(mc,editor,viewport,
+                        event.getPartialTicks(),worldWidth,worldHeight);
+                if(editor.getSceneState()!=null&&activePose!=null)
+                {
+                    final PreviewCameraPose mainPose=activePose;
+                    final float framePartialTicks=event.getPartialTicks();
+                    CameraSceneMirrorRenderer.capture(mc,
                             editor.getSceneState().getCameraMirrors(),
-                            activePose);
-                BbsFsNativeActorPass.render(mc,
-                        editor,viewport,event.getPartialTicks(),
-                        worldWidth,worldHeight);
+                            mainPose,new CameraSceneMirrorRenderer.ReflectionPass()
+                            {
+                                @Override public void draw(PreviewCameraPose reflected)
+                                        throws Throwable
+                                {
+                                    // SAME WorldClient, SAME RenderGlobal,
+                                    // SAME actors, SAME timeline frame. No
+                                    // additional entity or physics ticking.
+                                    view.updateCamera(reflected.x,reflected.y,
+                                            reflected.z,
+                                            BbsFsCameraConventions.entityYaw(
+                                                    reflected.yaw),
+                                            BbsFsCameraConventions.entityPitch(
+                                                    reflected.pitch));
+                                    try
+                                    {
+                                        CameraMirrorTerrainPass.render(mc,
+                                                reflected,framePartialTicks);
+                                        editor.renderPreparedActorsInMirror(mc,
+                                                reflected,
+                                                mc.getFramebuffer().framebufferWidth,
+                                                mc.getFramebuffer().framebufferHeight);
+                                    }
+                                    finally
+                                    {
+                                        view.updateCamera(mainPose.x,mainPose.y,
+                                                mainPose.z,
+                                                BbsFsCameraConventions.entityYaw(
+                                                        mainPose.yaw),
+                                                BbsFsCameraConventions.entityPitch(
+                                                        mainPose.pitch));
+                                    }
+                                }
+                            });
+                    // Main depth already contains the posed actors. The
+                    // mirror quad is depth tested against those actors and
+                    // blocks; do not clear or overwrite main depth.
+                    CameraSceneMirrorRenderer.render(mc,
+                            editor.getSceneState().getCameraMirrors(),mainPose);
+                }
             }
         }
     }
