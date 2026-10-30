@@ -175,9 +175,9 @@ public final class BbsFsWorldCameraDriver
         // and historically left actor and CAMERA lights one frame behind.
         BetterLightsWorldEngine.prepare(mc,editor);
 
-        // Reflection is rendered BEFORE the ordinary Minecraft world frame.
-        // Never issue a second renderWorld from RenderWorldLast (or GuiScreen):
-        // doing so would recurse through OptiFine, actor/Jolt and frame capture.
+        // Reflection chunks are rendered BEFORE the ordinary Minecraft world
+        // frame, but the full Minecraft EntityRenderer is NEVER re-entered.
+        // This avoids corrupting the native frame's chunk/actor state.
         // Only terrain/vanilla entities render in this experimental pass.
         // Blockbuster preview actors are deliberately drawn ONCE per frame
         // in the normal world to preserve their mutable morph/Jolt state.
@@ -205,8 +205,13 @@ public final class BbsFsWorldCameraDriver
                                         {
                                             @Override public void render()
                                             {
-                                                mc.entityRenderer.renderWorld(
-                                                        event.renderTickTime,0L);
+                                                // Do NOT re-enter the
+                                                // full world renderer: it
+                                                // mutates main-frame culling,
+                                                // entity passes and lighting.
+                                                CameraMirrorTerrainPass.render(
+                                                        mc,reflected,
+                                                        event.renderTickTime);
                                             }
                                         });
                             }
@@ -277,16 +282,19 @@ public final class BbsFsWorldCameraDriver
                  * the native world pass BEFORE BBS FS captures its texture.
                  * Never recursively render the world or touch the GUI FBO.
                  */
-                BbsFsNativeActorPass.render(mc,
-                        (AnimationEditorScreen) mc.currentScreen,
-                        viewport, event.getPartialTicks(),
-                        worldWidth, worldHeight);
+                // The mirror is world geometry. Draw it before the
+                // custom recorded-actor pass, not over the actor's final
+                // pixels. When an actor stands in front of the glass its
+                // native depth test must be able to occlude the mirror.
                 AnimationEditorScreen editor=
                         (AnimationEditorScreen)mc.currentScreen;
                 if(editor.getSceneState()!=null)
                     CameraSceneMirrorRenderer.render(mc,
                             editor.getSceneState().getCameraMirrors(),
                             activePose);
+                BbsFsNativeActorPass.render(mc,
+                        editor,viewport,event.getPartialTicks(),
+                        worldWidth,worldHeight);
             }
         }
     }
