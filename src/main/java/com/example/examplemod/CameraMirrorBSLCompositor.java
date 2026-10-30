@@ -130,9 +130,12 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             if(pid<=0){GL20.glUseProgram(0);return;}
             targets.bindGeometry();
             GL20.glUseProgram(pid);
-            if(mirrorProjection==null)
+            // Sky uses a farther projection than terrain. Capture the
+            // terrain camera for deferred/composite matrix uniforms,
+            // otherwise a sky projection would distort BSL world depth.
+            if(mirrorProjection==null||"ProgramTerrain".equals(name))
                 mirrorProjection=currentMatrix(GL11.GL_PROJECTION_MATRIX);
-            if(mirrorView==null)
+            if(mirrorView==null||"ProgramTerrain".equals(name))
                 mirrorView=currentMatrix(GL11.GL_MODELVIEW_MATRIX);
             IntBuffer draw=(IntBuffer)getDrawBuffers.invoke(program);
             if(draw!=null)GL20.glDrawBuffers(draw.asReadOnlyBuffer());
