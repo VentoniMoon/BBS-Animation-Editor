@@ -56,6 +56,13 @@ Geometry outside that loaded range is unavailable until Minecraft loads
 it normally. New back-facing chunks can take a few frames to compile.
 The mirror never creates a second world, chunk renderer, or chunk cache.
 
+The mirror sky calls vanilla RenderGlobal.renderSky(partialTicks, 2),
+matching Minecraft's non-anaglyph world pass. Using pass 0 previously
+applied the anaglyph RGB transform and tinted the mirrored sky pink/purple.
+The ordinary CAMERA preview remains the BBS FS-style native world pipeline;
+the mirror still manually assembles sky and terrain passes, so fog, clouds,
+weather, BetterLights and OptiFine shaderpack parity are NOT yet complete.
+
 Shaderpack reflection still requires a dedicated OptiFine-compatible render
 target: the current safe default shows tinted fallback when shaders are on.
 
