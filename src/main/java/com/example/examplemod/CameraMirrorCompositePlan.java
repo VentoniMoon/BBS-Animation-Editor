@@ -53,18 +53,32 @@ public final class CameraMirrorCompositePlan
         int[] targets=new int[input.length];
         boolean[] flips=new boolean[input.length];
         boolean[] seen=new boolean[colorCount];
+        int actualOutputs=0;
         for(int i=0;i<input.length;i++)
         {
+            // DRAWBUFFERS:N means GL_NONE (0) at this fragment output
+            // location. Keep its slot, don't shift the shader's output
+            // indices or accidentally write a different colortex.
+            if(input[i]==0)
+            {
+                targets[i]=-1;
+                flips[i]=false;
+                continue;
+            }
             int t=input[i]-36064;
             if(t<0||t>=colorCount||seen[t])
                 throw new IllegalArgumentException(
                         "Invalid or duplicate colortex: "+t);
             seen[t]=true;
+            actualOutputs++;
             targets[i]=t;
             Boolean choice=overrides!=null&&t<overrides.length?
                     overrides[t]:null;
             flips[i]=choice==null||choice.booleanValue();
         }
+        if(actualOutputs==0)
+            throw new IllegalArgumentException(
+                    "Composite pass has no writable attachments");
         return new CameraMirrorCompositePlan(name,targets,flips);
     }
 
