@@ -125,9 +125,9 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
                 int.class,float.class);
         updateFogColor=method(cls,
                 new String[]{"updateFogColor","func_78466_h"},float.class);
-        fogRed=field(cls,new String[]{"fogColorRed","field_78504_Q"});
-        fogGreen=field(cls,new String[]{"fogColorGreen","field_78506_S"});
-        fogBlue=field(cls,new String[]{"fogColorBlue","field_78505_R"});
+        fogRed=field(cls,new String[]{"fogColorRed","field_78518_n","n"});
+        fogGreen=field(cls,new String[]{"fogColorGreen","field_78519_o","o"});
+        fogBlue=field(cls,new String[]{"fogColorBlue","field_78533_p","p"});
     }
 
     private static Method method(Class<?> cls,String[] names,
