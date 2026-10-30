@@ -78,6 +78,7 @@ public final class CameraSceneMirrorRenderer
         // Reflection now shares the original world's existing render chunks.
         // Only release its private color/depth target on editor detach.
         failed=false;warned=false;
+        CameraMirrorOptiFinePreflight.reset();
         blockedByShaderpack=false;
         captureStatus="MIRROR: awaiting first frame";
     }
@@ -130,6 +131,10 @@ public final class CameraSceneMirrorRenderer
                     CameraMirrorOptiFineBackend.inspect();
             if(!support.usable)
             {
+                // Optional offline-MRT smoke test for BSL. A framebuffer
+                // gets allocated, checked and released without drawing or
+                // changing the normal shader world. Fail closed regardless.
+                CameraMirrorOptiFinePreflight.runOnce();
                 blockedByShaderpack=true;
                 captureStatus="SHADER: "+support.message;
                 return;
