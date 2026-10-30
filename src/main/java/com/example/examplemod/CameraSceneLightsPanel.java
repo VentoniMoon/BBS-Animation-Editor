@@ -162,10 +162,11 @@ public final class CameraSceneLightsPanel
         top=25;bottom=panelBottom;
         Minecraft mc=Minecraft.getMinecraft();
         Gui.drawRect(0,25,LEFT,54,0xFF1D303B);
-        mc.fontRenderer.drawString("PRESETS",7,36,
+        mc.fontRenderer.drawString("CLIPS",5,36,
                 opened?0xFF899DAA:0xFF60C8FA);
-        mc.fontRenderer.drawString("LIGHTS",LEFT/2+7,36,
+        mc.fontRenderer.drawString("LIGHTS",47,36,
                 opened?0xFF60C8FA:0xFF899DAA);
+        mc.fontRenderer.drawString("MIRRORS",88,36,0xFF899DAA);
         if(!opened)return;
         CameraSceneLights.Light selected=sync(screen);
         Gui.drawRect(0,54,LEFT,panelBottom,0xFF19232C);
@@ -364,8 +365,9 @@ public final class CameraSceneLightsPanel
     {
         if(my>=25&&my<54&&mx>=0&&mx<LEFT&&button==0)
         {
+            if(mx>=87)return false; // Dedicated MIRRORS tab
             commit(screen);
-            if(mx>=LEFT/2)
+            if(mx>=43)
             {
                 opened=true;
                 sync(screen);
