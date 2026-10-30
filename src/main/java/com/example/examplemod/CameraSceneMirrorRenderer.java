@@ -99,6 +99,11 @@ public final class CameraSceneMirrorRenderer
                 !Boolean.getBoolean("bbs.editor.camera.mirrorUnsafeShaders"))
         {
             blockedByShaderpack=true;
+            // Mirror-specific chunks may have been created with shaders OFF
+            // earlier in this editor session. Dispose them after a pack is
+            // enabled; otherwise they keep receiving world block updates.
+            if(CameraMirrorWorldIsolation.ready())
+                CameraMirrorWorldIsolation.reset(mc);
             return;
         }
         CameraSceneMirrors.Mirror picked=null;
@@ -215,19 +220,31 @@ public final class CameraSceneMirrorRenderer
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
             GL11.glViewport(oldViewport.get(0),oldViewport.get(1),
                     oldViewport.get(2),oldViewport.get(3));
-            // Vanilla/OptiFine must see exactly the same matrix stacks
-            // after the reflected view as before it. Restore even when the
-            // renderer returned from an unusual render error path.
-            restoreMatrix(GL11.GL_MODELVIEW,
-                    GL11.GL_MODELVIEW_STACK_DEPTH,modelviewDepth);
-            restoreMatrix(GL11.GL_PROJECTION,
-                    GL11.GL_PROJECTION_STACK_DEPTH,projectionDepth);
-            GL11.glMatrixMode(previousMatrixMode);
-            GL11.glPopAttrib();
-            if(!clipPreviouslyEnabled)
-                GL11.glDisable(GL11.GL_CLIP_PLANE0);
-            GL13.glActiveTexture(oldTexture);
-            GL20.glUseProgram(oldShader);
+            // Even a broken third-party renderer that under/overflows its
+            // matrix stack cannot prevent the framebuffer/program/clip state
+            // from being restored on the normal native world pass.
+            try
+            {
+                restoreMatrix(GL11.GL_MODELVIEW,
+                        GL11.GL_MODELVIEW_STACK_DEPTH,modelviewDepth);
+                restoreMatrix(GL11.GL_PROJECTION,
+                        GL11.GL_PROJECTION_STACK_DEPTH,projectionDepth);
+            }
+            finally
+            {
+                try
+                {
+                    GL11.glMatrixMode(previousMatrixMode);
+                    GL11.glPopAttrib();
+                }
+                finally
+                {
+                    if(!clipPreviouslyEnabled)
+                        GL11.glDisable(GL11.GL_CLIP_PLANE0);
+                    GL13.glActiveTexture(oldTexture);
+                    GL20.glUseProgram(oldShader);
+                }
+            }
         }
     }
 
