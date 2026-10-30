@@ -233,9 +233,12 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
         // Common OptiFine 1.12.2 shaderpack format enum values.
         switch(fmt)
         {
-            case 32849: // RGB8
+            case 32849: // RGB8 (BSL colortex1/3)
+            case 32852: // RGB16 (BSL colortex6/7)
             case 32856: // RGBA8
-            case 32859: // RGBA16
+            case 32857: // RGB10_A2 (BSL colortex5)
+            case 32859: // RGBA16 (BSL colortex2)
+            case 35898: // R11F_G11F_B10F (BSL colortex0)
             case 34842: // RGBA16F
             case 34843: // RGB16F
             case 34836: // RGBA32F
@@ -261,7 +264,11 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
                 GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_T,
                 GL12.GL_CLAMP_TO_EDGE);
-        int channels=(format==32849||format==34843||format==34837)?
+        // OptiFine gbuffersFormat[] stores INTERNAL formats, not external
+        // pixel layouts. Match each BSL GBuffer channel by component count.
+        // glTexImage2D with null pixels only allocates storage.
+        int channels=(format==32849||format==32852||format==35898||
+                format==34843||format==34837)?
                 GL11.GL_RGB:
                 (format==33321||format==33325)?GL11.GL_RED:
                 (format==33323||format==33327)?GL30.GL_RG:GL11.GL_RGBA;
