@@ -154,10 +154,13 @@ public final class CameraClipInspector
                 selectedClip.kind!=CameraClipDocument.Kind.CURVE)return;
         java.util.List<String> choices=curvePickerChoices();
         int lx=right+5,rx=width-6;
-        int topY=Math.max(92,bottom-7*21-15);
-        rect(lx-2,topY-22,rx+2,topY+7*21+3,0xFF080D11);
+        int topY=Math.max(92,bottom-7*21-36);
+        rect(lx-2,topY-22,rx+2,topY+7*21+23,0xFF080D11);
         rect(lx,topY-20,rx,topY,0xFF293038);
-        text("CURVE CHANNELS",lx+6,topY-15,0xFF8BE2FF,rx-lx-12);
+        text("CURVE CHANNELS",lx+6,topY-15,0xFF8BE2FF,rx-lx-65);
+        text("RESCAN",rx-49,topY-15,0xFF8BE2FF,45);
+        hits.add(new Hit("@curve:refresh",-1,rx-54,topY-21,
+                54,21,"",false,false));
         for(int i=0;i<7;i++)
         {
             int index=i+curvePickerScroll;
@@ -165,10 +168,17 @@ public final class CameraClipInspector
             String id=choices.get(index);
             int pos=topY+i*21;
             rect(lx,pos,rx,pos+20,i%2==0?0xFF222930:0xFF1B2229);
-            text(curveTitle(id),lx+6,pos+5,0xFFE5EDF0,rx-lx-15);
+            String title=curveTitle(id);
+            boolean pending=id.startsWith("curve.")&&
+                    !CameraShaderCurves.animatable(id.substring(6));
+            text(pending?"Pending: "+title:title,lx+6,pos+5,
+                    pending?0xFFE7C588:0xFFE5EDF0,rx-lx-15);
             hits.add(new Hit("@curve:set:"+id,-1,lx,pos,rx-lx,20,
                     id,false,false));
         }
+        rect(lx,topY+7*21+3,rx,topY+7*21+22,0xFF293038);
+        text(CameraShaderCurves.state(),lx+5,topY+7*21+8,
+                0xFF9CC4D6,rx-lx-10);
     }
 
     public int maxScroll(){return Math.max(0,contentHeight-Math.max(1,bottom-CONTENT_TOP));}
