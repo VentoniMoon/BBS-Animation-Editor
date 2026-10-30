@@ -46,8 +46,8 @@ public final class CameraSceneMirrorRenderer
         if(failed)return "Mirror renderer unavailable (see latest.log)";
         return capturedId.isEmpty()?"Mirror world view pending":
                 (clipPlaneInstalled?
-                        "Planar reflection / clipped world":
-                        "Planar reflection / clip pending");
+                        "Reflection / GL clip requested":
+                        "Reflection / clip not installed");
     }
     public static void reset()
     {
