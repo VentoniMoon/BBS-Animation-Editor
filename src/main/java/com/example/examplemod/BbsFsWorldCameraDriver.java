@@ -196,8 +196,17 @@ public final class BbsFsWorldCameraDriver
                                             reflected.pitch));
                             try
                             {
-                                mc.entityRenderer.renderWorld(
-                                        event.renderTickTime,0L);
+                                // A second world render MUST NOT mutate the
+                                // main RenderGlobal ViewFrustum/visible chunks.
+                                CameraMirrorWorldIsolation.draw(mc,
+                                        new CameraMirrorWorldIsolation.Pass()
+                                        {
+                                            @Override public void render()
+                                            {
+                                                mc.entityRenderer.renderWorld(
+                                                        event.renderTickTime,0L);
+                                            }
+                                        });
                             }
                             finally
                             {
@@ -210,6 +219,12 @@ public final class BbsFsWorldCameraDriver
                             }
                         }
                     });
+
+        // Fail closed if any auxiliary render retained a legacy clipping
+        // plane. It may never affect the upcoming main native world frame.
+        if(!CameraSceneMirrorRenderer.isCapturing())
+            org.lwjgl.opengl.GL11.glDisable(
+                    org.lwjgl.opengl.GL11.GL_CLIP_PLANE0);
 
         // Normally a no-op. The one-frame diagnostic is guarded by an
         // explicit JVM flag and uses the native Minecraft world pass.
