@@ -65,9 +65,16 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
             // Compute the same sky/biome/weather fog color from the ACTIVE
             // reflected view entity used by the normal world pipeline.
             updateFogColor.invoke(mc.entityRenderer,partialTicks);
-            // The mirror target was just cleared with the previous camera's
-            // clear color. Clear again with the reflected biome fog color.
-            GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);
+            // In the vanilla one-color mirror, update the clear color
+            // to the reflected biome and clear the target as before.
+            // In BSL, the geometry compositor ALREADY cleared each
+            // independent colortex to its native neutral value (including
+            // WHITE for gdepth). Calling glClear on all eight draw buffers
+            // here would overwrite every GBuffer channel with the same
+            // sky/fog color and destroy BSL's encoded material data.
+            if(!CameraMirrorBSLCompositor.active())
+                GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|
+                        GL11.GL_DEPTH_BUFFER_BIT);
             return scope;
         }
         catch(Throwable failure)
