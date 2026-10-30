@@ -40,6 +40,7 @@ public final class CameraSceneMirrorRenderer
     private static int sourceWidth,sourceHeight;
     private static net.minecraft.world.World lastWorld;
     private static boolean blockedByShaderpack;
+    private static String captureStatus="MIRROR: awaiting first frame";
     private static boolean shaderDiscoveryComplete;
     private static Method optiFineShadersActive;
     private static Field optiFineShaderLoaded;
@@ -49,13 +50,19 @@ public final class CameraSceneMirrorRenderer
     public static boolean isFailed(){return failed;}
     public static String status()
     {
-        if(failed)return "Mirror capture disabled (see latest.log)";
-        if(blockedByShaderpack)
-            return "Shaderpack active - safe mirror fallback";
-        return capturedId.isEmpty()?"Mirror world view pending":
-                (clipPlaneInstalled?
-                        "Reflection / GL clip requested":
-                        "Reflection / clip not installed");
+        return captureStatus;
+    }
+    /** Short, editor-only diagnostic for a selected mirror surface. */
+    public static String surfaceHint()
+    {
+        if(!capturedId.isEmpty())return "";
+        if(blockedByShaderpack)return "SHADERPACK ON - REFLECTION PAUSED";
+        if(failed)return "MIRROR ERROR - SEE latest.log";
+        return captureStatus;
+    }
+    public static boolean hasCapturedReflection()
+    {
+        return !capturedId.isEmpty() && capturedPose!=null;
     }
     public static void reset()
     {
@@ -74,6 +81,7 @@ public final class CameraSceneMirrorRenderer
         CameraMirrorWorldIsolation.reset(Minecraft.getMinecraft());
         failed=false;warned=false;
         blockedByShaderpack=false;
+        captureStatus="MIRROR: awaiting first frame";
     }
 
     /** Choose one visible mirror; never recursively render N mirrors. */
@@ -85,10 +93,25 @@ public final class CameraSceneMirrorRenderer
         activeMirror=null;
         clipPlaneInstalled=false;
         blockedByShaderpack=false;
-        if(capturing||failed||mc==null||mirrors==null||
-                mc.world==null||camera==null||pass==null||
-                "false".equalsIgnoreCase(System.getProperty(
-                        "bbs.editor.camera.mirrors","true")))return;
+        if(capturing)return;
+        if(failed)
+        {
+            captureStatus="MIRROR ERROR - SEE latest.log";
+            return;
+        }
+        if(mc==null||mirrors==null||mc.world==null||
+                camera==null||pass==null)
+        {
+            captureStatus="MIRROR: world not ready";
+            return;
+        }
+        if("false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrors","true")))
+        {
+            captureStatus="MIRROR DISABLED BY JVM FLAG";
+            return;
+        }
+        captureStatus="MIRROR: waiting for capture";
         if(lastWorld!=null&&lastWorld!=mc.world)reset();
         lastWorld=mc.world;
         // OptiFine maintains global shader program, framebuffer, draw-buffer
@@ -99,6 +122,7 @@ public final class CameraSceneMirrorRenderer
                 !Boolean.getBoolean("bbs.editor.camera.mirrorUnsafeShaders"))
         {
             blockedByShaderpack=true;
+            captureStatus="SHADERPACK ON - REFLECTION PAUSED";
             // Mirror-specific chunks may have been created with shaders OFF
             // earlier in this editor session. Dispose them after a pack is
             // enabled; otherwise they keep receiving world block updates.
@@ -119,11 +143,19 @@ public final class CameraSceneMirrorRenderer
             double distance=Math.hypot(camera.x-m.x,camera.z-m.z);
             if(distance<closest){closest=distance;picked=m;}
         }
-        if(picked==null)return;
+        if(picked==null)
+        {
+            captureStatus="MIRROR: outside view / back-facing";
+            return;
+        }
 
         Framebuffer source=mc.getFramebuffer();
         if(source==null||source.framebufferObject<=0||
-                source.framebufferWidth<1||source.framebufferHeight<1)return;
+                source.framebufferWidth<1||source.framebufferHeight<1)
+        {
+            captureStatus="MIRROR: world framebuffer unavailable";
+            return;
+        }
         int max=Math.max(source.framebufferWidth,source.framebufferHeight);
         double scale=Math.min(1D,1024D/max);
         int w=Math.max(1,(int)Math.round(source.framebufferWidth*scale));
@@ -196,6 +228,9 @@ public final class CameraSceneMirrorRenderer
                 throw new IllegalStateException("Reflection blit GL "+error);
             capturedId=picked.id;
             capturedPose=reflected;
+            captureStatus=clipPlaneInstalled?
+                    "MIRROR: captured (clip requested)":
+                    "MIRROR: captured (clip unavailable)";
             sourceWidth=source.framebufferWidth;
             sourceHeight=source.framebufferHeight;
         }
@@ -204,6 +239,7 @@ public final class CameraSceneMirrorRenderer
             failed=true;
             capturedId="";
             capturedPose=null;
+            captureStatus="MIRROR ERROR - SEE latest.log";
             if(!warned)
             {
                 warned=true;
