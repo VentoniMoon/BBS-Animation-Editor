@@ -50,7 +50,7 @@ public final class CameraMirrorTerrainPass
                             "Native Minecraft fog pipeline unavailable");
                 // The sky has no physical mirror plane. Clip ONLY terrain.
                 GL11.glDisable(GL11.GL_CLIP_PLANE0);
-                setCamera(camera,aspect,false);
+                setCamera(camera,aspect,false,2F);
                 atmosphere.sky(partialTicks);
                 try
                 {
@@ -71,7 +71,7 @@ public final class CameraMirrorTerrainPass
 
                 // RenderGlobal VBO container supplies -cameraXYZ. Reuse
                 // existing chunk buffers, never another world renderer.
-                setCamera(camera,aspect,false);
+                setCamera(camera,aspect,false,1F);
                 atmosphere.terrain(partialTicks);
                 try(CameraMirrorChunkVisibility.Scope mirrorChunks=
                         CameraMirrorChunkVisibility.begin(mc,camera,mainCamera))
@@ -109,7 +109,7 @@ public final class CameraMirrorTerrainPass
         // Vanilla uses a farther projection for clouds. Keep the mirror's
         // camera rotation while supplying its actual world position, just
         // like EntityRenderer.renderCloudsCheck().
-        setCamera(camera,aspect,false);
+        setCamera(camera,aspect,false,4F);
         atmosphere.terrain(partialTicks);
         GL11.glDisable(GL11.GL_CLIP_PLANE0);
         GL11.glDepthMask(false);
@@ -151,13 +151,13 @@ public final class CameraMirrorTerrainPass
     }
 
     private static void setCamera(PreviewCameraPose pose,float aspect,
-            boolean translate)
+            boolean translate,float farMultiplier)
     {
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glLoadIdentity();
         GLU.gluPerspective(pose.fov,aspect,
                 Math.max(0.02F,pose.nearPlane),
-                Math.max(64F,pose.farPlane));
+                Math.max(64F,pose.farPlane*farMultiplier));
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
         GL11.glRotated(-pose.roll,0,0,1);
