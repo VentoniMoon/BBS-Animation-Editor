@@ -83,7 +83,9 @@ public final class CameraMirrorOptiFinePreflight
             int previousDraw=GL11.glGetInteger(
                     GL30.GL_DRAW_FRAMEBUFFER_BINDING);
             int previousUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
-            IntBuffer previousViewport=BufferUtils.createIntBuffer(4);
+            // LWJGL 2 glGetInteger(pname, buffer) validates 16 elements
+            // even when GL_VIEWPORT writes only four integers.
+            IntBuffer previousViewport=BufferUtils.createIntBuffer(16);
             GL11.glGetInteger(GL11.GL_VIEWPORT,previousViewport);
             try
             {
