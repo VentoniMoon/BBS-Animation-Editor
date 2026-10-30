@@ -160,20 +160,32 @@ It never runs Minecraft/OptiFine beginRender recursively, never constructs
 a new WorldClient, and never steps Jolt a second time.
 
 **Important:** This is the first actual runtime version and has not yet
-been visually verified in-game. OptiFine's custom shader program state,
-nonstandard material samplers, depthtex1/depthtex2 opaque/translucent
-boundaries, temporal shadow history, and pack-specific postprocessing
-may still be incomplete. In particular, depthtex1/depthtex2 are currently
-snapshotted after the combined scene draw, not at the separate vanilla
-opaque/translucent boundaries; this can cause incorrect effects.
-The final image, main-world shader stability, and reflections MUST be
-tested before the flag is used for actual recording.
+been visually verified in-game. Native OptiFine shader hooks are disabled
+temporarily in the auxiliary renderer (the compiled BSL GLSL is used
+explicitly) so a nested beginWater/renderDeferred cannot composite the
+MAIN world. The original isRenderingWorld/other shader flags, program,
+program ID and draw-buffer references are restored afterwards.
+
+The private depthtex1 is now snapped at the opaque/translucent terrain
+boundary, and private depthtex2 after the scene pass. However, the
+current actor draw occurs AFTER the translucent world pass (rather
+than between opaque/translucent), and additional BSL custom uniforms,
+sampler aliases, temporal history and pack-specific postprocessing may
+still need work. The final image, main-world shader stability and actor
+reflections MUST be visually verified before using this for recording.
 
 If the experimental pass fails it logs
 `[BBS Editor][Mirror]` / `[BBS Editor][Mirror][BSL Render]`,
 latches the mirror off for the editor session, and leaves the default
 renderer unchanged. Restart without the experimental flag to go back to
-the safe known-good behavior. Do not enable `mirrorUnsafeShaders`.
+the safe known-good behavior. For a test, turn OFF the old
+`mirrorBSLPreflight` argument, enable only
+`-Dbbs.editor.camera.mirrorBSLExperimental=true`, pull main, start
+Minecraft with BSL BetterLights and open one mirror. Inspect
+`[BBS Editor][Mirror][BSL Render]` for the first successful composite
+or `[BBS Editor][Mirror]` for the first failure. Check if the ordinary
+world is still correct both before and after toggling away from CAMERA.
+Do not enable `mirrorUnsafeShaders`.
 
 Never use the old JVM override `mirrorUnsafeShaders` to force
 unvalidated multi-pass rendering; the normal CAMERA world must remain
