@@ -67,6 +67,60 @@ public final class CameraMirrorMath
                 view.nearPlane,view.farPlane);
     }
     /**
+     * Transform a world-space vector into the same eye space used by
+     * PreviewCameraProjection and the native BBS FS camera.
+     */
+    public static double[] viewVector(PreviewCameraPose camera,
+            double dx,double dy,double dz)
+    {
+        double yaw=Math.toRadians(camera.yaw);
+        double pitch=Math.toRadians(camera.pitch);
+        double roll=Math.toRadians(camera.roll);
+        double cy=Math.cos(yaw),sy=Math.sin(yaw);
+        double localX=cy*dx-sy*dz;
+        double localZ=sy*dx+cy*dz;
+        double cp=Math.cos(pitch),sp=Math.sin(pitch);
+        double localY=cp*dy+sp*localZ;
+        localZ=-sp*dy+cp*localZ;
+        double cr=Math.cos(roll),sr=Math.sin(roll);
+        return new double[]{
+                cr*localX+sr*localY,
+                cr*localY-sr*localX,
+                localZ
+        };
+    }
+
+    /**
+     * An eye-space OpenGL clip plane for the mirror's FRONT half-space.
+     *
+     * The reflected eye is physically behind the surface and must not
+     * see walls, blocks or actors behind it. Values are (A,B,C,D) where
+     * A*xEye+B*yEye+C*zEye+D >= 0 remains visible. The positive margin
+     * avoids drawing a wall coplanar with the mirror.
+     *
+     * Set this with GL_MODELVIEW identity; OpenGL transforms clip planes
+     * by whichever modelview is active when glClipPlane() is called.
+     */
+    public static double[] frontClipPlane(PreviewCameraPose virtualCamera,
+            double x,double y,double z,double yaw,double margin)
+    {
+        double[] n=normal(yaw);
+        double[] eyeN=viewVector(virtualCamera,n[0],n[1],n[2]);
+        double[] eyeP=viewVector(virtualCamera,
+                x-virtualCamera.x,y-virtualCamera.y,z-virtualCamera.z);
+        double d=-(eyeN[0]*eyeP[0]+eyeN[1]*eyeP[1]+
+                eyeN[2]*eyeP[2])-Math.max(0D,margin);
+        return new double[]{eyeN[0],eyeN[1],eyeN[2],d};
+    }
+
+    /** Positive means retained, negative means behind the mirror. */
+    public static double clipSide(double[] plane,double[] eyePoint)
+    {
+        return plane[0]*eyePoint[0]+plane[1]*eyePoint[1]+
+                plane[2]*eyePoint[2]+plane[3];
+    }
+
+    /**
      * Intersect a camera ray with the bounded rectangle. Returns world XYZ
      * and local half-width/height offsets, or null when outside/behind.
      */
