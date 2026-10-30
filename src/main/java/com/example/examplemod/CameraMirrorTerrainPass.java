@@ -55,6 +55,7 @@ public final class CameraMirrorTerrainPass
                 try
                 {
                     // pass=2 is vanilla's non-anaglyph world/sky pass.
+                    CameraMirrorOptiFineBackend.stage("ProgramSkyBasic");
                     world.renderSky(partialTicks,2);
                 }
                 catch(Throwable skyProblem)
@@ -115,6 +116,7 @@ public final class CameraMirrorTerrainPass
         GL11.glDepthMask(false);
         try
         {
+            CameraMirrorOptiFineBackend.stage("ProgramClouds");
             world.renderClouds(partialTicks,2,
                     camera.x,camera.y,camera.z);
         }
@@ -134,6 +136,7 @@ public final class CameraMirrorTerrainPass
             GL11.glDisable(GL11.GL_BLEND);
             RenderHelper.disableStandardItemLighting();
             mc.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
+            CameraMirrorOptiFineBackend.stage("ProgramTerrain");
             world.renderBlockLayer(BlockRenderLayer.SOLID,partialTicks,0,eye);
             GL11.glEnable(GL11.GL_ALPHA_TEST);
             world.renderBlockLayer(BlockRenderLayer.CUTOUT_MIPPED,
@@ -143,6 +146,7 @@ public final class CameraMirrorTerrainPass
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glDepthMask(false);
+            CameraMirrorOptiFineBackend.stage("ProgramWater");
             world.renderBlockLayer(BlockRenderLayer.TRANSLUCENT,
                     partialTicks,0,eye);
             GL11.glDepthMask(true);
