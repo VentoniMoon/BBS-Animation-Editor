@@ -162,13 +162,25 @@ public final class BetterLightsActorInspector
             // MCLib ValueSerializer.copy() loses the parent Value nodes on
             // the copied leaves returned by getValues(). Read the canonical
             // full paths from Blockbuster's original value tree instead.
-            Class<?> treeClass=Class.forName(
-                    "mchorse.blockbuster_pack.morphs."+
-                    "BetterLightsMorph$BetterLightsProperties");
-            Object tree=treeClass.getField("valueTree").get(null);
-            if(!(tree instanceof mchorse.mclib.config.values.Value))
-                throw new IllegalStateException("Native light tree missing");
-            gatherNativeValues(serializer,(mchorse.mclib.config.values.Value)tree);
+            try
+            {
+                Class<?> treeClass=Class.forName(
+                        "mchorse.blockbuster_pack.morphs."+
+                        "BetterLightsMorph$BetterLightsProperties");
+                Object tree=treeClass.getField("valueTree").get(null);
+                if(tree instanceof mchorse.mclib.config.values.Value)
+                    gatherNativeValues(serializer,
+                            (mchorse.mclib.config.values.Value)tree);
+            }
+            catch(ReflectiveOperationException unsupportedTree)
+            {
+                // Fallback below for a BetterLights/Blockbuster update.
+            }
+            if(entries.isEmpty())
+                gatherSerializerKeys(serializer);
+            if(entries.isEmpty())
+                throw new IllegalStateException(
+                        "Native BetterLights properties unavailable");
         }
         catch(Throwable problem)
         {
@@ -198,6 +210,33 @@ public final class BetterLightsActorInspector
                 }
             }
             gatherNativeValues(serializer,child);
+        }
+    }
+
+    /**
+     * Compatibility fallback: MCLib stores canonical full paths in the
+     * ordered pool map, even though getValues() returns detached copies.
+     */
+    private void gatherSerializerKeys(ValueSerializer serializer)
+            throws ReflectiveOperationException
+    {
+        java.lang.reflect.Field pool=
+                ValueSerializer.class.getDeclaredField("pool");
+        pool.setAccessible(true);
+        Object raw=pool.get(serializer);
+        if(!(raw instanceof java.util.Map))return;
+        for(Object key:((java.util.Map<?,?>)raw).keySet())
+        {
+            if(!(key instanceof String))continue;
+            String path=(String)key;
+            java.util.Optional<GenericBaseValue<?>> found=
+                    serializer.getValue(path);
+            if(!found.isPresent())continue;
+            GenericBaseValue<?> value=found.get();
+            Object field=value.getValue();
+            if(field instanceof Number||field instanceof Boolean||
+                    field instanceof Color)
+                entries.add(new Entry(value,path));
         }
     }
 
