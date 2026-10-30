@@ -262,7 +262,8 @@ public final class BbsFsWorldCameraDriver
                                     try
                                     {
                                         CameraMirrorTerrainPass.render(mc,
-                                                reflected,framePartialTicks);
+                                                reflected,mainPose,
+                                                framePartialTicks);
                                         editor.renderPreparedActorsInMirror(mc,
                                                 reflected,
                                                 mc.getFramebuffer().framebufferWidth,
