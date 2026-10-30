@@ -103,7 +103,10 @@ The new `CameraMirrorOptiFineTargets` resource class allocates a private
 8-color multi-render-target GBuffer (with two textures per color for
 composite ping-pong), three depth textures and its own framebuffer.
 Allocation is bounded to 768 px on the longest side and checks hardware
-MRT attachment limits and GL framebuffer completeness.
+MRT attachment limits and GL framebuffer completeness. The resource
+allocator also accepts the **exact** per-channel internal texture formats
+from OptiFine's live `gbuffersFormat[]` configuration; silently making every
+channel the same format could corrupt BSL's encoded material/lighting data.
 
 This is **resource groundwork only**. The class is not yet invoked by the
 normal mirror capture. The BSL mirror is still deliberately disabled
