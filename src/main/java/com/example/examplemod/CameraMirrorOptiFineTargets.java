@@ -1,6 +1,7 @@
 package com.example.examplemod;
 
 import java.nio.IntBuffer;
+import java.util.Arrays;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -48,6 +49,19 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
     public int color(int index){return colors[index][front[index]];}
     public int colorBack(int index){return colors[index][1-front[index]];}
     public int depth(int index){return depths[index];}
+
+    public boolean matches(int requestedWidth,int requestedHeight,
+            int colors,int depth,int[] requestedFormats)
+    {
+        float scale=Math.min(1F,(float)MAX_SIZE/
+                Math.max(1,Math.max(requestedWidth,requestedHeight)));
+        int w=Math.max(1,Math.round(requestedWidth*scale));
+        int h=Math.max(1,Math.round(requestedHeight*scale));
+        return !closed&&this.width==w&&this.height==h&&
+                colorCount==colors&&depthCount==depth&&
+                requestedFormats!=null&&
+                Arrays.equals(formats,Arrays.copyOf(requestedFormats,colors));
+    }
 
     private CameraMirrorOptiFineTargets(){}
 
