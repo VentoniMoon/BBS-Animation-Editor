@@ -49,6 +49,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private final Field activeDrawBuffersField;
     private final Object originalOptiFineProgram;
     private final Object originalOptiFineDrawBuffers;
+    private final Field activeProgramIdField;
+    private final int originalOptiFineProgramId;
     private final Method getId;
     private final Method getDrawBuffers;
     private final Field finalProgram;
@@ -83,6 +85,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         activeDrawBuffersField.setAccessible(true);
         originalOptiFineProgram=activeProgramField.get(null);
         originalOptiFineDrawBuffers=activeDrawBuffersField.get(null);
+        activeProgramIdField=shaders.getField("activeProgramID");
+        originalOptiFineProgramId=activeProgramIdField.getInt(null);
         Class<?> clazz=Class.forName("net.optifine.shaders.Program");
         getId=clazz.getMethod("getId");
         getDrawBuffers=clazz.getMethod("getDrawBuffers");
@@ -415,6 +419,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 for(int i=0;i<safetyFlags.length;i++)
                     safetyFlags[i].setBoolean(null,originalFlags[i]);
                 activeProgramField.set(null,originalOptiFineProgram);
+                activeProgramIdField.setInt(null,originalOptiFineProgramId);
                 activeDrawBuffersField.set(null,originalOptiFineDrawBuffers);
                 for(int i=0;i<16;i++)
                 {
