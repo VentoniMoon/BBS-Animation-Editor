@@ -99,7 +99,7 @@ pack=BSL_v8.2.02-BetterLights.zip
 colors=8 depth=3 deferred=2 composite=5 final=true
 ```
 
-The new `CameraMirrorOptiFineTargets` resource class allocates a private
+The new `CameraMirrorOptiFineTargets` resource class can allocate a private
 8-color multi-render-target GBuffer (with two textures per color for
 composite ping-pong), three depth textures and its own framebuffer.
 Allocation is bounded to 768 px on the longest side and checks hardware
@@ -109,7 +109,24 @@ from OptiFine's live `gbuffersFormat[]` configuration; silently making every
 channel the same format could corrupt BSL's encoded material/lighting data.
 
 This is **resource groundwork only**. The class is not yet invoked by the
-normal mirror capture. The BSL mirror is still deliberately disabled
+normal mirror capture. A diagnostic-only opt-in validates the private
+OpenGL targets, the actual `Program.getDrawBuffers()` / `getBuffersFlip()`
+metadata and `deferred_pre` / `composite_pre` flips. It draws NO world and
+never calls OptiFine's main composite:
+
+```
+-Dbbs.editor.camera.mirrorBSLPreflight=true
+```
+
+Set this as a **JVM argument before Minecraft launch**. Open CAMERA with
+BSL_v8.2.02-BetterLights.zip and inspect `run/logs/latest.log` for
+`[BBS Editor][Mirror][BSL Preflight]`. A passing test reports the actual
+buffer formats, per-pass color targets, flips, framebuffer completeness,
+and GPU attachment support. After the test, the resources are deleted and
+the normal OptiFine FBO and viewport are restored. If not opted in, the
+GPU test does not allocate textures.
+
+The BSL mirror is still deliberately disabled
 because the following must be implemented and verified before activation:
 correct native shader-specific color attachment formats and draw-buffer
 mappings; depthtex0/1/2 copies at opaque/translucent boundaries; private
