@@ -11,6 +11,11 @@ import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
         "com.example.examplemod.CameraShaderCurveTransformer"})
 public final class CameraShaderCurveCorePlugin implements IFMLLoadingPlugin
 {
+    private static volatile boolean loaded;
+    public CameraShaderCurveCorePlugin(){loaded=true;}
+    /** True only if Forge registered the core plugin at launch. */
+    public static boolean registeredAtLaunch(){return loaded;}
+
     @Override public String[] getASMTransformerClass()
     {
         return new String[]{
