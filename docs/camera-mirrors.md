@@ -68,16 +68,32 @@ capture; the main CAMERA preview uses the unchanged BBS FS native pass.
 Rain/particles, BetterLights and OptiFine shaderpack parity are still not
 fully reproduced by the independent mirror image capture.
 
-Shaderpack reflection still requires a dedicated OptiFine-compatible
-deferred-render target: OptiFine G5 owns global GBuffer/depth attachments,
-shader stages, shadow maps, uniforms and composite passes. A single
-Minecraft Framebuffer with glUseProgram() is NOT a replacement for that
-graph and re-entering full EntityRenderer.renderWorld() corrupted the
-normal world in earlier experiments. This release deliberately keeps the
-tinted fallback with active shaderpacks. True shaderpack parity is tracked
-as a separate backend requiring isolated GBuffer buffers and final composite
-without rerunning the normal actor/physics tick. No runtime shaderpack
-compatibility claim is made yet.
+## OptiFine shaderpack backend (first stage)
+
+The mirror now probes the active OptiFine G5 renderer reflectively at
+RenderWorldLast and distinguishes TWO paths:
+
+1. **Forward-only shaderpacks** (exactly one color and one depth buffer,
+   no active deferred, composite or final GLSL programs) can enter the
+   experimental shader-reflection path. The existing OptiFine programs
+   for sky, clouds, terrain, water and entities are reused, and their
+   cameraPosition / gbuffer projection uniforms are directed at the
+   reflected view. Their output goes to the mirror's PRIVATE framebuffer.
+   Shaders.useProgram restores the previously active program on exit.
+   No extra world, shadow render, Blockbuster tick or Jolt step occurs.
+   Shaderpacks may still require additional uniforms and state; this path
+   needs visual verification with the user's particular pack.
+2. **Deferred / multi-attachment shaderpacks** still show a tinted
+   fallback. The mirror surface reports the reason (GBuffer color/depth
+   count, or presence of deferred/composite/final GLSL stages). Those
+   packs require an independent ping-pong GBuffer, frame-dependent
+   uniforms and final composite; borrowing a single Minecraft FBO
+   would overwrite the main BBS FS shader frame.
+
+Never use the old JVM override `mirrorUnsafeShaders` to force
+unvalidated multi-pass rendering; the normal CAMERA world must remain
+untouched. This is the first shaderpack compatibility increment, not
+complete support for typical PBR/deferred OptiFine packs.
 
 ## First game test
 
@@ -92,19 +108,21 @@ compatibility claim is made yet.
 5. Move and resize the rectangle, rotate yaw, place it in front of a wall,
    and view it at angles. Ensure nearby terrain properly occludes it.
 6. Save editor.dat, reopen the scene, and check all mirror parameters.
-7. First test with OptiFine shaders **OFF**. With shaders ON the renderer
-   intentionally shows a non-reflective fallback rather than risking global
-   OptiFine state and destroying the normal world. Export remains unverified.
+7. First test with OptiFine shaders **OFF** to establish the unchanged
+   baseline, then turn on the desired pack. Simple forward packs can
+   attempt a shader reflection; multi-pass packs show a reason on the
+   mirror inspector / surface. Compare world brightness, shadow, sky,
+   actors and shader-specific effects. Export remains unverified.
 
 Under MIRROR PROPERTIES an experimental runtime status appears.
 Check `run/logs/latest.log` for `[BBS Editor][Mirror]` if capture stops.
 
 ## Limitations / safety
 
-- This is an **experimental shared-world reflection**. Active OptiFine
-  shaderpacks use the tinted fallback surface by default: second native
-  world passes alter OptiFine global shader state outside GL attrib stacks.
-  This is intentionally disabled, not yet solved.
+- This is an **experimental shared-world reflection**. Forward-only
+  shaderpacks may render through an isolated one-color OptiFine path.
+  Deferred/composite shaderpacks remain disabled rather than modifying
+  the normal world's global shader frame.
 - Full compatibility with OptiFine/BetterLights and Minecraft's depth
   buffers is **not yet visually confirmed**.
 - Rendering a reflection involves an extra draw of mirror-visible chunks
