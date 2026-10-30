@@ -3261,6 +3261,8 @@ public class AnimationEditorScreen extends GuiScreen
                     filmX,filmY,filmW,filmH);
             cameraWorkspace.drawLightGizmo(this,
                     filmX,filmY,filmW,filmH);
+            cameraWorkspace.drawMirrorGuide(this,
+                    filmX,filmY,filmW,filmH);
         }
         // Actor lights share the same world-space cone guide as CAMERA
         // statics. The guide is drawn after film compositing, so it cannot
@@ -4021,6 +4023,14 @@ public class AnimationEditorScreen extends GuiScreen
         // CAMERA's toolbar uses the same hitboxes as all other modes.
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
                 &&clickStage8PreviewButton(mouseX,mouseY,mouseButton))return;
+        // A mirror is a world-space clickable rectangle. Pick it before
+        // moving the camera, scrubbing clips or dragging IMAGE/VIDEO layers.
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                &&sceneViewport!=null&&
+                cameraWorkspace.beginMirrorDrag(this,mouseX,mouseY,
+                        mouseButton,sceneViewport.getX(),
+                        sceneViewport.getY(),sceneViewport.getWidth(),
+                        sceneViewport.getHeight()))return;
         // The CAMERA light gizmo gets first chance at its three handles.
         // It must not accidentally scrub the scene or drag a VIDEO layer.
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
@@ -4081,6 +4091,7 @@ public class AnimationEditorScreen extends GuiScreen
                 == EditorModeController.EditorMode.CAMERA
                 && clickedMouseButton == 0)
         {
+            if(cameraWorkspace.dragMirror(this,mouseX,mouseY))return;
             if(cameraWorkspace.dragLightSetting(this,mouseX,mouseY))return;
             if(cameraWorkspace.dragLightGizmo(this,mouseX,mouseY))return;
             this.cameraWorkspace.move(mouseX,mouseY,getSceneLength());
@@ -4110,6 +4121,7 @@ public class AnimationEditorScreen extends GuiScreen
         {
             this.cameraWorkspace.releaseLightSetting(this);
             this.cameraWorkspace.releaseLightGizmo(this);
+            this.cameraWorkspace.releaseMirror(this);
             this.cameraWorkspace.release();
         }
         if (this.editorInput != null)
