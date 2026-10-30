@@ -38,48 +38,90 @@ public final class CameraMirrorTerrainPass
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDepthFunc(GL11.GL_LEQUAL);
             GL11.glDepthMask(true);
-            // The sky has no physical mirror plane. Only clip terrain.
-            GL11.glDisable(GL11.GL_CLIP_PLANE0);
-            setCamera(camera,aspect,false);
-            try
+            // The normal BBS FS world pass uses the private native
+            // EntityRenderer updateFogColor / setupFog lifecycle. Borrow
+            // EXACTLY that same biome/weather/fog calculation for the mirror.
+            // The scope restores cached fog colors after the pass.
+            try(CameraMirrorNativeAtmosphere atmosphere=
+                    CameraMirrorNativeAtmosphere.begin(mc,partialTicks))
             {
-                // The ordinary Minecraft/OptiFine non-anaglyph world pass
-                // uses pass=2. Passing 0 silently runs the old anaglyph
-                // RGB conversion inside RenderGlobal.renderSky(), causing
-                // the pink/purple sky visible only in mirror reflections.
-                world.renderSky(partialTicks,2);
-            }
-            catch(Throwable skyProblem)
-            {
-                if(!reported)
-                    System.err.println("[BBS Editor][Mirror] Sky skipped: "+
-                            skyProblem);
-            }
-
-            // The renderer's VBO container owns the -cameraXYZ translation.
-            // Reflection needs a different renderInfos cull list but NOT
-            // another ViewFrustum, world, chunk rebuild or EntityRenderer.
-            setCamera(camera,aspect,false);
-            try(CameraMirrorChunkVisibility.Scope mirrorChunks=
-                    CameraMirrorChunkVisibility.begin(mc,camera,mainCamera))
-            {
-                if(mirrorChunks==null)
+                if(atmosphere==null)
                     throw new IllegalStateException(
-                            "Mirror RenderGlobal visibility unavailable");
-                CameraSceneMirrorRenderer.installFrontClipPlane(camera);
-                drawWorldLayers(mc,world,eye,partialTicks);
+                            "Native Minecraft fog pipeline unavailable");
+                // The sky has no physical mirror plane. Clip ONLY terrain.
+                GL11.glDisable(GL11.GL_CLIP_PLANE0);
+                setCamera(camera,aspect,false);
+                atmosphere.sky(partialTicks);
+                try
+                {
+                    // pass=2 is vanilla's non-anaglyph world/sky pass.
+                    world.renderSky(partialTicks,2);
+                }
+                catch(Throwable skyProblem)
+                {
+                    if(!reported)
+                        System.err.println("[BBS Editor][Mirror] Sky skipped: "+
+                                skyProblem);
+                }
+
+                // Vanilla renders clouds before terrain when camera eye
+                // is below y=128, and afterwards when above it.
+                if(camera.y<128D)renderClouds(mc,world,camera,aspect,
+                        partialTicks,atmosphere);
+
+                // RenderGlobal VBO container supplies -cameraXYZ. Reuse
+                // existing chunk buffers, never another world renderer.
+                setCamera(camera,aspect,false);
+                atmosphere.terrain(partialTicks);
+                try(CameraMirrorChunkVisibility.Scope mirrorChunks=
+                        CameraMirrorChunkVisibility.begin(mc,camera,mainCamera))
+                {
+                    if(mirrorChunks==null)
+                        throw new IllegalStateException(
+                                "Mirror RenderGlobal visibility unavailable");
+                    CameraSceneMirrorRenderer.installFrontClipPlane(camera);
+                    drawWorldLayers(mc,world,eye,partialTicks);
+                }
+                GL11.glDisable(GL11.GL_CLIP_PLANE0);
+                if(camera.y>=128D)renderClouds(mc,world,camera,aspect,
+                        partialTicks,atmosphere);
             }
             if(!reported)
             {
                 reported=true;
-                System.out.println("[BBS Editor][Mirror] Shared RenderGlobal "+
-                        "with reflected visibility list: world not duplicated.");
+                System.out.println("[BBS Editor][Mirror] Native fog and "+
+                        "shared render chunks; no second world renderer.");
             }
         }
         finally
         {
             GL11.glDisable(GL11.GL_CLIP_PLANE0);
             GL11.glMatrixMode(mode);
+        }
+    }
+
+    private static void renderClouds(Minecraft mc,RenderGlobal world,
+            PreviewCameraPose camera,float aspect,float partialTicks,
+            CameraMirrorNativeAtmosphere atmosphere)
+    {
+        if(mc.gameSettings.shouldRenderClouds()==0||
+                !mc.world.provider.isSurfaceWorld())return;
+        // Vanilla uses a farther projection for clouds. Keep the mirror's
+        // camera rotation while supplying its actual world position, just
+        // like EntityRenderer.renderCloudsCheck().
+        setCamera(camera,aspect,false);
+        atmosphere.terrain(partialTicks);
+        GL11.glDisable(GL11.GL_CLIP_PLANE0);
+        GL11.glDepthMask(false);
+        try
+        {
+            world.renderClouds(partialTicks,2,
+                    camera.x,camera.y,camera.z);
+        }
+        finally
+        {
+            GL11.glDepthMask(true);
+            GL11.glDisable(GL11.GL_CLIP_PLANE0);
         }
     }
 
