@@ -86,8 +86,18 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         CameraMirrorBSLCompositor result=
                 new CameraMirrorBSLCompositor(targets,view);
         current=result;
-        result.geometryBegin();
-        return result;
+        try
+        {
+            result.geometryBegin();
+            return result;
+        }
+        catch(Throwable t)
+        {
+            try{result.close();}
+            catch(Throwable restore){t.addSuppressed(restore);}
+            if(t instanceof Exception)throw (Exception)t;
+            throw new IllegalStateException("BSL geometry init failed",t);
+        }
     }
 
     public static void stage(String name)
