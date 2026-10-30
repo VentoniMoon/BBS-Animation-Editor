@@ -5,12 +5,13 @@ import java.util.Collections;
 import java.util.Comparator;
 
 /**
- * Lightweight CAMERA Curve for film-space visual channels. This is NOT an
- * OptiFine shader uniform adaptor; unsupported external shader attributes
- * (for example the legacy sun_rotation channel) return no film correction.
+ * CAMERA Curve scalar interpolation, shared by film-space channels and
+ * native OptiFine shader options prefixed with "curve.". Existing film
+ * channels keep their previous -1..1 delta semantics. Shader channels
+ * carry raw numeric pack values (often far beyond that range).
  *
- * Key.x is a scalar and key.tick is relative to the curve clip. Multiple
- * channels are achieved with separate CURVE clips on independent layers.
+ * Key.x is a scalar and key.tick is relative to the clip. Multiple
+ * independent channels may be stacked using CURVE clips on other layers.
  */
 public final class CameraCurveSampler
 {
@@ -32,8 +33,40 @@ public final class CameraCurveSampler
         if(!"brightness".equals(channel)&&!"red".equals(channel)&&
                 !"green".equals(channel)&&!"blue".equals(channel)&&
                 !"fade".equals(channel))return null;
-        double value=number(clip,"value",
+        double value=sampleValue(clip,frame,
                 "brightness".equals(channel)?0.25D:0D);
+        double opacity=CameraClipEnvelope.factor(clip,frame);
+        return new Sample(channel,clamp(value,-1D,1D)*opacity);
+    }
+
+    /**
+     * Samples one native shader-pack option, including its unbounded value.
+     * The envelope blends towards the real shader-pack default rather than
+     * towards zero, so fading the clip does not corrupt the underlying pack.
+     */
+    public static Sample sampleShader(CameraClipDocument.Clip clip,
+            double frame)
+    {
+        if(clip==null||clip.kind!=CameraClipDocument.Kind.CURVE||
+                !clip.enabled||frame<clip.tick||
+                frame>=clip.tick+clip.duration)return null;
+        String channel=clip.settings.get("channels");
+        if(channel==null||!channel.startsWith("curve.")||
+                channel.length()<=6)return null;
+        String name=channel.substring(6);
+        CameraShaderCurveSource.Option option=
+                CameraShaderCurves.options().get(name);
+        if(option==null)return null;
+        double value=sampleValue(clip,frame,option.fallback);
+        double blend=CameraClipEnvelope.factor(clip,frame);
+        return new Sample(channel,
+                option.fallback+(value-option.fallback)*blend);
+    }
+
+    private static double sampleValue(CameraClipDocument.Clip clip,
+            double frame,double fallback)
+    {
+        double value=number(clip,"value",fallback);
         if(!clip.keys.isEmpty())
         {
             java.util.List<CameraClipDocument.Key> keys=
@@ -63,8 +96,7 @@ public final class CameraCurveSampler
                 }
             }
         }
-        double opacity=CameraClipEnvelope.factor(clip,frame);
-        return new Sample(channel,clamp(value,-1D,1D)*opacity);
+        return value;
     }
     private static double number(CameraClipDocument.Clip clip,String name,double or)
     {
