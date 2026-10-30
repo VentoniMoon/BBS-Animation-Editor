@@ -213,6 +213,14 @@ public final class CameraMirrorOptiFineBackend
 
     public static void stage(String name)
     {
+        // OptiFine multipass geometry uses compiled GLSL programs, but
+        // writes to our private eight-color GBuffer instead of Shaders.dfb.
+        // The forward-only backend remains unchanged.
+        if(CameraMirrorBSLCompositor.active())
+        {
+            CameraMirrorBSLCompositor.stage(name);
+            return;
+        }
         Scope scope=current;
         if(scope!=null)scope.stage(name);
     }
