@@ -634,9 +634,18 @@ public final class CameraClipInspector
                 singleChannelEditor(key,"TIME REMAPPING");
                 break;
             case CURVE:
-                section("FILM CURVE");
+                section("CURVE CHANNEL");
                 curveChannelField();
-                setting("value","Default value (-1..1)");
+                if(value("channels","brightness").startsWith("curve."))
+                {
+                    int at=y-scroll;
+                    if(!measuring&&visible(at,12))
+                        text(CameraShaderCurves.state(),right+12,at+1,
+                                0xFF86B3C6,width-right-24);
+                    y+=14;
+                    setting("value","Shader option value");
+                }
+                else setting("value","Film delta (-1..1)");
                 interpolation("interp","Interpolation",
                         value("interp","linear"));
                 singleChannelEditor(key,"CURVE KEYS");
