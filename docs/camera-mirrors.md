@@ -37,6 +37,9 @@ This must still be verified in the actual game.
 
 The mirrored world image is mapped onto the 3D surface in the main
 RenderWorldLast with depth-testing so normal blocks can occlude the mirror.
+During the auxiliary render, an eye-space OpenGL clip plane removes geometry
+on the BACK side of the mirror, including a wall directly behind it. The
+plane is installed before the world pass and reinstalled at camera setup.
 It remains visible in the CAMERA preview and is eligible for native export,
 because it is rendered in the world before frame capture.
 
@@ -72,9 +75,12 @@ Check `run/logs/latest.log` for `[BBS Editor][Mirror]` if capture stops.
   a mirror faces the camera.
 - Current mirrored FOV/UVs use the CPU viewport camera projection; very
   wide output aspect ratios and extremely oblique views may need refinement.
-- True mirror-plane *clipping* (hiding geometry located behind the reflective
-  surface from the virtual camera) is not implemented. Placing a mirror
-  flush against thick walls may reveal incorrect occlusion in reflection.
+- Mirror-plane clipping is **experimental**, implemented using the OpenGL
+  fixed-function clip plane. Some OptiFine shaders may ignore the plane
+  because shader vertex programs control clipping themselves. Test with
+  shaders OFF first; wall and character geometry behind the mirror should
+  disappear from the reflection. A shader-compatible oblique-projection
+  fallback may be necessary.
 - A mirror is a *visual* plane, not a solid collision box.
 - There is not yet an independent reflective capture for each simultaneous
   mirror, and mirrors do not recursively reflect each other.
