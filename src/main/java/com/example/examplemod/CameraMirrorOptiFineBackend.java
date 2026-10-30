@@ -47,6 +47,7 @@ public final class CameraMirrorOptiFineBackend
     private static Method useProgram,getId;
     private static boolean lookedUp;
     private static boolean reported;
+    private static String lastAssessment="";
     private static Scope current;
     private static final String[] STAGES={
         "ProgramSkyBasic","ProgramSkyTextured","ProgramClouds",
@@ -68,14 +69,15 @@ public final class CameraMirrorOptiFineBackend
             int color=colorCount.getInt(null);
             int depth=depthCount.getInt(null);
             if(color!=1||depth!=1)
-                return new Support(false,"Shaderpack needs GBuffer "+
-                        color+" colors / "+depth+" depths");
+                return report(new Support(false,"Shaderpack needs GBuffer "+
+                        color+" colors / "+depth+" depths"));
             if(hasPrograms(deferredPrograms.get(null))||
                     hasPrograms(compositePrograms.get(null))||
                     programId(finalProgram.get(null))!=0)
-                return new Support(false,
-                        "Shaderpack needs deferred/composite stages");
-            return new Support(true,"OptiFine forward GBuffer available");
+                return report(new Support(false,
+                        "Shaderpack needs deferred/composite stages"));
+            return report(new Support(true,
+                    "OptiFine forward GBuffer available"));
         }
         catch(Throwable t)
         {
@@ -91,18 +93,29 @@ public final class CameraMirrorOptiFineBackend
         }
     }
 
+    private static Support report(Support support)
+    {
+        if(!support.message.equals(lastAssessment))
+        {
+            lastAssessment=support.message;
+            System.out.println("[BBS Editor][Mirror][Shader] "+
+                    support.message);
+        }
+        return support;
+    }
+
     public static final class Scope implements AutoCloseable
     {
         private final Object previous;
         private final PreviewCameraPose pose;
         private final int framebuffer;
-        private final int previousDrawBuffers;
         private boolean closed;
         private Scope(Object previous,PreviewCameraPose pose,int framebuffer)
         {
             this.previous=previous;this.pose=pose;
             this.framebuffer=framebuffer;
-            previousDrawBuffers=GL11.glGetInteger(GL20.GL_MAX_DRAW_BUFFERS);
+            // GL draw-buffer state belongs to the parent reflection GL
+            // attrib scope, not to OptiFine's global frame.
         }
 
         public void stage(String name)
