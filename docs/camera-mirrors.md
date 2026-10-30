@@ -180,6 +180,31 @@ After the first runtime screenshot (bright wall/blue reflection despite a
 
 The experimental path remains opt-in and awaits another runtime image
 test for confirmation.
+
+### BSL back-wall reflection fix
+
+The next in-game image showed the mirror reflecting the **stone wall
+behind it** rather than the world in front of the mirror. This is a
+geometry clipping error, not another color/fog postprocessing problem:
+GL_CLIP_PLANE0 is a fixed-function user clip plane and cannot be relied
+on with custom OptiFine GLSL vertex shaders that do not write
+gl_ClipVertex or gl_ClipDistance.
+
+The BSL-only auxiliary geometry renderer now replaces the standard near
+plane with an oblique plane matching the mirror's FRONT half-space
+(`CameraMirrorObliqueProjection`). This changes the hardware clip-space
+near boundary seen by gl_Position, so the wall behind the mirror is
+clipped regardless of user clip-plane support. Apply it AFTER the
+reflected-camera perspective setup for BOTH RenderGlobal chunk rendering
+and the separate prepared-actor projection. The normal CAMERA projection,
+no-shader mirror and native world renderer are unchanged.
+
+A pure Java 8 geometry regression test asserts that the back wall gets
+negative clip-space near distance, while front-of-mirror landscape
+remains visible, including for rotated/tipped clipping planes. The
+runtime prints once: `[BSL Render] Oblique projection installed`.
+Visual runtime verification is still required to confirm BSL's actual
+vertex programs respect the new projection.
 It never runs Minecraft/OptiFine beginRender recursively, never constructs
 a new WorldClient, and never steps Jolt a second time.
 
