@@ -114,8 +114,18 @@ complete support for typical PBR/deferred OptiFine packs.
    mirror inspector / surface. Compare world brightness, shadow, sky,
    actors and shader-specific effects. Export remains unverified.
 
-Under MIRROR PROPERTIES an experimental runtime status appears.
-Check `run/logs/latest.log` for `[BBS Editor][Mirror]` if capture stops.
+Under MIRROR PROPERTIES an experimental runtime status appears. As of
+the latest debug update, it shows the actual OptiFine shaderpack name and
+GBuffer requirements (color/depth count, deferred, composite and final
+programs) across multiple lines. The same details are logged once per
+detected configuration under `[BBS Editor][Mirror][Shader]` in
+`run/logs/latest.log`. This is the most useful diagnostic to attach for a
+shaderpack that still shows the blue fallback.
+
+The forward-shader path now snapshots and restores the original GL shader
+uniforms (cameraPosition, projection/view matrices) before OptiFine
+composites the ordinary camera's frame. This protects the main CAMERA
+shader image. It does **not** implement deferred reflections by itself.
 
 ## Limitations / safety
 
