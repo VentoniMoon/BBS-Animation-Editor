@@ -56,6 +56,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private final Field finalProgram;
     private FloatBuffer mirrorProjection;
     private FloatBuffer mirrorView;
+    private boolean opaqueDepthSaved;
     private boolean closed;
 
     private CameraMirrorBSLCompositor(CameraMirrorOptiFineTargets targets,
@@ -143,6 +144,18 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     }
     public static boolean active(){return current!=null;}
 
+    /** Native BSL copies depthtex1 BEFORE water/translucent geometry.
+     * Copy the private mirror depth at the same boundary. */
+    public static void beforeTranslucent()
+    {
+        if(current==null)return;
+        if(current.targets.depthCount()>1)
+        {
+            current.targets.copyDepth(1);
+            current.opaqueDepthSaved=true;
+        }
+    }
+
     private int id(Object program)throws Exception
     {
         return program==null?0:((Number)getId.invoke(program)).intValue();
@@ -195,11 +208,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             int outputHeight)throws Exception
     {
         if(closed)throw new IllegalStateException("BSL scope closed");
-        // Run after ALL opaque/translucent terrain and all prepared actors.
-        // Depth snapshots copied here are conservative placeholders; the
-        // translucent boundary will be separated in a later integration.
-        for(int i=1;i<targets.depthCount();i++)
-            targets.copyDepth(i);
+        // The opaque snapshot is captured just before translucent terrain.
+        // depthtex2 is captured after all prepared actors (same scene).
+        // The native character pass still runs after translucent terrain,
+        // so exact per-entity depth ordering needs further parity work.
+        if(!opaqueDepthSaved&&targets.depthCount()>1)
+            targets.copyDepth(1);
+        if(targets.depthCount()>2)targets.copyDepth(2);
         List<CameraMirrorCompositePlan> plans=
                 CameraMirrorOptiFinePlanning.inspect(targets.colorCount());
         Class<?> clazz=Class.forName("net.optifine.shaders.Program");
