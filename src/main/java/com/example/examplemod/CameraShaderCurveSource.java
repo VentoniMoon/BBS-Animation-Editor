@@ -28,7 +28,7 @@ public final class CameraShaderCurveSource
             "([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[Ee][-+]?\\d+)?[fF]?)"+
             "\\s*(?://\\s*\\[([^]\\r\\n]*)\\].*)?$");
     private static final Pattern DIRECTIVE=Pattern.compile(
-            "(?m)^\\s*#\\s*(?:if|elif|define)\\b([^\\r\\n]*)");
+            "(?m)^\\s*#\\s*(if|elif|define)\\b([^\\r\\n]*)");
     private static final Pattern ARRAY_OR_CASE=Pattern.compile(
             "\\[([^]\\r\\n]*)\\]|\\bcase\\s+([^:]+):");
     private static final Pattern CONST=Pattern.compile(
@@ -69,8 +69,12 @@ public final class CameraShaderCurveSource
             String allowed=definitions.group(3);
             // Only actual pack options, not arbitrary internal macros. The
             // original option-menu slider annotation is also required.
-            if(allowed==null||enabledOptions!=null&&
-                    !enabledOptions.contains(name)||
+            boolean integerLiteral=!literal.matches(".*[.eEfF].*");
+            // Float options exposed by the active OptiFine pack do not
+            // require an explicit // [slider] range. Integer options do.
+            if(enabledOptions!=null&&!enabledOptions.contains(name)||
+                    enabledOptions==null&&allowed==null||
+                    integerLiteral&&allowed==null||
                     "WATER_WAVE_ITERATIONS".equals(name))continue;
             try
             {
@@ -89,10 +93,16 @@ public final class CameraShaderCurveSource
         Matcher preprocessor=DIRECTIVE.matcher(commentsRemoved);
         while(preprocessor.find())
         {
-            String expression=preprocessor.group(1);
+            String expression=preprocessor.group(2);
+            if("define".equals(preprocessor.group(1)))
+            {
+                // Only the *defined symbol* is exempt, not other
+                // option references in a macro expression.
+                expression=expression.trim().replaceFirst(
+                        "^[A-Za-z_][A-Za-z0-9_]*\\\\s*","");
+            }
             for(String name:new ArrayList<String>(candidates.keySet()))
-                if(hasIdentifier(expression,name)&&
-                        !isSelfDefine(expression,name))
+                if(hasIdentifier(expression,name))
                     candidates.remove(name);
         }
         Matcher constantContexts=ARRAY_OR_CASE.matcher(commentsRemoved);
@@ -168,12 +178,6 @@ public final class CameraShaderCurveSource
         return new Result(result,candidates);
     }
 
-    private static boolean isSelfDefine(String expression,String name)
-    {
-        // The defining #define NAME ... must not disqualify its own name.
-        return expression.trim().matches(
-                Pattern.quote(name)+"\\b.*");
-    }
     private static boolean hasIdentifier(String text,String name)
     {
         return Pattern.compile("(?<![A-Za-z0-9_])"+Pattern.quote(name)+
