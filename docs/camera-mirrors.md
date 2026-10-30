@@ -22,14 +22,21 @@ The MIRRORS list supports up to 32 independent objects per scene:
 
 ## Rendering pipeline
 
-An optional **second native world pass** is performed at RenderTick.START,
-prior to the normal world pass, from the reflected position and direction
-across the selected mirror plane. Its **isolated RenderGlobal** keeps a
-separate view frustum/visible chunk list and is restored in a finally block.
-No world render is issued recursively from
-RenderWorldLast or the editor GUI. A separate OpenGL framebuffer stores the
-result (maximum dimension 1024 pixels); the normal native world pass then
-overwrites the ordinary game framebuffer.
+An auxiliary **chunk-only** mirror pass runs at RenderTick.START,
+before the normal native world pass. It renders the reflection with an
+isolated RenderGlobal (separate chunk frustum and visibility lists) into
+its own Minecraft framebuffer (maximum side 1024 px).
+
+**The full Minecraft EntityRenderer.renderWorld() is NOT called twice**:
+its reentrant camera/Forge/OptiFine/actor logic corrupted the original
+world and model state. The auxiliary pass draws sky and chunk layers
+directly via RenderGlobal.setupTerrain/renderBlockLayer, with its own
+reflected projection. The normal world remains owned by the original
+EntityRenderer and BBS FS preview pipeline.
+
+The world-space mirror quad is drawn **before** native recorded actors in
+RenderWorldLast; normal actor depth can therefore occlude the reflective
+surface when actors stand in front of it.
 
 **Recorded Blockbuster/Metamorph/Chameleon actors are intentionally NOT
 rendered in the auxiliary pass.** The mutable Blockbuster actor renderer,
@@ -78,8 +85,13 @@ Check `run/logs/latest.log` for `[BBS Editor][Mirror]` if capture stops.
   This is intentionally disabled, not yet solved.
 - Full compatibility with OptiFine/BetterLights and Minecraft's depth
   buffers is **not yet visually confirmed**.
-- The auxiliary pass is expensive: it renders the world a second time while
-  a mirror faces the camera.
+- The auxiliary pass renders a second set of terrain chunks, which can
+  initially compile over several frames and consume GPU/CPU resources.
+  It never re-enters full Minecraft.renderWorld.
+- Actor/Body Parts/Jolt reflection is not yet provided; recorded actors in
+  front of the mirror should visibly occlude the surface correctly.
+- If the native terrain renderer cannot initialize, it fails closed and
+  shows its diagnostic status rather than copying the main camera view.
 - Current mirrored FOV/UVs use the CPU viewport camera projection; very
   wide output aspect ratios and extremely oblique views may need refinement.
 - Mirror-plane clipping is **experimental**, implemented using the OpenGL
