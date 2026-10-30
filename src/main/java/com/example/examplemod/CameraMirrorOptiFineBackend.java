@@ -1,0 +1,256 @@
+package com.example.examplemod;
+
+import java.lang.reflect.Array;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.FloatBuffer;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.util.vector.Matrix4f;
+
+/**
+ * Experimental OptiFine G5 *forward-only* reflection bridge.
+ *
+ * A shaderpack is eligible only when it uses ONE color output and does not
+ * install deferred/composite/final programs. That restrictive contract is
+ * deliberate: multipass shaderpacks require their own GBuffer ping-pong and
+ * composite graph and MUST NEVER write the normal world's buffers.
+ *
+ * Uses existing active OptiFine shader programs, shadow textures and prepared
+ * scene state with a private mirror FBO. No extra world, render tick, Jolt
+ * simulation, shadow render, or OptiFine beginRender/endRender call.
+ *
+ * Native forward shaderpack programs are borrowed through Shaders.useProgram,
+ * not glUseProgram, to keep OptiFine's cached shader state synchronized.
+ * The scope restores the original active program even after exceptions.
+ *
+ * This is NOT full G5 deferred shaderpack parity; see camera-mirrors.md.
+ */
+public final class CameraMirrorOptiFineBackend
+{
+    public static final class Support
+    {
+        public final boolean usable;
+        public final String message;
+        private Support(boolean usable,String message)
+        {
+            this.usable=usable;this.message=message;
+        }
+    }
+    private static Class<?> shaders;
+    private static Field worldFlag,shadowFlag,activeProgram;
+    private static Field colorCount,depthCount;
+    private static Field[] stages;
+    private static Field compositePrograms,deferredPrograms,finalProgram;
+    private static Method useProgram,getId;
+    private static boolean lookedUp;
+    private static boolean reported;
+    private static Scope current;
+    private static final String[] STAGES={
+        "ProgramSkyBasic","ProgramSkyTextured","ProgramClouds",
+        "ProgramTerrain","ProgramWater","ProgramEntities"
+    };
+    private CameraMirrorOptiFineBackend(){}
+
+    public static Support inspect()
+    {
+        try
+        {
+            if(!lookedUp)resolve();
+            if(shaders==null)
+                return new Support(false,"OptiFine program API missing");
+            if(!worldFlag.getBoolean(null))
+                return new Support(false,"OptiFine frame not active");
+            if(shadowFlag.getBoolean(null))
+                return new Support(false,"OptiFine shadow pass active");
+            int color=colorCount.getInt(null);
+            int depth=depthCount.getInt(null);
+            if(color!=1||depth!=1)
+                return new Support(false,"Shaderpack needs GBuffer "+
+                        color+" colors / "+depth+" depths");
+            if(hasPrograms(deferredPrograms.get(null))||
+                    hasPrograms(compositePrograms.get(null))||
+                    programId(finalProgram.get(null))!=0)
+                return new Support(false,
+                        "Shaderpack needs deferred/composite stages");
+            return new Support(true,"OptiFine forward GBuffer available");
+        }
+        catch(Throwable t)
+        {
+            if(!reported)
+            {
+                reported=true;
+                System.err.println("[BBS Editor][Mirror][Shader] "+
+                        "OptiFine G5 inspection failed: "+t);
+            }
+            return new Support(false,
+                    "OptiFine API incompatible: "+
+                    t.getClass().getSimpleName());
+        }
+    }
+
+    public static final class Scope implements AutoCloseable
+    {
+        private final Object previous;
+        private final PreviewCameraPose pose;
+        private final int framebuffer;
+        private final int previousDrawBuffers;
+        private boolean closed;
+        private Scope(Object previous,PreviewCameraPose pose,int framebuffer)
+        {
+            this.previous=previous;this.pose=pose;
+            this.framebuffer=framebuffer;
+            previousDrawBuffers=GL11.glGetInteger(GL20.GL_MAX_DRAW_BUFFERS);
+        }
+
+        public void stage(String name)
+        {
+            if(closed)return;
+            int which=-1;
+            for(int i=0;i<STAGES.length;i++)
+                if(STAGES[i].equals(name)){which=i;break;}
+            if(which<0)return;
+            try
+            {
+                Object program=stages[which].get(null);
+                if(program==null)return;
+                useProgram.invoke(null,program);
+                // useProgram can change OptiFine's drawBuffers. A forward
+                // mirror has exactly one color target.
+                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,framebuffer);
+                GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+                int id=programId(program);
+                if(id>0)uploadViewUniforms(id,pose);
+            }
+            catch(Throwable e)
+            {
+                throw new IllegalStateException(
+                        "OptiFine mirror shader stage "+name+" failed",e);
+            }
+        }
+
+        @Override public void close()
+        {
+            if(closed)return;
+            closed=true;
+            current=null;
+            try
+            {
+                if(previous!=null)useProgram.invoke(null,previous);
+            }
+            catch(Throwable e)
+            {
+                throw new IllegalStateException(
+                        "Unable to restore OptiFine activeProgram",e);
+            }
+        }
+    }
+
+    public static Scope begin(PreviewCameraPose pose,int framebuffer)
+    {
+        Support support=inspect();
+        if(!support.usable)
+            throw new IllegalStateException(support.message);
+        if(current!=null)
+            throw new IllegalStateException("Recursive shader reflection");
+        try
+        {
+            Scope scope=new Scope(activeProgram.get(null),pose,framebuffer);
+            current=scope;
+            return scope;
+        }
+        catch(Throwable e)
+        {
+            throw new IllegalStateException("OptiFine reflection init",e);
+        }
+    }
+
+    public static void stage(String name)
+    {
+        Scope scope=current;
+        if(scope!=null)scope.stage(name);
+    }
+    public static boolean active(){return current!=null;}
+
+    private static boolean hasPrograms(Object array)throws Exception
+    {
+        if(array==null)return false;
+        for(int i=0;i<Array.getLength(array);i++)
+        {
+            Object p=Array.get(array,i);
+            if(p!=null&&programId(p)>0)return true;
+        }
+        return false;
+    }
+    private static int programId(Object p)throws Exception
+    {
+        return p==null?0:((Number)getId.invoke(p)).intValue();
+    }
+
+    private static void resolve()throws Exception
+    {
+        lookedUp=true;
+        shaders=Class.forName("net.optifine.shaders.Shaders");
+        worldFlag=shaders.getField("isRenderingWorld");
+        shadowFlag=shaders.getField("isShadowPass");
+        activeProgram=shaders.getField("activeProgram");
+        Class<?> type=activeProgram.getType();
+        getId=type.getMethod("getId");
+        useProgram=shaders.getMethod("useProgram",type);
+        colorCount=hidden("usedColorBuffers");
+        depthCount=hidden("usedDepthBuffers");
+        compositePrograms=shaders.getField("ProgramsComposite");
+        deferredPrograms=shaders.getField("ProgramsDeferred");
+        finalProgram=shaders.getField("ProgramFinal");
+        stages=new Field[STAGES.length];
+        for(int i=0;i<STAGES.length;i++)
+            stages[i]=shaders.getField(STAGES[i]);
+    }
+    private static Field hidden(String name)throws Exception
+    {
+        Field f=shaders.getDeclaredField(name);
+        f.setAccessible(true);
+        return f;
+    }
+
+    private static void uploadViewUniforms(int program,
+            PreviewCameraPose pose)
+    {
+        // Mirror camera position must not inherit the ordinary camera's
+        // uniform. Current GL projection/modelview is set by the mirror
+        // terrain pass before each stage.
+        int loc=GL20.glGetUniformLocation(program,"cameraPosition");
+        if(loc>=0)GL20.glUniform3f(loc,(float)pose.x,
+                (float)pose.y,(float)pose.z);
+        uploadMatrix(program,"gbufferProjection",
+                GL11.GL_PROJECTION_MATRIX,false);
+        uploadMatrix(program,"gbufferProjectionInverse",
+                GL11.GL_PROJECTION_MATRIX,true);
+        uploadMatrix(program,"gbufferModelView",
+                GL11.GL_MODELVIEW_MATRIX,false);
+        uploadMatrix(program,"gbufferModelViewInverse",
+                GL11.GL_MODELVIEW_MATRIX,true);
+    }
+    private static void uploadMatrix(int program,String uniform,
+            int matrixType,boolean invert)
+    {
+        int loc=GL20.glGetUniformLocation(program,uniform);
+        if(loc<0)return;
+        FloatBuffer buf=BufferUtils.createFloatBuffer(16);
+        GL11.glGetFloat(matrixType,buf);
+        buf.rewind();
+        if(invert)
+        {
+            Matrix4f mat=new Matrix4f();
+            mat.load(buf);
+            Matrix4f inverse=Matrix4f.invert(mat,null);
+            if(inverse==null)return;
+            buf.clear();
+            inverse.store(buf);
+            buf.flip();
+        }
+        GL20.glUniformMatrix4(loc,false,buf);
+    }
+}
