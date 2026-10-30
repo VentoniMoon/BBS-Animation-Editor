@@ -3081,6 +3081,21 @@ public class AnimationEditorScreen extends GuiScreen
      * this only evaluates the same actor/Body Parts/physics code that the
      * GUI coordinator would otherwise draw in its later compositing pass.
      */
+    /**
+     * A second camera reads the SAME prepared actor state after the normal
+     * native actor pass. No timeline adapters, Body Parts prepare or Jolt
+     * step may be invoked here.
+     */
+    public void renderPreparedActorsInMirror(Minecraft mc,
+            PreviewCameraPose mirrorView,int width,int height)
+    {
+        if(mc==null||mirrorView==null||sceneViewport==null||
+                sceneState==null)return;
+        multiActorPreview.renderPreparedMirrorActors(mc,mirrorView,
+                width,height);
+        sceneViewport.renderPreparedMirrorActor(mc,mirrorView,width,height);
+    }
+
     public boolean renderActorsInNativeWorld()
     {
         if (this.sceneViewport == null || this.sceneState == null ||
