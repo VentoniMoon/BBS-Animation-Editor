@@ -67,8 +67,13 @@ public final class CameraMirrorWorldIsolation
             catch(Throwable init)
             {
                 disabled=true;
-                // Restore Minecraft's RenderManager world association when
-                // RenderGlobal setup failed partway through.
+                // setWorldAndLoadRenderers may have partially allocated
+                // chunks or registered a world listener before throwing.
+                if(separate!=null)
+                    try{separate.setWorldAndLoadRenderers(null);}
+                    catch(Throwable cleanup){}
+                // Restore the global RenderManager world association even
+                // when auxiliary renderer initialization fails.
                 try{mc.getRenderManager().set(mc.world);}
                 catch(Throwable ignored){}
                 throw init;
