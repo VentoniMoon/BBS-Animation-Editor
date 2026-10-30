@@ -23,6 +23,29 @@ public final class CameraWorkspace
     /** Scene-only LIGHTS tab; never creates timeline clips. */
     private final CameraSceneLightsPanel lightPanel=
             new CameraSceneLightsPanel();
+    private final CameraSceneMirrorsPanel mirrorPanel=
+            new CameraSceneMirrorsPanel();
+    private int mirrorFilmX,mirrorFilmY,mirrorFilmW,mirrorFilmH;
+    public boolean beginMirrorDrag(AnimationEditorScreen screen,
+            int mx,int my,int button,int x,int y,int w,int h)
+    {
+        mirrorFilmX=x;mirrorFilmY=y;mirrorFilmW=w;mirrorFilmH=h;
+        return mirrorPanel.beginDrag(screen,mx,my,button,x,y,w,h);
+    }
+    public boolean dragMirror(AnimationEditorScreen screen,int mx,int my)
+    {
+        return mirrorPanel.drag(screen,mx,my,mirrorFilmX,mirrorFilmY,
+                mirrorFilmW,mirrorFilmH);
+    }
+    public void releaseMirror(AnimationEditorScreen screen)
+    {
+        mirrorPanel.release(screen);
+    }
+    public void drawMirrorGuide(AnimationEditorScreen screen,
+            int x,int y,int w,int h)
+    {
+        mirrorPanel.drawGuide(screen,x,y,w,h);
+    }
 
     public boolean beginLightGizmo(AnimationEditorScreen screen,
             int mx,int my,int button,int filmX,int filmY,int filmW,int filmH)
@@ -249,8 +272,10 @@ public final class CameraWorkspace
         Minecraft currentMinecraft=Minecraft.getMinecraft();
         if(currentMinecraft!=null&&currentMinecraft.currentScreen
                 instanceof AnimationEditorScreen&&
+                (mirrorPanel.keyTyped((AnimationEditorScreen)
+                    currentMinecraft.currentScreen,typedChar,keyCode)||
                 lightPanel.keyTyped((AnimationEditorScreen)
-                    currentMinecraft.currentScreen,typedChar,keyCode))
+                    currentMinecraft.currentScreen,typedChar,keyCode)))
             return true;
         if(editField==null)
         {
@@ -555,8 +580,9 @@ public final class CameraWorkspace
         Minecraft currentMinecraft=Minecraft.getMinecraft();
         if(currentMinecraft!=null&&currentMinecraft.currentScreen
                 instanceof AnimationEditorScreen&&
+                (mirrorPanel.scroll(mouseX,mouseY,direction)||
                 lightPanel.scroll((AnimationEditorScreen)
-                    currentMinecraft.currentScreen,mouseX,mouseY,direction))
+                    currentMinecraft.currentScreen,mouseX,mouseY,direction)))
             return true;
         if(editField!=null||palette)return true;
         if(choosingMedia)
@@ -638,6 +664,7 @@ public final class CameraWorkspace
         stopPreviewRecording();
         activeSceneId=id;
         lightPanel.reset();
+        mirrorPanel.reset();
         activeState=state;
         activeSceneFile=scene==null?null:sceneDocument(scene);
         document=state.getCameraClips();
@@ -906,14 +933,18 @@ public final class CameraWorkspace
         boolean activeKey=selectedKey!=null&&keyOwner==selected;
         if(!activeKey&&selected!=null&&!selected.keys.isEmpty())
             displayedKey=selected.keys.get(0);
-        if(!lightPanel.opened())
+        if(mirrorPanel.opened())
+            mirrorPanel.drawRight(screen,top);
+        else if(lightPanel.opened())
+            lightPanel.drawRight(screen,top);
+        else
         {
             inspector.draw(screen,selected,displayedKey,
                     activeKey,inspectorScroll,right,top);
             inspectorScroll=inspector.clampedScroll();
         }
-        else lightPanel.drawRight(screen,top);
         lightPanel.drawLeft(screen,top);
+        mirrorPanel.drawLeft(screen,top);
         // Same exact dark accent-derived palette as CharacterTimeline.
         int accent=EditorThemeManager.get().getAccent();
         GuiScreen.drawRect(0,top,width,bottom,trackTheme(0.07F));
@@ -1204,6 +1235,11 @@ public final class CameraWorkspace
 
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        if(mirrorPanel.click(screen,mouseX,mouseY,button))
+        {
+            if(mirrorPanel.opened())lightPanel.close(screen);
+            return true;
+        }
         if(lightPanel.click(screen,mouseX,mouseY,button))return true;
         if(choosingMedia)
         {
