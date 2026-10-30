@@ -178,8 +178,9 @@ public final class BbsFsWorldCameraDriver
         // Reflection is rendered BEFORE the ordinary Minecraft world frame.
         // Never issue a second renderWorld from RenderWorldLast (or GuiScreen):
         // doing so would recurse through OptiFine, actor/Jolt and frame capture.
-        // The auxiliary pass reuses the already tick-keyed actor/Jolt pose
-        // cache. It is never allowed to claim the main world frame.
+        // Only terrain/vanilla entities render in this experimental pass.
+        // Blockbuster preview actors are deliberately drawn ONCE per frame
+        // in the normal world to preserve their mutable morph/Jolt state.
         if(editor.getSceneState()!=null)
             CameraSceneMirrorRenderer.capture(mc,
                     editor.getSceneState().getCameraMirrors(),pose,
@@ -238,30 +239,11 @@ public final class BbsFsWorldCameraDriver
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void nativeWorldLast(RenderWorldLastEvent event)
     {
-        if(CameraSceneMirrorRenderer.isCapturing())
-        {
-            // The reflected world is a genuine native pass, with its own
-            // camera projection and actor draw. Same-frame pose/physics
-            // samples are reused in the following normal world pass.
-            Minecraft reflectedMc=Minecraft.getMinecraft();
-            if(controlling&&viewport!=null&&view!=null&&
-                    reflectedMc.currentScreen instanceof AnimationEditorScreen
-                    &&reflectedMc.getRenderViewEntity()==view&&
-                    !"false".equalsIgnoreCase(System.getProperty(
-                            "bbs.editor.camera.mirrorActors","true")))
-            {
-                java.nio.IntBuffer size=org.lwjgl.BufferUtils
-                        .createIntBuffer(16);
-                org.lwjgl.opengl.GL11.glGetInteger(
-                        org.lwjgl.opengl.GL11.GL_VIEWPORT,size);
-                int w=Math.max(1,size.get(2)),h=Math.max(1,size.get(3));
-                BbsFsWorldProjection.capture(w,h);
-                BbsFsNativeActorPass.renderReflected(reflectedMc,
-                        (AnimationEditorScreen)reflectedMc.currentScreen,
-                        viewport,event.getPartialTicks(),w,h);
-            }
-            return;
-        }
+        // Never invoke recorded-actor / Body Parts / Jolt state from the
+        // auxiliary world render. These renderers mutate the actor runtime
+        // and may run the same simulation tick twice, corrupting Chameleon
+        // attachments even if their GL matrices are perfectly restored.
+        if(CameraSceneMirrorRenderer.isCapturing())return;
         Minecraft mc = Minecraft.getMinecraft();
         if (controlling && viewport != null &&
                 mc.currentScreen instanceof AnimationEditorScreen &&
