@@ -10,6 +10,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -28,6 +29,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -59,6 +61,9 @@ jobs:
           grep -q 'infosField.set(global,original)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'container.initialize(restoreX,restoreY,restoreZ)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'renderPreparedMirror' src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java
+          grep -q 'CameraMirrorOptiFineBackend.inspect()' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          ! grep -q 'Shaders.beginRender(' src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java
+          ! grep -q 'Shaders.endRender(' src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java
       - name: Compile entire editor against pinned Forge and mod dependencies
         run: |
           chmod +x ./gradlew
