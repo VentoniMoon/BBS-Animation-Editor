@@ -51,6 +51,8 @@ public final class CameraClipInspector
     private int optionScroll;
     private boolean curvePickerOpen;
     private int curvePickerScroll;
+    private final java.util.List<String> curveCatalog=
+            new java.util.ArrayList<String>();
     private CameraClipDocument.Clip selectedClip;
     private String popupField="";
     public Hit hit(int mouseX,int mouseY)
@@ -78,7 +80,30 @@ public final class CameraClipInspector
     {
         curvePickerOpen=!curvePickerOpen;
         curvePickerScroll=0;
+        if(curvePickerOpen)refreshCurvePicker();
         closeInterpolation();
+    }
+    public void refreshCurvePicker()
+    {
+        curveCatalog.clear();
+        curveCatalog.add("brightness");
+        curveCatalog.add("red");
+        curveCatalog.add("green");
+        curveCatalog.add("blue");
+        curveCatalog.add("fade");
+        java.util.List<String> names=new java.util.ArrayList<String>(
+                CameraShaderCurves.availableOptions().keySet());
+        java.util.Collections.sort(names);
+        for(String name:names)curveCatalog.add("curve."+name);
+        if(selectedClip!=null&&
+                selectedClip.kind==CameraClipDocument.Kind.CURVE)
+        {
+            String selected=selectedClip.settings.get("channels");
+            if(selected!=null&&!curveCatalog.contains(selected))
+                curveCatalog.add(selected);
+        }
+        curvePickerScroll=Math.max(0,Math.min(curvePickerScroll,
+                Math.max(0,curveCatalog.size()-7)));
     }
     public void closeCurvePicker(){curvePickerOpen=false;}
     public void scrollCurvePicker(int direction)
@@ -91,24 +116,7 @@ public final class CameraClipInspector
 
     private java.util.List<String> curvePickerChoices()
     {
-        java.util.List<String> choices=new java.util.ArrayList<String>();
-        choices.add("brightness");
-        choices.add("red");
-        choices.add("green");
-        choices.add("blue");
-        choices.add("fade");
-        java.util.List<String> names=new java.util.ArrayList<String>(
-                CameraShaderCurves.options().keySet());
-        java.util.Collections.sort(names);
-        for(String name:names)choices.add("curve."+name);
-        if(selectedClip!=null&&
-                selectedClip.kind==CameraClipDocument.Kind.CURVE)
-        {
-            String selected=selectedClip.settings.get("channels");
-            if(selected!=null&&!choices.contains(selected))
-                choices.add(selected); // retain an imported or inactive pack
-        }
-        return choices;
+        return curveCatalog;
     }
 
     private static String curveTitle(String id)
