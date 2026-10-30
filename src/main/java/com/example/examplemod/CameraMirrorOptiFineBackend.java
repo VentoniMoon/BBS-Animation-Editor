@@ -41,7 +41,7 @@ public final class CameraMirrorOptiFineBackend
     }
     private static Class<?> shaders;
     private static Field worldFlag,shadowFlag,activeProgram;
-    private static Field colorCount,depthCount;
+    private static Field colorCount,depthCount,shaderName;
     private static Field[] stages;
     private static Field compositePrograms,deferredPrograms,finalProgram;
     private static Method useProgram,getId;
@@ -62,22 +62,30 @@ public final class CameraMirrorOptiFineBackend
             if(!lookedUp)resolve();
             if(shaders==null)
                 return new Support(false,"OptiFine program API missing");
+            String pack=shaderName==null?"Unknown":
+                    String.valueOf(shaderName.get(null));
             if(!worldFlag.getBoolean(null))
-                return new Support(false,"OptiFine frame not active");
+                return report(new Support(false,
+                        pack+": OptiFine frame not active at WorldLast"));
             if(shadowFlag.getBoolean(null))
-                return new Support(false,"OptiFine shadow pass active");
+                return report(new Support(false,
+                        pack+": OptiFine shadow pass active"));
             int color=colorCount.getInt(null);
             int depth=depthCount.getInt(null);
-            if(color!=1||depth!=1)
-                return report(new Support(false,"Shaderpack needs GBuffer "+
-                        color+" colors / "+depth+" depths"));
-            if(hasPrograms(deferredPrograms.get(null))||
-                    hasPrograms(compositePrograms.get(null))||
-                    programId(finalProgram.get(null))!=0)
+            int deferred=countPrograms(deferredPrograms.get(null));
+            int composite=countPrograms(compositePrograms.get(null));
+            int finalId=programId(finalProgram.get(null));
+            String details="pack="+pack+" colors="+color+" depth="+depth+
+                    " deferred="+deferred+" composite="+composite+
+                    " final="+(finalId>0);
+            if(color!=1||depth!=1||deferred>0||composite>0||
+                    finalId>0)
+            {
                 return report(new Support(false,
-                        "Shaderpack needs deferred/composite stages"));
+                        "Multipass shaderpack: "+details));
+            }
             return report(new Support(true,
-                    "OptiFine forward GBuffer available"));
+                    "Forward shaderpack: "+details));
         }
         catch(Throwable t)
         {
@@ -187,15 +195,13 @@ public final class CameraMirrorOptiFineBackend
     }
     public static boolean active(){return current!=null;}
 
-    private static boolean hasPrograms(Object array)throws Exception
+    private static int countPrograms(Object array)throws Exception
     {
-        if(array==null)return false;
-        for(int i=0;i<Array.getLength(array);i++)
-        {
-            Object p=Array.get(array,i);
-            if(p!=null&&programId(p)>0)return true;
-        }
-        return false;
+        int count=0;
+        if(array!=null)
+            for(int i=0;i<Array.getLength(array);i++)
+                if(programId(Array.get(array,i))>0)count++;
+        return count;
     }
     private static int programId(Object p)throws Exception
     {
@@ -214,6 +220,8 @@ public final class CameraMirrorOptiFineBackend
         useProgram=shaders.getMethod("useProgram",type);
         colorCount=hidden("usedColorBuffers");
         depthCount=hidden("usedDepthBuffers");
+        try{shaderName=shaders.getField("currentShaderName");}
+        catch(NoSuchFieldException ignored){shaderName=null;}
         compositePrograms=shaders.getField("ProgramsComposite");
         deferredPrograms=shaders.getField("ProgramsDeferred");
         finalProgram=shaders.getField("ProgramFinal");
