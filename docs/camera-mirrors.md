@@ -90,10 +90,37 @@ RenderWorldLast and distinguishes TWO paths:
    uniforms and final composite; borrowing a single Minecraft FBO
    would overwrite the main BBS FS shader frame.
 
+## BSL 8.2.02-BetterLights target layout (next shader stage)
+
+A runtime log from the active BSL pack reports:
+
+```
+pack=BSL_v8.2.02-BetterLights.zip
+colors=8 depth=3 deferred=2 composite=5 final=true
+```
+
+The new `CameraMirrorOptiFineTargets` resource class allocates a private
+8-color multi-render-target GBuffer (with two textures per color for
+composite ping-pong), three depth textures and its own framebuffer.
+Allocation is bounded to 768 px on the longest side and checks hardware
+MRT attachment limits and GL framebuffer completeness.
+
+This is **resource groundwork only**. The class is not yet invoked by the
+normal mirror capture. The BSL mirror is still deliberately disabled
+because the following must be implemented and verified before activation:
+correct native shader-specific color attachment formats and draw-buffer
+mappings; depthtex0/1/2 copies at opaque/translucent boundaries; private
+deferred/composite ping-pong execution with correct samplers, shadow textures,
+camera matrices and flips; final shader output to the mirror's texture;
+restoring every main-frame OptiFine global and OpenGL state.
+
+In particular, it must NOT call `Shaders.renderCompositeFinal()` directly
+against the normal BBS FS GBuffer. Doing so would mutate the main world's
+color attachments and flip history.
+
 Never use the old JVM override `mirrorUnsafeShaders` to force
 unvalidated multi-pass rendering; the normal CAMERA world must remain
-untouched. This is the first shaderpack compatibility increment, not
-complete support for typical PBR/deferred OptiFine packs.
+untouched. Full support for this BSL pack is not yet claimed.
 
 ## First game test
 
