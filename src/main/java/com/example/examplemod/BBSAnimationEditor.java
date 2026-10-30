@@ -27,6 +27,52 @@ public class BBSAnimationEditor
 
         MinecraftForge.EVENT_BUS.register(new KeyHandler());
 
+        /*
+         * In production Forge reads FMLCorePlugin from the JAR manifest.
+         * Older IntelliJ / ForgeGradle run configurations may ignore
+         * fml.coreMods.load, which previously left the Curve selector with
+         * only five film channels and no actionable explanation.
+         *
+         * Register a fallback transformer BEFORE OptiFine's Shaders class
+         * is first resolved. Never register twice if the core plugin was
+         * already loaded early: double bytecode patches would be unsafe.
+         */
+        if(event.getSide().isClient()&&
+                !"false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.shaderCurves","true")))
+        {
+            try
+            {
+                if(!CameraShaderCurveCorePlugin.registeredAtLaunch())
+                {
+                    net.minecraft.launchwrapper.Launch.classLoader
+                            .registerTransformer(
+                                    "com.example.examplemod."+
+                                    "CameraShaderCurveTransformer");
+                    logger.warn("CAMERA shader Curve: Forge early core plugin "+
+                            "not registered. Installed fallback hook during "+
+                            "mod preInit; check IntelliJ run configuration.");
+                }
+                // Force bytecode transformation before OptiFine uses it.
+                // false means do not start Shaders static GL initialization.
+                Class.forName("net.optifine.shaders.Shaders",false,
+                        net.minecraft.launchwrapper.Launch.classLoader);
+                if(!CameraShaderCurveTransformer.installed())
+                    logger.warn("CAMERA shader Curve: OptiFine Shaders "+
+                            "was not transformed; only film channels are "+
+                            "guaranteed to work.");
+            }
+            catch(ClassNotFoundException optifineAbsent)
+            {
+                logger.info("CAMERA shader Curve: no OptiFine Shaders class.");
+            }
+            catch(Throwable shaderHookError)
+            {
+                logger.warn("CAMERA shader Curve startup hook: "+
+                        shaderHookError.toString());
+            }
+        }
+
         // Real Blockbuster playback calls ChameleonRenderer directly, outside
         // our editor's actor Preview. Install the render-only Weld hook early,
         // before the Chameleon renderer is loaded for the first world frame.
