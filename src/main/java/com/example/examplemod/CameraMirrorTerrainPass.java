@@ -43,7 +43,11 @@ public final class CameraMirrorTerrainPass
             setCamera(camera,aspect,false);
             try
             {
-                world.renderSky(partialTicks,0);
+                // The ordinary Minecraft/OptiFine non-anaglyph world pass
+                // uses pass=2. Passing 0 silently runs the old anaglyph
+                // RGB conversion inside RenderGlobal.renderSky(), causing
+                // the pink/purple sky visible only in mirror reflections.
+                world.renderSky(partialTicks,2);
             }
             catch(Throwable skyProblem)
             {
