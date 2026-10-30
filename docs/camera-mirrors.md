@@ -172,6 +172,11 @@ After the first runtime screenshot (bright wall/blue reflection despite a
    The reflection also uses its own current view matrices as initial
    previous-frame reprojection uniforms instead of borrowing the main
    camera's history.
+3. The BSL geometry, seven postprocessing passes and final framebuffer now
+   all have the SAME resolution (maximum 768px on the longest side).
+   Earlier the final shader ran at 1024px with `viewWidth/viewHeight`
+   uniforms set to 768px, mismatching screen-space sampling and lens
+   effects. The nonshader mirror retains its previous 1024px resolution.
 
 The experimental path remains opt-in and awaits another runtime image
 test for confirmation.
