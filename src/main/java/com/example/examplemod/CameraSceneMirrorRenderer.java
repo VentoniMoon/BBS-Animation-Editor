@@ -109,7 +109,21 @@ public final class CameraSceneMirrorRenderer
         int oldTexture=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         IntBuffer oldViewport=BufferUtils.createIntBuffer(16);
         GL11.glGetInteger(GL11.GL_VIEWPORT,oldViewport);
+        int previousMatrixMode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        boolean clipPreviouslyEnabled=GL11.glIsEnabled(
+                GL11.GL_CLIP_PLANE0);
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        // GL attribute stacks do NOT preserve the projection/modelview
+        // matrices. A secondary native render changes both.
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPushMatrix();
+        int projectionDepth=GL11.glGetInteger(
+                GL11.GL_PROJECTION_STACK_DEPTH);
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        int modelviewDepth=GL11.glGetInteger(
+                GL11.GL_MODELVIEW_STACK_DEPTH);
+        GL11.glMatrixMode(previousMatrixMode);
 
         try
         {
@@ -181,10 +195,32 @@ public final class CameraSceneMirrorRenderer
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
             GL11.glViewport(oldViewport.get(0),oldViewport.get(1),
                     oldViewport.get(2),oldViewport.get(3));
+            // Vanilla/OptiFine must see exactly the same matrix stacks
+            // after the reflected view as before it. Restore even when the
+            // renderer returned from an unusual render error path.
+            restoreMatrix(GL11.GL_MODELVIEW,
+                    GL11.GL_MODELVIEW_STACK_DEPTH,modelviewDepth);
+            restoreMatrix(GL11.GL_PROJECTION,
+                    GL11.GL_PROJECTION_STACK_DEPTH,projectionDepth);
+            GL11.glMatrixMode(previousMatrixMode);
             GL11.glPopAttrib();
+            if(!clipPreviouslyEnabled)
+                GL11.glDisable(GL11.GL_CLIP_PLANE0);
             GL13.glActiveTexture(oldTexture);
             GL20.glUseProgram(oldShader);
         }
+    }
+
+    private static void restoreMatrix(int mode,int depthConstant,
+            int expectedDepth)
+    {
+        GL11.glMatrixMode(mode);
+        int depth=GL11.glGetInteger(depthConstant);
+        // Guard against unbalanced matrix pushes inside third-party mods.
+        for(int i=0;i<64&&depth>expectedDepth;i++,depth--)
+            GL11.glPopMatrix();
+        if(depth==expectedDepth)
+            GL11.glPopMatrix();
     }
 
     /**
