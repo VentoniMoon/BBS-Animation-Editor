@@ -74,7 +74,7 @@ public final class CameraMirrorWorldIsolation
                     catch(Throwable cleanup){}
                 // Restore the global RenderManager world association even
                 // when auxiliary renderer initialization fails.
-                try{mc.getRenderManager().set(mc.world);}
+                try{mc.getRenderManager().setWorld(mc.world);}
                 catch(Throwable ignored){}
                 throw init;
             }
@@ -115,7 +115,7 @@ public final class CameraMirrorWorldIsolation
         finally
         {
             if(mc!=null&&mc.world!=null)
-                try{mc.getRenderManager().set(mc.world);}
+                try{mc.getRenderManager().setWorld(mc.world);}
                 catch(Throwable ignored){}
         }
     }
