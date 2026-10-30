@@ -29,6 +29,15 @@ on:
       - 'src/test/java/com/example/examplemod/BetterLightsWorldStateSmokeTest.java'
       - 'src/test/java/com/example/examplemod/CameraSceneLightsSmokeTest.java'
       - 'src/test/camera-light-stubs/**'
+      - 'src/main/java/com/example/examplemod/CameraShaderCurveSource.java'
+      - 'src/main/java/com/example/examplemod/CameraShaderCurveCorePlugin.java'
+      - 'src/main/java/com/example/examplemod/CameraShaderCurveTransformer.java'
+      - 'src/main/java/com/example/examplemod/CameraShaderOptionDiscovery.java'
+      - 'src/main/java/com/example/examplemod/CameraShaderCurves.java'
+      - 'src/main/java/com/example/examplemod/CameraCurveSampler.java'
+      - 'src/main/java/com/example/examplemod/CameraClipInspector.java'
+      - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
+      - 'src/test/java/com/example/examplemod/CameraShaderCurveSourceSmokeTest.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldProjection.java'
       - 'src/main/java/com/example/examplemod/BbsFsCameraConventions.java'
@@ -140,6 +149,15 @@ jobs:
             src/test/java/com/example/examplemod/EditorPreviewGeometrySmokeTest.java
           java -ea -cp build/preview3/gui-layout \
             com.example.examplemod.EditorPreviewGeometrySmokeTest
+
+      - name: OptiFine Curve shader source safety (Java 8)
+        run: |
+          mkdir -p build/preview3/shader-curves
+          javac -source 8 -target 8 -encoding UTF-8 -d build/preview3/shader-curves \
+            src/main/java/com/example/examplemod/CameraShaderCurveSource.java \
+            src/test/java/com/example/examplemod/CameraShaderCurveSourceSmokeTest.java
+          java -ea -cp build/preview3/shader-curves \
+            com.example.examplemod.CameraShaderCurveSourceSmokeTest
 
       - name: BetterLights section taxonomy and native slider ranges
         run: |
