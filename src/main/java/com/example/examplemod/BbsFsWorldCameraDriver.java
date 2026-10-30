@@ -178,8 +178,8 @@ public final class BbsFsWorldCameraDriver
         // Reflection is rendered BEFORE the ordinary Minecraft world frame.
         // Never issue a second renderWorld from RenderWorldLast (or GuiScreen):
         // doing so would recurse through OptiFine, actor/Jolt and frame capture.
-        // The auxiliary pass skips native recorded actors until they can be
-        // safely sampled without advancing their simulation twice.
+        // The auxiliary pass reuses the already tick-keyed actor/Jolt pose
+        // cache. It is never allowed to claim the main world frame.
         if(editor.getSceneState()!=null)
             CameraSceneMirrorRenderer.capture(mc,
                     editor.getSceneState().getCameraMirrors(),pose,
