@@ -5,12 +5,16 @@ on:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java'
       - 'src/test/java/com/example/examplemod/CameraMirrorCompositePlanSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraMirrorObliqueProjectionSmokeTest.java'
       - '.github/workflows/camera-mirror-composite-plan.yml'
   pull_request:
     paths:
       - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java'
       - 'src/test/java/com/example/examplemod/CameraMirrorCompositePlanSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/CameraMirrorObliqueProjectionSmokeTest.java'
   workflow_dispatch:
 
 jobs:
@@ -27,6 +31,10 @@ jobs:
           mkdir -p build/composite-plan
           javac -source 8 -target 8 -encoding UTF-8 -d build/composite-plan \
             src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java \
-            src/test/java/com/example/examplemod/CameraMirrorCompositePlanSmokeTest.java
+            src/test/java/com/example/examplemod/CameraMirrorCompositePlanSmokeTest.java \
+            src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java \
+            src/test/java/com/example/examplemod/CameraMirrorObliqueProjectionSmokeTest.java
           java -ea -cp build/composite-plan \
             com.example.examplemod.CameraMirrorCompositePlanSmokeTest
+          java -ea -cp build/composite-plan \
+            com.example.examplemod.CameraMirrorObliqueProjectionSmokeTest
