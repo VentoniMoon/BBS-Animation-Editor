@@ -141,6 +141,9 @@ public final class CameraSceneMirrorsPanel
                 inspectorLeft+10,305,0xFF8C9CA8);
         mc.fontRenderer.drawString("Max 32 / reflection view: 1",
                 inspectorLeft+10,319,0xFF8C9CA8);
+        mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
+                CameraSceneMirrorRenderer.status(),169),
+                inspectorLeft+10,334,0xFF9AD5E5);
     }
     public boolean click(AnimationEditorScreen screen,int mx,int my,int button)
     {
