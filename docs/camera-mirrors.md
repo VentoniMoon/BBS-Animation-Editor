@@ -156,6 +156,25 @@ the seven active compiled BSL deferred/composite GLSL programs using each
 program's own DRAWBUFFERS mapping, and runs the BSL final GLSL program
 to the mirror surface texture. It snapshots/restores normal-frame GL
 framebuffer, viewport, 16 texture bindings and changed GLSL uniforms.
+
+After the first runtime screenshot (bright wall/blue reflection despite a
+"PASS: 7 shader stages" log), two important corrections were added:
+1. The OptiFine 1.12.2 composite samplers are explicitly assigned to the
+   native slots: colortex0..3 = 0..3, colortex4..7 = 7..10 and
+   depthtex0..2 = 6, 11, 12. Sampling the existing uniform values was
+   invalid because a program not activated via Shaders.useProgram may
+   still have all its samplers on GL_TEXTURE0. All assigned sampler uniforms
+   are restored at scope close, and the fullscreen UV uses texture unit 0.
+2. CameraMirrorNativeAtmosphere does NOT clear the private BSL MRT after
+   per-buffer initialization; that formerly wiped out all eight channels
+   with a shared fog color. BSL's colortex1 is independently cleared white
+   and the other channels black. Normal no-shader fog clearing is unchanged.
+   The reflection also uses its own current view matrices as initial
+   previous-frame reprojection uniforms instead of borrowing the main
+   camera's history.
+
+The experimental path remains opt-in and awaits another runtime image
+test for confirmation.
 It never runs Minecraft/OptiFine beginRender recursively, never constructs
 a new WorldClient, and never steps Jolt a second time.
 
@@ -173,6 +192,18 @@ than between opaque/translucent), and additional BSL custom uniforms,
 sampler aliases, temporal history and pack-specific postprocessing may
 still need work. The final image, main-world shader stability and actor
 reflections MUST be visually verified before using this for recording.
+
+To isolate any remaining bright/incorrect output, temporarily add
+
+```
+-Dbbs.editor.camera.mirrorBSLDebugColor=0
+```
+
+alongside `-Dbbs.editor.camera.mirrorBSLExperimental=true`. This presents
+the raw PRIVATE `colortex0` through an OpenGL blit, without deferred,
+composite or final. It is NOT expected to look like fully lit BSL; it tells
+whether the reflected scene geometry exists inside the raw GBuffer. Remove
+the debug flag to return to normal deferred/composite/final rendering.
 
 If the experimental pass fails it logs
 `[BBS Editor][Mirror]` / `[BBS Editor][Mirror][BSL Render]`,
