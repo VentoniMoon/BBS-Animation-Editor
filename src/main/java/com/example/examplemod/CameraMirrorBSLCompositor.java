@@ -292,43 +292,70 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         }
     }
 
+    private static final int[] COMPOSITE_COLOR_UNITS={
+        0,1,2,3,7,8,9,10
+    };
+    private static final int[] COMPOSITE_DEPTH_UNITS={6,11,12};
+
     private void bindInputs(int program)
     {
-        // Query sampler assignments from the COMPILED shader itself,
-        // never assume every shaderpack uses fixed colortex units.
+        // OptiFine 1.12.2 assigns sampler slots inside Shaders.useProgram.
+        // We intentionally do NOT call that method (it mutates main
+        // dfb/FlipTextures), so any program not yet visited this frame
+        // may have ALL samplers defaulting to unit 0. Reading existing
+        // sampler uniform values was the cause of the bright/wall-colored
+        // mirror: colortex and depthtex were bound over one another on
+        // GL_TEXTURE0. Match OptiFine's documented fixed slot layout.
         for(int i=0;i<targets.colorCount();i++)
-            bindSampler(program,"colortex"+i,targets.color(i));
+            assignSampler(program,"colortex"+i,
+                    COMPOSITE_COLOR_UNITS[i],targets.color(i));
         for(int i=0;i<targets.depthCount();i++)
-            bindSampler(program,"depthtex"+i,targets.depth(i));
-        bindSampler(program,"gcolor",targets.color(0));
+            assignSampler(program,"depthtex"+i,
+                    COMPOSITE_DEPTH_UNITS[i],targets.depth(i));
+        assignSampler(program,"gcolor",0,targets.color(0));
         if(targets.colorCount()>1)
-            bindSampler(program,"gdepth",targets.color(1));
+            assignSampler(program,"gdepth",1,targets.color(1));
         if(targets.colorCount()>2)
-            bindSampler(program,"gnormal",targets.color(2));
+            assignSampler(program,"gnormal",2,targets.color(2));
         if(targets.colorCount()>3)
-            bindSampler(program,"composite",targets.color(3));
+            assignSampler(program,"composite",3,targets.color(3));
         for(int i=4;i<targets.colorCount();i++)
-            bindSampler(program,"gaux"+(i-3),targets.color(i));
+            assignSampler(program,"gaux"+(i-3),
+                    COMPOSITE_COLOR_UNITS[i],targets.color(i));
         if(targets.depthCount()>0)
-            bindSampler(program,"gdepthtex",targets.depth(0));
+            assignSampler(program,"gdepthtex",6,targets.depth(0));
+
+        // Shadow/noise images already belong to the active main OptiFine
+        // shader frame. They are read-only here; NEVER replace their
+        // bindings with mirror textures or alter global shadow FBOs.
+        samplerUnitOnly(program,"shadow",4);
+        samplerUnitOnly(program,"watershadow",4);
+        samplerUnitOnly(program,"shadowtex0",4);
+        samplerUnitOnly(program,"shadowtex1",5);
+        samplerUnitOnly(program,"shadowcolor",13);
+        samplerUnitOnly(program,"shadowcolor0",13);
+        samplerUnitOnly(program,"shadowcolor1",14);
+        samplerUnitOnly(program,"noisetex",15);
         GL13.glActiveTexture(oldTextureUnit);
     }
 
-    private void bindSampler(int program,String name,int texture)
+    private void samplerUnitOnly(int program,String name,int unit)
     {
         int loc=GL20.glGetUniformLocation(program,name);
         if(loc<0)return;
-        // LWJGL 2 exposes glGetUniform(program,loc,IntBuffer), not
-        // the LWJGL 3-style scalar glGetUniformi overload. It also
-        // validates a buffer of at least 16 elements.
-        IntBuffer samplerValue=BufferUtils.createIntBuffer(16);
-        GL20.glGetUniform(program,loc,samplerValue);
-        int unit=samplerValue.get(0);
-        // Unit0 also carries the normal texture atlas in the geometry
-        // pass; only bind these inputs during fullscreen postprocessing.
+        restored.add(UniformBackup.captureInt(program,loc));
+        GL20.glUniform1i(loc,unit);
+    }
+
+    private void assignSampler(int program,String name,int unit,int texture)
+    {
+        int loc=GL20.glGetUniformLocation(program,name);
+        if(loc<0)return;
         if(unit<0||unit>=16)
-            throw new IllegalStateException("Invalid sampler "+name+
-                    " unit="+unit);
+            throw new IllegalStateException("Invalid mirror sampler "+
+                    name+" unit="+unit);
+        restored.add(UniformBackup.captureInt(program,loc));
+        GL20.glUniform1i(loc,unit);
         GL13.glActiveTexture(GL13.GL_TEXTURE0+unit);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
     }
@@ -481,10 +508,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     {
         final int program,location,count;
         final FloatBuffer value;
-        UniformBackup(int program,int location,int count,FloatBuffer value)
+        final int integerValue;
+        UniformBackup(int program,int location,int count,FloatBuffer value,
+                int integerValue)
         {
             this.program=program;this.location=location;
             this.count=count;this.value=value;
+            this.integerValue=integerValue;
         }
         static UniformBackup capture(int program,int location,int count)
         {
@@ -493,12 +523,19 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             FloatBuffer b=BufferUtils.createFloatBuffer(16);
             GL20.glGetUniform(program,location,b);
             b.rewind();
-            return new UniformBackup(program,location,count,b);
+            return new UniformBackup(program,location,count,b,0);
+        }
+        static UniformBackup captureInt(int program,int location)
+        {
+            IntBuffer b=BufferUtils.createIntBuffer(16);
+            GL20.glGetUniform(program,location,b);
+            return new UniformBackup(program,location,0,null,b.get(0));
         }
         void restore()
         {
             GL20.glUseProgram(program);
-            if(count==1)GL20.glUniform1f(location,value.get(0));
+            if(count==0)GL20.glUniform1i(location,integerValue);
+            else if(count==1)GL20.glUniform1f(location,value.get(0));
             else if(count==16)
             {
                 value.rewind();
