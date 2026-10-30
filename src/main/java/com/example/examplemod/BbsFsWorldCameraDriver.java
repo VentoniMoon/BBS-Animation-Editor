@@ -79,6 +79,7 @@ public final class BbsFsWorldCameraDriver
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void renderTick(TickEvent.RenderTickEvent event)
     {
+        if(CameraSceneMirrorRenderer.isCapturing())return;
         if (event.phase == TickEvent.Phase.END)
         {
             // Fail-safe: never leave an export-size world target active after
@@ -174,6 +175,42 @@ public final class BbsFsWorldCameraDriver
         // and historically left actor and CAMERA lights one frame behind.
         BetterLightsWorldEngine.prepare(mc,editor);
 
+        // Reflection is rendered BEFORE the ordinary Minecraft world frame.
+        // Never issue a second renderWorld from RenderWorldLast (or GuiScreen):
+        // doing so would recurse through OptiFine, actor/Jolt and frame capture.
+        // The auxiliary pass skips native recorded actors until they can be
+        // safely sampled without advancing their simulation twice.
+        if(editor.getSceneState()!=null)
+            CameraSceneMirrorRenderer.capture(mc,
+                    editor.getSceneState().getCameraMirrors(),pose,
+                    new CameraSceneMirrorRenderer.ReflectionPass()
+                    {
+                        @Override public void draw(PreviewCameraPose reflected)
+                        {
+                            activePose=reflected;
+                            view.updateCamera(reflected.x,reflected.y,
+                                    reflected.z,
+                                    BbsFsCameraConventions.entityYaw(
+                                            reflected.yaw),
+                                    BbsFsCameraConventions.entityPitch(
+                                            reflected.pitch));
+                            try
+                            {
+                                mc.entityRenderer.renderWorld(
+                                        event.renderTickTime,0L);
+                            }
+                            finally
+                            {
+                                activePose=pose;
+                                view.updateCamera(pose.x,pose.y,pose.z,
+                                        BbsFsCameraConventions.entityYaw(
+                                                pose.yaw),
+                                        BbsFsCameraConventions.entityPitch(
+                                                pose.pitch));
+                            }
+                        }
+                    });
+
         // Normally a no-op. The one-frame diagnostic is guarded by an
         // explicit JVM flag and uses the native Minecraft world pass.
         CameraNativeFrameProbe.beforeWorld(mc);
@@ -186,6 +223,7 @@ public final class BbsFsWorldCameraDriver
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void nativeWorldLast(RenderWorldLastEvent event)
     {
+        if(CameraSceneMirrorRenderer.isCapturing())return;
         Minecraft mc = Minecraft.getMinecraft();
         if (controlling && viewport != null &&
                 mc.currentScreen instanceof AnimationEditorScreen &&
@@ -222,6 +260,12 @@ public final class BbsFsWorldCameraDriver
                         (AnimationEditorScreen) mc.currentScreen,
                         viewport, event.getPartialTicks(),
                         worldWidth, worldHeight);
+                AnimationEditorScreen editor=
+                        (AnimationEditorScreen)mc.currentScreen;
+                if(editor.getSceneState()!=null)
+                    CameraSceneMirrorRenderer.render(mc,
+                            editor.getSceneState().getCameraMirrors(),
+                            activePose);
             }
         }
     }
@@ -355,6 +399,7 @@ public final class BbsFsWorldCameraDriver
     {
         CameraBetterLightsCameraOrigin.end();
         CameraShaderCurves.clearFrame();
+        CameraSceneMirrorRenderer.reset();
         CameraSceneLightsRenderer.reset();
         CameraVisualFrameClock.clearPreview();
         restoreHud();
