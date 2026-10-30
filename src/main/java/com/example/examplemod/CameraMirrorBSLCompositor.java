@@ -427,6 +427,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
 
     private static void drawQuad()
     {
+        // glTexCoord2f updates the currently active fixed-function texture
+        // coordinate set. OptiFine composite GLSL reads gl_TexCoord[0].
+        // The caller may have left the lightmap or shadow unit active.
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL11.glColor4f(1F,1F,1F,1F);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2f(0F,0F);
