@@ -84,6 +84,7 @@ public final class BbsFsWorldCameraDriver
             // Fail-safe: never leave an export-size world target active after
             // a skipped/failed GUI pass.
             CameraVisualFrameClock.clearPreview();
+            CameraShaderCurves.clearFrame();
             CameraBetterLightsCameraOrigin.end();
             CameraNativeFrameProbe.afterRenderTick(Minecraft.getMinecraft());
             Minecraft endMc=Minecraft.getMinecraft();
@@ -118,6 +119,11 @@ public final class BbsFsWorldCameraDriver
         CameraVisualFrameClock.beginPreview(editor.getCurrentFrame(),
                 event.renderTickTime,editor.isCameraPlaying(),
                 bake!=null&&bake.isRecording());
+        // Upload shader-curve values before OptiFine's native world pass.
+        // CAMERA export uses its exact sub-tick sample from the same clock.
+        CameraShaderCurves.prepare(
+                editor.getSceneState().getCameraClips().clips(),
+                CameraVisualFrameClock.sceneTime(editor.getCurrentFrame()));
         PreviewCameraPose pose=editor.getCameraWorkspaceNativePose();
         if (view == null || view.world != mc.world)
             view = new PreviewCameraEntity(mc.world);
@@ -348,6 +354,7 @@ public final class BbsFsWorldCameraDriver
     private void release()
     {
         CameraBetterLightsCameraOrigin.end();
+        CameraShaderCurves.clearFrame();
         CameraSceneLightsRenderer.reset();
         CameraVisualFrameClock.clearPreview();
         restoreHud();
