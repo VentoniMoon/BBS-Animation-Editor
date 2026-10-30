@@ -26,7 +26,7 @@ public final class CameraShaderCurveSource
     private static final Pattern DEFINE=Pattern.compile(
             "(?m)^\\s*#\\s*define\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+"+
             "([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[Ee][-+]?\\d+)?[fF]?)"+
-            "\\s*(?://\\s*\\[([^]\\r\\n]*)\\].*)?$");
+            "\\s*(?://[^\\r\\n]*?\\[([^]\\r\\n]*)\\][^\\r\\n]*)?$");
     private static final Pattern DIRECTIVE=Pattern.compile(
             "(?m)^\\s*#\\s*(if|elif|define)\\b([^\\r\\n]*)");
     private static final Pattern ARRAY_OR_CASE=Pattern.compile(
