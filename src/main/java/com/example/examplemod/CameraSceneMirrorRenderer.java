@@ -1,6 +1,7 @@
 package com.example.examplemod;
 
 import java.nio.IntBuffer;
+import java.nio.DoubleBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.shader.Framebuffer;
@@ -29,6 +30,8 @@ public final class CameraSceneMirrorRenderer
     private static Framebuffer texture;
     private static String capturedId="";
     private static PreviewCameraPose capturedPose;
+    private static CameraSceneMirrors.Mirror activeMirror;
+    private static boolean clipPlaneInstalled;
     private static boolean capturing;
     private static boolean failed;
     private static boolean warned;
@@ -42,12 +45,16 @@ public final class CameraSceneMirrorRenderer
     {
         if(failed)return "Mirror renderer unavailable (see latest.log)";
         return capturedId.isEmpty()?"Mirror world view pending":
-                "Planar world reflection active";
+                (clipPlaneInstalled?
+                        "Planar reflection / clipped world":
+                        "Planar reflection / clip pending");
     }
     public static void reset()
     {
         capturedId="";
         capturedPose=null;
+        activeMirror=null;
+        clipPlaneInstalled=false;
         if(texture!=null)
         {
             texture.deleteFramebuffer();
@@ -63,6 +70,8 @@ public final class CameraSceneMirrorRenderer
     {
         capturedId="";
         capturedPose=null;
+        activeMirror=null;
+        clipPlaneInstalled=false;
         if(capturing||failed||mc==null||mirrors==null||
                 mc.world==null||camera==null||pass==null||
                 "false".equalsIgnoreCase(System.getProperty(
@@ -108,14 +117,24 @@ public final class CameraSceneMirrorRenderer
             PreviewCameraPose reflected=CameraMirrorMath.reflect(camera,
                     picked.x,picked.y,picked.z,picked.yaw);
             capturing=true;
+            activeMirror=picked;
             try
             {
+                // Reject blocks and actors BEHIND the mirror (including
+                // a wall into which the reflected eye may have been placed).
+                // The native camera event reinstalls this after Minecraft
+                // sets up the render view, in case shaders reset GL state.
+                installFrontClipPlane(reflected);
                 // The stock Minecraft world renderer still owns all chunk,
                 // fog and shader passes. It renders once into its usual FBO;
                 // the next main world render overwrites those pixels.
                 pass.draw(reflected);
             }
-            finally {capturing=false;}
+            finally
+            {
+                capturing=false;
+                activeMirror=null;
+            }
 
             // Snapshot before vanilla overwrites its framebuffer. World
             // clipping/depth are provided by the main pass later.
@@ -154,6 +173,7 @@ public final class CameraSceneMirrorRenderer
         finally
         {
             capturing=false;
+            activeMirror=null;
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,oldRead);
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
             GL11.glViewport(oldViewport.get(0),oldViewport.get(1),
@@ -161,6 +181,40 @@ public final class CameraSceneMirrorRenderer
             GL11.glPopAttrib();
             GL13.glActiveTexture(oldTexture);
             GL20.glUseProgram(oldShader);
+        }
+    }
+
+    /**
+     * Install the mirror half-space in eye coordinates. This is invoked
+     * once before the auxiliary render and again after native camera setup.
+     * Force modelview identity while defining the plane: OpenGL transforms
+     * the coefficients with the modelview in effect at glClipPlane time.
+     *
+     * Never apply to the normal world pass or editor GUI.
+     */
+    public static void installFrontClipPlane(PreviewCameraPose virtualCamera)
+    {
+        if(!capturing||activeMirror==null||virtualCamera==null)return;
+        CameraSceneMirrors.Mirror mirror=activeMirror;
+        double[] plane=CameraMirrorMath.frontClipPlane(virtualCamera,
+                mirror.x,mirror.y,mirror.z,mirror.yaw,0.02D);
+        DoubleBuffer data=BufferUtils.createDoubleBuffer(4);
+        data.put(plane);
+        data.flip();
+        int mode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        try
+        {
+            GL11.glLoadIdentity();
+            GL11.glClipPlane(GL11.GL_CLIP_PLANE0,data);
+            GL11.glEnable(GL11.GL_CLIP_PLANE0);
+            clipPlaneInstalled=true;
+        }
+        finally
+        {
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(mode);
         }
     }
 
