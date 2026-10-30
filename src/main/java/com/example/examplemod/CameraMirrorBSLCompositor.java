@@ -218,6 +218,16 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             int outputHeight)throws Exception
     {
         if(closed)throw new IllegalStateException("BSL scope closed");
+        // Diagnostic view for isolating a broken geometry stage from a
+        // broken deferred/composite stage. Never enabled by default.
+        int rawColor=Integer.getInteger(
+                "bbs.editor.camera.mirrorBSLDebugColor",-1);
+        if(rawColor>=0&&rawColor<targets.colorCount())
+        {
+            blitRawColor(rawColor,outputFramebuffer,outputWidth,
+                    outputHeight);
+            return;
+        }
         // The opaque snapshot is captured just before translucent terrain.
         // depthtex2 is captured after all prepared actors (same scene).
         // The native character pass still runs after translucent terrain,
@@ -306,6 +316,29 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         0,1,2,3,7,8,9,10
     };
     private static final int[] COMPOSITE_DEPTH_UNITS={6,11,12};
+
+    private static boolean rawDebugLogged;
+
+    private void blitRawColor(int color,int destination,int width,int height)
+    {
+        // This draws exactly what the reflected world wrote into one
+        // PRIVATE colortex. If this image is wrong, repairing composite
+        // uniforms alone cannot fix the reflection.
+        targets.bindGeometry();
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,
+                targets.framebuffer());
+        GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0+color);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,destination);
+        GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        GL30.glBlitFramebuffer(0,0,targets.width(),targets.height(),
+                0,0,width,height,GL11.GL_COLOR_BUFFER_BIT,GL11.GL_LINEAR);
+        if(!rawDebugLogged)
+        {
+            rawDebugLogged=true;
+            System.out.println(TAG+"DEBUG: raw mirrored colortex"+color+
+                    " blitted without deferred/composite/final");
+        }
+    }
 
     private void bindInputs(int program)
     {
