@@ -45,7 +45,7 @@ public final class CameraCurveSampler
      * towards zero, so fading the clip does not corrupt the underlying pack.
      */
     public static Sample sampleShader(CameraClipDocument.Clip clip,
-            double frame)
+            double frame,double shaderDefault)
     {
         if(clip==null||clip.kind!=CameraClipDocument.Kind.CURVE||
                 !clip.enabled||frame<clip.tick||
@@ -54,13 +54,11 @@ public final class CameraCurveSampler
         if(channel==null||!channel.startsWith("curve.")||
                 channel.length()<=6)return null;
         String name=channel.substring(6);
-        CameraShaderCurveSource.Option option=
-                CameraShaderCurves.options().get(name);
-        if(option==null)return null;
-        double value=sampleValue(clip,frame,option.fallback);
+        if(!Double.isFinite(shaderDefault))return null;
+        double value=sampleValue(clip,frame,shaderDefault);
         double blend=CameraClipEnvelope.factor(clip,frame);
         return new Sample(channel,
-                option.fallback+(value-option.fallback)*blend);
+                shaderDefault+(value-shaderDefault)*blend);
     }
 
     private static double sampleValue(CameraClipDocument.Clip clip,
