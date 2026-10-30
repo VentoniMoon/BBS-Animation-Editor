@@ -20,6 +20,10 @@ public final class EditorMultiActorPreviewController
 {
     private final Map<String, BlockbusterActorPreviewRenderer> renderers =
             new HashMap<String, BlockbusterActorPreviewRenderer>();
+    /** Saved read-only render context from the NORMAL actor preparation. */
+    private final Map<String,List<AnimationBoneSnapshot>> mirrorPoseContexts =
+            new HashMap<String,List<AnimationBoneSnapshot>>();
+    private int mirrorFrame;
 
     private boolean showAllActors = true;
 
@@ -65,6 +69,8 @@ public final class EditorMultiActorPreviewController
             previousSceneIndex=scene==null?-1:scene.getSelectedScene();
         }
 
+        mirrorPoseContexts.clear();
+        mirrorFrame=frame;
         if (!this.showAllActors || scene == null || viewport == null)
         {
             return;
@@ -146,6 +152,11 @@ public final class EditorMultiActorPreviewController
              */
             renderer.setPassiveBodyPartsModels(bodyPartsController == null
                     ? null : bodyPartsController.getModelsForActor(data.getId()));
+            // Morph/Emoticons draw layers can read the per-actor global
+            // snapshot context even when the EntityActor is already posed.
+            // Keep that context for the *read-only* mirror draw.
+            mirrorPoseContexts.put(data.getId(),
+                    new ArrayList<AnimationBoneSnapshot>(own));
 
             try
             {
@@ -181,9 +192,32 @@ public final class EditorMultiActorPreviewController
             int width,int height)
     {
         if(!showAllActors||mc==null||view==null)return;
-        for(BlockbusterActorPreviewRenderer renderer:renderers.values())
-            if(renderer!=null)
-                renderer.renderPreparedMirror(mc,view,width,height);
+        List<AnimationBoneSnapshot> selectedBlockbuster =
+                BlockbusterPreviewAnimationState.getSnapshots();
+        List<AnimationBoneSnapshot> selectedEmoticons =
+                EmoticonsPreviewAnimationState.getSnapshots();
+        int selectedBlockbusterFrame=BlockbusterPreviewAnimationState.getFrame();
+        int selectedEmoticonsFrame=EmoticonsPreviewAnimationState.getFrame();
+        try
+        {
+            for(Map.Entry<String,BlockbusterActorPreviewRenderer> entry:
+                    renderers.entrySet())
+            {
+                List<AnimationBoneSnapshot> own=
+                        mirrorPoseContexts.get(entry.getKey());
+                if(own==null||entry.getValue()==null)continue;
+                BlockbusterPreviewAnimationState.set(own,mirrorFrame);
+                EmoticonsPreviewAnimationState.set(own,mirrorFrame);
+                entry.getValue().renderPreparedMirror(mc,view,width,height);
+            }
+        }
+        finally
+        {
+            BlockbusterPreviewAnimationState.set(selectedBlockbuster,
+                    selectedBlockbusterFrame);
+            EmoticonsPreviewAnimationState.set(selectedEmoticons,
+                    selectedEmoticonsFrame);
+        }
     }
 
     public void reset()
@@ -193,6 +227,7 @@ public final class EditorMultiActorPreviewController
             renderer.reset();
         }
         renderers.clear();
+        mirrorPoseContexts.clear();
         previousScene=null;
         previousSceneIndex=-1;
     }
