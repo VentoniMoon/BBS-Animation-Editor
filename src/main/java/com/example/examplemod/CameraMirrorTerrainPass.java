@@ -55,9 +55,12 @@ public final class CameraMirrorTerrainPass
                             skyProblem);
             }
 
-            // Sky can replace projection and textures; reconstruct the exact
-            // reflected camera for the world chunks and the culling frustum.
-            setCamera(camera,aspect,true);
+            // RenderGlobal.renderBlockLayer and its VBO render container
+            // perform the -cameraXYZ translation themselves. Vanilla's
+            // EntityRenderer.orientCamera leaves the modelview with camera
+            // rotation only. Translating here double-offsets the chunks,
+            // making the reflection appear displaced/partly empty.
+            setCamera(camera,aspect,false);
             CameraSceneMirrorRenderer.installFrontClipPlane(camera);
             Frustum frustum=new Frustum();
             frustum.setPosition(camera.x,camera.y,camera.z);
