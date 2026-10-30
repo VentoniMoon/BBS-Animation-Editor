@@ -176,6 +176,16 @@ public final class EditorMultiActorPreviewController
         }
     }
 
+    /** Read-only visual replay of background actors at the current tick. */
+    public void renderPreparedMirrorActors(Minecraft mc,PreviewCameraPose view,
+            int width,int height)
+    {
+        if(!showAllActors||mc==null||view==null)return;
+        for(BlockbusterActorPreviewRenderer renderer:renderers.values())
+            if(renderer!=null)
+                renderer.renderPreparedMirror(mc,view,width,height);
+    }
+
     public void reset()
     {
         for (BlockbusterActorPreviewRenderer renderer : renderers.values())
