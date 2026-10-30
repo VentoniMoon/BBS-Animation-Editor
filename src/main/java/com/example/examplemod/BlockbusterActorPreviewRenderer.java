@@ -1628,6 +1628,7 @@ public class BlockbusterActorPreviewRenderer
             {
                 GlStateManager.enableLighting();
                 RenderHelper.enableStandardItemLighting();
+                CameraMirrorOptiFineBackend.stage("ProgramEntities");
                 rm.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
                         actor.rotationYaw,preparedPartialTicks,true);
             }
