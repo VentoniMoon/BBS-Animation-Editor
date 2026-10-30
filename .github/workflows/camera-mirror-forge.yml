@@ -9,6 +9,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -26,6 +27,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
@@ -50,6 +52,9 @@ jobs:
           ! grep -q 'new RenderGlobal(' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           ! grep -q 'new ViewFrustum(' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'world.renderSky(partialTicks,2)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'CameraMirrorNativeAtmosphere.begin' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'atmosphere.sky(partialTicks)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'atmosphere.terrain(partialTicks)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           ! grep -q 'world.renderSky(partialTicks,0)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'infosField.set(global,original)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'container.initialize(restoreX,restoreY,restoreZ)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
