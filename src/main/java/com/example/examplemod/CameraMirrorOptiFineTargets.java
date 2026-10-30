@@ -168,6 +168,11 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
         for(int i=0;i<stage.targets.length;i++)
         {
             int slot=stage.targets[i];
+            if(slot==-1)
+            {
+                draw.put(GL11.GL_NONE);
+                continue;
+            }
             if(slot<0||slot>=colorCount)
                 throw new IllegalArgumentException("Invalid colortex "+slot);
             GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER,
@@ -185,7 +190,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
     {
         checkOpen();
         for(int i=0;i<stage.targets.length;i++)
-            if(stage.flip[i])
+            if(stage.targets[i]>=0&&stage.flip[i])
                 front[stage.targets[i]]=1-front[stage.targets[i]];
     }
 
