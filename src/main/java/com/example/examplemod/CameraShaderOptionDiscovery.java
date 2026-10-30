@@ -4,6 +4,8 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 /** Reflection-only integration: OptiFine is optional in Forge dev/CI. */
 public final class CameraShaderOptionDiscovery
@@ -16,13 +18,21 @@ public final class CameraShaderOptionDiscovery
      */
     public static Set<String> enabledNames()
     {
+        Map<String,Float> values=currentNumericValues();
+        return values==null?null:Collections.unmodifiableSet(
+                new LinkedHashSet<String>(values.keySet()));
+    }
+
+    /** Effective shader-pack defaults, including values selected by user. */
+    public static Map<String,Float> currentNumericValues()
+    {
         try
         {
             Class<?> api=Class.forName("net.optifine.shaders.Shaders");
             Method get=api.getMethod("getShaderPackOptions");
             Object result=get.invoke(null);
             if(!(result instanceof Object[]))return null;
-            Set<String> names=new LinkedHashSet<String>();
+            Map<String,Float> names=new LinkedHashMap<String,Float>();
             for(Object raw:(Object[])result)
             {
                 if(raw==null)continue;
@@ -41,9 +51,14 @@ public final class CameraShaderOptionDiscovery
                             String.class).invoke(null,name);
                     if(!Boolean.TRUE.equals(slider))continue;
                 }
-                names.add(name);
+                try
+                {
+                    float actual=Float.parseFloat(value);
+                    if(Float.isFinite(actual))names.put(name,actual);
+                }
+                catch(NumberFormatException nonNumeric){} 
             }
-            return Collections.unmodifiableSet(names);
+            return Collections.unmodifiableMap(names);
         }
         catch(Throwable optionalOptifineUnavailable)
         {
