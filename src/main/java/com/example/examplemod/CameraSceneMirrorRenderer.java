@@ -61,6 +61,9 @@ public final class CameraSceneMirrorRenderer
             texture=null;
         }
         lastWorld=null;
+        // Drop the secondary chunk/view-frustum renderer and its world
+        // listeners. The editor's normal RenderGlobal remains untouched.
+        CameraMirrorWorldIsolation.reset(Minecraft.getMinecraft());
         failed=false;warned=false;
     }
 
