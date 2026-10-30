@@ -9,6 +9,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
       - 'src/main/java/com/example/examplemod/EditorMultiActorPreviewController.java'
@@ -25,6 +26,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
       - 'src/main/java/com/example/examplemod/EditorMultiActorPreviewController.java'
@@ -46,6 +48,9 @@ jobs:
           ! grep -q 'world.setupTerrain(' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           ! grep -q 'world.updateChunks(' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           ! grep -q 'new RenderGlobal(' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          ! grep -q 'new ViewFrustum(' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
+          grep -q 'infosField.set(global,original)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
+          grep -q 'container.initialize(restoreX,restoreY,restoreZ)' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'renderPreparedMirror' src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java
       - name: Compile entire editor against pinned Forge and mod dependencies
         run: |
