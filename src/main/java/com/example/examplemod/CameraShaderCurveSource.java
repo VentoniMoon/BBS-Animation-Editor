@@ -98,8 +98,11 @@ public final class CameraShaderCurveSource
             {
                 // Only the *defined symbol* is exempt, not other
                 // option references in a macro expression.
-                expression=expression.trim().replaceFirst(
-                        "^[A-Za-z_][A-Za-z0-9_]*\\\\s*","");
+                String defined=expression.trim();
+                int end=0;
+                while(end<defined.length()&&isPart(defined.charAt(end)))
+                    end++;
+                expression=defined.substring(end);
             }
             for(String name:new ArrayList<String>(candidates.keySet()))
                 if(hasIdentifier(expression,name))
