@@ -52,16 +52,25 @@ public final class CameraShaderCurves
         // During OptiFine's class initialization the option API may not yet
         // be ready. The converter requires an OptiFine slider annotation
         // even in that case, never unrestricted #define rewriting.
-        Set<String> allowed=CameraShaderOptionDiscovery.enabledNames();
+        Map<String,Float> actual=
+                CameraShaderOptionDiscovery.currentNumericValues();
+        Set<String> allowed=actual==null?null:actual.keySet();
         CameraShaderCurveSource.Result result=
                 CameraShaderCurveSource.convert(source.toString(),allowed);
         if(!result.options.isEmpty())
             synchronized(OPTIONS)
             {
-                for(Map.Entry<String,CameraShaderCurveSource.Option> option:
+                for(Map.Entry<String,CameraShaderCurveSource.Option> entry:
                         result.options.entrySet())
-                    if(!OPTIONS.containsKey(option.getKey()))
-                        OPTIONS.put(option.getKey(),option.getValue());
+                {
+                    if(OPTIONS.containsKey(entry.getKey()))continue;
+                    CameraShaderCurveSource.Option o=entry.getValue();
+                    Float fromPack=actual==null?null:actual.get(entry.getKey());
+                    OPTIONS.put(entry.getKey(),
+                            new CameraShaderCurveSource.Option(o.name,
+                                    fromPack==null?o.fallback:fromPack,
+                                    o.integer,o.limits));
+                }
             }
         sourceHook=true;
         return new BufferedReader(new StringReader(result.source));
