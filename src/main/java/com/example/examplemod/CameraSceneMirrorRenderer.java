@@ -663,6 +663,16 @@ public final class CameraSceneMirrorRenderer
         try
         {
             GL20.glUseProgram(0);
+            // OptiFine leaves a shader-specific MRT draw-buffer mapping
+            // active at RenderWorldLast. The mirror is a single color
+            // surface and must update colortex0, not whichever material
+            // attachment the last terrain/actor program happened to use.
+            // The surrounding glPushAttrib restores the native mapping.
+            // The default framebuffer has no COLOR_ATTACHMENT0.
+            int drawFbo=GL11.glGetInteger(
+                    GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+            if(drawFbo>0)
+                GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
             GL11.glDisable(GL11.GL_LIGHTING);
             GL11.glDisable(GL11.GL_FOG);
