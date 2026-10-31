@@ -34,6 +34,12 @@ public final class CameraMirrorTerrainPass
                 Math.max(1,mc.getFramebuffer().framebufferHeight);
         try
         {
+            // Independently render the existing compiled chunk VBOs into
+            // an isolated reflected-camera shadow map, BEFORE any BSL
+            // reflected sky, terrain or actor lighting samples it.
+            // The shadow pass is not a second Minecraft world render.
+            CameraMirrorBSLCompositor.renderPrivateShadows(
+                    mc,camera,mainCamera,partialTicks);
             GL11.glDisable(GL11.GL_SCISSOR_TEST);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDepthFunc(GL11.GL_LEQUAL);

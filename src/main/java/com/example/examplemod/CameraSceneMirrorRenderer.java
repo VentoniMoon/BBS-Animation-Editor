@@ -89,6 +89,7 @@ public final class CameraSceneMirrorRenderer
             bslTargets=null;
         }
         CameraMirrorBSLDenoiser.reset();
+        CameraMirrorBSLCompositor.releaseShadowResources();
         lastWorld=null;
         // Reflection now shares the original world's existing render chunks.
         // Only release its private color/depth target on editor detach.

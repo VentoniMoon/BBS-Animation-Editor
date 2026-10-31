@@ -61,7 +61,11 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean shadowAnchorUnavailableLogged;
     private int expectedTerrainProgram;
     private final PreviewCameraPose mainView;
-    private final FloatBuffer reflectedShadowView;
+    private FloatBuffer reflectedShadowView;
+    private FloatBuffer privateShadowProjection;
+    private static CameraMirrorPrivateShadowPass privateShadowMap;
+    private boolean privateShadowsReady;
+    private static boolean privateShadowWarning;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -212,6 +216,146 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     }
 
     public static boolean active(){return current!=null;}
+
+    /**
+     * Create a reflected shadow map before drawing sky or terrain.
+     * Reuses the main RenderGlobal's existing compiled chunks; never
+     * runs the native OptiFine shadow renderer (which writes global sfb).
+     */
+    public static void renderPrivateShadows(Minecraft mc,
+            PreviewCameraPose reflected,PreviewCameraPose main,
+            float partialTicks)
+    {
+        if(current==null||"false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrorBSLPrivateShadows","true")))
+            return;
+        current.renderMirrorShadowMap(mc,reflected,main,partialTicks);
+    }
+
+    public static void releaseShadowResources()
+    {
+        if(privateShadowMap!=null)
+        {
+            privateShadowMap.close();
+            privateShadowMap=null;
+        }
+        privateShadowWarning=false;
+    }
+
+    /** Shadow shader uses cached OptiFine Program bookkeeping, never
+     * Shaders.useProgram (which would replace the native sfb). */
+    void bindPrivateShadowProgram(Object program,int pid)
+            throws Exception
+    {
+        activeProgramField.set(null,program);
+        activeProgramIdField.setInt(null,pid);
+        IntBuffer draw=(IntBuffer)getDrawBuffers.invoke(program);
+        activeDrawBuffersField.set(null,draw);
+        samplerUnitOnly(pid,"texture",0);
+        samplerUnitOnly(pid,"gtexture",0);
+        samplerUnitOnly(pid,"lightmap",1);
+        samplerUnitOnly(pid,"normals",2);
+        samplerUnitOnly(pid,"specular",3);
+        samplerUnitOnly(pid,"noisetex",15);
+        bindNativeNoiseImage();
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        write3(pid,"cameraPosition",(float)view.x,
+                (float)view.y,(float)view.z);
+        overrideEnvironment(pid);
+    }
+
+    private void renderMirrorShadowMap(Minecraft mc,
+            PreviewCameraPose reflected,PreviewCameraPose main,
+            float partialTicks)
+    {
+        privateShadowsReady=false;
+        if(privateShadowMap!=null&&!privateShadowMap.ready())
+        {
+            // The allocation can still be reused; a failed GL pass will
+            // fall back to the original native map for this frame.
+        }
+        try
+        {
+            Object shadowProgram=shaders.getField("ProgramShadow").get(null);
+            int programId=id(shadowProgram);
+            if(programId<=0)
+                throw new IllegalStateException("BSL shadow program absent");
+            float[] nativeModel=readNativeMatrix("shadowModelView",
+                    "faShadowModelView");
+            float[] nativeProjection=readNativeMatrix("shadowProjection",
+                    "faShadowProjection");
+            if(nativeModel==null||nativeProjection==null)
+                throw new IllegalStateException(
+                        "Native OptiFine shadow matrices unavailable");
+            // A private shadow map must use the SAME camera-relative
+            // transform for rendering AND sampling. Native map-rebasing
+            // was only appropriate while sharing the main depth texture.
+            FloatBuffer model=matrixBuffer(nativeModel);
+            FloatBuffer projection=matrixBuffer(nativeProjection);
+            privateShadowMap=CameraMirrorPrivateShadowPass.acquire(
+                    privateShadowMap,shaders);
+            privateShadowMap.render(mc,reflected,main,partialTicks,
+                    programId,shadowProgram,shaders,projection,model,this);
+            privateShadowsReady=privateShadowMap.ready();
+            if(privateShadowsReady)
+            {
+                reflectedShadowView=matrixBuffer(nativeModel);
+                privateShadowProjection=matrixBuffer(nativeProjection);
+            }
+        }
+        catch(Throwable problem)
+        {
+            privateShadowsReady=false;
+            if(!privateShadowWarning)
+            {
+                privateShadowWarning=true;
+                System.err.println(TAG+"Private shadow pass unavailable; "+
+                        "falling back to native shadow map: "+problem);
+                problem.printStackTrace();
+            }
+        }
+        finally
+        {
+            // No shadow framebuffer/program may remain active when
+            // BSL resumes its private sky + terrain GBuffer drawing.
+            targets.bindGeometry();
+            GL20.glUseProgram(mainProgram);
+        }
+    }
+
+    private static FloatBuffer matrixBuffer(float[] matrix)
+    {
+        FloatBuffer out=BufferUtils.createFloatBuffer(16);
+        out.put(matrix).flip();
+        return out;
+    }
+
+    private float[] readNativeMatrix(String primary,String fallback)
+            throws IllegalAccessException
+    {
+        for(String name:new String[]{primary,fallback})
+        {
+            Field f=nativeField(name);
+            if(f==null)continue;
+            Object data=f.get(null);
+            if(data instanceof FloatBuffer)
+            {
+                FloatBuffer copy=((FloatBuffer)data).duplicate();
+                if(copy.capacity()<16)continue;
+                copy.position(0);
+                float[] out=new float[16];
+                copy.get(out);
+                return out;
+            }
+            if(data instanceof float[]&&((float[])data).length>=16)
+            {
+                float[] out=new float[16];
+                System.arraycopy(data,0,out,0,16);
+                return out;
+            }
+        }
+        return null;
+    }
 
     /**
      * OptiFine can suppress its native sky dome while a shaderpack is
@@ -935,6 +1079,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
 
     private void bindNativeShadowImages()
     {
+        if(privateShadowsReady&&privateShadowMap!=null&&
+                privateShadowMap.ready())
+        {
+            bindReadOnlyTexture(4,privateShadowMap.depth0());
+            bindReadOnlyTexture(5,privateShadowMap.depth1());
+            bindReadOnlyTexture(13,privateShadowMap.color0());
+            bindReadOnlyTexture(14,privateShadowMap.color1());
+            return;
+        }
         try
         {
             Field depths=nativeField("sfbDepthTextures");
@@ -1045,6 +1198,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             writeMatrix(pid,"shadowModelViewInverse",
                     reflectedShadowView,true);
         }
+        if(privateShadowsReady&&privateShadowProjection!=null)
+        {
+            writeMatrix(pid,"shadowProjection",
+                    privateShadowProjection,false);
+            writeMatrix(pid,"shadowProjectionInverse",
+                    privateShadowProjection,true);
+        }
     }
 
     /**
@@ -1101,28 +1261,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private float[] readNativeShadowMatrix()
             throws IllegalAccessException
     {
-        for(String name:new String[]{"shadowModelView","faShadowModelView"})
-        {
-            Field field=nativeField(name);
-            if(field==null)continue;
-            Object raw=field.get(null);
-            if(raw instanceof FloatBuffer)
-            {
-                FloatBuffer copy=((FloatBuffer)raw).duplicate();
-                if(copy.capacity()<16)continue;
-                copy.position(0);
-                float[] matrix=new float[16];
-                copy.get(matrix,0,16);
-                return matrix;
-            }
-            if(raw instanceof float[]&&((float[])raw).length>=16)
-            {
-                float[] matrix=new float[16];
-                System.arraycopy(raw,0,matrix,0,16);
-                return matrix;
-            }
-        }
-        return null;
+        return readNativeMatrix("shadowModelView","faShadowModelView");
     }
 
     private static final String[] NATIVE_FLOATS={

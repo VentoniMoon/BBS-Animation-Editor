@@ -20,6 +20,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorShadowMatrix.java'
       - 'src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
@@ -51,6 +52,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorShadowMatrix.java'
       - 'src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
@@ -99,6 +101,9 @@ jobs:
           grep -q 'GL11.GL_NEAREST' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
           grep -q 'copyReflectedDirection' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'writeMatrix(pid,"shadowModelView",reflectedShadowView,false)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorBSLCompositor.renderPrivateShadows' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'CameraMirrorPrivateShadowPass.acquire' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorBSLCompositor.releaseShadowResources' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'CameraMirrorShadowMatrix.rebase' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'bslTargets,reflected,camera' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'mirrorBSLMaxSize' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java

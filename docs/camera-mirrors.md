@@ -734,3 +734,48 @@ This corrects the world-coordinate transform. Reflected points outside
 the main camera's shadow-distance coverage still cannot receive shadows
 from the shared shadow map; long-distance parity requires independent
 shadow coverage and should be checked in-game.
+
+### Private BSL shadow pass for the reflected camera (first version)
+
+OptiFine's normal shadow pass computes shadowtex0/1 and shadowcolor
+textures using the main camera's shadow-map coverage. Reusing those
+textures, even with a corrected receiver `shadowModelView`, does not
+include occluders outside the main camera's shadow coverage. The apparent
+large shifting shadow on mirror grass came from this limitation.
+
+The experimental BSL reflection now builds an **independent shadow FBO**
+using OptiFine's compiled `ProgramShadow` and the existing
+`WorldClient`, `RenderGlobal` and prepared chunk VBOs. It renders
+SOLID, CUTOUT_MIPPED and CUTOUT occluders from the reflected camera's
+shadow-map origin, copies opaque depth into shadowtex1 before rendering
+TRANSLUCENT, and supplies those private depth/color textures on the
+normal OptiFine shader sampler units 4/5/13/14. The private shadow
+shader's own projection, and the receiver's `shadowModelView`, use
+the same (reflected-camera-relative) coordinate system. In particular
+the main-camera rebase applied for shared shadow maps is NOT applied
+while private shadows are active.
+
+Both camera and OptiFine active-program bookkeeping, draw buffers,
+depth buffers, texture bindings and projection/modelview matrices
+are scoped and restored; the main `sfb`/native shadow resources
+remain untouched. Resources are cached until the editor resets.
+A failed private pass falls back to the prior shared shadow map,
+with a once-only error log instead of a partially shadowed scene.
+Shader-specific shadow depth and color buffer counts, and shadow-map
+resolution, are read at runtime. The default dimension cap is 2048,
+configurable via `mirrorBSLShadowMaxSize` (256..4096).
+
+Diagnostics:
+```
+-Dbbs.editor.camera.mirrorBSLPrivateShadows=false
+-Dbbs.editor.camera.mirrorBSLShadowMaxSize=2048
+-Dbbs.editor.camera.mirrorBSLShadowTranslucent=true
+```
+
+This first version includes **block/chunk shadow casters**, including
+cutout and translucent block layers. It does NOT render recorded actor
+poses or tile entities into the private shadow map yet; they remain
+properly visible in the mirror GBuffer, but their cast shadows are not
+guaranteed. Prepared-pose actor shadow casting is a separate integration
+task. Scene parity must be tested in-game with BSL BetterLights,
+especially for transparent blocks and large outdoor areas.
