@@ -234,7 +234,8 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
             GL20.glUseProgram(shadowProgram);
             // Use raw program + synchronized OptiFine bookkeeping. Native
             // Shaders.useProgram would bind the MAIN shared sfb.
-            owner.bindPrivateShadowProgram(optiProgram,shadowProgram);
+            owner.bindPrivateShadowProgram(optiProgram,shadowProgram,
+                    projection,lightView);
 
             GL11.glDisable(GL11.GL_BLEND);
             GL11.glDisable(GL11.GL_CULL_FACE);
