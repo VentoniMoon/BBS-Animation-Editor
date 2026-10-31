@@ -55,7 +55,9 @@ public final class CameraMirrorTerrainPass
                 try
                 {
                     // pass=2 is vanilla's non-anaglyph world/sky pass.
-                    CameraMirrorOptiFineBackend.stage("ProgramSkyBasic");
+                    // OptiFine's sky path is textured for the horizon/sky
+                    // dome. The shaderless path remains unchanged.
+                    CameraMirrorOptiFineBackend.stage("ProgramSkyTextured");
                     world.renderSky(partialTicks,2);
                 }
                 catch(Throwable skyProblem)
@@ -141,15 +143,23 @@ public final class CameraMirrorTerrainPass
             GL11.glDisable(GL11.GL_BLEND);
             RenderHelper.disableStandardItemLighting();
             mc.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-            CameraMirrorOptiFineBackend.stage("ProgramTerrain");
+            CameraMirrorOptiFineBackend.stage("ProgramTerrainSolid");
             world.renderBlockLayer(BlockRenderLayer.SOLID,partialTicks,0,eye);
             GL11.glEnable(GL11.GL_ALPHA_TEST);
+            CameraMirrorOptiFineBackend.stage("ProgramTerrainCutoutMip");
             world.renderBlockLayer(BlockRenderLayer.CUTOUT_MIPPED,
                     partialTicks,0,eye);
+            CameraMirrorOptiFineBackend.stage("ProgramTerrainCutout");
             world.renderBlockLayer(BlockRenderLayer.CUTOUT,partialTicks,0,eye);
             // Save mirror depthtex1 at the native opaque/translucent
             // boundary; never copy from the main OptiFine depth buffer.
             CameraMirrorBSLCompositor.beforeTranslucent();
+            // OptiFine runs deferred between opaque/cutout and water.
+            // Do NOT execute the global Shaders.renderDeferred(): it
+            // composites the main BBS FS frame. This uses private MRT.
+            CameraMirrorBSLCompositor.runDeferredPasses();
+            mc.getTextureManager().bindTexture(
+                    TextureMap.LOCATION_BLOCKS_TEXTURE);
 
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
