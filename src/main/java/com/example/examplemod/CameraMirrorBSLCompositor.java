@@ -67,6 +67,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static CameraMirrorPrivateShadowPass privateShadowMap;
     private boolean privateShadowsReady;
     private static boolean privateShadowWarning;
+    private static boolean privateShadowDisabled;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -227,8 +228,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             PreviewCameraPose reflected,PreviewCameraPose main,
             float partialTicks)
     {
-        if(current==null||"false".equalsIgnoreCase(System.getProperty(
-                "bbs.editor.camera.mirrorBSLPrivateShadows","true")))
+        if(current==null||privateShadowDisabled||
+                "false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLPrivateShadows","true")))
             return;
         current.renderMirrorShadowMap(mc,reflected,main,partialTicks);
     }
@@ -241,6 +243,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             privateShadowMap=null;
         }
         privateShadowWarning=false;
+        privateShadowDisabled=false;
     }
 
     /** Shadow shader uses cached OptiFine Program bookkeeping, never
@@ -320,6 +323,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         catch(Throwable problem)
         {
             privateShadowsReady=false;
+            // Avoid expensive FBO/reflective-program retries every frame
+            // on unsupported GPU or OptiFine configurations. A reset
+            // or editor reopen retries resource negotiation.
+            privateShadowDisabled=true;
             if(!privateShadowWarning)
             {
                 privateShadowWarning=true;
