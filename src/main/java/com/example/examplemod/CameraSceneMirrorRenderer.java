@@ -306,6 +306,7 @@ public final class CameraSceneMirrorRenderer
             // redirect that private field to our isolated target instead.
             capturing=true;
             activeMirror=picked;
+            bslEffectiveNear=Float.NaN;
             try
             {
                 minecraftFramebufferField.set(mc,texture);
@@ -572,6 +573,15 @@ public final class CameraSceneMirrorRenderer
      * geometry projection (terrain AND cached actor renderers).
      */
     private static boolean obliqueClipLogged;
+    private static float bslEffectiveNear=Float.NaN;
+    private static boolean standardClipWarningLogged;
+
+    /** Actual perspective near plane used by the BSL mirror geometry. */
+    public static float bslNear(float fallback)
+    {
+        return Float.isFinite(bslEffectiveNear)?
+                bslEffectiveNear:fallback;
+    }
 
     public static void installShaderObliqueProjection(
             PreviewCameraPose virtualCamera)
@@ -590,18 +600,55 @@ public final class CameraSceneMirrorRenderer
             float[] original=new float[16];
             projection.rewind();
             projection.get(original);
-            float[] oblique=CameraMirrorObliqueProjection.clip(
-                    original,plane);
+            // BSL's ToNDC() assumes a sparse, symmetric perspective
+            // inverse. An oblique projection has non-zero inverse W terms
+            // for X/Y. Its world-space reconstruction becomes wrong,
+            // making shadow lookup and cloud shadowing move with the eye.
+            // Use a conventional near plane near the mirror surface;
+            // retain the old exact oblique clip for A/B diagnosis.
+            String modeName=System.getProperty(
+                    "bbs.editor.camera.mirrorBSLProjectionMode",
+                    "perspective");
+            float[] selected=original;
+            if("oblique".equalsIgnoreCase(modeName))
+                selected=CameraMirrorObliqueProjection.clip(
+                        original,plane);
+            else if(!"off".equalsIgnoreCase(modeName))
+            {
+                try
+                {
+                    selected=CameraMirrorObliqueProjection.bslCompatible(
+                            original,plane);
+                }
+                catch(IllegalArgumentException incompatible)
+                {
+                    if(!standardClipWarningLogged)
+                    {
+                        standardClipWarningLogged=true;
+                        System.err.println("[BBS Editor][Mirror][BSL Render] "+
+                                "Cannot approximate mirror near plane "+
+                                "with symmetric projection; preserving "+
+                                "original perspective: "+incompatible);
+                    }
+                }
+            }
+            // An oblique projection has no meaningful symmetric near
+            // distance; preserve the legacy OptiFine near uniform there.
+            bslEffectiveNear="oblique".equalsIgnoreCase(modeName)?
+                    Float.NaN:
+                    CameraMirrorObliqueProjection.nearPlane(selected);
             projection.clear();
-            projection.put(oblique);
+            projection.put(selected);
             projection.flip();
             GL11.glLoadMatrix(projection);
             if(!obliqueClipLogged)
             {
                 obliqueClipLogged=true;
                 System.out.println("[BBS Editor][Mirror][BSL Render] "+
-                        "Oblique projection installed: clipping "+
-                        "geometry behind mirror (shader-safe).");
+                        "Reflection projection mode="+modeName+
+                        " near="+bslEffectiveNear+
+                        " (standard perspective preserves BSL "+
+                        "screen-space shadow reconstruction)");
             }
         }
         finally

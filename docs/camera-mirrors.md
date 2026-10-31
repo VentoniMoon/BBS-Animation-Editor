@@ -900,3 +900,47 @@ This correction applies to orthographic OptiFine shadow maps; any
 remaining artifacts require examining the actual shadow-map depth
 content and shaderpack-specific shadow sampling, not further
 unverified adjustments to lightmap, color or exposure.
+
+### BSL mirror projection: symmetric perspective compatibility (shadow drift)
+
+A/B tests showed that disabling either the private shadow map or the
+colored/translucent shadow stage did NOT fix the moving dark regions.
+The common cause can be in the BSL terrain shader rather than in shadow
+texture allocation. The mirror previously replaced its perspective near
+clip plane with an **oblique** projection to hide the physical wall behind
+the mirror.
+
+BSL's `ToNDC()` from `lib/util/spaceConversion.glsl` does *not* invert
+a general projection matrix. It reads only four diagonal inverse
+projection terms. Oblique near-plane clipping changes projection[2]
+and projection[6] (screen-X/Y dependence of depth), so the resulting
+world positions are incorrect. Both shadow-map sampling and BSL's
+cloud-shadow code then appear to slide when the camera moves.
+
+The BSL mirror now defaults to a **standard symmetric perspective**
+whose near plane is moved to 98% of the mirror-plane intersection along
+the optical axis. This preserves BSL's sparse inverse-projection
+contract, avoids re-shading any pixel with the wrong projection, and
+passes the new near distance to BSL's `near` uniform. It is an
+approximation of a slanted mirror clipping plane: for strongly off-axis
+camera views, some behind-plane geometry may leak or some desired
+geometry may be clipped at an edge. That exact-edge case will require
+a shader-aware geometric clipping solution; reusing oblique projection
+is not safe for BSL screen-space lighting.
+
+A/B diagnostic:
+```
+-Dbbs.editor.camera.mirrorBSLProjectionMode=perspective
+-Dbbs.editor.camera.mirrorBSLProjectionMode=oblique
+-Dbbs.editor.camera.mirrorBSLProjectionMode=off
+```
+Only ONE of these values should be used at a time. `perspective` is
+the new default. `oblique` is the old exact clip that can make shadows
+swim. `off` uses the original unmodified camera projection without
+mirror near-plane approximation, for diagnostic isolation only.
+
+The independent Java 8 projection test verifies that the perspective
+alternative preserves the depth projection's diagonal form and far
+plane, while the oblique projection introduces off-diagonal depth terms.
+Game screenshots with camera movement are still required for visual
+confirmation. Shadow map calculations are not changed in this patch.

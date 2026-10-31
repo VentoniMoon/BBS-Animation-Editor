@@ -95,6 +95,9 @@ jobs:
           grep -q 'bbs.editor.camera.mirrorBSLExperimental' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'CameraMirrorOptiFinePreflight.runOnce()' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'installShaderObliqueProjection' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'mirrorBSLProjectionMode' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'CameraMirrorObliqueProjection.bslCompatible' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'CameraSceneMirrorRenderer.bslNear' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'installShaderObliqueProjection' src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java
           grep -q 'CameraMirrorBSLCompositor.runDeferredPasses()' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'gbuffersClearColor' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
@@ -141,6 +144,14 @@ jobs:
           grep -q 'copyNumberInt(pid,"worldTime","worldTime")' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'tonemapInMain' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           ! grep -q 'Shaders.renderDeferred()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+      - name: Verify BSL-compatible mirror perspective and clipping fallback
+        run: |
+          mkdir -p /tmp/bbs-mirror-projection-test
+          javac -d /tmp/bbs-mirror-projection-test \
+            src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java \
+            src/test/java/com/example/examplemod/CameraMirrorObliqueProjectionSmokeTest.java
+          java -cp /tmp/bbs-mirror-projection-test \
+            com.example.examplemod.CameraMirrorObliqueProjectionSmokeTest
       - name: Verify shadow map is anchored in world space
         run: |
           mkdir -p /tmp/bbs-mirror-shadow-test

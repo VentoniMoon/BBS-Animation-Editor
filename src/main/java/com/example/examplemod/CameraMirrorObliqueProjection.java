@@ -72,6 +72,48 @@ public final class CameraMirrorObliqueProjection
     }
 
     /**
+     * Compatibility mode for BSL/OptiFine fragment shaders whose ToNDC()
+     * reconstructs view positions from only four diagonal inverse
+     * projection terms. Such shaders CANNOT recover world coordinates
+     * under an oblique projection because inverseProjection.w depends on
+     * screen X and Y. That makes shadow sampling camera-dependent.
+     *
+     * Keep a conventional perspective projection, moving its symmetric
+     * near plane close to the mirror intersection on the optical axis.
+     * This is an approximation of the mirror's exact clipping plane, but
+     * it keeps BSL shadow/fog/SSAO projection maths internally coherent.
+     * Off-axis fragments may need a future dedicated shader clip pass.
+     */
+    public static float[] bslCompatible(float[] original,double[] plane)
+    {
+        if(original==null||original.length!=16||
+                plane==null||plane.length!=4)
+            throw new IllegalArgumentException("Invalid perspective/plane");
+        // Eye space is looking down -Z; plane dot(0,0,-t,1)=0.
+        double z=plane[2];
+        double t=plane[3]/z;
+        double near=original[14]/(original[10]-1D);
+        double far=original[14]/(original[10]+1D);
+        if(!Double.isFinite(t)||!Double.isFinite(near)||
+                !Double.isFinite(far)||t<=0D||
+                !(near>0D)||!(far>near))
+            throw new IllegalArgumentException(
+                    "No forward mirror plane for BSL-compatible projection");
+        // Pull the near plane just behind the real mirror plane so the
+        // mirror surface is not accidentally discarded by rounding.
+        double candidate=Math.max(near,Math.min(t*0.98D,far*0.75D));
+        float[] out=original.clone();
+        out[10]=(float)(-(far+candidate)/(far-candidate));
+        out[14]=(float)(-2D*far*candidate/(far-candidate));
+        return out;
+    }
+
+    public static float nearPlane(float[] perspective)
+    {
+        return perspective[14]/(perspective[10]-1F);
+    }
+
+    /**
      * Homogeneous near-plane condition z_clip+w_clip >= 0. Used in
      * pure-Java regression tests to ensure the wall behind a mirror is
      * rejected while geometry on the reflected side stays visible.

@@ -1255,7 +1255,11 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         write3(pid,"previousCameraPosition",(float)view.x,
                 (float)view.y,(float)view.z);
         write1(pid,"eyeAltitude",(float)view.y);
-        write1(pid,"near",Math.max(0.02F,view.nearPlane));
+        // The BSL-friendly mirror path uses an ordinary perspective
+        // matrix with a nearer clipping distance. Its near uniform must
+        // match that matrix for depth, AO and fog reconstruction.
+        write1(pid,"near",Math.max(0.02F,
+                CameraSceneMirrorRenderer.bslNear(view.nearPlane)));
         write1(pid,"far",Math.max(64F,view.farPlane));
         write1(pid,"viewWidth",(float)targets.width());
         write1(pid,"viewHeight",(float)targets.height());

@@ -58,6 +58,34 @@ public final class CameraMirrorObliqueProjectionSmokeTest
             check((expected>=0D)==(actual>=0D),
                     "tilted mirror clip sign mismatch");
         }
+        // BSL's ToNDC fast path reconstructs only the diagonal of
+        // inverseProjection and therefore cannot invert an oblique
+        // perspective whose inverse W has X/Y contributions.
+        check(Math.abs(tilted[2])>0.001D||
+                Math.abs(tilted[6])>0.001D,
+                "test failed to create a genuinely oblique projection");
+        float[] compatible=CameraMirrorObliqueProjection.bslCompatible(
+                perspective(60D,1.6D,0.05D,256D),oblique);
+        check(compatible[2]==0F&&compatible[6]==0F,
+                "BSL perspective still has oblique X/Y depth terms");
+        check(CameraMirrorObliqueProjection.nearPlane(compatible)>1D,
+                "standard near plane did not approach the mirror");
+        check(CameraMirrorObliqueProjection.nearPlane(compatible)<1.4D,
+                "standard near plane incorrectly moved past mirror");
+        double compatibleFar=compatible[14]/(compatible[10]+1D);
+        check(Math.abs(compatibleFar-256D)<0.1D,
+                "standard fallback changed far plane");
+
+        // Oblique near-depth coordinates vary with X/Y. BSL's sparse
+        // inverse does not carry these cross terms, so sampling the same
+        // world block at different screen positions yields moving shadows.
+        double obliqueCrossX=tilted[2]/tilted[0];
+        double obliqueCrossY=tilted[6]/tilted[5];
+        check(Math.abs(obliqueCrossX)+Math.abs(obliqueCrossY)>0.01D,
+                "oblique screen-space depth dependence missing");
+        check(compatible[2]==0F&&compatible[6]==0F,
+                "compatibility mode still violates BSL inverse contract");
+
         boolean rejected=false;
         try
         {
