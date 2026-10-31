@@ -41,6 +41,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
         return Math.max(512,Math.min(1536,selected));
     }
     private int fbo;
+    private int historyReadFbo,historyDrawFbo;
     private int width,height,colorCount,depthCount;
     private int[][] colors;
     private int[] formats;
@@ -217,6 +218,93 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
                 front[stage.targets[i]]=1-front[stage.targets[i]];
     }
 
+    /**
+     * BSL keeps AUTO_EXPOSURE and lens-flare feedback in tiny texels of
+     * colortex2 at the lower-left of the image. The independent mirror's
+     * newly created RGBA16 colortex2 has no valid history there and BSL
+     * divides its HDR color by (2*tempExposure+0.125). When the value is
+     * zero, reflected terrain becomes eight times too bright.
+     *
+     * Borrow ONLY those four-by-two pixels from the active MAIN OptiFine
+     * colortex2. Do not copy the camera-specific TAA history stored in
+     * the rest of the texture. Reading the main texture through our own
+     * scratch READ FBO does not alter the native dfb attachments.
+     */
+    public void copyNativeExposureMetadata(int mainColor2)
+    {
+        checkOpen();
+        if(colorCount<=2||mainColor2<=0||
+                !GL11.glIsTexture(mainColor2))return;
+        final int oldRead=GL11.glGetInteger(
+                GL30.GL_READ_FRAMEBUFFER_BINDING);
+        final int oldDraw=GL11.glGetInteger(
+                GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        final int oldActive=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        final int oldTexture=GL11.glGetInteger(
+                GL11.GL_TEXTURE_BINDING_2D);
+        final int oldReadBuffer=GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        final int oldDrawBuffer=GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
+        try
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,mainColor2);
+            int srcW=GL11.glGetTexLevelParameteri(
+                    GL11.GL_TEXTURE_2D,0,GL11.GL_TEXTURE_WIDTH);
+            int srcH=GL11.glGetTexLevelParameteri(
+                    GL11.GL_TEXTURE_2D,0,GL11.GL_TEXTURE_HEIGHT);
+            if(srcW<4||srcH<2||width<4||height<2)
+                return;
+            if(historyReadFbo==0)
+                historyReadFbo=GL30.glGenFramebuffers();
+            if(historyDrawFbo==0)
+                historyDrawFbo=GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,
+                    historyReadFbo);
+            GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER,
+                    GL30.GL_COLOR_ATTACHMENT0,GL11.GL_TEXTURE_2D,
+                    mainColor2,0);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            if(GL30.glCheckFramebufferStatus(
+                    GL30.GL_READ_FRAMEBUFFER)!=
+                    GL30.GL_FRAMEBUFFER_COMPLETE)
+                throw new IllegalStateException(
+                        "BSL native colortex2 read framebuffer incomplete");
+
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,
+                    historyDrawFbo);
+            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            // Write to BOTH private ping-pong sides. The native pack
+            // can use composite_pre / deferred_pre buffer flips.
+            for(int side=0;side<2;side++)
+            {
+                GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER,
+                        GL30.GL_COLOR_ATTACHMENT0,GL11.GL_TEXTURE_2D,
+                        colors[2][side],0);
+                if(GL30.glCheckFramebufferStatus(
+                        GL30.GL_DRAW_FRAMEBUFFER)!=
+                        GL30.GL_FRAMEBUFFER_COMPLETE)
+                    throw new IllegalStateException(
+                            "BSL mirror colortex2 history FBO incomplete");
+                GL30.glBlitFramebuffer(0,0,4,2,0,0,4,2,
+                        GL11.GL_COLOR_BUFFER_BIT,GL11.GL_NEAREST);
+            }
+            int error=GL11.glGetError();
+            if(error!=GL11.GL_NO_ERROR)
+                throw new IllegalStateException(
+                        "BSL exposure history blit GL error 0x"+
+                        Integer.toHexString(error));
+        }
+        finally
+        {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,oldRead);
+            GL11.glReadBuffer(oldReadBuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
+            GL11.glDrawBuffer(oldDrawBuffer);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,oldTexture);
+            GL13.glActiveTexture(oldActive);
+        }
+    }
+
     /** Copy the live mirror depth into OptiFine depthtex1/2 at the normal
      * opaque/translucent boundary. This modifies PRIVATE textures only. */
     public void copyDepth(int index)
@@ -356,6 +444,9 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
                 for(int id:side)if(id>0)GL11.glDeleteTextures(id);
         if(depths!=null)
             for(int id:depths)if(id>0)GL11.glDeleteTextures(id);
+        if(historyReadFbo>0)GL30.glDeleteFramebuffers(historyReadFbo);
+        if(historyDrawFbo>0)GL30.glDeleteFramebuffers(historyDrawFbo);
+        historyReadFbo=0;historyDrawFbo=0;
         if(fbo>0)GL30.glDeleteFramebuffers(fbo);
         fbo=0;
     }

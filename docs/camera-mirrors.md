@@ -607,3 +607,32 @@ original draw path. No changes to reflected camera, GBuffer programs,
 sky calculations, actors or Jolt physics are introduced. In-game
 visual parity must be verified, as separate gamma/exposure differences
 could still remain after the alpha issue is eliminated.
+
+### Native BSL auto-exposure history (colortex2) handoff
+
+BSL's `composite5` reads the last frame's exposure value at the
+lower-left corner of `colortex2`, then divides scene brightness by
+`2 * tempExposure + 0.125`. A private GBuffer with no initialized
+temporal feedback yields `tempExposure=0` and can produce roughly
+eightfold overexposure. Fixing alpha or setting the world's `timeAngle`
+does not initialize this history.
+
+After the private clear contract but before mirror rendering, the BSL
+executor now obtains the main OptiFine `dfbColorTexturesFlip.getA(2)`
+texture and GPU-blits **only the 4x2 bottom-left metadata region** to
+both sides of its own private `colortex2` ping-pong allocation. The
+rest of `colortex2` is untouched to avoid borrowing the main camera's
+per-pixel TAA history. Scratch framebuffer binding, read/draw state and
+texture state are restored; the native OptiFine texture is read-only.
+This makes the reflected and normal cameras start from the same current
+adaptive-exposure metadata.
+
+Disable for A/B comparison with:
+```
+-Dbbs.editor.camera.mirrorBSLNativeExposure=false
+```
+
+The log prints a one-time `Mirrored colortex2 metadata seeded` on
+success, or an explicit warning if the OptiFine API is incompatible.
+This specifically tests auto-exposure mismatch; further in-game
+validation of all color data and shaderpack passes remains necessary.

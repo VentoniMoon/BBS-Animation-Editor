@@ -53,6 +53,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             new HashMap<String,int[]>();
     private static boolean nativeUniformsLogged;
     private static boolean mipmapLogged;
+    private static boolean exposureLogged;
+    private static boolean exposureWarningLogged;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -141,6 +143,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             // The private executor sets the actual GLSL programs itself.
             result.worldRenderingFlag.setBoolean(null,false);
             result.geometryBegin();
+            // Run after the native gbuffersClear contract but BEFORE
+            // mirror sky/terrain/deferred/composite shaders. BSL's
+            // exposure feedback lives in only a few colortex2 pixels.
+            result.seedNativeExposure();
             return result;
         }
         catch(Throwable t)
@@ -244,6 +250,51 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             current.targets.copyDepth(1);
             current.opaqueDepthSaved=true;
+        }
+    }
+
+    /**
+     * The native OptiFine FlipTextures stores the actual CURRENT front
+     * texture for each colortex. Reading its colortex2 exposure metadata
+     * avoids the undefined zero-history auto-exposure in the mirror while
+     * preserving all other per-camera temporal data.
+     */
+    private void seedNativeExposure()
+    {
+        if("false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrorBSLNativeExposure","true")))
+            return;
+        try
+        {
+            Field field=nativeField("dfbColorTexturesFlip");
+            if(field==null)throw new IllegalStateException(
+                    "OptiFine FlipTextures field unavailable");
+            Object flip=field.get(null);
+            if(flip==null)throw new IllegalStateException(
+                    "Native FlipTextures is null");
+            Method getA=flip.getClass().getMethod("getA",int.class);
+            int nativeColor2=((Number)getA.invoke(flip,2)).intValue();
+            if(nativeColor2<=0)throw new IllegalStateException(
+                    "Native colortex2 texture is missing");
+            targets.copyNativeExposureMetadata(nativeColor2);
+            if(!exposureLogged)
+            {
+                exposureLogged=true;
+                System.out.println(TAG+"Mirrored colortex2 metadata seeded "+
+                        "from native OptiFine history (4x2 pixels only)");
+            }
+        }
+        catch(Throwable problem)
+        {
+            // No guessed exposure divisor or overall brightness multiplier:
+            // preserve the reflection, emit the missing dependency for logs.
+            if(!exposureWarningLogged)
+            {
+                exposureWarningLogged=true;
+                System.err.println(TAG+
+                        "Unable to seed BSL native exposure history: "+
+                        problem);
+            }
         }
     }
 
