@@ -186,7 +186,7 @@ public final class CameraSceneMirrorRenderer
         // into a 1024px Minecraft Framebuffer with viewWidth=768,
         // causing shader screen-space coordinates to disagree.
         final double maxResolution=experimentalBSL?
-                CameraMirrorOptiFineTargets.MAX_SIZE:1024D;
+                CameraMirrorOptiFineTargets.maxDimension():1024D;
         double scale=Math.min(1D,maxResolution/max);
         int w=Math.max(1,(int)Math.round(source.framebufferWidth*scale));
         int h=Math.max(1,(int)Math.round(source.framebufferHeight*scale));
@@ -223,6 +223,16 @@ public final class CameraSceneMirrorRenderer
             else if(texture.framebufferWidth!=w||
                     texture.framebufferHeight!=h)
                 texture.createBindFramebuffer(w,h);
+            // A Minecraft 1.12.2 Framebuffer defaults to NEAREST. That
+            // point-samples the full BSL final image when its projective
+            // mirror quad is magnified in the preview, visibly amplifying
+            // single-pixel dither. Only the FINAL color texture should be
+            // bilinear; private material/depth GBuffer textures remain
+            // GL_NEAREST to preserve shader data.
+            if(texture.framebufferFilter!=
+                    (experimentalBSL?GL11.GL_LINEAR:GL11.GL_NEAREST))
+                texture.setFramebufferFilter(experimentalBSL?
+                        GL11.GL_LINEAR:GL11.GL_NEAREST);
             if(experimentalBSL)
             {
                 int[] formats=CameraMirrorOptiFineBackend.getColorFormats(8);
