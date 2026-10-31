@@ -244,13 +244,17 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
 
     /** Shadow shader uses cached OptiFine Program bookkeeping, never
      * Shaders.useProgram (which would replace the native sfb). */
-    void bindPrivateShadowProgram(Object program,int pid)
+    void bindPrivateShadowProgram(Object program,int pid,
+            FloatBuffer projection,FloatBuffer model)
             throws Exception
     {
         activeProgramField.set(null,program);
         activeProgramIdField.setInt(null,pid);
         IntBuffer draw=(IntBuffer)getDrawBuffers.invoke(program);
         activeDrawBuffersField.set(null,draw);
+        // BSL shadow.glsl uses sampler `tex`, unlike terrain's
+        // `texture`. Bind both aliases to the active block atlas.
+        samplerUnitOnly(pid,"tex",0);
         samplerUnitOnly(pid,"texture",0);
         samplerUnitOnly(pid,"gtexture",0);
         samplerUnitOnly(pid,"lightmap",1);
@@ -262,6 +266,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         write3(pid,"cameraPosition",(float)view.x,
                 (float)view.y,(float)view.z);
         overrideEnvironment(pid);
+        // BSL shadow.vsh reconstructs its position with
+        // shadowModelViewInverse * shadowProjectionInverse * ftransform().
+        // Both inverse uniforms MUST describe this private map's actual
+        // GL projection/modelview or leaves and other waving blocks cast
+        // inconsistent, camera-dependent shadows.
+        writeMatrix(pid,"shadowProjection",projection,false);
+        writeMatrix(pid,"shadowProjectionInverse",projection,true);
+        writeMatrix(pid,"shadowModelView",model,false);
+        writeMatrix(pid,"shadowModelViewInverse",model,true);
     }
 
     private void renderMirrorShadowMap(Minecraft mc,
