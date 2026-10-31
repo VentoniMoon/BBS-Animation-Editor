@@ -501,7 +501,53 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         samplerUnitOnly(program,"shadowcolor0",13);
         samplerUnitOnly(program,"shadowcolor1",14);
         samplerUnitOnly(program,"noisetex",15);
+        // The ordinary OptiFine frame may have rebound texture units for
+        // terrain/lightmap after its last shadow pass. The auxiliary
+        // compositor must bind the native shadow maps as INPUTS instead
+        // of assuming texture units 4/5/13/14 still contain them.
+        // Only texture bindings are changed; global sfb/shadow render
+        // targets and their contents remain completely untouched.
+        bindNativeShadowImages();
         GL13.glActiveTexture(oldTextureUnit);
+    }
+
+    private void bindNativeShadowImages()
+    {
+        try
+        {
+            Field depths=nativeField("sfbDepthTextures");
+            if(depths!=null)
+            {
+                IntBuffer images=(IntBuffer)depths.get(null);
+                if(images!=null)
+                {
+                    if(images.limit()>0)bindReadOnlyTexture(4,images.get(0));
+                    if(images.limit()>1)bindReadOnlyTexture(5,images.get(1));
+                }
+            }
+            Field colors=nativeField("sfbColorTextures");
+            if(colors!=null)
+            {
+                IntBuffer images=(IntBuffer)colors.get(null);
+                if(images!=null)
+                {
+                    if(images.limit()>0)bindReadOnlyTexture(13,images.get(0));
+                    if(images.limit()>1)bindReadOnlyTexture(14,images.get(1));
+                }
+            }
+        }
+        catch(IllegalAccessException e)
+        {
+            throw new IllegalStateException(
+                    "Cannot bind read-only OptiFine shadow samplers",e);
+        }
+    }
+
+    private void bindReadOnlyTexture(int unit,int texture)
+    {
+        if(texture<=0)return;
+        GL13.glActiveTexture(GL13.GL_TEXTURE0+unit);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
     }
 
     private void samplerUnitOnly(int program,String name,int unit)
