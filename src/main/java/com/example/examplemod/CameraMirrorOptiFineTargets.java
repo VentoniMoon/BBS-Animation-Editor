@@ -30,7 +30,16 @@ import org.lwjgl.opengl.GL30;
  */
 public final class CameraMirrorOptiFineTargets implements AutoCloseable
 {
-    public static final int MAX_SIZE=768;
+    // The original 768px cap magnified BSL's screen-space dither when
+    // the mirror was displayed at native preview resolution. 1024 is a
+    // conservative quality/performance default. Override only for testing.
+    public static final int MAX_SIZE=1024;
+    public static int maxDimension()
+    {
+        int selected=Integer.getInteger(
+                "bbs.editor.camera.mirrorBSLMaxSize",MAX_SIZE);
+        return Math.max(512,Math.min(1536,selected));
+    }
     private int fbo;
     private int width,height,colorCount,depthCount;
     private int[][] colors;
@@ -53,7 +62,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
     public boolean matches(int requestedWidth,int requestedHeight,
             int colors,int depth,int[] requestedFormats)
     {
-        float scale=Math.min(1F,(float)MAX_SIZE/
+        float scale=Math.min(1F,(float)maxDimension()/
                 Math.max(1,Math.max(requestedWidth,requestedHeight)));
         int w=Math.max(1,Math.round(requestedWidth*scale));
         int h=Math.max(1,Math.round(requestedHeight*scale));
@@ -95,7 +104,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
                     ", draw="+maxDraw+", BSL requires "+colorBuffers;
             throw new IllegalStateException(lastProblem);
         }
-        float scale=Math.min(1F,(float)MAX_SIZE/
+        float scale=Math.min(1F,(float)maxDimension()/
                 Math.max(requestedWidth,requestedHeight));
         int w=Math.max(1,Math.round(requestedWidth*scale));
         int h=Math.max(1,Math.round(requestedHeight*scale));
