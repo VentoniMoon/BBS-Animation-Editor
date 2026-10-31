@@ -158,7 +158,7 @@ to the mirror surface texture. It snapshots/restores normal-frame GL
 framebuffer, viewport, 16 texture bindings and changed GLSL uniforms.
 
 After the first runtime screenshot (bright wall/blue reflection despite a
-"PASS: 7 shader stages" log), two important corrections were added:
+"PASS: 7 shader stages" log), three important corrections were added:
 1. The OptiFine 1.12.2 composite samplers are explicitly assigned to the
    native slots: colortex0..3 = 0..3, colortex4..7 = 7..10 and
    depthtex0..2 = 6, 11, 12. Sampling the existing uniform values was
@@ -167,8 +167,9 @@ After the first runtime screenshot (bright wall/blue reflection despite a
    are restored at scope close, and the fullscreen UV uses texture unit 0.
 2. CameraMirrorNativeAtmosphere does NOT clear the private BSL MRT after
    per-buffer initialization; that formerly wiped out all eight channels
-   with a shared fog color. BSL's colortex1 is independently cleared white
-   and the other channels black. Normal no-shader fog clearing is unchanged.
+   with a shared fog color. Per-channel background clears now follow the
+   ACTIVE OptiFine gbuffersClear[] and gbuffersClearColor[] settings.
+   Normal no-shader fog clearing is unchanged.
    The reflection also uses its own current view matrices as initial
    previous-frame reprojection uniforms instead of borrowing the main
    camera's history.
@@ -177,6 +178,41 @@ After the first runtime screenshot (bright wall/blue reflection despite a
    Earlier the final shader ran at 1024px with `viewWidth/viewHeight`
    uniforms set to 768px, mismatching screen-space sampling and lens
    effects. The nonshader mirror retains its previous 1024px resolution.
+
+### BSL lighting/atmosphere parity pass (October 31)
+
+Based on the next in-game screenshot, geometry and mirror-plane clipping
+work but the postprocessed BSL image still has wrong atmospheric lighting,
+fog, sky, clouds and blur. This source update addresses the most obvious
+mismatches with native OptiFine G5:
+
+- Mirror terrain now selects ProgramTerrainSolid, ProgramTerrainCutoutMip
+  and ProgramTerrainCutout by layer, falling back to ProgramTerrain when
+  the pack does not compile a dedicated program. The sky uses
+  ProgramSkyTextured rather than treating every dome/sky pixel as basic.
+- The PRIVATE deferred programs execute at the opaque/translucent world
+  boundary (AFTER the opaque depth snapshot, BEFORE ProgramWater), not at
+  the end of the frame. Only composite and final run after all geometry.
+  Every intermediate fullscreen pass restores textures, program, FBO,
+  viewport and matrices before world rendering resumes.
+- The private colortex buffers use NEAREST sampling for encoded material,
+  normals and masks; final display texture filtering remains separate.
+- Each private GBuffer attachment follows OptiFine's gbuffersClear[] /
+  gbuffersClearColor[] rules instead of forcing all attachments to zero.
+- BSL GLSL programs receive live OptiFine fog, sky, rain, wetness, sun
+  and shadow angles, frame timing and environment uniforms. Sun/moon/up
+  and shadow-light view directions are transformed from the main view to
+  the reflected camera's view matrix.
+- The ordinary, already-rendered OptiFine shadow depth/color textures
+  are bound as read-only inputs to the mirror's postprocessing; no new
+  shadow pass or global Shaders.dfb is created.
+
+The experimental path is STILL opt-in and MUST be visually retested:
+the prepared actor draw currently happens AFTER the translucent world
+pass, the reflected camera has no independent temporal history, and
+BSL's complex clouds/custom weather, postprocess and mixed-resolution
+effects may require additional work. A passing Java 8 compilation does
+NOT mean BSL image parity has been achieved.
 
 The experimental path remains opt-in and awaits another runtime image
 test for confirmation.
