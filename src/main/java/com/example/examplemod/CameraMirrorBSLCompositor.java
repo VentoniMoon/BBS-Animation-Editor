@@ -161,21 +161,35 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         return program==null?0:((Number)getId.invoke(program)).intValue();
     }
 
-    private void geometryBegin()
+    private void geometryBegin()throws Exception
     {
         targets.bindGeometry();
-        GL11.glClearColor(0F,0F,0F,0F);
-        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT|GL11.GL_DEPTH_BUFFER_BIT);
-        // OptiFine's GBuffer contract clears gdepth / colortex1 to
-        // WHITE, not transparent black. BSL uses this as the neutral
-        // background value for its deferred calculations.
-        if(targets.colorCount()>1)
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        // Copy the ACTIVE pack's actual per-attachment clear contract.
+        // In OptiFine, a false gbuffersClear[i] deliberately preserves
+        // temporal colortex history across frames. Clearing every color
+        // attachment to black destroyed BSL's persistent data.
+        boolean[] clear=(boolean[])shaders.getField(
+                "gbuffersClear").get(null);
+        org.lwjgl.util.vector.Vector4f[] values=
+                (org.lwjgl.util.vector.Vector4f[])shaders.getField(
+                        "gbuffersClearColor").get(null);
+        GL11.glDepthMask(true);
+        GL11.glDrawBuffer(GL11.GL_NONE);
+        GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
+        for(int i=0;i<targets.colorCount();i++)
         {
-            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0+1);
-            GL11.glClearColor(1F,1F,1F,1F);
+            if(clear!=null&&i<clear.length&&!clear[i])continue;
+            org.lwjgl.util.vector.Vector4f value=
+                    values!=null&&i<values.length?values[i]:null;
+            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0+i);
+            if(value==null)
+                GL11.glClearColor(i==1?1F:0F,
+                        i==1?1F:0F,i==1?1F:0F,i==1?1F:0F);
+            else GL11.glClearColor(value.x,value.y,value.z,value.w);
             GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
-            targets.bindGeometry();
         }
+        targets.bindGeometry();
     }
 
     /** Use an OptiFine world program, but NOT Shaders.useProgram(). The
