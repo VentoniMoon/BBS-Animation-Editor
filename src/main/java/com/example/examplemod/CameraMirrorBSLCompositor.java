@@ -85,6 +85,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private final Field finalProgram;
     private FloatBuffer mirrorProjection;
     private FloatBuffer mirrorView;
+    private float[] nativeMainViewMatrix;
+    private final java.util.List<double[]> worldLightPositions=
+            BetterLightsWorldEngine.registeredLightPositions();
     private boolean opaqueDepthSaved;
     private boolean deferredExecuted;
     private boolean closed;
@@ -141,6 +144,18 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         }
         finally{GL13.glActiveTexture(oldTextureUnit);}
         snapshotNativeUniforms();
+        try
+        {
+            nativeMainViewMatrix=readNativeMatrix(
+                    "gbufferModelView","faModelView");
+        }
+        catch(ReflectiveOperationException incompatible)
+        {
+            // Keep the frame alive if a different OptiFine build has
+            // no standard matrix field. Relative-space matching still
+            // works and all eye-space candidates remain untouched.
+            nativeMainViewMatrix=null;
+        }
         reflectedShadowView=shadowMatrixForReflectedCamera();
     }
 
@@ -239,6 +254,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
 
     public static void releaseShadowResources()
     {
+        CameraMirrorBetterLightsUniforms.reset();
         if(privateShadowMap!=null)
         {
             privateShadowMap.close();
@@ -1288,6 +1304,34 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             writeMatrix(pid,"gbufferModelViewInverse",mirrorView,true);
             writeMatrix(pid,"gbufferPreviousModelView",mirrorView,false);
         }
+        if(mirrorView!=null&&!worldLightPositions.isEmpty()&&
+                mainView!=null)
+        {
+            FloatBuffer m=mirrorView.duplicate();
+            m.position(0);
+            float[] reflectedMatrix=new float[16];
+            m.get(reflectedMatrix);
+            CameraMirrorBetterLightsUniforms.apply(pid,
+                    worldLightPositions,
+                    new double[]{mainView.x,mainView.y,mainView.z},
+                    new double[]{view.x,view.y,view.z},
+                    nativeMainViewMatrix,reflectedMatrix,
+                    new CameraMirrorBetterLightsUniforms.Writer()
+                    {
+                        @Override public void write3(int program,
+                                String name,float x,float y,float z)
+                        {
+                            CameraMirrorBSLCompositor.this.write3(
+                                    program,name,x,y,z);
+                        }
+                        @Override public void write4(int program,
+                                String name,float x,float y,float z,float w)
+                        {
+                            CameraMirrorBSLCompositor.this.write4(
+                                    program,name,x,y,z,w);
+                        }
+                    });
+        }
         // BSL's GetShadow() projects reconstructed camera-relative
         // world positions with shadowModelView. The native shadow map,
         // however, is anchored to the MAIN camera, not the reflected
@@ -1648,6 +1692,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         restored.add(UniformBackup.capture(pid,loc,3));
         GL20.glUniform3f(loc,x,y,z);
     }
+    private void write4(int pid,String name,
+            float x,float y,float z,float w)
+    {
+        int loc=GL20.glGetUniformLocation(pid,name);
+        if(loc<0)return;
+        restored.add(UniformBackup.capture(pid,loc,4));
+        GL20.glUniform4f(loc,x,y,z,w);
+    }
+
     private void write1(int pid,String name,float value)
     {
         int loc=GL20.glGetUniformLocation(pid,name);
@@ -1792,6 +1845,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                     integerValue,integerValue2);
             else if(count==0)GL20.glUniform1i(location,integerValue);
             else if(count==1)GL20.glUniform1f(location,value.get(0));
+            else if(count==4)GL20.glUniform4f(location,value.get(0),
+                    value.get(1),value.get(2),value.get(3));
             else if(count==16)
             {
                 value.rewind();

@@ -207,3 +207,50 @@ during the auxiliary private GL program draw. In that case the next
 step is a scoped uniform refresh using the installed BetterLights
 build's actual GLSL names/API, not a second world render or an
 arbitrary brightness/position multiplier.
+
+### Dynamic BetterLights GLSL uniform rebasing for reflected CAMERA
+
+Field testing confirmed the mirror's nested player-position spoof runs,
+but light still follows the editor camera. The reason can be that
+BetterLights 1.0.3's `OptifineShaderUniformsHandler` uploads caster
+uniforms during the main OptiFine world render and does not run when the
+mirror selects already-compiled programs using raw `glUseProgram`.
+Changing `Minecraft.player` in RenderWorldLast cannot automatically
+change a uniform already stored on the GPU.
+
+The BSL mirror now performs a **value-verified** rebase of live GL
+`vec3`/`vec4` uniforms on the borrowed compiled programs. It does
+NOT guess provider-specific names or automatically change everything
+containing 'light'. Instead it:
+
+- Gets the *same registered* world-space caster origins already prepared
+  once at RenderTick.START by `BetterLightsWorldEngine`.
+- Enumerates the compiled program's actual active `vec3`/`vec4`
+  uniforms (including arrays), reads their existing values with
+  `glGetUniform`, and matches the XYZ against a caster's position
+  either in main-camera-relative space or after the main model-view.
+- For confirmed matches only, recomputes the caster's corresponding
+  reflected-camera-relative or reflected-view coordinates and writes
+  them with the existing BSL uniform backup/restore mechanism.
+  `vec4.w` remains intact.
+- If an active uniform contains *absolute world coordinates*, it is
+  already camera-independent and remains unchanged. Sun, moon, shadow,
+  camera uniforms and unrelated GLSL state are never modified.
+- Restores all changes at the end of the mirror pass before OptiFine
+  resumes drawing the regular scene.
+
+On first successful application the log includes
+`[Mirror][BetterLights] Updated compiled GLSL light position` plus
+the uniform name and old/new coordinates. If none match, it prints
+`No direct position-uniform match yet` with candidate names, to
+distinguish a truly unsupported provider layout (e.g., buffer blocks
+or shader-generated light matrices) from an incorrectly guessed fix.
+
+A/B test:
+```
+-Dbbs.editor.camera.mirrorBSLLightUniforms=false
+```
+The nested player-origin mirror scope remains independently controlled
+by `mirrorBSLLightOrigin`. A Java 8 regression test covers relative,
+view-space, absolute world-space, and unrelated uniforms; actual
+in-game BSL/BetterLights parity still requires visual verification.

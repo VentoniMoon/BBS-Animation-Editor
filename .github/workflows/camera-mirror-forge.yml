@@ -20,6 +20,10 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorLightSpace.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsUniforms.java'
+      - 'src/main/java/com/example/examplemod/BetterLightsWorldEngine.java'
+      - 'src/test/mirror-lights/CameraMirrorLightSpaceSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorShadowMatrix.java'
       - 'src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java'
@@ -52,6 +56,10 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorLightSpace.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsUniforms.java'
+      - 'src/main/java/com/example/examplemod/BetterLightsWorldEngine.java'
+      - 'src/test/mirror-lights/CameraMirrorLightSpaceSmokeTest.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorShadowMatrix.java'
       - 'src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java'
@@ -116,6 +124,9 @@ jobs:
           grep -q 'fixedWorldAnchor' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'owner.bindPrivateShadowProgram(optiProgram' src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java
           grep -q 'CameraMirrorBSLCompositor.releaseShadowResources' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'CameraMirrorBetterLightsUniforms.apply' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'registeredLightPositions()' src/main/java/com/example/examplemod/BetterLightsWorldEngine.java
+          grep -q 'UniformBackup.capture(pid,loc,4)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorShadowMatrix.rebase' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'bslTargets,reflected,camera' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'mirrorBSLMaxSize' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
@@ -160,6 +171,14 @@ jobs:
             src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java
           java -cp /tmp/bbs-mirror-shadow-test \
             com.example.examplemod.CameraMirrorShadowMatrixInvariantTest
+      - name: Verify BetterLights uniform camera-space rebasing
+        run: |
+          mkdir -p /tmp/bbs-mirror-light-test
+          javac -source 8 -target 8 -d /tmp/bbs-mirror-light-test \
+            src/main/java/com/example/examplemod/CameraMirrorLightSpace.java \
+            src/test/mirror-lights/CameraMirrorLightSpaceSmokeTest.java
+          java -cp /tmp/bbs-mirror-light-test \
+            com.example.examplemod.CameraMirrorLightSpaceSmokeTest
       - name: Compile entire editor against pinned Forge and mod dependencies
         run: |
           chmod +x ./gradlew

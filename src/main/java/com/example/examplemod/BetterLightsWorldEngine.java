@@ -2,6 +2,8 @@ package com.example.examplemod;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -45,6 +47,20 @@ public final class BetterLightsWorldEngine
         ValueSerializer baseline;
         String baseSignature;
         boolean registered;
+        double worldX,worldY,worldZ;
+    }
+
+    /** World positions of the SAME registered native sources. A separate
+     * camera may reinterpret their shader coordinates but may NOT tick
+     * or recreate them. Safe snapshot for OpenGL render thread use. */
+    public static synchronized List<double[]> registeredLightPositions()
+    {
+        List<double[]> out=new ArrayList<double[]>();
+        for(Slot slot:SLOTS.values())
+            if(slot.registered&&slot.caster!=null)
+                out.add(new double[]{
+                        slot.worldX,slot.worldY,slot.worldZ});
+        return out;
     }
 
     public static synchronized void prepare(Minecraft mc,
@@ -193,6 +209,9 @@ public final class BetterLightsWorldEngine
                 manager("addTemporaryLightCaster",activeWorld,slot.caster);
                 slot.registered=true;
             }
+            slot.worldX=world.x;
+            slot.worldY=world.y;
+            slot.worldZ=world.z;
         }
         catch(Throwable exception)
         {
