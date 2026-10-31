@@ -92,7 +92,8 @@ public final class CameraMirrorChunkVisibility
     public static Scope begin(Minecraft mc,PreviewCameraPose reflected,
             PreviewCameraPose normal)
     {
-        return beginInternal(mc,reflected,normal,false,0D);
+        return beginInternal(mc,reflected,normal,false,0D,
+                reflected.x,reflected.z);
     }
 
     /**
@@ -107,16 +108,20 @@ public final class CameraMirrorChunkVisibility
      */
     public static Scope beginShadow(Minecraft mc,
             PreviewCameraPose reflected,PreviewCameraPose normal,
-            double shadowRadius)
+            double anchorX,double anchorZ,double shadowRadius)
     {
-        if(!Double.isFinite(shadowRadius)||shadowRadius<=0D)
-            throw new IllegalArgumentException("Invalid shadow caster radius");
-        return beginInternal(mc,reflected,normal,true,shadowRadius);
+        if(!Double.isFinite(shadowRadius)||shadowRadius<=0D||
+                !Double.isFinite(anchorX)||!Double.isFinite(anchorZ))
+            throw new IllegalArgumentException(
+                    "Invalid world-anchored shadow caster footprint");
+        return beginInternal(mc,reflected,normal,true,shadowRadius,
+                anchorX,anchorZ);
     }
 
     private static Scope beginInternal(Minecraft mc,
             PreviewCameraPose reflected,PreviewCameraPose normal,
-            boolean shadowCasters,double shadowRadius)
+            boolean shadowCasters,double shadowRadius,
+            double anchorX,double anchorZ)
     {
         if(mc==null||mc.renderGlobal==null||reflected==null||
                 normal==null)return null;
@@ -154,8 +159,10 @@ public final class CameraMirrorChunkVisibility
             {
                 if(chunk==null)continue;
                 BlockPos pos=chunk.getPosition();
-                double dx=pos.getX()+8D-reflected.x;
-                double dz=pos.getZ()+8D-reflected.z;
+                double dx=pos.getX()+8D-
+                        (shadowCasters?anchorX:reflected.x);
+                double dz=pos.getZ()+8D-
+                        (shadowCasters?anchorZ:reflected.z);
                 if(dx*dx+dz*dz>limitSq)continue;
                 AxisAlignedBB bounds=new AxisAlignedBB(pos,
                         pos.add(16,16,16));
@@ -225,7 +232,8 @@ public final class CameraMirrorChunkVisibility
                 System.out.println("[BBS Editor][Mirror][Private Shadow] "+
                         "Caster chunk selection: "+visible.size()+
                         " chunks, radius="+limit+
-                        " blocks (independent of reflected view frustum)");
+                        " anchor="+anchorX+","+anchorZ+
+                        " (fixed mirror origin; no camera-view culling)");
             }
             if(!shadowCasters&&!logged)
             {

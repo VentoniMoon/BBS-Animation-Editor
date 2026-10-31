@@ -51,6 +51,11 @@ public final class CameraSceneMirrorRenderer
     private CameraSceneMirrorRenderer(){}
 
     public static boolean isCapturing(){return capturing;}
+    /** Fixed shadow-map origin: the physical mirror, never the moving eye. */
+    public static CameraSceneMirrors.Mirror captureMirror()
+    {
+        return capturing?activeMirror:null;
+    }
     public static boolean isFailed(){return failed;}
     public static String status()
     {

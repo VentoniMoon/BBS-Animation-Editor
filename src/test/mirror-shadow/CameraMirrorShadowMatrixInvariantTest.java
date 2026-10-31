@@ -75,6 +75,58 @@ public final class CameraMirrorShadowMatrixInvariantTest
                         ": "+a[i]+" != "+b[i]);
     }
 
+    private static float[] nativeWithMainSnap(float[] rotation,
+            double[] main,float interval)
+    {
+        return CameraMirrorShadowMatrix.rebase(rotation,
+                (float)main[0]%interval-interval/2,
+                (float)main[1]%interval-interval/2,
+                (float)main[2]%interval-interval/2);
+    }
+
+    /**
+     * Moving either the real spectator or reflected eye must not move
+     * the shadow of a world block when the mirror itself is stationary.
+     */
+    private static void verifyFixedWorldAnchor()
+    {
+        float[] rotation={
+                0.6F,0.8F,0F,0F,
+                -0.8F,0.6F,0F,0F,
+                0F,0F,1F,0F,
+                0F,0F,-100F,1F
+        };
+        float interval=2F;
+        double[] anchor={18.25,65.5,-12.75};
+        double[] point={7.25,67.0,-3.50};
+        double[][] mains={
+                {12.3,64.2,-8.2},{20.8,67.7,-13.2},
+                {-10.7,72.2,5.5}
+        };
+        double[][] reflected={
+                {-7.4,65.6,14.3},{-3.2,65.7,12.6},
+                {12.2,66.3,-22.8}
+        };
+        double[] expected=null;
+        for(int i=0;i<mains.length;i++)
+        {
+            double[] m=mains[i],e=reflected[i];
+            float[] nativeView=nativeWithMainSnap(rotation,m,interval);
+            float[] anchored=CameraMirrorShadowMatrix.fixedWorldAnchor(
+                    nativeView,m[0],m[1],m[2],e[0],e[1],e[2],
+                    anchor[0],anchor[1],anchor[2],interval);
+            double[] actual=transform(anchored,new double[]{
+                    point[0]-e[0],point[1]-e[1],
+                    point[2]-e[2],1});
+            if(expected==null)expected=actual;
+            else for(int k=0;k<4;k++)
+                if(Math.abs(actual[k]-expected[k])>0.0001)
+                    throw new AssertionError("Fixed mirror shadow drifts "+
+                            "with camera at iteration "+i+" coordinate "+
+                            k+": "+actual[k]+" vs "+expected[k]);
+        }
+    }
+
     public static void main(String[] args)
     {
         float[] shadow={
@@ -92,6 +144,7 @@ public final class CameraMirrorShadowMatrixInvariantTest
         verify(shadow,new double[]{12,65,-8},
                 new double[]{12,65,-8},point);
         verifyReflectedSnap();
+        verifyFixedWorldAnchor();
         for(int i=0;i<16;i++)
             if(shadow[i]!=before[i])
                 throw new AssertionError("Native matrix was modified");

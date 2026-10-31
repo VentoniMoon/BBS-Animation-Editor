@@ -825,3 +825,47 @@ The private pass still draws block VBO casters only; animated actor
 casters need a separately scoped prepared-pose shadow pass. The result
 is intended to fix view-driven caster loss, snap drift and shadowcolor
 state mismatches; final validation requires in-game movement tests.
+
+### Stable shadow origin anchored to the physical mirror
+
+Field capture showed a *moving* long shadow in the reflection even
+though a private shadow FBO reported success and its caster frustum
+included 51 chunks. The previous shadow view still targeted the moving
+**reflected eye**. This means the shadow-map projection and effective
+coverage can change as the user moves the editor camera, even with
+the mirror and sun stationary. A full private shadow map by itself
+does not eliminate this dependency.
+
+The default orthographic BSL shadow pass now anchors its world-space
+shadow projection to the **physical mirror center**. It computes the
+native OptiFine sun rotation as before but replaces the main-camera
+modulo translation with the precise offset needed to center that same
+sun-aligned map around a fixed mirror-world anchor. The private FBO
+uses this model-view for rasterization and supplies **the exact same
+matrix** to BSL's terrain/actor shadow lookups. Both the main and
+reflected eye may move without altering the shadow-space coordinates
+of any stationary world block.
+
+Shadow-caster selection is centered on the same mirror-world anchor,
+not the reflected eye. The chunk VBO coordinate origin remains the
+reflected eye because BSL's shadow vertex program and its GLSL inverse
+matrix use that camera-relative coordinate system. No second world,
+entity simulation, or OptiFine global shadow FBO is created.
+
+The Java 8 invariant test now compares world-point shadow coordinates
+over three different real/reflected camera positions, including
+negative world coordinates and changes spanning OptiFine snap intervals.
+The one-time private shadow log includes the fixed world anchor.
+
+Colored glass shadow writes remain optional:
+```
+-Dbbs.editor.camera.mirrorBSLShadowTranslucent=false
+```
+
+This isolates translucent shadowcaster failures without disabling
+transparent world blocks in the reflection itself. If colored-glass
+rendering is still wrong, compare the setting with and without the
+translucent shadow stage to identify whether the cause is
+`shadowcolor0` or the main GBuffer/composite. In-game tests remain
+necessary; compile-time matrix tests do not prove shaderpack visual
+parity.

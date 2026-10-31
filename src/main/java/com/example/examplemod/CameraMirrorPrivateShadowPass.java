@@ -196,7 +196,8 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
             PreviewCameraPose main,float partialTicks,int shadowProgram,
             Object optiProgram,Class<?> shaders,
             FloatBuffer projection,FloatBuffer lightView,
-            double casterRadius,CameraMirrorBSLCompositor owner)
+            double anchorX,double anchorZ,double casterRadius,
+            CameraMirrorBSLCompositor owner)
             throws Exception
     {
         ready=false;
@@ -252,7 +253,8 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
             // chunks, independent of the camera's direction.
             try(CameraMirrorChunkVisibility.Scope chunks=
                     CameraMirrorChunkVisibility.beginShadow(
-                            mc,reflected,main,casterRadius))
+                            mc,reflected,main,
+                            anchorX,anchorZ,casterRadius))
             {
                 if(chunks==null)throw new IllegalStateException(
                         "Shadow caster chunk set could not be prepared");
@@ -313,6 +315,7 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
                         width+"x"+height+" depth="+depthCount+
                         " color="+colorCount+
                         " casterRadius="+casterRadius+
+                        " worldAnchor="+anchorX+","+anchorZ+
                         " translucent="+System.getProperty(
                                 "bbs.editor.camera.mirrorBSLShadowTranslucent",
                                 "true")+

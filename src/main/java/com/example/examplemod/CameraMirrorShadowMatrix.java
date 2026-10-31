@@ -39,6 +39,44 @@ public final class CameraMirrorShadowMatrix
      * translation with the reflected-eye snapped translation. Both
      * rasterization and lookup must use the returned matrix.
      */
+    /**
+     * Fix the shadow-map origin to a WORLD point, such as the mirror plane,
+     * regardless of which reflected camera views that point.
+     *
+     * The native OptiFine view is:
+     *     R * T(mainEye % interval - interval/2)
+     * and the compiled chunk positions are relative to reflectedEye.
+     * To obtain a light view that is anchored at the same world point
+     * on EVERY frame, right-multiply the native matrix with:
+     *     T(reflectedEye - anchor + anchor % interval - mainEye % interval).
+     *
+     * Result for a static world point W:
+     *     shadowView * (W - reflectedEye)
+     *         = R * (W - anchor + anchor % interval - interval/2).
+     *
+     * Unlike re-snapping around the moving camera, this expression is
+     * independent of both the main and reflected camera positions.
+     */
+    public static float[] fixedWorldAnchor(float[] nativeView,
+            double mainX,double mainY,double mainZ,
+            double reflectedX,double reflectedY,double reflectedZ,
+            double anchorX,double anchorY,double anchorZ,
+            float interval)
+    {
+        if(!(interval>0F)||!Float.isFinite(interval))
+            throw new IllegalArgumentException("Invalid shadow interval");
+        if(!Double.isFinite(anchorX)||!Double.isFinite(anchorY)||
+                !Double.isFinite(anchorZ))
+            throw new IllegalArgumentException("Invalid world shadow anchor");
+        return rebase(nativeView,
+                reflectedX-anchorX+
+                    (float)anchorX%interval-(float)mainX%interval,
+                reflectedY-anchorY+
+                    (float)anchorY%interval-(float)mainY%interval,
+                reflectedZ-anchorZ+
+                    (float)anchorZ%interval-(float)mainZ%interval);
+    }
+
     public static float[] retargetOrthographicSnap(float[] nativeView,
             double mainX,double mainY,double mainZ,
             double mirrorX,double mirrorY,double mirrorZ,

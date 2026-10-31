@@ -315,10 +315,21 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             if(ortho&&!(interval>0F))
                 throw new IllegalStateException(
                         "Missing OptiFine orthographic shadow interval");
+            // The shadow map should belong to the physical MIRROR,
+            // not to the moving reflected eye. Otherwise different eye
+            // positions re-center the same shadow frustum and create a
+            // sliding shadow boundary, even with correct terrain GLSL.
+            CameraSceneMirrors.Mirror mirror=
+                    CameraSceneMirrorRenderer.captureMirror();
+            final double anchorX=mirror!=null?mirror.x:reflected.x;
+            final double anchorY=mirror!=null?
+                    mirror.y+mirror.height*0.5D:reflected.y;
+            final double anchorZ=mirror!=null?mirror.z:reflected.z;
             float[] mirrorModel=ortho?
-                    CameraMirrorShadowMatrix.retargetOrthographicSnap(
+                    CameraMirrorShadowMatrix.fixedWorldAnchor(
                             nativeModel,main.x,main.y,main.z,
-                            reflected.x,reflected.y,reflected.z,interval):
+                            reflected.x,reflected.y,reflected.z,
+                            anchorX,anchorY,anchorZ,interval):
                     nativeModel;
             FloatBuffer model=matrixBuffer(mirrorModel);
             FloatBuffer projection=matrixBuffer(nativeProjection);
@@ -332,7 +343,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             double casterRadius=Math.max(48D,Math.min(512D,footprint));
             privateShadowMap.render(mc,reflected,main,partialTicks,
                     programId,shadowProgram,shaders,projection,model,
-                    casterRadius,this);
+                    anchorX,anchorZ,casterRadius,this);
             privateShadowsReady=privateShadowMap.ready();
             if(privateShadowsReady)
             {
