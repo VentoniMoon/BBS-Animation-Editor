@@ -539,3 +539,41 @@ texture indices.
 
 This is a targeted parity repair; the full main-renderer sky/fog/
 lighting equivalence still needs an in-game BSL screenshot check.
+
+### BSL mirror after-final overlay (dark/tinted reflection fix)
+
+When the private reflected camera runs its own BSL deferred/composite
+passes, its finished HDR color is NOT a valid material/normal/albedo input
+to the main camera's GBuffer. Writing it into main colortex0 at
+RenderWorldLast makes OptiFine process it a second time (lighting, color
+curves, fog and tonemapping). This produced a dark orange tint across the
+whole reflection even though the private sky was now visible.
+
+The experimental BSL mirror now defaults to **late presentation**:
+
+1. Render the same reflected WorldClient geometry and prepared actors
+   into private BSL buffers and run its own final shader.
+2. During RenderWorldLast, copy the main scene depth into a separate
+   transparent overlay FBO. Draw the projective mirror quad into it with
+   native depth testing. Only visible mirror pixels are opaque; nearby
+   actors and blocks in front stay visible.
+3. Once OptiFine's own final shader finishes, but BEFORE
+   `AnimationEditorScreen` captures the world / draws GUI, alpha-composite
+   that overlay into Minecraft's resolved color framebuffer.
+4. Never run BSL deferred/composite/final on the same mirror color twice.
+   Preserve existing mirror geometry and skip denoising in the late mode.
+
+No second WorldClient, new chunks, actor animation or Jolt integration
+is introduced. All state and framebuffer bindings are restored. If
+native-depth copying fails the renderer logs a single failure and
+uses the old WorldLast path for subsequent frames.
+
+To compare against the previous HDR-in-GBuffer rendering:
+```
+-Dbbs.editor.camera.mirrorBSLPresentation=world
+```
+
+This is a change in presentation order, not an arbitrary brightness
+increase. It must be validated in-game against the active shaderpack:
+private-final uniform parity and shaderpack-specific depth attachment
+formats can still cause image differences.

@@ -77,6 +77,12 @@ public final class BbsFsWorldFrameCapture
         capturedThisNativeFrame = true;
         depthValid = true;
 
+        // The native OptiFine final has now finished. Draw only the
+        // private, already-postprocessed mirror overlay at this boundary,
+        // before we snapshot the world or paint editor GUI elements.
+        // This avoids a second BSL composite/tonemap on mirror colors.
+        CameraMirrorLateComposite.composite(mc);
+
         Framebuffer source = mc.getFramebuffer();
         int sw = source.framebufferWidth;
         int sh = source.framebufferHeight;

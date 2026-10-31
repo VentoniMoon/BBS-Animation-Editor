@@ -28,6 +28,7 @@ public final class CameraSceneMirrorRenderer
         void draw(PreviewCameraPose pose) throws Throwable;
     }
     private static Framebuffer texture;
+    private static boolean lateCaptured;
     private static boolean hdrColorTexture;
     private static boolean lastBslHdrMode;
     private static CameraMirrorOptiFineTargets bslTargets;
@@ -69,6 +70,8 @@ public final class CameraSceneMirrorRenderer
     }
     public static void reset()
     {
+        CameraMirrorLateComposite.reset();
+        lateCaptured=false;
         capturedId="";
         capturedPose=null;
         activeMirror=null;
@@ -99,6 +102,8 @@ public final class CameraSceneMirrorRenderer
     public static void capture(Minecraft mc,CameraSceneMirrors mirrors,
             PreviewCameraPose camera,ReflectionPass pass)
     {
+        lateCaptured=false;
+        CameraMirrorLateComposite.beginFrame();
         capturedId="";
         capturedPose=null;
         activeMirror=null;
@@ -185,6 +190,16 @@ public final class CameraSceneMirrorRenderer
             return;
         }
         final boolean experimentalBSL=bslMultiPass;
+        // A completed mirror is not a raw material GBuffer pixel. The
+        // native BSL composite would shade/tonemap it a second time and
+        // turn a correctly reflected sky and scene unnaturally dark.
+        // Preserve the true native depth mask in WorldLast, then present
+        // the mirror's own BSL final only AFTER OptiFine's main final.
+        final boolean lateBSL=experimentalBSL&&
+                !"world".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLPresentation","late"))&&
+                Integer.getInteger("bbs.editor.camera.mirrorBSLDebugColor",
+                        -1)<0;
         // In RenderWorldLast the normal OptiFine deferred frame has not
         // completed its final tone mapping. Mirror colors must enter that
         // same final pass as LINEAR HDR, not as an already tonemapped LDR
@@ -192,7 +207,7 @@ public final class CameraSceneMirrorRenderer
         //
         // Set -Dbbs.editor.camera.mirrorBSLFinalMode=final to compare with
         // the old private-final path when diagnosing shaderpack parity.
-        final boolean bslHdr=experimentalBSL&&
+        final boolean bslHdr=experimentalBSL&&!lateBSL&&
                 !"final".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLFinalMode","hdr"))&&
                 Integer.getInteger(
@@ -308,7 +323,7 @@ public final class CameraSceneMirrorRenderer
                         // Denoising is only suitable after final LDR
                         // conversion. The HDR mirror is tonemapped once
                         // by the main BSL frame, not by this filter.
-                        if(!bslHdr&&Integer.getInteger(
+                        if(!lateBSL&&!bslHdr&&Integer.getInteger(
                                 "bbs.editor.camera.mirrorBSLDebugColor",
                                 -1)<0&&!Boolean.getBoolean(
                                 "bbs.editor.camera.mirrorBSLSkipFinal"))
@@ -347,9 +362,11 @@ public final class CameraSceneMirrorRenderer
                 throw new IllegalStateException("Mirror texture missing");
             capturedId=picked.id;
             capturedPose=reflected;
+            lateCaptured=lateBSL;
             captureStatus=experimentalBSL?
-                    (bslHdr?"MIRROR: BSL HDR -> MAIN FINAL":
-                            "MIRROR: BSL PRIVATE FINAL (diagnostic)"):
+                    (lateBSL?"MIRROR: BSL FINAL -> LATE COMPOSITE":
+                        (bslHdr?"MIRROR: BSL HDR -> MAIN FINAL":
+                            "MIRROR: BSL PRIVATE FINAL (diagnostic)")):
                     (shaderMirror?
                         "MIRROR: OptiFine forward shader active":
                         (clipPlaneInstalled?
@@ -652,6 +669,23 @@ public final class CameraSceneMirrorRenderer
             PreviewCameraPose camera)
     {
         if(capturing||mc==null||mirrors==null||camera==null)return;
+        // During WorldLast preserve native depth occlusion, but postpone
+        // finished color until after main BSL final. If a GPU cannot copy
+        // the native depth, fall back to the original in-world mirror.
+        if(lateCaptured&&CameraMirrorLateComposite.prepare(mc,
+                new CameraMirrorLateComposite.Draw()
+                {
+                    @Override public void draw()
+                    {
+                        renderDirect(mc,mirrors,camera);
+                    }
+                }))return;
+        renderDirect(mc,mirrors,camera);
+    }
+
+    private static void renderDirect(Minecraft mc,
+            CameraSceneMirrors mirrors,PreviewCameraPose camera)
+    {
         RenderManager manager=mc.getRenderManager();
         if(manager==null)return;
         int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
