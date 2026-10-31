@@ -196,6 +196,7 @@ public final class CameraSceneMirrorRenderer
         // Preserve the true native depth mask in WorldLast, then present
         // the mirror's own BSL final only AFTER OptiFine's main final.
         final boolean lateBSL=experimentalBSL&&
+                CameraMirrorLateComposite.available()&&
                 !"world".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLPresentation","late"))&&
                 Integer.getInteger("bbs.editor.camera.mirrorBSLDebugColor",
