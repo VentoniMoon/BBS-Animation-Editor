@@ -157,6 +157,19 @@ public final class CameraMirrorTerrainPass
     private static void drawWorldLayers(Minecraft mc,RenderGlobal world,
             Entity eye,float partialTicks)
     {
+        // BSL evaluates terrain lighting using the chunk VBO's packed
+        // lightmap UV and gl_TextureMatrix[1]. Unlike the main
+        // EntityRenderer pass, this auxiliary pass doesn't run the
+        // enableLightmap lifecycle. Restore its transform only for the
+        // private BSL block layers, never for sky, actors or vanilla.
+        CameraMirrorTerrainLightmap lightmap=
+                CameraMirrorBSLCompositor.active()&&
+                !"false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLTerrainLightmap",
+                        "true"))?
+                CameraMirrorTerrainLightmap.begin():null;
+        try
+        {
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDepthMask(true);
@@ -190,6 +203,11 @@ public final class CameraMirrorTerrainPass
             GL11.glDepthMask(true);
             GL11.glDisable(GL11.GL_BLEND);
             GL11.glDisable(GL11.GL_CLIP_PLANE0);
+        }
+        finally
+        {
+            if(lightmap!=null)lightmap.close();
+        }
     }
 
     private static void setCamera(PreviewCameraPose pose,float aspect,

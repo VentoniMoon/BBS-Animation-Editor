@@ -636,3 +636,35 @@ The log prints a one-time `Mirrored colortex2 metadata seeded` on
 success, or an explicit warning if the OptiFine API is incompatible.
 This specifically tests auto-exposure mismatch; further in-game
 validation of all color data and shaderpack passes remains necessary.
+
+### BSL terrain lightmap transform parity (October 31)
+
+The sky, BB/Chameleon actor and gamma-encoded private final output are
+visually close to the main camera, but reflective grass and block faces
+remain washed out. The BSL `gbuffers_terrain` VSH computes its block
+lightmap from `gl_TextureMatrix[1] * gl_MultiTexCoord1`, where OptiFine
+chunk VBOs contain the 0..240 packed lightmap values.
+
+Unlike Minecraft's normal `EntityRenderer` render pass, the mirror's
+manual `RenderGlobal.renderBlockLayer` calls do not explicitly prepare
+this texture matrix. If the prior screen/shader stage left texture unit 1
+with an identity matrix, BSL clamps almost every lightmap coordinate to
+maximum illumination even while sky and actor programs appear correct.
+
+The BSL mirror block pass now pushes texture unit 1's existing texture
+matrix, installs vanilla 1.12.2's standard 1/256 scale with an 8-texel
+offset, renders SOLID/CUTOUT_MIPPED/CUTOUT/TRANSLUCENT, and pops the
+original matrix. The unit and matrix modes are restored even on error.
+Nothing changes for the regular nonshader mirror or main Minecraft
+camera. The one-time `[Mirror][Terrain Lightmap]` log prints the
+previous matrix scale/offset so a field test can confirm if it was wrong.
+
+For a controlled A/B comparison, disable only this new lightmap scope:
+```
+-Dbbs.editor.camera.mirrorBSLTerrainLightmap=false
+```
+
+If the logged previous matrix already had 1/256 scale, or visual parity
+is unchanged, the remaining issue lies in another terrain-specific
+input (e.g. OptiFine VBO vertex attributes, material IDs or light
+uniforms), not a global color multiplier.
