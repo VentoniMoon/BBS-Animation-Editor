@@ -166,7 +166,7 @@ public final class CameraMirrorTerrainPass
                 CameraMirrorBSLCompositor.active()&&
                 !"false".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLTerrainLightmap",
-                        "true"))?
+                        "false"))?
                 CameraMirrorTerrainLightmap.begin():null;
         try
         {
@@ -178,12 +178,15 @@ public final class CameraMirrorTerrainPass
             mc.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
             CameraMirrorOptiFineBackend.stage("ProgramTerrainSolid");
             world.renderBlockLayer(BlockRenderLayer.SOLID,partialTicks,0,eye);
+            CameraMirrorBSLCompositor.verifyTerrainProgram("SOLID");
             GL11.glEnable(GL11.GL_ALPHA_TEST);
             CameraMirrorOptiFineBackend.stage("ProgramTerrainCutoutMip");
             world.renderBlockLayer(BlockRenderLayer.CUTOUT_MIPPED,
                     partialTicks,0,eye);
+            CameraMirrorBSLCompositor.verifyTerrainProgram("CUTOUT_MIPPED");
             CameraMirrorOptiFineBackend.stage("ProgramTerrainCutout");
             world.renderBlockLayer(BlockRenderLayer.CUTOUT,partialTicks,0,eye);
+            CameraMirrorBSLCompositor.verifyTerrainProgram("CUTOUT");
             // Save mirror depthtex1 at the native opaque/translucent
             // boundary; never copy from the main OptiFine depth buffer.
             CameraMirrorBSLCompositor.beforeTranslucent();

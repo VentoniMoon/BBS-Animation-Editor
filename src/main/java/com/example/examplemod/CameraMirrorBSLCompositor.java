@@ -55,6 +55,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean mipmapLogged;
     private static boolean exposureLogged;
     private static boolean exposureWarningLogged;
+    private static boolean terrainProgramVerified;
+    private static boolean terrainProgramWarning;
+    private int expectedTerrainProgram;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -161,6 +164,45 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     public static void stage(String name)
     {
         if(current!=null)current.geometryStage(name);
+    }
+
+    /**
+     * RenderGlobal.renderBlockLayer() calls EntityRenderer.enableLightmap(),
+     * which calls OptiFine Shaders.enableLightmap(). That hook may replace
+     * ProgramTextured with ProgramTexturedLit based on its cached
+     * activeProgram, ignoring our raw glUseProgram(ProgramTerrain).
+     *
+     * Check the actual driver state after a chunk layer, so a regression
+     * is visible in latest.log rather than silently washing out terrain.
+     */
+    public static void verifyTerrainProgram(String layer)
+    {
+        if(current==null)return;
+        current.checkTerrainProgram(layer);
+    }
+
+    private void checkTerrainProgram(String layer)
+    {
+        if(expectedTerrainProgram<=0)return;
+        int actual=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        if(actual==expectedTerrainProgram)
+        {
+            if(!terrainProgramVerified)
+            {
+                terrainProgramVerified=true;
+                System.out.println(TAG+"Terrain GLSL verified: "+layer+
+                        " program="+actual+
+                        " (OptiFine bookkeeping synchronized)");
+            }
+        }
+        else if(!terrainProgramWarning)
+        {
+            terrainProgramWarning=true;
+            System.err.println(TAG+"TERRAIN PROGRAM OVERRIDE: "+layer+
+                    " expected="+expectedTerrainProgram+
+                    " actual="+actual+
+                    " (OptiFine lightmap or chunk hook replaced shader)");
+        }
     }
 
     public static boolean active(){return current!=null;}
@@ -386,6 +428,21 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 mirrorView=currentMatrix(GL11.GL_MODELVIEW_MATRIX);
             IntBuffer draw=(IntBuffer)getDrawBuffers.invoke(program);
             if(draw!=null)GL20.glDrawBuffers(draw.asReadOnlyBuffer());
+            // OptiFine caches the ACTIVE Program independently of the GL
+            // CURRENT_PROGRAM. In RenderGlobal.renderBlockLayer(),
+            // enableLightmap()/disableLightmap() can call useProgram() and
+            // replace our terrain shader if the cache still points at the
+            // main camera's ProgramTextured/ProgramTexturedLit.
+            //
+            // Mirror the borrowed compiled program in the cache ONLY inside
+            // this private scope. Never call Shaders.useProgram here: it
+            // would bind/modify OptiFine's shared dfb. close() restores
+            // the original program, ID and draw-buffer metadata.
+            activeProgramField.set(null,program);
+            activeProgramIdField.setInt(null,pid);
+            activeDrawBuffersField.set(null,draw);
+            expectedTerrainProgram=name.startsWith("ProgramTerrain")?
+                    pid:0;
             // Raw glUseProgram deliberately bypasses OptiFine's
             // useProgram (which would rewrite the MAIN dfb state). Give
             // the borrowed GLSL program the native sampler unit layout

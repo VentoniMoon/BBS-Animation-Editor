@@ -668,3 +668,35 @@ If the logged previous matrix already had 1/256 scale, or visual parity
 is unchanged, the remaining issue lies in another terrain-specific
 input (e.g. OptiFine VBO vertex attributes, material IDs or light
 uniforms), not a global color multiplier.
+
+### Active OptiFine GLSL program vs actual GL program (October 31)
+
+The last in-game log confirmed the terrain lightmap matrix already had
+the **correct vanilla values** (scale 0.00390625, offsets 0.03125).
+The supplemental mirror lightmap transform is thus disabled by default;
+it can still be toggled using
+`-Dbbs.editor.camera.mirrorBSLTerrainLightmap=true` for diagnosis.
+
+The main difference in the mirror's block rendering is the compiled
+shader program *lifecycle*. Private `CameraMirrorBSLCompositor.geometryStage`
+called raw `GL20.glUseProgram(ProgramTerrain)` so that native OptiFine
+would not rebind its shared main-world framebuffers. But OptiFine
+maintains a separate **`Shaders.activeProgram` / `activeProgramID` /
+`activeDrawBuffers`** cache. `RenderGlobal.renderBlockLayer()` calls
+`EntityRenderer.enableLightmap()` and `disableLightmap()`, which may
+switch from cached `ProgramTextured` to `ProgramTexturedLit` through
+`Shaders.useProgram()`, replacing the raw `ProgramTerrain` halfway
+through a draw while all the private GBuffer targets stay active.
+
+The compositor now updates all three OptiFine bookkeeping fields to
+the borrowed compiled program before rendering a private geometry
+stage; its existing `close()` already restores the original native
+program, program ID and draw buffers without calling global
+`Shaders.useProgram`. This prevents native lightmap hooks from
+mistaking terrain rendering for an ordinary textured draw.
+
+The mirror also verifies `GL_CURRENT_PROGRAM` immediately after each
+solid/cutout layer. Logs now include either `Terrain GLSL verified`
+or `TERRAIN PROGRAM OVERRIDE` (expected/actual IDs) for testing.
+This is an evidence-driven terrain-program correction; full BSL
+reflective lighting parity still needs an in-game screenshot.

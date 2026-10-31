@@ -111,6 +111,8 @@ jobs:
           grep -q 'GL30.glBlitFramebuffer(0,0,4,2' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
           grep -q 'mirrorBSLSkyProgram' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'CameraMirrorBSLCompositor.renderSkyBackdrop()' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'activeProgramField.set(null,program)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorBSLCompositor.verifyTerrainProgram' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'CameraMirrorTerrainLightmap.begin()' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'GL11.glScalef(1F/256F' src/main/java/com/example/examplemod/CameraMirrorTerrainLightmap.java
           grep -q 'applyPreFlips("ProgramDeferredPre")' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
