@@ -13,6 +13,7 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.util.vector.Matrix4f;
+import org.lwjgl.util.vector.Vector4f;
 
 /**
  * Experimental independent BSL/OptiFine G5 deferred compositor.
@@ -580,6 +581,51 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         copyInt(pid,"frameCounter","frameCounter");
         copyInt(pid,"moonPhase","moonPhase");
         copyInt(pid,"isEyeInWater","isEyeInWater");
+        // OptiFine stores the world sun/moon/shadow light in the MAIN
+        // camera's view coordinates. A reflected camera must rotate those
+        // vectors into its own view-space, not blindly reuse main-camera
+        // values. Ignore translations: these are directional vectors.
+        copyReflectedDirection(pid,"sunPosition","sunPosition");
+        copyReflectedDirection(pid,"moonPosition","moonPosition");
+        copyReflectedDirection(pid,"upPosition","upPosition");
+        copyReflectedDirection(pid,"shadowLightPosition",
+                "shadowLightPosition");
+    }
+
+    private void copyReflectedDirection(int pid,String uniform,
+            String sourceName)
+    {
+        if(mirrorView==null)return;
+        try
+        {
+            Field sourceField=nativeField(sourceName);
+            Field mainField=nativeField("faModelView");
+            if(sourceField==null||mainField==null)return;
+            float[] source=(float[])sourceField.get(null);
+            float[] main=(float[])mainField.get(null);
+            if(source==null||source.length<3||
+                    main==null||main.length<16)return;
+            FloatBuffer buf=BufferUtils.createFloatBuffer(16);
+            buf.put(main,0,16);
+            buf.flip();
+            Matrix4f from=new Matrix4f();
+            from.load(buf);
+            Matrix4f inverse=Matrix4f.invert(from,null);
+            if(inverse==null)return;
+            Vector4f world=Matrix4f.transform(inverse,
+                    new Vector4f(source[0],source[1],source[2],0F),null);
+            mirrorView.rewind();
+            Matrix4f reflected=new Matrix4f();
+            reflected.load(mirrorView);
+            mirrorView.rewind();
+            Vector4f result=Matrix4f.transform(reflected,world,null);
+            write3(pid,uniform,result.x,result.y,result.z);
+        }
+        catch(IllegalAccessException e)
+        {
+            throw new IllegalStateException(
+                    "Cannot transform BSL light direction "+uniform,e);
+        }
     }
 
     private Field nativeField(String name)
