@@ -4,6 +4,8 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,6 +44,9 @@ public final class CameraMirrorBetterLightsUniforms
     private static final Map<Integer,List<Uniform>> CACHE=
             new HashMap<Integer,List<Uniform>>();
     private static boolean foundLogged,notFoundLogged;
+    private static final Set<Integer> VIEWED_PROGRAMS=
+            new HashSet<Integer>();
+    private static int totalVectorCandidates;
     private static int maxCandidateCount;
     private static String candidateExamples="";
     private CameraMirrorBetterLightsUniforms(){}
@@ -51,6 +56,9 @@ public final class CameraMirrorBetterLightsUniforms
         CACHE.clear();
         foundLogged=false;
         notFoundLogged=false;
+        VIEWED_PROGRAMS.clear();
+        totalVectorCandidates=0;
+        CameraMirrorBetterLightsProbe.reset();
         maxCandidateCount=0;
         candidateExamples="";
     }
@@ -86,6 +94,11 @@ public final class CameraMirrorBetterLightsUniforms
             }
         }
         CACHE.put(pid,result);
+        if(VIEWED_PROGRAMS.add(pid))
+        {
+            totalVectorCandidates+=result.size();
+            CameraMirrorBetterLightsProbe.inspect(pid);
+        }
         return result;
     }
 
@@ -168,16 +181,25 @@ public final class CameraMirrorBetterLightsUniforms
                     candidateExamples+=uniform.name+";";
             }
         }
-        if(fixed==0&&!notFoundLogged)
+        return fixed;
+    }
+
+    /** Print after the whole reflected frame, not after the FIRST sky or
+     * terrain program. Previous diagnostics reported only one program
+     * and made an incorrect global inference about the provider format. */
+    public static void frameCompleted()
+    {
+        if(!notFoundLogged&&!foundLogged&&!VIEWED_PROGRAMS.isEmpty())
         {
             notFoundLogged=true;
             System.out.println("[BBS Editor][Mirror][BetterLights] "+
-                    "No direct position-uniform match yet; sources="+
-                    sources.size()+" vec3/4 candidates="+maxCandidateCount+
-                    " light names="+candidateExamples+
-                    " (possible BetterLights UBO/SSBO or view transform "+
-                    "mismatch; no unsafe shader modifications)");
+                    "No direct position-uniform match after entire frame; "+
+                    "compiledPrograms="+VIEWED_PROGRAMS.size()+
+                    " totalVec3/4="+totalVectorCandidates+
+                    " maxPerProgram="+maxCandidateCount+
+                    " possibleNames="+candidateExamples+
+                    " (see [Mirror][LightProbe] for the actual GLSL "+
+                    "program and provider uniform inventories)");
         }
-        return fixed;
     }
 }

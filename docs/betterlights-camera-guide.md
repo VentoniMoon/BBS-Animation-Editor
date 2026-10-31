@@ -254,3 +254,40 @@ The nested player-origin mirror scope remains independently controlled
 by `mirrorBSLLightOrigin`. A Java 8 regression test covers relative,
 view-space, absolute world-space, and unrelated uniforms; actual
 in-game BSL/BetterLights parity still requires visual verification.
+
+### Mirror BetterLights: identifying the real shader data layout
+
+The log `No direct position-uniform match yet; ... vec3/4 candidates=1`
+was misleading: the old probe emitted that result after the FIRST
+borrowed GLSL program in `overrideCamera`, not after all terrain,
+deferred, composite, and final programs were examined.
+
+The new diagnostic records the unique compiled GLSL program IDs
+encountered by the reflected render. For each program it prints the
+actual active uniform count, the number of `vec3/vec4` declarations,
+other uniform types, names containing relevant light/caster keywords,
+and a limited sample of vector values. A final `No direct
+position-uniform match after entire frame` message only prints after
+the mirror compositor has closed and all programs have been visited.
+
+A read-only provider probe also identifies shader/uniform/patcher
+classes from the **user-installed BetterLights JAR**, without needing
+to redistribute the private provider binary or guess a package name.
+It lists the names/signatures of candidate uniform-handler methods and
+fields. It does not call arbitrary private methods, edit provider
+sources, or mutate main OptiFine state.
+
+To collect decisive logs:
+```powershell
+Select-String -Path '.\run\logs\latest.log' `
+  -SimpleMatch '[Mirror][LightProbe]', `
+               'No direct position-uniform match after entire frame', `
+               'Updated compiled GLSL light position'
+```
+
+You can disable only this one-time probe using
+`-Dbbs.editor.camera.mirrorBSLLightProbe=false`. The existing
+value-confirmed rebase remains enabled independently. If there are
+no source uniforms in all programs, the next implementation must
+use the actual provider pipeline (e.g., buffer texture/light
+compositor) rather than inventing a position-uniform name.

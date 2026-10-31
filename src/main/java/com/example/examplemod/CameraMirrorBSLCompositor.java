@@ -1737,6 +1737,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     {
         if(closed)return;
         closed=true;
+        // The earlier BetterLights diagnostic was emitted on the FIRST
+        // program, which might be skypass with only one vec3. Aggregate
+        // all borrowed BSL programs before concluding no match exists.
+        CameraMirrorBetterLightsUniforms.frameCompleted();
         current=null;
         Throwable failure=null;
         try
