@@ -217,6 +217,48 @@ NOT mean BSL image parity has been achieved.
 The experimental path remains opt-in and awaits another runtime image
 test for confirmation.
 
+### BSL grain and repeated-final diagnostic
+
+The experimental BSL mirror was visibly grainier than the main camera.
+The private mirror GBuffer had been hard-limited to **768px** and the
+Minecraft `Framebuffer` carrying its finished image defaults to point
+sampling (`GL_NEAREST`). Magnifying that texture on the projected
+mirror surface accentuated individual screen-space dither pixels.
+
+The experimental BSL capture now defaults to a **1024px** maximum side;
+it can be adjusted (bounded from 512 to 1536) using a client JVM arg:
+
+```
+-Dbbs.editor.camera.mirrorBSLMaxSize=1280
+```
+
+Use 768 if GPU load increases too much. The FINAL mirror color is
+sampled with `GL_LINEAR`, while private material/normal/depth textures
+remain `GL_NEAREST` (these cannot safely be smoothed). The mirror also
+explicitly binds OptiFine's active read-only `noisetex` to unit 15 during
+private GLSL postprocessing rather than sampling an unrelated texture left
+on that unit. This does NOT disable BSL's dithering or provide
+independent temporal antialiasing history.
+
+There is still a possible **double tonemap** issue: the mirror's BSL
+`final` output is drawn at `RenderWorldLast` before the normal
+camera's final composite. To compare the outcome without changing the
+default pipeline, use this additional diagnostic JVM arg:
+
+```
+-Dbbs.editor.camera.mirrorBSLSkipFinal=true
+```
+
+This displays the private `colortex0` **after** the seven BSL
+`deferred/composite` stages but **before** its own `final` stage.
+The main normal camera continues its own OptiFine processing. A
+pre-final color buffer may be HDR and will be clamped into the LDR
+mirror framebuffer, so this is a comparison test, not a supported
+final rendering mode. Do not combine it with `mirrorBSLDebugColor`.
+The default remains the full seven stages + BSL final.
+Visual game tests are still required to verify grain reduction and
+determine where tone mapping belongs.
+
 ### BSL back-wall reflection fix
 
 The next in-game image showed the mirror reflecting the **stone wall
