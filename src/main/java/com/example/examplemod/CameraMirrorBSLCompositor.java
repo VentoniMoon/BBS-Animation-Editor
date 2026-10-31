@@ -524,7 +524,51 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         // Only texture bindings are changed; global sfb/shadow render
         // targets and their contents remain completely untouched.
         bindNativeShadowImages();
+        // BSL uses noisetex for screen-space dithering and spatial
+        // sampling. At RenderWorldLast GL_TEXTURE15 is NOT guaranteed to
+        // remain bound to OptiFine's noise image. Always bind the actual
+        // pack resource rather than sampling an unrelated stale texture.
+        bindNativeNoiseImage();
         GL13.glActiveTexture(oldTextureUnit);
+    }
+
+    private static boolean noiseDiagnosticLogged;
+
+    private void bindNativeNoiseImage()
+    {
+        try
+        {
+            Field enabled=nativeField("noiseTextureEnabled");
+            Field nativeNoise=nativeField("noiseTexture");
+            if(nativeNoise==null||enabled==null||
+                    !enabled.getBoolean(null))return;
+            Object resource=nativeNoise.get(null);
+            if(resource==null)return;
+            // ICustomTexture is optional and OptiFine's concrete texture
+            // classes vary; never make it a Forge compile dependency.
+            Method getTextureId=resource.getClass().getMethod(
+                    "getTextureId");
+            int id=((Number)getTextureId.invoke(resource)).intValue();
+            if(id>0)
+            {
+                bindReadOnlyTexture(15,id);
+                if(!noiseDiagnosticLogged)
+                {
+                    noiseDiagnosticLogged=true;
+                    System.out.println(TAG+
+                            "Bound native BSL noisetex on unit 15");
+                }
+            }
+        }
+        catch(ReflectiveOperationException error)
+        {
+            if(!noiseDiagnosticLogged)
+            {
+                noiseDiagnosticLogged=true;
+                System.err.println(TAG+
+                        "OptiFine noisetex unavailable: "+error);
+            }
+        }
     }
 
     private void bindNativeShadowImages()
