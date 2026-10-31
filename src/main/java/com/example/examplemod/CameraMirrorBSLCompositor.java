@@ -1,5 +1,6 @@
 package com.example.examplemod;
 
+import net.minecraft.client.Minecraft;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
