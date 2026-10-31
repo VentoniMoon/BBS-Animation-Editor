@@ -869,3 +869,34 @@ translucent shadow stage to identify whether the cause is
 `shadowcolor0` or the main GBuffer/composite. In-game tests remain
 necessary; compile-time matrix tests do not prove shaderpack visual
 parity.
+
+### Native OptiFine shadow eye versus BBS preview camera (October 31)
+
+The physical mirror and caster selection are now fixed in world space, but
+shadow drift can persist if the shaderpack's **original** shadow view
+is de-snapped using the wrong camera. In OptiFine 1.12.2
+`Shaders.setCameraShadow(partialTicks)` obtains the shadow-map origin
+from the interpolated `mc.getRenderViewEntity().lastTickPos*/pos*`.
+This is not necessarily the BBS preview camera pose; the two can move
+independently during editing, particularly while viewing actors.
+
+The previous `fixedWorldAnchor` call cancelled a modulo translation
+computed from **BBS preview camera** `main.x/y/z`, not the actual
+native `RenderViewEntity` used to construct
+`Shaders.shadowModelView`. This left a residual position-dependent
+translation despite a stable world anchor. The call now supplies the
+same interpolated native eye coordinates used by OptiFine, while still
+using the reflected eye for chunk VBO coordinates and the physical
+mirror as the fixed shadow-map center.
+
+The new diagnostic prints both native and editor eye coordinates,
+the mirror anchor and shadow interval:
+`OptiFine shadow native eye=... editor eye=... mirror anchor=...`.
+A pure Java 8 regression test now deliberately separates these two
+camera positions and confirms that cancelling the editor-eye remainder
+would produce a different (wrong) shadow matrix.
+
+This correction applies to orthographic OptiFine shadow maps; any
+remaining artifacts require examining the actual shadow-map depth
+content and shaderpack-specific shadow sampling, not further
+unverified adjustments to lightmap, color or exposure.

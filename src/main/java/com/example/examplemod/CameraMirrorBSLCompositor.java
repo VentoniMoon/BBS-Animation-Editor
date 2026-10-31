@@ -1,6 +1,7 @@
 package com.example.examplemod;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.entity.Entity;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -67,6 +68,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static CameraMirrorPrivateShadowPass privateShadowMap;
     private boolean privateShadowsReady;
     private static boolean privateShadowWarning;
+    private static boolean nativeShadowEyeLogged;
     private static boolean privateShadowDisabled;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
@@ -325,12 +327,36 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             final double anchorY=mirror!=null?
                     mirror.y+mirror.height*0.5D:reflected.y;
             final double anchorZ=mirror!=null?mirror.z:reflected.z;
+            // OptiFine Shaders.setCameraShadow() builds its snapped
+            // light-space matrix using the interpolated RenderViewEntity
+            // coordinates, NOT our independent BBS preview-camera pose.
+            // Using main.x/y/z here left an un-cancelled camera-dependent
+            // translation even when the mirror-world anchor was fixed.
+            Entity nativeEye=mc.getRenderViewEntity();
+            if(nativeEye==null)
+                throw new IllegalStateException(
+                        "OptiFine native shadow eye is unavailable");
+            final double nativeX=nativeEye.lastTickPosX+
+                    (nativeEye.posX-nativeEye.lastTickPosX)*partialTicks;
+            final double nativeY=nativeEye.lastTickPosY+
+                    (nativeEye.posY-nativeEye.lastTickPosY)*partialTicks;
+            final double nativeZ=nativeEye.lastTickPosZ+
+                    (nativeEye.posZ-nativeEye.lastTickPosZ)*partialTicks;
             float[] mirrorModel=ortho?
                     CameraMirrorShadowMatrix.fixedWorldAnchor(
-                            nativeModel,main.x,main.y,main.z,
+                            nativeModel,nativeX,nativeY,nativeZ,
                             reflected.x,reflected.y,reflected.z,
                             anchorX,anchorY,anchorZ,interval):
                     nativeModel;
+            if(!nativeShadowEyeLogged)
+            {
+                nativeShadowEyeLogged=true;
+                System.out.println(TAG+"OptiFine shadow native eye="+
+                        nativeX+","+nativeY+","+nativeZ+
+                        " editor eye="+main.x+","+main.y+","+main.z+
+                        " mirror anchor="+anchorX+","+anchorY+","+anchorZ+
+                        " interval="+interval);
+            }
             FloatBuffer model=matrixBuffer(mirrorModel);
             FloatBuffer projection=matrixBuffer(nativeProjection);
             privateShadowMap=CameraMirrorPrivateShadowPass.acquire(

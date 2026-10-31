@@ -107,6 +107,8 @@ jobs:
           grep -q 'CameraSceneMirrorRenderer.captureMirror()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorChunkVisibility.beginShadow' src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java
           grep -q 'verifyFixedWorldAnchor()' src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java
+          grep -q 'nativeEye.lastTickPosX' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'verifyNativeEyeNotPreviewEye()' src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java
           grep -q 'CameraMirrorChunkVisibility.beginShadow' src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java
           grep -q 'fixedWorldAnchor' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'owner.bindPrivateShadowProgram(optiProgram' src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java

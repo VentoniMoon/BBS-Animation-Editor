@@ -127,6 +127,52 @@ public final class CameraMirrorShadowMatrixInvariantTest
         }
     }
 
+    /**
+     * Real OptiFine shadow camera uses interpolated RenderViewEntity,
+     * which is not necessarily equal to a BBS/editor preview camera.
+     * The wrong source produces a real residual translation on the
+     * shadow map despite an otherwise correct static anchor.
+     */
+    private static void verifyNativeEyeNotPreviewEye()
+    {
+        float[] rotate={
+                0.6F,0.8F,0F,0F,
+                -0.8F,0.6F,0F,0F,
+                0F,0F,1F,0F,
+                0F,0F,-100F,1F
+        };
+        float interval=2F;
+        double[] nativeEye={12.35,64.25,-8.17};
+        double[] editorEye={20.75,70.2,-13.9};
+        double[] reflected={-7.4,65.6,14.3};
+        double[] anchor={18.25,65.5,-12.75};
+        float[] nativeView=nativeWithMainSnap(rotate,nativeEye,interval);
+        float[] correct=CameraMirrorShadowMatrix.fixedWorldAnchor(
+                nativeView,nativeEye[0],nativeEye[1],nativeEye[2],
+                reflected[0],reflected[1],reflected[2],
+                anchor[0],anchor[1],anchor[2],interval);
+        float[] expectedView=CameraMirrorShadowMatrix.rebase(rotate,
+                reflected[0]-anchor[0]+
+                    (float)anchor[0]%interval-interval/2,
+                reflected[1]-anchor[1]+
+                    (float)anchor[1]%interval-interval/2,
+                reflected[2]-anchor[2]+
+                    (float)anchor[2]%interval-interval/2);
+        for(int i=0;i<16;i++)
+            if(Math.abs(correct[i]-expectedView[i])>0.0002)
+                throw new AssertionError(
+                        "Native shadow-eye snap was not cancelled at "+i);
+        float[] wrong=CameraMirrorShadowMatrix.fixedWorldAnchor(
+                nativeView,editorEye[0],editorEye[1],editorEye[2],
+                reflected[0],reflected[1],reflected[2],
+                anchor[0],anchor[1],anchor[2],interval);
+        if(Math.abs(wrong[12]-correct[12])<0.01 &&
+                Math.abs(wrong[13]-correct[13])<0.01 &&
+                Math.abs(wrong[14]-correct[14])<0.01)
+            throw new AssertionError(
+                    "Test did not distinguish native eye from editor eye");
+    }
+
     public static void main(String[] args)
     {
         float[] shadow={
@@ -145,6 +191,7 @@ public final class CameraMirrorShadowMatrixInvariantTest
                 new double[]{12,65,-8},point);
         verifyReflectedSnap();
         verifyFixedWorldAnchor();
+        verifyNativeEyeNotPreviewEye();
         for(int i=0;i<16;i++)
             if(shadow[i]!=before[i])
                 throw new AssertionError("Native matrix was modified");
