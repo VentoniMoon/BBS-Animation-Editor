@@ -30,6 +30,90 @@ public final class CameraBetterLightsCameraOrigin
     private static Entity savedPlayer;
     private static double x,y,z,prevX,prevY,prevZ,lastX,lastY,lastZ;
     private static boolean active;
+    private static MirrorScope currentMirror;
+    private static boolean mirrorReported;
+
+    /**
+     * Nested override for the auxiliary reflected pass.
+     *
+     * A native CAMERA frame already spoofs Minecraft.player to the
+     * MAIN camera. During a mirror draw, BetterLights shaders must
+     * instead subtract the REFLECTED camera. It is not enough to move
+     * PreviewCameraEntity: BetterLights reads Minecraft.player.
+     *
+     * Restore to the previously-spoofed MAIN camera, not to the real
+     * player's gameplay position. The outer render-tick END performs
+     * that final restoration.
+     */
+    public static final class MirrorScope implements AutoCloseable
+    {
+        private final Entity player;
+        private final double[] before;
+        private boolean closed;
+
+        private MirrorScope(Entity player)
+        {
+            this.player=player;
+            before=player==null?null:new double[]{
+                    player.posX,player.posY,player.posZ,
+                    player.prevPosX,player.prevPosY,player.prevPosZ,
+                    player.lastTickPosX,player.lastTickPosY,
+                    player.lastTickPosZ
+            };
+        }
+
+        @Override public void close()
+        {
+            if(closed)return;
+            closed=true;
+            if(player==null||currentMirror!=this)return;
+            write(player,before);
+            currentMirror=null;
+        }
+    }
+
+    private static void write(Entity entity,double[] pos)
+    {
+        entity.posX=pos[0];entity.posY=pos[1];entity.posZ=pos[2];
+        entity.prevPosX=pos[3];entity.prevPosY=pos[4];
+        entity.prevPosZ=pos[5];
+        entity.lastTickPosX=pos[6];
+        entity.lastTickPosY=pos[7];entity.lastTickPosZ=pos[8];
+    }
+
+    public static MirrorScope beginMirror(Minecraft mc,Entity reflected)
+    {
+        if(!active||mc==null||reflected==null||
+                mc.player!=savedPlayer||
+                mc.getRenderViewEntity()!=reflected||
+                !Loader.isModLoaded("better_lights")||
+                "false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLLightOrigin","true")))
+            return new MirrorScope(null);
+        if(currentMirror!=null)
+            throw new IllegalStateException(
+                    "Recursive CAMERA mirror BetterLights light origin");
+        MirrorScope scope=new MirrorScope(mc.player);
+        currentMirror=scope;
+        double[] pose={
+                reflected.posX,reflected.posY,reflected.posZ,
+                reflected.prevPosX,reflected.prevPosY,reflected.prevPosZ,
+                reflected.lastTickPosX,reflected.lastTickPosY,
+                reflected.lastTickPosZ
+        };
+        write(mc.player,pose);
+        if(!mirrorReported)
+        {
+            mirrorReported=true;
+            System.out.println("[BBS Editor][Mirror][BetterLights] "+
+                    "Reflected light origin applied; main="+
+                    scope.before[0]+","+scope.before[1]+","+
+                    scope.before[2]+" reflected="+pose[0]+","+
+                    pose[1]+","+pose[2]+
+                    " (restored to main camera after mirror)");
+        }
+        return scope;
+    }
 
     public static void begin(Minecraft mc,Entity camera)
     {
@@ -65,6 +149,9 @@ public final class CameraBetterLightsCameraOrigin
     /** Idempotent; safe on successful capture, cancellation and close. */
     public static void end()
     {
+        // An aborted main frame must unwind both scopes. In particular
+        // the reflected origin must never leak into gameplay state.
+        if(currentMirror!=null)currentMirror.close();
         if(!active)return;
         Entity player=savedPlayer;
         savedPlayer=null;

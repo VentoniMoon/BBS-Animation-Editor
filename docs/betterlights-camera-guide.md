@@ -165,3 +165,45 @@ normal scene preview modes (subject to actor visibility settings).
 
 Successful Java 8 and full Forge compilation is not a substitute for these
 shaderpack/client tests.
+
+## Reflected CAMERA pass: BetterLights origin scope
+
+The normal BBS CAMERA frame uses `CameraBetterLightsCameraOrigin.begin`
+at RenderTick.START: BetterLights' OptiFine uniform bridge subtracts
+`Minecraft.player`'s interpolated coordinates rather than the detached
+`PreviewCameraEntity`'s render-camera coordinates. The shim temporarily
+maps the player fields onto the MAIN preview camera, and restores the
+real player at RenderTick.END.
+
+When CAMERA draws a planar mirror inside RenderWorldLast, the
+`PreviewCameraEntity` is temporarily moved to the **reflected** position.
+Previously, `Minecraft.player` remained at the main camera origin,
+so BetterLights could evaluate the same world-fixed caster using a
+different coordinate origin from the reflected BSL matrices. This
+causes camera-locked or sliding light on reflected surfaces even when
+the separate shadow-map projection is already correct.
+
+The mirror callback now creates a nested
+`CameraBetterLightsCameraOrigin.MirrorScope` around reflected world
+and prepared-actor drawing, AFTER moving the preview camera and BEFORE
+executing its terrain shaders. The scope saves all nine player position
+fields, temporarily copies the actual reflected camera fields into
+them, and restores **the prior main CAMERA shim** on close. The outer
+RenderTick.END still restores the real player. No world position of any
+LightCaster is changed, no extra light sources are created, and no
+entity simulation is rerun. Exception and aborted-frame cleanup are
+covered by smoke tests.
+
+One-time diagnostic:
+`[BBS Editor][Mirror][BetterLights] Reflected light origin applied; main=... reflected=...`
+
+To A/B-test this change, pass
+`-Dbbs.editor.camera.mirrorBSLLightOrigin=false` and restart the client.
+
+This isolates the known PLAYER-versus-REFLECTED-viewpoint bug. If
+light still appears to move, BetterLights may be caching its uniforms
+during OptiFine's main `useProgram` rather than re-evaluating them
+during the auxiliary private GL program draw. In that case the next
+step is a scoped uniform refresh using the installed BetterLights
+build's actual GLSL names/API, not a second world render or an
+arbitrary brightness/position multiplier.

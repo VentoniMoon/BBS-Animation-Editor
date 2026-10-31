@@ -259,7 +259,17 @@ public final class BbsFsWorldCameraDriver
                                                     reflected.yaw),
                                             BbsFsCameraConventions.entityPitch(
                                                     reflected.pitch));
-                                    try
+                                    // BetterLights computes lightcaster
+                                    // coordinates relative to mc.player, not
+                                    // to mc.getRenderViewEntity(). Main CAMERA
+                                    // already spoofs the player to mainPose;
+                                    // temporarily use the reflected pose for
+                                    // ALL borrowed shaders in this pass and
+                                    // restore the main origin before exit.
+                                    try(CameraBetterLightsCameraOrigin.MirrorScope
+                                            lightOrigin=
+                                            CameraBetterLightsCameraOrigin
+                                                    .beginMirror(mc,view))
                                     {
                                         CameraMirrorTerrainPass.render(mc,
                                                 reflected,mainPose,
