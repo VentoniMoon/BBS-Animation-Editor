@@ -86,6 +86,10 @@ jobs:
           grep -q 'gbuffersClearColor' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'GL11.GL_NEAREST' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
           grep -q 'copyReflectedDirection' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'mirrorBSLMaxSize' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
+          grep -q 'GL11.GL_LINEAR' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'bindNativeNoiseImage' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'mirrorBSLSkipFinal' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           ! grep -q 'Shaders.renderDeferred()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
       - name: Compile entire editor against pinned Forge and mod dependencies
         run: |
