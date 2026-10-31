@@ -7,6 +7,8 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -43,6 +45,14 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private final int[] oldViewport=new int[4];
     private final List<UniformBackup> restored=
             new ArrayList<UniformBackup>();
+    // Snapshot native (already initialized) GLSL environment BEFORE the
+    // reflected camera borrows any of these compiled shader programs.
+    private final Map<String,Float> nativeFloatUniforms=
+            new HashMap<String,Float>();
+    private final Map<String,int[]> nativeInt2Uniforms=
+            new HashMap<String,int[]>();
+    private static boolean nativeUniformsLogged;
+    private static boolean mipmapLogged;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -112,6 +122,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             }
         }
         finally{GL13.glActiveTexture(oldTextureUnit);}
+        snapshotNativeUniforms();
     }
 
     public static CameraMirrorBSLCompositor begin(
@@ -485,15 +496,104 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 throw new IllegalStateException(
                         "BSL composite plan count mismatch: "+field);
             CameraMirrorCompositePlan plan=plans.get(index);
-            targets.bindCompositeOutputs(plan);
-            GL20.glUseProgram(pid);
-            bindInputs(pid);
-            overrideCamera(pid);
-            drawQuad();
-            targets.commitCompositeOutputs(plan);
+            // OptiFine generates shader-declared colortex mipmaps before
+            // the pass. BSL AUTO_EXPOSURE samples a distant LOD of
+            // colortex0; without these levels it samples undefined/black
+            // texels and massively overexposes reflected terrain.
+            int mipmapMask=programMipmapMask(program,field);
+            prepareStageMipmaps(mipmapMask);
+            try
+            {
+                targets.bindCompositeOutputs(plan);
+                GL20.glUseProgram(pid);
+                bindInputs(pid);
+                overrideCamera(pid);
+                drawQuad();
+                targets.commitCompositeOutputs(plan);
+            }
+            finally{restoreStageMipmaps(mipmapMask);}
             count++;
         }
         return count;
+    }
+
+    /**
+     * OptiFine stores a per-program bitmask for colortex mipmap generation.
+     * Reflection keeps using the already-compiled Program metadata, rather
+     * than guessing whether AUTO_EXPOSURE/DOF/BLOOM are pack options.
+     */
+    private int programMipmapMask(Object program,String group)
+    {
+        if("false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrorBSLMipmaps","true")))return 0;
+        try
+        {
+            Method read=program.getClass().getMethod(
+                    "getCompositeMipmapSetting");
+            return ((Number)read.invoke(program)).intValue();
+        }
+        catch(ReflectiveOperationException incompatible)
+        {
+            // Older Program API: at least BSL's composite stages read
+            // colortex0 with texture2DLod for exposure. A conservative
+            // mipmap of that source is safer than a missing LOD chain.
+            return "ProgramsComposite".equals(group)?1:0;
+        }
+    }
+
+    private void prepareStageMipmaps(int mask)
+    {
+        if(mask==0)return;
+        int oldUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        int oldTexture=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        try
+        {
+            for(int i=0;i<targets.colorCount();i++)
+            {
+                if((mask&(1<<i))==0)continue;
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D,targets.color(i));
+                GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D,
+                        GL11.GL_TEXTURE_MIN_FILTER,
+                        GL11.GL_LINEAR_MIPMAP_LINEAR);
+            }
+            if(!mipmapLogged)
+            {
+                mipmapLogged=true;
+                System.out.println(TAG+
+                        "Restored shaderpack colortex mipmap generation "+
+                        "(AUTO_EXPOSURE / screen-space LOD)");
+            }
+        }
+        finally
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,oldTexture);
+            GL13.glActiveTexture(oldUnit);
+        }
+    }
+
+    private void restoreStageMipmaps(int mask)
+    {
+        if(mask==0)return;
+        int oldUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        int oldTexture=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        try
+        {
+            for(int i=0;i<targets.colorCount();i++)
+            {
+                if((mask&(1<<i))==0)continue;
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D,targets.color(i));
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D,
+                        GL11.GL_TEXTURE_MIN_FILTER,GL11.GL_NEAREST);
+            }
+        }
+        finally
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,oldTexture);
+            GL13.glActiveTexture(oldUnit);
+        }
     }
 
     private interface DrawAction
@@ -800,6 +900,11 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         // NOT executed for this camera. Copy the current WORLD time,
         // weather, sky and fog values from the active native renderer.
         overrideEnvironment(pid);
+        // In the mirrored pass we use raw glUseProgram, not OptiFine's
+        // useProgram(). Supply dynamic shaderpack inputs captured from the
+        // already-rendered MAIN camera rather than leaving GLSL defaults
+        // (notably eyeBrightnessSmooth = 0, timeAngle = 0).
+        applyNativeUniformSnapshot(pid);
         if(mirrorProjection!=null)
         {
             writeMatrix(pid,"gbufferProjection",mirrorProjection,false);
@@ -811,6 +916,94 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             writeMatrix(pid,"gbufferModelView",mirrorView,false);
             writeMatrix(pid,"gbufferModelViewInverse",mirrorView,true);
             writeMatrix(pid,"gbufferPreviousModelView",mirrorView,false);
+        }
+    }
+
+    private static final String[] NATIVE_FLOATS={
+        "timeAngle","timeBrightness","shadowFade","screenBrightness",
+        "blindFactor","darknessFactor","darknessLightFactor",
+        "centerDepthSmooth","nightVision","wetness"
+    };
+    private static final String[] NATIVE_INT2={
+        "eyeBrightness","eyeBrightnessSmooth"
+    };
+
+    /**
+     * Query uniform values from the main camera's GL programs BEFORE
+     * switching to the private mirror. These programs were initialized
+     * through OptiFine's regular useProgram path; the auxiliary programs
+     * intentionally cannot call it, as doing so rewrites global dfb state.
+     */
+    private void snapshotNativeUniforms()throws Exception
+    {
+        int[] programIds=new int[5];
+        programIds[0]=mainProgram;
+        String[] fields={"ProgramTerrain","ProgramSkyBasic",
+                "ProgramEntities","ProgramTextured"};
+        for(int i=0;i<fields.length;i++)
+        {
+            try{programIds[i+1]=id(shaders.getField(fields[i]).get(null));}
+            catch(NoSuchFieldException missing){programIds[i+1]=0;}
+        }
+        for(String uniform:NATIVE_FLOATS)
+        {
+            for(int source:programIds)
+            {
+                if(source<=0)continue;
+                int loc=GL20.glGetUniformLocation(source,uniform);
+                if(loc<0)continue;
+                FloatBuffer b=BufferUtils.createFloatBuffer(16);
+                GL20.glGetUniform(source,loc,b);
+                float value=b.get(0);
+                if(!Float.isNaN(value)&&!Float.isInfinite(value))
+                {
+                    nativeFloatUniforms.put(uniform,value);
+                    break;
+                }
+            }
+        }
+        for(String uniform:NATIVE_INT2)
+        {
+            for(int source:programIds)
+            {
+                if(source<=0)continue;
+                int loc=GL20.glGetUniformLocation(source,uniform);
+                if(loc<0)continue;
+                IntBuffer b=BufferUtils.createIntBuffer(16);
+                GL20.glGetUniform(source,loc,b);
+                nativeInt2Uniforms.put(uniform,
+                        new int[]{b.get(0),b.get(1)});
+                break;
+            }
+        }
+        if(!nativeUniformsLogged)
+        {
+            nativeUniformsLogged=true;
+            textNativeUniformDiagnostic();
+        }
+    }
+
+    private void textNativeUniformDiagnostic()
+    {
+        int[] e=nativeInt2Uniforms.get("eyeBrightnessSmooth");
+        System.out.println(TAG+"Native BSL state snapshot: "+
+                "eyeBrightnessSmooth="+
+                (e==null?"unavailable":e[0]+","+e[1])+
+                ", timeAngle="+nativeFloatUniforms.get("timeAngle")+
+                ", timeBrightness="+nativeFloatUniforms.get("timeBrightness"));
+    }
+
+    private void applyNativeUniformSnapshot(int pid)
+    {
+        for(Map.Entry<String,Float> entry:nativeFloatUniforms.entrySet())
+            write1(pid,entry.getKey(),entry.getValue());
+        for(Map.Entry<String,int[]> entry:nativeInt2Uniforms.entrySet())
+        {
+            int loc=GL20.glGetUniformLocation(pid,entry.getKey());
+            if(loc<0)continue;
+            restored.add(UniformBackup.captureInt2(pid,loc));
+            int[] v=entry.getValue();
+            GL20.glUniform2i(loc,v[0],v[1]);
         }
     }
 
@@ -1109,12 +1302,19 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         final int program,location,count;
         final FloatBuffer value;
         final int integerValue;
+        final int integerValue2;
         UniformBackup(int program,int location,int count,FloatBuffer value,
                 int integerValue)
+        {
+            this(program,location,count,value,integerValue,0);
+        }
+        UniformBackup(int program,int location,int count,FloatBuffer value,
+                int integerValue,int integerValue2)
         {
             this.program=program;this.location=location;
             this.count=count;this.value=value;
             this.integerValue=integerValue;
+            this.integerValue2=integerValue2;
         }
         static UniformBackup capture(int program,int location,int count)
         {
@@ -1131,10 +1331,19 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             GL20.glGetUniform(program,location,b);
             return new UniformBackup(program,location,0,null,b.get(0));
         }
+        static UniformBackup captureInt2(int program,int location)
+        {
+            IntBuffer b=BufferUtils.createIntBuffer(16);
+            GL20.glGetUniform(program,location,b);
+            return new UniformBackup(program,location,-2,null,
+                    b.get(0),b.get(1));
+        }
         void restore()
         {
             GL20.glUseProgram(program);
-            if(count==0)GL20.glUniform1i(location,integerValue);
+            if(count==-2)GL20.glUniform2i(location,
+                    integerValue,integerValue2);
+            else if(count==0)GL20.glUniform1i(location,integerValue);
             else if(count==1)GL20.glUniform1f(location,value.get(0));
             else if(count==16)
             {
