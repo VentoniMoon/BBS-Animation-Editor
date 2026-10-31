@@ -230,7 +230,7 @@ public final class CameraMirrorChunkVisibility
             if(!shadowCasters&&!logged)
             {
                 logged=true;
-                System.out.println("[BBS Editor][Mirror] Shared chunks: 
+                System.out.println("[BBS Editor][Mirror] Shared chunks: "+
                         "mirror-visible="+visible.size()+
                         " original-visible="+old.size()+
                         "; no secondary world or RenderGlobal.");
