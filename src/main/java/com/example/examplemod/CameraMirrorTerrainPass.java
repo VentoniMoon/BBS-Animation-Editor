@@ -80,6 +80,12 @@ public final class CameraMirrorTerrainPass
                         System.err.println("[BBS Editor][Mirror] Sky skipped: "+
                                 skyProblem);
                 }
+                // OptiFine's normal gbuffers_skybasic hook may skip drawing
+                // when the private mirror disables isRenderingWorld to
+                // protect the MAIN dfb. Run the pack's real skybasic GLSL
+                // explicitly once as an isolated sky/background pass.
+                // Vanilla and forward mirrors are not affected.
+                CameraMirrorBSLCompositor.renderSkyBackdrop();
 
                 // Vanilla renders clouds before terrain when camera eye
                 // is below y=128, and afterwards when above it.

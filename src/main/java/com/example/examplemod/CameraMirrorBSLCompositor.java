@@ -145,7 +145,67 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     {
         if(current!=null)current.geometryStage(name);
     }
+
     public static boolean active(){return current!=null;}
+
+    /**
+     * OptiFine can suppress its native sky dome while a shaderpack is
+     * loaded. During the private mirror pass isRenderingWorld must remain
+     * false so its hooks cannot composite the MAIN camera; consequently,
+     * renderSky() alone is not a reliable way to run BSL's skybasic GLSL.
+     *
+     * Render skybasic explicitly to the private color attachments, with
+     * depth testing/writes disabled. This draws the real shaderpack sky
+     * (including the pack's cloud implementation), not a fake color fill.
+     * The real sky and sun/moon geometry have already had their chance to
+     * draw in RenderGlobal; the private sky basic pass restores GL state
+     * before blocks or prepared actors render.
+     */
+    public static void renderSkyBackdrop()
+    {
+        if(current==null||"false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrorBSLSkyBackdrop","true")))return;
+        try{current.skyBackdrop();}
+        catch(Exception failure)
+        {
+            throw new IllegalStateException(
+                    "Cannot render private BSL sky background",failure);
+        }
+    }
+
+    private static boolean backdropLogged;
+
+    private void skyBackdrop()throws Exception
+    {
+        final Object program=shaders.getField("ProgramSkyBasic").get(null);
+        final int pid=id(program);
+        if(pid<=0)return;
+        fullscreen(new DrawAction()
+        {
+            @Override public void draw()throws Exception
+            {
+                targets.bindGeometry();
+                GL20.glUseProgram(pid);
+                IntBuffer draw=(IntBuffer)getDrawBuffers.invoke(program);
+                if(draw!=null)GL20.glDrawBuffers(draw.asReadOnlyBuffer());
+                // Bind the same native resources as the ordinary
+                // gbuffers_skybasic program. No new OptiFine frame.
+                samplerUnitOnly(pid,"noisetex",15);
+                bindNativeNoiseImage();
+                overrideCamera(pid);
+                // BSL skybasic detects stars by equality of gl_Color.rgb.
+                // All-white fullscreen vertices would incorrectly mark
+                // every fragment as a STAR (transparent sky alpha).
+                drawQuad(true);
+            }
+        },true);
+        if(!backdropLogged)
+        {
+            backdropLogged=true;
+            System.out.println(TAG+"Procedural skybasic background rendered "+
+                    "to private GBuffer (no depth writes)");
+        }
+    }
 
     /** The native OptiFine deferred boundary is before translucent water.
      * Running it in compose() AFTER all terrain corrupted depth and color
@@ -306,6 +366,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             @Override public void draw()throws Exception
             {
+                applyPreFlips("ProgramDeferredPre");
                 runStagePrograms("ProgramsDeferred",0);
             }
         },true);
@@ -333,6 +394,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             @Override public void draw()throws Exception
             {
+                applyPreFlips("ProgramCompositePre");
                 int offset=countPrograms("ProgramsDeferred");
                 int count=runStagePrograms("ProgramsComposite",offset);
                 // The outer RenderWorldLast pass feeds the normal BSL
@@ -377,6 +439,23 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 }
             }
         },false);
+    }
+
+    /**
+     * OptiFine applies flips from deferred_pre and composite_pre BEFORE
+     * the first real shader program. Ignoring these special directives
+     * means subsequent passes sample obsolete colortex history.
+     * Only change the independent mirror texture indices.
+     */
+    private void applyPreFlips(String field)throws Exception
+    {
+        Object program=shaders.getField(field).get(null);
+        if(program==null)return;
+        Method getFlip=program.getClass().getMethod("getBuffersFlip");
+        Boolean[] flags=(Boolean[])getFlip.invoke(program);
+        if(flags==null)return;
+        for(int i=0;i<Math.min(targets.colorCount(),flags.length);i++)
+            if(Boolean.TRUE.equals(flags[i]))targets.swapColor(i);
     }
 
     private int countPrograms(String field)throws Exception
@@ -464,6 +543,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             GL11.glDisable(GL11.GL_ALPHA_TEST);
             GL11.glDisable(GL11.GL_CULL_FACE);
             GL11.glDisable(GL11.GL_CLIP_PLANE0);
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
             action.draw();
         }
         finally
@@ -936,13 +1016,18 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         GL20.glUniform1f(loc,value);
     }
 
-    private static void drawQuad()
+    private static void drawQuad(){drawQuad(false);}
+
+    private static void drawQuad(boolean proceduralSky)
     {
         // glTexCoord2f updates the currently active fixed-function texture
         // coordinate set. OptiFine composite GLSL reads gl_TexCoord[0].
         // The caller may have left the lightmap or shadow unit active.
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glColor4f(1F,1F,1F,1F);
+        // Skybasic's vertex shader may classify white vertices as stars.
+        GL11.glColor4f(proceduralSky?0.36F:1F,
+                proceduralSky?0.63F:1F,
+                proceduralSky?0.89F:1F,1F);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2f(0F,0F);
         GL11.glVertex2f(0F,0F);

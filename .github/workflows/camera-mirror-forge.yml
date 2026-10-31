@@ -97,6 +97,9 @@ jobs:
           grep -q 'GL30.GL_RGBA16F' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'mirrorBSLFinalMode' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'mirrorBSLSkyProgram' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'CameraMirrorBSLCompositor.renderSkyBackdrop()' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'applyPreFlips("ProgramDeferredPre")' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'applyPreFlips("ProgramCompositePre")' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'copyNumberInt(pid,"worldTime","worldTime")' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'tonemapInMain' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           ! grep -q 'Shaders.renderDeferred()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java

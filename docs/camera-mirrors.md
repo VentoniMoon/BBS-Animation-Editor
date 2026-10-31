@@ -511,3 +511,31 @@ The debug log now includes
 so missing/uncompiled skybasic can be diagnosed. The native shaderpack
 may still vary the sky program mid-draw: further in-game visual testing
 is necessary, especially for sun/moon textures and fog.
+
+### BSL independent sky + special pre-flips (November diagnostic)
+
+OptiFine invokes most shaderpack geometry helpers only while
+`Shaders.isRenderingWorld` is true. The isolated mirror *must* disable that
+flag to prevent native `Shaders.beginWater` and `renderDeferred` from
+compositing the main world's GBuffer. Simply calling
+`RenderGlobal.renderSky` under that scope may therefore produce no
+shaderpack sky, even though the private terrain/actor geometry succeeds.
+
+The experimental BSL mirror now runs the **actual compiled
+`ProgramSkyBasic` shader** over the independent reflection GBuffer
+before terrain. Its full-screen quad is intentionally rendered with
+depth writes/tests off, retaining untouched depth for terrain and actors.
+The BSL skybasic vertex shader detects stars from equal RGB vertex
+colors; this quad uses non-equal RGB to avoid incorrectly labeling the
+entire sky as a star. It restores OpenGL state when finished and does
+not allocate another WorldClient. To compare against the previous
+behavior, use `-Dbbs.editor.camera.mirrorBSLSkyBackdrop=false`.
+
+The private compositor also applies the live OptiFine
+`ProgramDeferredPre` and `ProgramCompositePre` ping-pong flip flags
+before executing the real shader passes, rather than silently ignoring
+these special prepasses. These changes affect only private mirror
+texture indices.
+
+This is a targeted parity repair; the full main-renderer sky/fog/
+lighting equivalence still needs an in-game BSL screenshot check.
