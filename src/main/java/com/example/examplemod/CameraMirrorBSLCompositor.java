@@ -302,6 +302,18 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             {
                 int offset=countPrograms("ProgramsDeferred");
                 int count=runStagePrograms("ProgramsComposite",offset);
+                // A mirror captured at RenderWorldLast can be presented
+                // again to the MAIN OptiFine composite/final sequence.
+                // The explicit preFinal diagnostic distinguishes duplicated
+                // tonemapping from problems in the private GBuffer.
+                // Keep the existing final path as default until validated.
+                if(Boolean.getBoolean(
+                        "bbs.editor.camera.mirrorBSLSkipFinal"))
+                {
+                    blitRawColor(0,outputFramebuffer,
+                            outputWidth,outputHeight);
+                    return;
+                }
                 Object finalStage=finalProgram.get(null);
                 int pid=id(finalStage);
                 if(pid<=0)
@@ -448,6 +460,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static final int[] COMPOSITE_DEPTH_UNITS={6,11,12};
 
     private static boolean rawDebugLogged;
+    private static boolean preFinalLogged;
 
     private void blitRawColor(int color,int destination,int width,int height)
     {
@@ -462,7 +475,19 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
         GL30.glBlitFramebuffer(0,0,targets.width(),targets.height(),
                 0,0,width,height,GL11.GL_COLOR_BUFFER_BIT,GL11.GL_LINEAR);
-        if(!rawDebugLogged)
+        boolean afterComposite=Boolean.getBoolean(
+                "bbs.editor.camera.mirrorBSLSkipFinal");
+        if(afterComposite)
+        {
+            if(!preFinalLogged)
+            {
+                preFinalLogged=true;
+                System.out.println(TAG+
+                        "DEBUG: post-composite colortex0 BEFORE BSL final "+
+                        "(diagnose duplicate tonemapping)");
+            }
+        }
+        else if(!rawDebugLogged)
         {
             rawDebugLogged=true;
             System.out.println(TAG+"DEBUG: raw mirrored colortex"+color+
