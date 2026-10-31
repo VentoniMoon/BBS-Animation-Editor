@@ -220,6 +220,22 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             Object program=shaders.getField(name).get(null);
             int pid=id(program);
+            // Most packs provide gbuffers_terrain, but not individual
+            // terrain_solid/terrain_cutout shaders. The normal OptiFine
+            // pipeline falls back to ProgramTerrain for these stages.
+            // Without this fallback, switching to native per-layer names
+            // would leave the geometry pass unshaded.
+            if(pid<=0&&name.startsWith("ProgramTerrain")&&
+                    !"ProgramTerrain".equals(name))
+            {
+                program=shaders.getField("ProgramTerrain").get(null);
+                pid=id(program);
+            }
+            if(pid<=0&&"ProgramSkyTextured".equals(name))
+            {
+                program=shaders.getField("ProgramSkyBasic").get(null);
+                pid=id(program);
+            }
             if(pid<=0){GL20.glUseProgram(0);return;}
             targets.bindGeometry();
             GL20.glUseProgram(pid);
