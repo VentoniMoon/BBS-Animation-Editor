@@ -54,10 +54,24 @@ public final class CameraMirrorTerrainPass
                 atmosphere.sky(partialTicks);
                 try
                 {
-                    // pass=2 is vanilla's non-anaglyph world/sky pass.
-                    // OptiFine's sky path is textured for the horizon/sky
-                    // dome. The shaderless path remains unchanged.
-                    CameraMirrorOptiFineBackend.stage("ProgramSkyTextured");
+                    // BSL draws its sky gradient, volumetric-like clouds
+                    // and horizon in gbuffers_skybasic, NOT skytextured
+                    // (the latter is for sun/moon/skybox textures).
+                    // The previous single ProgramSkyTextured selection
+                    // suppressed shader-generated atmosphere entirely.
+                    // Leave forward-only shaderpacks on their old path.
+                    if(CameraMirrorBSLCompositor.active())
+                    {
+                        String requested=System.getProperty(
+                                "bbs.editor.camera.mirrorBSLSkyProgram",
+                                "basic");
+                        CameraMirrorOptiFineBackend.stage(
+                                "textured".equalsIgnoreCase(requested)?
+                                        "ProgramSkyTextured":
+                                        "ProgramSkyBasic");
+                    }
+                    else CameraMirrorOptiFineBackend.stage(
+                            "ProgramSkyTextured");
                     world.renderSky(partialTicks,2);
                 }
                 catch(Throwable skyProblem)

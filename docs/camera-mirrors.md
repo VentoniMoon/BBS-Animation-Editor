@@ -482,3 +482,32 @@ specific BSL RenderWorldLast integration, but visual testing with
 BSL_v8.2.02-BetterLights is still required. HDR presentation cannot by
 itself fix missing geometry, pack-specific samplers or incorrect lighting
 uniforms.
+
+### BSL procedural sky and cloud program fix (October 31)
+
+The reflected HDR scene showed terrain but a featureless dark sky while
+the main view had pink BSL clouds. The mirror had selected
+`ProgramSkyTextured` for **the whole** native RenderGlobal sky call.
+BSL's sky gradient, cloud algorithm and horizon are implemented in its
+**`gbuffers_skybasic`** program; skytextured handles the texture-based
+skybox and celestial objects. Rendering a complete sky using only
+skytextured skipped the pack's atmospheric shading.
+
+For the experimental multi-pass BSL path the sky renderer now defaults
+to `ProgramSkyBasic`. The forward and shaderless mirror paths keep their
+prior behavior. Shader-specific sampler locations are explicitly
+configured during borrowed geometry programs (including lightmap,
+normals, shadow and noisetex, with all modified uniforms backed up).
+Live OptiFine world time/day, night vision and blindness inputs are
+also forwarded for the cloud and sky programs.
+
+To test the previous behavior without reverting the source:
+```
+-Dbbs.editor.camera.mirrorBSLSkyProgram=textured
+```
+
+The debug log now includes
+`[BBS Editor][Mirror][BSL Render] Sky program requested=... compiledId=...`
+so missing/uncompiled skybasic can be diagnosed. The native shaderpack
+may still vary the sky program mid-draw: further in-game visual testing
+is necessary, especially for sun/moon textures and fog.

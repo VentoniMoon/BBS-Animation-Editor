@@ -33,6 +33,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static final String TAG="[BBS Editor][Mirror][BSL Render] ";
     private static CameraMirrorBSLCompositor current;
     private static boolean firstFrameLogged;
+    private static boolean skyStageLogged;
     private final CameraMirrorOptiFineTargets targets;
     private final PreviewCameraPose view;
     private final int mainProgram;
@@ -231,10 +232,23 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 program=shaders.getField("ProgramTerrain").get(null);
                 pid=id(program);
             }
-            if(pid<=0&&"ProgramSkyTextured".equals(name))
+            // Some packs compile only one sky variant. Log the exact
+            // compiled program used: a silent ProgramSkyTextured fallback
+            // hid the fact that BSL skybasic was never invoked.
+            if(pid<=0&&("ProgramSkyTextured".equals(name)||
+                    "ProgramSkyBasic".equals(name)))
             {
-                program=shaders.getField("ProgramSkyBasic").get(null);
+                String backup="ProgramSkyBasic".equals(name)?
+                        "ProgramSkyTextured":"ProgramSkyBasic";
+                program=shaders.getField(backup).get(null);
                 pid=id(program);
+            }
+            if(name.startsWith("ProgramSky")&&!skyStageLogged)
+            {
+                skyStageLogged=true;
+                System.out.println(TAG+"Sky program requested="+name+
+                        " compiledId="+pid+
+                        " (BSL procedural clouds/sky require skybasic)");
             }
             if(pid<=0){GL20.glUseProgram(0);return;}
             targets.bindGeometry();
@@ -248,6 +262,24 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 mirrorView=currentMatrix(GL11.GL_MODELVIEW_MATRIX);
             IntBuffer draw=(IntBuffer)getDrawBuffers.invoke(program);
             if(draw!=null)GL20.glDrawBuffers(draw.asReadOnlyBuffer());
+            // Raw glUseProgram deliberately bypasses OptiFine's
+            // useProgram (which would rewrite the MAIN dfb state). Give
+            // the borrowed GLSL program the native sampler unit layout
+            // it expects. Skybasic uses these for clouds and atmospheric
+            // lighting; terrain needs the lightmap at unit 1.
+            samplerUnitOnly(pid,"texture",0);
+            samplerUnitOnly(pid,"gtexture",0);
+            samplerUnitOnly(pid,"lightmap",1);
+            samplerUnitOnly(pid,"normals",2);
+            samplerUnitOnly(pid,"specular",3);
+            samplerUnitOnly(pid,"noisetex",15);
+            samplerUnitOnly(pid,"shadowtex0",4);
+            samplerUnitOnly(pid,"shadowtex1",5);
+            samplerUnitOnly(pid,"shadowcolor0",13);
+            samplerUnitOnly(pid,"shadowcolor1",14);
+            bindNativeShadowImages();
+            bindNativeNoiseImage();
+            GL13.glActiveTexture(oldTextureUnit);
             overrideCamera(pid);
         }
         catch(Throwable e)
@@ -721,6 +753,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         copyInt(pid,"frameCounter","frameCounter");
         copyInt(pid,"moonPhase","moonPhase");
         copyInt(pid,"isEyeInWater","isEyeInWater");
+        // Skybasic/clouds depend on day cycle and temporal wind motion.
+        // The normal pack programs may have not been activated again
+        // since Shader.useProgram last uploaded these uniforms.
+        copyNumberInt(pid,"worldTime","worldTime");
+        copyNumberInt(pid,"worldDay","worldDay");
+        copyFloat(pid,"nightVision","nightVision");
+        copyFloat(pid,"blindness","blindness");
         // OptiFine stores the world sun/moon/shadow light in the MAIN
         // camera's view coordinates. A reflected camera must rotate those
         // vectors into its own view-space, not blindly reuse main-camera
@@ -791,6 +830,28 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             throw new IllegalStateException(
                     "Cannot read OptiFine environment "+field,e);
+        }
+    }
+
+    /** OptiFine builds differ on worldTime's Java field type (int/long).
+     * Read Number without assuming Field.getInt will always succeed. */
+    private void copyNumberInt(int pid,String uniform,String field)
+    {
+        try
+        {
+            Field source=nativeField(field);
+            if(source==null)return;
+            Object value=source.get(null);
+            if(!(value instanceof Number))return;
+            int loc=GL20.glGetUniformLocation(pid,uniform);
+            if(loc<0)return;
+            restored.add(UniformBackup.captureInt(pid,loc));
+            GL20.glUniform1i(loc,((Number)value).intValue());
+        }
+        catch(IllegalAccessException e)
+        {
+            throw new IllegalStateException(
+                    "Cannot read BSL time uniform "+field,e);
         }
     }
 

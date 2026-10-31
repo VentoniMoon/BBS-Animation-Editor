@@ -96,6 +96,8 @@ jobs:
           grep -q 'mirrorBSLSkipFinal' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'GL30.GL_RGBA16F' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'mirrorBSLFinalMode' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'mirrorBSLSkyProgram' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q 'copyNumberInt(pid,"worldTime","worldTime")' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'tonemapInMain' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           ! grep -q 'Shaders.renderDeferred()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
       - name: Compile entire editor against pinned Forge and mod dependencies
