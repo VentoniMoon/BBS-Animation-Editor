@@ -678,14 +678,22 @@ public final class CameraSceneMirrorRenderer
                 {
                     @Override public void draw()
                     {
-                        renderDirect(mc,mirrors,camera);
+                        renderDirect(mc,mirrors,camera,false);
+                    }
+                },
+                new CameraMirrorLateComposite.MaskDraw()
+                {
+                    @Override public void drawMask()
+                    {
+                        renderMask(mc,mirrors,camera);
                     }
                 }))return;
-        renderDirect(mc,mirrors,camera);
+        renderDirect(mc,mirrors,camera,true);
     }
 
     private static void renderDirect(Minecraft mc,
-            CameraSceneMirrors mirrors,PreviewCameraPose camera)
+            CameraSceneMirrors mirrors,PreviewCameraPose camera,
+            boolean writeDepth)
     {
         RenderManager manager=mc.getRenderManager();
         if(manager==null)return;
@@ -713,8 +721,12 @@ public final class CameraSceneMirrorRenderer
             GL11.glDisable(GL11.GL_FOG);
             GL11.glDisable(GL11.GL_CULL_FACE);
             GL11.glDisable(GL11.GL_BLEND);
+            GL11.glDisable(GL11.GL_ALPHA_TEST);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glDepthMask(true);
+            // In the late overlay the copied real-world depth is
+            // read-only: writing the mirror's depth could mask the
+            // separate alpha-only pass and hide foreground geometry.
+            GL11.glDepthMask(writeDepth);
             GL11.glColor4f(1F,1F,1F,1F);
             GL11.glTranslated(-manager.viewerPosX,
                     -manager.viewerPosY,-manager.viewerPosZ);
@@ -732,6 +744,72 @@ public final class CameraSceneMirrorRenderer
             GL11.glPopAttrib();
             GL13.glActiveTexture(unit);
             GL20.glUseProgram(program);
+        }
+    }
+
+    /**
+     * Mirror opacity is geometry-defined, never sampled from BSL final.
+     * The caller selects alpha-only writes; keep the world depth read-only.
+     * Match drawQuad's physical 0.015 block face offset exactly, including
+     * its thin frame, to avoid colored but transparent border pixels.
+     */
+    private static void renderMask(Minecraft mc,
+            CameraSceneMirrors mirrors,PreviewCameraPose camera)
+    {
+        RenderManager manager=mc.getRenderManager();
+        if(manager==null)return;
+        int oldProgram=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        int oldUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int oldMode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        try
+        {
+            GL20.glUseProgram(0);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_FOG);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glDisable(GL11.GL_ALPHA_TEST);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthFunc(GL11.GL_LEQUAL);
+            GL11.glDepthMask(false);
+            GL11.glColor4f(1F,1F,1F,1F);
+            GL11.glTranslated(-manager.viewerPosX,
+                    -manager.viewerPosY,-manager.viewerPosZ);
+            for(CameraSceneMirrors.Mirror m:mirrors.all())
+            {
+                if(!m.enabled||CameraMirrorMath.side(m.x,m.z,camera.x,
+                        camera.z,m.yaw)<=0.01D)continue;
+                double[][] corners=CameraMirrorMath.corners(
+                        m.x,m.y,m.z,m.yaw,m.width,m.height);
+                double[] normal=CameraMirrorMath.normal(m.yaw);
+                for(double[] corner:corners)
+                {
+                    corner[0]+=normal[0]*0.015D;
+                    corner[2]+=normal[2]*0.015D;
+                }
+                GL11.glBegin(GL11.GL_QUADS);
+                for(double[] corner:corners)
+                    GL11.glVertex3d(corner[0],corner[1],corner[2]);
+                GL11.glEnd();
+                GL11.glLineWidth(2F);
+                GL11.glBegin(GL11.GL_LINE_LOOP);
+                for(double[] corner:corners)
+                    GL11.glVertex3d(corner[0],corner[1],corner[2]);
+                GL11.glEnd();
+            }
+        }
+        finally
+        {
+            GL11.glPopMatrix();
+            GL11.glMatrixMode(oldMode);
+            GL11.glPopAttrib();
+            GL13.glActiveTexture(oldUnit);
+            GL20.glUseProgram(oldProgram);
         }
     }
 

@@ -577,3 +577,33 @@ This is a change in presentation order, not an arbitrary brightness
 increase. It must be validated in-game against the active shaderpack:
 private-final uniform parity and shaderpack-specific depth attachment
 formats can still cause image differences.
+
+### Opaque alpha mask for the late BSL mirror (October 31)
+
+The late overlay previously copied **both RGB and alpha** from the
+private BSL final texture. BSL may use alpha for atmospheric or sky
+information, not for physical mirror transparency. Alpha blending then
+mixed the reflected blocks with the native scene behind the mirror,
+creating a washed-out / overly bright glass-window effect despite the
+sky looking correct.
+
+The overlay now uses two depth-tested, read-only passes:
+
+1. Draw the true reflected RGB with `glColorMask(true,true,true,false)`;
+   retain the overlay's transparent clear alpha.
+2. Draw the same mirror face and frame untextured with
+   `glColorMask(false,false,false,true)` and vertex alpha 1.
+   Foreground geometry occlusion comes from the copied native depth;
+   shaderpack texture alpha is ignored.
+
+The final full-frame composition uses ordinary
+`GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` blending with an explicit
+`GL_FUNC_ADD` equation and preserves the original main framebuffer
+alpha channel. Thus alpha=0 outside the mirror and alpha=1 on visible
+mirror pixels, yielding a fully opaque surface rather than tinted glass.
+
+The regular (nonshader or legacy in-world) mirror still uses its
+original draw path. No changes to reflected camera, GBuffer programs,
+sky calculations, actors or Jolt physics are introduced. In-game
+visual parity must be verified, as separate gamma/exposure differences
+could still remain after the alpha issue is eliminated.

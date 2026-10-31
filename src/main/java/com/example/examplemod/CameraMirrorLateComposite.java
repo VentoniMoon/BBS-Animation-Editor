@@ -6,6 +6,7 @@ import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
@@ -29,6 +30,12 @@ public final class CameraMirrorLateComposite
         void draw();
     }
 
+    /** Only the mirror's visible polygon: no BSL final-image alpha. */
+    public interface MaskDraw
+    {
+        void drawMask();
+    }
+
     private static Framebuffer overlay;
     private static boolean prepared;
     private static boolean unavailable;
@@ -48,11 +55,12 @@ public final class CameraMirrorLateComposite
      * Called during RenderWorldLast, while the real scene depth and
      * modelview/projection matrices still describe the main world camera.
      */
-    public static boolean prepare(Minecraft mc,Draw quadDraw)
+    public static boolean prepare(Minecraft mc,Draw quadDraw,
+            MaskDraw maskDraw)
     {
         prepared=false;
         if(unavailable||mc==null||mc.getFramebuffer()==null||
-                quadDraw==null)return false;
+                quadDraw==null||maskDraw==null)return false;
         Framebuffer main=mc.getFramebuffer();
         int w=main.framebufferWidth,h=main.framebufferHeight;
         if(w<=0||h<=0)return false;
@@ -102,15 +110,29 @@ public final class CameraMirrorLateComposite
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDepthFunc(GL11.GL_LEQUAL);
             GL11.glDepthMask(false);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glDisable(GL11.GL_ALPHA_TEST);
+            // BSL's final output alpha is not an opacity mask. It may
+            // encode sky/atmosphere/transmittance and must NEVER dilute
+            // the reflected RGB with the underlying normal world.
+            //
+            // Pass 1: real reflected RGB; keep cleared alpha=0.
+            GL11.glColorMask(true,true,true,false);
             quadDraw.draw();
+            // Pass 2: write alpha=1 ONLY where the mirror polygon passes
+            // the same scene depth test (including foreground actors).
+            // A separate untextured pass ignores the shaderpack alpha.
+            GL11.glColorMask(false,false,false,true);
+            maskDraw.drawMask();
+            GL11.glColorMask(true,true,true,true);
             prepared=true;
             problem="";
             if(!reported)
             {
                 reported=true;
                 System.out.println("[BBS Editor][Mirror][Late] "+
-                        "Depth-tested mirror overlay prepared; "+
-                        "compositing after OptiFine final.");
+                        "Opaque depth-tested mirror overlay prepared "+
+                        "(RGB from BSL final, alpha from mirror geometry).");
             }
             return true;
         }
@@ -183,8 +205,12 @@ public final class CameraMirrorLateComposite
             GL11.glDisable(GL11.GL_FOG);
             GL11.glDisable(GL11.GL_LIGHTING);
             GL11.glEnable(GL11.GL_BLEND);
+            GL14.glBlendEquation(GL14.GL_FUNC_ADD);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA,
                     GL11.GL_ONE_MINUS_SRC_ALPHA);
+            // Only replace scene RGB. Do not alter the main framebuffer
+            // alpha, which other GUI/export compositors may depend on.
+            GL11.glColorMask(true,true,true,false);
             GL20.glUseProgram(0);
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
