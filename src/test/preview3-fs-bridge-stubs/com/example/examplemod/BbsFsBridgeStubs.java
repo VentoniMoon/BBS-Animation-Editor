@@ -6,3 +6,7 @@ class PreviewRenderBackend {
     }
     BbsFsPreviewTarget getNativeTarget(){return target;}
 }
+/** Test-only surrogate. The real compositor is validated by Forge compile. */
+class CameraMirrorLateComposite {
+    static void composite(net.minecraft.client.Minecraft mc) {}
+}
