@@ -779,3 +779,49 @@ properly visible in the mirror GBuffer, but their cast shadows are not
 guaranteed. Prepared-pose actor shadow casting is a separate integration
 task. Scene parity must be tested in-game with BSL BetterLights,
 especially for transparent blocks and large outdoor areas.
+
+### Private shadow map: stabilize camera snapping and shadow-caster coverage
+
+A private shadow FBO being complete does not guarantee stable shadows.
+Two bugs remained in the first implementation:
+
+* The private shadow pass reused `CameraMirrorChunkVisibility.begin`,
+  which selects chunks in the **reflected viewing frustum**. Casters
+  behind/aside the camera can still shadow the ground seen in the
+  reflection, so the rendered shadow map lost/gained occluders as the
+  camera moved or turned. The new `beginShadow` selects compiled
+  chunks inside the **shadow-map footprint**, regardless of view yaw.
+  The shadow projection itself clips them to the light-space map.
+* OptiFine's orthographic `shadowModelView` is snapped with the
+  MAIN camera remainder `(float)eye % shadowIntervalSize`. A
+  reflected map must instead use the REFLECTED camera remainder.
+  The new `retargetOrthographicSnap` right-multiplies just the
+  remainder delta, preserving the sun-facing rotation, and passes
+  the same matrix to both private shadow rendering and BSL receivers.
+  The test verifies identical projections while the camera moves
+  inside one snapped cell, including signed negative positions.
+
+The transparent-glass stage now reasserts the shadow framebuffer,
+draw buffer, shader program, texture atlas and GL alpha/depth state
+after the opaque depth copy. This mirrors OptiFine's pre-translucent
+shadow boundary and prevents unrelated chunk hooks from redirecting
+the tinted shadowcolor write.
+
+Diagnostics:
+`Caster chunk selection: ... radius=...`
+and `Private mirror shadow rendered ... translucent=true`.
+
+Isolate stained-glass shadow coloring without disabling the entire
+reflection:
+```
+-Dbbs.editor.camera.mirrorBSLShadowTranslucent=false
+```
+Disable private shadow maps to compare against shared-map fallbacks:
+```
+-Dbbs.editor.camera.mirrorBSLPrivateShadows=false
+```
+
+The private pass still draws block VBO casters only; animated actor
+casters need a separately scoped prepared-pose shadow pass. The result
+is intended to fix view-driven caster loss, snap drift and shadowcolor
+state mismatches; final validation requires in-game movement tests.

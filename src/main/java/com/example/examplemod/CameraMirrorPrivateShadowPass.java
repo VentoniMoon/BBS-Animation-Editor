@@ -196,7 +196,8 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
             PreviewCameraPose main,float partialTicks,int shadowProgram,
             Object optiProgram,Class<?> shaders,
             FloatBuffer projection,FloatBuffer lightView,
-            CameraMirrorBSLCompositor owner)throws Exception
+            double casterRadius,CameraMirrorBSLCompositor owner)
+            throws Exception
     {
         ready=false;
         if(mc==null||mc.renderGlobal==null||shadowProgram<=0||
@@ -244,11 +245,17 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
                     TextureMap.LOCATION_BLOCKS_TEXTURE);
             Entity eye=mc.getRenderViewEntity();
             RenderGlobal world=mc.renderGlobal;
+            // A chunk BEHIND the reflected camera can still cast a
+            // long shadow onto a block that is visible in the mirror.
+            // The image frustum is NOT a valid shadow-caster frustum.
+            // Select the full shadow footprint from existing compiled
+            // chunks, independent of the camera's direction.
             try(CameraMirrorChunkVisibility.Scope chunks=
-                    CameraMirrorChunkVisibility.begin(mc,reflected,main))
+                    CameraMirrorChunkVisibility.beginShadow(
+                            mc,reflected,main,casterRadius))
             {
                 if(chunks==null)throw new IllegalStateException(
-                        "Shadow chunk frustum could not be prepared");
+                        "Shadow caster chunk set could not be prepared");
                 world.renderBlockLayer(BlockRenderLayer.SOLID,
                         partialTicks,2,eye);
                 GL11.glEnable(GL11.GL_ALPHA_TEST);
@@ -271,11 +278,25 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
                 if("true".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLShadowTranslucent","true")))
                 {
-                    // Match OptiFine's native shadow-translucent pass:
-                    // no framebuffer alpha blending; shadow.glsl writes
-                    // its own water/glass color and depth coverage.
+                    // Mirror the native pre-translucent shadow boundary:
+                    // reassert the private shadow framebuffer, draw buffer
+                    // mapping, and ProgramShadow AFTER the opaque/cutout
+                    // layers. Those layers may change active GL state via
+                    // OptiFine's chunk hooks. Otherwise shadowcolor0 may
+                    // be written with the wrong program, corrupting tinted
+                    // glass while other materials appear normal.
+                    bindDraw();
+                    GL20.glUseProgram(shadowProgram);
+                    owner.bindPrivateShadowProgram(optiProgram,
+                            shadowProgram,projection,lightView);
+                    GL11.glColorMask(true,true,true,true);
+                    GL11.glEnable(GL11.GL_DEPTH_TEST);
                     GL11.glDisable(GL11.GL_BLEND);
+                    GL11.glEnable(GL11.GL_ALPHA_TEST);
+                    GL11.glAlphaFunc(GL11.GL_GREATER,0.1F);
                     GL11.glDepthMask(true);
+                    mc.getTextureManager().bindTexture(
+                            TextureMap.LOCATION_BLOCKS_TEXTURE);
                     world.renderBlockLayer(BlockRenderLayer.TRANSLUCENT,
                             partialTicks,2,eye);
                 }
@@ -291,7 +312,11 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
                 System.out.println(TAG+"Private mirror shadow rendered "+
                         width+"x"+height+" depth="+depthCount+
                         " color="+colorCount+
-                        " (shared compiled chunks; main shadow map intact)");
+                        " casterRadius="+casterRadius+
+                        " translucent="+System.getProperty(
+                                "bbs.editor.camera.mirrorBSLShadowTranslucent",
+                                "true")+
+                        " (light-space casters; native shadow map intact)");
             }
         }
         finally

@@ -29,6 +29,29 @@ public final class CameraMirrorShadowMatrix
      * Input is not modified. Uses double intermediates to avoid accumulating
      * unnecessary precision loss when the two eyes are far apart.
      */
+    /**
+     * OptiFine's setCameraShadow() builds an orthographic light matrix
+     * ending in translate((float)eye % shadowIntervalSize - interval/2).
+     * Reusing that MAIN-eye translation for a PRIVATE mirror shadow map
+     * makes the shadow texture slide when the main camera moves.
+     *
+     * Preserve its sun rotation and replace ONLY the main-eye snapped
+     * translation with the reflected-eye snapped translation. Both
+     * rasterization and lookup must use the returned matrix.
+     */
+    public static float[] retargetOrthographicSnap(float[] nativeView,
+            double mainX,double mainY,double mainZ,
+            double mirrorX,double mirrorY,double mirrorZ,
+            float interval)
+    {
+        if(!(interval>0F)||!Float.isFinite(interval))
+            throw new IllegalArgumentException("Invalid OptiFine shadow interval");
+        return rebase(nativeView,
+                ((float)mirrorX % interval)-((float)mainX % interval),
+                ((float)mirrorY % interval)-((float)mainY % interval),
+                ((float)mirrorZ % interval)-((float)mainZ % interval));
+    }
+
     public static float[] rebase(float[] original,
             double dx,double dy,double dz)
     {

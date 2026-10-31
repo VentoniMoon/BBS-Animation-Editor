@@ -103,6 +103,9 @@ jobs:
           grep -q 'writeMatrix(pid,"shadowModelView",reflectedShadowView,false)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorBSLCompositor.renderPrivateShadows' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'CameraMirrorPrivateShadowPass.acquire' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorChunkVisibility.beginShadow' src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java
+          grep -q 'retargetOrthographicSnap' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'owner.bindPrivateShadowProgram(optiProgram' src/main/java/com/example/examplemod/CameraMirrorPrivateShadowPass.java
           grep -q 'CameraMirrorBSLCompositor.releaseShadowResources' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'CameraMirrorShadowMatrix.rebase' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'bslTargets,reflected,camera' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java

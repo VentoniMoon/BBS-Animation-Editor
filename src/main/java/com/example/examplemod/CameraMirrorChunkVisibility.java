@@ -43,6 +43,7 @@ public final class CameraMirrorChunkVisibility
     private static boolean initialized;
     private static boolean logged;
     private static boolean reportedFailure;
+    private static boolean shadowLogged;
 
     private CameraMirrorChunkVisibility(){}
 
@@ -91,6 +92,32 @@ public final class CameraMirrorChunkVisibility
     public static Scope begin(Minecraft mc,PreviewCameraPose reflected,
             PreviewCameraPose normal)
     {
+        return beginInternal(mc,reflected,normal,false,0D);
+    }
+
+    /**
+     * Shadow maps require *casters*, not just chunks seen by the reflected
+     * camera. A wall behind the camera still casts onto visible ground.
+     * Using the normal camera-view frustum for this pass caused a sliding
+     * shadow boundary when the reflected camera turned or moved.
+     *
+     * Select all already-compiled nearby chunks (including those outside
+     * the mirror's image) within the shadow-map footprint. OpenGL's light
+     * projection then clips geometry in the correct light-space view.
+     */
+    public static Scope beginShadow(Minecraft mc,
+            PreviewCameraPose reflected,PreviewCameraPose normal,
+            double shadowRadius)
+    {
+        if(!Double.isFinite(shadowRadius)||shadowRadius<=0D)
+            throw new IllegalArgumentException("Invalid shadow caster radius");
+        return beginInternal(mc,reflected,normal,true,shadowRadius);
+    }
+
+    private static Scope beginInternal(Minecraft mc,
+            PreviewCameraPose reflected,PreviewCameraPose normal,
+            boolean shadowCasters,double shadowRadius)
+    {
         if(mc==null||mc.renderGlobal==null||reflected==null||
                 normal==null)return null;
         try
@@ -112,9 +139,13 @@ public final class CameraMirrorChunkVisibility
             // The terrain pass has just installed the reflected camera
             // rotation and projection. Frustum.setPosition supplies the
             // world-space translation, as in vanilla setupTerrain().
-            Frustum frustum=new Frustum();
-            frustum.setPosition(reflected.x,reflected.y,reflected.z);
-            final double limit=mc.gameSettings.renderDistanceChunks*16D+32D;
+            Frustum frustum=shadowCasters?null:new Frustum();
+            if(frustum!=null)
+                frustum.setPosition(reflected.x,reflected.y,reflected.z);
+            final double viewLimit=
+                    mc.gameSettings.renderDistanceChunks*16D+32D;
+            final double limit=shadowCasters?
+                    Math.min(viewLimit,shadowRadius):viewLimit;
             final double limitSq=limit*limit;
             List<RenderChunk> visible=new ArrayList<RenderChunk>();
             int scheduled=0;
@@ -128,7 +159,8 @@ public final class CameraMirrorChunkVisibility
                 if(dx*dx+dz*dz>limitSq)continue;
                 AxisAlignedBB bounds=new AxisAlignedBB(pos,
                         pos.add(16,16,16));
-                if(!frustum.isBoundingBoxInFrustum(bounds))continue;
+                if(frustum!=null&&
+                        !frustum.isBoundingBoxInFrustum(bounds))continue;
                 CompiledChunk compiled=chunk.getCompiledChunk();
 
                 // The rear-side chunks may never have been drawn or
@@ -187,10 +219,18 @@ public final class CameraMirrorChunkVisibility
                 scope.close();
                 throw t;
             }
-            if(!logged)
+            if(shadowCasters&&!shadowLogged)
+            {
+                shadowLogged=true;
+                System.out.println("[BBS Editor][Mirror][Private Shadow] "+
+                        "Caster chunk selection: "+visible.size()+
+                        " chunks, radius="+limit+
+                        " blocks (independent of reflected view frustum)");
+            }
+            if(!shadowCasters&&!logged)
             {
                 logged=true;
-                System.out.println("[BBS Editor][Mirror] Shared chunks: "+
+                System.out.println("[BBS Editor][Mirror] Shared chunks: 
                         "mirror-visible="+visible.size()+
                         " original-visible="+old.size()+
                         "; no secondary world or RenderGlobal.");

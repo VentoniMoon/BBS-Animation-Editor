@@ -304,19 +304,39 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             if(nativeModel==null||nativeProjection==null)
                 throw new IllegalStateException(
                         "Native OptiFine shadow matrices unavailable");
-            // A private shadow map must use the SAME camera-relative
-            // transform for rendering AND sampling. Native map-rebasing
-            // was only appropriate while sharing the main depth texture.
-            FloatBuffer model=matrixBuffer(nativeModel);
+            // The native OptiFine shadowModelView contains a translation
+            // snapped to the MAIN camera: (float)mainEye % shadowInterval.
+            // Merely reusing that rotation+translation for a private
+            // REFLECTED-eye shadow camera causes the giant moving shadow.
+            // Retarget only this snap; rasterization and lookup must then
+            // use EXACTLY the same adjusted matrices.
+            boolean ortho=readNativeFlag("shadowMapIsOrtho");
+            float interval=readNativeNumber("shadowIntervalSize");
+            if(ortho&&!(interval>0F))
+                throw new IllegalStateException(
+                        "Missing OptiFine orthographic shadow interval");
+            float[] mirrorModel=ortho?
+                    CameraMirrorShadowMatrix.retargetOrthographicSnap(
+                            nativeModel,main.x,main.y,main.z,
+                            reflected.x,reflected.y,reflected.z,interval):
+                    nativeModel;
+            FloatBuffer model=matrixBuffer(mirrorModel);
             FloatBuffer projection=matrixBuffer(nativeProjection);
             privateShadowMap=CameraMirrorPrivateShadowPass.acquire(
                     privateShadowMap,shaders);
+            float halfPlane=readNativeNumber("shadowMapHalfPlane");
+            float shadowDistance=readNativeNumber("shadowDistance");
+            double footprint=halfPlane>0F?
+                    halfPlane*1.75D+48D:
+                    (shadowDistance>0F?shadowDistance+48D:176D);
+            double casterRadius=Math.max(48D,Math.min(512D,footprint));
             privateShadowMap.render(mc,reflected,main,partialTicks,
-                    programId,shadowProgram,shaders,projection,model,this);
+                    programId,shadowProgram,shaders,projection,model,
+                    casterRadius,this);
             privateShadowsReady=privateShadowMap.ready();
             if(privateShadowsReady)
             {
-                reflectedShadowView=matrixBuffer(nativeModel);
+                reflectedShadowView=matrixBuffer(mirrorModel);
                 privateShadowProjection=matrixBuffer(nativeProjection);
             }
         }
@@ -342,6 +362,26 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             targets.bindGeometry();
             GL20.glUseProgram(mainProgram);
         }
+    }
+
+    private float readNativeNumber(String field)
+            throws IllegalAccessException
+    {
+        Field f=nativeField(field);
+        if(f==null)return Float.NaN;
+        Object value=f.get(null);
+        return value instanceof Number?((Number)value).floatValue():
+                Float.NaN;
+    }
+
+    private boolean readNativeFlag(String field)
+            throws IllegalAccessException
+    {
+        Field f=nativeField(field);
+        if(f==null)
+            throw new IllegalStateException(
+                    "Missing OptiFine shadow flag "+field);
+        return f.getBoolean(null);
     }
 
     private static FloatBuffer matrixBuffer(float[] matrix)
