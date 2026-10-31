@@ -57,6 +57,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private FloatBuffer mirrorProjection;
     private FloatBuffer mirrorView;
     private boolean opaqueDepthSaved;
+    private boolean deferredExecuted;
     private boolean closed;
 
     private CameraMirrorBSLCompositor(CameraMirrorOptiFineTargets targets,
@@ -144,6 +145,23 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     }
     public static boolean active(){return current!=null;}
 
+    /** The native OptiFine deferred boundary is before translucent water.
+     * Running it in compose() AFTER all terrain corrupted depth and color
+     * inputs. This invokes ONLY the private mirrored shader targets. */
+    public static void runDeferredPasses()
+    {
+        if(current==null)return;
+        // Raw GBuffer diagnostic must bypass ALL postprocessing stages.
+        if(Integer.getInteger("bbs.editor.camera.mirrorBSLDebugColor",-1)>=0)
+            return;
+        try{current.deferred();}
+        catch(Exception e)
+        {
+            throw new IllegalStateException(
+                    "BSL mirror private deferred pass failed",e);
+        }
+    }
+
     /** Native BSL copies depthtex1 BEFORE water/translucent geometry.
      * Copy the private mirror depth at the same boundary. */
     public static void beforeTranslucent()
@@ -207,7 +225,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             // Sky uses a farther projection than terrain. Capture the
             // terrain camera for deferred/composite matrix uniforms,
             // otherwise a sky projection would distort BSL world depth.
-            if(mirrorProjection==null||"ProgramTerrain".equals(name))
+            if(mirrorProjection==null||name.startsWith("ProgramTerrain"))
                 mirrorProjection=currentMatrix(GL11.GL_PROJECTION_MATRIX);
             if(mirrorView==null||"ProgramTerrain".equals(name))
                 mirrorView=currentMatrix(GL11.GL_MODELVIEW_MATRIX);
@@ -223,17 +241,34 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     }
 
     /**
-     * Runs each active deferred/composite shader against the private
-     * mirrored GBuffer, followed by the user's actual BSL final shader
-     * into the existing mirror texture. No real world or shadow pass
-     * is started a second time.
+     * Execute BSL's actual deferred programs at the opaque/translucent
+     * boundary. Preserve GL state, texture bindings and shader program
+     * before returning to RenderGlobal's water pass.
      */
-    public void compose(int outputFramebuffer,int outputWidth,
-            int outputHeight)throws Exception
+    private void deferred()throws Exception
+    {
+        if(deferredExecuted)return;
+        if(!opaqueDepthSaved&&targets.depthCount()>1)
+        {
+            targets.copyDepth(1);
+            opaqueDepthSaved=true;
+        }
+        fullscreen(new DrawAction()
+        {
+            @Override public void draw()throws Exception
+            {
+                runStagePrograms("ProgramsDeferred",0);
+            }
+        },true);
+        deferredExecuted=true;
+    }
+
+    /** Composite only runs AFTER the reflected opaque/water/actor scene.
+     * In particular, deferred has ALREADY run before water. */
+    public void compose(final int outputFramebuffer,final int outputWidth,
+            final int outputHeight)throws Exception
     {
         if(closed)throw new IllegalStateException("BSL scope closed");
-        // Diagnostic view for isolating a broken geometry stage from a
-        // broken deferred/composite stage. Never enabled by default.
         int rawColor=Integer.getInteger(
                 "bbs.editor.camera.mirrorBSLDebugColor",-1);
         if(rawColor>=0&&rawColor<targets.colorCount())
@@ -242,34 +277,108 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                     outputHeight);
             return;
         }
-        // The opaque snapshot is captured just before translucent terrain.
-        // depthtex2 is captured after all prepared actors (same scene).
-        // The native character pass still runs after translucent terrain,
-        // so exact per-entity depth ordering needs further parity work.
-        if(!opaqueDepthSaved&&targets.depthCount()>1)
-            targets.copyDepth(1);
+        if(!deferredExecuted)deferred();
         if(targets.depthCount()>2)targets.copyDepth(2);
+        fullscreen(new DrawAction()
+        {
+            @Override public void draw()throws Exception
+            {
+                int offset=countPrograms("ProgramsDeferred");
+                int count=runStagePrograms("ProgramsComposite",offset);
+                Object finalStage=finalProgram.get(null);
+                int pid=id(finalStage);
+                if(pid<=0)
+                    throw new IllegalStateException("BSL ProgramFinal missing");
+                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,
+                        outputFramebuffer);
+                GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+                GL11.glViewport(0,0,outputWidth,outputHeight);
+                GL20.glUseProgram(pid);
+                bindInputs(pid);
+                overrideCamera(pid);
+                drawQuad();
+                if(!firstFrameLogged)
+                {
+                    firstFrameLogged=true;
+                    System.out.println(TAG+"PASS: "+
+                            (offset+count)+
+                            " shader stages + final on private GBuffer"+
+                            " (deferred before translucent)");
+                }
+            }
+        },false);
+    }
+
+    private int countPrograms(String field)throws Exception
+    {
+        Object array=shaders.getField(field).get(null);
+        if(array==null)return 0;
+        int count=0;
+        for(int i=0;i<Array.getLength(array);i++)
+            if(id(Array.get(array,i))>0)count++;
+        return count;
+    }
+
+    private int runStagePrograms(String field,int offset)throws Exception
+    {
         List<CameraMirrorCompositePlan> plans=
                 CameraMirrorOptiFinePlanning.inspect(targets.colorCount());
-        Class<?> clazz=Class.forName("net.optifine.shaders.Program");
-        Method getName=clazz.getMethod("getName");
-        List<Object> programs=new ArrayList<Object>();
-        Object[] categories={
-            shaders.getField("ProgramsDeferred").get(null),
-            shaders.getField("ProgramsComposite").get(null)
-        };
-        for(Object array:categories)
+        Object array=shaders.getField(field).get(null);
+        if(array==null)return 0;
+        int count=0;
+        for(int i=0;i<Array.getLength(array);i++)
         {
-            if(array==null)continue;
-            for(int i=0;i<Array.getLength(array);i++)
+            Object program=Array.get(array,i);
+            int pid=id(program);
+            if(pid<=0)continue;
+            int index=offset+count;
+            if(index>=plans.size())
+                throw new IllegalStateException(
+                        "BSL composite plan count mismatch: "+field);
+            CameraMirrorCompositePlan plan=plans.get(index);
+            targets.bindCompositeOutputs(plan);
+            GL20.glUseProgram(pid);
+            bindInputs(pid);
+            overrideCamera(pid);
+            drawQuad();
+            targets.commitCompositeOutputs(plan);
+            count++;
+        }
+        return count;
+    }
+
+    private interface DrawAction
+    {
+        void draw()throws Exception;
+    }
+
+    /** Prevent the fullscreen shader stages from leaving texture units,
+     * matrices, blend/depth state, viewport or a private FBO bound while
+     * RenderGlobal resumes rendering translucent blocks. */
+    private void fullscreen(DrawAction action,boolean resumeGeometry)
+            throws Exception
+    {
+        final int priorProgram=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        final int priorMode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        final int priorRead=GL11.glGetInteger(
+                GL30.GL_READ_FRAMEBUFFER_BINDING);
+        final int priorDraw=GL11.glGetInteger(
+                GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        final int priorUnit=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        final IntBuffer priorViewport=BufferUtils.createIntBuffer(16);
+        GL11.glGetInteger(GL11.GL_VIEWPORT,priorViewport);
+        final int[] priorTextures=new int[16];
+        try
+        {
+            for(int i=0;i<16;i++)
             {
-                Object program=Array.get(array,i);
-                if(id(program)>0)programs.add(program);
+                GL13.glActiveTexture(GL13.GL_TEXTURE0+i);
+                priorTextures[i]=GL11.glGetInteger(
+                        GL11.GL_TEXTURE_BINDING_2D);
             }
         }
-        if(programs.size()!=plans.size())
-            throw new IllegalStateException("BSL program/plan count mismatch");
-        // The fullscreen pass owns its own ortho matrices.
+        finally{GL13.glActiveTexture(priorUnit);}
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
@@ -277,44 +386,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glPushMatrix();
         GL11.glLoadIdentity();
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(false);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_ALPHA_TEST);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glDisable(GL11.GL_CLIP_PLANE0);
         try
         {
-            for(int i=0;i<programs.size();i++)
-            {
-                Object program=programs.get(i);
-                CameraMirrorCompositePlan plan=plans.get(i);
-                targets.bindCompositeOutputs(plan);
-                int pid=id(program);
-                GL20.glUseProgram(pid);
-                bindInputs(pid);
-                overrideCamera(pid);
-                drawQuad();
-                targets.commitCompositeOutputs(plan);
-            }
-            Object finalStage=finalProgram.get(null);
-            int pid=id(finalStage);
-            if(pid<=0)
-                throw new IllegalStateException("BSL ProgramFinal missing");
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,outputFramebuffer);
-            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
-            GL11.glViewport(0,0,outputWidth,outputHeight);
-            GL20.glUseProgram(pid);
-            bindInputs(pid);
-            overrideCamera(pid);
-            drawQuad();
-            if(!firstFrameLogged)
-            {
-                firstFrameLogged=true;
-                System.out.println(TAG+"PASS: "+
-                        programs.size()+
-                        " shader stages + final on private GBuffer");
-            }
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(false);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glDisable(GL11.GL_ALPHA_TEST);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_CLIP_PLANE0);
+            action.draw();
         }
         finally
         {
@@ -322,7 +402,26 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             GL11.glPopMatrix();
             GL11.glMatrixMode(GL11.GL_PROJECTION);
             GL11.glPopMatrix();
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glPopAttrib();
+            try
+            {
+                for(int i=0;i<16;i++)
+                {
+                    GL13.glActiveTexture(GL13.GL_TEXTURE0+i);
+                    GL11.glBindTexture(GL11.GL_TEXTURE_2D,priorTextures[i]);
+                }
+            }
+            finally
+            {
+                GL13.glActiveTexture(priorUnit);
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,priorRead);
+                GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,priorDraw);
+                GL11.glViewport(priorViewport.get(0),priorViewport.get(1),
+                        priorViewport.get(2),priorViewport.get(3));
+                GL11.glMatrixMode(priorMode);
+                GL20.glUseProgram(priorProgram);
+                if(resumeGeometry)targets.bindGeometry();
+            }
         }
     }
 
