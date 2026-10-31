@@ -413,3 +413,36 @@ Emergency JVM flags (must be supplied before starting Minecraft):
    handling for shaderpacks.
 3. Optionally batch/limit multi-mirror capture and introduce surface presets.
 4. After mirror stabilization, unify editor window/panel style.
+
+### BSL final-image spatial denoising (October 31)
+
+BSL's final shader still introduces high-frequency dither/noise.
+The mirrored camera cannot safely reuse the main camera's temporal
+antialiasing history (its projected pixels and previous camera matrices
+do not match the reflected view). Raising the render resolution and using
+`GL_LINEAR` reduces magnification but does not eliminate the dither.
+
+The experimental BSL mirror now uses a private **13-tap edge-aware spatial
+filter** on the **finished LDR color**, after BSL's own final stage.
+It runs in an independent GLSL 1.20 fragment program and scratch FBO,
+then blits only that cleaned image to the mirror's display texture.
+Color-difference weighting protects sharp Minecraft/actor edges.
+Normal/material/depth GBuffer channels, global OptiFine targets and
+shadow textures are not touched. A failure of this optional filter
+falls back to the unchanged reflection rather than disabling the mirror.
+
+Comparison without this extra filter:
+```
+-Dbbs.editor.camera.mirrorBSLDenoise=false
+```
+
+Tune its blend strength from 0 (off) to 1 (maximum edge-aware output),
+default 0.90:
+```
+-Dbbs.editor.camera.mirrorBSLDenoiseStrength=0.90
+```
+
+The `mirrorBSLDebugColor` and `mirrorBSLSkipFinal` diagnostic modes
+bypass the new filter. This is spatial cleanup, **not** independent
+temporal AA: changing geometry and BSL-specific lighting/sky parity still
+require separate verification. Test on the active shaderpack in-game.

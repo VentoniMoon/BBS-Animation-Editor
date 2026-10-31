@@ -80,6 +80,7 @@ public final class CameraSceneMirrorRenderer
             bslTargets.close();
             bslTargets=null;
         }
+        CameraMirrorBSLDenoiser.reset();
         lastWorld=null;
         // Reflection now shares the original world's existing render chunks.
         // Only release its private color/depth target on editor detach.
@@ -275,6 +276,14 @@ public final class CameraSceneMirrorRenderer
                     {
                         pass.draw(reflected);
                         bsl.compose(texture.framebufferObject,w,h);
+                        // Spatially suppress final BSL dithering without
+                        // touching encoded GBuffer color, material or depth.
+                        // Leave raw and pre-final diagnostics unfiltered.
+                        if(Integer.getInteger(
+                                "bbs.editor.camera.mirrorBSLDebugColor",
+                                -1)<0&&!Boolean.getBoolean(
+                                "bbs.editor.camera.mirrorBSLSkipFinal"))
+                            CameraMirrorBSLDenoiser.apply(texture);
                     }
                 }
                 else if(shaderMirror)

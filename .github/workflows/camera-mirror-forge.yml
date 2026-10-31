@@ -9,6 +9,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorBSLDenoiser.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java'
@@ -34,6 +35,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorsPanel.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorBSLDenoiser.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorNativeAtmosphere.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFineBackend.java'
@@ -88,6 +90,8 @@ jobs:
           grep -q 'copyReflectedDirection' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'mirrorBSLMaxSize' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
           grep -q 'GL11.GL_LINEAR' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'CameraMirrorBSLDenoiser.apply(texture)' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q 'GL30.glBlitFramebuffer' src/main/java/com/example/examplemod/CameraMirrorBSLDenoiser.java
           grep -q 'bindNativeNoiseImage' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'mirrorBSLSkipFinal' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           ! grep -q 'Shaders.renderDeferred()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
