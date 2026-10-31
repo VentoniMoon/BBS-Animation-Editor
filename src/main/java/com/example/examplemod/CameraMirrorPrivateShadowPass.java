@@ -271,9 +271,10 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
                 if("true".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLShadowTranslucent","true")))
                 {
-                    GL11.glEnable(GL11.GL_BLEND);
-                    GL11.glBlendFunc(GL11.GL_SRC_ALPHA,
-                            GL11.GL_ONE_MINUS_SRC_ALPHA);
+                    // Match OptiFine's native shadow-translucent pass:
+                    // no framebuffer alpha blending; shadow.glsl writes
+                    // its own water/glass color and depth coverage.
+                    GL11.glDisable(GL11.GL_BLEND);
                     GL11.glDepthMask(true);
                     world.renderBlockLayer(BlockRenderLayer.TRANSLUCENT,
                             partialTicks,2,eye);
