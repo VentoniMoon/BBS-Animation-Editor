@@ -1,6 +1,7 @@
 package com.example.examplemod;
 
 import java.nio.IntBuffer;
+import java.nio.ByteBuffer;
 import java.nio.DoubleBuffer;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -27,6 +28,8 @@ public final class CameraSceneMirrorRenderer
         void draw(PreviewCameraPose pose) throws Throwable;
     }
     private static Framebuffer texture;
+    private static boolean hdrColorTexture;
+    private static boolean lastBslHdrMode;
     private static CameraMirrorOptiFineTargets bslTargets;
     private static String capturedId="";
     private static PreviewCameraPose capturedPose;
@@ -75,6 +78,8 @@ public final class CameraSceneMirrorRenderer
             texture.deleteFramebuffer();
             texture=null;
         }
+        hdrColorTexture=false;
+        lastBslHdrMode=false;
         if(bslTargets!=null)
         {
             bslTargets.close();
@@ -180,6 +185,18 @@ public final class CameraSceneMirrorRenderer
             return;
         }
         final boolean experimentalBSL=bslMultiPass;
+        // In RenderWorldLast the normal OptiFine deferred frame has not
+        // completed its final tone mapping. Mirror colors must enter that
+        // same final pass as LINEAR HDR, not as an already tonemapped LDR
+        // image (which BSL would tonemap a second time).
+        //
+        // Set -Dbbs.editor.camera.mirrorBSLFinalMode=final to compare with
+        // the old private-final path when diagnosing shaderpack parity.
+        final boolean bslHdr=experimentalBSL&&
+                !"final".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLFinalMode","hdr"))&&
+                Integer.getInteger(
+                        "bbs.editor.camera.mirrorBSLDebugColor",-1)<0;
         int max=Math.max(source.framebufferWidth,source.framebufferHeight);
         // Every BSL post-processing stage, including final, must use
         // the same pixel dimensions as the PRIVATE eight-color GBuffer.
@@ -220,10 +237,22 @@ public final class CameraSceneMirrorRenderer
 
         try
         {
-            if(texture==null)texture=new Framebuffer(w,h,true);
+            if(texture==null)
+            {
+                texture=new Framebuffer(w,h,true);
+                hdrColorTexture=false;
+            }
             else if(texture.framebufferWidth!=w||
                     texture.framebufferHeight!=h)
+            {
                 texture.createBindFramebuffer(w,h);
+                hdrColorTexture=false;
+            }
+            // A vanilla 1.12.2 framebuffer is RGBA8. Blitting the BSL
+            // post-composite HDR color into it would CLAMP sunlight and
+            // bright pixels before the main BSL final shader can tonemap
+            // them. Preserve HDR until the main camera resolves the frame.
+            ensureMirrorColorFormat(bslHdr);
             // A Minecraft 1.12.2 Framebuffer defaults to NEAREST. That
             // point-samples the full BSL final image when its projective
             // mirror quad is magnified in the preview, visibly amplifying
@@ -275,11 +304,11 @@ public final class CameraSceneMirrorRenderer
                                     bslTargets,reflected))
                     {
                         pass.draw(reflected);
-                        bsl.compose(texture.framebufferObject,w,h);
-                        // Spatially suppress final BSL dithering without
-                        // touching encoded GBuffer color, material or depth.
-                        // Leave raw and pre-final diagnostics unfiltered.
-                        if(Integer.getInteger(
+                        bsl.compose(texture.framebufferObject,w,h,bslHdr);
+                        // Denoising is only suitable after final LDR
+                        // conversion. The HDR mirror is tonemapped once
+                        // by the main BSL frame, not by this filter.
+                        if(!bslHdr&&Integer.getInteger(
                                 "bbs.editor.camera.mirrorBSLDebugColor",
                                 -1)<0&&!Boolean.getBoolean(
                                 "bbs.editor.camera.mirrorBSLSkipFinal"))
@@ -319,7 +348,8 @@ public final class CameraSceneMirrorRenderer
             capturedId=picked.id;
             capturedPose=reflected;
             captureStatus=experimentalBSL?
-                    "MIRROR: BSL MULTIPASS EXPERIMENTAL":
+                    (bslHdr?"MIRROR: BSL HDR -> MAIN FINAL":
+                            "MIRROR: BSL PRIVATE FINAL (diagnostic)"):
                     (shaderMirror?
                         "MIRROR: OptiFine forward shader active":
                         (clipPlaneInstalled?
@@ -375,6 +405,59 @@ public final class CameraSceneMirrorRenderer
                     GL20.glUseProgram(oldShader);
                 }
             }
+        }
+    }
+
+
+    /**
+     * Keep the mirror's linear HDR values while the native OptiFine
+     * deferred frame is still rendering. The surface texture is NEVER
+     * read/write at the same time; composite stages live in separate MRTs.
+     *
+     * Reallocate the existing Minecraft color attachment in-place, rather
+     * than replacing its texture id (Minecraft stores that id internally).
+     * Switching BSL modes or resizing restores the appropriate format.
+     */
+    private static void ensureMirrorColorFormat(boolean hdr)
+    {
+        if(texture==null||hdrColorTexture==hdr)return;
+        int oldActive=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int oldRead=GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int oldDraw=GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        int oldBinding=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        try
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,
+                    texture.framebufferTexture);
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D,0,
+                    hdr?GL30.GL_RGBA16F:GL11.GL_RGBA8,
+                    texture.framebufferWidth,texture.framebufferHeight,
+                    0,GL11.GL_RGBA,
+                    hdr?GL11.GL_FLOAT:GL11.GL_UNSIGNED_BYTE,
+                    (ByteBuffer)null);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,
+                    texture.framebufferObject);
+            int status=GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+            if(status!=GL30.GL_FRAMEBUFFER_COMPLETE)
+                throw new IllegalStateException(
+                        "BSL mirror color framebuffer incomplete: 0x"+
+                        Integer.toHexString(status));
+            hdrColorTexture=hdr;
+            if(lastBslHdrMode!=hdr)
+            {
+                lastBslHdrMode=hdr;
+                System.out.println("[BBS Editor][Mirror][BSL Render] "+
+                        "Mirror color = "+(hdr?"RGBA16F (main BSL final)":
+                                "RGBA8 (private final / shaderless)"));
+            }
+        }
+        finally
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D,oldBinding);
+            GL13.glActiveTexture(oldActive);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,oldRead);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,oldDraw);
         }
     }
 

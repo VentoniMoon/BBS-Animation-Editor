@@ -446,3 +446,39 @@ The `mirrorBSLDebugColor` and `mirrorBSLSkipFinal` diagnostic modes
 bypass the new filter. This is spatial cleanup, **not** independent
 temporal AA: changing geometry and BSL-specific lighting/sky parity still
 require separate verification. Test on the active shaderpack in-game.
+
+### BSL mirror: one final tonemap, HDR target (October 31)
+
+The new screenshots exposed a more fundamental bug than grain: switching
+the optional denoiser could reveal a nearly uniform blue rectangle, while
+the older BSL picture had obvious overexposure. A post-filter cannot fix
+an incorrect color pipeline.
+
+In CAMERA, the reflection is drawn during RenderWorldLast, inside the
+native OptiFine frame. The mirror's own seven deferred/composite stages
+generate HDR `colortex0`. Previously the mirror also ran BSL's `final`
+program and stored that already-tonemapped image into Minecraft's default
+**8-bit** framebuffer. The ordinary camera could then process this image
+again. Filtering that result only hid noise and risked blur.
+
+The experimental BSL path now defaults to:
+1. Private reflected geometry + private BSL deferred/composite passes.
+2. Copy **linear HDR** colortex0 to a `RGBA16F` mirror surface texture.
+3. Draw that surface into the ordinary world's native shader frame.
+4. Let the **main BSL final** tonemap the entire image only once.
+
+The private final shader and its LDR-only denoiser are bypassed in this
+HDR path. Both denoiser on/off should therefore produce the same geometry
+and base exposure; a future independent mirror TAA can be added later.
+
+To compare the previous path (private BSL final + optional denoiser):
+```
+-Dbbs.editor.camera.mirrorBSLFinalMode=final
+```
+
+If an active shaderpack renders the mirror only after its main final, the
+legacy mode can be used as a fallback. HDR mode is the default for this
+specific BSL RenderWorldLast integration, but visual testing with
+BSL_v8.2.02-BetterLights is still required. HDR presentation cannot by
+itself fix missing geometry, pack-specific samplers or incorrect lighting
+uniforms.

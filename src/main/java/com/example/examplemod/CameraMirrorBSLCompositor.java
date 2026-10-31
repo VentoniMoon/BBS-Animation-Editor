@@ -283,7 +283,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     /** Composite only runs AFTER the reflected opaque/water/actor scene.
      * In particular, deferred has ALREADY run before water. */
     public void compose(final int outputFramebuffer,final int outputWidth,
-            final int outputHeight)throws Exception
+            final int outputHeight,final boolean tonemapInMain)
+            throws Exception
     {
         if(closed)throw new IllegalStateException("BSL scope closed");
         int rawColor=Integer.getInteger(
@@ -302,16 +303,24 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             {
                 int offset=countPrograms("ProgramsDeferred");
                 int count=runStagePrograms("ProgramsComposite",offset);
-                // A mirror captured at RenderWorldLast can be presented
-                // again to the MAIN OptiFine composite/final sequence.
-                // The explicit preFinal diagnostic distinguishes duplicated
-                // tonemapping from problems in the private GBuffer.
-                // Keep the existing final path as default until validated.
-                if(Boolean.getBoolean(
+                // The outer RenderWorldLast pass feeds the normal BSL
+                // deferred/final frame. Do NOT apply BSL final here as well:
+                // that tonemaps and dithers the reflected scene twice.
+                // Pre-final colortex0 is HDR and must be copied to the
+                // mirror's RGBA16F display target, not a clamping RGBA8.
+                // A legacy private-final diagnostic remains available.
+                if(tonemapInMain||Boolean.getBoolean(
                         "bbs.editor.camera.mirrorBSLSkipFinal"))
                 {
                     blitRawColor(0,outputFramebuffer,
                             outputWidth,outputHeight);
+                    if(!firstFrameLogged)
+                    {
+                        firstFrameLogged=true;
+                        System.out.println(TAG+"PASS: "+(offset+count)+
+                                " shader stages, linear HDR mirror; "+
+                                "main BSL frame owns final tonemapping");
+                    }
                     return;
                 }
                 Object finalStage=finalProgram.get(null);
