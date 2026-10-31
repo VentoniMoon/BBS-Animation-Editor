@@ -230,11 +230,11 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
      * the rest of the texture. Reading the main texture through our own
      * scratch READ FBO does not alter the native dfb attachments.
      */
-    public void copyNativeExposureMetadata(int mainColor2)
+    public boolean copyNativeExposureMetadata(int mainColor2)
     {
         checkOpen();
         if(colorCount<=2||mainColor2<=0||
-                !GL11.glIsTexture(mainColor2))return;
+                !GL11.glIsTexture(mainColor2))return false;
         final int oldRead=GL11.glGetInteger(
                 GL30.GL_READ_FRAMEBUFFER_BINDING);
         final int oldDraw=GL11.glGetInteger(
@@ -253,7 +253,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
             int srcH=GL11.glGetTexLevelParameteri(
                     GL11.GL_TEXTURE_2D,0,GL11.GL_TEXTURE_HEIGHT);
             if(srcW<4||srcH<2||width<4||height<2)
-                return;
+                return false;
             if(historyReadFbo==0)
                 historyReadFbo=GL30.glGenFramebuffers();
             if(historyDrawFbo==0)
@@ -293,6 +293,7 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
                 throw new IllegalStateException(
                         "BSL exposure history blit GL error 0x"+
                         Integer.toHexString(error));
+            return true;
         }
         finally
         {

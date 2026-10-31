@@ -276,7 +276,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             int nativeColor2=((Number)getA.invoke(flip,2)).intValue();
             if(nativeColor2<=0)throw new IllegalStateException(
                     "Native colortex2 texture is missing");
-            targets.copyNativeExposureMetadata(nativeColor2);
+            if(!targets.copyNativeExposureMetadata(nativeColor2))
+                throw new IllegalStateException(
+                        "Native colortex2 history texture is invalid or too small");
             if(!exposureLogged)
             {
                 exposureLogged=true;
