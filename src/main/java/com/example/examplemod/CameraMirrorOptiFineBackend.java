@@ -54,7 +54,8 @@ public final class CameraMirrorOptiFineBackend
     private static Scope current;
     private static final String[] STAGES={
         "ProgramSkyBasic","ProgramSkyTextured","ProgramClouds",
-        "ProgramTerrain","ProgramWater","ProgramEntities"
+        "ProgramTerrain","ProgramTerrainSolid","ProgramTerrainCutoutMip",
+        "ProgramTerrainCutout","ProgramWater","ProgramEntities"
     };
     private CameraMirrorOptiFineBackend(){}
 
