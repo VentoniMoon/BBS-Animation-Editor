@@ -541,6 +541,12 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         write1(pid,"viewHeight",(float)targets.height());
         write1(pid,"aspectRatio",(float)targets.width()/
                 Math.max(1,targets.height()));
+        // GLSL programs are selected via raw glUseProgram to avoid
+        // modifying the main OptiFine program stack. Thus the normal
+        // Shaders.useProgram() environment-uniform initialization is
+        // NOT executed for this camera. Copy the current WORLD time,
+        // weather, sky and fog values from the active native renderer.
+        overrideEnvironment(pid);
         if(mirrorProjection!=null)
         {
             writeMatrix(pid,"gbufferProjection",mirrorProjection,false);
@@ -552,6 +558,89 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             writeMatrix(pid,"gbufferModelView",mirrorView,false);
             writeMatrix(pid,"gbufferModelViewInverse",mirrorView,true);
             writeMatrix(pid,"gbufferPreviousModelView",mirrorView,false);
+        }
+    }
+
+    /** Copy non-view-dependent OptiFine environment state into each
+     * compiled BSL program, restoring all uniforms at scope exit.
+     * Shadow/sun direction require reflected-view transforms and are
+     * handled separately from these world-space scalars. */
+    private void overrideEnvironment(int pid)
+    {
+        copyFloat(pid,"fogDensity","fogDensity");
+        copyInt(pid,"fogMode","fogMode");
+        copy3(pid,"fogColor","fogColorR","fogColorG","fogColorB");
+        copy3(pid,"skyColor","skyColorR","skyColorG","skyColorB");
+        copyFloat(pid,"sunAngle","sunAngle");
+        copyFloat(pid,"shadowAngle","shadowAngle");
+        copyFloat(pid,"rainStrength","rainStrength");
+        copyFloat(pid,"wetness","wetness");
+        copyFloat(pid,"frameTime","frameTime");
+        copyFloat(pid,"frameTimeCounter","frameTimeCounter");
+        copyInt(pid,"frameCounter","frameCounter");
+        copyInt(pid,"moonPhase","moonPhase");
+        copyInt(pid,"isEyeInWater","isEyeInWater");
+    }
+
+    private Field nativeField(String name)
+    {
+        try
+        {
+            Field field=shaders.getDeclaredField(name);
+            field.setAccessible(true);
+            return field;
+        }
+        catch(ReflectiveOperationException unavailable){return null;}
+    }
+
+    private void copyFloat(int pid,String uniform,String field)
+    {
+        try
+        {
+            Field source=nativeField(field);
+            if(source!=null)
+                write1(pid,uniform,source.getFloat(null));
+        }
+        catch(IllegalAccessException e)
+        {
+            throw new IllegalStateException(
+                    "Cannot read OptiFine environment "+field,e);
+        }
+    }
+
+    private void copyInt(int pid,String uniform,String field)
+    {
+        try
+        {
+            Field source=nativeField(field);
+            if(source==null)return;
+            int loc=GL20.glGetUniformLocation(pid,uniform);
+            if(loc<0)return;
+            restored.add(UniformBackup.captureInt(pid,loc));
+            GL20.glUniform1i(loc,source.getInt(null));
+        }
+        catch(IllegalAccessException e)
+        {
+            throw new IllegalStateException(
+                    "Cannot read OptiFine environment "+field,e);
+        }
+    }
+
+    private void copy3(int pid,String uniform,String r,String g,String b)
+    {
+        try
+        {
+            Field rf=nativeField(r);
+            Field gf=nativeField(g);
+            Field bf=nativeField(b);
+            if(rf==null||gf==null||bf==null)return;
+            write3(pid,uniform,rf.getFloat(null),gf.getFloat(null),
+                    bf.getFloat(null));
+        }
+        catch(IllegalAccessException e)
+        {
+            throw new IllegalStateException(
+                    "Cannot read OptiFine environment "+uniform,e);
         }
     }
 
