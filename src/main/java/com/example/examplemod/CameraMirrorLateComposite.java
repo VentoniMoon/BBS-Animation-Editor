@@ -39,6 +39,7 @@ public final class CameraMirrorLateComposite
     private CameraMirrorLateComposite(){}
 
     public static boolean prepared(){return prepared;}
+    public static boolean available(){return !unavailable;}
     public static String problem(){return problem;}
 
     public static void beginFrame(){prepared=false;}
