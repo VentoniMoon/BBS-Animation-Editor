@@ -317,7 +317,7 @@ public final class CameraSceneMirrorRenderer
                     // as render outputs in this pipeline.
                     try(CameraMirrorBSLCompositor bsl=
                             CameraMirrorBSLCompositor.begin(
-                                    bslTargets,reflected))
+                                    bslTargets,reflected,camera))
                     {
                         pass.draw(reflected);
                         bsl.compose(texture.framebufferObject,w,h,bslHdr);

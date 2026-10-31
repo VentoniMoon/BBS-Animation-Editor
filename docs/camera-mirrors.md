@@ -700,3 +700,37 @@ solid/cutout layer. Logs now include either `Terrain GLSL verified`
 or `TERRAIN PROGRAM OVERRIDE` (expected/actual IDs) for testing.
 This is an evidence-driven terrain-program correction; full BSL
 reflective lighting parity still needs an in-game screenshot.
+
+### World-anchored BSL shadow map for reflected camera
+
+BSL calculates terrain shadows by projecting positions relative to its
+GBuffer camera through `shadowModelView`. The independent mirror reuses
+the main camera's shadow textures, but had also reused the unmodified
+main `shadowModelView`, so the shadow slid over grass when the camera
+moved, even though terrain color and clouds were correct.
+
+The mirror now receives the original and reflected camera positions.
+It copies the native OptiFine `shadowModelView` and right-multiplies
+it by `translate(reflectedEye-mainEye)`. Thus, for any block world
+position P:
+
+`shadowMirror*(P-reflectedEye) = shadowMain*(P-mainEye)`
+
+The transformed matrix and its inverse are assigned only to private
+shader programs and restored after rendering. The native shadow FBO,
+depth/color textures and `shadowProjection` are read-only and shared.
+No duplicate world or shadow-map render is created. An independent
+Java 8 invariant test checks several camera displacements.
+
+Log: `BSL shadow map anchored to main world camera; mirror-main delta=...`
+or `Mirror shadow anchoring unavailable` if the OptiFine API is missing.
+
+To compare previous behavior:
+```
+-Dbbs.editor.camera.mirrorBSLShadowAnchor=false
+```
+
+This corrects the world-coordinate transform. Reflected points outside
+the main camera's shadow-distance coverage still cannot receive shadows
+from the shared shadow map; long-distance parity requires independent
+shadow coverage and should be checked in-game.

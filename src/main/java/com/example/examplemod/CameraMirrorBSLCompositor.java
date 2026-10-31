@@ -57,7 +57,11 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean exposureWarningLogged;
     private static boolean terrainProgramVerified;
     private static boolean terrainProgramWarning;
+    private static boolean shadowAnchorLogged;
+    private static boolean shadowAnchorUnavailableLogged;
     private int expectedTerrainProgram;
+    private final PreviewCameraPose mainView;
+    private final FloatBuffer reflectedShadowView;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -78,9 +82,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private boolean closed;
 
     private CameraMirrorBSLCompositor(CameraMirrorOptiFineTargets targets,
-            PreviewCameraPose view)throws Exception
+            PreviewCameraPose view,PreviewCameraPose mainView)
+            throws Exception
     {
-        this.targets=targets;this.view=view;
+        this.targets=targets;this.view=view;this.mainView=mainView;
         shaders=Class.forName("net.optifine.shaders.Shaders");
         // OptiFine's beginWater() can invoke GLOBAL renderDeferred() if
         // isRenderingWorld remains true. That would composite the normal
@@ -128,16 +133,17 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         }
         finally{GL13.glActiveTexture(oldTextureUnit);}
         snapshotNativeUniforms();
+        reflectedShadowView=shadowMatrixForReflectedCamera();
     }
 
     public static CameraMirrorBSLCompositor begin(
-            CameraMirrorOptiFineTargets targets,PreviewCameraPose view)
-            throws Exception
+            CameraMirrorOptiFineTargets targets,PreviewCameraPose view,
+            PreviewCameraPose mainView)throws Exception
     {
         if(current!=null)
             throw new IllegalStateException("Recursive BSL mirror compositor");
         CameraMirrorBSLCompositor result=
-                new CameraMirrorBSLCompositor(targets,view);
+                new CameraMirrorBSLCompositor(targets,view,mainView);
         current=result;
         try
         {
@@ -1027,6 +1033,96 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             writeMatrix(pid,"gbufferModelViewInverse",mirrorView,true);
             writeMatrix(pid,"gbufferPreviousModelView",mirrorView,false);
         }
+        // BSL's GetShadow() projects reconstructed camera-relative
+        // world positions with shadowModelView. The native shadow map,
+        // however, is anchored to the MAIN camera, not the reflected
+        // camera. Rebase the matrix, leaving the real shadow map and
+        // shadowProjection unchanged. This keeps the shadow locked to
+        // the same WORLD block while moving the spectator/editor camera.
+        if(reflectedShadowView!=null)
+        {
+            writeMatrix(pid,"shadowModelView",reflectedShadowView,false);
+            writeMatrix(pid,"shadowModelViewInverse",
+                    reflectedShadowView,true);
+        }
+    }
+
+    /**
+     * Rendered shadow-map texels are already positioned relative to the
+     * native main-camera origin. BSL terrain's ToWorld(viewPos) reconstructs
+     * coordinates relative to the *reflected* eye, so it must use
+     *
+     *     shadowMirror = shadowMain * T(mirrorEye - mainEye).
+     *
+     * This changes only the private GLSL uniforms, never OptiFine's
+     * shadow camera, matrices, FBOs or existing depth maps.
+     */
+    private FloatBuffer shadowMatrixForReflectedCamera()
+    {
+        if("false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrorBSLShadowAnchor","true"))||
+                mainView==null)return null;
+        try
+        {
+            float[] original=readNativeShadowMatrix();
+            if(original==null)throw new IllegalStateException(
+                    "Native shadowModelView matrix unavailable");
+            double dx=view.x-mainView.x;
+            double dy=view.y-mainView.y;
+            double dz=view.z-mainView.z;
+            float[] translated=CameraMirrorShadowMatrix.rebase(original,
+                    dx,dy,dz);
+            FloatBuffer buffer=BufferUtils.createFloatBuffer(16);
+            buffer.put(translated).flip();
+            if(!shadowAnchorLogged)
+            {
+                shadowAnchorLogged=true;
+                System.out.println(TAG+
+                        "BSL shadow map anchored to main world camera; "+
+                        "mirror-main delta="+dx+","+dy+","+dz+
+                        " (shadow projection and textures unchanged)");
+            }
+            return buffer;
+        }
+        catch(Throwable error)
+        {
+            // Preserve original appearance instead of guessing matrices
+            // if another OptiFine build uses incompatible shadow fields.
+            if(!shadowAnchorUnavailableLogged)
+            {
+                shadowAnchorUnavailableLogged=true;
+                System.err.println(TAG+
+                        "Mirror shadow anchoring unavailable: "+error);
+            }
+            return null;
+        }
+    }
+
+    private float[] readNativeShadowMatrix()
+            throws IllegalAccessException
+    {
+        for(String name:new String[]{"shadowModelView","faShadowModelView"})
+        {
+            Field field=nativeField(name);
+            if(field==null)continue;
+            Object raw=field.get(null);
+            if(raw instanceof FloatBuffer)
+            {
+                FloatBuffer copy=((FloatBuffer)raw).duplicate();
+                if(copy.capacity()<16)continue;
+                copy.position(0);
+                float[] matrix=new float[16];
+                copy.get(matrix,0,16);
+                return matrix;
+            }
+            if(raw instanceof float[]&&((float[])raw).length>=16)
+            {
+                float[] matrix=new float[16];
+                System.arraycopy(raw,0,matrix,0,16);
+                return matrix;
+            }
+        }
+        return null;
     }
 
     private static final String[] NATIVE_FLOATS={

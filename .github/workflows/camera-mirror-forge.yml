@@ -20,6 +20,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorShadowMatrix.java'
+      - 'src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
@@ -49,6 +51,8 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorShadowMatrix.java'
+      - 'src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorCompositePlan.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java'
       - 'src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java'
@@ -94,6 +98,9 @@ jobs:
           grep -q 'gbuffersClearColor' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'GL11.GL_NEAREST' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
           grep -q 'copyReflectedDirection' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'writeMatrix(pid,"shadowModelView",reflectedShadowView,false)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorShadowMatrix.rebase' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'bslTargets,reflected,camera' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'mirrorBSLMaxSize' src/main/java/com/example/examplemod/CameraMirrorOptiFineTargets.java
           grep -q 'GL11.GL_LINEAR' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'CameraMirrorBSLDenoiser.apply(texture)' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
@@ -120,6 +127,14 @@ jobs:
           grep -q 'copyNumberInt(pid,"worldTime","worldTime")' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'tonemapInMain' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           ! grep -q 'Shaders.renderDeferred()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+      - name: Verify shadow map is anchored in world space
+        run: |
+          mkdir -p /tmp/bbs-mirror-shadow-test
+          javac -d /tmp/bbs-mirror-shadow-test \
+            src/main/java/com/example/examplemod/CameraMirrorShadowMatrix.java \
+            src/test/mirror-shadow/CameraMirrorShadowMatrixInvariantTest.java
+          java -cp /tmp/bbs-mirror-shadow-test \
+            com.example.examplemod.CameraMirrorShadowMatrixInvariantTest
       - name: Compile entire editor against pinned Forge and mod dependencies
         run: |
           chmod +x ./gradlew
