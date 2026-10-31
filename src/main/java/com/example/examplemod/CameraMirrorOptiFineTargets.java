@@ -270,10 +270,13 @@ public final class CameraMirrorOptiFineTargets implements AutoCloseable
     {
         int id=GL11.glGenTextures();
         GL11.glBindTexture(GL11.GL_TEXTURE_2D,id);
+        // GBuffer channels contain normal/material/depth-like encoded
+        // data. Linear filtering interpolates IDs and mask values and
+        // causes erroneous lighting in the BSL postprocess.
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MIN_FILTER,
-                GL11.GL_LINEAR);
+                GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_MAG_FILTER,
-                GL11.GL_LINEAR);
+                GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_S,
                 GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D,GL11.GL_TEXTURE_WRAP_T,
