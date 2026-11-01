@@ -51,7 +51,43 @@ public final class CameraMirrorMathSmokeTest
                 72F,0.05F,256F),1D,67D,-1D,45D);
         checkClip(new PreviewCameraPose(-3D,72D,7D,-28F,17F,-7F,
                 65F,0.05F,256F),-2D,70D,2D,-30D);
+        verifyDepthReconstructedClip();
+
         System.out.println("Planar mirror geometry + clipping smoke OK");
+    }
+
+    private static void verifyDepthReconstructedClip()
+    {
+        PreviewCameraPose main=new PreviewCameraPose(
+                0D,65D,3D,0F,0F,0F,70F,0.05F,256F);
+        PreviewCameraPose reflected=CameraMirrorMath.reflect(main,
+                0D,65D,0D,0D);
+        double[] plane=CameraMirrorMath.frontClipPlane(reflected,
+                0D,65D,0D,0D,0.02D);
+        // Two real world points on opposite sides of the mirror,
+        // both in FRONT of the virtual camera. The pixel-depth inverse
+        // must recover their actual eye-space signed clip distances.
+        double[] front=CameraMirrorMath.viewVector(reflected,
+                0D,0D,5D-reflected.z);
+        double[] back=CameraMirrorMath.viewVector(reflected,
+                0D,0D,-1D-reflected.z);
+        double near=0.05D,far=256D;
+        double a=-(far+near)/(far-near);
+        double b=-2D*far*near/(far-near);
+        for(double[] eye:new double[][]{front,back})
+        {
+            double depth=(a*eye[2]+b)/(-eye[2]);
+            // Reconstruct eye-space Z from gl_FragCoord.z*2-1
+            // using the same inverse symmetric perspective matrix.
+            double recoveredZ=-b/(depth+a);
+            close(recoveredZ,eye[2]);
+            close(plane[2]*recoveredZ+plane[3],
+                    CameraMirrorMath.clipSide(plane,eye));
+        }
+        if(CameraMirrorMath.clipSide(plane,front)<=0D)
+            throw new AssertionError("Front-side grass was discarded");
+        if(CameraMirrorMath.clipSide(plane,back)>=0D)
+            throw new AssertionError("Wall behind mirror was retained");
     }
 
     private static void checkClip(PreviewCameraPose camera,

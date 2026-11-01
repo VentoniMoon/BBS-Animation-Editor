@@ -117,7 +117,10 @@ jobs:
           grep -q 'CameraMirrorBetterLightsProbe.inspect(pid)' src/main/java/com/example/examplemod/CameraMirrorBetterLightsUniforms.java
           grep -q 'refreshBetterLightsProgram(program,nativePid)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorShaderClip.copyUniforms' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
-          grep -q 'gl_ClipVertex = bbsMirrorClipEye' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
+          grep -q 'bbsMirrorClipInverseProjection' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
+          grep -q 'gl_FragCoord.z' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
+          grep -q 'GL11.glDisable(GL11.GL_CLIP_PLANE0)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'writeMatrix(pid,"bbsMirrorClipInverseProjection"' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'injectFragmentClip(fragmentSource)' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
           grep -q 'bbsMirrorClipPlane' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorBetterLightsSnapshot.capture' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java

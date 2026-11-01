@@ -828,7 +828,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             GL20.glUseProgram(nativePid);
             refreshBetterLightsProgram(program,nativePid);
             targets.bindGeometry();
-            if(GL11.glIsEnabled(GL11.GL_CLIP_PLANE0)&&
+            if(CameraSceneMirrorRenderer.captureMirror()!=null&&
                     (name.startsWith("ProgramTerrain")||
                      "ProgramWater".equals(name)))
             {
@@ -894,6 +894,11 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             // projection that previously moved terrain shadows.
             if(pid!=nativePid)
             {
+                // Disable legacy user clip plane for borrowed terrain:
+                // it is NOT guaranteed to share the same vertex coordinate
+                // convention as BSL. The private fragment shader is now
+                // solely responsible for clipping.
+                GL11.glDisable(GL11.GL_CLIP_PLANE0);
                 CameraSceneMirrors.Mirror planeMirror=
                         CameraSceneMirrorRenderer.captureMirror();
                 if(planeMirror!=null)
@@ -904,13 +909,30 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                     write4(pid,"bbsMirrorClipPlane",
                             (float)plane[0],(float)plane[1],
                             (float)plane[2],(float)plane[3]);
+                    // gl_FragCoord comes from the actual rasterized
+                    // projected vertex, not from a presumed chunk-VBO
+                    // local coordinate. Invert the same perspective
+                    // matrix used by the reflected geometry pass.
+                    FloatBuffer projectionForClip=
+                            currentMatrix(GL11.GL_PROJECTION_MATRIX);
+                    writeMatrix(pid,"bbsMirrorClipInverseProjection",
+                            projectionForClip,true);
+                    IntBuffer viewport=BufferUtils.createIntBuffer(4);
+                    GL11.glGetInteger(GL11.GL_VIEWPORT,viewport);
+                    int vw=viewport.get(2),vh=viewport.get(3);
+                    if(vw<=0||vh<=0)
+                        throw new IllegalStateException(
+                                "Reflected GLSL clip viewport unavailable");
+                    write4(pid,"bbsMirrorClipViewport",
+                            viewport.get(0),viewport.get(1),vw,vh);
                     if(!fragmentClipLogged)
                     {
                         fragmentClipLogged=true;
                         System.out.println(TAG+"Mirror fragment clip active "+
                                 "pid="+pid+" plane="+java.util.Arrays.
                                 toString(plane)+
-                                " (no oblique projection)");
+                                " viewport="+vw+"x"+vh+
+                                " (depth-reconstructed GLSL clip)");
                     }
                 }
             }

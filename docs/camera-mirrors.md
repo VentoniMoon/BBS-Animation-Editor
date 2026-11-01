@@ -1140,3 +1140,42 @@ These changes address two directly observed integration failures.
 They have not yet been validated visually: shader compilation,
 runtime fragment discard, and provider-world-space lighting need
 the next in-game check.
+
+### Depth-reconstructed fragment clipping: avoid removing all terrain
+
+Field verification after the fragment-discard patch showed sky and
+prepared actors in the mirror but almost ALL terrain removed. The
+private vertex/fragment pair had compared an eye-space plane from
+`CameraMirrorMath.frontClipPlane` against
+`gl_ModelViewMatrix * gl_Vertex`. That assumes OptiFine's shader vertex
+and the reflected chunk VBO share the same eye-coordinate origin.
+Their native chunk transforms are not a safe source for a clipping
+point, so the explicit discard could remove the wrong half-space.
+
+The reflection-only shader now reconstructs the actual rasterized
+eye-space point from `gl_FragCoord.xy/z`, the current OpenGL viewport
+and an inverse of the exact reflected **symmetric perspective**
+matrix. It evaluates the same eye-space physical mirror plane using
+that reconstructed point and discards only fragments behind it. This
+does not rely on chunk-local vertex coordinates or the GLSL
+`gl_ClipVertex` extension. The old fixed-function
+`GL_CLIP_PLANE0` is disabled during borrowed BSL terrain/water
+programs so it cannot apply a second, contradictory clip. Actor
+rendering and shaderless reflection retain their own earlier scopes.
+
+The fragment shader needs three private uniforms:
+`bbsMirrorClipPlane`, `bbsMirrorClipInverseProjection` and
+`bbsMirrorClipViewport`. The compositor provides all three after
+binding the private program. It selects mirror clones by mirror
+capture state rather than by the now-disabled fixed clip-plane flag.
+
+A regression test projects world positions on both sides of a
+mirror into a normal perspective depth and reconstructs their Z
+from depth, asserting the grass side survives and the mounting-wall
+side disappears. Forge Java 8 compile and static matrix tests still
+do NOT replace in-game visual validation.
+
+BetterLights is NOT changed in this patch. The previous log confirms
+a valid native light snapshot reached the mirror program; whether its
+world-space illumination remains stationary has yet to be checked
+after reliable terrain rendering is restored.

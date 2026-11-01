@@ -191,7 +191,11 @@ public final class CameraMirrorShaderClip
             // A BetterLights-injected native fragment must not be silently
             // replaced by a vanilla fragment missing its light array.
             if(GL20.glGetUniformLocation(program,
-                    "bbsMirrorClipPlane")<0)
+                    "bbsMirrorClipPlane")<0 ||
+                    GL20.glGetUniformLocation(program,
+                    "bbsMirrorClipViewport")<0 ||
+                    GL20.glGetUniformLocation(program,
+                    "bbsMirrorClipInverseProjection")<0)
                 throw new IllegalStateException(
                         "Private fragment clip plane uniform optimized away");
             if(GL20.glGetUniformLocation(original,"lightCount")>=0&&
@@ -245,12 +249,11 @@ public final class CameraMirrorShaderClip
         // Preserve exactly the original shader behavior. This additional
         // output is consumed by the compatibility clip-plane unit only.
         // Using original eye-space position works for terrain vertices.
-        return source.substring(0,main)+
-                "varying vec4 bbsMirrorClipEye;\n"+
-                source.substring(main,end)+
-                "\n    bbsMirrorClipEye = gl_ModelViewMatrix * gl_Vertex;\n"+
-                "    gl_ClipVertex = bbsMirrorClipEye;\n"+
-                source.substring(end);
+        // No gl_ClipVertex: OptiFine's cached chunk VBOs and
+        // fixed-function user clip plane can disagree with the native
+        // shader vertex coordinate origin. The fragment stage instead
+        // reconstructs the actual rasterized eye position from depth.
+        return source;
     }
 
     private static String injectFragmentClip(String source)
@@ -264,11 +267,20 @@ public final class CameraMirrorShaderClip
         // Explicit discard is independent of driver support for legacy
         // user clip planes and executes before BSL's material/depth writes.
         return source.substring(0,main)+
-                "varying vec4 bbsMirrorClipEye;\n"+
                 "uniform vec4 bbsMirrorClipPlane;\n"+
+                "uniform mat4 bbsMirrorClipInverseProjection;\n"+
+                "uniform vec4 bbsMirrorClipViewport;\n"+
                 source.substring(main,begin+1)+
-                "\n    if (dot(bbsMirrorClipPlane, "+
-                "bbsMirrorClipEye) < 0.0) discard;\n"+
+                "\n    vec2 bbsClipNDCxy = "+
+                "(gl_FragCoord.xy - bbsMirrorClipViewport.xy) / "+
+                "bbsMirrorClipViewport.zw * 2.0 - 1.0;\n"+
+                "    vec4 bbsClipNDC = vec4(bbsClipNDCxy, "+
+                "gl_FragCoord.z * 2.0 - 1.0, 1.0);\n"+
+                "    vec4 bbsClipEye = "+
+                "bbsMirrorClipInverseProjection * bbsClipNDC;\n"+
+                "    if (bbsClipEye.w > 0.000001 && "+
+                "dot(bbsMirrorClipPlane, bbsClipEye) < 0.0) "+
+                "discard;\n"+
                 source.substring(begin+1);
     }
 
