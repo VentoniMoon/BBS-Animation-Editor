@@ -107,6 +107,14 @@ public final class CameraMirrorLightSpace
         return SCREEN_UNKNOWN;
     }
 
+    public static boolean cameraMoved(double[] a,double[] b,
+            double threshold)
+    {
+        if(a==null||b==null||a.length<3||b.length<3)return true;
+        double dx=a[0]-b[0],dy=a[1]-b[1],dz=a[2]-b[2];
+        return dx*dx+dy*dy+dz*dz>threshold*threshold;
+    }
+
     public static float[] relative(double[] source,double[] camera)
     {
         return new float[]{
