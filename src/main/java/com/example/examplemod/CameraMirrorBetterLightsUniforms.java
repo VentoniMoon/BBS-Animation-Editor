@@ -49,6 +49,15 @@ public final class CameraMirrorBetterLightsUniforms
     private static int totalVectorCandidates;
     private static int maxCandidateCount;
     private static String candidateExamples="";
+    // Once a screen-space encoding is PROVEN from native GL values,
+    // remember its type for the same compiled program and uniform slot.
+    // This lets us reproject from the registered WORLD light even when a
+    // later native snapshot retains stale main-camera screen coordinates.
+    private static final Map<String,Integer> SCREEN_ENCODINGS=
+            new HashMap<String,Integer>();
+    private static boolean cachedScreenLogged;
+    private static int screenDiagnosticCount;
+    private static double[] lastDiagnosticCamera;
     private CameraMirrorBetterLightsUniforms(){}
 
     public static void reset()
@@ -61,6 +70,10 @@ public final class CameraMirrorBetterLightsUniforms
         CameraMirrorBetterLightsProbe.reset();
         maxCandidateCount=0;
         candidateExamples="";
+        SCREEN_ENCODINGS.clear();
+        cachedScreenLogged=false;
+        screenDiagnosticCount=0;
+        lastDiagnosticCamera=null;
     }
 
     private static List<Uniform> list(int pid)
@@ -148,38 +161,69 @@ public final class CameraMirrorBetterLightsUniforms
             if(uniform.name.startsWith("lights[")&&
                     uniform.name.endsWith(".positionScreenSpace")&&
                     uniform.type==GL20.GL_FLOAT_VEC4&&
-                    nativeProjection!=null&&reflectedProjection!=null)
+                    reflectedProjection!=null&&reflectedView!=null)
             {
                 float[] observed4={data.get(0),data.get(1),
                         data.get(2),data.get(3)};
-                for(double[] source:sources)
+                String key=pid+":"+uniform.name;
+                // Confirm the original light slot maps to an actual
+                // registered caster. Never infer source ordering.
+                double[] slotSource=verifiedWorldSource(
+                        pid,uniform.name,sources);
+                if(slotSource!=null)
                 {
-                    if(source==null||source.length<3)continue;
-                    int mode=CameraMirrorLightSpace.matchScreen(observed4,
-                            nativeProjection,nativeView,source,main);
-                    if(mode==CameraMirrorLightSpace.SCREEN_UNKNOWN)
-                        continue;
-                    float[] corrected=CameraMirrorLightSpace.screen(
-                            reflectedProjection,reflectedView,
-                            source,mirror,mode);
-                    if(corrected!=null)
+                    int mode=CameraMirrorLightSpace.SCREEN_UNKNOWN;
+                    if(nativeProjection!=null&&nativeView!=null)
+                        mode=CameraMirrorLightSpace.matchScreen(observed4,
+                                nativeProjection,nativeView,
+                                slotSource,main);
+                    if(mode!=CameraMirrorLightSpace.SCREEN_UNKNOWN)
+                        SCREEN_ENCODINGS.put(key,mode);
+                    else
                     {
-                        writer.write4(pid,uniform.name,
-                                corrected[0],corrected[1],
-                                corrected[2],corrected[3]);
-                        fixed++;
-                        matched=true;
-                        if(!foundLogged)
+                        Integer known=SCREEN_ENCODINGS.get(key);
+                        if(known!=null)mode=known.intValue();
+                    }
+                    if(mode!=CameraMirrorLightSpace.SCREEN_UNKNOWN)
+                    {
+                        float[] corrected=CameraMirrorLightSpace.screen(
+                                reflectedProjection,reflectedView,
+                                slotSource,mirror,mode);
+                        if(corrected!=null)
                         {
-                            foundLogged=true;
-                            System.out.println(
+                            writer.write4(pid,uniform.name,
+                                    corrected[0],corrected[1],
+                                    corrected[2],corrected[3]);
+                            fixed++;
+                            matched=true;
+                            if(!foundLogged)
+                            {
+                                foundLogged=true;
+                                System.out.println(
                                     "[BBS Editor][Mirror][BetterLights] "+
                                     "Reprojected verified positionScreenSpace "+
                                     uniform.name+" program="+pid+
                                     " encoding="+mode);
+                            }
+                            if(nativeProjection!=null&&
+                                    CameraMirrorLightSpace.matchScreen(
+                                        observed4,nativeProjection,
+                                        nativeView,slotSource,main)==
+                                        CameraMirrorLightSpace.SCREEN_UNKNOWN&&
+                                    !cachedScreenLogged)
+                            {
+                                cachedScreenLogged=true;
+                                System.out.println(
+                                    "[BBS Editor][Mirror][BetterLights] "+
+                                    "Reprojected camera-moved light with "+
+                                    "previously verified screen encoding "+
+                                    mode+" (stale native coordinates ignored)");
+                            }
                         }
                     }
-                    break;
+                    if(!matched)
+                        logUnmatchedScreen(uniform.name,observed4,
+                                slotSource,main,mirror);
                 }
                 if(matched)continue;
             }
@@ -225,6 +269,53 @@ public final class CameraMirrorBetterLightsUniforms
             }
         }
         return fixed;
+    }
+
+    private static double[] verifiedWorldSource(int pid,String name,
+            List<double[]> sources)
+    {
+        int open=name.indexOf('['),close=name.indexOf(']',open+1);
+        if(open<0||close<=open)return null;
+        int index;
+        try{index=Integer.parseInt(name.substring(open+1,close));}
+        catch(NumberFormatException wrong){return null;}
+        int loc=GL20.glGetUniformLocation(pid,
+                "lights["+index+"].position");
+        if(loc<0)return null;
+        FloatBuffer raw=BufferUtils.createFloatBuffer(16);
+        GL20.glGetUniform(pid,loc,raw);
+        float[] position={raw.get(0),raw.get(1),raw.get(2)};
+        for(double[] source:sources)
+        {
+            if(source==null||source.length<3)continue;
+            if(Math.abs(position[0]-source[0])<0.2D&&
+                    Math.abs(position[1]-source[1])<0.2D&&
+                    Math.abs(position[2]-source[2])<0.2D)
+                return source;
+        }
+        return null;
+    }
+
+    private static void logUnmatchedScreen(String name,
+            float[] observed,double[] source,double[] main,double[] mirror)
+    {
+        if(screenDiagnosticCount>=8||
+                "false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLScreenDiagnostics","true")))
+            return;
+        if(lastDiagnosticCamera!=null&&
+                !CameraMirrorLightSpace.cameraMoved(
+                        lastDiagnosticCamera,main,0.5D))
+            return;
+        lastDiagnosticCamera=main.clone();
+        screenDiagnosticCount++;
+        System.out.println("[BBS Editor][Mirror][BetterLights] "+
+                "Unmatched positionScreenSpace after movement "+
+                name+" observed="+java.util.Arrays.toString(observed)+
+                " world="+java.util.Arrays.toString(source)+
+                " main="+java.util.Arrays.toString(main)+
+                " mirror="+java.util.Arrays.toString(mirror)+
+                " (no guessed conversion applied)");
     }
 
     /** Print after the whole reflected frame, not after the FIRST sky or
