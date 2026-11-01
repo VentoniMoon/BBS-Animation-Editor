@@ -86,6 +86,23 @@ public final class CameraMirrorObliqueProjection
      */
     public static float[] bslCompatible(float[] original,double[] plane)
     {
+        return bslCompatible(original,plane,Double.POSITIVE_INFINITY);
+    }
+
+    /**
+     * When viewing a planar mirror obliquely, the bottom/side corners
+     * can be much closer to the reflected eye than the mirror's center
+     * ray. A near plane taken from the center cuts away visible terrain
+     * within the rectangle, leaving the sky's clear color in that area.
+     *
+     * Choose a conservative perspective near plane from the closest
+     * positive mirror-corner depth. This intentionally trades some
+     * behind-mirror clipping accuracy for preserving all reflected
+     * terrain; an exact half-plane needs shader-aware world clipping.
+     */
+    public static float[] bslCompatible(float[] original,double[] plane,
+            double minimumMirrorDepth)
+    {
         if(original==null||original.length!=16||
                 plane==null||plane.length!=4)
             throw new IllegalArgumentException("Invalid perspective/plane");
@@ -99,9 +116,16 @@ public final class CameraMirrorObliqueProjection
                 !(near>0D)||!(far>near))
             throw new IllegalArgumentException(
                     "No forward mirror plane for BSL-compatible projection");
-        // Pull the near plane just behind the real mirror plane so the
-        // mirror surface is not accidentally discarded by rounding.
-        double candidate=Math.max(near,Math.min(t*0.98D,far*0.75D));
+        // Preserve the projection/depth algebra that BSL's ToNDC
+        // expects: never use the oblique near-plane variant here.
+        // The previously used 0.98*centerDistance still clipped terrain
+        // whenever a mirror corner was nearer than the center ray.
+        double limit=Double.isFinite(minimumMirrorDepth)?
+                Math.min(t,minimumMirrorDepth):t;
+        if(!(limit>near))
+            return original.clone();
+        double candidate=Math.max(near,Math.min(
+                limit*0.80D,far*0.75D));
         float[] out=original.clone();
         out[10]=(float)(-(far+candidate)/(far-candidate));
         out[14]=(float)(-2D*far*candidate/(far-candidate));

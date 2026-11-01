@@ -617,8 +617,32 @@ public final class CameraSceneMirrorRenderer
             {
                 try
                 {
+                    double closest=Double.POSITIVE_INFINITY;
+                    if(activeMirror!=null)
+                    {
+                        double[][] corners=CameraMirrorMath.corners(
+                                activeMirror.x,activeMirror.y,
+                                activeMirror.z,activeMirror.yaw,
+                                activeMirror.width,activeMirror.height);
+                        for(double[] corner:corners)
+                        {
+                            double[] eye=CameraMirrorMath.viewVector(
+                                    camera,corner[0]-camera.x,
+                                    corner[1]-camera.y,
+                                    corner[2]-camera.z);
+                            // OpenGL perspective looks along negative Z.
+                            // If a corner crosses the eye plane, use the
+                            // native near value rather than cropping it.
+                            if(eye[2]>=0D)
+                            {
+                                closest=0D;
+                                break;
+                            }
+                            closest=Math.min(closest,-eye[2]);
+                        }
+                    }
                     selected=CameraMirrorObliqueProjection.bslCompatible(
-                            original,plane);
+                            original,plane,closest);
                 }
                 catch(IllegalArgumentException incompatible)
                 {

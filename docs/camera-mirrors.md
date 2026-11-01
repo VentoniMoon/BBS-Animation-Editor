@@ -944,3 +944,53 @@ alternative preserves the depth projection's diagonal form and far
 plane, while the oblique projection introduces off-diagonal depth terms.
 Game screenshots with camera movement are still required for visual
 confirmation. Shadow map calculations are not changed in this patch.
+
+### BSL perspective corner-safe clipping (November 1)
+
+The initial BSL-safe perspective matched the near plane to
+98% of the mirror plane on the **optical axis**. At grazing angles the
+physical mirror's side and lower corners can project substantially
+closer to the reflected eye. Minecraft then clips legitimate terrain
+from a portion of the mirror, exposing the rendered sky clear color
+as a pink rectangle. The normal eye-space near plane cannot be taken
+from the optical axis alone.
+
+When rendering a physical mirror, the renderer now evaluates all four
+world-space rectangle corners using the same `viewVector` convention
+as the camera. The shader-compatible near distance is set no greater
+than 80% of the closest *positive* eye-space corner depth. If any
+corner lies behind the eye, it uses the original Minecraft near plane
+rather than clipping the face. The projection remains a standard
+symmetric perspective, preserving the shaderpack's shadow/world-depth
+reconstruction math and the previously validated static shadows.
+
+This is intentionally conservative: a symmetric near plane cannot
+exactly match an angled geometric mirror half-space. Some geometry
+behind the plane could be exposed at extreme angles. Full clipping
+parity would need a shader-compatible world-space clip implementation,
+not the broken oblique depth projection. Pure Java regression tests
+cover a shallow corner and a corner crossing the eye plane.
+
+### BetterLights lightCount and live active-light arrays
+
+The user-provided log revealed the actual BetterLights-injected GLSL
+uniforms: `lightCount`, `lights[i].position`,
+`lights[i].positionScreenSpace`, `lights[i].isEnabled`,
+`lights[i].color`, etc. The initial examples showing
+`lights[0..3].position=(0,0,0)` did not establish which indices were
+actually active, and the previous candidate matcher could not
+safely change unknown source coordinates.
+
+For each linked shader program that has `lightCount`, the new probe
+now reads that count and enumerates up to 24 slots, logging up to
+8 populated/enabled light structs, including the corresponding
+world/screen positions, colors and intensity. It does not change
+lighting uniforms or call BetterLights' unknown private handler.
+Only live, evidenced values can justify a subsequent rebase, avoiding
+regression of working shadows and BSL exposure.
+
+Use:
+```powershell
+Select-String -Path '.\run\logs\latest.log' `
+  -SimpleMatch '[Mirror][LightProbe] Light struct'
+```

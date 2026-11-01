@@ -111,6 +111,9 @@ jobs:
           grep -q 'CameraMirrorObliqueProjection.bslCompatible' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'CameraSceneMirrorRenderer.bslNear' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorBetterLightsProbe.inspect(pid)' src/main/java/com/example/examplemod/CameraMirrorBetterLightsUniforms.java
+          grep -q 'inspectActiveLights(pid)' src/main/java/com/example/examplemod/CameraMirrorBetterLightsProbe.java
+          grep -q 'minimumMirrorDepth' src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java
+          grep -q 'activeMirror.width,activeMirror.height' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
           grep -q 'CameraMirrorBetterLightsUniforms.frameCompleted()' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'GL20.glGetActiveUniform' src/main/java/com/example/examplemod/CameraMirrorBetterLightsProbe.java
           grep -q 'installShaderObliqueProjection' src/main/java/com/example/examplemod/BlockbusterActorPreviewRenderer.java

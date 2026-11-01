@@ -86,6 +86,24 @@ public final class CameraMirrorObliqueProjectionSmokeTest
         check(compatible[2]==0F&&compatible[6]==0F,
                 "compatibility mode still violates BSL inverse contract");
 
+        // At a grazing angle, a mirror corner may be much nearer than
+        // the optical-axis intersection. Center-only near clipping
+        // removed the terrain from the bottom of the reflection.
+        float[] edgeSafe=CameraMirrorObliqueProjection.bslCompatible(
+                perspective(60D,1.6D,0.05D,256D),oblique,0.33D);
+        check(CameraMirrorObliqueProjection.nearPlane(edgeSafe)<0.33D,
+                "side-facing mirror corner would be clipped");
+        check(edgeSafe[2]==0F&&edgeSafe[6]==0F,
+                "edge-safe projection broke BSL shadow reconstruction");
+        float[] eyeCrossing=CameraMirrorObliqueProjection.bslCompatible(
+                perspective(60D,1.6D,0.05D,256D),oblique,0D);
+        check(Math.abs(CameraMirrorObliqueProjection.nearPlane(
+                eyeCrossing)-0.05F)<0.0001F,
+                "eye-crossing mirror must not discard visible geometry");
+        // A horizontal near cut cannot exactly match a tilted physical
+        // mirror plane: these assertions preserve visible geometry,
+        // not behind-wall clipping perfection.
+
         boolean rejected=false;
         try
         {

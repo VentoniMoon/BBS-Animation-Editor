@@ -95,6 +95,7 @@ public final class CameraMirrorBetterLightsProbe
             // The earlier "vec3/4 candidates=1" was printed at the FIRST
             // program, not after all stages. Log PER PROGRAM to distinguish
             // terrain from deferred/composite/sky and avoid false conclusions.
+            inspectActiveLights(pid);
             System.out.println(TAG+"GLSL program="+pid+" uniforms="+total+
                     " vectorDeclarations="+vec+" scalar="+scalar+
                     " other="+other+" lightNames="+
@@ -106,6 +107,77 @@ public final class CameraMirrorBetterLightsProbe
             System.err.println(TAG+"Unable to inspect GLSL program "+pid+
                     ": "+failure);
         }
+    }
+
+    private static int intUniform(int pid,String name,int absent)
+    {
+        int loc=GL20.glGetUniformLocation(pid,name);
+        if(loc<0)return absent;
+        IntBuffer value=BufferUtils.createIntBuffer(16);
+        GL20.glGetUniform(pid,loc,value);
+        return value.get(0);
+    }
+
+    private static float[] position(int pid,String name,int size)
+    {
+        int loc=GL20.glGetUniformLocation(pid,name);
+        if(loc<0)return null;
+        FloatBuffer b=BufferUtils.createFloatBuffer(16);
+        GL20.glGetUniform(pid,loc,b);
+        float[] v=new float[size];
+        for(int i=0;i<size;i++)v[i]=b.get(i);
+        return v;
+    }
+
+    /**
+     * The BetterLights injection has lights[i].position and
+     * lights[i].positionScreenSpace, which differ from standard BSL.
+     * Print the actual CURRENT active slots, not the initial all-zero
+     * entries nor only the first program's few vec3 uniforms.
+     */
+    private static void inspectActiveLights(int pid)
+    {
+        int count=intUniform(pid,"lightCount",-1);
+        if(count<0)return;
+        StringBuilder active=new StringBuilder();
+        int scanned=0,found=0;
+        for(int i=0;i<Math.min(24,Math.max(count,8));i++)
+        {
+            String base="lights["+i+"].";
+            int enabled=intUniform(pid,base+"isEnabled",-1);
+            float[] xyz=position(pid,base+"position",3);
+            float[] screen=position(pid,base+"positionScreenSpace",4);
+            float[] color=position(pid,base+"color",3);
+            int hasXYZ=xyz!=null &&
+                    (Math.abs(xyz[0])+Math.abs(xyz[1])+
+                     Math.abs(xyz[2])>0.0001F)?1:0;
+            int hasColor=color!=null &&
+                    (Math.abs(color[0])+Math.abs(color[1])+
+                     Math.abs(color[2])>0.0001F)?1:0;
+            if(enabled!=1&&hasXYZ==0&&hasColor==0)continue;
+            scanned++;
+            if(found>=8)continue;
+            found++;
+            if(active.length()>0)active.append("; ");
+            active.append(i).append(":enabled=").append(enabled);
+            if(xyz!=null)active.append(" xyz=")
+                    .append(java.util.Arrays.toString(xyz));
+            if(screen!=null)active.append(" screen=")
+                    .append(java.util.Arrays.toString(screen));
+            if(color!=null)active.append(" rgb=")
+                    .append(java.util.Arrays.toString(color));
+            int intensityLoc=GL20.glGetUniformLocation(pid,
+                    base+"intensity");
+            if(intensityLoc>=0)
+            {
+                FloatBuffer intensity=BufferUtils.createFloatBuffer(16);
+                GL20.glGetUniform(pid,intensityLoc,intensity);
+                active.append(" intensity=").append(intensity.get(0));
+            }
+        }
+        System.out.println(TAG+"Light struct program="+pid+
+                " lightCount="+count+" populatedSlots="+scanned+
+                " examples="+limit(active.toString(),1500));
     }
 
     private static String limit(String s,int n)
