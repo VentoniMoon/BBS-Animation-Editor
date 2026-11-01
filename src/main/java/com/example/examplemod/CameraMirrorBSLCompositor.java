@@ -70,6 +70,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean privateShadowWarning;
     private static boolean nativeShadowEyeLogged;
     private static boolean privateShadowDisabled;
+    private static boolean fragmentClipLogged;
     private static boolean nativeLightRefreshLogged;
     private static boolean nativeLightRefreshEmptyLogged;
     private static boolean nativeLightRefreshErrorLogged;
@@ -239,6 +240,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         // expensive OptiFine selector or modify its alpha/blend state.
         if(before>0)
         {
+            CameraMirrorBetterLightsSnapshot.capture(
+                    pid,worldLightPositions);
             CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
             return;
         }
@@ -276,6 +279,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 IntBuffer refreshed=BufferUtils.createIntBuffer(16);
                 GL20.glGetUniform(pid,current,refreshed);
                 int after=refreshed.get(0);
+                if(after>0)
+                    CameraMirrorBetterLightsSnapshot.capture(
+                            pid,worldLightPositions);
                 CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
                 if(after>before&&!nativeLightRefreshLogged)
                 {
@@ -386,6 +392,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     public static void releaseShadowResources()
     {
         CameraMirrorBetterLightsUniforms.reset();
+        CameraMirrorBetterLightsSnapshot.reset();
         CameraMirrorShaderClip.release();
         if(privateShadowMap!=null)
         {
@@ -873,6 +880,40 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             bindNativeNoiseImage();
             GL13.glActiveTexture(oldTextureUnit);
             overrideCamera(pid);
+            // Some original OptiFine programs receive BetterLights light
+            // structs AFTER the first reflected terrain stage. Reuse only
+            // a verified native light snapshot in PRIVATE cloned programs,
+            // never fabricate values or rewrite the main OptiFine shader.
+            if(pid!=nativePid)
+                CameraMirrorBetterLightsSnapshot.applyToPrivateClone(
+                        pid,worldLightPositions);
+            // gl_ClipVertex is not a reliable clipping contract with
+            // programmable BSL terrain programs. The mirror-only cloned
+            // FRAGMENT shader independently discards any surface behind
+            // the actual world-space mirror plane. This avoids the oblique
+            // projection that previously moved terrain shadows.
+            if(pid!=nativePid)
+            {
+                CameraSceneMirrors.Mirror planeMirror=
+                        CameraSceneMirrorRenderer.captureMirror();
+                if(planeMirror!=null)
+                {
+                    double[] plane=CameraMirrorMath.frontClipPlane(
+                            view,planeMirror.x,planeMirror.y,
+                            planeMirror.z,planeMirror.yaw,0.02D);
+                    write4(pid,"bbsMirrorClipPlane",
+                            (float)plane[0],(float)plane[1],
+                            (float)plane[2],(float)plane[3]);
+                    if(!fragmentClipLogged)
+                    {
+                        fragmentClipLogged=true;
+                        System.out.println(TAG+"Mirror fragment clip active "+
+                                "pid="+pid+" plane="+java.util.Arrays.
+                                toString(plane)+
+                                " (no oblique projection)");
+                    }
+                }
+            }
         }
         catch(Throwable e)
         {

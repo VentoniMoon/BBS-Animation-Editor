@@ -20,6 +20,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsSnapshot.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorShaderClip.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsUniforms.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsProbe.java'
@@ -59,6 +60,7 @@ on:
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePlanning.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorOptiFinePreflight.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java'
+      - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsSnapshot.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorShaderClip.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsUniforms.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorBetterLightsProbe.java'
@@ -116,6 +118,10 @@ jobs:
           grep -q 'refreshBetterLightsProgram(program,nativePid)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorShaderClip.copyUniforms' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'gl_ClipVertex = gl_ModelViewMatrix' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
+          grep -q 'injectFragmentClip(fragmentSource)' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
+          grep -q 'bbsMirrorClipPlane' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorBetterLightsSnapshot.capture' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorBetterLightsSnapshot.applyToPrivateClone' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'createVertShader' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
           grep -q 'createFragShader' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
           grep -q 'CameraMirrorShaderClip.program(nativePid,program)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java

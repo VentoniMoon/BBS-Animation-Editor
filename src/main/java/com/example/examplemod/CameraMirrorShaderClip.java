@@ -141,6 +141,28 @@ public final class CameraMirrorShaderClip
                     Math.max(8192,GL20.glGetShaderi(vertex,
                             GL20.GL_SHADER_SOURCE_LENGTH)));
             String patched=injectClipVertex(source);
+            // Fixed-function gl_ClipVertex alone is not reliably honored
+            // by every OptiFine/driver shader combination. Also reject
+            // behind-mirror fragments inside the PRIVATE fragment shader.
+            // This keeps BSL's ordinary symmetric projection unchanged.
+            String fragmentSource=GL20.glGetShaderSource(fragment,
+                    Math.max(8192,GL20.glGetShaderi(fragment,
+                            GL20.GL_SHADER_SOURCE_LENGTH)));
+            String clippedFragment=injectFragmentClip(fragmentSource);
+            int privateFragment=GL20.glCreateShader(GL20.GL_FRAGMENT_SHADER);
+            GL20.glShaderSource(privateFragment,clippedFragment);
+            GL20.glCompileShader(privateFragment);
+            if(GL20.glGetShaderi(privateFragment,GL20.GL_COMPILE_STATUS)==0)
+            {
+                String reason=GL20.glGetShaderInfoLog(privateFragment,4096);
+                GL20.glDeleteShader(privateFragment);
+                throw new IllegalStateException(
+                        "Mirror fragment clip compilation: "+reason);
+            }
+            // Replace only the newly compiled transient fragment shader,
+            // never touch the original OptiFine linked program.
+            GL20.glDeleteShader(fragment);
+            fragment=privateFragment;
             custom=GL20.glCreateShader(GL20.GL_VERTEX_SHADER);
             GL20.glShaderSource(custom,patched);
             GL20.glCompileShader(custom);
@@ -168,6 +190,10 @@ public final class CameraMirrorShaderClip
                         GL20.glGetProgramInfoLog(program,4096));
             // A BetterLights-injected native fragment must not be silently
             // replaced by a vanilla fragment missing its light array.
+            if(GL20.glGetUniformLocation(program,
+                    "bbsMirrorClipPlane")<0)
+                throw new IllegalStateException(
+                        "Private fragment clip plane uniform optimized away");
             if(GL20.glGetUniformLocation(original,"lightCount")>=0&&
                     GL20.glGetUniformLocation(program,"lightCount")<0)
                 throw new IllegalStateException(
@@ -219,9 +245,31 @@ public final class CameraMirrorShaderClip
         // Preserve exactly the original shader behavior. This additional
         // output is consumed by the compatibility clip-plane unit only.
         // Using original eye-space position works for terrain vertices.
-        return source.substring(0,end)+
-                "\n    gl_ClipVertex = gl_ModelViewMatrix * gl_Vertex;\n"+
+        return source.substring(0,main)+
+                "varying vec4 bbsMirrorClipEye;\n"+
+                source.substring(main,end)+
+                "\n    bbsMirrorClipEye = gl_ModelViewMatrix * gl_Vertex;\n"+
+                "    gl_ClipVertex = bbsMirrorClipEye;\n"+
                 source.substring(end);
+    }
+
+    private static String injectFragmentClip(String source)
+    {
+        if(source==null||source.length()<50)
+            throw new IllegalStateException("Native fragment GLSL missing");
+        int main=source.indexOf("void main");
+        if(main<0)throw new IllegalStateException("No fragment main()");
+        int begin=source.indexOf('{',main);
+        if(begin<0)throw new IllegalStateException("Malformed fragment main");
+        // Explicit discard is independent of driver support for legacy
+        // user clip planes and executes before BSL's material/depth writes.
+        return source.substring(0,main)+
+                "varying vec4 bbsMirrorClipEye;\n"+
+                "uniform vec4 bbsMirrorClipPlane;\n"+
+                source.substring(main,begin+1)+
+                "\n    if (dot(bbsMirrorClipPlane, "+
+                "bbsMirrorClipEye) < 0.0) discard;\n"+
+                source.substring(begin+1);
     }
 
     /**

@@ -1095,3 +1095,48 @@ This is instrumentation, not yet a verified correction to
 BetterLights reflected light placement. In-game results and populated
 source coordinates remain necessary before altering the private
 lighting uniforms.
+
+### Explicit fragment clipping and verified native BetterLights light snapshot
+
+A clone compiled successfully and received `gl_ClipVertex`, but the
+wall behind the mirror still appeared. A successfully linked vertex
+shader does not demonstrate that OpenGL's fixed-function
+`GL_CLIP_PLANE0` actually rejects fragments after OptiFine's
+RenderGlobal/shader state changes. The reflection-only GLSL clone
+now compiles BOTH a private vertex stage and a private fragment stage.
+The vertex shader exports the actual eye-space point as
+`varying vec4 bbsMirrorClipEye`. The fragment shader executes
+`if(dot(bbsMirrorClipPlane,bbsMirrorClipEye)<0.0) discard;` at the
+beginning of its main function; the compositor provides the real
+mirror plane coefficients for the reflected camera via a private
+uniform. This is independent of fixed-function clip-plane support,
+retains BSL's symmetric camera projection and native shadow matrices,
+and does not alter OptiFine's original shader stages.
+
+The user's recent log also revealed a specific timing gap: the original
+terrain/water programs eventually contain a real BetterLights caster
+(`lightCount=1`, world XYZ, color, intensity) while the cloned mirror
+programs contain `lightCount=0`. A safe native-light snapshot now
+captures all active `lights[i].*` uniforms from any ORIGINAL linked
+OptiFine program only after `lightCount>0`, and only if its
+`lights[i].position` matches an already registered editor
+`LightCaster` world coordinate. If the same light still exists at
+that position, it copies the **actual** captured GPU values into
+the mirror's private linked GLSL clone when its native source has
+not yet been populated, and sets only that clone's `lightCount`.
+Original OptiFine program uniforms are never written by the snapshot.
+It is held across frames to bridge late provider uploads; switching
+scenes resets it, and moving/disabling the caster invalidates it.
+It never guesses colors, intensities, attenuation or unrelated
+unknown uniforms.
+
+Expected log when native data and the clone both match:
+`Latched native populated light uniforms` and
+`Populated mirror-only GLSL clone`.
+The independent switch is
+`-Dbbs.editor.camera.mirrorBSLLightSnapshot=false`.
+
+These changes address two directly observed integration failures.
+They have not yet been validated visually: shader compilation,
+runtime fragment discard, and provider-world-space lighting need
+the next in-game check.
