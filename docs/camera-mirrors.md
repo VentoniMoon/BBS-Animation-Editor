@@ -1043,3 +1043,55 @@ In-game validation still required: compiled shader compatibility,
 accurate fragment clipping on the wall, proper BetterLights count,
 and unchanged shadows and transparent blocks. Do not treat CI
 compilation as visual proof.
+
+### OptiFine stage objects are detached after link: shader-clip compiler repair
+
+Observed in-game:
+`[Mirror][GLSL Clip] No native vertex source`.
+This was expected with OptiFine 1.12.2: it explicitly calls
+`glDetachObjectARB` and `glDeleteObjectARB` on vertex, geometry and
+fragment shader handles immediately after linking. Querying the
+linked program with `glGetAttachedShaders` can therefore **never**
+return its source. The previous shader clone did nothing and fell back
+to the unmodified BSL terrain, allowing the wall behind the physical
+mirror into the reflection.
+
+The new mirror-only compiler resolves the exact **real OptiFine
+Program** name (including fallback), world-dimension shader path and
+active shaderpack. It invokes OptiFine's own private
+`createVertShader/createFragShader/createGeomShader` methods by
+reflection. This uses the same pack includes, chosen shader options and
+BetterLights mod transformer as normal OptiFine compilation. It reads
+the freshly created vertex source *before OptiFine deletes it*,
+inserts `gl_ClipVertex = gl_ModelViewMatrix * gl_Vertex` at the end
+of the vertex main function, and links it to the freshly compiled
+original fragment (+ optional geometry) stage in a separate GL
+program. GL attributes preserve their native locations. The private
+stage program copies original uniforms before the mirrored camera
+overrides, and fails closed if it loses the BetterLights
+`lightCount` uniform. All temporary shader objects are deleted and
+the original OptiFine Program is untouched.
+
+The reflection still uses a standard symmetric perspective, so BSL
+shadow and screen-space coordinates remain valid. GL_CLIP_PLANE0
+should now be honored by the private vertex shader. Shader-source
+availability or unexpected modded stage compilation errors are logged
+once and fall back to the previous terrain without crashing the main
+world. The A/B option remains
+`-Dbbs.editor.camera.mirrorBSLShaderPlaneClip=false`.
+
+### BetterLights false-positive upload log
+
+The previous native hook logged `populated lightCount=1` when both
+the *previous* and *after* values were already 1. That is not an
+update or proof of a correct reflected-camera transform. Now the
+native hook runs only while the program count is zero; a positive
+existing count is left untouched. The probe records the first
+transition to a positive count and dumps active
+`lights[i].position/positionScreenSpace` values at that moment.
+Only a genuine 0->positive transition is labeled "populated".
+
+This is instrumentation, not yet a verified correction to
+BetterLights reflected light placement. In-game results and populated
+source coordinates remain necessary before altering the private
+lighting uniforms.

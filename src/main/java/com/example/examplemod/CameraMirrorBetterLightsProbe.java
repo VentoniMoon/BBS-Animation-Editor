@@ -28,6 +28,8 @@ public final class CameraMirrorBetterLightsProbe
 {
     private static final String TAG="[BBS Editor][Mirror][LightProbe] ";
     private static final Set<Integer> PROGRAMS=new HashSet<Integer>();
+    private static final Set<Integer> ACTIVE_LIGHT_PROGRAMS=
+            new HashSet<Integer>();
     private static boolean providerChecked;
     private static int shown;
     private CameraMirrorBetterLightsProbe(){}
@@ -35,6 +37,7 @@ public final class CameraMirrorBetterLightsProbe
     public static void reset()
     {
         PROGRAMS.clear();
+        ACTIVE_LIGHT_PROGRAMS.clear();
         providerChecked=false;
         shown=0;
     }
@@ -107,6 +110,22 @@ public final class CameraMirrorBetterLightsProbe
             System.err.println(TAG+"Unable to inspect GLSL program "+pid+
                     ": "+failure);
         }
+    }
+
+    /**
+     * A linked program may have lightCount=0 on the first inspection
+     * and receive a real light later in the same frame. Capture that
+     * transition once, with actual per-source positions, instead of
+     * reporting only stale startup values.
+     */
+    public static void inspectAfterRefresh(int pid)
+    {
+        if("false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrorBSLLightProbe","true")))
+            return;
+        int count=intUniform(pid,"lightCount",-1);
+        if(count>0&&ACTIVE_LIGHT_PROGRAMS.add(pid))
+            inspectActiveLights(pid);
     }
 
     private static int intUniform(int pid,String name,int absent)

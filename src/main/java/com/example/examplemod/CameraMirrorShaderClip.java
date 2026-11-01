@@ -1,5 +1,8 @@
 package com.example.examplemod;
 
+import java.lang.reflect.Method;
+import java.io.InputStream;
+import net.minecraft.client.Minecraft;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.HashMap;
@@ -46,7 +49,7 @@ public final class CameraMirrorShaderClip
         warning=false;
     }
 
-    public static int program(int original)
+    public static int program(int original,Object optifineProgram)
     {
         if(original<=0||
                 "false".equalsIgnoreCase(System.getProperty(
@@ -57,7 +60,7 @@ public final class CameraMirrorShaderClip
         if(UNSUPPORTED.containsKey(original))return original;
         try
         {
-            int id=cloneShader(original);
+            int id=cloneShader(original,optifineProgram);
             COPIES.put(original,id);
             if(!once)
             {
@@ -82,74 +85,117 @@ public final class CameraMirrorShaderClip
         }
     }
 
-    private static int cloneShader(int original)
+    private static int cloneShader(int original,Object optifineProgram)
+            throws Exception
     {
-        IntBuffer attached=BufferUtils.createIntBuffer(8);
-        IntBuffer count=BufferUtils.createIntBuffer(1);
-        GL20.glGetAttachedShaders(original,count,attached);
-        int vertex=0;
-        for(int i=0;i<count.get(0);i++)
-        {
-            int shader=attached.get(i);
-            if(GL20.glGetShaderi(shader,GL20.GL_SHADER_TYPE)==
-                    GL20.GL_VERTEX_SHADER)
-            {
-                if(vertex!=0)
-                    throw new IllegalStateException(
-                            "Multiple vertex shaders in native program");
-                vertex=shader;
-            }
-        }
-        if(vertex==0)
-            throw new IllegalStateException("No native vertex source");
-        String source=GL20.glGetShaderSource(vertex,
-                Math.max(8192,GL20.glGetShaderi(vertex,
-                        GL20.GL_SHADER_SOURCE_LENGTH)));
-        String patched=injectClipVertex(source);
-        int custom=GL20.glCreateShader(GL20.GL_VERTEX_SHADER);
-        int program=GL20.glCreateProgram();
+        Class<?> shaderClass=Class.forName("net.optifine.shaders.Shaders");
+        Class<?> programClass=Class.forName("net.optifine.shaders.Program");
+        String programName=(String)programClass.getMethod("getRealProgramName")
+                .invoke(optifineProgram);
+        if(programName==null||programName.isEmpty()||
+                "none".equals(programName)||
+                "unknown".equals(programName))
+            throw new IllegalStateException("Cannot resolve native shaderpack program");
+        // OptiFine 1.12.2 DETACHES and DELETES native stage shader objects
+        // immediately after linking. glGetAttachedShaders() therefore
+        // returns zero even for fully working programs. Invoke its PRIVATE
+        // shader compilation pipeline instead: this processes includes,
+        // options and any BetterLights coremod source transformations
+        // exactly as the original native program did.
+        Object shaderPack=shaderClass.getMethod("getShaderPack")
+                .invoke(null);
+        int dimension=Minecraft.getMinecraft().world==null?0:
+                Minecraft.getMinecraft().world.provider.getDimension();
+        String world="/shaders/world"+dimension+"/"+programName;
+        String plain="/shaders/"+programName;
+        String base=hasSource(shaderPack,world+".vsh")?world:plain;
+        if(!hasSource(shaderPack,base+".vsh")||
+                !hasSource(shaderPack,base+".fsh"))
+            throw new IllegalStateException("No shaderpack stages at "+base);
+        Method vert=shaderClass.getDeclaredMethod("createVertShader",
+                programClass,String.class);
+        Method frag=shaderClass.getDeclaredMethod("createFragShader",
+                programClass,String.class);
+        Method geom=shaderClass.getDeclaredMethod("createGeomShader",
+                programClass,String.class);
+        vert.setAccessible(true);
+        frag.setAccessible(true);
+        geom.setAccessible(true);
+        int vertex=0,fragment=0,geometry=0,custom=0,program=0;
         try
         {
+            vertex=((Number)vert.invoke(null,optifineProgram,
+                    base+".vsh")).intValue();
+            fragment=((Number)frag.invoke(null,optifineProgram,
+                    base+".fsh")).intValue();
+            if(hasSource(shaderPack,base+".gsh"))
+                geometry=((Number)geom.invoke(null,optifineProgram,
+                        base+".gsh")).intValue();
+            if(vertex<=0||fragment<=0)
+                throw new IllegalStateException(
+                        "Native shaderpack stage compilation unavailable "+base);
+            // This is the already-preprocessed OptiFine shader source.
+            // Unlike a raw shaderpack file, it includes all #include,
+            // user shader options and BetterLights source patches.
+            String source=GL20.glGetShaderSource(vertex,
+                    Math.max(8192,GL20.glGetShaderi(vertex,
+                            GL20.GL_SHADER_SOURCE_LENGTH)));
+            String patched=injectClipVertex(source);
+            custom=GL20.glCreateShader(GL20.GL_VERTEX_SHADER);
             GL20.glShaderSource(custom,patched);
             GL20.glCompileShader(custom);
             if(GL20.glGetShaderi(custom,GL20.GL_COMPILE_STATUS)==0)
-                throw new IllegalStateException("Vertex clip compile: "+
+                throw new IllegalStateException("Mirror clipped vertex: "+
                         GL20.glGetShaderInfoLog(custom,4096));
-            for(int i=0;i<count.get(0);i++)
-            {
-                int attachedId=attached.get(i);
-                if(attachedId!=vertex)
-                    GL20.glAttachShader(program,attachedId);
-            }
+            program=GL20.glCreateProgram();
             GL20.glAttachShader(program,custom);
+            GL20.glAttachShader(program,fragment);
+            if(geometry>0)GL20.glAttachShader(program,geometry);
+            // OptiFine binds static attributes for built-in shaderpack
+            // entities and Block VBOs. Preserve the ACTUAL native binding.
             int n=Math.min(64,GL20.glGetProgrami(original,
                     GL20.GL_ACTIVE_ATTRIBUTES));
             for(int i=0;i<n;i++)
             {
-                IntBuffer type=BufferUtils.createIntBuffer(2);
-                String name=GL20.glGetActiveAttrib(original,i,256,type);
+                IntBuffer meta=BufferUtils.createIntBuffer(2);
+                String name=GL20.glGetActiveAttrib(original,i,256,meta);
                 int loc=GL20.glGetAttribLocation(original,name);
                 if(loc>=0)GL20.glBindAttribLocation(program,loc,name);
             }
             GL20.glLinkProgram(program);
             if(GL20.glGetProgrami(program,GL20.GL_LINK_STATUS)==0)
-                throw new IllegalStateException("Clipped BSL link: "+
+                throw new IllegalStateException("Mirror clipped shader link: "+
                         GL20.glGetProgramInfoLog(program,4096));
-            return program;
-        }
-        catch(Throwable failure)
-        {
-            GL20.glDeleteProgram(program);
-            if(failure instanceof RuntimeException)
-                throw (RuntimeException)failure;
-            throw new IllegalStateException(failure);
+            // A BetterLights-injected native fragment must not be silently
+            // replaced by a vanilla fragment missing its light array.
+            if(GL20.glGetUniformLocation(original,"lightCount")>=0&&
+                    GL20.glGetUniformLocation(program,"lightCount")<0)
+                throw new IllegalStateException(
+                        "Recompiled shader lost BetterLights uniforms");
+            int result=program;
+            program=0;
+            return result;
         }
         finally
         {
-            // The linked program retains the compiled VSH; no source
-            // shader object or reference needs to remain attached.
-            GL20.glDeleteShader(custom);
+            if(program>0)GL20.glDeleteProgram(program);
+            if(custom>0)GL20.glDeleteShader(custom);
+            if(vertex>0)GL20.glDeleteShader(vertex);
+            if(fragment>0)GL20.glDeleteShader(fragment);
+            if(geometry>0)GL20.glDeleteShader(geometry);
         }
+    }
+
+    private static boolean hasSource(Object shaderPack,String name)
+            throws Exception
+    {
+        if(shaderPack==null)return false;
+        Method stream=shaderPack.getClass().getMethod(
+                "getResourceAsStream",String.class);
+        InputStream input=(InputStream)stream.invoke(shaderPack,name);
+        if(input==null)return false;
+        input.close();
+        return true;
     }
 
     private static String injectClipVertex(String source)

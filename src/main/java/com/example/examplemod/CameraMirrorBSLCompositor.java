@@ -229,6 +229,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         IntBuffer beforeBuffer=BufferUtils.createIntBuffer(16);
         GL20.glGetUniform(pid,loc,beforeBuffer);
         int before=beforeBuffer.get(0);
+        // The previous log called any positive light count "populated"
+        // even when previous==after==1. That was a false success.
+        // If native light structs are already active, do not call the
+        // expensive OptiFine selector or modify its alpha/blend state.
+        if(before>0)
+        {
+            CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
+            return;
+        }
         // A successful native hook changes the program's shared values.
         // The previous light count must be restored when the mirror scope
         // closes so the main OptiFine camera cannot inherit mirror lights.
@@ -263,7 +272,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 IntBuffer refreshed=BufferUtils.createIntBuffer(16);
                 GL20.glGetUniform(pid,current,refreshed);
                 int after=refreshed.get(0);
-                if(after>0&&!nativeLightRefreshLogged)
+                CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
+                if(after>before&&!nativeLightRefreshLogged)
                 {
                     nativeLightRefreshLogged=true;
                     System.out.println(TAG+"BetterLights native shader hook "+
@@ -811,7 +821,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                     (name.startsWith("ProgramTerrain")||
                      "ProgramWater".equals(name)))
             {
-                pid=CameraMirrorShaderClip.program(nativePid);
+                pid=CameraMirrorShaderClip.program(nativePid,program);
                 if(pid!=nativePid)
                     CameraMirrorShaderClip.copyUniforms(nativePid,pid);
             }
