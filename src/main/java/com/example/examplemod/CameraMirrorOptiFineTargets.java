@@ -30,15 +30,16 @@ import org.lwjgl.opengl.GL30;
  */
 public final class CameraMirrorOptiFineTargets implements AutoCloseable
 {
-    // The original 768px cap magnified BSL's screen-space dither when
-    // the mirror was displayed at native preview resolution. 1024 is a
-    // conservative quality/performance default. Override only for testing.
-    public static final int MAX_SIZE=1024;
+    // The old 1024px cap softens the reflection when the main preview is
+    // larger. 1536 is a quality/performance compromise; allow higher
+    // resolutions for testing on GPUs with sufficient VRAM.
+    // All private BSL GBuffer attachments use this SAME resolution.
+    public static final int MAX_SIZE=1536;
     public static int maxDimension()
     {
         int selected=Integer.getInteger(
                 "bbs.editor.camera.mirrorBSLMaxSize",MAX_SIZE);
-        return Math.max(512,Math.min(1536,selected));
+        return Math.max(512,Math.min(2560,selected));
     }
     private int fbo;
     private int historyReadFbo,historyDrawFbo;

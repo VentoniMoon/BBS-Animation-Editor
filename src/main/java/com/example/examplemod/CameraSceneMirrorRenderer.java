@@ -306,10 +306,16 @@ public final class CameraSceneMirrorRenderer
             // single-pixel dither. Only the FINAL color texture should be
             // bilinear; private material/depth GBuffer textures remain
             // GL_NEAREST to preserve shader data.
-            if(texture.framebufferFilter!=
-                    (experimentalBSL?GL11.GL_LINEAR:GL11.GL_NEAREST))
-                texture.setFramebufferFilter(experimentalBSL?
-                        GL11.GL_LINEAR:GL11.GL_NEAREST);
+            // Compare bilinear presentation with unfiltered pixels without
+            // changing the GBuffer material/depth filtering. The default
+            // remains LINEAR to avoid magnifying single-pixel BSL dither.
+            // -Dbbs.editor.camera.mirrorBSLFinalFilter=nearest is an A/B test.
+            int mirrorFilter=experimentalBSL&&
+                    !"nearest".equalsIgnoreCase(System.getProperty(
+                            "bbs.editor.camera.mirrorBSLFinalFilter",
+                            "linear"))?GL11.GL_LINEAR:GL11.GL_NEAREST;
+            if(texture.framebufferFilter!=mirrorFilter)
+                texture.setFramebufferFilter(mirrorFilter);
             if(experimentalBSL)
             {
                 int[] formats=CameraMirrorOptiFineBackend.getColorFormats(8);
