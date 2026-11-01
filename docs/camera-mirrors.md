@@ -994,3 +994,52 @@ Use:
 Select-String -Path '.\run\logs\latest.log' `
   -SimpleMatch '[Mirror][LightProbe] Light struct'
 ```
+
+### Native BetterLights hook and isolated fragment-accurate shader clip
+
+**Evidence:** the mirrored BSL programs declare `lightCount` and
+`lights[i].position`, but every inspected program reported
+`lightCount=0` even though the editor has a registered light. The
+existing auxiliary compositor bypasses `Shaders.useProgram` and
+directly calls `glUseProgram`. BetterLights's OptiFine patching can
+depend on the native program-selection lifecycle.
+
+To recover that lifecycle WITHOUT starting a second main world render,
+the BSL compositor now calls the original `Shaders.useProgram(Program)`
+with `isRenderingDfb=false` only for programs with `lightCount` when
+an editor light is registered. It snapshots and restores original
+OptiFine active-program state, prevents native draw-buffer output
+redirection, rebinds the mirror's own geometry/composite FBO, and
+backs up the original `lightCount` GLSL uniform. Log states whether
+this actually populated the compiled program or still returned zero.
+The hook can be disabled with
+`-Dbbs.editor.camera.mirrorBSLNativeLightRefresh=false`.
+
+The missing-wall/behind-wall clipping and BSL's moving shadows require
+different handling. The BSL fragment shader has an inverse projection
+routine that cannot invert an oblique camera matrix; restoring oblique
+clipping would regress the shadow fix. An ordinary near plane cannot
+geometrically isolate a tilted mirror. The experimental replacement
+uses a *separate copy* of the already linked terrain/water program:
+recompiles only the VERTEX shader with one extra output:
+`gl_ClipVertex = gl_ModelViewMatrix * gl_Vertex;`. The original fragment
+shader, vertex attributes and OptiFine program are unchanged. The
+existing world-space `GL_CLIP_PLANE0` is then applied by the fixed
+compatibility clip unit in the mirror-only clone. BSL retains the
+same symmetric perspective and valid fragment-space reconstruction.
+
+Every active native program uniform, including sampler addresses and
+BetterLights light structs, is copied to its private clone before
+setting reflected-camera uniforms. The original compiled programs are
+never relinked and can continue rendering the main world. Private
+clones are cached and deleted when mirror resources reset. If GLSL
+source is absent, patch compilation fails or a driver rejects
+`gl_ClipVertex`, the mirror falls back to its existing symmetric
+perspective path, with a once-only error message. The clipping feature
+can be disabled for A/B tests using
+`-Dbbs.editor.camera.mirrorBSLShaderPlaneClip=false`.
+
+In-game validation still required: compiled shader compatibility,
+accurate fragment clipping on the wall, proper BetterLights count,
+and unchanged shadows and transparent blocks. Do not treat CI
+compilation as visual proof.

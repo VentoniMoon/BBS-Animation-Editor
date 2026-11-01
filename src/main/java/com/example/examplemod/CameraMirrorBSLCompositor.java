@@ -70,6 +70,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean privateShadowWarning;
     private static boolean nativeShadowEyeLogged;
     private static boolean privateShadowDisabled;
+    private static boolean nativeLightRefreshLogged;
+    private static boolean nativeLightRefreshEmptyLogged;
+    private static boolean nativeLightRefreshErrorLogged;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -204,6 +207,106 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
      * Check the actual driver state after a chunk layer, so a regression
      * is visible in latest.log rather than silently washing out terrain.
      */
+    /**
+     * BetterLights injects its lightCount/lights[] upload into OptiFine's
+     * native program-selection lifecycle. Raw glUseProgram bypasses that
+     * hook, leaving lightCount=0 in the mirrored BSL passes.
+     *
+     * Only call the native selector when the program actually declares
+     * lightCount and the editor owns registered native light casters.
+     * Do not allow OptiFine to redirect the private draw FBO; callers
+     * rebind their private targets immediately after this method.
+     * A/B switch: -Dbbs.editor.camera.mirrorBSLNativeLightRefresh=false.
+     */
+    private void refreshBetterLightsProgram(Object program,int pid)
+    {
+        if(worldLightPositions.isEmpty()||pid<=0||
+                "false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLNativeLightRefresh",
+                        "true")))return;
+        int loc=GL20.glGetUniformLocation(pid,"lightCount");
+        if(loc<0)return;
+        IntBuffer beforeBuffer=BufferUtils.createIntBuffer(16);
+        GL20.glGetUniform(pid,loc,beforeBuffer);
+        int before=beforeBuffer.get(0);
+        // A successful native hook changes the program's shared values.
+        // The previous light count must be restored when the mirror scope
+        // closes so the main OptiFine camera cannot inherit mirror lights.
+        restored.add(UniformBackup.captureInt(pid,loc));
+        Object savedProgram=null,savedBuffers=null;
+        int savedId=0;
+        boolean savedDfb=false;
+        boolean wasCaptured=false;
+        try
+        {
+            savedProgram=activeProgramField.get(null);
+            savedBuffers=activeDrawBuffersField.get(null);
+            savedId=activeProgramIdField.getInt(null);
+            savedDfb=safetyFlags[1].getBoolean(null); // isRenderingDfb
+            wasCaptured=true;
+            safetyFlags[1].setBoolean(null,false);
+            // Force native useProgram even when we borrowed the same
+            // compiled Program on a previous mirrored shader stage.
+            activeProgramField.set(null,null);
+            activeProgramIdField.setInt(null,0);
+            Method nativeUse=shaders.getMethod("useProgram",
+                    program.getClass());
+            nativeUse.invoke(null,program);
+            int current=GL20.glGetUniformLocation(pid,"lightCount");
+            if(current>=0)
+            {
+                IntBuffer refreshed=BufferUtils.createIntBuffer(16);
+                GL20.glGetUniform(pid,current,refreshed);
+                int after=refreshed.get(0);
+                if(after>0&&!nativeLightRefreshLogged)
+                {
+                    nativeLightRefreshLogged=true;
+                    System.out.println(TAG+"BetterLights native shader hook "+
+                            "populated lightCount="+after+" in program="+
+                            pid+" (previous="+before+
+                            "; main OptiFine program and light count saved)");
+                }
+                else if(after==0&&!nativeLightRefreshEmptyLogged)
+                {
+                    nativeLightRefreshEmptyLogged=true;
+                    System.out.println(TAG+"BetterLights native shader hook "+
+                            "returned lightCount=0 in program="+pid+
+                            "; provider upload is not triggered through "+
+                            "Shaders.useProgram; no fabricated light added");
+                }
+            }
+        }
+        catch(Throwable problem)
+        {
+            if(!nativeLightRefreshErrorLogged)
+            {
+                nativeLightRefreshErrorLogged=true;
+                System.err.println(TAG+"BetterLights native light refresh "+
+                        "unavailable: "+problem);
+            }
+        }
+        finally
+        {
+            if(wasCaptured)
+            {
+                try
+                {
+                    safetyFlags[1].setBoolean(null,savedDfb);
+                    activeProgramField.set(null,savedProgram);
+                    activeProgramIdField.setInt(null,savedId);
+                    activeDrawBuffersField.set(null,savedBuffers);
+                }
+                catch(IllegalAccessException failure)
+                {
+                    throw new IllegalStateException(
+                            "Cannot restore native light hook state",failure);
+                }
+            }
+            // It is only a uniform refresh, not a new world render.
+            GL20.glUseProgram(pid);
+        }
+    }
+
     public static void verifyTerrainProgram(String layer)
     {
         if(current==null)return;
@@ -255,6 +358,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     public static void releaseShadowResources()
     {
         CameraMirrorBetterLightsUniforms.reset();
+        CameraMirrorShaderClip.release();
         if(privateShadowMap!=null)
         {
             privateShadowMap.close();
@@ -681,7 +785,22 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                         " (BSL procedural clouds/sky require skybasic)");
             }
             if(pid<=0){GL20.glUseProgram(0);return;}
+            // Let the optional native BetterLights hook upload lightCount
+            // and light arrays to the ORIGINAL compiled OptiFine program.
+            // A cloned mirror-only program then copies those uniforms.
+            final int nativePid=pid;
             targets.bindGeometry();
+            GL20.glUseProgram(nativePid);
+            refreshBetterLightsProgram(program,nativePid);
+            targets.bindGeometry();
+            if(GL11.glIsEnabled(GL11.GL_CLIP_PLANE0)&&
+                    (name.startsWith("ProgramTerrain")||
+                     "ProgramWater".equals(name)))
+            {
+                pid=CameraMirrorShaderClip.program(nativePid);
+                if(pid!=nativePid)
+                    CameraMirrorShaderClip.copyUniforms(nativePid,pid);
+            }
             GL20.glUseProgram(pid);
             // Sky uses a farther projection than terrain. Capture the
             // terrain camera for deferred/composite matrix uniforms,
@@ -880,6 +999,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             {
                 targets.bindCompositeOutputs(plan);
                 GL20.glUseProgram(pid);
+                refreshBetterLightsProgram(program,pid);
+                targets.bindCompositeOutputs(plan);
                 bindInputs(pid);
                 overrideCamera(pid);
                 drawQuad();
