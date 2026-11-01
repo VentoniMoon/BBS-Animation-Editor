@@ -40,14 +40,16 @@ public final class CameraMirrorBetterLightsSnapshot
     private static final List<Entry> snapshot=new ArrayList<Entry>();
     private static final List<double[]> origin=new ArrayList<double[]>();
     private static int sourceCount;
-    private static boolean captureLogged,restoreLogged;
+    private static double[] snapshotCamera;
+    private static boolean captureLogged,restoreLogged,staleScreenLogged;
 
     private CameraMirrorBetterLightsSnapshot(){}
 
     public static void reset()
     {
         snapshot.clear();origin.clear();sourceCount=0;
-        captureLogged=false;restoreLogged=false;
+        snapshotCamera=null;
+        captureLogged=false;restoreLogged=false;staleScreenLogged=false;
     }
 
     private static int readInt(int pid,String name)
@@ -97,7 +99,8 @@ public final class CameraMirrorBetterLightsSnapshot
      * Reads original OptiFine program values, never a mirrored clone.
      * A lightCount=1 with an unregistered/unrelated source is rejected.
      */
-    public static void capture(int pid,List<double[]> sources)
+    public static void capture(int pid,List<double[]> sources,
+            double[] mainCamera)
     {
         if(pid<=0||sources==null||sources.isEmpty())return;
         int count=Math.min(16,readInt(pid,"lightCount"));
@@ -158,6 +161,7 @@ public final class CameraMirrorBetterLightsSnapshot
         snapshot.clear();snapshot.addAll(next);
         origin.clear();origin.addAll(verified);
         sourceCount=count;
+        snapshotCamera=mainCamera==null?null:mainCamera.clone();
         if(!captureLogged)
         {
             captureLogged=true;
@@ -170,7 +174,7 @@ public final class CameraMirrorBetterLightsSnapshot
 
     /** Never apply to original/main OptiFine shaders. */
     public static boolean applyToPrivateClone(int clone,
-            List<double[]> currentSources)
+            List<double[]> currentSources,double[] currentMainCamera)
     {
         if(clone<=0||!sourceStillValid(currentSources)||
                 snapshot.isEmpty())return false;
@@ -179,9 +183,31 @@ public final class CameraMirrorBetterLightsSnapshot
             return false;
         if(GL20.glGetUniformLocation(clone,"lightCount")<0)
             return false;
+        // World-space light properties remain valid when the camera
+        // moves, but positionScreenSpace was projected for the camera at
+        // snapshot capture time. Never reintroduce a stale projection to
+        // a private mirror clone. The following mirror-camera correction
+        // will reproject it when the coordinate encoding is verified.
+        boolean cameraMoved=snapshotCamera==null||
+                currentMainCamera==null||
+                CameraMirrorLightSpace.cameraMoved(
+                        snapshotCamera,currentMainCamera,0.02D);
         int applied=0;
         for(Entry entry:snapshot)
         {
+            if(cameraMoved&&entry.name.endsWith(".positionScreenSpace"))
+            {
+                if(!staleScreenLogged)
+                {
+                    staleScreenLogged=true;
+                    System.out.println(
+                            "[BBS Editor][Mirror][BetterLights] "+
+                            "Skipped screen-space uniforms from a "+
+                            "different main-camera position; "+
+                            "mirror reprojection must use current view");
+                }
+                continue;
+            }
             int loc=GL20.glGetUniformLocation(clone,entry.name);
             if(loc<0)continue;
             if(write(loc,entry))applied++;

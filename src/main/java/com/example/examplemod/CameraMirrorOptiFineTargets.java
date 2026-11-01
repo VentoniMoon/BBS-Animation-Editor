@@ -30,11 +30,12 @@ import org.lwjgl.opengl.GL30;
  */
 public final class CameraMirrorOptiFineTargets implements AutoCloseable
 {
-    // The old 1024px cap softens the reflection when the main preview is
-    // larger. 1536 is a quality/performance compromise; allow higher
-    // resolutions for testing on GPUs with sufficient VRAM.
+    // The 1536px cap still downsamples a 1920x1080 world viewport.
+    // At 2048px the mirror retains native detail on common Full-HD
+    // previews; use mirrorBSLMaxSize=1536 for a lower-VRAM fallback.
+    // 2560 is available for higher-resolution experiments.
     // All private BSL GBuffer attachments use this SAME resolution.
-    public static final int MAX_SIZE=1536;
+    public static final int MAX_SIZE=2048;
     public static int maxDimension()
     {
         int selected=Integer.getInteger(

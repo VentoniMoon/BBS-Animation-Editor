@@ -223,6 +223,12 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
      * rebind their private targets immediately after this method.
      * A/B switch: -Dbbs.editor.camera.mirrorBSLNativeLightRefresh=false.
      */
+    private double[] mainCameraPosition()
+    {
+        return mainView==null?null:new double[]{
+                mainView.x,mainView.y,mainView.z};
+    }
+
     private void refreshBetterLightsProgram(Object program,int pid)
     {
         if(worldLightPositions.isEmpty()||pid<=0||
@@ -241,7 +247,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         if(before>0)
         {
             CameraMirrorBetterLightsSnapshot.capture(
-                    pid,worldLightPositions);
+                    pid,worldLightPositions,mainCameraPosition());
             CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
             return;
         }
@@ -281,7 +287,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 int after=refreshed.get(0);
                 if(after>0)
                     CameraMirrorBetterLightsSnapshot.capture(
-                            pid,worldLightPositions);
+                            pid,worldLightPositions,mainCameraPosition());
                 CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
                 if(after>before&&!nativeLightRefreshLogged)
                 {
@@ -886,7 +892,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             // This never writes the main OptiFine program.
             if(pid!=nativePid)
                 CameraMirrorBetterLightsSnapshot.applyToPrivateClone(
-                        pid,worldLightPositions);
+                        pid,worldLightPositions,mainCameraPosition());
             overrideCamera(pid);
             // gl_ClipVertex is not a reliable clipping contract with
             // programmable BSL terrain programs. The mirror-only cloned
