@@ -43,6 +43,13 @@ public final class CameraSceneMirrorRenderer
     private static net.minecraft.world.World lastWorld;
     private static boolean blockedByShaderpack;
     private static String captureStatus="MIRROR: awaiting first frame";
+    private static String lastPathDiagnostic="";
+    private static void logPath(String reason)
+    {
+        if(reason.equals(lastPathDiagnostic))return;
+        lastPathDiagnostic=reason;
+        System.out.println("[BBS Editor][Mirror][CapturePath] "+reason);
+    }
     private static boolean shaderDiscoveryComplete;
     private static Method optiFineShadersActive;
     private static Field optiFineShaderLoaded;
@@ -102,6 +109,7 @@ public final class CameraSceneMirrorRenderer
         CameraMirrorOptiFinePreflight.reset();
         blockedByShaderpack=false;
         captureStatus="MIRROR: awaiting first frame";
+        lastPathDiagnostic="";
     }
 
     /** Choose one visible mirror; never recursively render N mirrors. */
@@ -119,6 +127,10 @@ public final class CameraSceneMirrorRenderer
         if(failed)
         {
             captureStatus="MIRROR ERROR - SEE latest.log";
+            logPath("Capture disabled by previous exception; "+
+                    "restart/reopen editor or reset mirror resources. "+
+                    "Check [BBS Editor][Mirror] Auxiliary world pass "+
+                    "disabled after failure in latest.log.");
             return;
         }
         if(mc==null||mirrors==null||mc.world==null||
@@ -165,6 +177,12 @@ public final class CameraSceneMirrorRenderer
                 {
                     blockedByShaderpack=true;
                     captureStatus="SHADER: "+support.message;
+                    logPath("BSL auxiliary capture NOT started: "+
+                            "experimental="+Boolean.getBoolean(
+                                "bbs.editor.camera.mirrorBSLExperimental")+
+                            " support="+support.message+
+                            "; mirror surface uses fallback (not a "+
+                            "rendered reflected frame)");
                     return;
                 }
             }
@@ -196,6 +214,13 @@ public final class CameraSceneMirrorRenderer
             return;
         }
         final boolean experimentalBSL=bslMultiPass;
+        logPath("Selected renderer="+
+                (experimentalBSL?"BSL private compositor":
+                 shaderMirror?"OptiFine forward":"vanilla")+
+                " experimental="+Boolean.getBoolean(
+                        "bbs.editor.camera.mirrorBSLExperimental")+
+                " capturedMirror="+picked.id+
+                " shaderpackActive="+shaderMirror);
         // A completed mirror is not a raw material GBuffer pixel. The
         // native BSL composite would shade/tonemap it a second time and
         // turn a correctly reflected sky and scene unnaturally dark.
@@ -389,6 +414,10 @@ public final class CameraSceneMirrorRenderer
             capturedId="";
             capturedPose=null;
             captureStatus="MIRROR ERROR - SEE latest.log";
+            logPath("Capture FAILED ("+t.getClass().getSimpleName()+
+                    "): "+t.getMessage()+
+                    "; renderer will not retry until reset. "+
+                    "The colored mirror is a fallback, not a valid frame.");
             if(!warned)
             {
                 warned=true;

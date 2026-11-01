@@ -96,6 +96,8 @@ jobs:
           ! grep -q 'new RenderGlobal(' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           ! grep -q 'new ViewFrustum(' src/main/java/com/example/examplemod/CameraMirrorChunkVisibility.java
           grep -q 'world.renderSky(partialTicks,2)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
+          grep -q '\[CapturePath\]' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
+          grep -q '\[TerrainDraw\]' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'CameraMirrorNativeAtmosphere.begin' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'atmosphere.sky(partialTicks)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java
           grep -q 'atmosphere.terrain(partialTicks)' src/main/java/com/example/examplemod/CameraMirrorTerrainPass.java

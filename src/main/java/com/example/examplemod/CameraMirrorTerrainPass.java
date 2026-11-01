@@ -19,6 +19,8 @@ import org.lwjgl.util.glu.GLU;
 public final class CameraMirrorTerrainPass
 {
     private static boolean reported;
+    private static boolean reportedSolidZero;
+    private static boolean reportedSolidDraw;
     private CameraMirrorTerrainPass(){}
 
     public static void render(Minecraft mc,PreviewCameraPose camera,
@@ -183,7 +185,32 @@ public final class CameraMirrorTerrainPass
             RenderHelper.disableStandardItemLighting();
             mc.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
             CameraMirrorOptiFineBackend.stage("ProgramTerrainSolid");
-            world.renderBlockLayer(BlockRenderLayer.SOLID,partialTicks,0,eye);
+            int solid=world.renderBlockLayer(
+                    BlockRenderLayer.SOLID,partialTicks,0,eye);
+            // An apparently uniform blue mirror can mean the auxiliary
+            // FBO was cleared successfully but NO compiled terrain VBO
+            // was drawn. Report the actual draw result, not merely that
+            // a GLSL stage or framebuffer was initialized.
+            if(CameraMirrorBSLCompositor.active())
+            {
+                if(solid==0&&!reportedSolidZero)
+                {
+                    reportedSolidZero=true;
+                    System.out.println("[BBS Editor][Mirror][TerrainDraw] "+
+                            "No SOLID chunk buffers rendered; "+
+                            "check reflected chunk frustum, FBO and "+
+                            "stage program before diagnosing GLSL clip.");
+                }
+                else if(solid>0&&!reportedSolidDraw)
+                {
+                    reportedSolidDraw=true;
+                    System.out.println("[BBS Editor][Mirror][TerrainDraw] "+
+                            "SOLID layer returned "+solid+
+                            " rendered chunk buffer(s); GLSL program="+
+                            GL11.glGetInteger(
+                                    org.lwjgl.opengl.GL20.GL_CURRENT_PROGRAM));
+                }
+            }
             CameraMirrorBSLCompositor.verifyTerrainProgram("SOLID");
             GL11.glEnable(GL11.GL_ALPHA_TEST);
             CameraMirrorOptiFineBackend.stage("ProgramTerrainCutoutMip");

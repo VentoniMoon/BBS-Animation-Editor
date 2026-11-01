@@ -1179,3 +1179,41 @@ BetterLights is NOT changed in this patch. The previous log confirms
 a valid native light snapshot reached the mirror program; whether its
 world-space illumination remains stationary has yet to be checked
 after reliable terrain rendering is restored.
+
+### Blue mirror after latest fragment-clip experiments: distinguish the disabled path from a blank FBO
+
+A user reported a completely blue mirror and NO entries for
+`[GLSL Clip]`, `Mirror fragment clip active`, or the BetterLights
+snapshot. Without those strings one cannot conclude that depth-based
+fragment clipping was executed at all. The reflection capture has
+several earlier bailouts, including missing
+`-Dbbs.editor.camera.mirrorBSLExperimental=true` on a multipass
+BSL shaderpack and a sticky `failed` guard after an auxiliary
+render exception. Both can leave an opaque fallback or a cleared
+reflection texture.
+
+A new throttled diagnostic `[BBS Editor][Mirror][CapturePath]` reports
+the selected pipeline (BSL private/OptiFine forward/vanilla), whether
+the experimental flag is present, and explicit reasons for blocked
+or failed capture. The color of a missing reflection is not a
+valid substitute for those status data.
+
+Inside the private BSL draw, `[BBS Editor][Mirror][TerrainDraw]`
+reports the integer result of SOLID RenderGlobal.renderBlockLayer()
+(the native draw count) and the active GL shader program. This
+distinguishes a successful FBO clear with **zero chunk VBO draws**
+from a shader that discards already submitted geometry.
+
+Collect together:
+```powershell
+Select-String -Path '.\run\logs\latest.log' `
+  -SimpleMatch '[Mirror][CapturePath]', `
+               '[Mirror][TerrainDraw]', `
+               'Auxiliary world pass disabled', `
+               '[Mirror][GLSL Clip]', `
+               'Mirror fragment clip active' |
+  ForEach-Object { $_.Line }
+```
+No projection, shadow, light or clipping math is changed by this
+diagnostic-only patch. If the BSL path is not selected, restore its
+launch configuration before attempting to tune fragment clipping.
