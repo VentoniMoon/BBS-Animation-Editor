@@ -89,6 +89,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private FloatBuffer mirrorProjection;
     private FloatBuffer mirrorView;
     private float[] nativeMainViewMatrix;
+    private float[] nativeMainProjectionMatrix;
     private final java.util.List<double[]> worldLightPositions=
             BetterLightsWorldEngine.registeredLightPositions();
     private boolean opaqueDepthSaved;
@@ -151,6 +152,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             nativeMainViewMatrix=readNativeMatrix(
                     "gbufferModelView","faModelView");
+            nativeMainProjectionMatrix=readNativeMatrix(
+                    "gbufferProjection","faProjection");
         }
         catch(ReflectiveOperationException incompatible)
         {
@@ -158,6 +161,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             // no standard matrix field. Relative-space matching still
             // works and all eye-space candidates remain untouched.
             nativeMainViewMatrix=null;
+            nativeMainProjectionMatrix=null;
         }
         reflectedShadowView=shadowMatrixForReflectedCamera();
     }
@@ -1456,11 +1460,20 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             m.position(0);
             float[] reflectedMatrix=new float[16];
             m.get(reflectedMatrix);
+            float[] reflectedProjectionMatrix=null;
+            if(mirrorProjection!=null)
+            {
+                FloatBuffer p=mirrorProjection.duplicate();
+                p.position(0);
+                reflectedProjectionMatrix=new float[16];
+                p.get(reflectedProjectionMatrix);
+            }
             CameraMirrorBetterLightsUniforms.apply(pid,
                     worldLightPositions,
                     new double[]{mainView.x,mainView.y,mainView.z},
                     new double[]{view.x,view.y,view.z},
                     nativeMainViewMatrix,reflectedMatrix,
+                    nativeMainProjectionMatrix,reflectedProjectionMatrix,
                     new CameraMirrorBetterLightsUniforms.Writer()
                     {
                         @Override public void write3(int program,

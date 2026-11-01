@@ -55,6 +55,37 @@ public final class CameraMirrorLightSpaceSmokeTest
                 new float[]{10000F,0F,-200F},light,main,mainMatrix)!=
                 CameraMirrorLightSpace.UNKNOWN)
             throw new AssertionError("Unrelated uniform was accepted");
+        float[] perspective={
+                1.8F,0F,0F,0F,
+                0F,2.4F,0F,0F,
+                0F,0F,-1.02F,-1F,
+                0F,0F,-0.2F,0F
+        };
+        float[] identity={
+                1F,0F,0F,0F,
+                0F,1F,0F,0F,
+                0F,0F,1F,0F,
+                0F,0F,0F,1F
+        };
+        for(int kind=CameraMirrorLightSpace.SCREEN_CLIP;
+                kind<=CameraMirrorLightSpace.SCREEN_VIEW;kind++)
+        {
+            float[] nativeScreen=CameraMirrorLightSpace.screen(
+                    perspective,identity,light,main,kind);
+            int identified=CameraMirrorLightSpace.matchScreen(
+                    nativeScreen,perspective,identity,light,main);
+            if(identified!=kind)
+                throw new AssertionError("Wrong screen-space encoding "+
+                        kind+" identified="+identified);
+            float[] reflectedScreen=CameraMirrorLightSpace.screen(
+                    perspective,mirrorMatrix,light,mirror,identified);
+            if(reflectedScreen==null)
+                throw new AssertionError("Reflected screen transform absent");
+        }
+        if(CameraMirrorLightSpace.matchScreen(
+                new float[]{88F,-90F,0.1F,0.2F},perspective,identity,
+                light,main)!=CameraMirrorLightSpace.SCREEN_UNKNOWN)
+            throw new AssertionError("Unrelated screen uniform accepted");
         System.out.println("PASS: BetterLights uniforms matched and rebased "+
                 "only for genuine registered light positions");
     }

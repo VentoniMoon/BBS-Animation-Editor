@@ -291,3 +291,26 @@ value-confirmed rebase remains enabled independently. If there are
 no source uniforms in all programs, the next implementation must
 use the actual provider pipeline (e.g., buffer texture/light
 compositor) rather than inventing a position-uniform name.
+
+### Verified BetterLights positionScreenSpace reprojection
+
+When BetterLights supplies positive `lightCount` in a compiled BSL
+program, the provider's `lights[i].positionScreenSpace` may still
+contain coordinates calculated from the MAIN camera. The mirror now
+checks this vec4 separately from `lights[i].position`. It projects
+each currently registered world caster using the actual MAIN view
+and projection matrices and tests four supported encodings: eye-space
+vec4, clip-space vec4, normalized-device vec4 and UV/depth vec4.
+An encoding is accepted only if every component agrees with the
+existing GPU uniform to within a small bounded numeric tolerance.
+Only then is the same caster projected through the REFLECTED view
+and projection, and only that single GLSL uniform is overridden.
+The existing uniform backup restores the original value before
+returning to the main camera.
+
+Zero/unknown uniforms are NOT populated or guessed. The one-time
+`Reprojected verified positionScreenSpace` log identifies any actual
+change. Otherwise the GLSL program stays untouched. Pure Java 8
+tests cover all four encodings and rejection of unrelated values.
+This is a conservative compatibility fix; visual outcome remains
+unverified until in-game tests with populated BetterLights uniforms.

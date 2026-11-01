@@ -118,7 +118,8 @@ public final class CameraMirrorBetterLightsUniforms
 
     public static int apply(int pid,List<double[]> sources,
             double[] main,double[] mirror,float[] nativeView,
-            float[] reflectedView,Writer writer)
+            float[] reflectedView,float[] nativeProjection,
+            float[] reflectedProjection,Writer writer)
     {
         if(pid<=0||sources==null||sources.isEmpty()||
                 main==null||mirror==null||writer==null||
@@ -140,6 +141,48 @@ public final class CameraMirrorBetterLightsUniforms
                     !Float.isFinite(observed[1])||
                     !Float.isFinite(observed[2]))continue;
             boolean matched=false;
+            // BetterLights uses a separate positionScreenSpace vec4
+            // for some effects. Correct it only when the native value
+            // precisely matches a registered light's projection under
+            // the MAIN camera. Do not invent a value for unknown encodings.
+            if(uniform.name.startsWith("lights[")&&
+                    uniform.name.endsWith(".positionScreenSpace")&&
+                    uniform.type==GL20.GL_FLOAT_VEC4&&
+                    nativeProjection!=null&&reflectedProjection!=null)
+            {
+                float[] observed4={data.get(0),data.get(1),
+                        data.get(2),data.get(3)};
+                for(double[] source:sources)
+                {
+                    if(source==null||source.length<3)continue;
+                    int mode=CameraMirrorLightSpace.matchScreen(observed4,
+                            nativeProjection,nativeView,source,main);
+                    if(mode==CameraMirrorLightSpace.SCREEN_UNKNOWN)
+                        continue;
+                    float[] corrected=CameraMirrorLightSpace.screen(
+                            reflectedProjection,reflectedView,
+                            source,mirror,mode);
+                    if(corrected!=null)
+                    {
+                        writer.write4(pid,uniform.name,
+                                corrected[0],corrected[1],
+                                corrected[2],corrected[3]);
+                        fixed++;
+                        matched=true;
+                        if(!foundLogged)
+                        {
+                            foundLogged=true;
+                            System.out.println(
+                                    "[BBS Editor][Mirror][BetterLights] "+
+                                    "Reprojected verified positionScreenSpace "+
+                                    uniform.name+" program="+pid+
+                                    " encoding="+mode);
+                        }
+                    }
+                    break;
+                }
+                if(matched)continue;
+            }
             for(double[] source:sources)
             {
                 if(source==null||source.length<3)continue;

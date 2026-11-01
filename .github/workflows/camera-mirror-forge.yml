@@ -120,6 +120,8 @@ jobs:
           grep -q 'createFragShader' src/main/java/com/example/examplemod/CameraMirrorShaderClip.java
           grep -q 'CameraMirrorShaderClip.program(nativePid,program)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid)' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
+          grep -q 'CameraMirrorLightSpace.matchScreen' src/main/java/com/example/examplemod/CameraMirrorBetterLightsUniforms.java
+          grep -q 'nativeMainProjectionMatrix,reflectedProjectionMatrix' src/main/java/com/example/examplemod/CameraMirrorBSLCompositor.java
           grep -q 'inspectActiveLights(pid)' src/main/java/com/example/examplemod/CameraMirrorBetterLightsProbe.java
           grep -q 'minimumMirrorDepth' src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java
           grep -q 'activeMirror.width,activeMirror.height' src/main/java/com/example/examplemod/CameraSceneMirrorRenderer.java
