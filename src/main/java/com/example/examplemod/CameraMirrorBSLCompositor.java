@@ -245,12 +245,17 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             savedDfb=safetyFlags[1].getBoolean(null); // isRenderingDfb
             wasCaptured=true;
             safetyFlags[1].setBoolean(null,false);
-            // Force native useProgram even when we borrowed the same
-            // compiled Program on a previous mirrored shader stage.
-            activeProgramField.set(null,null);
-            activeProgramIdField.setInt(null,0);
+            // OptiFine's updateAlphaBlend() dereferences the PREVIOUS
+            // program, so NEVER set Shaders.activeProgram to null.
+            // Select its real ProgramNone first, then the requested
+            // compiled program. Restore the original native program
+            // via the SAME API below to balance alpha/blend locks.
             Method nativeUse=shaders.getMethod("useProgram",
                     program.getClass());
+            Object none=shaders.getField("ProgramNone").get(null);
+            if(none==null)throw new IllegalStateException(
+                    "OptiFine ProgramNone unavailable");
+            nativeUse.invoke(null,none);
             nativeUse.invoke(null,program);
             int current=GL20.glGetUniformLocation(pid,"lightCount");
             if(current>=0)
@@ -291,12 +296,21 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             {
                 try
                 {
+                    // Return through OptiFine's program-selection path
+                    // so the native alpha/blend lock state is balanced.
+                    // isRenderingDfb stays false during this call; never
+                    // switch back to the shared main framebuffer.
+                    Object restore=savedProgram!=null?savedProgram:
+                            shaders.getField("ProgramNone").get(null);
+                    if(restore!=null)
+                        shaders.getMethod("useProgram",
+                                program.getClass()).invoke(null,restore);
                     safetyFlags[1].setBoolean(null,savedDfb);
                     activeProgramField.set(null,savedProgram);
                     activeProgramIdField.setInt(null,savedId);
                     activeDrawBuffersField.set(null,savedBuffers);
                 }
-                catch(IllegalAccessException failure)
+                catch(ReflectiveOperationException failure)
                 {
                     throw new IllegalStateException(
                             "Cannot restore native light hook state",failure);
