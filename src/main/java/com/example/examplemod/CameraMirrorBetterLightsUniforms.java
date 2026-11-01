@@ -225,7 +225,11 @@ public final class CameraMirrorBetterLightsUniforms
                         logUnmatchedScreen(uniform.name,observed4,
                                 slotSource,main,mirror);
                 }
-                if(matched)continue;
+                // A vec4 screen-space position is not an ordinary
+                // world/eye-space XYZ. If its encoding was not verified,
+                // leave it unchanged instead of guessing a conversion
+                // from its first three components.
+                continue;
             }
             for(double[] source:sources)
             {
