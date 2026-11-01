@@ -879,14 +879,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             bindNativeShadowImages();
             bindNativeNoiseImage();
             GL13.glActiveTexture(oldTextureUnit);
-            overrideCamera(pid);
-            // Some original OptiFine programs receive BetterLights light
-            // structs AFTER the first reflected terrain stage. Reuse only
-            // a verified native light snapshot in PRIVATE cloned programs,
-            // never fabricate values or rewrite the main OptiFine shader.
+            // A private clone needs native BetterLights values before its
+            // mirror-camera adjustments. Applying this snapshot after
+            // overrideCamera() would overwrite corrected positions and
+            // screen-space coordinates with MAIN-camera values.
+            // This never writes the main OptiFine program.
             if(pid!=nativePid)
                 CameraMirrorBetterLightsSnapshot.applyToPrivateClone(
                         pid,worldLightPositions);
+            overrideCamera(pid);
             // gl_ClipVertex is not a reliable clipping contract with
             // programmable BSL terrain programs. The mirror-only cloned
             // FRAGMENT shader independently discards any surface behind
