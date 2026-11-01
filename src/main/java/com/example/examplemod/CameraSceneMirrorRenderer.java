@@ -627,9 +627,9 @@ public final class CameraSceneMirrorRenderer
                         for(double[] corner:corners)
                         {
                             double[] eye=CameraMirrorMath.viewVector(
-                                    camera,corner[0]-camera.x,
-                                    corner[1]-camera.y,
-                                    corner[2]-camera.z);
+                                    virtualCamera,corner[0]-virtualCamera.x,
+                                    corner[1]-virtualCamera.y,
+                                    corner[2]-virtualCamera.z);
                             // OpenGL perspective looks along negative Z.
                             // If a corner crosses the eye plane, use the
                             // native near value rather than cropping it.
