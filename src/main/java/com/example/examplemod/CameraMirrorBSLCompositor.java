@@ -917,7 +917,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                             currentMatrix(GL11.GL_PROJECTION_MATRIX);
                     writeMatrix(pid,"bbsMirrorClipInverseProjection",
                             projectionForClip,true);
-                    IntBuffer viewport=BufferUtils.createIntBuffer(4);
+                    // LWJGL 2 requires 16 slots for glGetInteger(IntBuffer)
+                    // even though GL_VIEWPORT returns only four values.
+                    IntBuffer viewport=BufferUtils.createIntBuffer(16);
                     GL11.glGetInteger(GL11.GL_VIEWPORT,viewport);
                     int vw=viewport.get(2),vh=viewport.get(3);
                     if(vw<=0||vh<=0)
