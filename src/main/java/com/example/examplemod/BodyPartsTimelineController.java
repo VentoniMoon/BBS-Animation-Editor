@@ -529,6 +529,11 @@ public class BodyPartsTimelineController
                 y + TRACK_HEIGHT,
                 border()
         );
+        // Shared row-level grid is visible in BOTH Body Parts modes:
+        // actor attachments and selected model bones. Render beneath
+        // the CAMERA-style clip bars and actual keyframe handles.
+        EditorTimelineSkin.gridRow(this.timeline,TIMELINE_START_X,
+                width,y,TRACK_HEIGHT);
     }
 
     private void drawRuler(
