@@ -5,7 +5,7 @@ import net.minecraft.client.gui.FontRenderer;
 
 public class TransformPanel
 {
-    private static final int PANEL_WIDTH = 175;
+    private static final int PANEL_WIDTH = 185;
     private static final int PANEL_HEIGHT = 245;
 
     private static final float POSITION_STEP = 0.1F;
@@ -181,8 +181,15 @@ public class TransformPanel
             return;
         }
 
-        FontRenderer font =
-                mc.fontRenderer;
+        FontRenderer font = mc.fontRenderer;
+
+        // Fill the complete right inspector width, leaving symmetric
+        // 8px padding for all X/Y/Z controls and headers.
+        for (AnimationValueControl control : new AnimationValueControl[]{
+                positionXControl, positionYControl, positionZControl,
+                rotationXControl, rotationYControl, rotationZControl,
+                scaleXControl, scaleYControl, scaleZControl})
+            control.setWidth(PANEL_WIDTH - 16);
 
         AnimationTransform transform =
                 keyframe.getTransform();
@@ -195,9 +202,9 @@ public class TransformPanel
                 mc,
                 x - 1,
                 y - 1,
-                x + PANEL_WIDTH + 1,
+                x + PANEL_WIDTH,
                 y + (lightRigMode?132:PANEL_HEIGHT) + 1,
-                PANEL_BORDER
+                EditorVisualStyle.themedSurface(0.04F)
         );
 
         drawRect(
@@ -206,7 +213,7 @@ public class TransformPanel
                 y,
                 x + PANEL_WIDTH,
                 y + (lightRigMode?132:PANEL_HEIGHT),
-                PANEL_BACKGROUND
+                EditorVisualStyle.themedSurface(0.08F)
         );
 
         /*
@@ -219,7 +226,7 @@ public class TransformPanel
                 y,
                 x + PANEL_WIDTH,
                 y + 22,
-                HEADER_BACKGROUND
+                EditorVisualStyle.themedSurface(0.16F)
         );
 
         drawRect(
@@ -228,7 +235,7 @@ public class TransformPanel
                 y + 21,
                 x + PANEL_WIDTH,
                 y + 22,
-                HEADER_BOTTOM
+                EditorVisualStyle.themedSurface(0.09F)
         );
 
         /*
@@ -325,7 +332,7 @@ public class TransformPanel
                 y + 96,
                 x + PANEL_WIDTH - 8,
                 y + 97,
-                SECTION_LINE
+                EditorVisualStyle.themedSurface(0.23F)
         );
         if(lightRigMode)
         {
@@ -391,7 +398,7 @@ public class TransformPanel
                 y + 169,
                 x + PANEL_WIDTH - 8,
                 y + 170,
-                SECTION_LINE
+                EditorVisualStyle.themedSurface(0.23F)
         );
 
         /*
