@@ -161,15 +161,10 @@ public final class EditorMultiActorPreviewController
             mirrorPoseContexts.put(data.getId(),
                     new ArrayList<AnimationBoneSnapshot>(own));
 
-            // A secondary actor's CustomMorph/Emoticons render can change
-            // GL state AND Minecraft's cached flags/bound textures. The
-            // original glPushAttrib/glPopAttrib restores the driver only;
-            // without reconciling GlStateManager, the next actor's second
-            // skin layer/mesh can inherit stale texture or alpha state.
-            // Limit the expensive resync to BACKGROUND actor boundaries,
-            // not every ordinary single-actor preview render.
-            BbsFsGlStateResync.Snapshot beforeActor=
-                    BbsFsGlStateResync.capture();
+            // BlockbusterActorPreviewRenderer.drawActor now isolates
+            // GL client vertex arrays AND GlStateManager state for every
+            // actor (selected or background). Only actor-specific animation
+            // snapshots need to be restored at this higher level.
             try
             {
                 BlockbusterPreviewAnimationState.set(own, frame);
@@ -178,17 +173,10 @@ public final class EditorMultiActorPreviewController
             }
             finally
             {
-                try
-                {
-                    BbsFsGlStateResync.restore(beforeActor);
-                }
-                finally
-                {
-                    BlockbusterPreviewAnimationState.set(
-                            selectedBlockbuster, selectedBlockbusterFrame);
-                    EmoticonsPreviewAnimationState.set(
-                            selectedEmoticons, selectedEmoticonsFrame);
-                }
+                BlockbusterPreviewAnimationState.set(
+                        selectedBlockbuster, selectedBlockbusterFrame);
+                EmoticonsPreviewAnimationState.set(
+                        selectedEmoticons, selectedEmoticonsFrame);
             }
         }
 
