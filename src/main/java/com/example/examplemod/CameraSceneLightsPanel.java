@@ -511,16 +511,23 @@ public final class CameraSceneLightsPanel
             if(key==Keyboard.KEY_ESCAPE){field=null;fieldAxis=-1;return true;}
             if(key==Keyboard.KEY_UP||key==Keyboard.KEY_DOWN)
             {
-                try
+                // Commit any typed value first so arrow nudges use the
+                // exact value visible in the editor rather than stale data.
+                int axis=fieldAxis;
+                commit(screen);
+                CameraSceneLights.Light light=sync(screen);
+                if(light!=null&&axis>=0)
                 {
-                    double current=Double.parseDouble(field.getText());
-                    double next=current+(key==Keyboard.KEY_UP?0.03125D:-0.03125D);
-                    field.setText(String.format(Locale.ROOT,"%.5f",next));
-                    CameraSceneLights.Light light=sync(screen);
-                    if(light!=null)stepCoordinate(screen,light,fieldAxis,
+                    stepCoordinate(screen,light,axis,
                             key==Keyboard.KEY_UP?1:-1,0.03125D);
+                    fieldAxis=axis;
+                    field=new GuiTextField(18618,
+                            Minecraft.getMinecraft().fontRenderer,
+                            leftRight+66,FIRST_FIELD_Y+axis*FIELD_SPACING+1,94,15);
+                    field.setText(String.format(Locale.ROOT,"%.5f",
+                            component(light,tab,axis)));
+                    field.setFocused(true);
                 }
-                catch(NumberFormatException ignored) { }
                 return true;
             }
             field.textboxKeyTyped(c,key);return true;
