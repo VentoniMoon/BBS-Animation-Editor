@@ -36,6 +36,33 @@ public final class BbsFsNativeActorSunShadowOverlay
     private static boolean logged,warning;
 
     private BbsFsNativeActorSunShadowOverlay(){}
+
+    // In-editor A/B experiment: injecting real actor silhouettes into
+    // OptiFine's sun shadow atlas. Always off by default unless explicitly
+    // configured at JVM startup or toggled for the current editor session.
+    private static Boolean editorShadowCasterOverride;
+
+    public static boolean isEnabled()
+    {
+        return editorShadowCasterOverride==null
+                ?Boolean.getBoolean("bbs.editor.camera.nativeActorSunShadows")
+                :editorShadowCasterOverride.booleanValue();
+    }
+
+    public static boolean toggleForEditor()
+    {
+        editorShadowCasterOverride=Boolean.valueOf(!isEnabled());
+        System.out.println(TAG+"[Caster A/B] Actor native sun-shadow "+
+                (isEnabled()?"ON":"OFF")+
+                "; nativeHook="+CameraShaderCurveTransformer.nativeShadowHookInstalled()+
+                "; hook="+CameraShaderCurveTransformer.nativeShadowHookDiagnostic());
+        return isEnabled();
+    }
+
+    public static void resetEditorOverride()
+    {
+        editorShadowCasterOverride=null;
+    }
     private static boolean earlyHookLogged;
     private static boolean shadowRenderedThisFrame;
     private static boolean callbackReported;
@@ -79,8 +106,7 @@ public final class BbsFsNativeActorSunShadowOverlay
      */
     public static void onNativeShadowMapCompleted()
     {
-        if(!Boolean.getBoolean(
-                    "bbs.editor.camera.nativeActorSunShadows"))
+        if(!isEnabled())
             return;
         if(shadowRenderedThisFrame)return;
         // Diagnostic isolation: prepare/replay the actor exactly as in
@@ -135,8 +161,7 @@ public final class BbsFsNativeActorSunShadowOverlay
     public static void render(Minecraft mc,
             AnimationEditorScreen editor,PreviewCameraPose mainEye)
     {
-        if(!Boolean.getBoolean(
-                    "bbs.editor.camera.nativeActorSunShadows")||
+        if(!isEnabled()||
                 mc==null||editor==null||mainEye==null||
                 mc.world==null)return;
         // Keep Minecraft's cached texture/alpha flags synchronized with
