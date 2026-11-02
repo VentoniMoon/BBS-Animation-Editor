@@ -448,10 +448,33 @@ public class CharacterEditorPanel
             if (this.selectedKey != key)
             {
                 resetBodyPartScroll();
+                // Bring the selected CHARACTER key's editing section
+                // into view without requiring an unrelated manual
+                // accordion click. Preserve user selection on later
+                // frame syncs when the key identity is unchanged.
+                if(key.getType()!=null)
+                {
+                    switch(key.getType())
+                    {
+                        case SKIN:
+                        case MORPH:
+                            openedSection=Section.APPEARANCE;
+                            break;
+                        case ANIMATION:
+                            openedSection=Section.ANIMATION_SETUP;
+                            break;
+                        case BODY_PART_OVERRIDE:
+                            openedSection=Section.BODY_PART_OVERRIDES;
+                            break;
+                        default:
+                            openedSection=Section.ANIMATION_PARAMETERS;
+                    }
+                }
+                sectionScrollOffset=0;
             }
 
-            this.selectedKey = key;
-        this.selectedBodyPartModel = null;
+            this.selectedKey=key;
+            this.selectedBodyPartModel=null;
         }
         else
         {
@@ -463,6 +486,11 @@ public class CharacterEditorPanel
 
     public void setSelectedBodyPartModel(BodyPartModelData model)
     {
+        if(model!=null&&model!=this.selectedBodyPartModel)
+        {
+            openedSection=Section.ANIMATION_SETUP;
+            sectionScrollOffset=0;
+        }
         this.selectedBodyPartModel = model;
 
         CharacterTimelineController timeline =
