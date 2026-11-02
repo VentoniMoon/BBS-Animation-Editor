@@ -75,6 +75,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean nativeLightRefreshEmptyLogged;
     private static boolean nativeLightRefreshErrorLogged;
     private static int betterLightsShadowDiagnosticCount;
+    private static double[] lastBetterLightsShadowDiagnosticEye;
     private static boolean betterLightsShadowBypassLogged;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
@@ -1535,7 +1536,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                     GL20.glUniform1i(shadowLoc,0);
                 }
             }
-            if(betterLightsShadowDiagnosticCount<12)
+            // One representative populated caster per meaningful camera
+            // translation, rather than exhausting the log budget in
+            // the first render frame before the user starts moving.
+            double[] mainEye=new double[]{
+                    mainView.x,mainView.y,mainView.z};
+            if(betterLightsShadowDiagnosticCount<12&&
+                    (lastBetterLightsShadowDiagnosticEye==null||
+                     CameraMirrorLightSpace.cameraMoved(
+                         lastBetterLightsShadowDiagnosticEye,mainEye,0.5D)))
             {
                 int positionLoc=GL20.glGetUniformLocation(
                         pid,base+"position");
@@ -1556,6 +1565,17 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                     matrixTranslation=new float[]{
                             m.get(12),m.get(13),m.get(14)};
                 }
+                if(pos==null||worldLightPositions.isEmpty())
+                    continue;
+                boolean verified=false;
+                for(double[] source:worldLightPositions)
+                    if(source!=null&&source.length>=3&&
+                            Math.abs(pos[0]-source[0])<0.2D&&
+                            Math.abs(pos[1]-source[1])<0.2D&&
+                            Math.abs(pos[2]-source[2])<0.2D)
+                        verified=true;
+                if(!verified)continue;
+                lastBetterLightsShadowDiagnosticEye=mainEye;
                 betterLightsShadowDiagnosticCount++;
                 System.out.println(
                         "[BBS Editor][Mirror][BetterLights][Spatial] "+
