@@ -76,6 +76,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean nativeLightRefreshErrorLogged;
     private static int mirrorLightCountReports;
     private static boolean mirrorLightCountPromoted;
+    private static int lastRegisteredMirrorLightCount=-1;
     private static int betterLightsShadowDiagnosticCount;
     private static double[] lastBetterLightsShadowDiagnosticEye;
     private static boolean betterLightsShadowBypassLogged;
@@ -180,6 +181,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             throw new IllegalStateException("Recursive BSL mirror compositor");
         CameraMirrorBSLCompositor result=
                 new CameraMirrorBSLCompositor(targets,view,mainView);
+        if(lastRegisteredMirrorLightCount!=result.worldLightPositions.size())
+        {
+            lastRegisteredMirrorLightCount=result.worldLightPositions.size();
+            System.out.println(
+                "[BBS Editor][Mirror][BetterLights][Slots] "+
+                "Registered editor world casters="+
+                lastRegisteredMirrorLightCount+
+                " (actor and CAMERA static lights)");
+        }
         current=result;
         try
         {
