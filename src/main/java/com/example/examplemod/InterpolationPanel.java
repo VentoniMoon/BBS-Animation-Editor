@@ -19,28 +19,28 @@ public class InterpolationPanel
      */
 
     private static final int PANEL_BACKGROUND =
-            0xFF252629;
+            0xFF191E24;
 
     private static final int PANEL_BORDER =
-            0xFF111214;
+            0xFF090D11;
 
     private static final int HEADER_BACKGROUND =
-            0xFF303134;
+            0xFF26313A;
 
     private static final int HEADER_BOTTOM =
-            0xFF18191B;
+            0xFF0D171E;
 
     private static final int FIELD_BACKGROUND =
-            0xFF303134;
+            0xFF26313A;
 
     private static final int FIELD_HOVER =
-            0xFF3A3B3E;
+            0xFF33414B;
 
     private static final int FIELD_ACTIVE =
-            0xFF45474A;
+            0xFF384956;
 
     private static final int FIELD_BORDER =
-            0xFF18191B;
+            0xFF0D171E;
 
     private static final int TEXT =
             0xFFE0E0E0;
@@ -84,31 +84,31 @@ public class InterpolationPanel
      */
 
     private static final int GRAPH_BACKGROUND =
-            0xFF18191B;
+            0xFF0D171E;
 
     private static final int GRAPH_GRID =
-            0xFF2A2C2F;
+            0xFF1A2B34;
 
     private static final int GRAPH_AXIS =
-            0xFF484B4F;
+            0xFF4C6472;
 
     private static final int GRAPH_BORDER =
-            0xFF36383B;
+            0xFF253744;
 
     private static final int GRAPH_POINT =
             0xFFFFFFFF;
 
     private static final int DROPDOWN_BACKGROUND =
-            0xFF202124;
+            0xFF191E24;
 
     private static final int DROPDOWN_SELECTED =
-            0xFF34373A;
+            0xFF273944;
 
     private static final int DROPDOWN_HOVER =
-            0xFF3A3D40;
+            0xFF314450;
 
     private static final int DROPDOWN_BORDER =
-            0xFF111214;
+            0xFF090D11;
 
     /*
      * =========================================================
@@ -1114,7 +1114,7 @@ public class InterpolationPanel
                 pointY - 4,
                 pointX + 5,
                 pointY + 5,
-                0xFF252629
+                0xFF191E24
         );
 
         /*
