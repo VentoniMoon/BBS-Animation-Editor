@@ -87,7 +87,7 @@ public class BodyPartsEditorPanel
      * occupies 225 px. Keep the scroll range tied to that
      * actual content size instead of an arbitrary larger value.
      */
-    private static final int GLOBAL_CONTENT_HEIGHT = 225;
+    private static final int GLOBAL_CONTENT_HEIGHT = 194;
 
     public BodyPartsEditorPanel(
             BodyPartsEditorController controller)
@@ -122,15 +122,16 @@ public class BodyPartsEditorPanel
     {
         if (mc == null) return;
 
-        drawRect(mc, x, y, x + WIDTH, y + panelHeight, 0xFF19232C);
+        drawRect(mc, x, y, x + WIDTH, y + panelHeight,
+                EditorVisualStyle.themedSurface(0.075F));
         BodyPartModelData selectedModel = controller.getSelectedModel();
         if (selectedModel != null)
         {
             /* Physics is isolated from the shared Pose TransformPanel. */
             drawRect(mc, x + 5, y + 5, x + 91, y + 25,
-                    physicsView ? 0xFF253440 : 0xFF34536A);
+                    EditorVisualStyle.themedSurface(physicsView ? 0.11F : 0.26F));
             drawRect(mc, x + 94, y + 5, x + 180, y + 25,
-                    physicsView ? 0xFF34536A : 0xFF253440);
+                    EditorVisualStyle.themedSurface(physicsView ? 0.26F : 0.11F));
             mc.fontRenderer.drawString("TRANSFORM", x + 13, y + 11, 0xFFFFFFFF);
             mc.fontRenderer.drawString("PHYSICS", x + 112, y + 11, 0xFFFFFFFF);
 
@@ -155,8 +156,10 @@ public class BodyPartsEditorPanel
             return;
         }
 
-        drawRect(mc, x, y, x + WIDTH, y + 25, 0xFF17222B);
-        drawRect(mc, x, y + 24, x + WIDTH, y + 25, 0xFF384148);
+        drawRect(mc, x, y, x + WIDTH, y + 25,
+                EditorVisualStyle.themedSurface(0.15F));
+        drawRect(mc, x, y + 24, x + WIDTH, y + 25,
+                EditorVisualStyle.themedSurface(0.22F));
         drawRect(mc, x + 9, y + 7, x + 11, y + 18,
                 EditorThemeManager.get().getAccent());
         mc.fontRenderer.drawString("BODY PARTS", x + 16, y + 8, 0xFFE2E5E7);
@@ -206,7 +209,8 @@ public class BodyPartsEditorPanel
             AnimationTransform transform = selected.getGlobalTransform();
             int viewportTop = globalY + SECTION_HEIGHT;
             int viewportBottom = y + panelHeight - 5;
-            drawRect(mc, x + 6, viewportTop, x + WIDTH - 6, viewportBottom, 0xFF17222B);
+            drawRect(mc, x + 6, viewportTop, x + WIDTH - 6, viewportBottom,
+                    EditorVisualStyle.themedSurface(0.05F));
             syncGlobalControls(transform, viewportTop);
             drawGlobalControls(mc, viewportTop, viewportBottom);
             writeGlobalTransform(transform);
@@ -220,7 +224,7 @@ public class BodyPartsEditorPanel
         boolean hovered = mouseX >= x + 7 && mouseX < x + WIDTH - 7
                 && mouseY >= drawY && mouseY < drawY + SECTION_HEIGHT;
         drawRect(mc, x + 7, drawY, x + WIDTH - 7, drawY + SECTION_HEIGHT,
-                hovered ? 0xFF31495D : 0xFF27343F);
+                EditorVisualStyle.themedSurface(hovered ? 0.25F : 0.16F));
         drawRect(mc, x + 7, drawY, x + 9, drawY + SECTION_HEIGHT,
                 EditorThemeManager.get().getAccent());
         mc.fontRenderer.drawString(title, x + 15, drawY + 6,
@@ -242,26 +246,30 @@ public class BodyPartsEditorPanel
         globalScaleZ.setValue(transform.getScaleZ());
 
         int cx = x + 9;
-        int contentY = viewportTop + 4 - globalScroll;
-        globalPositionX.setPosition(cx, contentY + 15);
-        globalPositionY.setPosition(cx, contentY + 36);
-        globalPositionZ.setPosition(cx, contentY + 57);
-        globalRotationX.setPosition(cx, contentY + 89);
-        globalRotationY.setPosition(cx, contentY + 110);
-        globalRotationZ.setPosition(cx, contentY + 131);
-        globalScaleX.setPosition(cx, contentY + 163);
-        globalScaleY.setPosition(cx, contentY + 184);
-        globalScaleZ.setPosition(cx, contentY + 205);
+        int contentY = viewportTop + 3 - globalScroll;
+        // Compact 17 px pitch and 11 px group labels. All nine controls
+        // fit within 194 px instead of extending below the timeline.
+        AnimationValueControl[] controls = {
+                globalPositionX, globalPositionY, globalPositionZ,
+                globalRotationX, globalRotationY, globalRotationZ,
+                globalScaleX, globalScaleY, globalScaleZ
+        };
+        int[] offsets = {12,29,46,74,91,108,136,153,170};
+        for (int i=0;i<controls.length;i++)
+        {
+            controls[i].setPosition(cx, contentY + offsets[i]);
+            controls[i].setWidth(WIDTH - 18);
+        }
     }
 
     private void drawGlobalControls(Minecraft mc, int viewportTop, int viewportBottom)
     {
-        int contentY = viewportTop + 4 - globalScroll;
-        drawGlobalLabel(mc, "Position", contentY + 1, viewportTop, viewportBottom);
+        int contentY = viewportTop + 3 - globalScroll;
+        drawGlobalLabel(mc, "POSITION", contentY, viewportTop, viewportBottom);
         globalPositionX.draw(mc); globalPositionY.draw(mc); globalPositionZ.draw(mc);
-        drawGlobalLabel(mc, "Rotation", contentY + 75, viewportTop, viewportBottom);
+        drawGlobalLabel(mc, "ROTATION", contentY + 62, viewportTop, viewportBottom);
         globalRotationX.draw(mc); globalRotationY.draw(mc); globalRotationZ.draw(mc);
-        drawGlobalLabel(mc, "Scale", contentY + 150, viewportTop, viewportBottom);
+        drawGlobalLabel(mc, "SCALE", contentY + 124, viewportTop, viewportBottom);
         globalScaleX.draw(mc); globalScaleY.draw(mc); globalScaleZ.draw(mc);
     }
 
@@ -269,7 +277,11 @@ public class BodyPartsEditorPanel
             int viewportTop, int viewportBottom)
     {
         if (drawY + 10 < viewportTop || drawY > viewportBottom) return;
-        mc.fontRenderer.drawString(text, x + 9, drawY,
+        drawRect(mc, x + 9, drawY - 1, x + WIDTH - 9, drawY + 11,
+                EditorVisualStyle.themedSurface(0.16F));
+        drawRect(mc, x + 9, drawY - 1, x + 11, drawY + 11,
+                EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString(text, x + 15, drawY + 1,
                 EditorThemeManager.get().getAccentBright());
     }
 
@@ -718,13 +730,12 @@ public class BodyPartsEditorPanel
                 by,
                 bx + bw,
                 by + bh,
-                hovered
-                        ? 0xFF31495D
-                        : 0xFF26343E
+                EditorVisualStyle.themedSurface(hovered ? 0.23F : 0.13F)
         );
 
         // Only a thin border: don't paint over the hover fill.
-        drawRect(mc, bx, by + bh - 1, bx + bw, by + bh, 0xFF384148);
+        drawRect(mc, bx, by + bh - 1, bx + bw, by + bh,
+                EditorVisualStyle.themedSurface(0.25F));
 
         drawRect(
                 mc,
@@ -734,7 +745,7 @@ public class BodyPartsEditorPanel
                 by + 1,
                 hovered
                         ? EditorThemeManager.get().getAccent()
-                        : 0xFF384148
+                        : EditorVisualStyle.themedSurface(0.21F)
         );
 
         mc.fontRenderer.drawString(
