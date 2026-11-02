@@ -75,6 +75,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean nativeLightRefreshEmptyLogged;
     private static boolean nativeLightRefreshErrorLogged;
     private static boolean forcedLightRefreshLogged;
+    private static final java.util.Set<String> LIGHT_REFRESH_GATE_LOGS=
+            new java.util.HashSet<String>();
     private final Map<Integer,BetterLightsProgramState> nativeLightStates=
             new HashMap<Integer,BetterLightsProgramState>();
     private static int mirrorLightCountReports;
@@ -251,29 +253,72 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 mainView.x,mainView.y,mainView.z};
     }
 
+    /**
+     * Log WHY the native BetterLights refresh does or does not execute.
+     * PR #135 logged only after a successful native upload: an empty
+     * [Refresh] grep could mean a disabled flag, missing origin, missing
+     * lightCount, an exception, or no shader-backed mirror at all.
+     *
+     * Report a bounded sample of distinct decisions (not every frame).
+     */
+    private static void reportLightRefreshGate(int pid,String decision,
+            boolean loaded,boolean nativeEnabled,boolean forceEnabled,
+            boolean mirrorOrigin,int count)
+    {
+        String key=decision+":"+pid;
+        if(LIGHT_REFRESH_GATE_LOGS.size()>=18||
+                !LIGHT_REFRESH_GATE_LOGS.add(key))return;
+        System.out.println(
+                "[BBS Editor][Mirror][BetterLights][Refresh] "+
+                "gate="+decision+" pid="+pid+
+                " modLoaded="+loaded+
+                " nativeEnabled="+nativeEnabled+
+                " forceFlag="+forceEnabled+
+                " reflectedOrigin="+mirrorOrigin+
+                " lightCount="+count+
+                " capturing="+CameraSceneMirrorRenderer.isCapturing());
+    }
+
     private void refreshBetterLightsProgram(Object program,int pid)
     {
-        // BetterLights can also be placed directly through its OWN mod:
-        // those native casters are not in our editor-owned registry.
-        // Do not gate the provider refresh on worldLightPositions.
-        if(pid<=0||
-                !net.minecraftforge.fml.common.Loader.isModLoaded(
-                        "better_lights")||
-                "false".equalsIgnoreCase(System.getProperty(
-                        "bbs.editor.camera.mirrorBSLNativeLightRefresh",
-                        "true")))return;
-        // Force a native upload ONLY when the reflected player-derived
-        // camera origin has actually been installed. A standalone mirror
-        // render without the CAMERA spoof must keep legacy behavior.
-        boolean force=CameraBetterLightsCameraOrigin.isMirrorOriginActive()&&
-                "true".equalsIgnoreCase(System.getProperty(
+        // Source-created BetterLights casters are NOT in the editor's
+        // registry and must not be excluded from this path.
+        boolean loaded=net.minecraftforge.fml.common.Loader.isModLoaded(
+                "better_lights");
+        boolean nativeEnabled=!"false".equalsIgnoreCase(
+                System.getProperty(
+                    "bbs.editor.camera.mirrorBSLNativeLightRefresh",
+                    "true"));
+        boolean forceEnabled="true".equalsIgnoreCase(
+                System.getProperty(
                     "bbs.editor.camera.mirrorBSLForceNativeLightRefresh",
                     "true"));
+        boolean origin=CameraBetterLightsCameraOrigin.isMirrorOriginActive();
+        if(pid<=0||!loaded||!nativeEnabled)
+        {
+            reportLightRefreshGate(pid,pid<=0?"invalid-program":
+                    !loaded?"mod-not-loaded":"native-refresh-disabled",
+                    loaded,nativeEnabled,forceEnabled,origin,-1);
+            return;
+        }
+        boolean force=origin&&forceEnabled;
         int loc=GL20.glGetUniformLocation(pid,"lightCount");
-        if(loc<0)return;
+        if(loc<0)
+        {
+            // Sky/basic programs generally have no BetterLights struct.
+            // Report once so the user can distinguish this from disabled
+            // native refresh without flooding the log.
+            reportLightRefreshGate(pid,"uniform-absent",
+                    loaded,nativeEnabled,forceEnabled,origin,-1);
+            return;
+        }
         IntBuffer beforeBuffer=BufferUtils.createIntBuffer(16);
         GL20.glGetUniform(pid,loc,beforeBuffer);
         int before=beforeBuffer.get(0);
+        reportLightRefreshGate(pid,force?"forced-upload":
+                !origin?"missing-reflected-origin":
+                !forceEnabled?"force-flag-disabled":"legacy-upload",
+                loaded,nativeEnabled,forceEnabled,origin,before);
         // The previous log called any positive light count "populated"
         // even when previous==after==1. That was a false success.
         // A positive lightCount only proves registration, NOT that the
@@ -287,6 +332,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             // reflected frame. Repeating ProgramTerrain for the solid,
             // cutout and foliage layers should not rerun the costly
             // selector and alter its cached provider state again.
+            reportLightRefreshGate(pid,
+                    force?"already-refreshed-this-capture":
+                    "positive-light-count-skip",
+                    loaded,nativeEnabled,forceEnabled,origin,before);
             CameraMirrorBetterLightsSnapshot.capture(
                     pid,worldLightPositions,
                     force?null:mainCameraPosition());
@@ -402,8 +451,20 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             if(!nativeLightRefreshErrorLogged)
             {
                 nativeLightRefreshErrorLogged=true;
-                System.err.println(TAG+"BetterLights native light refresh "+
-                        "unavailable: "+problem);
+                Throwable cause=problem;
+                if(problem instanceof java.lang.reflect.InvocationTargetException&&
+                        ((java.lang.reflect.InvocationTargetException)problem)
+                                .getCause()!=null)
+                    cause=((java.lang.reflect.InvocationTargetException)problem)
+                            .getCause();
+                System.err.println(
+                        "[BBS Editor][Mirror][BetterLights][Refresh] "+
+                        "gate=native-hook-error pid="+pid+
+                        " error="+cause.getClass().getName()+
+                        " message="+cause.getMessage()+
+                        " reflectedOrigin="+origin+
+                        " force="+force);
+                cause.printStackTrace();
             }
         }
         finally
