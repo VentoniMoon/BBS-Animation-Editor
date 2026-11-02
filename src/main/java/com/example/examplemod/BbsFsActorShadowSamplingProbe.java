@@ -22,6 +22,8 @@ public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
     private static boolean bypass;
     private static int unshadowedDepthTexture;
     private static boolean warned;
+    private static boolean activeReported;
+    private static boolean unavailableReported;
     private final int oldActiveTexture;
     private final int[] previous = new int[2];
     private boolean active;
@@ -39,6 +41,8 @@ public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
     public static boolean toggle()
     {
         bypass=!bypass;
+        activeReported=false;
+        unavailableReported=false;
         System.out.println("[BBS Editor][Actor Shadow A/B] "+
                 (bypass?"Shadow samplers bypassed for actors ONLY":
                         "Original shadow samplers restored"));
@@ -49,8 +53,17 @@ public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
     {
         BbsFsActorShadowSamplingProbe probe=
                 new BbsFsActorShadowSamplingProbe();
-        if(!bypass || GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM)==0)
+        if(!bypass)return probe;
+        if(GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM)==0)
+        {
+            if(!unavailableReported)
+            {
+                unavailableReported=true;
+                System.out.println("[BBS Editor][Actor Shadow A/B] "+
+                        "No active shader program for this actor draw");
+            }
             return probe;
+        }
         try
         {
             if(unshadowedDepthTexture==0)
@@ -75,7 +88,22 @@ public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
                 GL11.glTexParameteri(GL11.GL_TEXTURE_2D,
                         GL14.GL_TEXTURE_COMPARE_FUNC,compareFunc);
             }
-            probe.active=true;
+            probe.active=probe.previous[0]!=0||probe.previous[1]!=0;
+            if(probe.active&&!activeReported)
+            {
+                activeReported=true;
+                System.out.println("[BBS Editor][Actor Shadow A/B] "+
+                        "Replaced shadow samplers in program "+
+                        GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM)+
+                        " (original units 4/5="+probe.previous[0]+
+                        "/"+probe.previous[1]+")");
+            }
+            else if(!probe.active&&!unavailableReported)
+            {
+                unavailableReported=true;
+                System.out.println("[BBS Editor][Actor Shadow A/B] "+
+                        "No textures bound on shadow sampler units 4/5");
+            }
         }
         catch(Throwable t)
         {
