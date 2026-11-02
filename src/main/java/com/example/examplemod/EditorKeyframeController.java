@@ -564,6 +564,7 @@ public class EditorKeyframeController
                 transform.getScaleX(), transform.getScaleY(), transform.getScaleZ());
         copy.setInterpolation(source.getInterpolation());
         copy.setEasing(source.getEasing());
+        copy.setEditorCurve(source.getEditorCurve());
         copy.setRX(source.getRX());
         copy.setRY(source.getRY());
         copy.setLX(source.getLX());
