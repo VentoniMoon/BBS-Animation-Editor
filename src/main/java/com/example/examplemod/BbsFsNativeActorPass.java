@@ -75,6 +75,7 @@ public final class BbsFsNativeActorPass
     {
         if(!Boolean.getBoolean(
                 "bbs.editor.camera.nativeActorSunShadows")||
+                !CameraShaderCurveTransformer.nativeShadowHookInstalled()||
                 rendering||earlyAttempted||mc==null||mc.world==null||
                 editor==null||viewport==null||mc.player==null||
                 viewport.getWidth()<=0||viewport.getHeight()<=0)
