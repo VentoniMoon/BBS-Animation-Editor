@@ -92,7 +92,10 @@ public final class BbsFsOptiFineEntityStage implements AutoCloseable
 
     public static void beforeEntity(Entity actor)
     {
-        if (!entityStageActive || shadersClass == null || actor == null) return;
+        initialize();
+        if ((!entityStageActive &&
+                !BbsFsNativeActorPass.isNativeEntityStage()) ||
+                shadersClass == null || actor == null) return;
         try
         {
             if (renderingWorld.getBoolean(null))
