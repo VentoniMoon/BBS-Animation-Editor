@@ -87,6 +87,9 @@ public final class BbsFsNativeActorSunShadowOverlay
         int old4=0,old5=0;
         boolean touched4=false,touched5=false;
         boolean pushed=false,projectionPushed=false,modelPushed=false;
+        Field nativeShadowPassFlag=null;
+        boolean nativeShadowPassChanged=false;
+        boolean previousShadowPass=false;
         try
         {
             Class<?> shaders=Class.forName("net.optifine.shaders.Shaders");
@@ -145,6 +148,16 @@ public final class BbsFsNativeActorSunShadowOverlay
             GL11.glLoadMatrix(buffer(projection));
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glLoadMatrix(buffer(view));
+            // RenderManager's normal entity render callbacks consult
+            // OptiFine's isShadowPass. Native renderShadowMap has just
+            // restored that flag on return; enable it *only* while our
+            // caster geometry is drawn, then put it back. Otherwise
+            // entity hooks can select a GBuffer shader instead of
+            // ProgramShadow, making depth coverage unreliable.
+            nativeShadowPassFlag=field(shaders,"isShadowPass");
+            previousShadowPass=nativeShadowPassFlag.getBoolean(null);
+            nativeShadowPassFlag.setBoolean(null,true);
+            nativeShadowPassChanged=true;
             // Native OptiFine shadowModelView consumes geometry relative
             // to the main view. The prepared actors use absolute world
             // coordinates and RenderManager.viewerPos=0.
@@ -203,6 +216,17 @@ public final class BbsFsNativeActorSunShadowOverlay
         }
         finally
         {
+            if(nativeShadowPassChanged)
+            {
+                try{nativeShadowPassFlag.setBoolean(null,
+                        previousShadowPass);}
+                catch(IllegalAccessException restore)
+                {
+                    System.err.println(TAG+
+                            "Failed to restore OptiFine shadow pass flag: "+
+                            restore);
+                }
+            }
             if(modelPushed)
             {
                 GL11.glMatrixMode(GL11.GL_MODELVIEW);GL11.glPopMatrix();
