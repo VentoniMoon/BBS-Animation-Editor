@@ -143,6 +143,12 @@ public final class CameraBetterLightsCameraOrigin
         return scope;
     }
 
+    /** True only while the editor is actively spoofing the reflected eye. */
+    public static boolean isMirrorOriginActive()
+    {
+        return active&&currentMirror!=null;
+    }
+
     private static boolean compositeOriginReported;
 
     /**
