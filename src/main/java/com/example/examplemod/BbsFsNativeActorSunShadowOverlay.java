@@ -67,6 +67,7 @@ public final class BbsFsNativeActorSunShadowOverlay
     private static boolean shadowRenderedThisFrame;
     private static boolean callbackReported;
     private static boolean overlayBypassLogged;
+    private static boolean shadowCameraLogged;
     /**
      * Depth written into the native OptiFine sun-shadow atlas must be biased
      * AWAY from the light: otherwise the same receiver samples nearly equal
@@ -275,10 +276,21 @@ public final class BbsFsNativeActorSunShadowOverlay
             previousShadowPass=nativeShadowPassFlag.getBoolean(null);
             nativeShadowPassFlag.setBoolean(null,true);
             nativeShadowPassChanged=true;
-            // Native OptiFine shadowModelView consumes geometry relative
-            // to the main view. The prepared actors use absolute world
-            // coordinates and RenderManager.viewerPos=0.
-            GL11.glTranslated(-mainEye.x,-mainEye.y,-mainEye.z);
+            // Native OptiFine shadowModelView expects camera-relative
+            // world coordinates. Use OptiFine's actual interpolated world
+            // camera origin (also used by shadow transforms/uniforms),
+            // not the editor's authored pose or its rounded position.
+            double sx=doubleField(shaders,"cameraPositionX",mainEye.x);
+            double sy=doubleField(shaders,"cameraPositionY",mainEye.y);
+            double sz=doubleField(shaders,"cameraPositionZ",mainEye.z);
+            GL11.glTranslated(-sx,-sy,-sz);
+            if(!shadowCameraLogged)
+            {
+                shadowCameraLogged=true;
+                System.out.println(TAG+"Caster origin OptiFine=("+
+                        sx+","+sy+","+sz+") editor=("+
+                        mainEye.x+","+mainEye.y+","+mainEye.z+")");
+            }
 
             int total=0;
             // Both shadowtex0 and shadowtex1 must receive opaque actor
@@ -410,6 +422,21 @@ public final class BbsFsNativeActorSunShadowOverlay
             throws Exception
     {
         return ((Number)field(clazz,name).get(null)).intValue();
+    }
+
+    private static double doubleField(Class<?> clazz,String name,double fallback)
+    {
+        try
+        {
+            Object v=field(clazz,name).get(null);
+            if(v instanceof Number)
+            {
+                double value=((Number)v).doubleValue();
+                if(Double.isFinite(value))return value;
+            }
+        }
+        catch(Exception ignored) { }
+        return fallback;
     }
 
     private static float[] matrix(Class<?> clazz,String...names)
