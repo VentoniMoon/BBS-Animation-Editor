@@ -89,7 +89,7 @@ public class BodyPartsEditorPanel
     // In the common 1.12.2 GUI scale the compact preset fits without
     // scrolling. Larger windows use more breathing room between fields.
     private static final int[] COMPACT_OFFSETS = {
-            12, 29, 46, 74, 91, 108, 136, 153, 170
+            10, 28, 46, 75, 93, 111, 140, 158, 176
     };
     private static final int[] MEDIUM_OFFSETS = {
             15, 34, 53, 89, 108, 127, 163, 182, 201
@@ -97,7 +97,7 @@ public class BodyPartsEditorPanel
     private static final int[] ROOMY_OFFSETS = {
             17, 39, 61, 105, 127, 149, 193, 215, 237
     };
-    private static final int[] COMPACT_LABELS = {0, 62, 124};
+    private static final int[] COMPACT_LABELS = {0, 65, 130};
     private static final int[] MEDIUM_LABELS = {0, 74, 148};
     private static final int[] ROOMY_LABELS = {0, 88, 176};
 
@@ -449,8 +449,8 @@ public class BodyPartsEditorPanel
     private int getGlobalMaxScroll()
     {
         int[] offsets = getGlobalControlOffsets();
-        // Last field has 16px height; include 5px breathing room.
-        int contentHeight = 3 + offsets[offsets.length - 1] + 16 + 5;
+        // Last field has 16px height; include a 3px bottom inset.
+        int contentHeight = 3 + offsets[offsets.length - 1] + 16 + 3;
         return Math.max(0, contentHeight - getGlobalViewportHeight());
     }
 
