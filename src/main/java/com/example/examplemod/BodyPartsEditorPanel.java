@@ -655,7 +655,8 @@ public class BodyPartsEditorPanel
             char typedChar,
             int keyCode)
     {
-        if (controller.getSelectedModel() != null && physicsView) return false;
+        if (controller.getSelectedModel() != null && physicsView)
+            return physicsPanel.keyTyped(typedChar, keyCode);
         if (controller.getSelectedModel() == null &&
                 activeGlobalControl != null)
         {
