@@ -262,9 +262,13 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 "false".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLNativeLightRefresh",
                         "true")))return;
-        boolean force="true".equalsIgnoreCase(System.getProperty(
-                "bbs.editor.camera.mirrorBSLForceNativeLightRefresh",
-                "true"));
+        // Force a native upload ONLY when the reflected player-derived
+        // camera origin has actually been installed. A standalone mirror
+        // render without the CAMERA spoof must keep legacy behavior.
+        boolean force=CameraBetterLightsCameraOrigin.isMirrorOriginActive()&&
+                "true".equalsIgnoreCase(System.getProperty(
+                    "bbs.editor.camera.mirrorBSLForceNativeLightRefresh",
+                    "true"));
         int loc=GL20.glGetUniformLocation(pid,"lightCount");
         if(loc<0)return;
         IntBuffer beforeBuffer=BufferUtils.createIntBuffer(16);
