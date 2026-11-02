@@ -1862,6 +1862,10 @@ public class BlockbusterActorPreviewRenderer
 
         this.bodyPartsPreviewRenderer.clear();
 
-        EmoticonsPreviewAnimationState.clear();
+        // This renderer may belong to a BACKGROUND actor removed when its
+        // owner becomes selected. EmoticonsPreviewAnimationState is shared
+        // by ALL preview actors; clearing it here used to erase the selected
+        // actor's pose and leave only part of a mixed scene visible.
+        // The scene's owner restores/clears that shared state at scene exit.
     }
 }
