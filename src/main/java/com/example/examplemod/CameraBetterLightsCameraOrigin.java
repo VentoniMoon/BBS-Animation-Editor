@@ -143,6 +143,35 @@ public final class CameraBetterLightsCameraOrigin
         return scope;
     }
 
+    private static boolean compositeOriginReported;
+
+    /**
+     * Verify that the player-derived BetterLights origin is still the
+     * reflected eye AFTER the world callback and BEFORE BSL composite.
+     * Only reports state, never changes the world or a GLSL uniform.
+     */
+    public static void verifyBeforeComposite(Minecraft mc,
+            PreviewCameraPose reflected)
+    {
+        if(compositeOriginReported||!active||mc==null||
+                mc.player!=savedPlayer||reflected==null||
+                !Loader.isModLoaded("better_lights"))return;
+        compositeOriginReported=true;
+        Entity player=mc.player;
+        boolean correct=currentMirror!=null&&
+                Math.abs(player.posX-reflected.x)<0.001D&&
+                Math.abs(player.posY-reflected.y)<0.001D&&
+                Math.abs(player.posZ-reflected.z)<0.001D&&
+                Math.abs(player.prevPosX-reflected.x)<0.001D&&
+                Math.abs(player.prevPosY-reflected.y)<0.001D&&
+                Math.abs(player.prevPosZ-reflected.z)<0.001D;
+        System.out.println("[BBS Editor][Mirror][BetterLights] "+
+                "BSL composite reflected origin held="+correct+
+                " player="+player.posX+","+player.posY+","+player.posZ+
+                " expected="+reflected.x+","+reflected.y+","+
+                reflected.z+" (main origin restored after capture)");
+    }
+
     public static void begin(Minecraft mc,Entity camera)
     {
         // A failed/aborted frame must never leave stale player fields.
