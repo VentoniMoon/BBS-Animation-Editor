@@ -155,6 +155,11 @@ public class BodyPartsTimelineController
         return themeColor(0.12F);
     }
 
+    private int trackAlternate()
+    {
+        return themeColor(0.09F);
+    }
+
     private int trackSelected()
     {
         return themeColor(0.22F);
@@ -253,7 +258,8 @@ public class BodyPartsTimelineController
         for(int row=populated;row<rowCapacity;row++)
         {
             int y=rowsTop+row*TRACK_HEIGHT;
-            Gui.drawRect(0,y,width,y+TRACK_HEIGHT,track());
+            Gui.drawRect(0,y,width,y+TRACK_HEIGHT,
+                    row % 2 == 0 ? track() : trackAlternate());
             Gui.drawRect(0,y+TRACK_HEIGHT-1,width,y+TRACK_HEIGHT,border());
             EditorTimelineSkin.gridRow(this.timeline,TIMELINE_START_X,
                     width,y,TRACK_HEIGHT);
@@ -333,7 +339,7 @@ public class BodyPartsTimelineController
             boolean selected = row.model == null
                     ? row.boneIndex == controller.getSelectedActorBone()
                     : row.model == controller.getSelectedAttachment();
-            drawTrackBackground(width, y, selected);
+            drawTrackBackground(width, y, i, selected);
             if (selected)
             {
                 Gui.drawRect(0, y, 3, y + TRACK_HEIGHT,
@@ -459,6 +465,7 @@ public class BodyPartsTimelineController
             drawTrackBackground(
                     width,
                     y,
+                    visibleIndex,
                     bone == selectedBone
             );
 
@@ -528,6 +535,7 @@ public class BodyPartsTimelineController
     private void drawTrackBackground(
             int width,
             int y,
+            int visibleIndex,
             boolean selected)
     {
         Gui.drawRect(
@@ -537,7 +545,7 @@ public class BodyPartsTimelineController
                 y + TRACK_HEIGHT,
                 selected
                         ? trackSelected()
-                        : track()
+                        : (visibleIndex % 2 == 0 ? track() : trackAlternate())
         );
 
         Gui.drawRect(
