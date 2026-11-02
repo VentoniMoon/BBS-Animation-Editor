@@ -82,6 +82,32 @@ public final class CameraMirrorBetterLightsSnapshot
         return false;
     }
 
+    /**
+     * BetterLights may populate enabled GPU light slots while the native
+     * OptiFine program still reports lightCount=0. Only trust a contiguous
+     * prefix of slots whose WORLD coordinates match editor-owned casters.
+     * No light is invented from a nonzero GPU color or an arbitrary slot.
+     */
+    public static int validatedPrefix(int pid,List<double[]> sources)
+    {
+        if(pid<=0||sources==null||sources.isEmpty())return 0;
+        int count=0;
+        for(int i=0;i<Math.min(16,sources.size());i++)
+        {
+            String base="lights["+i+"].";
+            int enabledLoc=GL20.glGetUniformLocation(pid,
+                    base+"isEnabled");
+            if(enabledLoc<0)break;
+            IntBuffer enabled=BufferUtils.createIntBuffer(16);
+            GL20.glGetUniform(pid,enabledLoc,enabled);
+            if(enabled.get(0)!=1)break;
+            if(!matches(readPosition(pid,base+"position"),sources))
+                break;
+            count++;
+        }
+        return count;
+    }
+
     private static boolean sourceStillValid(List<double[]> positions)
     {
         if(sourceCount<1||positions==null||positions.isEmpty())
@@ -103,7 +129,11 @@ public final class CameraMirrorBetterLightsSnapshot
             double[] mainCamera)
     {
         if(pid<=0||sources==null||sources.isEmpty())return;
-        int count=Math.min(16,readInt(pid,"lightCount"));
+        int nativeCount=Math.min(16,readInt(pid,"lightCount"));
+        int provenCount=validatedPrefix(pid,sources);
+        // Native count can be 0 or stale despite populated registered
+        // light uniforms in the private mirror's linked program.
+        int count=Math.max(nativeCount,provenCount);
         if(count<=0)return;
         List<double[]> verified=new ArrayList<double[]>();
         for(int i=0;i<count;i++)
@@ -168,7 +198,10 @@ public final class CameraMirrorBetterLightsSnapshot
             System.out.println("[BBS Editor][Mirror][BetterLights] "+
                     "Latched native populated light uniforms: "+
                     "count="+count+" fields="+next.size()+
-                    " sourceProgram="+pid+" (only verified casters)");
+                    " sourceProgram="+pid+
+                    " nativeCount="+nativeCount+
+                    " validatedPrefix="+provenCount+
+                    " (only verified casters)");
         }
     }
 
