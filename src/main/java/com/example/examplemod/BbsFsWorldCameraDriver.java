@@ -51,6 +51,21 @@ public final class BbsFsWorldCameraDriver
         return d.controlling&&d.viewport==requested?d.activePose:null;
     }
 
+    /**
+     * Only the actively controlled native world may receive recorded actors.
+     * Called from the OptiFine gbuffers_entities end hook, never GUI drawing.
+     */
+    static EditorSceneViewport nativeViewportForActorStage()
+    {
+        BbsFsWorldCameraDriver driver=INSTANCE;
+        Minecraft mc=Minecraft.getMinecraft();
+        return driver.controlling&&driver.viewport!=null&&driver.activePose!=null&&
+                driver.view!=null&&mc!=null&&mc.world!=null&&
+                mc.currentScreen instanceof AnimationEditorScreen&&
+                mc.getRenderViewEntity()==driver.view?
+                driver.viewport:null;
+    }
+
     private BbsFsWorldCameraDriver() {}
 
     public static void attach(EditorSceneViewport viewport)
