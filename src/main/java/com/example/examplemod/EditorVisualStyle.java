@@ -30,6 +30,29 @@ public final class EditorVisualStyle
         return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
+    /** Shared CLIPS / LIGHTS / MIRRORS navigation across CAMERA modes. */
+    public static void drawCameraTabs(net.minecraft.client.Minecraft mc,
+            int leftWidth,int selected)
+    {
+        final String[] labels={"CLIPS","LIGHTS","MIRRORS"};
+        Gui.drawRect(0,25,leftWidth,54,themedSurface(0.08F));
+        Gui.drawRect(0,53,leftWidth,54,themedSurface(0.28F));
+        for(int i=0;i<3;i++)
+        {
+            int x1=i*leftWidth/3;
+            int x2=(i+1)*leftWidth/3;
+            boolean active=i==selected;
+            Gui.drawRect(x1+1,27,x2-1,52,
+                    active?themedSurface(0.24F):themedSurface(0.10F));
+            if(active)
+                Gui.drawRect(x1+2,50,x2-2,53,getAccent());
+            int textW=mc.fontRenderer.getStringWidth(labels[i]);
+            mc.fontRenderer.drawString(labels[i],
+                    x1+(x2-x1-textW)/2,36,
+                    active?getAccentBright():TEXT_SECONDARY);
+        }
+    }
+
     /*
      * =========================================================
      * BACKGROUND
