@@ -24,6 +24,7 @@ public class BlockbusterActorPreviewRenderer
 {
     private EntityActor actor;
     private boolean preparedForMirror;
+    private static boolean nativeRasterStateReported;
     private float preparedPartialTicks;
 
     private String loadedMorphSignature = "";
@@ -1401,6 +1402,22 @@ public class BlockbusterActorPreviewRenderer
                 net.minecraft.client.renderer.OpenGlHelper.defaultTexUnit
         );
         GlStateManager.bindTexture(0);
+
+        // One diagnostics line helps distinguish a leaked raster mode from
+        // duplicate faces or shaderpack-side shading, without log spam.
+        if (!nativeRasterStateReported && BbsFsNativeActorPass.isRendering())
+        {
+            nativeRasterStateReported=true;
+            System.out.println("[BBS Editor][Actor Raster] "+
+                    "nativeSunShadows="+Boolean.getBoolean(
+                            "bbs.editor.camera.nativeActorSunShadows")+
+                    " polygonOffsetFill="+GL11.glIsEnabled(
+                            GL11.GL_POLYGON_OFFSET_FILL)+
+                    " polygonStipple="+GL11.glIsEnabled(
+                            GL11.GL_POLYGON_STIPPLE)+
+                    " alphaToCoverage="+GL11.glIsEnabled(
+                            org.lwjgl.opengl.GL13.GL_SAMPLE_ALPHA_TO_COVERAGE));
+        }
 
         // The editor actor is drawn at RenderWorldLast, after OptiFine's
         // native shadow and transparency passes. The visible GBuffer must
