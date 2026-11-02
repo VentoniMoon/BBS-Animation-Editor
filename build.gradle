@@ -89,6 +89,12 @@ minecraft {
                     System.getProperty(
                             'bbs.editor.camera.mirrorBSLNativeLightRefresh',
                             'true')
+            // Experimental late actor shadows in the MAIN native OptiFine
+            // shadow depth atlas; disabled until user visual validation.
+            property 'bbs.editor.camera.nativeActorSunShadows',
+                    System.getProperty(
+                            'bbs.editor.camera.nativeActorSunShadows',
+                            'false')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
