@@ -501,11 +501,10 @@ public class BodyPartsEditorPanel
 
         activeGlobalControl = control;
 
-        return control.mouseClicked(
-                mouseX,
-                mouseY,
-                mouseButton
-        );
+        boolean handled = control.mouseClicked(mouseX, mouseY, mouseButton);
+        if (handled && control.isStepperHit(mouseX, mouseY))
+            writeGlobalTransform(controller.getSelectedAttachment().getGlobalTransform());
+        return handled;
     }
 
     private void mouseDraggedGlobalTransform(
@@ -667,7 +666,8 @@ public class BodyPartsEditorPanel
                     );
 
             if (handled &&
-                    !activeGlobalControl.isEditing() &&
+                    (!activeGlobalControl.isEditing() || keyCode == org.lwjgl.input.Keyboard.KEY_UP
+                        || keyCode == org.lwjgl.input.Keyboard.KEY_DOWN) &&
                     controller.getSelectedAttachment() != null)
             {
                 writeGlobalTransform(
