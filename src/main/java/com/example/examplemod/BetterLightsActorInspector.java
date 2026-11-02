@@ -71,6 +71,7 @@ public final class BetterLightsActorInspector
     private int x,top,bottom,scroll;
     private GuiTextField input;
     private Entry editing;
+    private Entry focusedNumeric;
     private int inputY;
     private int previousFrame=-1;
     /**
@@ -574,6 +575,7 @@ public final class BetterLightsActorInspector
                 scroll=0;
                 picking=null;
                 sliding=null;
+                focusedNumeric=null;
                 return true;
             }
         }
@@ -716,6 +718,7 @@ public final class BetterLightsActorInspector
                 &&my>=cy&&my<cy+18 &&
                 ((mx>=x+103&&mx<x+118)||(mx>=x+160&&mx<x+175)))
         {
+            focusedNumeric=target;
             nudgeNumber(screen,target,mx<x+118?-1:1,false);
             return true;
         }
@@ -732,6 +735,7 @@ public final class BetterLightsActorInspector
             }
         }
         editing=target;
+        focusedNumeric=target.value.getValue() instanceof Number?target:null;
         input=new GuiTextField(17431,Minecraft.getMinecraft().fontRenderer,
                 x+14,cy+18,155,16);
         input.setMaxStringLength(80);
@@ -767,6 +771,14 @@ public final class BetterLightsActorInspector
     public boolean keyTyped(AnimationEditorScreen screen,
             char c,int code)
     {
+        if((editing==null||input==null)&&
+                (code==Keyboard.KEY_UP||code==Keyboard.KEY_DOWN)&&
+                focusedNumeric!=null&&entries.contains(focusedNumeric))
+        {
+            nudgeNumber(screen,focusedNumeric,
+                    code==Keyboard.KEY_UP?1:-1,true);
+            return true;
+        }
         if(editing==null||input==null)return false;
         if((code==Keyboard.KEY_UP||code==Keyboard.KEY_DOWN)&&
                 editing.value.getValue() instanceof Number)
