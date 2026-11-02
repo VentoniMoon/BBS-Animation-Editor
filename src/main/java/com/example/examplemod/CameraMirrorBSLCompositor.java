@@ -257,6 +257,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         // those native casters are not in our editor-owned registry.
         // Do not gate the provider refresh on worldLightPositions.
         if(pid<=0||
+                !net.minecraftforge.fml.common.Loader.isModLoaded(
+                        "better_lights")||
                 "false".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLNativeLightRefresh",
                         "true")))return;
@@ -274,10 +276,16 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         // native provider recomputed camera-relative fields for this
         // reflected render. Refresh even populated programs by default
         // while keeping an explicit rollback switch.
-        if(before>0&&!force)
+        if((before>0&&!force)||
+                (force&&nativeLightStates.containsKey(pid)))
         {
+            // Each native program needs at most one provider upload per
+            // reflected frame. Repeating ProgramTerrain for the solid,
+            // cutout and foliage layers should not rerun the costly
+            // selector and alter its cached provider state again.
             CameraMirrorBetterLightsSnapshot.capture(
-                    pid,worldLightPositions,mainCameraPosition());
+                    pid,worldLightPositions,
+                    force?null:mainCameraPosition());
             CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
             return;
         }
@@ -326,7 +334,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 // Even lightCount=0 may contain verified populated
                 // BetterLights struct slots in the native GL program.
                 CameraMirrorBetterLightsSnapshot.capture(
-                        pid,worldLightPositions,mainCameraPosition());
+                        pid,worldLightPositions,
+                        force?null:mainCameraPosition());
                 CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
                 if(force&&!forcedLightRefreshLogged)
                 {
@@ -2276,14 +2285,31 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         try
         {
             for(int i=restored.size()-1;i>=0;i--)
-                restored.get(i).restore();
+            {
+                try{restored.get(i).restore();}
+                catch(Throwable t)
+                {
+                    if(failure==null)failure=t;
+                    else failure.addSuppressed(t);
+                }
+            }
             // Per-source state must win over any later camera-program
-            // backups. Only native programs touched by the mirror's
-            // BetterLights provider hook are restored.
+            // backups. Even if a legacy GL backup fails we still attempt
+            // to restore every originally shared BetterLights struct.
             for(BetterLightsProgramState state:nativeLightStates.values())
-                state.restore();
+            {
+                try{state.restore();}
+                catch(Throwable t)
+                {
+                    if(failure==null)failure=t;
+                    else failure.addSuppressed(t);
+                }
+            }
         }
-        catch(Throwable t){failure=t;}
+        catch(Throwable t)
+        {
+            if(failure==null)failure=t;else failure.addSuppressed(t);
+        }
         finally
         {
             // Perform OpenGL restoration even if reflection of one
