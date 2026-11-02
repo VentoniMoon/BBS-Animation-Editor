@@ -92,8 +92,7 @@ public final class BbsFsNativeActorPass
         // layouts. Prepare whenever the explicit user flag is enabled:
         // the normal film renderer replays that pose even if the native
         // shadow hook never appears, without an extra Jolt tick.
-        if(!Boolean.getBoolean(
-                "bbs.editor.camera.nativeActorSunShadows")||
+        if(!BbsFsNativeActorSunShadowOverlay.isEnabled()||
                 rendering||earlyAttempted||mc==null||mc.world==null||
                 editor==null||viewport==null||mc.player==null||
                 viewport.getWidth()<=0||viewport.getHeight()<=0)
