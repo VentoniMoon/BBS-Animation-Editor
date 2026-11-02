@@ -23,7 +23,14 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
     private static final String RUNTIME="com/example/examplemod/CameraShaderCurves";
     private static final String SUN_SHADOW=
             "com/example/examplemod/BbsFsNativeActorSunShadowOverlay";
+    private static final String NATIVE_ACTORS=
+            "com/example/examplemod/BbsFsNativeActorPass";
     private static volatile boolean nativeShadowHookInstalled;
+    private static volatile boolean nativeEntityHookInstalled;
+    public static boolean nativeEntityHookInstalled()
+    {
+        return nativeEntityHookInstalled;
+    }
     private static volatile String shadowHookDiagnostic="not-transformed";
     public static String nativeShadowHookDiagnostic()
     {
@@ -50,17 +57,19 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
                 System.getProperty(
                         "bbs.editor.camera.nativeSunShadowTransformer",
                         "true"));
+        final boolean actorEntityEnabled=!"false".equalsIgnoreCase(
+                System.getProperty("bbs.editor.preview.nativeEntityStage","true"));
         final boolean isShaders=SHADERS.equals(name)||
                 SHADERS.equals(transformedName);
         final boolean isShadersRender=SHADERS_RENDER.equals(name)||
                 SHADERS_RENDER.equals(transformedName);
         if(!isShaders&&!isShadersRender)return bytes;
-        if(!curvesEnabled&&!shadowsEnabled)return bytes;
+        if(!curvesEnabled&&!shadowsEnabled&&!actorEntityEnabled)return bytes;
         try
         {
             ClassNode node=new ClassNode(Opcodes.ASM5);
             new ClassReader(bytes).accept(node,0);
-            int readerHooks=0,programHooks=0,shadowHooks=0;
+            int readerHooks=0,programHooks=0,shadowHooks=0,actorHooks=0;
             // Prefer instrumenting the actual shadow renderer, not
             // assuming which method in Shaders calls it. The method is
             // invoked before ordinary GBuffer terrain in OptiFine G5.
@@ -181,7 +190,7 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
                         "waiting for ShadersRender transform";
             if(shadowHooks>0)
                 nativeShadowHookInstalled=true;
-            if(!curveValid&&shadowHooks<1)return bytes;
+            if(!curveValid&&shadowHooks<1&&!actorEntityEnabled)return bytes;
 
             // If curves aren't recognized, strip any partial curve
             // insertions by re-reading the original bytecode and apply
@@ -207,13 +216,39 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
                     }
                 }
             }
+            // A conservative exact-method hook, placed at the ENTRY to
+            // endEntities while gbuffers_entities and its draw buffers are
+            // still active. Never call the hook inside Shaders.useProgram,
+            // where late composite programs would corrupt the GBuffer.
+            if(actorEntityEnabled)
+            {
+                for(Object obj:node.methods)
+                {
+                    MethodNode method=(MethodNode)obj;
+                    if("endEntities".equals(method.name) &&
+                            "()V".equals(method.desc))
+                    {
+                        method.instructions.insert(new MethodInsnNode(
+                                Opcodes.INVOKESTATIC,NATIVE_ACTORS,
+                                "beforeOptiFineEndEntities","()V",false));
+                        actorHooks++;
+                    }
+                }
+                if(actorHooks>0)
+                {
+                    nativeEntityHookInstalled=true;
+                    System.out.println("[BBS Editor][FS Preview] "+
+                            "OptiFine native entity GBuffer hook installed.");
+                }
+            }
+            if(!curveValid&&shadowHooks<1&&actorHooks<1)return bytes;
             ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);
             node.accept(writer);
             installed=curveValid;
             System.out.println("[BBS Editor][Curve] Native OptiFine "+
                     "shader source/program hooks installed ("+readerHooks+
                     "/"+programHooks+") nativeSunShadowHook="+shadowHooks+
-                    " curves="+curveValid);
+                    " curves="+curveValid+" entityStageHooks="+actorHooks);
             return writer.toByteArray();
         }
         catch(Throwable incompatible)
