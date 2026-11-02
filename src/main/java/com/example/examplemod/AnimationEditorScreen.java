@@ -514,15 +514,17 @@ public class AnimationEditorScreen extends GuiScreen
                         @Override
                         public void run()
                         {
-                            if (editorModeController.getMode()
-                                    != EditorModeController.EditorMode.POSE)
-                            {
+                            EditorModeController.EditorMode mode=
+                                    editorModeController.getMode();
+                            if(mode!=EditorModeController.EditorMode.POSE&&
+                                    mode!=EditorModeController.EditorMode.BODY_PARTS)
                                 return;
-                            }
 
-                            AnimationKeyframe keyframe =
-                                    keyframeController
-                                            .getSelectedKeyframe();
+                            AnimationKeyframe keyframe=
+                                    mode==EditorModeController.EditorMode.BODY_PARTS?
+                                    bodyPartsController.getKeyframeController()
+                                            .getSelectedKeyframe():
+                                    keyframeController.getSelectedKeyframe();
 
                             if (keyframe != null)
                             {
@@ -3059,13 +3061,17 @@ public class AnimationEditorScreen extends GuiScreen
                 COLOR_BORDER
         );
 
-        AnimationKeyframe selectedKeyframe =
-                this.keyframeController
-                        .getSelectedKeyframe();
+        EditorModeController.EditorMode mode=
+                this.editorModeController.getMode();
+        AnimationKeyframe selectedKeyframe=
+                mode==EditorModeController.EditorMode.BODY_PARTS?
+                this.bodyPartsController.getKeyframeController()
+                        .getSelectedKeyframe():
+                this.keyframeController.getSelectedKeyframe();
 
-        if (selectedKeyframe != null
-                && this.editorModeController.getMode()
-                == EditorModeController.EditorMode.POSE)
+        if (selectedKeyframe != null &&
+                (mode==EditorModeController.EditorMode.POSE||
+                 mode==EditorModeController.EditorMode.BODY_PARTS))
         {
             this.interpolationPanel
                     .setSelectedInterpolation(
