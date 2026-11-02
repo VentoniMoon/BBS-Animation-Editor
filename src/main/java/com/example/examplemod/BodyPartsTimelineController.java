@@ -313,16 +313,28 @@ public class BodyPartsTimelineController
                 0xFFE0E3E5
         );
 
-        if (modelView)
-        {
-            mc.fontRenderer.drawString(
-                    "← BODY PARTS",
-                    width - 76,
-                    top + 11,
-                    EditorThemeManager.get().getAccentBright()
-            );
-        }
+        if (modelView) drawModelBackButton(mc, width, top);
 
+    }
+
+    /** Redraw above WAV waveform: the waveform previously covered this control. */
+    public void drawModelBackButtonOverlay(Minecraft mc, int width, int height)
+    {
+        if (controller.getSelectedModel() != null)
+            drawModelBackButton(mc, width, height - getTimelineHeight());
+    }
+
+    private void drawModelBackButton(Minecraft mc, int width, int top)
+    {
+        int left = width - 211;
+        int right = width - 95;
+        int y = top + 3;
+        Gui.drawRect(left, y, right, y + 19, 0xFF253440);
+        Gui.drawRect(left, y, left + 3, y + 19,
+                EditorThemeManager.get().getAccent());
+        Gui.drawRect(left, y + 18, right, y + 19, border());
+        mc.fontRenderer.drawString("< BACK TO PARTS", left + 9, y + 6,
+                EditorThemeManager.get().getAccentBright());
     }
 
     private void drawActorTimeline(Minecraft mc, int width, int height, int top, int sceneLength)
@@ -875,9 +887,9 @@ public class BodyPartsTimelineController
         BodyPartModelData model =
                 controller.getSelectedModel();
 
-        if (model != null &&
-                mouseY < top + HEADER_HEIGHT &&
-                mouseX > width - 120)
+        if (model != null && mouseButton == 0 &&
+                mouseY >= top + 3 && mouseY < top + 22 &&
+                mouseX >= width - 211 && mouseX < width - 95)
         {
             controller.backToModelTracks();
             boneScroll = 0;
