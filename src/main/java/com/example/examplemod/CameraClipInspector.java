@@ -289,8 +289,37 @@ public final class CameraClipInspector
                 text(checked?"On":"Off",x+5,at+4,0xFFD5E3E9,w-27);
                 rect(x+w-17,at+2,x+w-5,at+14,checked?accent:0xFF58626A);
             }
-            else text(compact(value),x+5,at+4,0xFFE6F0F3,w-10);
-            hits.add(new Hit(key,-1,x,at,w,16,value,onKey,toggle));
+            else
+            {
+                Double numeric=null;
+                try{numeric=Double.valueOf(value);}
+                catch(NumberFormatException ignored){}
+                if(numeric!=null&&Double.isFinite(numeric))
+                {
+                    // Keep the actual value editable in the central
+                    // column, and add exact Blockbuster-style fine steps.
+                    int arrow=16;
+                    rect(x+1,at+1,x+arrow,at+15,0xFF28313A);
+                    rect(x+w-arrow,at+1,x+w-1,at+15,0xFF28313A);
+                    text("<",x+5,at+4,0xFF6BC9F4,9);
+                    text(">",x+w-12,at+4,0xFF6BC9F4,9);
+                    text(compact(value),x+arrow+4,at+4,
+                            0xFFE6F0F3,Math.max(1,w-2*arrow-7));
+                    hits.add(new Hit(key,-1,x+arrow,at,w-2*arrow,16,
+                            value,onKey,false));
+                    hits.add(new Hit("@nudge:-:"+key,-1,x,at,arrow,
+                            16,value,onKey,false));
+                    hits.add(new Hit("@nudge:+:"+key,-1,x+w-arrow,at,arrow,
+                            16,value,onKey,false));
+                }
+                else
+                {
+                    text(compact(value),x+5,at+4,0xFFE6F0F3,w-10);
+                    hits.add(new Hit(key,-1,x,at,w,16,value,onKey,false));
+                }
+            }
+            if(toggle)
+                hits.add(new Hit(key,-1,x,at,w,16,value,onKey,true));
         }
         y+=18;
     }
