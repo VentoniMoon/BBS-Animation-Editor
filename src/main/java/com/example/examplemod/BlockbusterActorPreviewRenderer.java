@@ -1587,6 +1587,20 @@ public class BlockbusterActorPreviewRenderer
     public void renderPreparedMirror(Minecraft mc,PreviewCameraPose view,
             int targetWidth,int targetHeight)
     {
+        renderPreparedCamera(mc,view,targetWidth,targetHeight,true);
+    }
+
+    /** Read-only replay into the native main film GBuffer, with no
+     * mirror plane clipping and no timeline/physics re-evaluation. */
+    public void renderPreparedNative(Minecraft mc,PreviewCameraPose view,
+            int targetWidth,int targetHeight)
+    {
+        renderPreparedCamera(mc,view,targetWidth,targetHeight,false);
+    }
+
+    private void renderPreparedCamera(Minecraft mc,PreviewCameraPose view,
+            int targetWidth,int targetHeight,boolean mirror)
+    {
         if(!preparedForMirror||actor==null||actor.world!=mc.world||
                 actor.isDead||actor.getMorph()==null||view==null||
                 targetWidth<=0||targetHeight<=0)return;
@@ -1597,13 +1611,22 @@ public class BlockbusterActorPreviewRenderer
             rm.viewerPosX=rm.viewerPosY=rm.viewerPosZ=0D;
             GL11.glMatrixMode(GL11.GL_PROJECTION);
             GL11.glLoadIdentity();
-            GLU.gluPerspective(view.fov,(float)targetWidth/targetHeight,
+            if(!mirror&&BbsFsWorldProjection.isCaptured())
+            {
+                if(!BbsFsWorldProjection.loadForNativeWorld())
+                    GLU.gluPerspective(view.fov,
+                            (float)targetWidth/targetHeight,
+                            Math.max(0.02F,view.nearPlane),
+                            Math.max(64F,view.farPlane));
+            }
+            else GLU.gluPerspective(view.fov,
+                    (float)targetWidth/targetHeight,
                     Math.max(0.02F,view.nearPlane),
                     Math.max(64F,view.farPlane));
-            // This renderer resets the projection separately from terrain.
-            // Retain exactly the same mirror-side oblique near clip so
-            // prepared actors behind the mirror cannot leak into BSL.
-            CameraSceneMirrorRenderer.installShaderObliqueProjection(view);
+            // The oblique near clip is valid ONLY for the private mirror.
+            // Never clip the visible main world or its actor silhouettes.
+            if(mirror)
+                CameraSceneMirrorRenderer.installShaderObliqueProjection(view);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
             GL11.glLoadIdentity();
             GL11.glRotatef(-view.roll,0F,0F,1F);
@@ -1632,7 +1655,10 @@ public class BlockbusterActorPreviewRenderer
             {
                 GlStateManager.enableLighting();
                 RenderHelper.enableStandardItemLighting();
-                CameraMirrorOptiFineBackend.stage("ProgramEntities");
+                if(mirror)
+                    CameraMirrorOptiFineBackend.stage("ProgramEntities");
+                else
+                    BbsFsOptiFineEntityStage.beforeEntity(actor);
                 rm.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
                         actor.rotationYaw,preparedPartialTicks,true);
             }
