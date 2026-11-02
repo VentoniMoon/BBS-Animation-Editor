@@ -1014,39 +1014,16 @@ public class CharacterEditorPanel
                         : COLOR_PANEL_LIGHT
         );
 
-        if (opened)
-        {
-            drawRect(
-                    this.x + 5,
-                    y,
-                    this.x + 7,
-                    y + 24,
-                    getAccentColor()
-            );
-        }
-
-        String arrow =
-                opened
-                        ? "▼"
-                        : "▶";
-
-        mc.fontRenderer.drawString(
-                arrow,
-                this.x + 10,
-                y + 8,
-                opened
-                        ? getAccentBrightColor()
-                        : COLOR_TEXT_SECONDARY
-        );
-
-        mc.fontRenderer.drawString(
-                title,
-                this.x + 24,
-                y + 8,
-                opened
-                        ? COLOR_TEXT
-                        : COLOR_TEXT_SECONDARY
-        );
+        // Match CAMERA: an accent rail on every inspector section,
+        // with a compact right-aligned fold indicator.
+        drawRect(this.x + 5, y, this.x + 8, y + 24, getAccentColor());
+        drawRect(this.x + 8, y + 23, this.x + this.width - 5,
+                y + 24, COLOR_BORDER);
+        mc.fontRenderer.drawString(title, this.x + 15, y + 8,
+                opened ? COLOR_TEXT : COLOR_TEXT_SECONDARY);
+        mc.fontRenderer.drawString(opened ? "v" : ">",
+                this.x + this.width - 20, y + 8,
+                opened ? getAccentBrightColor() : COLOR_TEXT_SECONDARY);
 
         return y + 24;
     }
