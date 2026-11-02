@@ -209,7 +209,8 @@ public final class CameraOutputPopup
         font.drawString("Width",x+12,y+64,MUTED);
         font.drawString("Height",x+12,y+94,MUTED);
         customX=x+77;customY=y+57;
-        int fieldW=Math.max(46,width-91);
+        // Leave room for both numeric arrows inside the popup bounds.
+        int fieldW=Math.max(46,width-110);
         if(widthInput==null||heightInput==null)
         {
             widthInput=new GuiTextField(35,font,customX,customY,fieldW,19);
