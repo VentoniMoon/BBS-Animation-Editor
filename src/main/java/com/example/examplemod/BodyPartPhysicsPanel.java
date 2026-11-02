@@ -13,6 +13,9 @@ public final class BodyPartPhysicsPanel
     private BodyPartCollisionSettings colliders;
     private boolean colliderTab;
     private int chainBones;
+    private int activeNumericProperty = -1;
+    private static final float CLICK_STEP = 0.0625F;
+    private static final float KEY_STEP = 0.03125F;
 
     public void setTarget(int x, int y, String boneName,
             BodyPartPhysicsSettings settings, BodyPartCollisionSettings colliders,
@@ -20,7 +23,9 @@ public final class BodyPartPhysicsPanel
     {
         this.x = x;
         this.y = y;
-        this.boneName = boneName == null ? "" : boneName;
+        String nextName = boneName == null ? "" : boneName;
+        if (!this.boneName.equals(nextName)) activeNumericProperty = -1;
+        this.boneName = nextName;
         this.settings = settings;
         this.colliders = colliders;
         this.chainBones = chainBones;
@@ -37,13 +42,13 @@ public final class BodyPartPhysicsPanel
     {
         if(this.settings==null)return;
         int accent=EditorThemeManager.get().getAccent();
-        Gui.drawRect(x,y,x+175,y+235,0xFF252629);
-        Gui.drawRect(x,y,x+175,y+22,0xFF303134);
+        Gui.drawRect(x,y,x+175,y+235,0xFF19232C);
+        Gui.drawRect(x,y,x+175,y+22,0xFF27343F);
         Gui.drawRect(x,y,x+3,y+22,accent);
         Gui.drawRect(x+5,y+2,x+87,y+21,
-                colliderTab?0xFF303134:0xFF484C50);
+                colliderTab?0xFF25313D:0xFF34536A);
         Gui.drawRect(x+88,y+2,x+174,y+21,
-                colliderTab?0xFF484C50:0xFF303134);
+                colliderTab?0xFF34536A:0xFF25313D);
         mc.fontRenderer.drawString("CHAINS",x+13,y+7,0xFFE0E0E0);
         mc.fontRenderer.drawString("COLLIDERS",x+96,y+7,0xFFE0E0E0);
         mc.fontRenderer.drawString(trim(mc,boneName,155),x+9,y+31,0xFFAAAAAA);
@@ -80,10 +85,13 @@ public final class BodyPartPhysicsPanel
     private void drawValue(Minecraft mc, String title, float value, int lineY)
     {
         mc.fontRenderer.drawString(title, x + 9, y + lineY, 0xFFE0E0E0);
-        String number = String.format(java.util.Locale.ROOT, "%.2f", value);
-        mc.fontRenderer.drawString(number, x + 101, y + lineY, 0xFFCCCCCC);
-        drawButton(mc, "-", x + 136, y + lineY - 4);
-        drawButton(mc, "+", x + 155, y + lineY - 4);
+        String number = String.format(java.util.Locale.ROOT, "%.4f", value);
+        int id = colliderTab ? 3 : lineY == 77 ? 0 : lineY == 108 ? 1 : 2;
+        Gui.drawRect(x + 87, y + lineY - 4, x + 174, y + lineY + 13,
+                id == activeNumericProperty ? 0xFF34536A : 0xFF26343E);
+        mc.fontRenderer.drawString(number, x + 110, y + lineY, 0xFFE6F0F3);
+        drawButton(mc, "<", x + 89, y + lineY - 4);
+        drawButton(mc, ">", x + 155, y + lineY - 4);
     }
 
     private void drawToggle(Minecraft mc, String label, boolean selected, int lineY)
@@ -97,7 +105,7 @@ public final class BodyPartPhysicsPanel
 
     private void drawButton(Minecraft mc, String text, int left, int top)
     {
-        Gui.drawRect(left, top, left + 17, top + 17, 0xFF44474B);
+        Gui.drawRect(left, top, left + 17, top + 17, 0xFF34536A);
         mc.fontRenderer.drawString(text, left + 6, top + 4, 0xFFFFFFFF);
     }
 
@@ -115,6 +123,7 @@ public final class BodyPartPhysicsPanel
         if(row>=2 && row<=22)
         {
             colliderTab=mouseX>=x+88;
+            activeNumericProperty = -1;
             return true;
         }
         if(row>=208 && row<=226 && mouseX>=x+140 &&
@@ -137,8 +146,9 @@ public final class BodyPartPhysicsPanel
             }
             else if(row>=104 && row<=128)
             {
-                float delta=mouseX>=x+136 && mouseX<x+153?-0.05F:
-                        mouseX>=x+155 && mouseX<x+172?0.05F:0F;
+                activeNumericProperty = 3;
+                float delta=mouseX>=x+89 && mouseX<x+106?-CLICK_STEP:
+                        mouseX>=x+155 && mouseX<x+172?CLICK_STEP:0F;
                 if(delta!=0F)
                     colliders.setScale(Math.min(2F,Math.max(0.25F,
                             colliders.getScale()+delta)));
@@ -157,12 +167,32 @@ public final class BodyPartPhysicsPanel
 
     private void change(int mouseX, int property)
     {
-        float delta;
-        if (mouseX >= x + 136 && mouseX < x + 153) delta = -0.05F;
-        else if (mouseX >= x + 155 && mouseX < x + 172) delta = 0.05F;
-        else return;
+        activeNumericProperty = property;
+        if (mouseX >= x + 89 && mouseX < x + 106) nudge(property, -CLICK_STEP);
+        else if (mouseX >= x + 155 && mouseX < x + 172) nudge(property, CLICK_STEP);
+    }
+
+    public boolean keyTyped(char typedChar, int keyCode)
+    {
+        if (activeNumericProperty < 0 ||
+                (keyCode != org.lwjgl.input.Keyboard.KEY_UP &&
+                 keyCode != org.lwjgl.input.Keyboard.KEY_DOWN)) return false;
+        nudge(activeNumericProperty,
+                keyCode == org.lwjgl.input.Keyboard.KEY_UP ? KEY_STEP : -KEY_STEP);
+        return true;
+    }
+
+    private void nudge(int property, float delta)
+    {
+        if (property == 3)
+        {
+            if (colliders != null) colliders.setScale(Math.min(2F,
+                    Math.max(0.25F, colliders.getScale() + delta)));
+            return;
+        }
+        if (settings == null) return;
         if (property == 0) settings.setGravity(settings.getGravity() + delta);
         else if (property == 1) settings.setStiffness(settings.getStiffness() + delta);
-        else settings.setDamping(settings.getDamping() + delta);
+        else if (property == 2) settings.setDamping(settings.getDamping() + delta);
     }
 }
