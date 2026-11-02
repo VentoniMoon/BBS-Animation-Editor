@@ -29,6 +29,10 @@ public class AnimationValueControl
     private long lastClickTime = 0L;
 
     private static final long DOUBLE_CLICK_TIME = 300L;
+    // Exact fractions: two clicks = 0.125, sixteen clicks = 1.0.
+    private static final float CLICK_STEP = 1.0F / 16.0F;
+    private static final float KEY_STEP = 1.0F / 32.0F;
+    private static final int ARROW_WIDTH = 16;
 
     /*
      * =========================================================
@@ -158,6 +162,16 @@ public class AnimationValueControl
             return false;
         }
 
+        // Arrows are independent from value drag and text editing.
+        if (isStepperHit(mouseX, mouseY))
+        {
+            if (this.editing) applyInput();
+            this.dragging = false;
+            this.lastClickTime = 0L;
+            changeBy(mouseX < this.x + 26 + ARROW_WIDTH ? -CLICK_STEP : CLICK_STEP);
+            return true;
+        }
+
         long currentTime =
                 System.currentTimeMillis();
 
@@ -269,6 +283,16 @@ public class AnimationValueControl
         {
             cancelEditing();
 
+            return true;
+        }
+
+        if (keyCode == Keyboard.KEY_UP || keyCode == Keyboard.KEY_DOWN)
+        {
+            try { this.value = Float.parseFloat(this.inputText.replace(',', '.')); }
+            catch (NumberFormatException ignored) { }
+            changeBy(keyCode == Keyboard.KEY_UP ? KEY_STEP : -KEY_STEP);
+            this.inputText = format(this.value);
+            this.selectAll = true;
             return true;
         }
 
@@ -463,6 +487,20 @@ public class AnimationValueControl
 
         this.inputText +=
                 character;
+    }
+
+    private void changeBy(float amount)
+    {
+        float next = this.value + amount;
+        if (!Float.isNaN(next) && !Float.isInfinite(next))
+            this.value = Math.round(next * 100000.0F) / 100000.0F;
+    }
+
+    public boolean isStepperHit(int mouseX, int mouseY)
+    {
+        return contains(mouseX, mouseY) &&
+                ((mouseX >= x + 26 && mouseX < x + 26 + ARROW_WIDTH) ||
+                 mouseX >= x + width - ARROW_WIDTH);
     }
 
     private void startEditing()
@@ -690,6 +728,16 @@ public class AnimationValueControl
                 0xFF45474A
         );
 
+        int leftArrowX = this.x + 26;
+        int rightArrowX = this.x + this.width - ARROW_WIDTH;
+        int arrowColor = getAccent();
+        net.minecraft.client.gui.Gui.drawRect(leftArrowX, this.y + 1,
+                leftArrowX + ARROW_WIDTH, this.y + this.height - 1, LABEL_BACKGROUND);
+        net.minecraft.client.gui.Gui.drawRect(rightArrowX, this.y + 1,
+                rightArrowX + ARROW_WIDTH - 1, this.y + this.height - 1, LABEL_BACKGROUND);
+        font.drawString("<", leftArrowX + 5, this.y + 4, arrowColor);
+        font.drawString(">", rightArrowX + 5, this.y + 4, arrowColor);
+
         /*
          * =====================================================
          * LABEL
@@ -734,9 +782,7 @@ public class AnimationValueControl
 
         font.drawString(
                 text,
-                this.x +
-                        this.width -
-                        valueWidth - 6,
+                Math.max(this.x + 44, this.x + this.width - ARROW_WIDTH - valueWidth - 5),
                 this.y + 4,
                 this.editing
                         ? ACTIVE_TEXT
@@ -782,7 +828,7 @@ public class AnimationValueControl
     {
         return String.format(
                 java.util.Locale.US,
-                "%.2f",
+                "%.5f",
                 value
         );
     }
