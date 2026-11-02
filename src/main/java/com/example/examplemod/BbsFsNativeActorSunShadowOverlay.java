@@ -40,6 +40,31 @@ public final class BbsFsNativeActorSunShadowOverlay
     private static boolean shadowRenderedThisFrame;
     private static boolean callbackReported;
     private static boolean overlayBypassLogged;
+    /**
+     * Depth written into the native OptiFine sun-shadow atlas must be biased
+     * AWAY from the light: otherwise the same receiver samples nearly equal
+     * depths and shows diagonal self-shadow bands (shadow acne). This bias
+     * must never apply to the visible actor GBuffer render.
+     */
+    private static final float SHADOW_SLOPE_BIAS = floatProperty(
+            "bbs.editor.camera.nativeActorSunShadows.biasSlope", 1.1F, 0F, 8F);
+    private static final float SHADOW_UNIT_BIAS = floatProperty(
+            "bbs.editor.camera.nativeActorSunShadows.biasUnits", 4.0F, 0F, 32F);
+
+    private static float floatProperty(String name, float defaultValue,
+            float minimum, float maximum)
+    {
+        String value=System.getProperty(name);
+        if(value==null)return defaultValue;
+        try
+        {
+            float parsed=Float.parseFloat(value);
+            return Float.isNaN(parsed)||Float.isInfinite(parsed)?
+                    defaultValue:Math.max(minimum,Math.min(maximum,parsed));
+        }
+        catch(NumberFormatException ignored) { return defaultValue; }
+    }
+
 
     public static void beginFrame()
     {
@@ -203,6 +228,10 @@ public final class BbsFsNativeActorSunShadowOverlay
             GL11.glDepthMask(true);
             GL11.glDisable(GL11.GL_BLEND);
             GL11.glDisable(GL11.GL_CULL_FACE);
+            // The shadow-map receiver compares its fragment to this depth.
+            // Offset only the CASTING pass, never actor pixels in the film.
+            GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(SHADOW_SLOPE_BIAS,SHADOW_UNIT_BIAS);
             GL11.glEnable(GL11.GL_ALPHA_TEST);
             GL11.glAlphaFunc(GL11.GL_GREATER,0.1F);
             GL11.glColorMask(false,false,false,false);
@@ -247,6 +276,8 @@ public final class BbsFsNativeActorSunShadowOverlay
                 GL20.glUseProgram(pid);
                 GL11.glEnable(GL11.GL_DEPTH_TEST);
                 GL11.glDepthMask(true);
+                GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+                GL11.glPolygonOffset(SHADOW_SLOPE_BIAS,SHADOW_UNIT_BIAS);
                 total+=editor.renderPreparedActorsInShadow(mc);
                 // Actor RenderManager may change the current program,
                 // active texture, or FBO. Reset before the next depth map.
