@@ -89,6 +89,9 @@ public class AnimationEditorInput
             return false;
         draggingRuler=true;
         draggingRulerMode=mode;
+        // A playing scene otherwise overwrites the held cursor on each
+        // tick. CAMERA's scrub similarly owns the playback clock.
+        playbackController.pause();
         updateTimelineScrub(mouseX);
         return true;
     }
