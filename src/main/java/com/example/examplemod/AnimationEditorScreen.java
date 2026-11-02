@@ -2113,6 +2113,17 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
+        if(BbsFsNativeActorSunShadowOverlay.isEnabled() &&
+                !BbsFsActorShadowSamplingProbe.isBypassed())
+        {
+            String atlasLabel="ACTOR A/B: NATIVE SUN SHADOW CASTERS ON (Ctrl+Shift+F6)";
+            int left=LEFT_PANEL_WIDTH+9;
+            int labelWidth=Math.min(width-left-12,
+                    fontRenderer.getStringWidth(atlasLabel)+13);
+            drawRect(left,85,left+labelWidth,102,0xED182B20);
+            fontRenderer.drawString(fontRenderer.trimStringToWidth(
+                    atlasLabel,labelWidth-10),left+5,89,0xFF99FFB4);
+        }
         if(BbsFsActorShadowSamplingProbe.isBypassed())
         {
             String probeLabel="ACTOR A/B: SUN SHADOW SAMPLERS OFF (Ctrl+Shift+F7)";
@@ -4267,6 +4278,17 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        // Compare the REAL OptiFine sun-shadow atlas with/without
+        // editor actor silhouettes. This is independent of the F7
+        // no-shadow texture probe and remains disabled by default.
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_F6 &&
+                isCtrlKeyDown() && isShiftKeyDown())
+        {
+            BbsFsNativeActorSunShadowOverlay.toggleForEditor();
+            if(BbsFsActorShadowSamplingProbe.isBypassed())
+                BbsFsActorShadowSamplingProbe.toggle();
+            return;
+        }
         // Render-only A/B test for diagonal striping on BSL-lit actors.
         // Ctrl+Shift+F7 toggles just actor shadow-map sampling.
         if(keyCode==org.lwjgl.input.Keyboard.KEY_F7 &&
@@ -4576,6 +4598,7 @@ public class AnimationEditorScreen extends GuiScreen
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
         BbsFsActorShadowSamplingProbe.dispose();
+        BbsFsNativeActorSunShadowOverlay.resetEditorOverride();
         BetterLightsWorldEngine.reset();
         cameraVideoExport.close();
         cameraExportDialog.close();
