@@ -201,6 +201,10 @@ public class EditorTimelineController
 
     private int boneScroll = 0;
 
+    private boolean draggingPlayhead = false;
+    private int scrubbingMaximumFrame = 0;
+    private int scrubbingStartX = 0;
+
     private long lastRightKeyClickTime = 0L;
     private int lastRightKeyClickX = -1;
     private int lastRightKeyClickY = -1;
@@ -568,6 +572,17 @@ public class EditorTimelineController
 
         int tracksTop =
                 timelineTop + 35;
+
+        // The ruler playhead is draggable throughout the scene with LMB.
+        if (mouseButton == 0 && mouseX >= leftPanelWidth && mouseX < width
+                && mouseY >= timelineTop && mouseY < tracksTop)
+        {
+            draggingPlayhead = true;
+            scrubbingMaximumFrame = getMaximumFrame(sceneLength);
+            scrubbingStartX = leftPanelWidth;
+            updatePlayheadFromMouse(mouseX);
+            return true;
+        }
 
         int visibleBoneCount =
                 Math.max(
@@ -1534,11 +1549,23 @@ int trackColor =
      * =========================================================
      */
 
+    private void updatePlayheadFromMouse(int mouseX)
+    {
+        int frame = timeline.getFrameFromMouseX(mouseX, scrubbingStartX);
+        playbackController.setCurrentFrame(Math.max(FIRST_FRAME,
+                Math.min(scrubbingMaximumFrame, frame)));
+    }
+
     public boolean mouseClickMove(
             int mouseX,
             int mouseY,
             int clickedMouseButton)
     {
+        if (draggingPlayhead && clickedMouseButton == 0)
+        {
+            updatePlayheadFromMouse(mouseX);
+            return true;
+        }
         if (
                 this.keyframeController
                         .isKeyframeDragging()
@@ -1577,6 +1604,7 @@ int trackColor =
 
     public void mouseReleased()
     {
+        draggingPlayhead = false;
         this.keyframeController
                 .stopKeyframeDragging();
     }
