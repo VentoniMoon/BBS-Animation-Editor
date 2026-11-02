@@ -460,7 +460,8 @@ public class TransformPanel
     {
         // Same full-width title bar and theme-accent rail as CAMERA.
         drawRect(mc, drawX, drawY - 3,
-                drawX + PANEL_WIDTH - 14, drawY + 12, HEADER_BACKGROUND);
+                drawX + PANEL_WIDTH - 14, drawY + 12,
+                EditorVisualStyle.themedSurface(0.16F));
         drawRect(mc, drawX, drawY - 3, drawX + 3,
                 drawY + 12, getAccentColor());
         font.drawString(title.toUpperCase(java.util.Locale.ROOT),
