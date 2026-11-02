@@ -66,23 +66,35 @@ public class CharacterEditorPanel
      * =========================================================
      */
 
-    private static final int COLOR_PANEL =
-            0xFF19232C;
+    private static int COLOR_PANEL()
+    {
+        return EditorVisualStyle.themedSurface(0.075F);
+    }
 
-    private static final int COLOR_PANEL_DARK =
-            0xFF17222B;
+    private static int COLOR_PANEL_DARK()
+    {
+        return EditorVisualStyle.themedSurface(0.035F);
+    }
 
-    private static final int COLOR_PANEL_LIGHT =
-            0xFF253440;
+    private static int COLOR_PANEL_LIGHT()
+    {
+        return EditorVisualStyle.themedSurface(0.140F);
+    }
 
-    private static final int COLOR_PANEL_HOVER =
-            0xFF34536A;
+    private static int COLOR_PANEL_HOVER()
+    {
+        return EditorVisualStyle.themedSurface(0.220F);
+    }
 
-    private static final int COLOR_SELECTED =
-            0xFF31495D;
+    private static int COLOR_SELECTED()
+    {
+        return EditorVisualStyle.themedSurface(0.250F);
+    }
 
-    private static final int COLOR_BORDER =
-            0xFF384148;
+    private static int COLOR_BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.180F);
+    }
 
     private static final int COLOR_TEXT =
             0xFFE2E5E7;
@@ -680,7 +692,7 @@ public class CharacterEditorPanel
                 this.y,
                 this.x + this.width,
                 this.y + this.height,
-                COLOR_PANEL
+                COLOR_PANEL()
         );
 
         drawRect(
@@ -688,7 +700,7 @@ public class CharacterEditorPanel
                 this.y,
                 this.x + 1,
                 this.y + this.height,
-                COLOR_BORDER
+                COLOR_BORDER()
         );
 
         drawHeader(
@@ -952,7 +964,7 @@ public class CharacterEditorPanel
                 this.y,
                 this.x + this.width,
                 this.y + 25,
-                COLOR_PANEL_DARK
+                COLOR_PANEL_DARK()
         );
 
         drawRect(
@@ -960,7 +972,7 @@ public class CharacterEditorPanel
                 this.y + 24,
                 this.x + this.width,
                 this.y + 25,
-                COLOR_BORDER
+                COLOR_BORDER()
         );
 
         drawRect(
@@ -1008,17 +1020,17 @@ public class CharacterEditorPanel
                 this.x + this.width - 5,
                 y + 24,
                 hovered
-                        ? COLOR_PANEL_HOVER
+                        ? COLOR_PANEL_HOVER()
                         : opened
-                        ? COLOR_SELECTED
-                        : COLOR_PANEL_LIGHT
+                        ? COLOR_SELECTED()
+                        : COLOR_PANEL_LIGHT()
         );
 
         // Match CAMERA: an accent rail on every inspector section,
         // with a compact right-aligned fold indicator.
         drawRect(this.x + 5, y, this.x + 8, y + 24, getAccentColor());
         drawRect(this.x + 8, y + 23, this.x + this.width - 5,
-                y + 24, COLOR_BORDER);
+                y + 24, COLOR_BORDER());
         mc.fontRenderer.drawString(title, this.x + 15, y + 8,
                 opened ? COLOR_TEXT : COLOR_TEXT_SECONDARY);
         mc.fontRenderer.drawString(opened ? "v" : ">",
@@ -1275,8 +1287,8 @@ public class CharacterEditorPanel
                 x + width,
                 y + height,
                 hovered
-                        ? COLOR_PANEL_HOVER
-                        : COLOR_PANEL_DARK
+                        ? COLOR_PANEL_HOVER()
+                        : COLOR_PANEL_DARK()
         );
 
         drawRect(
@@ -1286,7 +1298,7 @@ public class CharacterEditorPanel
                 y + 1,
                 hovered
                         ? getAccentColor()
-                        : COLOR_BORDER
+                        : COLOR_BORDER()
         );
 
         drawRect(
@@ -1294,7 +1306,7 @@ public class CharacterEditorPanel
                 y + height - 1,
                 x + width,
                 y + height,
-                COLOR_BORDER
+                COLOR_BORDER()
         );
 
         mc.fontRenderer.drawString(
@@ -1511,7 +1523,7 @@ public class CharacterEditorPanel
                         8,
                 listY +
                         BODY_PART_LIST_HEIGHT,
-                COLOR_PANEL_DARK
+                COLOR_PANEL_DARK()
         );
 
         /*
@@ -1607,7 +1619,7 @@ public class CharacterEditorPanel
                     y,
                     rowX + rowWidth,
                     y + BODY_PART_ROW_HEIGHT,
-                    COLOR_PANEL_HOVER
+                    COLOR_PANEL_HOVER()
             );
         }
 
@@ -1722,7 +1734,7 @@ public class CharacterEditorPanel
                         BODY_PART_SCROLLBAR_WIDTH,
                 scrollbarY +
                         scrollbarHeight,
-                COLOR_PANEL_DARK
+                COLOR_PANEL_DARK()
         );
 
         float visibleRatio =
@@ -1791,7 +1803,7 @@ public class CharacterEditorPanel
                 hovered ||
                         this.bodyPartScrollDragging
                         ? getAccentColor()
-                        : COLOR_BORDER
+                        : COLOR_BORDER()
         );
 
         if (hovered ||
@@ -2580,7 +2592,7 @@ public class CharacterEditorPanel
                 y,
                 x + width,
                 y + 17,
-                COLOR_PANEL_DARK
+                COLOR_PANEL_DARK()
         );
 
         drawRect(
@@ -2588,7 +2600,7 @@ public class CharacterEditorPanel
                 y,
                 x + width,
                 y + 1,
-                COLOR_BORDER
+                COLOR_BORDER()
         );
 
         mc.fontRenderer.drawString(
