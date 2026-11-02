@@ -84,6 +84,8 @@ public class EditorGizmoController
     private float dragStartSX;
     private float dragStartSY;
     private float dragStartSZ;
+    // Native Emoticons Animator+key Euler angles captured at drag start.
+    private float[] dragStartNativeEmoticonsEuler;
 
     private AnimationKeyframe activeKeyframe;
     private AnimationBone activeBone;
@@ -446,6 +448,7 @@ public class EditorGizmoController
         this.dragStartSX = transform.getScaleX();
         this.dragStartSY = transform.getScaleY();
         this.dragStartSZ = transform.getScaleZ();
+        this.dragStartNativeEmoticonsEuler = capturePoseEmoticonsEuler(bone);
 
         return true;
     }
@@ -577,7 +580,12 @@ public class EditorGizmoController
                         this.activePart, mouseX, mouseY
                 );
 
-                if (this.bodyPartTarget != null || this.globalTransformTarget != null)
+                if (this.dragStartNativeEmoticonsEuler != null)
+                {
+                    applyPoseEmoticonsLocalRotation(transform,
+                            this.activePart, amount);
+                }
+                else if (this.bodyPartTarget != null || this.globalTransformTarget != null)
                 {
                     applyBodyPartLocalRotationDelta(
                             transform,
@@ -4867,6 +4875,76 @@ public class EditorGizmoController
                 + " relX=(" + rel.m00 + "," + rel.m10 + "," + rel.m20 + ")"
                 + " relY=(" + rel.m01 + "," + rel.m11 + "," + rel.m21 + ")"
                 + " relZ=(" + rel.m02 + "," + rel.m12 + "," + rel.m22 + ")");
+    }
+
+    /**
+     * Emoticons POSE uses additive Euler key channels, but its gizmo rings
+     * follow the complete native BOBJ rotation (Animator + editor key).
+     * Dragging a tilted arm's local Z ring must compose a LOCAL rotation,
+     * rather than simply incrementing the key's parent-space Z angle.
+     */
+    private float[] capturePoseEmoticonsEuler(AnimationBone bone)
+    {
+        if (this.mode != Mode.ROTATION || bone == null ||
+                this.bodyPartTarget != null || this.globalTransformTarget != null ||
+                this.previewActor == null ||
+                !(this.previewActor.getMorph() instanceof
+                        mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph))
+            return null;
+        mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph morph =
+                (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+                        this.previewActor.getMorph();
+        mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone nativeBone =
+                EmoticonsModelAccess.findBone(morph,bone.getName());
+        if(nativeBone==null)return null;
+        float x=(float)Math.toDegrees(nativeBone.rotateX);
+        float y=(float)Math.toDegrees(nativeBone.rotateY);
+        float z=(float)Math.toDegrees(nativeBone.rotateZ);
+        if(Float.isNaN(x)||Float.isNaN(y)||Float.isNaN(z)||
+                Float.isInfinite(x)||Float.isInfinite(y)||Float.isInfinite(z))
+            return null;
+        return new float[]{x,y,z};
+    }
+
+    private void applyPoseEmoticonsLocalRotation(AnimationTransform target,
+            int axis,float angleDegrees)
+    {
+        if(target==null || dragStartNativeEmoticonsEuler==null ||
+                axis<AXIS_X || axis>AXIS_Z)return;
+        float[] initial=dragStartNativeEmoticonsEuler;
+        float[][] delta=identityRotationMatrix();
+        float a=(float)Math.toRadians(angleDegrees);
+        float c=(float)Math.cos(a),sin=(float)Math.sin(a);
+        if(axis==AXIS_X)
+        {
+            delta[1][1]=c;delta[1][2]=-sin;
+            delta[2][1]=sin;delta[2][2]=c;
+        }
+        else if(axis==AXIS_Y)
+        {
+            delta[0][0]=c;delta[0][2]=sin;
+            delta[2][0]=-sin;delta[2][2]=c;
+        }
+        else
+        {
+            delta[0][0]=c;delta[0][1]=-sin;
+            delta[1][0]=sin;delta[1][1]=c;
+        }
+        float[] euler=rotationMatrixToEulerDegrees(multiplyMatrix(
+                createRotationMatrix(initial[0],initial[1],initial[2]),delta));
+        // Subtract only the underlying Animator pose, never the key itself.
+        float nextX=euler[0]-(initial[0]-dragStartRX);
+        float nextY=euler[1]-(initial[1]-dragStartRY);
+        float nextZ=euler[2]-(initial[2]-dragStartRZ);
+        target.setRotation(
+                nearestEulerEquivalent(nextX,dragStartRX),
+                nearestEulerEquivalent(nextY,dragStartRY),
+                nearestEulerEquivalent(nextZ,dragStartRZ));
+    }
+
+    private static float nearestEulerEquivalent(float value,float reference)
+    {
+        return (float)(value-360D*Math.rint((value-reference)/360D));
     }
 
     private void applyBodyPartLocalRotationDelta(
