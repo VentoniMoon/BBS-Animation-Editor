@@ -1883,6 +1883,21 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     {
         write3(pid,"cameraPosition",(float)view.x,
                 (float)view.y,(float)view.z);
+        // The installed BetterLights-injected BSL terrain vertex shader
+        // reconstructs the absolute point-light receiver coordinate as:
+        //
+        //   BLposition = (gbufferModelViewInverse *
+        //                 gl_ModelViewMatrix * gl_Vertex).xyz
+        //                + playerPosition;
+        //
+        // That vertex position is RELATIVE to the reflected camera. The
+        // OptiFine 'playerPosition' uniform belongs to the main camera
+        // unless explicitly replaced. A stale main-view origin slides
+        // BetterLights patches across static blocks when CAMERA moves.
+        // This is deliberately separate from BSL's cameraPosition;
+        // write3 backs up the original GLSL value for main-frame restore.
+        write3(pid,"playerPosition",(float)view.x,
+                (float)view.y,(float)view.z);
         // BSL temporal reprojection must not use the MAIN camera's
         // previous position while the mirror uses a reflected camera.
         // Until mirror-only history is implemented, initialize the
