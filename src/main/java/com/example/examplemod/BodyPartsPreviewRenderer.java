@@ -2120,17 +2120,27 @@ public class BodyPartsPreviewRenderer
             EntityActor actor,
             int frame)
     {
-        prepareModels(actor, frame, controller == null ? null : controller.getModels());
+        prepareModels(actor, frame,
+                controller == null ? null : controller.getModels(),false);
     }
 
     /**
      * Prepare actor-specific attachments without switching the active
-     * editor selection or altering its controller.
+     * editor selection or altering its controller. The legacy three-argument
+     * overload is intentionally AUTHORITATIVE: empty means empty, just as
+     * in BODY PARTS editing. Untouched background actors opt in explicitly.
      */
+    public void prepareModels(EntityActor actor,int frame,
+            List<BodyPartModelData> models)
+    {
+        prepareModels(actor,frame,models,false);
+    }
+
     public void prepareModels(
             EntityActor actor,
             int frame,
-            List<BodyPartModelData> models)
+            List<BodyPartModelData> models,
+            boolean restoreNativeWhenEmpty)
     {
         if (actor == null)
         {
@@ -2204,10 +2214,12 @@ public class BodyPartsPreviewRenderer
         // the passive sample is stale and was spamming the log.
         if (models == null || models.isEmpty())
         {
-            // Always restore from our ORIGINAL snapshot: in this session
-            // manager.parts may currently contain editor-generated objects
-            // from a previously selected actor/track.
-            manager.parts.addAll(originalNativeParts);
+            // For never-edited background actors, preserve their embedded
+            // Metamorph attachments. If this actor's editor state is
+            // authoritative, leave the manager empty: deleting all tracks
+            // must not cause the original attachments to reappear.
+            if(restoreNativeWhenEmpty)
+                manager.parts.addAll(originalNativeParts);
             return;
         }
 
