@@ -25,6 +25,9 @@ public final class BbsFsNativeActorPass
      * native world event. No second GUI actor pass or opt-in switch.
      */
     private static boolean rendering;
+    private static boolean nativeEntityStage;
+    private static boolean stageDiagnosticReported;
+    private static boolean stageFailureReported;
     private static boolean renderedThisFrame;
     private static int frameSequence;
     private static int renderedSequence = -1;
@@ -184,6 +187,74 @@ public final class BbsFsNativeActorPass
         return rendering;
     }
 
+    public static boolean isNativeEntityStage()
+    {
+        return nativeEntityStage;
+    }
+
+    /**
+     * OptiFine G5 invokes Shaders.endEntities BEFORE deferred processing.
+     * Add recorded actors while the native gbuffers_entities program and
+     * attachments are still active, rather than reopening that program at
+     * RenderWorldLast (after the deferred pass may already have run).
+     *
+     * The existing WorldLast path remains a fallback if OptiFine changes
+     * its hook layout or its projection is not available in this callback.
+     */
+    public static void beforeOptiFineEndEntities()
+    {
+        if (rendering || didRenderThisFrame() ||
+                "false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.preview.nativeEntityStage","true")))
+            return;
+        Minecraft mc=Minecraft.getMinecraft();
+        EditorSceneViewport viewport=
+                BbsFsWorldCameraDriver.nativeViewportForActorStage();
+        if (mc==null||viewport==null||mc.world==null||
+                !(mc.currentScreen instanceof AnimationEditorScreen)||
+                CameraSceneMirrorRenderer.isCapturing())return;
+        try
+        {
+            java.nio.IntBuffer vp=org.lwjgl.BufferUtils.createIntBuffer(16);
+            GL11.glGetInteger(GL11.GL_VIEWPORT,vp);
+            int width=vp.get(2),height=vp.get(3);
+            if(width<=0||height<=0)return;
+            // Projection is captured *before* the actor's guard changes it.
+            BbsFsWorldProjection.capture(width,height);
+            if(!BbsFsWorldProjection.isCaptured())return;
+            AnimationEditorScreen editor=
+                    (AnimationEditorScreen)mc.currentScreen;
+            nativeEntityStage=true;
+            try
+            {
+                render(mc,editor,viewport,mc.getRenderPartialTicks(),
+                        width,height);
+            }
+            finally
+            {
+                nativeEntityStage=false;
+            }
+            if(didRenderThisFrame()&&!stageDiagnosticReported)
+            {
+                stageDiagnosticReported=true;
+                System.out.println("[BBS Editor][FS Preview] Actor rendered "+
+                        "inside OptiFine gbuffers_entities BEFORE deferred.");
+            }
+        }
+        catch(Throwable error)
+        {
+            if(!stageFailureReported)
+            {
+                stageFailureReported=true;
+                System.err.println("[BBS Editor][FS Preview] Native entity "+
+                        "stage callback failed: "+error);
+                error.printStackTrace();
+            }
+            // If the actor render already advanced physics or failed inside
+            // render(), it is marked attempted; never render it twice.
+        }
+    }
+
     public static boolean didRenderThisFrame()
     {
         return renderedThisFrame &&
@@ -248,9 +319,11 @@ public final class BbsFsNativeActorPass
                  * receive the same entity lighting as the main world. The
                  * previous OptiFine program is restored on every exit.
                  */
-                try (BbsFsOptiFineEntityStage shaders =
-                             BbsFsOptiFineEntityStage.open())
+                if(nativeEntityStage)
                 {
+                    // We are ALREADY in the correct OptiFine entity stage.
+                    // Never begin/end a nested entity program: it changes
+                    // draw buffers and disrupts the deferred frame.
                     if(earlyPrepared)
                     {
                         PreviewCameraPose pose=
@@ -259,7 +332,25 @@ public final class BbsFsNativeActorPass
                         editor.renderPreparedActorsInNativeWorld(mc,pose,
                                 worldWidth,worldHeight);
                     }
-                    else if (!editor.renderActorsInNativeWorld()) return;
+                    else if(!editor.renderActorsInNativeWorld())return;
+                }
+                else
+                {
+                    // Vanilla and unsupported OptiFine layouts still have
+                    // the original last-world-pass fallback.
+                    try(BbsFsOptiFineEntityStage shaders=
+                                BbsFsOptiFineEntityStage.open())
+                    {
+                        if(earlyPrepared)
+                        {
+                            PreviewCameraPose pose=
+                                    BbsFsWorldCameraDriver.nativeActorPose(viewport);
+                            if(pose==null)return;
+                            editor.renderPreparedActorsInNativeWorld(mc,pose,
+                                    worldWidth,worldHeight);
+                        }
+                        else if(!editor.renderActorsInNativeWorld())return;
+                    }
                 }
             }
             finally
