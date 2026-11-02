@@ -22,17 +22,24 @@ public final class CameraClipInspector
         public final int component, x, y, width, height;
         public final String value;
         public final boolean keyframe, toggle;
+        public final int stepDirection;
         Hit(String key,int component,int x,int y,int width,String value,
                 boolean keyframe,boolean toggle)
         {
-            this(key,component,x,y,width,19,value,keyframe,toggle);
+            this(key,component,x,y,width,19,value,keyframe,toggle,0);
         }
         Hit(String key,int component,int x,int y,int width,int height,
                 String value,boolean keyframe,boolean toggle)
         {
+            this(key,component,x,y,width,height,value,keyframe,toggle,0);
+        }
+        Hit(String key,int component,int x,int y,int width,int height,
+                String value,boolean keyframe,boolean toggle,int stepDirection)
+        {
             this.key=key;this.component=component;this.x=x;this.y=y;
             this.width=width;this.height=height;this.value=value;
             this.keyframe=keyframe;this.toggle=toggle;
+            this.stepDirection=stepDirection;
         }
         public boolean contains(int mx,int my)
         {return mx>=x&&mx<x+width&&my>=y&&my<y+height;}
@@ -272,6 +279,12 @@ public final class CameraClipInspector
         }
         catch(NumberFormatException ignored){return original;}
     }
+    private static boolean numeric(String value)
+    {
+        try { return Double.isFinite(Double.parseDouble(value)); }
+        catch (Exception ignored) { return false; }
+    }
+
     private void field(String key,String title,String value,boolean onKey)
     {
         int at=y-scroll;
@@ -289,8 +302,21 @@ public final class CameraClipInspector
                 text(checked?"On":"Off",x+5,at+4,0xFFD5E3E9,w-27);
                 rect(x+w-17,at+2,x+w-5,at+14,checked?accent:0xFF58626A);
             }
+            else if(numeric(value))
+            {
+                rect(x,at,x+14,at+16,0xFF34536A);
+                rect(x+w-14,at,x+w,at+16,0xFF34536A);
+                text("<",x+4,at+4,0xFFE6F0F3,10);
+                text(">",x+w-10,at+4,0xFFE6F0F3,10);
+                text(compact(value),x+17,at+4,0xFFE6F0F3,w-33);
+            }
             else text(compact(value),x+5,at+4,0xFFE6F0F3,w-10);
             hits.add(new Hit(key,-1,x,at,w,16,value,onKey,toggle));
+            if(!toggle&&numeric(value))
+            {
+                hits.add(new Hit(key,-1,x,at,14,16,value,onKey,false,-1));
+                hits.add(new Hit(key,-1,x+w-14,at,14,16,value,onKey,false,1));
+            }
         }
         y+=18;
     }
@@ -330,8 +356,18 @@ public final class CameraClipInspector
                 text(axisLabels[i],right+13,pos+4,0xFF9FBBCB,32);
                 rect(x,pos,x+w,pos+16,0xFF10151A);
                 rect(x,pos+15,x+w,pos+16,0xFF384148);
-                text(compact(parts[i].trim()),x+5,pos+4,0xFFE6F0F3,w-10);
-                hits.add(new Hit(key,i,x,pos,w,16,parts[i].trim(),false,false));
+                String value=parts[i].trim();
+                rect(x,pos,x+14,pos+16,0xFF34536A);
+                rect(x+w-14,pos,x+w,pos+16,0xFF34536A);
+                text("<",x+4,pos+4,0xFFE6F0F3,10);
+                text(">",x+w-10,pos+4,0xFFE6F0F3,10);
+                text(compact(value),x+17,pos+4,0xFFE6F0F3,w-33);
+                hits.add(new Hit(key,i,x,pos,w,16,value,false,false));
+                if(numeric(value))
+                {
+                    hits.add(new Hit(key,i,x,pos,14,16,value,false,false,-1));
+                    hits.add(new Hit(key,i,x+w-14,pos,14,16,value,false,false,1));
+                }
             }
             y+=18;
         }
