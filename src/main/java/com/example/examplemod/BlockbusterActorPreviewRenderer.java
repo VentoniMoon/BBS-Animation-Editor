@@ -741,10 +741,18 @@ public class BlockbusterActorPreviewRenderer
     }
 
     private List<BodyPartModelData> passiveBodyPartsModels;
+    private boolean restoreUneditedNativeParts;
 
     public void setPassiveBodyPartsModels(List<BodyPartModelData> models)
     {
+        setPassiveBodyPartsModels(models,false);
+    }
+
+    public void setPassiveBodyPartsModels(List<BodyPartModelData> models,
+            boolean preserveOriginalWhenEmpty)
+    {
         this.passiveBodyPartsModels = models;
+        this.restoreUneditedNativeParts = preserveOriginalWhenEmpty;
     }
 
     public AbstractMorph getPreparedBodyPartMorph(BodyPartModelData data)
@@ -1515,7 +1523,8 @@ public class BlockbusterActorPreviewRenderer
         else if (this.passiveBodyPartsModels != null)
         {
             this.bodyPartsPreviewRenderer.prepareModels(
-                    entityActor, previewFrame, this.passiveBodyPartsModels);
+                    entityActor,previewFrame,this.passiveBodyPartsModels,
+                    this.restoreUneditedNativeParts);
         }
 
         /*
@@ -1847,6 +1856,8 @@ public class BlockbusterActorPreviewRenderer
         this.preparedForMirror=false;
         this.preparedActorData=null;
         this.preparedActorFrame=0;
+        this.passiveBodyPartsModels=null;
+        this.restoreUneditedNativeParts=false;
 
         this.loadedMorphSignature = "";
 
