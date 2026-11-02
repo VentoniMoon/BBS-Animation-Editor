@@ -2117,23 +2117,7 @@ public class AnimationEditorScreen extends GuiScreen
                 partialTicks
         );
 
-        if (isDeleteDialogOpen())
-        {
-            this.deleteDialog.open(
-                    this.keyframeController
-                            .getPendingDeleteFrame()
-            );
-
-            this.deleteDialog.draw(
-                    this,
-                    this.fontRenderer,
-                    this.width,
-                    this.height,
-                    mouseX,
-                    mouseY,
-                    getAccentColor()
-            );
-        }
+        // Keyframes are deleted directly by double right-click; no modal.
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA)
             cameraExportDialog.draw(this,mouseX,mouseY);
