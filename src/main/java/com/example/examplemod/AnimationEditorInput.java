@@ -67,6 +67,51 @@ public class AnimationEditorInput
      */
 
     private boolean sceneDropdownOpen;
+    private boolean draggingRuler;
+    private EditorModeController.EditorMode draggingRulerMode;
+
+    /** Hold LMB on the frame ruler to scrub, as in CAMERA. */
+    private boolean beginTimelineScrub(int mouseX,int mouseY,int button)
+    {
+        if(button!=0)return false;
+        EditorModeController.EditorMode mode=editorModeController.getMode();
+        if(mode!=EditorModeController.EditorMode.POSE&&
+                mode!=EditorModeController.EditorMode.BODY_PARTS&&
+                mode!=EditorModeController.EditorMode.CHARACTER)
+            return false;
+        int top=screen.height-screen.getTimelineHeight();
+        int left=AnimationEditorScreen.LEFT_PANEL_WIDTH;
+        if(mouseX<left||mouseX>=screen.width||
+                mouseY<top+22||mouseY>=top+35)return false;
+        if(mode==EditorModeController.EditorMode.BODY_PARTS&&
+                bodyPartsController.getSelectedModel()!=null&&
+                mouseX>=screen.width-209&&mouseX<screen.width-95)
+            return false;
+        draggingRuler=true;
+        draggingRulerMode=mode;
+        updateTimelineScrub(mouseX);
+        return true;
+    }
+
+    private void updateTimelineScrub(int mouseX)
+    {
+        int left=AnimationEditorScreen.LEFT_PANEL_WIDTH;
+        EditorTimeline target=draggingRulerMode==
+                EditorModeController.EditorMode.BODY_PARTS?
+                bodyPartsController.getTimeline():
+                draggingRulerMode==EditorModeController.EditorMode.CHARACTER?
+                characterTimelineEditorController.getTimeline():timeline;
+        int tick=Math.max(0,Math.min(screen.getSceneLength()-1,
+                target.getFrameFromMouseX(Math.max(left,
+                        Math.min(screen.width-1,mouseX)),left)));
+        playbackController.setCurrentFrame(tick);
+        target.setTick(tick);
+        if(draggingRulerMode==EditorModeController.EditorMode.POSE)
+        {
+            screen.applyRecordFrame();
+            screen.applyAdapters();
+        }
+    }
     /** First visible SCENE file; shared by render, hit testing and wheel. */
     private int sceneDropdownOffset;
     public int getSceneDropdownOffset()
@@ -262,6 +307,7 @@ public class AnimationEditorInput
         }
 
         this.transformDragging = false;
+        if(beginTimelineScrub(mouseX,mouseY,mouseButton))return;
 
         /* Stage 8 Preview visibility / camera toggles get first chance. */
         if (this.screen.clickStage8PreviewButton(mouseX, mouseY, mouseButton))
@@ -869,6 +915,11 @@ public class AnimationEditorInput
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        if(draggingRuler&&clickedMouseButton==0)
+        {
+            updateTimelineScrub(mouseX);
+            return;
+        }
         /*
          * =========================================================
          * STAGE 5 - GIZMO DRAG
@@ -1038,6 +1089,11 @@ public class AnimationEditorInput
             int mouseY,
             int state)
     {
+        if(state==0)
+        {
+            draggingRuler=false;
+            draggingRulerMode=null;
+        }
         /*
          * Gizmo must release before the Preview camera receives
          * the same mouse-up event.
