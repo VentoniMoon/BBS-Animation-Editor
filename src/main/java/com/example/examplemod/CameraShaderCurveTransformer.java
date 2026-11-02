@@ -18,10 +18,17 @@ import org.objectweb.asm.tree.MethodNode;
 public final class CameraShaderCurveTransformer implements IClassTransformer
 {
     private static final String SHADERS="net.optifine.shaders.Shaders";
+    private static final String SHADERS_RENDER=
+            "net.optifine.shaders.ShadersRender";
     private static final String RUNTIME="com/example/examplemod/CameraShaderCurves";
     private static final String SUN_SHADOW=
             "com/example/examplemod/BbsFsNativeActorSunShadowOverlay";
     private static volatile boolean nativeShadowHookInstalled;
+    private static volatile String shadowHookDiagnostic="not-transformed";
+    public static String nativeShadowHookDiagnostic()
+    {
+        return shadowHookDiagnostic;
+    }
 
     /** Used for runtime diagnostics; the first frame may install lazily. */
     public static boolean nativeShadowHookInstalled()
@@ -37,22 +44,72 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
             byte[] bytes)
     {
         if(bytes==null)return null;
-        // Emergency escape hatch for shaderpacks with unsupported GLSL.
-        // Must be set before launch; no OptiFine modifications are made.
-        if("false".equalsIgnoreCase(
-                System.getProperty("bbs.editor.camera.shaderCurves","true")))
-            return bytes;
-        if(!SHADERS.equals(name)&&!SHADERS.equals(transformedName))
-            return bytes;
+        final boolean curvesEnabled=!"false".equalsIgnoreCase(
+                System.getProperty("bbs.editor.camera.shaderCurves","true"));
+        final boolean shadowsEnabled=!"false".equalsIgnoreCase(
+                System.getProperty(
+                        "bbs.editor.camera.nativeSunShadowTransformer",
+                        "true"));
+        final boolean isShaders=SHADERS.equals(name)||
+                SHADERS.equals(transformedName);
+        final boolean isShadersRender=SHADERS_RENDER.equals(name)||
+                SHADERS_RENDER.equals(transformedName);
+        if(!isShaders&&!isShadersRender)return bytes;
+        if(!curvesEnabled&&!shadowsEnabled)return bytes;
         try
         {
             ClassNode node=new ClassNode(Opcodes.ASM5);
             new ClassReader(bytes).accept(node,0);
             int readerHooks=0,programHooks=0,shadowHooks=0;
+            // Prefer instrumenting the actual shadow renderer, not
+            // assuming which method in Shaders calls it. The method is
+            // invoked before ordinary GBuffer terrain in OptiFine G5.
+            // A fallback callsite inside Shaders.beginRender is kept
+            // below for builds with unusual ShadersRender layouts.
+            if(isShadersRender&&shadowsEnabled)
+            {
+                for(Object obj:node.methods)
+                {
+                    MethodNode method=(MethodNode)obj;
+                    if(!"renderShadowMap".equals(method.name)||
+                            !method.desc.endsWith(")V"))continue;
+                    int exits=0;
+                    for(AbstractInsnNode insn:
+                            method.instructions.toArray())
+                    {
+                        if(insn.getOpcode()!=Opcodes.RETURN)continue;
+                        method.instructions.insertBefore(insn,
+                                shadowCallback());
+                        exits++;
+                    }
+                    shadowHooks+=exits;
+                    shadowHookDiagnostic="ShadersRender.renderShadowMap "+
+                            method.desc+" returnHooks="+exits;
+                }
+                if(shadowHooks>0)
+                {
+                    ClassWriter out=new ClassWriter(
+                            ClassWriter.COMPUTE_MAXS);
+                    node.accept(out);
+                    nativeShadowHookInstalled=true;
+                    System.out.println("[BBS Editor][Actor Sun Shadow] "+
+                            "Native hook installed in "+
+                            shadowHookDiagnostic);
+                    return out.toByteArray();
+                }
+                shadowHookDiagnostic=
+                        "ShadersRender loaded but no compatible return hook";
+                System.err.println("[BBS Editor][Actor Sun Shadow] "+
+                        shadowHookDiagnostic);
+                return bytes;
+            }
+            if(!isShaders)return bytes;
             for(Object o:node.methods)
             {
                 MethodNode method=(MethodNode)o;
-                if(method.name.matches("create(?:Vert|Geom|Frag|Comp)Shader"))
+                if(curvesEnabled&&
+                        method.name.matches(
+                                "create(?:Vert|Geom|Frag|Comp)Shader"))
                 {
                     for(AbstractInsnNode instruction:method.instructions.toArray())
                     {
@@ -70,7 +127,8 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
                         }
                     }
                 }
-                else if("beginRender".equals(method.name))
+                else if(shadowsEnabled&&
+                        "beginRender".equals(method.name))
                 {
                     // OptiFine 1.12.2 performs the full native sun
                     // shadow map BEFORE its regular world GBuffer.
@@ -85,14 +143,12 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
                         if(!"renderShadowMap".equals(invoke.name)||
                                 !"net/optifine/shaders/ShadersRender"
                                         .equals(invoke.owner))continue;
-                        MethodInsnNode callback=new MethodInsnNode(
-                                Opcodes.INVOKESTATIC,SUN_SHADOW,
-                                "onNativeShadowMapCompleted","()V",false);
-                        method.instructions.insert(instruction,callback);
+                        method.instructions.insert(instruction,
+                                shadowCallback());
                         shadowHooks++;
                     }
                 }
-                else if("useProgram".equals(method.name))
+                else if(curvesEnabled&&"useProgram".equals(method.name))
                 {
                     for(AbstractInsnNode instruction:method.instructions.toArray())
                         if(instruction.getOpcode()==Opcodes.RETURN)
@@ -102,30 +158,62 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
                             programHooks++;
                         }
                 }
-                else if("loadShaderPack".equals(method.name)||
-                        "init".equals(method.name))
+                else if(curvesEnabled&&
+                        ("loadShaderPack".equals(method.name)||
+                        "init".equals(method.name)))
                 {
                     method.instructions.insert(call("reset","()V"));
                 }
-                else if("uninit".equals(method.name))
+                else if(curvesEnabled&&"uninit".equals(method.name))
                 {
                     method.instructions.insert(call("clearPrograms","()V"));
                 }
             }
-            if(readerHooks<3||programHooks<1)
+            boolean curveValid=curvesEnabled&&
+                    readerHooks>=3&&programHooks>=1;
+            if(curvesEnabled&&!curveValid)
+                warn("OptiFine shader curve hooks incomplete ("+
+                        readerHooks+" source, "+programHooks+
+                        " program); preserving independent sun-shadow hook");
+            if(shadowHooks<1&&!nativeShadowHookInstalled)
+                shadowHookDiagnostic=
+                        "Shaders.beginRender callsite not found; "+
+                        "waiting for ShadersRender transform";
+            if(shadowHooks>0)
+                nativeShadowHookInstalled=true;
+            if(!curveValid&&shadowHooks<1)return bytes;
+
+            // If curves aren't recognized, strip any partial curve
+            // insertions by re-reading the original bytecode and apply
+            // only the shadow hook. Never leave a half-patched OptiFine.
+            if(!curveValid)
             {
-                warn("OptiFine shader layout not recognized ("+
-                        readerHooks+" source, "+programHooks+" program); "+
-                        "shader Curve disabled");
-                return bytes;
+                node=new ClassNode(Opcodes.ASM5);
+                new ClassReader(bytes).accept(node,0);
+                for(Object obj:node.methods)
+                {
+                    MethodNode method=(MethodNode)obj;
+                    if(!"beginRender".equals(method.name))continue;
+                    for(AbstractInsnNode insn:
+                            method.instructions.toArray())
+                    {
+                        if(!(insn instanceof MethodInsnNode))continue;
+                        MethodInsnNode call=(MethodInsnNode)insn;
+                        if("renderShadowMap".equals(call.name)&&
+                                "net/optifine/shaders/ShadersRender"
+                                        .equals(call.owner))
+                            method.instructions.insert(insn,
+                                    shadowCallback());
+                    }
+                }
             }
             ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);
             node.accept(writer);
-            installed=true;
-            nativeShadowHookInstalled=shadowHooks>0;
+            installed=curveValid;
             System.out.println("[BBS Editor][Curve] Native OptiFine "+
                     "shader source/program hooks installed ("+readerHooks+
-                    "/"+programHooks+") nativeSunShadowHook="+shadowHooks);
+                    "/"+programHooks+") nativeSunShadowHook="+shadowHooks+
+                    " curves="+curveValid);
             return writer.toByteArray();
         }
         catch(Throwable incompatible)
@@ -134,6 +222,12 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
             return bytes;
         }
     }
+    private static MethodInsnNode shadowCallback()
+    {
+        return new MethodInsnNode(Opcodes.INVOKESTATIC,SUN_SHADOW,
+                "onNativeShadowMapCompleted","()V",false);
+    }
+
     private static MethodInsnNode call(String name,String descriptor)
     {
         return new MethodInsnNode(Opcodes.INVOKESTATIC,RUNTIME,
