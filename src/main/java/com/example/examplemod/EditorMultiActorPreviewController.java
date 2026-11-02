@@ -150,8 +150,11 @@ public final class EditorMultiActorPreviewController
              * Each actor owns its Body Parts timeline. Do not switch
              * the selection in the editor's shared BodyParts controller.
              */
-            renderer.setPassiveBodyPartsModels(bodyPartsController == null
-                    ? null : bodyPartsController.getModelsForActor(data.getId()));
+            renderer.setPassiveBodyPartsModels(
+                    bodyPartsController == null
+                            ? null : bodyPartsController.getModelsForActor(data.getId()),
+                    bodyPartsController == null ||
+                            !bodyPartsController.hasEditorStateForActor(data.getId()));
             // Morph/Emoticons draw layers can read the per-actor global
             // snapshot context even when the EntityActor is already posed.
             // Keep that context for the *read-only* mirror draw.
