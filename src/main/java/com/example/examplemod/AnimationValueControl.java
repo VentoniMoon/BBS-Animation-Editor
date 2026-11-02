@@ -269,6 +269,13 @@ public class AnimationValueControl
     {
         if (!this.editing)
         {
+            // A single click selects the control; no double click is
+            // required to use Up/Down as precise nudge shortcuts.
+            if (keyCode == Keyboard.KEY_UP || keyCode == Keyboard.KEY_DOWN)
+            {
+                changeBy(keyCode == Keyboard.KEY_UP ? KEY_STEP : -KEY_STEP);
+                return true;
+            }
             return false;
         }
 
