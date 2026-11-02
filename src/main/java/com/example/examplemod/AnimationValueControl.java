@@ -41,25 +41,25 @@ public class AnimationValueControl
      */
 
     private static final int BACKGROUND =
-            0xFF303134;
+            EditorVisualStyle.themedSurface(0.17F);
 
     private static final int BACKGROUND_HOVER =
-            0xFF3A3B3E;
+            EditorVisualStyle.themedSurface(0.23F);
 
     private static final int BACKGROUND_ACTIVE =
-            0xFF4A4C4F;
+            EditorVisualStyle.themedSurface(0.28F);
 
     private static final int BACKGROUND_EDITING =
-            0xFF55575A;
+            EditorVisualStyle.themedSurface(0.33F);
 
     private static final int BORDER =
-            0xFF18191B;
+            EditorVisualStyle.themedSurface(0.06F);
 
     private static final int BORDER_HOVER =
-            0xFF55575A;
+            EditorVisualStyle.themedSurface(0.33F);
 
     private static final int LABEL_BACKGROUND =
-            0xFF292A2D;
+            EditorVisualStyle.themedSurface(0.11F);
 
     private static final int LABEL_TEXT =
             0xFFAAAAAA;
@@ -104,6 +104,11 @@ public class AnimationValueControl
      * POSITION
      * =========================================================
      */
+
+    public void setWidth(int width)
+    {
+        this.width = Math.max(86, width);
+    }
 
     public void setPosition(
             int x,
@@ -732,7 +737,7 @@ public class AnimationValueControl
                 this.y + 3,
                 this.x + 26,
                 this.y + this.height - 3,
-                0xFF45474A
+                EditorVisualStyle.themedSurface(0.25F)
         );
 
         int leftArrowX = this.x + 26;
