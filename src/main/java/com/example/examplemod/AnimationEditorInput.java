@@ -765,9 +765,9 @@ public class AnimationEditorInput
                     mouseY,
                     mouseButton,
                     this.screen.width,
-                    this.screen.height -
-                            this.screen.getTimelineHeight(),
-                    AnimationEditorScreen.LEFT_PANEL_WIDTH))
+                    this.screen.height,
+                    AnimationEditorScreen.LEFT_PANEL_WIDTH,
+                    this.screen.getSceneLength()))
             {
                 // Keep Character inspector and its key fields in sync with
                 // the mouse selection IMMEDIATELY, not on the next tick.
