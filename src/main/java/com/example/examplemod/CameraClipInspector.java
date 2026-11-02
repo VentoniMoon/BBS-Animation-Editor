@@ -72,7 +72,8 @@ public final class CameraClipInspector
     public void scrollInterpolation(int direction)
     {
         optionScroll=Math.max(0,Math.min(
-                Math.max(0,CameraInterpolation.OPTIONS.length-6),
+                EditorInterpolationCurvePicker.maxRowOffset(
+                        CameraInterpolation.OPTIONS,5),
                 optionScroll+(direction>0?-1:1)));
     }
     public boolean isCurvePickerOpen(){return curvePickerOpen;}
@@ -740,23 +741,56 @@ public final class CameraClipInspector
         String v=selectedClip.settings.get(key);
         return v==null?fallback:v;
     }
+    /** Shared thumbnail grid, matching the POSE BBS FS picker. */
     private void renderInterpolationPopup()
     {
         if(openInterpolation.isEmpty())return;
-        int topY=Math.max(89,bottom-156);
+        final int rows=5;
+        int topY=Math.max(83,bottom-rows*
+                EditorInterpolationCurvePicker.CELL_HEIGHT-34);
         int lx=right+5,rx=width-6;
-        rect(lx-2,topY-23,rx+2,topY+6*21+4,0xFF090D11);
-        rect(lx,topY-21,rx,topY,0xFF293038);
-        text("INTERPOLATION",lx+7,topY-15,0xFF9BDFFE,rx-lx-14);
-        for(int i=0;i<6&&i+optionScroll<CameraInterpolation.OPTIONS.length;i++)
+        int gridY=topY+21;
+        int gridW=Math.max(1,rx-lx);
+        rect(lx-2,topY-2,rx+2,
+                gridY+rows*EditorInterpolationCurvePicker.CELL_HEIGHT+2,
+                0xFF090D11);
+        rect(lx,topY,rx,topY+20,0xFF293038);
+        text("INTERPOLATION",lx+6,topY+5,0xFF9BDFFE,rx-lx-12);
+        String[] entries=CameraInterpolation.OPTIONS;
+        optionScroll=Math.max(0,Math.min(
+                EditorInterpolationCurvePicker.maxRowOffset(entries,rows),
+                optionScroll));
+        int physicalX=mc.currentScreen==null?-1:
+                org.lwjgl.input.Mouse.getX()*
+                        mc.currentScreen.width/Math.max(1,mc.displayWidth);
+        int physicalY=mc.currentScreen==null?-1:
+                mc.currentScreen.height-
+                org.lwjgl.input.Mouse.getY()*
+                        mc.currentScreen.height/Math.max(1,mc.displayHeight)-1;
+        // CAMERA inspector uses a scaled virtual layout; the picker is
+        // drawn before hits are converted back to real screen pixels.
+        // Convert hover coordinates too, otherwise labels/curves highlight
+        // the wrong thumbnail when uiScale != 1.
+        int mx=physicalX<0?-1:
+                right+Math.round((physicalX-right)/uiScale);
+        int my=physicalY<0?-1:
+                CONTENT_TOP+Math.round((physicalY-CONTENT_TOP)/uiScale);
+        EditorInterpolationCurvePicker.draw(entries,lx,gridY,gridW,
+                rows,optionScroll,"",mx,my);
+        int cellW=Math.max(1,gridW/
+                EditorInterpolationCurvePicker.COLUMNS);
+        for(int row=0;row<rows;row++)
+        for(int col=0;col<EditorInterpolationCurvePicker.COLUMNS;col++)
         {
-            String option=CameraInterpolation.OPTIONS[i+optionScroll];
-            int at=topY+i*21;
-            rect(lx,at,rx,at+20,i%2==0?0xFF23292F:0xFF1C2329);
-            text(CameraInterpolation.displayName(option),lx+7,at+6,
-                    0xFFE3EBEE,rx-lx-15);
-            hits.add(new Hit("@interp:set:"+openInterpolation+":"+option,-1,
-                    lx,at,rx-lx,option,false,false));
+            int index=(optionScroll+row)*
+                    EditorInterpolationCurvePicker.COLUMNS+col;
+            if(index>=entries.length)break;
+            String option=entries[index];
+            hits.add(new Hit("@interp:set:"+openInterpolation+":"+option,
+                    -1,lx+col*cellW,gridY+row*
+                    EditorInterpolationCurvePicker.CELL_HEIGHT,
+                    cellW,EditorInterpolationCurvePicker.CELL_HEIGHT,
+                    option,false,false));
         }
     }
     /**

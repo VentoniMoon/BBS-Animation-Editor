@@ -19,28 +19,28 @@ public class InterpolationPanel
      */
 
     private static final int PANEL_BACKGROUND =
-            0xFF252629;
+            0xFF191E24;
 
     private static final int PANEL_BORDER =
-            0xFF111214;
+            0xFF090D11;
 
     private static final int HEADER_BACKGROUND =
-            0xFF303134;
+            0xFF26313A;
 
     private static final int HEADER_BOTTOM =
-            0xFF18191B;
+            0xFF0D171E;
 
     private static final int FIELD_BACKGROUND =
-            0xFF303134;
+            0xFF26313A;
 
     private static final int FIELD_HOVER =
-            0xFF3A3B3E;
+            0xFF33414B;
 
     private static final int FIELD_ACTIVE =
-            0xFF45474A;
+            0xFF384956;
 
     private static final int FIELD_BORDER =
-            0xFF18191B;
+            0xFF0D171E;
 
     private static final int TEXT =
             0xFFE0E0E0;
@@ -84,31 +84,31 @@ public class InterpolationPanel
      */
 
     private static final int GRAPH_BACKGROUND =
-            0xFF18191B;
+            0xFF0D171E;
 
     private static final int GRAPH_GRID =
-            0xFF2A2C2F;
+            0xFF1A2B34;
 
     private static final int GRAPH_AXIS =
-            0xFF484B4F;
+            0xFF4C6472;
 
     private static final int GRAPH_BORDER =
-            0xFF36383B;
+            0xFF253744;
 
     private static final int GRAPH_POINT =
             0xFFFFFFFF;
 
     private static final int DROPDOWN_BACKGROUND =
-            0xFF202124;
+            0xFF191E24;
 
     private static final int DROPDOWN_SELECTED =
-            0xFF34373A;
+            0xFF273944;
 
     private static final int DROPDOWN_HOVER =
-            0xFF3A3D40;
+            0xFF314450;
 
     private static final int DROPDOWN_BORDER =
-            0xFF111214;
+            0xFF090D11;
 
     /*
      * =========================================================
@@ -129,6 +129,15 @@ public class InterpolationPanel
 
     private KeyframeInterpolation selectedInterpolation;
     private KeyframeEasing selectedEasing;
+    private String selectedCurve="";
+    private final String[] gridOptions=
+            EditorInterpolationCurvePicker.poseOptions();
+    public String getSelectedCurve(){return selectedCurve;}
+    public void setSelectedCurve(String curve)
+    {
+        selectedCurve=curve!=null&&CameraInterpolation.isKnown(curve)?
+                curve:"";
+    }
 
     private Runnable interpolationChanged;
 
@@ -445,9 +454,9 @@ public class InterpolationPanel
          */
 
         String selectedName =
-                getInterpolationName(
-                        this.selectedInterpolation
-                );
+                selectedCurve.isEmpty()?
+                    getInterpolationName(this.selectedInterpolation):
+                    CameraInterpolation.displayName(selectedCurve);
 
         this.mc.fontRenderer.drawString(
                 selectedName,
@@ -550,14 +559,11 @@ public class InterpolationPanel
 
         if (!this.dropdownOpen)
         {
-            drawGraph(
-                    this.selectedInterpolation,
-                    this.selectedEasing,
-                    graphX,
-                    graphY,
-                    graphWidth,
-                    graphHeight
-            );
+            if(selectedCurve.isEmpty())
+                drawGraph(this.selectedInterpolation,this.selectedEasing,
+                        graphX,graphY,graphWidth,graphHeight);
+            else
+                drawCameraGraph(graphX,graphY,graphWidth,graphHeight);
         }
 
         /*
@@ -581,348 +587,20 @@ public class InterpolationPanel
      * =========================================================
      */
 
-    private void drawDropdown(
-            int mouseX,
-            int mouseY)
+    private void drawDropdown(int mouseX,int mouseY)
     {
-        final int headerHeight = 25;
-        final int itemHeight = 18;
-
-        int dropdownX =
-                this.x;
-
-        int dropdownY =
-                this.y +
-                        headerHeight +
-                        25;
-
-        int dropdownWidth =
-                this.width;
-
-        int visibleItems =
-                Math.max(
-                        1,
-                        this.height / itemHeight
-                );
-
-        int maxScroll =
-                Math.max(
-                        0,
-                        this.interpolations.size()
-                                - visibleItems
-                );
-
-        this.dropdownScroll =
-                clamp(
-                        this.dropdownScroll,
-                        0,
-                        maxScroll
-                );
-
-        int dropdownHeight =
-                visibleItems *
-                        itemHeight;
-
-        /*
-         * =====================================================
-         * SHADOW
-         * =====================================================
-         */
-
-        Gui.drawRect(
-                dropdownX - 3,
-                dropdownY - 3,
-                dropdownX +
-                        dropdownWidth +
-                        3,
-                dropdownY +
-                        dropdownHeight +
-                        3,
-                0xDD080909
-        );
-
-        /*
-         * =====================================================
-         * FRAME
-         * =====================================================
-         */
-
-        Gui.drawRect(
-                dropdownX - 1,
-                dropdownY - 1,
-                dropdownX +
-                        dropdownWidth +
-                        1,
-                dropdownY +
-                        dropdownHeight +
-                        1,
-                DROPDOWN_BORDER
-        );
-
-        Gui.drawRect(
-                dropdownX,
-                dropdownY,
-                dropdownX + dropdownWidth,
-                dropdownY + dropdownHeight,
-                DROPDOWN_BACKGROUND
-        );
-
-        /*
-         * Top accent.
-         */
-
-        Gui.drawRect(
-                dropdownX,
-                dropdownY,
-                dropdownX + dropdownWidth,
-                dropdownY + 1,
-                getAccentColor()
-        );
-
-        this.hoveredInterpolation =
-                null;
-
-        /*
-         * =====================================================
-         * ITEMS
-         * =====================================================
-         */
-
-        for (
-                int visibleIndex = 0;
-                visibleIndex < visibleItems;
-                visibleIndex++
-        )
-        {
-            int index =
-                    this.dropdownScroll +
-                            visibleIndex;
-
-            if (
-                    index >=
-                            this.interpolations.size()
-            )
-            {
-                break;
-            }
-
-            KeyframeInterpolation interpolation =
-                    this.interpolations.get(
-                            index
-                    );
-
-            int itemY =
-                    dropdownY +
-                            visibleIndex *
-                                    itemHeight;
-
-            boolean hovered =
-                    mouseX >= dropdownX
-                            &&
-                            mouseX <
-                                    dropdownX +
-                                            dropdownWidth
-                            &&
-                            mouseY >= itemY
-                            &&
-                            mouseY <
-                                    itemY +
-                                            itemHeight;
-
-            boolean selected =
-                    interpolation ==
-                            this.selectedInterpolation;
-
-            /*
-             * Row background.
-             */
-
-            if (selected)
-            {
-                Gui.drawRect(
-                        dropdownX + 1,
-                        itemY,
-                        dropdownX +
-                                dropdownWidth - 1,
-                        itemY +
-                                itemHeight,
-                        hovered
-                                ? DROPDOWN_HOVER
-                                : DROPDOWN_SELECTED
-                );
-            }
-            else if (hovered)
-            {
-                Gui.drawRect(
-                        dropdownX + 1,
-                        itemY,
-                        dropdownX +
-                                dropdownWidth - 1,
-                        itemY +
-                                itemHeight,
-                        DROPDOWN_HOVER
-                );
-            }
-
-            if (hovered)
-            {
-                this.hoveredInterpolation =
-                        interpolation;
-            }
-
-            /*
-             * Selected marker.
-             */
-
-            if (selected)
-            {
-                Gui.drawRect(
-                        dropdownX + 1,
-                        itemY,
-                        dropdownX + 4,
-                        itemY + itemHeight,
-                        getAccentColor()
-                );
-            }
-
-            /*
-             * Hover marker.
-             */
-
-            if (
-                    hovered &&
-                            !selected
-            )
-            {
-                Gui.drawRect(
-                        dropdownX + 1,
-                        itemY,
-                        dropdownX + 3,
-                        itemY + itemHeight,
-                        TEXT_DARK
-                );
-            }
-
-            String name =
-                    getInterpolationName(
-                            interpolation
-                    );
-
-            this.mc.fontRenderer.drawString(
-                    name,
-                    dropdownX + 10,
-                    itemY + 5,
-                    selected
-                            ? TEXT_BRIGHT
-                            : hovered
-                            ? TEXT
-                            : TEXT_SECONDARY
-            );
-        }
-
-        /*
-         * =====================================================
-         * SCROLL INDICATORS
-         * =====================================================
-         */
-
-        if (this.dropdownScroll > 0)
-        {
-            Gui.drawRect(
-                    dropdownX,
-                    dropdownY,
-                    dropdownX +
-                            dropdownWidth,
-                    dropdownY + 1,
-                    getAccentColor()
-            );
-
-            this.mc.fontRenderer.drawString(
-                    "▲",
-                    dropdownX +
-                            dropdownWidth -
-                            12,
-                    dropdownY + 2,
-                    getAccentBrightColor()
-            );
-        }
-
-        if (this.dropdownScroll < maxScroll)
-        {
-            Gui.drawRect(
-                    dropdownX,
-                    dropdownY +
-                            dropdownHeight -
-                            1,
-                    dropdownX +
-                            dropdownWidth,
-                    dropdownY +
-                            dropdownHeight,
-                    getAccentColor()
-            );
-
-            this.mc.fontRenderer.drawString(
-                    "▼",
-                    dropdownX +
-                            dropdownWidth -
-                            12,
-                    dropdownY +
-                            dropdownHeight -
-                            10,
-                    getAccentBrightColor()
-            );
-        }
-
-        /*
-         * =====================================================
-         * FLOATING GRAPH
-         * =====================================================
-         */
-
-        if (
-                this.hoveredInterpolation != null
-        )
-        {
-            int graphWidth =
-                    125;
-
-            int graphHeight =
-                    82;
-
-            int graphX =
-                    dropdownX +
-                            dropdownWidth +
-                            7;
-
-            int graphY =
-                    dropdownY;
-
-            /*
-             * Prevent the graph from going too far
-             * outside the screen.
-             */
-
-            if (
-                    graphX +
-                            graphWidth >
-                            this.mc.currentScreen.width
-            )
-            {
-                graphX =
-                        dropdownX -
-                                graphWidth -
-                                7;
-            }
-
-            drawFloatingGraph(
-                    this.hoveredInterpolation,
-                    this.selectedEasing,
-                    graphX,
-                    graphY,
-                    graphWidth,
-                    graphHeight
-            );
-        }
+        int gridY=this.y+50;
+        int rows=4;
+        int max=EditorInterpolationCurvePicker.maxRowOffset(
+                gridOptions,rows);
+        dropdownScroll=clamp(dropdownScroll,0,max);
+        String selected=selectedCurve.isEmpty()?
+                EditorInterpolationCurvePicker.nativeId(
+                        selectedInterpolation,selectedEasing):
+                selectedCurve;
+        EditorInterpolationCurvePicker.draw(gridOptions,this.x+4,gridY,
+                Math.max(24,this.width-8),rows,dropdownScroll,
+                selected,mouseX,mouseY);
     }
 
     /*
@@ -930,6 +608,26 @@ public class InterpolationPanel
      * FLOATING GRAPH
      * =========================================================
      */
+
+    private void drawCameraGraph(int gx,int gy,int gw,int gh)
+    {
+        if(gw<2||gh<2)return;
+        Gui.drawRect(gx,gy,gx+gw,gy+gh,GRAPH_BACKGROUND);
+        Gui.drawRect(gx,gy,gx+gw,gy+1,GRAPH_BORDER);
+        Gui.drawRect(gx,gy+gh-1,gx+gw,gy+gh,GRAPH_BORDER);
+        Gui.drawRect(gx,gy,gx+1,gy+gh,GRAPH_BORDER);
+        Gui.drawRect(gx+gw-1,gy,gx+gw,gy+gh,GRAPH_BORDER);
+        for(int i=1;i<gw-1;i++)
+        {
+            double t=(double)(i-1)/Math.max(1,gw-3);
+            double value=CameraInterpolation.sample(t,selectedCurve);
+            value=Math.max(-0.2D,Math.min(1.2D,value));
+            int py=gy+gh-3-(int)Math.round(value*(gh-5));
+            py=Math.max(gy+2,Math.min(gy+gh-3,py));
+            Gui.drawRect(gx+i,py,gx+i+1,py+1,
+                    getAccentBrightColor());
+        }
+    }
 
     private void drawFloatingGraph(
             KeyframeInterpolation interpolation,
@@ -1416,7 +1114,7 @@ public class InterpolationPanel
                 pointY - 4,
                 pointX + 5,
                 pointY + 5,
-                0xFF252629
+                0xFF191E24
         );
 
         /*
@@ -1711,222 +1409,45 @@ public class InterpolationPanel
      * =========================================================
      */
 
-    public boolean mouseClicked(
-            int mouseX,
-            int mouseY,
+    public boolean mouseClicked(int mouseX,int mouseY,
             int mouseButton)
     {
-        /*
-         * Header toggles dropdown.
-         */
-
-        if (
-                mouseButton == 0 &&
-                        isInside(
-                                mouseX,
-                                mouseY,
-                                this.x,
-                                this.y,
-                                this.width,
-                                25
-                        )
-        )
+        int sx=this.x+7,sy=this.y+30,sw=this.width-14;
+        boolean header=isInside(mouseX,mouseY,this.x,this.y,
+                this.width,25);
+        boolean selector=isInside(mouseX,mouseY,sx,sy,sw,20);
+        if(mouseButton==0&&(header||selector))
         {
-            this.dropdownOpen =
-                    !this.dropdownOpen;
-
-            this.hoveredInterpolation =
-                    null;
-
+            dropdownOpen=!dropdownOpen;
+            hoveredInterpolation=null;
+            if(dropdownOpen)dropdownScroll=0;
             return true;
         }
-
-        /*
-         * Selector toggles dropdown.
-         */
-
-        int selectorX =
-                this.x + 7;
-
-        int selectorY =
-                this.y + 30;
-
-        int selectorWidth =
-                this.width - 14;
-
-        int selectorHeight =
-                20;
-
-        if (
-                mouseButton == 0 &&
-                        isInside(
-                                mouseX,
-                                mouseY,
-                                selectorX,
-                                selectorY,
-                                selectorWidth,
-                                selectorHeight
-                        )
-        )
+        if(!dropdownOpen)return false;
+        int idx=EditorInterpolationCurvePicker.hit(
+                gridOptions,this.x+4,this.y+50,Math.max(24,width-8),
+                4,dropdownScroll,mouseX,mouseY);
+        if(idx>=0&&mouseButton==0)
         {
-            this.dropdownOpen =
-                    !this.dropdownOpen;
-
-            this.hoveredInterpolation =
-                    null;
-
-            return true;
-        }
-
-        if (!this.dropdownOpen)
-        {
-            return false;
-        }
-
-        final int headerHeight = 25;
-        final int itemHeight = 18;
-
-        int dropdownY =
-                this.y +
-                        headerHeight +
-                        25;
-
-        int visibleItems =
-                Math.max(
-                        1,
-                        this.height / itemHeight
-                );
-
-        int maxScroll =
-                Math.max(
-                        0,
-                        this.interpolations.size()
-                                - visibleItems
-                );
-
-        this.dropdownScroll =
-                clamp(
-                        this.dropdownScroll,
-                        0,
-                        maxScroll
-                );
-
-        /*
-         * =====================================================
-         * SELECT INTERPOLATION
-         * =====================================================
-         */
-
-        if (mouseButton == 0)
-        {
-            for (
-                    int i = 0;
-                    i <
-                            this.interpolations.size();
-                    i++
-            )
+            String chosen=gridOptions[idx];
+            if(EditorInterpolationCurvePicker.isNative(chosen))
             {
-                int visibleIndex =
-                        i -
-                                this.dropdownScroll;
-
-                if (
-                        visibleIndex < 0 ||
-                                visibleIndex >=
-                                        visibleItems
-                )
-                {
-                    continue;
-                }
-
-                int itemY =
-                        dropdownY +
-                                visibleIndex *
-                                        itemHeight;
-
-                if (
-                        isInside(
-                                mouseX,
-                                mouseY,
-                                this.x,
-                                itemY,
-                                this.width,
-                                itemHeight
-                        )
-                )
-                {
-                    this.selectedInterpolation =
-                            this.interpolations.get(
-                                    i
-                            );
-
-                    if (
-                            this.interpolationChanged
-                                    != null
-                    )
-                    {
-                        this.interpolationChanged.run();
-                    }
-
-                    this.dropdownOpen =
-                            false;
-
-                    this.hoveredInterpolation =
-                            null;
-
-                    this.animationStartTime =
-                            System.currentTimeMillis();
-
-                    return true;
-                }
+                KeyframeInterpolation nativeType=
+                        EditorInterpolationCurvePicker.nativeInterpolation(chosen);
+                KeyframeEasing nativeEasing=
+                        EditorInterpolationCurvePicker.nativeEasing(chosen);
+                if(nativeType!=null)selectedInterpolation=nativeType;
+                if(nativeEasing!=null)selectedEasing=nativeEasing;
+                selectedCurve="";
             }
-        }
-
-        /*
-         * =====================================================
-         * CLICK OUTSIDE
-         * =====================================================
-         */
-
-        int dropdownHeight =
-                visibleItems *
-                        itemHeight;
-
-        boolean insideDropdown =
-                isInside(
-                        mouseX,
-                        mouseY,
-                        this.x,
-                        dropdownY,
-                        this.width,
-                        dropdownHeight
-                );
-
-        boolean insideSelector =
-                isInside(
-                        mouseX,
-                        mouseY,
-                        selectorX,
-                        selectorY,
-                        selectorWidth,
-                        selectorHeight
-                );
-
-        if (
-                !insideDropdown &&
-                        !insideSelector
-        )
-        {
-            this.dropdownOpen =
-                    false;
-
-            this.hoveredInterpolation =
-                    null;
-
+            else selectedCurve=chosen;
+            dropdownOpen=false;
+            animationStartTime=System.currentTimeMillis();
+            if(interpolationChanged!=null)interpolationChanged.run();
             return true;
         }
-
-        return false;
+        dropdownOpen=false;
+        return true;
     }
 
     /*
@@ -1969,53 +1490,12 @@ public class InterpolationPanel
      * =========================================================
      */
 
-    public boolean mouseScrolled(
-            int mouseX,
-            int mouseY,
-            int amount)
+    public boolean mouseScrolled(int mouseX,int mouseY,int amount)
     {
-        if (!this.dropdownOpen)
-        {
-            return false;
-        }
-
-        final int itemHeight = 18;
-
-        int visibleItems =
-                Math.max(
-                        1,
-                        this.height / itemHeight
-                );
-
-        int maxScroll =
-                Math.max(
-                        0,
-                        this.interpolations.size()
-                                - visibleItems
-                );
-
-        if (maxScroll <= 0)
-        {
-            return false;
-        }
-
-        if (amount > 0)
-        {
-            this.dropdownScroll =
-                    Math.max(
-                            0,
-                            this.dropdownScroll - 1
-                    );
-        }
-        else if (amount < 0)
-        {
-            this.dropdownScroll =
-                    Math.min(
-                            maxScroll,
-                            this.dropdownScroll + 1
-                    );
-        }
-
+        if(!dropdownOpen)return false;
+        int max=EditorInterpolationCurvePicker.maxRowOffset(
+                gridOptions,4);
+        dropdownScroll=clamp(dropdownScroll+(amount>0?-1:1),0,max);
         return true;
     }
 

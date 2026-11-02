@@ -514,15 +514,17 @@ public class AnimationEditorScreen extends GuiScreen
                         @Override
                         public void run()
                         {
-                            if (editorModeController.getMode()
-                                    != EditorModeController.EditorMode.POSE)
-                            {
+                            EditorModeController.EditorMode mode=
+                                    editorModeController.getMode();
+                            if(mode!=EditorModeController.EditorMode.POSE&&
+                                    mode!=EditorModeController.EditorMode.BODY_PARTS)
                                 return;
-                            }
 
-                            AnimationKeyframe keyframe =
-                                    keyframeController
-                                            .getSelectedKeyframe();
+                            AnimationKeyframe keyframe=
+                                    mode==EditorModeController.EditorMode.BODY_PARTS?
+                                    bodyPartsController.getKeyframeController()
+                                            .getSelectedKeyframe():
+                                    keyframeController.getSelectedKeyframe();
 
                             if (keyframe != null)
                             {
@@ -535,6 +537,11 @@ public class AnimationEditorScreen extends GuiScreen
                                         interpolationPanel
                                                 .getSelectedEasing()
                                 );
+                                // Empty keeps exact native McLib interpolation;
+                                // nonempty enables one of CAMERA's expanded
+                                // easing presets in the POSE evaluator.
+                                keyframe.setEditorCurve(
+                                        interpolationPanel.getSelectedCurve());
 
                                 markEditorDirty();
                             }
@@ -2714,15 +2721,17 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
+        int first=this.editorInput.getSceneDropdownOffset();
         for (int i = 0; i < count; i++)
         {
-            File file = sceneFiles.get(i);
+            int sceneIndex=first+i;
+            File file = sceneFiles.get(sceneIndex);
 
             int rowY =
                     y + i * rowHeight;
 
             boolean selected =
-                    i == selectedScene;
+                    sceneIndex == selectedScene;
 
             boolean hovered =
                     mouseX >= x
@@ -2779,6 +2788,18 @@ public class AnimationEditorScreen extends GuiScreen
                             ? getAccentBrightColor()
                             : COLOR_TEXT
             );
+        }
+        if(sceneFiles.size()>count&&count>0)
+        {
+            // Visible scroll thumb; the selected scene is tracked by its
+            // original index instead of the row currently on screen.
+            int barX=x+dropdownWidth-4;
+            drawRect(barX,y,barX+3,y+dropdownHeight,0xFF17242B);
+            int knob=Math.max(10,dropdownHeight*count/sceneFiles.size());
+            int maxOffset=Math.max(1,sceneFiles.size()-count);
+            int knobY=y+(dropdownHeight-knob)*first/maxOffset;
+            drawRect(barX,knobY,barX+3,knobY+knob,
+                    getAccentBrightColor());
         }
     }
 
@@ -3040,13 +3061,17 @@ public class AnimationEditorScreen extends GuiScreen
                 COLOR_BORDER
         );
 
-        AnimationKeyframe selectedKeyframe =
-                this.keyframeController
-                        .getSelectedKeyframe();
+        EditorModeController.EditorMode mode=
+                this.editorModeController.getMode();
+        AnimationKeyframe selectedKeyframe=
+                mode==EditorModeController.EditorMode.BODY_PARTS?
+                this.bodyPartsController.getKeyframeController()
+                        .getSelectedKeyframe():
+                this.keyframeController.getSelectedKeyframe();
 
-        if (selectedKeyframe != null
-                && this.editorModeController.getMode()
-                == EditorModeController.EditorMode.POSE)
+        if (selectedKeyframe != null &&
+                (mode==EditorModeController.EditorMode.POSE||
+                 mode==EditorModeController.EditorMode.BODY_PARTS))
         {
             this.interpolationPanel
                     .setSelectedInterpolation(
@@ -3059,6 +3084,8 @@ public class AnimationEditorScreen extends GuiScreen
                             selectedKeyframe
                                     .getEasing()
                     );
+            this.interpolationPanel.setSelectedCurve(
+                    selectedKeyframe.getEditorCurve());
         }
 
         this.interpolationPanel.draw(
@@ -3879,12 +3906,13 @@ public class AnimationEditorScreen extends GuiScreen
         int right=width-7;
         int left=Math.max(LEFT_PANEL_WIDTH+4,right-83);
         int top=timelineTop+2;
-        drawRect(left-2,top-1,right+1,top+16,0xEB122630);
-        drawRect(left,top,right,top+14,
-                this.wavAudio.isAudible()?0xFF315567:0xFF564245);
-        fontRenderer.drawString(this.wavAudio.isAudible()
+        // Avoid the old opaque mauve plate over the waveform. CAMERA
+        // doesn't use separate colored boxes for transport status;
+        // keep this monitor as unobtrusive typography on the timeline.
+        fontRenderer.drawStringWithShadow(this.wavAudio.isAudible()
                         ?"WAV SOUND ON":"WAV MUTED",
-                left+5,top+3,0xFFE6EFF5);
+                left+5,top+3,this.wavAudio.isAudible()
+                        ?getAccentBrightColor():COLOR_TEXT_SECONDARY);
     }
 
     /** Only intercept the tiny WAV monitor button above the sound waveform. */

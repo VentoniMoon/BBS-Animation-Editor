@@ -33,6 +33,15 @@ public class AnimationKeyframe
      */
     private KeyframeInterpolation interpolation;
     private KeyframeEasing easing;
+    // Optional expanded CAMERA curve. Empty retains exact McLib behavior,
+    // including Hermite/Bezier handles and existing .dat compatibility.
+    private String editorCurve="";
+    public String getEditorCurve(){return editorCurve;}
+    public void setEditorCurve(String curve)
+    {
+        editorCurve=curve!=null&&CameraInterpolation.isKnown(curve)?
+                curve.toLowerCase(java.util.Locale.ROOT):"";
+    }
 
     private float rx;
     private float ry;

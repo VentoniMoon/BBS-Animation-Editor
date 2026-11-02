@@ -349,26 +349,19 @@ public class BodyPartsTimelineController
         }
     }
 
-    private void drawActorModelBar(Minecraft mc, int width, int y, BodyPartModelData model)
+    private void drawActorModelBar(Minecraft mc,int width,int y,
+            BodyPartModelData model)
     {
-        int left = timeline.getFrameX(model.getStartFrame(), TIMELINE_START_X);
-        int right = timeline.getFrameX(model.getEndFrame(), TIMELINE_START_X);
-        if (right < TIMELINE_START_X || left > width) return;
-        left = Math.max(TIMELINE_START_X, left);
-        right = Math.min(width, Math.max(left + 8, right));
-        int barY = y + 4;
-        boolean selected = model == controller.getSelectedAttachment();
-        Gui.drawRect(left, barY, right, barY + 12,
-                selected ? EditorThemeManager.get().getAccentBright()
-                        : EditorThemeManager.get().getAccent());
-        Gui.drawRect(left, barY, Math.min(right, left + 2), barY + 12,
-                EditorThemeManager.get().getAccentBright());
-        Gui.drawRect(Math.max(left, right - 2), barY, right, barY + 12,
-                EditorThemeManager.get().getAccentBright());
-        mc.fontRenderer.drawString(trim(mc,
-                model.hasModel() ? model.getModelName() : "SELECT MODEL",
-                Math.max(16, right - left - 8)), left + 4, barY + 2,
-                model.hasModel() ? 0xFF101010 : 0xFFE0E3E5);
+        int left=timeline.getFrameX(model.getStartFrame(),
+                TIMELINE_START_X);
+        int right=timeline.getFrameX(model.getEndFrame(),
+                TIMELINE_START_X);
+        if(right<TIMELINE_START_X||left>width)return;
+        left=Math.max(TIMELINE_START_X,left);
+        right=Math.min(width,Math.max(left+8,right));
+        EditorTimelineSkin.clip(left,right,y,TRACK_HEIGHT,
+                model.hasModel()?model.getModelName():"SELECT MODEL",
+                model==controller.getSelectedAttachment());
     }
 
     private void drawModelBoneTimeline(
@@ -716,74 +709,9 @@ public class BodyPartsTimelineController
         );
     }
 
-    private void drawKeyframe(
-            int x,
-            int y,
-            boolean selected)
+    private void drawKeyframe(int x,int y,boolean selected)
     {
-        int color =
-                selected
-                        ? EditorThemeManager.get().getAccent()
-                        : EditorThemeManager.get().getAccent();
-
-        Gui.drawRect(
-                x,
-                y - 6,
-                x + 1,
-                y + 7,
-                color
-        );
-
-        Gui.drawRect(
-                x - 1,
-                y - 5,
-                x + 2,
-                y + 6,
-                color
-        );
-
-        Gui.drawRect(
-                x - 2,
-                y - 4,
-                x + 3,
-                y + 5,
-                color
-        );
-
-        Gui.drawRect(
-                x - 3,
-                y - 3,
-                x + 4,
-                y + 4,
-                color
-        );
-
-        Gui.drawRect(
-                x - 4,
-                y - 2,
-                x + 5,
-                y + 3,
-                color
-        );
-
-        if (!selected)
-        {
-            int inner = themeColor(0.10F);
-
-            Gui.drawRect(x, y - 4, x + 1, y + 5, inner);
-            Gui.drawRect(x - 1, y - 3, x + 2, y + 4, inner);
-            Gui.drawRect(x - 2, y - 2, x + 3, y + 3, inner);
-        }
-        else
-        {
-            Gui.drawRect(
-                    x - 1,
-                    y - 2,
-                    x + 2,
-                    y + 3,
-                    EditorThemeManager.get().getAccentBright()
-            );
-        }
+        EditorTimelineSkin.key(x,y,selected);
     }
 
     private void drawPlayhead(
@@ -1195,14 +1123,14 @@ public class BodyPartsTimelineController
         int left = timeline.getFrameX(model.getStartFrame(), TIMELINE_START_X);
         int right = timeline.getFrameX(model.getEndFrame(), TIMELINE_START_X);
         int barTop = tracksTop +
-                ((mouseY - tracksTop) / TRACK_HEIGHT) * TRACK_HEIGHT + 4;
+                ((mouseY - tracksTop) / TRACK_HEIGHT) * TRACK_HEIGHT + 3;
         /* The model name in the left column is selectable too. */
         if (mouseX >= 22 && mouseX < TIMELINE_START_X)
         {
             return model;
         }
         return mouseX >= left && mouseX <= right && mouseY >= barTop
-                && mouseY <= barTop + 12 ? model : null;
+                && mouseY <= barTop + TRACK_HEIGHT - 6 ? model : null;
     }
 
     private boolean mouseClickedModelTimeline(
