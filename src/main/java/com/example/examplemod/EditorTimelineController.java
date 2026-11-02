@@ -1002,6 +1002,12 @@ public class EditorTimelineController
                 getTimelineTrackBorderColor()
         );
 
+        // Draw the same vertical frame grid used in CAMERA and
+        // CHARACTER AFTER the track fill; the old full-height ruler
+        // grid was hidden underneath every bone background.
+        EditorTimelineSkin.gridRow(this.timeline,timelineStartX,width,
+                trackY,TRACK_HEIGHT);
+
         /*
          * Selected bone indicator.
          */
@@ -1077,17 +1083,8 @@ public class EditorTimelineController
                         : getTimelineTrackBorderColor()
         );
 
-        /*
-         * Track center line.
-         */
-
-        Gui.drawRect(
-                timelineStartX,
-                trackY + 10,
-                width,
-                trackY + 11,
-                0xFF292929
-        );
+        // CAMERA has no full-width center-line through each clip
+        // lane; the row separators plus frame grid provide structure.
 
         /*
          * =====================================================
