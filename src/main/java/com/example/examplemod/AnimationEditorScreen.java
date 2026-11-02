@@ -3096,6 +3096,19 @@ public class AnimationEditorScreen extends GuiScreen
         sceneViewport.renderPreparedMirrorActor(mc,mirrorView,width,height);
     }
 
+    /**
+     * Shadow-map-only replay. The normal native actor pass MUST have
+     * prepared the selected/background poses already. Never calls the
+     * timeline, morph updater, Body Parts prepare or physics simulation.
+     */
+    public int renderPreparedActorsInShadow(Minecraft mc)
+    {
+        if(mc==null||sceneViewport==null||sceneState==null)return 0;
+        int drawn=multiActorPreview.renderPreparedShadowActors(mc);
+        if(sceneViewport.renderPreparedShadowActor(mc))drawn++;
+        return drawn;
+    }
+
     public boolean renderActorsInNativeWorld()
     {
         if (this.sceneViewport == null || this.sceneState == null ||
