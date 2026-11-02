@@ -148,6 +148,11 @@ public class BlockbusterActorPreviewRenderer
     private float preparedPartialTicks;
 
     private String loadedMorphSignature = "";
+    // CharacterStateResolver (selected actor) and this renderer can both
+    // install an actor morph. A matching NBT signature alone is insufficient:
+    // after one owner installs a replacement, the other cache can report
+    // "loaded" while still holding a stale per-morph animator/layer setup.
+    private AbstractMorph loadedMorphReference;
 
     private double previousX;
     private double previousY;
@@ -197,6 +202,7 @@ public class BlockbusterActorPreviewRenderer
             this.actor.isDead = false;
 
             this.loadedMorphSignature = "";
+        this.loadedMorphReference = null;
 
             this.previousX = 0.0D;
             this.previousY = 0.0D;
@@ -252,8 +258,8 @@ public class BlockbusterActorPreviewRenderer
         String signature =
                 morphNBT.toString();
 
-        if (signature.equals(
-                this.loadedMorphSignature))
+        if (signature.equals(this.loadedMorphSignature) &&
+                entityActor.getMorph() == this.loadedMorphReference)
         {
             return;
         }
@@ -289,8 +295,8 @@ public class BlockbusterActorPreviewRenderer
                             );
                 }
 
-                this.loadedMorphSignature =
-                        signature;
+                this.loadedMorphSignature = signature;
+                this.loadedMorphReference = morph;
 
                 this.previousX = 0.0D;
                 this.previousY = 0.0D;
@@ -1985,6 +1991,7 @@ public class BlockbusterActorPreviewRenderer
         this.restoreUneditedNativeParts=false;
 
         this.loadedMorphSignature = "";
+        this.loadedMorphReference = null;
 
         this.previousX = 0.0D;
         this.previousY = 0.0D;
