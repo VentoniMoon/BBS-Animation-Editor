@@ -214,17 +214,59 @@ public final class CameraMirrorBetterLightsProbe
             Class<?> mod=Class.forName("dz.betterlights.BetterLightsMod",
                     false,CameraMirrorBetterLightsProbe.class
                             .getClassLoader());
+            // LaunchWrapper / Forge Gradle can expose a non-file
+            // ProtectionDomain URL for the same installed JAR. Fall back
+            // to the Minecraft mods directory and VERIFY the provider
+            // class entry instead of failing with "Unsupported provider URL".
+            File source=null;
             CodeSource code=mod.getProtectionDomain().getCodeSource();
-            if(code==null||code.getLocation()==null)
-                throw new IllegalStateException("No BetterLights code source");
-            URL url=code.getLocation();
-            if(!"file".equalsIgnoreCase(url.getProtocol()))
-                throw new IllegalStateException("Unsupported provider URL");
-            File source=new File(url.toURI());
-            if(!source.isFile()||!source.getName().endsWith(".jar"))
+            if(code!=null&&code.getLocation()!=null)
+            {
+                URL url=code.getLocation();
+                if("file".equalsIgnoreCase(url.getProtocol()))
+                    try
+                    {
+                        File candidate=new File(url.toURI());
+                        if(candidate.isFile()&&
+                                candidate.getName().endsWith(".jar"))
+                            source=candidate;
+                    }
+                    catch(Exception ignored){}
+            }
+            if(source==null)
+            {
+                net.minecraft.client.Minecraft mc=
+                        net.minecraft.client.Minecraft.getMinecraft();
+                File mods=mc==null?null:
+                        new File(mc.mcDataDir,"mods");
+                File[] candidates=mods==null?null:mods.listFiles();
+                if(candidates!=null)
+                    for(File candidate:candidates)
+                    {
+                        String name=candidate.getName().toLowerCase(
+                                Locale.ROOT);
+                        if(!candidate.isFile()||
+                                !name.startsWith("betterlights-")||
+                                !name.endsWith(".jar"))continue;
+                        try(JarFile probe=new JarFile(candidate))
+                        {
+                            if(probe.getJarEntry(
+                                    "dz/betterlights/BetterLightsMod.class")
+                                    !=null)
+                            {
+                                source=candidate;
+                                break;
+                            }
+                        }
+                        catch(Exception ignored){}
+                    }
+            }
+            if(source==null)
                 throw new IllegalStateException(
-                        "BetterLights code source is not an accessible JAR");
+                    "Installed BetterLights jar not found in mods");
             jar=new JarFile(source);
+            System.out.println(TAG+"Inspecting installed provider="+
+                    source.getName());
             List<String> classNames=new ArrayList<String>();
             Enumeration<JarEntry> entries=jar.entries();
             while(entries.hasMoreElements()&&classNames.size()<24)
