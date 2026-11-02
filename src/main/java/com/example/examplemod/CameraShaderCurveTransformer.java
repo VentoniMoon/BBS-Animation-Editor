@@ -19,6 +19,15 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
 {
     private static final String SHADERS="net.optifine.shaders.Shaders";
     private static final String RUNTIME="com/example/examplemod/CameraShaderCurves";
+    private static final String SUN_SHADOW=
+            "com/example/examplemod/BbsFsNativeActorSunShadowOverlay";
+    private static volatile boolean nativeShadowHookInstalled;
+
+    /** Used for runtime diagnostics; the first frame may install lazily. */
+    public static boolean nativeShadowHookInstalled()
+    {
+        return nativeShadowHookInstalled;
+    }
     private static boolean warned;
     private static volatile boolean installed;
 
@@ -39,7 +48,7 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
         {
             ClassNode node=new ClassNode(Opcodes.ASM5);
             new ClassReader(bytes).accept(node,0);
-            int readerHooks=0,programHooks=0;
+            int readerHooks=0,programHooks=0,shadowHooks=0;
             for(Object o:node.methods)
             {
                 MethodNode method=(MethodNode)o;
@@ -59,6 +68,28 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
                                     "Ljava/io/BufferedReader;"));
                             readerHooks++;
                         }
+                    }
+                }
+                else if("beginRender".equals(method.name))
+                {
+                    // OptiFine 1.12.2 performs the full native sun
+                    // shadow map BEFORE its regular world GBuffer.
+                    // Only there can actor casters affect BSL terrain
+                    // lighting. A post-WorldLast overlay was too late.
+                    // Avoid modifying ShadersRender or native sfb.
+                    for(AbstractInsnNode instruction:
+                            method.instructions.toArray())
+                    {
+                        if(!(instruction instanceof MethodInsnNode))continue;
+                        MethodInsnNode invoke=(MethodInsnNode)instruction;
+                        if(!"renderShadowMap".equals(invoke.name)||
+                                !"net/optifine/shaders/ShadersRender"
+                                        .equals(invoke.owner))continue;
+                        MethodInsnNode callback=new MethodInsnNode(
+                                Opcodes.INVOKESTATIC,SUN_SHADOW,
+                                "onNativeShadowMapCompleted","()V",false);
+                        method.instructions.insert(instruction,callback);
+                        shadowHooks++;
                     }
                 }
                 else if("useProgram".equals(method.name))
@@ -91,9 +122,10 @@ public final class CameraShaderCurveTransformer implements IClassTransformer
             ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);
             node.accept(writer);
             installed=true;
+            nativeShadowHookInstalled=shadowHooks>0;
             System.out.println("[BBS Editor][Curve] Native OptiFine "+
                     "shader source/program hooks installed ("+readerHooks+
-                    "/"+programHooks+")");
+                    "/"+programHooks+") nativeSunShadowHook="+shadowHooks);
             return writer.toByteArray();
         }
         catch(Throwable incompatible)
