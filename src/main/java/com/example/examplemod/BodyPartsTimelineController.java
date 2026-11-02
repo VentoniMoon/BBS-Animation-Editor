@@ -241,6 +241,24 @@ public class BodyPartsTimelineController
             );
         }
 
+        // The CAMERA reference shows a grid even on unused lanes.
+        // Populate the visible space after the last attachment/bone
+        // without painting over bars and selected keyframe handles.
+        int rowsTop=top+HEADER_HEIGHT;
+        int rowCapacity=Math.max(0,(height-rowsTop)/TRACK_HEIGHT);
+        int sourceCount=model==null?actorRows().size():
+                model.getBones().size();
+        int populated=Math.max(0,Math.min(rowCapacity,
+                sourceCount-boneScroll));
+        for(int row=populated;row<rowCapacity;row++)
+        {
+            int y=rowsTop+row*TRACK_HEIGHT;
+            Gui.drawRect(0,y,width,y+TRACK_HEIGHT,track());
+            Gui.drawRect(0,y+TRACK_HEIGHT-1,width,y+TRACK_HEIGHT,border());
+            EditorTimelineSkin.gridRow(this.timeline,TIMELINE_START_X,
+                    width,y,TRACK_HEIGHT);
+        }
+
         drawPlayhead(
                 mc,
                 width,
