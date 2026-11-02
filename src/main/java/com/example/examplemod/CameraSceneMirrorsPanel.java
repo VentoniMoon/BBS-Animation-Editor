@@ -125,9 +125,15 @@ public final class CameraSceneMirrorsPanel
                     0xFFAAB8C1);
             Gui.drawRect(inspectorLeft+78,yy-4,inspectorLeft+175,yy+15,
                     0xFF10151A);
+            Gui.drawRect(inspectorLeft+78,yy-4,inspectorLeft+92,yy+15,
+                    0xFF34536A);
+            Gui.drawRect(inspectorLeft+161,yy-4,inspectorLeft+175,yy+15,
+                    0xFF34536A);
+            mc.fontRenderer.drawString("<",inspectorLeft+82,yy,0xFFE3EFF4);
+            mc.fontRenderer.drawString(">",inspectorLeft+165,yy,0xFFE3EFF4);
             if(field!=null&&edit==i)field.drawTextBox();
             else mc.fontRenderer.drawString(String.format(Locale.ROOT,
-                    "%.3f",get(m,i)),inspectorLeft+85,yy,0xFFE3EFF4);
+                    "%.4f",get(m,i)),inspectorLeft+95,yy,0xFFE3EFF4);
         }
         Gui.drawRect(inspectorLeft+10,257,inspectorLeft+175,275,
                 0xFF29323C);
@@ -224,9 +230,15 @@ public final class CameraSceneMirrorsPanel
             if(mx>=screen.width-185+78&&mx<screen.width-10&&
                     my>=yy-4&&my<yy+15)
             {
+                if(mx<screen.width-185+92 || mx>=screen.width-185+161)
+                {
+                    stepValue(screen,m,i,
+                            mx<screen.width-185+92?-1:1,0.0625D);
+                    return true;
+                }
                 edit=i;
                 field=new GuiTextField(19251,mc().fontRenderer,
-                        screen.width-185+82,yy-2,89,16);
+                        screen.width-185+94,yy-2,66,16);
                 field.setText(String.format(Locale.ROOT,"%.4f",get(m,i)));
                 field.setFocused(true);
                 return true;
@@ -234,6 +246,15 @@ public final class CameraSceneMirrorsPanel
         }
         return true;
     }
+    private void stepValue(AnimationEditorScreen screen,
+            CameraSceneMirrors.Mirror mirror,int index,int direction,double step)
+    {
+        double before=get(mirror,index);
+        if(!Double.isFinite(before))return;
+        set(mirror,index,before+direction*step);
+        if(get(mirror,index)!=before)screen.getCameraWorkspace().saveScene();
+    }
+
     private static Minecraft mc(){return Minecraft.getMinecraft();}
     private void commit(AnimationEditorScreen screen)
     {
@@ -259,6 +280,16 @@ public final class CameraSceneMirrorsPanel
         if(key==Keyboard.KEY_RETURN||key==Keyboard.KEY_NUMPADENTER||
                 key==Keyboard.KEY_TAB)
         {commit(screen);return true;}
+        if(key==Keyboard.KEY_UP||key==Keyboard.KEY_DOWN)
+        {
+            CameraSceneMirrors.Mirror m=list(screen).selected();
+            if(m!=null&&edit>=0)
+            {
+                stepValue(screen,m,edit,key==Keyboard.KEY_UP?1:-1,0.03125D);
+                field.setText(String.format(Locale.ROOT,"%.5f",get(m,edit)));
+            }
+            return true;
+        }
         field.textboxKeyTyped(typed,key);
         return true;
     }
