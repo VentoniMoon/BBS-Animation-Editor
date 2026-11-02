@@ -78,11 +78,28 @@ public class BodyPartsEditorPanel
     private boolean modelSectionOpen = true;
     private boolean globalSectionOpen = false;
     private int globalScroll = 0;
-    private static final int SECTION_HEIGHT = 22;
+    private static final int TAB_TOP = 29;
+    private static final int TAB_HEIGHT = 21;
+    private static final int TAB_LEFT = 7;
+    private static final int MODEL_TAB_WIDTH = 57;
+    private static final int TAB_GAP = 3;
+    private static final int CONTENT_TOP = TAB_TOP + TAB_HEIGHT + 3;
 
-    /* Compact layout: last Scale Z starts at +170 and occupies 16px.
-     * Allow a small bottom margin; only scroll on unusually short screens. */
-    private static final int GLOBAL_CONTENT_HEIGHT = 194;
+    // Three density presets are selected by the REAL available height.
+    // In the common 1.12.2 GUI scale the compact preset fits without
+    // scrolling. Larger windows use more breathing room between fields.
+    private static final int[] COMPACT_OFFSETS = {
+            12, 29, 46, 74, 91, 108, 136, 153, 170
+    };
+    private static final int[] MEDIUM_OFFSETS = {
+            15, 34, 53, 89, 108, 127, 163, 182, 201
+    };
+    private static final int[] ROOMY_OFFSETS = {
+            17, 39, 61, 105, 127, 149, 193, 215, 237
+    };
+    private static final int[] COMPACT_LABELS = {0, 62, 124};
+    private static final int[] MEDIUM_LABELS = {0, 74, 148};
+    private static final int[] ROOMY_LABELS = {0, 88, 176};
 
     public BodyPartsEditorPanel(
             BodyPartsEditorController controller)
@@ -171,41 +188,37 @@ public class BodyPartsEditorPanel
             return;
         }
 
-        /*
-         * The old layout reserved space for "ATTACH TO" and the selected
-         * bone name. That made MODEL start far too low and left the rest
-         * of the inspector cramped.
-         *
-         * MODEL now starts directly below the BODY PARTS title bar.
-         * The selected actor bone is still used internally by the
-         * controller, but it is no longer rendered in this inspector.
-         */
-        int modelY = y + 30;
-        int globalY = getGlobalY(modelY);
+        // Tabs share ONE row, rather than stacking two accordion headers.
+        // The selected view owns the full vertical space below the row.
+        drawModeTab(mc, "MODEL", TAB_LEFT, MODEL_TAB_WIDTH,
+                modelSectionOpen, mouseX, mouseY);
+        int globalTabX = TAB_LEFT + MODEL_TAB_WIDTH + TAB_GAP;
+        drawModeTab(mc, "GLOBAL TRANSFORM", globalTabX,
+                WIDTH - TAB_LEFT - globalTabX, globalSectionOpen,
+                mouseX, mouseY);
 
-        drawAccordionHeader(mc, "MODEL", modelY, modelSectionOpen, mouseX, mouseY);
         if (modelSectionOpen)
         {
+            int contentY = y + CONTENT_TOP + 3;
             drawButton(mc,
                     selected.hasModel() ? selected.getModelName() : "SELECT MODEL",
-                    x + 9, modelY + SECTION_HEIGHT, WIDTH - 18, 20, mouseX, mouseY);
+                    x + 9, contentY, WIDTH - 18, 22, mouseX, mouseY);
             drawButton(mc, "REMOVE ATTACHMENT",
-                    x + 9, modelY + SECTION_HEIGHT + 24, WIDTH - 18, 17, mouseX, mouseY);
+                    x + 9, contentY + 27, WIDTH - 18, 20, mouseX, mouseY);
             boolean chameleon=isChameleonWeldCandidate(selected);
             drawButton(mc,
                     chameleon
                             ? "WELD GEOMETRY: " + (selected.isWeldEnabled() ? "ON" : "OFF")
                             : "WELD: CHAMELEON ONLY",
-                    x + 9, modelY + SECTION_HEIGHT + 46, WIDTH - 18, 18,
-                    mouseX, mouseY);
+                    x + 9, contentY + 52, WIDTH - 18, 20, mouseX, mouseY);
         }
-
-        drawAccordionHeader(mc, "GLOBAL TRANSFORM", globalY, globalSectionOpen, mouseX, mouseY);
-        if (globalSectionOpen)
+        else if (globalSectionOpen)
         {
             AnimationTransform transform = selected.getGlobalTransform();
-            int viewportTop = globalY + SECTION_HEIGHT;
-            int viewportBottom = y + panelHeight - 5;
+            int viewportTop = getGlobalViewportTop();
+            int viewportBottom = getGlobalViewportBottom();
+            int maxScroll = getGlobalMaxScroll();
+            globalScroll = Math.max(0, Math.min(maxScroll, globalScroll));
             drawRect(mc, x + 6, viewportTop, x + WIDTH - 6, viewportBottom,
                     EditorVisualStyle.themedSurface(0.05F));
             syncGlobalControls(transform, viewportTop);
@@ -214,20 +227,26 @@ public class BodyPartsEditorPanel
         }
     }
 
-    private void drawAccordionHeader(
-            Minecraft mc, String title, int drawY, boolean open,
-            int mouseX, int mouseY)
+    private void drawModeTab(Minecraft mc, String title, int relativeX,
+            int width, boolean active, int mouseX, int mouseY)
     {
-        boolean hovered = mouseX >= x + 7 && mouseX < x + WIDTH - 7
-                && mouseY >= drawY && mouseY < drawY + SECTION_HEIGHT;
-        drawRect(mc, x + 7, drawY, x + WIDTH - 7, drawY + SECTION_HEIGHT,
-                EditorVisualStyle.themedSurface(hovered ? 0.25F : 0.16F));
-        drawRect(mc, x + 7, drawY, x + 9, drawY + SECTION_HEIGHT,
-                EditorThemeManager.get().getAccent());
-        mc.fontRenderer.drawString(title, x + 15, drawY + 6,
-                hovered ? EditorThemeManager.get().getAccentBright() : 0xFFE2E5E7);
-        mc.fontRenderer.drawString(open ? "-" : "+", x + WIDTH - 18, drawY + 6,
-                EditorThemeManager.get().getAccentBright());
+        int left = x + relativeX;
+        int top = y + TAB_TOP;
+        boolean hover = mouseX >= left && mouseX < left + width
+                && mouseY >= top && mouseY < top + TAB_HEIGHT;
+        drawRect(mc, left, top, left + width, top + TAB_HEIGHT,
+                EditorVisualStyle.themedSurface(active ? 0.27F :
+                        (hover ? 0.20F : 0.12F)));
+        drawRect(mc, left, top + TAB_HEIGHT - 2, left + width,
+                top + TAB_HEIGHT, active ? EditorThemeManager.get().getAccent()
+                        : EditorVisualStyle.themedSurface(0.23F));
+        int availableWidth = width - 6;
+        String display = mc.fontRenderer.trimStringToWidth(title, availableWidth);
+        int textWidth = mc.fontRenderer.getStringWidth(display);
+        mc.fontRenderer.drawString(display,
+                left + (width - textWidth) / 2, top + 6,
+                active ? EditorThemeManager.get().getAccentBright()
+                        : (hover ? 0xFFE8E8E8 : 0xFFB9BCC2));
     }
 
     private void syncGlobalControls(AnimationTransform transform, int viewportTop)
@@ -244,29 +263,42 @@ public class BodyPartsEditorPanel
 
         int cx = x + 9;
         int contentY = viewportTop + 3 - globalScroll;
-        // Compact 17 px pitch and 11 px group labels. All nine controls
-        // fit within 194 px instead of extending below the timeline.
         AnimationValueControl[] controls = {
                 globalPositionX, globalPositionY, globalPositionZ,
                 globalRotationX, globalRotationY, globalRotationZ,
                 globalScaleX, globalScaleY, globalScaleZ
         };
-        int[] offsets = {12,29,46,74,91,108,136,153,170};
-        for (int i=0;i<controls.length;i++)
+        int[] offsets = getGlobalControlOffsets();
+        for (int i = 0; i < controls.length; i++)
         {
             controls[i].setPosition(cx, contentY + offsets[i]);
             controls[i].setWidth(WIDTH - 18);
         }
     }
 
+    private int[] getGlobalControlOffsets()
+    {
+        int available = getGlobalViewportHeight();
+        return available >= 267 ? ROOMY_OFFSETS :
+                available >= 229 ? MEDIUM_OFFSETS : COMPACT_OFFSETS;
+    }
+
+    private int[] getGlobalLabelOffsets()
+    {
+        int available = getGlobalViewportHeight();
+        return available >= 267 ? ROOMY_LABELS :
+                available >= 229 ? MEDIUM_LABELS : COMPACT_LABELS;
+    }
+
     private void drawGlobalControls(Minecraft mc, int viewportTop, int viewportBottom)
     {
         int contentY = viewportTop + 3 - globalScroll;
-        drawGlobalLabel(mc, "POSITION", contentY, viewportTop, viewportBottom);
+        int[] labels = getGlobalLabelOffsets();
+        drawGlobalLabel(mc, "POSITION", contentY + labels[0], viewportTop, viewportBottom);
         globalPositionX.draw(mc); globalPositionY.draw(mc); globalPositionZ.draw(mc);
-        drawGlobalLabel(mc, "ROTATION", contentY + 62, viewportTop, viewportBottom);
+        drawGlobalLabel(mc, "ROTATION", contentY + labels[1], viewportTop, viewportBottom);
         globalRotationX.draw(mc); globalRotationY.draw(mc); globalRotationZ.draw(mc);
-        drawGlobalLabel(mc, "SCALE", contentY + 124, viewportTop, viewportBottom);
+        drawGlobalLabel(mc, "SCALE", contentY + labels[2], viewportTop, viewportBottom);
         globalScaleX.draw(mc); globalScaleY.draw(mc); globalScaleZ.draw(mc);
     }
 
@@ -327,31 +359,34 @@ public class BodyPartsEditorPanel
             return false;
         }
 
-        int modelY = y + 30;
-        int globalY = getGlobalY(modelY);
-
-        if (insideSectionHeader(mouseX, mouseY, modelY))
+        int tabY = y + TAB_TOP;
+        int firstTabLeft = x + TAB_LEFT;
+        int secondTabLeft = firstTabLeft + MODEL_TAB_WIDTH + TAB_GAP;
+        if (mouseY >= tabY && mouseY < tabY + TAB_HEIGHT)
         {
-            modelSectionOpen = !modelSectionOpen;
-            if (modelSectionOpen) globalSectionOpen = false;
-            activeGlobalControl = null;
-            return true;
-        }
-
-        if (insideSectionHeader(mouseX, mouseY, globalY))
-        {
-            globalSectionOpen = !globalSectionOpen;
-            if (globalSectionOpen) modelSectionOpen = false;
-            globalScroll = 0;
-            activeGlobalControl = null;
-            return true;
+            if (mouseX >= firstTabLeft &&
+                    mouseX < firstTabLeft + MODEL_TAB_WIDTH)
+            {
+                modelSectionOpen = true;
+                globalSectionOpen = false;
+                activeGlobalControl = null;
+                return true;
+            }
+            if (mouseX >= secondTabLeft && mouseX < x + WIDTH - TAB_LEFT)
+            {
+                modelSectionOpen = false;
+                globalSectionOpen = true;
+                globalScroll = 0;
+                activeGlobalControl = null;
+                return true;
+            }
         }
 
         if (modelSectionOpen)
         {
-            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9
-                    && mouseY >= modelY + SECTION_HEIGHT
-                    && mouseY < modelY + SECTION_HEIGHT + 20)
+            int contentY = y + CONTENT_TOP + 3;
+            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9 &&
+                    mouseY >= contentY && mouseY < contentY + 22)
             {
                 if (this.screen != null)
                 {
@@ -364,18 +399,14 @@ public class BodyPartsEditorPanel
                 }
                 return true;
             }
-
-            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9
-                    && mouseY >= modelY + SECTION_HEIGHT + 24
-                    && mouseY < modelY + SECTION_HEIGHT + 41)
+            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9 &&
+                    mouseY >= contentY + 27 && mouseY < contentY + 47)
             {
                 controller.removeSelectedAttachment();
                 return true;
             }
-
-            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9
-                    && mouseY >= modelY + SECTION_HEIGHT + 46
-                    && mouseY < modelY + SECTION_HEIGHT + 64)
+            if (mouseX >= x + 9 && mouseX < x + WIDTH - 9 &&
+                    mouseY >= contentY + 52 && mouseY < contentY + 72)
             {
                 if (isChameleonWeldCandidate(selected))
                     selected.setWeldEnabled(!selected.isWeldEnabled());
@@ -384,12 +415,6 @@ public class BodyPartsEditorPanel
         }
 
         return false;
-    }
-
-    private boolean insideSectionHeader(int mouseX, int mouseY, int sectionY)
-    {
-        return mouseX >= x + 7 && mouseX < x + WIDTH - 7
-                && mouseY >= sectionY && mouseY < sectionY + SECTION_HEIGHT;
     }
 
     /**
@@ -406,14 +431,9 @@ public class BodyPartsEditorPanel
                         .equals(morph.getClass().getName());
     }
 
-    private int getGlobalY(int modelY)
+    private int getGlobalViewportTop()
     {
-        return modelY + SECTION_HEIGHT + (modelSectionOpen ? 70 : 0);
-    }
-
-    private int getGlobalViewportTop(int modelY)
-    {
-        return getGlobalY(modelY) + SECTION_HEIGHT;
+        return y + CONTENT_TOP;
     }
 
     private int getGlobalViewportBottom()
@@ -421,30 +441,24 @@ public class BodyPartsEditorPanel
         return y + panelHeight - 5;
     }
 
-    private int getGlobalViewportHeight(int modelY)
+    private int getGlobalViewportHeight()
     {
-        return Math.max(
-                0,
-                getGlobalViewportBottom()
-                        - getGlobalViewportTop(modelY)
-        );
+        return Math.max(0, getGlobalViewportBottom() - getGlobalViewportTop());
     }
 
-    private int getGlobalMaxScroll(int modelY)
+    private int getGlobalMaxScroll()
     {
-        return Math.max(
-                0,
-                GLOBAL_CONTENT_HEIGHT
-                        - getGlobalViewportHeight(modelY)
-        );
+        int[] offsets = getGlobalControlOffsets();
+        // Last field has 16px height; include 5px breathing room.
+        int contentHeight = 3 + offsets[offsets.length - 1] + 16 + 5;
+        return Math.max(0, contentHeight - getGlobalViewportHeight());
     }
 
     private boolean globalContains(int mouseX, int mouseY)
     {
         if (!globalSectionOpen) return false;
 
-        int modelY = y + 30;
-        int viewportTop = getGlobalViewportTop(modelY);
+        int viewportTop = getGlobalViewportTop();
         int viewportBottom = getGlobalViewportBottom();
 
         return mouseX >= x + 6 && mouseX < x + WIDTH - 6
@@ -469,8 +483,7 @@ public class BodyPartsEditorPanel
     public boolean mouseScrolled(int mouseX, int mouseY, int wheel)
     {
         if (!globalContains(mouseX, mouseY) || wheel == 0) return false;
-        int modelY = y + 30;
-        int maxScroll = getGlobalMaxScroll(modelY);
+        int maxScroll = getGlobalMaxScroll();
 
         globalScroll = Math.max(
                 0,
