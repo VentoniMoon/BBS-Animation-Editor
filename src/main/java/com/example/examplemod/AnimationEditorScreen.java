@@ -2028,7 +2028,9 @@ public class AnimationEditorScreen extends GuiScreen
                 0,
                 width,
                 height,
-                EditorVisualStyle.BACKGROUND
+                editorModeController.getMode() == EditorModeController.EditorMode.CAMERA
+                        ? EditorVisualStyle.themedSurface(0.07F)
+                        : EditorVisualStyle.BACKGROUND
         );
 
         drawTopBar();
@@ -2971,10 +2973,10 @@ public class AnimationEditorScreen extends GuiScreen
                 this.sceneState == null
                         ? -1
                         : this.sceneState.getSelectedActor(),
-                COLOR_PANEL,
-                COLOR_PANEL_DARK,
-                COLOR_SELECTED,
-                COLOR_BORDER,
+                EditorVisualStyle.themedSurface(0.08F),
+                EditorVisualStyle.themedSurface(0.045F),
+                EditorVisualStyle.themedSurface(0.23F),
+                EditorVisualStyle.themedSurface(0.19F),
                 COLOR_TEXT,
                 COLOR_TEXT_SECONDARY,
                 COLOR_TEXT_MUTED,
@@ -3214,7 +3216,9 @@ public class AnimationEditorScreen extends GuiScreen
         if(!geometry.canRender())
         {
             if(previewWidth>0&&previewHeight>0)
-                drawRect(left,top,previewRight,bottom,0xFF0E1011);
+                drawRect(left,top,previewRight,bottom,
+                        editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                                ? EditorVisualStyle.themedSurface(0.07F) : 0xFF0E1011);
             // Keep this fallback inside the real bounds rather than
             // covering the inspector or creating an invalid FBO.
             if(previewWidth>=100&&previewHeight>=20)
@@ -3228,7 +3232,9 @@ public class AnimationEditorScreen extends GuiScreen
                 top,
                 previewRight,
                 bottom,
-                0xFF0E1011
+                editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                        ? EditorVisualStyle.themedSurface(0.07F)
+                        : 0xFF0E1011
         );
 
         drawRect(
@@ -3410,7 +3416,7 @@ public class AnimationEditorScreen extends GuiScreen
                 top,
                 width,
                 bottom,
-                COLOR_PANEL
+                EditorVisualStyle.themedSurface(0.075F)
         );
 
         drawRect(
@@ -3418,7 +3424,7 @@ public class AnimationEditorScreen extends GuiScreen
                 top,
                 panelX + 1,
                 bottom,
-                COLOR_BORDER
+                EditorVisualStyle.themedSurface(0.19F)
         );
 
         if (this.editorModeController.getMode()
