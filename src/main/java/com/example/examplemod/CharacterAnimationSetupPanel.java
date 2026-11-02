@@ -20,9 +20,18 @@ public class CharacterAnimationSetupPanel
 
     public static final int HEIGHT = 94;
 
-    private static final int COLOR_PANEL_DARK = 0xFF202D38;
-    private static final int COLOR_PANEL_HOVER = 0xFF34536A;
-    private static final int COLOR_BORDER = 0xFF384148;
+    private static int COLOR_PANEL_DARK()
+    {
+        return EditorVisualStyle.themedSurface(0.090F);
+    }
+    private static int COLOR_PANEL_HOVER()
+    {
+        return EditorVisualStyle.themedSurface(0.230F);
+    }
+    private static int COLOR_BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.190F);
+    }
     private static final int COLOR_TEXT = 0xFFE2E5E7;
     private static final int COLOR_TEXT_SECONDARY = 0xFF9AA1A6;
     private static final int COLOR_TEXT_MUTED = 0xFF666D72;
@@ -175,7 +184,7 @@ public class CharacterAnimationSetupPanel
                 listY,
                 this.x + 8 + listWidth,
                 listY + LIST_HEIGHT,
-                COLOR_PANEL_DARK
+                COLOR_PANEL_DARK()
         );
 
         for (int i = 0; i < VISIBLE_ROWS; i++)
@@ -482,7 +491,7 @@ public class CharacterAnimationSetupPanel
                     rowY,
                     this.x + 8 + this.width - 28,
                     rowY + ROW_HEIGHT,
-                    COLOR_PANEL_HOVER
+                    COLOR_PANEL_HOVER()
             );
         }
 
@@ -567,7 +576,7 @@ public class CharacterAnimationSetupPanel
                 thumbY + thumbHeight,
                 hovered
                         ? EditorThemeManager.get().getAccent()
-                        : COLOR_BORDER
+                        : COLOR_BORDER()
         );
     }
 
