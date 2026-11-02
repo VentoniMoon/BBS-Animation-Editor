@@ -86,6 +86,10 @@ public class EditorGizmoController
     private float dragStartSZ;
     // Native Emoticons Animator+key Euler angles captured at drag start.
     private float[] dragStartNativeEmoticonsEuler;
+    // Blockbuster POSE: evaluated CustomMorph pose before the first drag;
+    // required to rotate in the native bone's local basis, including the
+    // imported/rest pose rather than assuming key rotations start at zero.
+    private float[] dragStartNativeBlockbusterEuler;
 
     private AnimationKeyframe activeKeyframe;
     private AnimationBone activeBone;
@@ -185,6 +189,8 @@ public class EditorGizmoController
         this.activeKeyframe = null;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
+        this.dragStartNativeEmoticonsEuler = null;
+        this.dragStartNativeBlockbusterEuler = null;
     }
 
     public boolean isDragging()
@@ -339,10 +345,19 @@ public class EditorGizmoController
             this.rotationDragCenterX = center.x;
             this.rotationDragCenterY = center.y;
             boolean accurateChildRingRotation =
-                    isBodyPartInternalBoneTarget(bone)
+                    (isBodyPartInternalBoneTarget(bone)
                             && (isBlockbusterBodyPartTarget()
                                 || this.bodyPartRuntimeMorph
-                                instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph);
+                                instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph))
+                    // POSE also displays the bone's full native orientation,
+                    // not a world-aligned ring. Measure tilted X/Y/Z rings
+                    // with the same projected 3D radius as BODY PARTS.
+                    || (this.bodyPartTarget == null
+                            && this.globalTransformTarget == null
+                            && (isBlockbusterCustomMorph()
+                                || (this.previewActor != null
+                                    && this.previewActor.getMorph()
+                                    instanceof mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)));
 
             if (accurateChildRingRotation)
             {
@@ -449,6 +464,7 @@ public class EditorGizmoController
         this.dragStartSY = transform.getScaleY();
         this.dragStartSZ = transform.getScaleZ();
         this.dragStartNativeEmoticonsEuler = capturePoseEmoticonsEuler(bone);
+        this.dragStartNativeBlockbusterEuler = capturePoseBlockbusterEuler(bone);
 
         return true;
     }
@@ -585,6 +601,11 @@ public class EditorGizmoController
                     applyPoseEmoticonsLocalRotation(transform,
                             this.activePart, amount);
                 }
+                else if (this.dragStartNativeBlockbusterEuler != null)
+                {
+                    applyPoseBlockbusterLocalRotation(transform,
+                            this.activePart, amount);
+                }
                 else if (this.bodyPartTarget != null || this.globalTransformTarget != null)
                 {
                     applyBodyPartLocalRotationDelta(
@@ -636,6 +657,8 @@ public class EditorGizmoController
         this.globalTransformTarget = null;
         this.rotationDragAngleValid = false;
         this.rotationDragAccumulatedDegrees = 0.0D;
+        this.dragStartNativeEmoticonsEuler = null;
+        this.dragStartNativeBlockbusterEuler = null;
 
         return true;
     }
@@ -4875,6 +4898,92 @@ public class EditorGizmoController
                 + " relX=(" + rel.m00 + "," + rel.m10 + "," + rel.m20 + ")"
                 + " relY=(" + rel.m01 + "," + rel.m11 + "," + rel.m21 + ")"
                 + " relZ=(" + rel.m02 + "," + rel.m12 + "," + rel.m22 + ")");
+    }
+
+    /**
+     * Blockbuster POSE evaluates the native ModelTransform from the actual
+     * CustomMorph pose that was rendered. The pose may already contain idle,
+     * recorded/rest rotation BEFORE the editor key is applied. Capture those
+     * three angles, not just the current editor key's X/Y/Z.
+     *
+     * Native renderer convention: X, -Y, -Z. BODY PARTS has its own
+     * already-working local-rotation path and is intentionally excluded.
+     */
+    private float[] capturePoseBlockbusterEuler(AnimationBone bone)
+    {
+        if (this.mode != Mode.ROTATION || bone == null ||
+                this.bodyPartTarget != null || this.globalTransformTarget != null ||
+                !isBlockbusterCustomMorph())
+            return null;
+        mchorse.blockbuster_pack.morphs.CustomMorph morph =
+                (mchorse.blockbuster_pack.morphs.CustomMorph)
+                        this.previewActor.getMorph();
+        mchorse.blockbuster_pack.morphs.CustomMorph.ModelProperties pose =
+                morph.customPose;
+        if (pose == null || pose.limbs == null)return null;
+        mchorse.blockbuster.api.ModelTransform nativeLimb =
+                pose.limbs.get(bone.getName());
+        if (nativeLimb == null || nativeLimb.rotate == null ||
+                nativeLimb.rotate.length < 3)return null;
+        float[] values = new float[]
+        {
+            nativeLimb.rotate[0],nativeLimb.rotate[1],nativeLimb.rotate[2]
+        };
+        for (float v : values)
+            if (Float.isNaN(v) || Float.isInfinite(v))return null;
+        return values;
+    }
+
+    /**
+     * R' = R_start * R_localAxis(angle), NOT an Euler component increment.
+     * The caller's amount already includes Blockbuster's data signs for Y/Z;
+     * reverse those signs before composing in native renderer space, then
+     * convert the decomposed Euler angles back to stored key channels.
+     * This preserves base/idle pose, rotation order and unwrapped keys.
+     */
+    private void applyPoseBlockbusterLocalRotation(AnimationTransform target,
+            int axis,float amount)
+    {
+        if(target==null || dragStartNativeBlockbusterEuler==null ||
+                axis<AXIS_X || axis>AXIS_Z)return;
+        if(Math.abs(amount)<0.00001F)
+        {
+            target.setRotation(dragStartRX,dragStartRY,dragStartRZ);
+            return;
+        }
+
+        float[] nativeStart=dragStartNativeBlockbusterEuler;
+        float[][] start=createRotationMatrix(
+                nativeStart[0],-nativeStart[1],-nativeStart[2]);
+        float nativeAngle=(float)Math.toRadians(
+                amount / getDataAxisSign(axis));
+        float c=(float)Math.cos(nativeAngle);
+        float sn=(float)Math.sin(nativeAngle);
+        float[][] delta=identityRotationMatrix();
+        if(axis==AXIS_X)
+        {
+            delta[1][1]=c;delta[1][2]=-sn;
+            delta[2][1]=sn;delta[2][2]=c;
+        }
+        else if(axis==AXIS_Y)
+        {
+            delta[0][0]=c;delta[0][2]=sn;
+            delta[2][0]=-sn;delta[2][2]=c;
+        }
+        else
+        {
+            delta[0][0]=c;delta[0][1]=-sn;
+            delta[1][0]=sn;delta[1][1]=c;
+        }
+        float[] result=rotationMatrixToEulerDegrees(
+                multiplyMatrix(start,delta));
+        float baseX=nativeStart[0]-dragStartRX;
+        float baseY=nativeStart[1]-dragStartRY;
+        float baseZ=nativeStart[2]-dragStartRZ;
+        target.setRotation(
+                nearestEulerEquivalent(result[0]-baseX,dragStartRX),
+                nearestEulerEquivalent(-result[1]-baseY,dragStartRY),
+                nearestEulerEquivalent(-result[2]-baseZ,dragStartRZ));
     }
 
     /**
