@@ -18,29 +18,45 @@ public class InterpolationPanel
      * =========================================================
      */
 
-    private static final int PANEL_BACKGROUND =
-            0xFF191E24;
+    private static int PANEL_BACKGROUND()
+    {
+        return EditorVisualStyle.themedSurface(0.07F);
+    }
 
-    private static final int PANEL_BORDER =
-            0xFF090D11;
+    private static int PANEL_BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.03F);
+    }
 
-    private static final int HEADER_BACKGROUND =
-            0xFF26313A;
+    private static int HEADER_BACKGROUND()
+    {
+        return EditorVisualStyle.themedSurface(0.16F);
+    }
 
-    private static final int HEADER_BOTTOM =
-            0xFF0D171E;
+    private static int HEADER_BOTTOM()
+    {
+        return EditorVisualStyle.themedSurface(0.11F);
+    }
 
-    private static final int FIELD_BACKGROUND =
-            0xFF26313A;
+    private static int FIELD_BACKGROUND()
+    {
+        return EditorVisualStyle.themedSurface(0.14F);
+    }
 
-    private static final int FIELD_HOVER =
-            0xFF33414B;
+    private static int FIELD_HOVER()
+    {
+        return EditorVisualStyle.themedSurface(0.21F);
+    }
 
-    private static final int FIELD_ACTIVE =
-            0xFF384956;
+    private static int FIELD_ACTIVE()
+    {
+        return EditorVisualStyle.themedSurface(0.28F);
+    }
 
-    private static final int FIELD_BORDER =
-            0xFF0D171E;
+    private static int FIELD_BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.05F);
+    }
 
     private static final int TEXT =
             0xFFE0E0E0;
@@ -83,32 +99,48 @@ public class InterpolationPanel
      * =========================================================
      */
 
-    private static final int GRAPH_BACKGROUND =
-            0xFF0D171E;
+    private static int GRAPH_BACKGROUND()
+    {
+        return EditorVisualStyle.themedSurface(0.03F);
+    }
 
-    private static final int GRAPH_GRID =
-            0xFF1A2B34;
+    private static int GRAPH_GRID()
+    {
+        return EditorVisualStyle.themedSurface(0.12F);
+    }
 
-    private static final int GRAPH_AXIS =
-            0xFF4C6472;
+    private static int GRAPH_AXIS()
+    {
+        return EditorVisualStyle.themedSurface(0.28F);
+    }
 
-    private static final int GRAPH_BORDER =
-            0xFF253744;
+    private static int GRAPH_BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.16F);
+    }
 
     private static final int GRAPH_POINT =
             0xFFFFFFFF;
 
-    private static final int DROPDOWN_BACKGROUND =
-            0xFF191E24;
+    private static int DROPDOWN_BACKGROUND()
+    {
+        return EditorVisualStyle.themedSurface(0.09F);
+    }
 
-    private static final int DROPDOWN_SELECTED =
-            0xFF273944;
+    private static int DROPDOWN_SELECTED()
+    {
+        return EditorVisualStyle.themedSurface(0.20F);
+    }
 
-    private static final int DROPDOWN_HOVER =
-            0xFF314450;
+    private static int DROPDOWN_HOVER()
+    {
+        return EditorVisualStyle.themedSurface(0.27F);
+    }
 
-    private static final int DROPDOWN_BORDER =
-            0xFF090D11;
+    private static int DROPDOWN_BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.04F);
+    }
 
     /*
      * =========================================================
@@ -299,7 +331,7 @@ public class InterpolationPanel
                 this.y - 1,
                 this.x + this.width + 1,
                 this.y + this.height + 1,
-                PANEL_BORDER
+                PANEL_BORDER()
         );
 
         Gui.drawRect(
@@ -307,7 +339,7 @@ public class InterpolationPanel
                 this.y,
                 this.x + this.width,
                 this.y + this.height,
-                PANEL_BACKGROUND
+                PANEL_BACKGROUND()
         );
 
         /*
@@ -323,7 +355,7 @@ public class InterpolationPanel
                 this.y,
                 this.x + this.width,
                 this.y + headerHeight,
-                HEADER_BACKGROUND
+                HEADER_BACKGROUND()
         );
 
         /*
@@ -358,7 +390,7 @@ public class InterpolationPanel
                 this.y + headerHeight - 1,
                 this.x + this.width,
                 this.y + headerHeight,
-                HEADER_BOTTOM
+                HEADER_BOTTOM()
         );
 
         /*
@@ -394,17 +426,17 @@ public class InterpolationPanel
         if (this.dropdownOpen)
         {
             selectorBackground =
-                    FIELD_ACTIVE;
+                    FIELD_ACTIVE();
         }
         else if (selectorHovered)
         {
             selectorBackground =
-                    FIELD_HOVER;
+                    FIELD_HOVER();
         }
         else
         {
             selectorBackground =
-                    FIELD_BACKGROUND;
+                    FIELD_BACKGROUND();
         }
 
         /*
@@ -416,7 +448,7 @@ public class InterpolationPanel
                 selectorY,
                 selectorX + selectorWidth,
                 selectorY + selectorHeight,
-                FIELD_BORDER
+                FIELD_BORDER()
         );
 
         /*
@@ -612,11 +644,11 @@ public class InterpolationPanel
     private void drawCameraGraph(int gx,int gy,int gw,int gh)
     {
         if(gw<2||gh<2)return;
-        Gui.drawRect(gx,gy,gx+gw,gy+gh,GRAPH_BACKGROUND);
-        Gui.drawRect(gx,gy,gx+gw,gy+1,GRAPH_BORDER);
-        Gui.drawRect(gx,gy+gh-1,gx+gw,gy+gh,GRAPH_BORDER);
-        Gui.drawRect(gx,gy,gx+1,gy+gh,GRAPH_BORDER);
-        Gui.drawRect(gx+gw-1,gy,gx+gw,gy+gh,GRAPH_BORDER);
+        Gui.drawRect(gx,gy,gx+gw,gy+gh,GRAPH_BACKGROUND());
+        Gui.drawRect(gx,gy,gx+gw,gy+1,GRAPH_BORDER());
+        Gui.drawRect(gx,gy+gh-1,gx+gw,gy+gh,GRAPH_BORDER());
+        Gui.drawRect(gx,gy,gx+1,gy+gh,GRAPH_BORDER());
+        Gui.drawRect(gx+gw-1,gy,gx+gw,gy+gh,GRAPH_BORDER());
         for(int i=1;i<gw-1;i++)
         {
             double t=(double)(i-1)/Math.max(1,gw-3);
@@ -666,7 +698,7 @@ public class InterpolationPanel
                 graphY +
                         graphHeight +
                         1,
-                DROPDOWN_BORDER
+                DROPDOWN_BORDER()
         );
 
         Gui.drawRect(
@@ -674,7 +706,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                GRAPH_BACKGROUND
+                GRAPH_BACKGROUND()
         );
 
         /*
@@ -700,7 +732,7 @@ public class InterpolationPanel
                         1,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                GRAPH_BORDER
+                GRAPH_BORDER()
         );
 
         Gui.drawRect(
@@ -708,7 +740,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + 1,
                 graphY + graphHeight,
-                GRAPH_BORDER
+                GRAPH_BORDER()
         );
 
         Gui.drawRect(
@@ -718,7 +750,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                GRAPH_BORDER
+                GRAPH_BORDER()
         );
 
         drawGraphGrid(
@@ -771,7 +803,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                GRAPH_BACKGROUND
+                GRAPH_BACKGROUND()
         );
 
         /*
@@ -783,7 +815,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + graphWidth,
                 graphY + 1,
-                GRAPH_BORDER
+                GRAPH_BORDER()
         );
 
         Gui.drawRect(
@@ -793,7 +825,7 @@ public class InterpolationPanel
                         1,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                GRAPH_BORDER
+                GRAPH_BORDER()
         );
 
         Gui.drawRect(
@@ -801,7 +833,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + 1,
                 graphY + graphHeight,
-                GRAPH_BORDER
+                GRAPH_BORDER()
         );
 
         Gui.drawRect(
@@ -811,7 +843,7 @@ public class InterpolationPanel
                 graphY,
                 graphX + graphWidth,
                 graphY + graphHeight,
-                GRAPH_BORDER
+                GRAPH_BORDER()
         );
 
         drawGraphGrid(
@@ -866,7 +898,7 @@ public class InterpolationPanel
                 quarterY,
                 graphX + graphWidth - 1,
                 quarterY + 1,
-                GRAPH_GRID
+                GRAPH_GRID()
         );
 
         /*
@@ -882,7 +914,7 @@ public class InterpolationPanel
                 middleY,
                 graphX + graphWidth - 1,
                 middleY + 1,
-                GRAPH_AXIS
+                GRAPH_AXIS()
         );
 
         /*
@@ -898,7 +930,7 @@ public class InterpolationPanel
                 threeQuarterY,
                 graphX + graphWidth - 1,
                 threeQuarterY + 1,
-                GRAPH_GRID
+                GRAPH_GRID()
         );
 
         /*
@@ -916,7 +948,7 @@ public class InterpolationPanel
                 graphY +
                         graphHeight -
                         1,
-                GRAPH_GRID
+                GRAPH_GRID()
         );
 
         /*
@@ -938,7 +970,7 @@ public class InterpolationPanel
                 graphY +
                         graphHeight -
                         1,
-                GRAPH_GRID
+                GRAPH_GRID()
         );
 
         Gui.drawRect(
@@ -948,7 +980,7 @@ public class InterpolationPanel
                 graphY +
                         graphHeight -
                         1,
-                GRAPH_GRID
+                GRAPH_GRID()
         );
     }
 
