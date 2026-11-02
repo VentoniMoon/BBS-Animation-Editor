@@ -902,7 +902,57 @@ public class BlockbusterActorPreviewRenderer
      * =========================================================
      */
 
+    /**
+     * Isolate per-actor OpenGL client arrays, not just server attributes.
+     * Emoticons uses VBO-backed vertex/normal/UV pointers while Blockbuster
+     * models can leave different client pointers enabled. The world guard
+     * saves them once for the whole scene, which is insufficient when the
+     * next actor uses a different morph renderer.
+     *
+     * This also reconciles Minecraft's GL cache for selected actors: the
+     * previous multi-actor resync only covered background actor draws.
+     */
     public void drawActor(
+            Minecraft mc,
+            BlockbusterSceneActorData actorData,
+            BlockbusterRecordFrame frame,
+            EditorCamera camera,
+            int viewportX,
+            int viewportY,
+            int viewportWidth,
+            int viewportHeight)
+    {
+        if(mc==null || mc.world==null || actorData==null || frame==null ||
+                camera==null || viewportWidth<=0 || viewportHeight<=0)
+        {
+            preparedForMirror=false;
+            return;
+        }
+
+        BbsFsGlStateResync.Snapshot beforeActor=
+                BbsFsGlStateResync.capture();
+        GL11.glPushClientAttrib(GL11.GL_ALL_CLIENT_ATTRIB_BITS);
+        try
+        {
+            org.lwjgl.opengl.GL13.glClientActiveTexture(
+                    org.lwjgl.opengl.GL13.GL_TEXTURE0);
+            drawActorUnisolated(mc,actorData,frame,camera,viewportX,
+                    viewportY,viewportWidth,viewportHeight);
+        }
+        finally
+        {
+            try
+            {
+                GL11.glPopClientAttrib();
+            }
+            finally
+            {
+                BbsFsGlStateResync.restore(beforeActor);
+            }
+        }
+    }
+
+    private void drawActorUnisolated(
             Minecraft mc,
             BlockbusterSceneActorData actorData,
             BlockbusterRecordFrame frame,
