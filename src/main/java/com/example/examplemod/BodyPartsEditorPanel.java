@@ -80,13 +80,8 @@ public class BodyPartsEditorPanel
     private int globalScroll = 0;
     private static final int SECTION_HEIGHT = 22;
 
-    /*
-     * The last control is Scale Z:
-     * contentY + 205 (top) + 16 px (control height).
-     * contentY starts at viewportTop + 4, so the real content
-     * occupies 225 px. Keep the scroll range tied to that
-     * actual content size instead of an arbitrary larger value.
-     */
+    /* Compact layout: last Scale Z starts at +170 and occupies 16px.
+     * Allow a small bottom margin; only scroll on unusually short screens. */
     private static final int GLOBAL_CONTENT_HEIGHT = 194;
 
     public BodyPartsEditorPanel(
@@ -143,7 +138,9 @@ public class BodyPartsEditorPanel
             }
             else
             {
-                controller.getTransformPanel().setPosition(x + 5, y + 28);
+                // TransformPanel now fills the complete 185px inspector.
+                // Do not inset it by 5px: that clips its right border.
+                controller.getTransformPanel().setPosition(x, y + 28);
                 controller.getTransformPanel().draw(
                         mc,
                         controller.getKeyframeController().getSelectedKeyframe(),
