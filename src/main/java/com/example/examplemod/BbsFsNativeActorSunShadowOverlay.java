@@ -39,6 +39,7 @@ public final class BbsFsNativeActorSunShadowOverlay
     private static boolean earlyHookLogged;
     private static boolean shadowRenderedThisFrame;
     private static boolean callbackReported;
+    private static boolean overlayBypassLogged;
 
     public static void beginFrame()
     {
@@ -57,6 +58,22 @@ public final class BbsFsNativeActorSunShadowOverlay
                     "bbs.editor.camera.nativeActorSunShadows"))
             return;
         if(shadowRenderedThisFrame)return;
+        // Diagnostic isolation: prepare/replay the actor exactly as in
+        // the full feature, but bypass ONLY native shadow atlas writes.
+        // This distinguishes prepass GL state pollution from a corrupted
+        // native OptiFine depth attachment without disabling the mirror.
+        if(Boolean.getBoolean(
+                "bbs.editor.camera.nativeActorSunShadows.skipOverlay"))
+        {
+            if(!overlayBypassLogged)
+            {
+                overlayBypassLogged=true;
+                System.out.println(TAG+
+                        "Native shadow overlay bypassed for A/B test; "+
+                        "early pose preparation remains active");
+            }
+            return;
+        }
         Minecraft mc=Minecraft.getMinecraft();
         if(mc==null||
                 !(mc.currentScreen instanceof AnimationEditorScreen)||
