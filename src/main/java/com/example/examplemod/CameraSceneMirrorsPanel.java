@@ -48,7 +48,7 @@ public final class CameraSceneMirrorsPanel
         bottom=panelBottom;
         Minecraft mc=Minecraft.getMinecraft();
         EditorVisualStyle.drawCameraTabs(mc,CameraWorkspace.CAMERA_LEFT_WIDTH,2);
-        Gui.drawRect(0,54,CameraWorkspace.CAMERA_LEFT_WIDTH,bottom,0xFF19232C);
+        Gui.drawRect(0,54,CameraWorkspace.CAMERA_LEFT_WIDTH,bottom,EditorVisualStyle.themedSurface(0.075F));
         Gui.drawRect(4,61,64,82,EditorVisualStyle.themedSurface(0.23F));
         Gui.drawRect(67,61,126,82,EditorVisualStyle.themedSurface(0.23F));
         mc.fontRenderer.drawString("+ ADD",10,68,0xFFFFFFFF);
@@ -100,8 +100,8 @@ public final class CameraSceneMirrorsPanel
         if(!opened)return;
         Minecraft mc=Minecraft.getMinecraft();
         inspectorLeft=screen.width-185;
-        Gui.drawRect(inspectorLeft,25,screen.width,panelBottom,0xFF191D21);
-        Gui.drawRect(inspectorLeft,25,inspectorLeft+2,panelBottom,0xFF30383E);
+        Gui.drawRect(inspectorLeft,25,screen.width,panelBottom,EditorVisualStyle.themedSurface(0.070F));
+        Gui.drawRect(inspectorLeft,25,inspectorLeft+2,panelBottom,EditorVisualStyle.themedSurface(0.220F));
         mc.fontRenderer.drawString("MIRROR PROPERTIES",inspectorLeft+9,35,
                 0xFF7DD4F8);
         CameraSceneMirrors.Mirror m=list(screen).selected();
@@ -111,7 +111,7 @@ public final class CameraSceneMirrorsPanel
                     inspectorLeft+9,57,0xFFB3BDC8);
             return;
         }
-        Gui.drawRect(inspectorLeft+7,48,inspectorLeft+177,67,0xFF272E34);
+        Gui.drawRect(inspectorLeft+7,48,inspectorLeft+177,67,EditorVisualStyle.themedSurface(0.150F));
         mc.fontRenderer.drawString(m.name,inspectorLeft+12,53,0xFFE8F1F3);
         mc.fontRenderer.drawString("WORLD RECTANGLE",inspectorLeft+10,82,
                 0xFF9EB4C3);
@@ -121,7 +121,7 @@ public final class CameraSceneMirrorsPanel
             mc.fontRenderer.drawString(LABELS[i],inspectorLeft+12,yy,
                     0xFFAAB8C1);
             Gui.drawRect(inspectorLeft+78,yy-4,inspectorLeft+175,yy+15,
-                    0xFF10151A);
+                    EditorVisualStyle.themedSurface(0.045F));
             Gui.drawRect(inspectorLeft+78,yy-4,inspectorLeft+92,yy+15,
                     EditorVisualStyle.themedSurface(0.29F));
             Gui.drawRect(inspectorLeft+161,yy-4,inspectorLeft+175,yy+15,
@@ -133,7 +133,7 @@ public final class CameraSceneMirrorsPanel
                     "%.4f",get(m,i)),inspectorLeft+95,yy,0xFFE3EFF4);
         }
         Gui.drawRect(inspectorLeft+10,257,inspectorLeft+175,275,
-                0xFF29323C);
+                EditorVisualStyle.themedSurface(0.160F));
         mc.fontRenderer.drawString("Enabled",inspectorLeft+16,262,
                 0xFFE0EAF0);
         mc.fontRenderer.drawString(m.enabled?"ON":"OFF",
