@@ -95,6 +95,12 @@ minecraft {
                     System.getProperty(
                             'bbs.editor.camera.nativeActorSunShadows',
                             'false')
+            // A/B diagnostics: keeps early actor pose preparation while
+            // preventing native shadow depth texture writes.
+            property 'bbs.editor.camera.nativeActorSunShadows.skipOverlay',
+                    System.getProperty(
+                            'bbs.editor.camera.nativeActorSunShadows.skipOverlay',
+                            'false')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
