@@ -155,6 +155,11 @@ public class BodyPartsTimelineController
         return themeColor(0.12F);
     }
 
+    private int trackAlternate()
+    {
+        return themeColor(0.085F);
+    }
+
     private int trackSelected()
     {
         return themeColor(0.22F);
@@ -253,7 +258,8 @@ public class BodyPartsTimelineController
         for(int row=populated;row<rowCapacity;row++)
         {
             int y=rowsTop+row*TRACK_HEIGHT;
-            Gui.drawRect(0,y,width,y+TRACK_HEIGHT,track());
+            Gui.drawRect(0,y,width,y+TRACK_HEIGHT,
+                    row%2==0?track():trackAlternate());
             Gui.drawRect(0,y+TRACK_HEIGHT-1,width,y+TRACK_HEIGHT,border());
             EditorTimelineSkin.gridRow(this.timeline,TIMELINE_START_X,
                     width,y,TRACK_HEIGHT);
@@ -305,14 +311,17 @@ public class BodyPartsTimelineController
                 0xFFE0E3E5
         );
 
-        if (modelView)
+        if(modelView)
         {
-            mc.fontRenderer.drawString(
-                    "← BODY PARTS",
-                    width - 76,
-                    top + 11,
-                    EditorThemeManager.get().getAccentBright()
-            );
+            // The WAV audio monitor occupies the upper-right ruler.
+            // Place BACK LEFT of the monitor, on its own visible
+            // high-contrast surface, rather than underneath it.
+            int backX=width-209;
+            Gui.drawRect(backX,top+7,backX+114,top+26,0xFF27343B);
+            Gui.drawRect(backX,top+7,backX+3,top+26,
+                    EditorThemeManager.get().getAccent());
+            mc.fontRenderer.drawString("< BODY PARTS",backX+9,
+                    top+12,0xFFE6F4F7);
         }
 
     }
@@ -333,7 +342,7 @@ public class BodyPartsTimelineController
             boolean selected = row.model == null
                     ? row.boneIndex == controller.getSelectedActorBone()
                     : row.model == controller.getSelectedAttachment();
-            drawTrackBackground(width, y, selected);
+            drawTrackBackground(width, y, selected,i);
             if (selected)
             {
                 Gui.drawRect(0, y, 3, y + TRACK_HEIGHT,
@@ -459,7 +468,8 @@ public class BodyPartsTimelineController
             drawTrackBackground(
                     width,
                     y,
-                    bone == selectedBone
+                    bone == selectedBone,
+                    visibleIndex
             );
 
             if (bone == selectedBone)
@@ -528,7 +538,7 @@ public class BodyPartsTimelineController
     private void drawTrackBackground(
             int width,
             int y,
-            boolean selected)
+            boolean selected,int rowIndex)
     {
         Gui.drawRect(
                 0,
@@ -537,7 +547,7 @@ public class BodyPartsTimelineController
                 y + TRACK_HEIGHT,
                 selected
                         ? trackSelected()
-                        : track()
+                        : (rowIndex%2==0?track():trackAlternate())
         );
 
         Gui.drawRect(
@@ -866,8 +876,10 @@ public class BodyPartsTimelineController
                 controller.getSelectedModel();
 
         if (model != null &&
-                mouseY < top + HEADER_HEIGHT &&
-                mouseX > width - 120)
+                mouseY >= top + 7 &&
+                mouseY < top + 26 &&
+                mouseX >= width - 209 &&
+                mouseX < width - 95)
         {
             controller.backToModelTracks();
             boneScroll = 0;
