@@ -19,6 +19,17 @@ public final class EditorVisualStyle
     {
     }
 
+    /** Theme-tinted neutral surface for inspectors and editable controls. */
+    public static int themedSurface(float strength)
+    {
+        float k = Math.max(0F, Math.min(0.8F, strength));
+        int accent = getAccent();
+        int r = Math.round(18 * (1F-k) + ((accent >>> 16)&255) * k);
+        int g = Math.round(19 * (1F-k) + ((accent >>> 8)&255) * k);
+        int b = Math.round(23 * (1F-k) + (accent&255) * k);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
     /*
      * =========================================================
      * BACKGROUND
