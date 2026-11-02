@@ -359,8 +359,19 @@ public final class CameraClipInspector
                 text(axisLabels[i],right+13,pos+4,0xFF9FBBCB,32);
                 rect(x,pos,x+w,pos+16,0xFF10151A);
                 rect(x,pos+15,x+w,pos+16,0xFF384148);
-                text(compact(parts[i].trim()),x+5,pos+4,0xFFE6F0F3,w-10);
-                hits.add(new Hit(key,i,x,pos,w,16,parts[i].trim(),false,false));
+                int arrow=16;
+                rect(x+1,pos+1,x+arrow,pos+15,0xFF293640);
+                rect(x+w-arrow,pos+1,x+w-1,pos+15,0xFF293640);
+                text("<",x+5,pos+4,0xFF6BC9F4,9);
+                text(">",x+w-12,pos+4,0xFF6BC9F4,9);
+                text(compact(parts[i].trim()),x+arrow+3,pos+4,
+                        0xFFE6F0F3,Math.max(1,w-2*arrow-5));
+                hits.add(new Hit(key,i,x+arrow,pos,w-2*arrow,16,
+                        parts[i].trim(),false,false));
+                hits.add(new Hit("@nudge:-:"+key,i,x,pos,arrow,16,
+                        parts[i].trim(),false,false));
+                hits.add(new Hit("@nudge:+:"+key,i,x+w-arrow,pos,
+                        arrow,16,parts[i].trim(),false,false));
             }
             y+=18;
         }
