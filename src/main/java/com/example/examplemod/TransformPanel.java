@@ -510,6 +510,27 @@ public class TransformPanel
             return false;
         }
 
+        // Apply stepper clicks immediately; drag controls still use mouseDragged.
+        AnimationValueControl[] steppers = {
+                positionXControl, positionYControl, positionZControl,
+                rotationXControl, rotationYControl, rotationZControl,
+                scaleXControl, scaleYControl, scaleZControl
+        };
+        for (int i = 0; i < steppers.length; i++)
+        {
+            if (lightRigMode && i >= 3) break;
+            AnimationValueControl control = steppers[i];
+            if (mouseButton == 0 && control.isStepperHit(mouseX, mouseY))
+            {
+                if (activeControl != null && activeControl != control)
+                    activeControl.finishEditing();
+                activeControl = control;
+                control.mouseClicked(mouseX, mouseY, mouseButton);
+                writeControlsToKeyframe(keyframe);
+                return true;
+            }
+        }
+
         if (
                 this.activeControl != null &&
                         this.activeControl.isEditing()
@@ -798,7 +819,8 @@ public class TransformPanel
 
         if (handled)
         {
-            if (!this.activeControl.isEditing())
+            if (!this.activeControl.isEditing() || keyCode == org.lwjgl.input.Keyboard.KEY_UP
+                    || keyCode == org.lwjgl.input.Keyboard.KEY_DOWN)
             {
                 writeControlsToKeyframe(
                         keyframe
