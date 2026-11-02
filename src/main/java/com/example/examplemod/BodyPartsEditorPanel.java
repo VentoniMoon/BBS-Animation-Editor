@@ -727,14 +727,10 @@ public class BodyPartsEditorPanel
                         : 0xFF222E37
         );
 
-        drawRect(
-                mc,
-                bx,
-                by,
-                bx + bw,
-                by + bh,
-                0xFF38454E
-        );
+        // Only the bottom separator uses the border color. A former
+        // second full-size fill covered the hover color, making BUTTONS
+        // visually inert despite processing mouse presses.
+        drawRect(mc,bx,by+bh-1,bx+bw,by+bh,0xFF38454E);
 
         drawRect(
                 mc,
