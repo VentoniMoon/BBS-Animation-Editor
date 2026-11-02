@@ -157,6 +157,12 @@ public class CharacterAnimationParametersPanel
         }
 
         ensureTextFields(Minecraft.getMinecraft());
+        if(nudgeAt(speedField,CharacterAnimationSetupController.PARAM_SPEED,
+                false,mouseX,mouseY))return true;
+        if(nudgeAt(fadeField,CharacterAnimationSetupController.PARAM_FADE,
+                true,mouseX,mouseY))return true;
+        if(nudgeAt(tickField,CharacterAnimationSetupController.PARAM_TICK,
+                true,mouseX,mouseY))return true;
 
         if (this.speedField.mouseClicked(
                 mouseX,
@@ -225,6 +231,23 @@ public class CharacterAnimationParametersPanel
         if (this.selectedKey == null)
         {
             return false;
+        }
+
+        if(keyCode==Keyboard.KEY_UP||keyCode==Keyboard.KEY_DOWN)
+        {
+            int direction=keyCode==Keyboard.KEY_UP?1:-1;
+            if(speedField!=null&&speedField.isFocused())
+                return nudge(speedField,
+                        CharacterAnimationSetupController.PARAM_SPEED,
+                        false,direction,true);
+            if(fadeField!=null&&fadeField.isFocused())
+                return nudge(fadeField,
+                        CharacterAnimationSetupController.PARAM_FADE,
+                        true,direction,true);
+            if(tickField!=null&&tickField.isFocused())
+                return nudge(tickField,
+                        CharacterAnimationSetupController.PARAM_TICK,
+                        true,direction,true);
         }
 
         if (this.speedField != null &&
@@ -493,6 +516,33 @@ public class CharacterAnimationParametersPanel
                 );
     }
 
+    private boolean nudgeAt(GuiTextField field,String parameter,
+            boolean integer,int mx,int my)
+    {
+        if(field==null||my<field.y-1||my>=field.y+field.height+1)
+            return false;
+        if(mx>=field.x-12&&mx<field.x)
+            return nudge(field,parameter,integer,-1,false);
+        if(mx>=field.x+field.width&&mx<field.x+field.width+11)
+            return nudge(field,parameter,integer,1,false);
+        return false;
+    }
+
+    private boolean nudge(GuiTextField field,String parameter,
+            boolean integer,int direction,boolean keyboard)
+    {
+        double current;
+        try{current=Double.parseDouble(field.getText());}
+        catch(NumberFormatException invalid){return false;}
+        double delta=integer?1D:keyboard?
+                EditorNumericStep.KEYBOARD:EditorNumericStep.MOUSE;
+        double next=current+direction*delta;
+        field.setText(integer?Long.toString(Math.round(next)):
+                EditorNumericStep.format(next));
+        applyNumericField(parameter,field,integer);
+        return true;
+    }
+
     private void drawTextFieldFrame(GuiTextField field)
     {
         if (field == null)
@@ -500,13 +550,19 @@ public class CharacterAnimationParametersPanel
             return;
         }
 
-        drawRect(
-                field.x - 1,
-                field.y - 1,
-                field.x + field.width + 1,
-                field.y + field.height + 1,
-                COLOR_BORDER
-        );
+        drawRect(field.x-1,field.y-1,
+                field.x+field.width+1,field.y+field.height+1,
+                COLOR_BORDER);
+        drawRect(field.x-12,field.y-1,field.x-1,
+                field.y+field.height+1,0xFF293640);
+        drawRect(field.x+field.width+1,field.y-1,
+                field.x+field.width+12,field.y+field.height+1,
+                0xFF293640);
+        Minecraft mc=Minecraft.getMinecraft();
+        mc.fontRenderer.drawString("<",field.x-9,field.y+4,
+                EditorThemeManager.get().getAccentBright());
+        mc.fontRenderer.drawString(">",field.x+field.width+3,
+                field.y+4,EditorThemeManager.get().getAccentBright());
 
         int originalY = field.y;
         field.y = originalY + 2;
