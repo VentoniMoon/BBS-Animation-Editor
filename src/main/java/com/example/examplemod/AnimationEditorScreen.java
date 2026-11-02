@@ -2113,6 +2113,17 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
+        if(BbsFsActorShadowSamplingProbe.isBypassed())
+        {
+            String probeLabel="ACTOR A/B: SUN SHADOW SAMPLERS OFF (Ctrl+Shift+F7)";
+            int left=LEFT_PANEL_WIDTH+9;
+            int labelWidth=Math.min(width-left-12,
+                    fontRenderer.getStringWidth(probeLabel)+13);
+            drawRect(left,66,left+labelWidth,83,0xED241A2F);
+            fontRenderer.drawString(fontRenderer.trimStringToWidth(
+                    probeLabel,labelWidth-10),left+5,70,0xFFFFD080);
+        }
+
         super.drawScreen(
                 mouseX,
                 mouseY,
@@ -4256,6 +4267,14 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        // Render-only A/B test for diagonal striping on BSL-lit actors.
+        // Ctrl+Shift+F7 toggles just actor shadow-map sampling.
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_F7 &&
+                isCtrlKeyDown() && isShiftKeyDown())
+        {
+            BbsFsActorShadowSamplingProbe.toggle();
+            return;
+        }
         // Keep the legacy shortcut, but open an actual settings/progress
         // window instead of silently starting a hidden 20 FPS job.
         if(editorModeController.getMode()
@@ -4556,6 +4575,7 @@ public class AnimationEditorScreen extends GuiScreen
     {
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
+        BbsFsActorShadowSamplingProbe.dispose();
         BetterLightsWorldEngine.reset();
         cameraVideoExport.close();
         cameraExportDialog.close();
