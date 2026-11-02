@@ -225,6 +225,36 @@ public class CharacterTimelineEditorController
     private int lastLeftClickTrack = -1;
 
     private int lastLeftClickFrame = -1;
+    private long lastRightClickTime;
+    private int lastRightClickTrack=-1,lastRightClickFrame=-1;
+    private Object lastRightClickKey;
+
+    /**
+     * Character keys use the same destructive gesture as Body Parts:
+     * FIRST RMB selects; only a SECOND RMB on the same key removes it.
+     * Requiring the same object prevents deleting an adjacent key when
+     * two frames are visually close at a low timeline zoom.
+     */
+    private boolean isDoubleRightClick(int track,int frame,Object key)
+    {
+        long now=System.currentTimeMillis();
+        boolean repeated=key!=null&&lastRightClickKey==key&&
+                lastRightClickTrack==track&&
+                lastRightClickFrame==frame&&
+                now-lastRightClickTime<=350L;
+        lastRightClickTime=now;
+        lastRightClickTrack=track;
+        lastRightClickFrame=frame;
+        lastRightClickKey=key;
+        if(repeated)clearRightClick();
+        return repeated;
+    }
+    private void clearRightClick()
+    {
+        lastRightClickTime=0L;
+        lastRightClickTrack=lastRightClickFrame=-1;
+        lastRightClickKey=null;
+    }
 
 
     /*
@@ -1473,6 +1503,7 @@ public class CharacterTimelineEditorController
         this.dragBodyPartModel = null;
 
         resetDoubleClickState();
+        clearRightClick();
     }
 
 
@@ -1702,16 +1733,14 @@ public class CharacterTimelineEditorController
 
                 if (mouseButton == 1)
                 {
-                    removeBodyPartKey(
-                            bodyPart,
-                            existingFrame
-                    );
-
-                    this.draggingBodyPart = false;
-                    this.dragBodyPartFrame = -1;
-                    this.dragBodyPartModel = null;
-                    this.selectedBodyPartModel = null;
-
+                    if(isDoubleRightClick(trackIndex,existingFrame,bodyPart))
+                    {
+                        removeBodyPartKey(bodyPart,existingFrame);
+                        this.draggingBodyPart=false;
+                        this.dragBodyPartFrame=-1;
+                        this.dragBodyPartModel=null;
+                        this.selectedBodyPartModel=null;
+                    }
                     resetDoubleClickState();
                     return true;
                 }
@@ -1747,22 +1776,26 @@ public class CharacterTimelineEditorController
 
             if (mouseButton == 1)
             {
-                track.removeKey(
-                        clickedKey
-                );
-
-                this.selectedKey = null;
-                this.draggingKey = false;
-                this.dragTrack = -1;
-                this.dragKey = null;
-
+                if(isDoubleRightClick(trackIndex,
+                        clickedKey.getFrame(),clickedKey))
+                {
+                    track.removeKey(clickedKey);
+                    this.selectedKey=null;
+                    this.draggingKey=false;
+                    this.dragTrack=-1;
+                    this.dragKey=null;
+                }
                 resetDoubleClickState();
-
                 return true;
             }
 
             if (mouseButton == 0)
             {
+                clearRightClick();
+                this.timeline.setTick(clickedKey.getFrame());
+                if(this.playbackController!=null)
+                    this.playbackController.setCurrentFrame(
+                            clickedKey.getFrame());
                 this.draggingKey = true;
                 this.dragTrack = trackIndex;
                 this.dragKey = clickedKey;
@@ -1840,6 +1873,7 @@ public class CharacterTimelineEditorController
 
             this.selectedKey = null;
             this.selectedBodyPartModel = getBodyPartModel(track);
+            clearRightClick();
 
             this.timeline.setTick(
                     frame
