@@ -239,6 +239,14 @@ public final class BbsFsWorldCameraDriver
                 // reflection pass without re-running their animation.
                 BbsFsNativeActorPass.render(mc,editor,viewport,
                         event.getPartialTicks(),worldWidth,worldHeight);
+                // Experimental late native OptiFine sun-shadow overlay:
+                // replays the just-prepared actor pose into existing shadow
+                // depth maps before BSL's deferred/composite, when enabled.
+                // Default OFF; does not attempt to rerun native world
+                // shadows or to step actor physics again.
+                if(activePose!=null)
+                    BbsFsNativeActorSunShadowOverlay.render(
+                            mc,editor,activePose);
                 if(editor.getSceneState()!=null&&activePose!=null)
                 {
                     final PreviewCameraPose mainPose=activePose;
