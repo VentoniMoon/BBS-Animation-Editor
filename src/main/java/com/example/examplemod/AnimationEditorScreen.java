@@ -3097,6 +3097,20 @@ public class AnimationEditorScreen extends GuiScreen
     }
 
     /**
+     * Visible main-world replay after actor preparation was moved to
+     * RenderTick.START for the native OptiFine shadow pass. This must never
+     * advance a timeline or a Jolt simulation for a second time.
+     */
+    public void renderPreparedActorsInNativeWorld(Minecraft mc,
+            PreviewCameraPose view,int width,int height)
+    {
+        if(mc==null||view==null||sceneViewport==null||
+                sceneState==null)return;
+        multiActorPreview.renderPreparedNativeActors(mc,view,width,height);
+        sceneViewport.renderPreparedNativeActor(mc,view,width,height);
+    }
+
+    /**
      * Shadow-map-only replay. The normal native actor pass MUST have
      * prepared the selected/background poses already. Never calls the
      * timeline, morph updater, Body Parts prepare or physics simulation.

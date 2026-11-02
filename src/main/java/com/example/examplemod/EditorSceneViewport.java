@@ -328,6 +328,14 @@ public class EditorSceneViewport
                 this.actorPreviewRenderer.renderPreparedShadow(mc);
     }
 
+    public void renderPreparedNativeActor(Minecraft mc,
+            PreviewCameraPose view,int width,int height)
+    {
+        if(this.actorPreviewRenderer!=null)
+            this.actorPreviewRenderer.renderPreparedNative(
+                    mc,view,width,height);
+    }
+
     public void beginNativeActorFrame()
     {
         /* Called BEFORE RenderWorldLastEvent's selected actor draw, not by
