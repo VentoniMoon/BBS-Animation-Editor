@@ -62,6 +62,41 @@ public final class CameraOutputPopup
         options.add(new Option(null,null,true));
     }
 
+    private static void drawArrows(FontRenderer font,GuiTextField field)
+    {
+        if(field==null)return;
+        Gui.drawRect(field.x-15,field.y,field.x-1,field.y+19,0xFF34536A);
+        Gui.drawRect(field.x+field.width+1,field.y,
+                field.x+field.width+15,field.y+19,0xFF34536A);
+        font.drawString("<",field.x-10,field.y+5,TEXT);
+        font.drawString(">",field.x+field.width+5,field.y+5,TEXT);
+    }
+
+    private boolean clickDimension(GuiTextField field,int mouseX,int mouseY)
+    {
+        if(field==null||mouseY<field.y||mouseY>=field.y+19)return false;
+        int dir=mouseX>=field.x-15&&mouseX<field.x-1?-1:
+                mouseX>=field.x+field.width+1&&
+                mouseX<field.x+field.width+15?1:0;
+        if(dir==0)return false;
+        nudgeDimension(field,dir);
+        widthInput.setFocused(field==widthInput);
+        heightInput.setFocused(field==heightInput);
+        return true;
+    }
+
+    private void nudgeDimension(GuiTextField field,int direction)
+    {
+        try
+        {
+            int value=Integer.parseInt(field.getText());
+            int next=Math.max(128,Math.min(8192,value+2*direction));
+            if((next&1)!=0)next+=direction>0?1:-1;
+            field.setText(Integer.toString(next));
+        }
+        catch(NumberFormatException ignored) { }
+    }
+
     public boolean isOpen(){return opened;}
 
     public void toggle()
@@ -190,6 +225,8 @@ public final class CameraOutputPopup
         heightInput.x=customX;heightInput.y=customY+30;
         heightInput.width=fieldW;
         widthInput.drawTextBox();heightInput.drawTextBox();
+        drawArrows(font,widthInput);
+        drawArrows(font,heightInput);
         applyX=x+width-76;applyY=y+128;backX=x+10;
         Gui.drawRect(backX,applyY,backX+58,applyY+20,ROW);
         Gui.drawRect(applyX,applyY,applyX+64,applyY+20,SELECTED);
@@ -240,6 +277,8 @@ public final class CameraOutputPopup
         }
         if(editingCustom)
         {
+            if(clickDimension(widthInput,mouseX,mouseY)||
+                    clickDimension(heightInput,mouseX,mouseY))return true;
             if(widthInput!=null)widthInput.mouseClicked(mouseX,mouseY,button);
             if(heightInput!=null)heightInput.mouseClicked(mouseX,mouseY,button);
             if(mouseY>=applyY&&mouseY<applyY+20)
@@ -308,6 +347,19 @@ public final class CameraOutputPopup
                 if(widthInput!=null)widthInput.setFocused(!first);
                 if(heightInput!=null)heightInput.setFocused(first);
                 return true;
+            }
+            if(keyCode==org.lwjgl.input.Keyboard.KEY_UP||
+                    keyCode==org.lwjgl.input.Keyboard.KEY_DOWN)
+            {
+                GuiTextField focused=widthInput!=null&&widthInput.isFocused()?
+                        widthInput:heightInput!=null&&heightInput.isFocused()?
+                        heightInput:null;
+                if(focused!=null)
+                {
+                    nudgeDimension(focused,
+                            keyCode==org.lwjgl.input.Keyboard.KEY_UP?1:-1);
+                    return true;
+                }
             }
             if(widthInput!=null)widthInput.textboxKeyTyped(character,keyCode);
             if(heightInput!=null)heightInput.textboxKeyTyped(character,keyCode);
