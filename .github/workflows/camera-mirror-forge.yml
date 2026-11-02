@@ -43,6 +43,8 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsWorldProjection.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
       - 'src/main/java/com/example/examplemod/EditorMultiActorPreviewController.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsEditorController.java'
       - 'src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java'
       - 'src/main/java/com/example/examplemod/CameraWorkspace.java'
       - 'src/main/java/com/example/examplemod/AnimationEditorScreen.java'
@@ -90,6 +92,8 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsWorldProjection.java'
       - 'src/main/java/com/example/examplemod/EditorSceneViewport.java'
       - 'src/main/java/com/example/examplemod/EditorMultiActorPreviewController.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsEditorController.java'
   workflow_dispatch:
 
 jobs:
