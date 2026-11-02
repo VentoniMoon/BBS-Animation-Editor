@@ -67,6 +67,25 @@ public class AnimationEditorInput
      */
 
     private boolean sceneDropdownOpen;
+    /** First visible SCENE file; shared by render, hit testing and wheel. */
+    private int sceneDropdownOffset;
+    public int getSceneDropdownOffset()
+    {
+        int maximum=Math.max(0,sceneState.getSceneFiles().size()-8);
+        sceneDropdownOffset=Math.max(0,Math.min(maximum,sceneDropdownOffset));
+        return sceneDropdownOffset;
+    }
+    public boolean scrollSceneDropdown(int mouseX,int mouseY,int direction)
+    {
+        if(!sceneDropdownOpen||mouseX<172||mouseX>358||
+                mouseY<AnimationEditorScreen.TOP_BAR_HEIGHT||
+                mouseY>AnimationEditorScreen.TOP_BAR_HEIGHT+2+8*19)
+            return false;
+        int maximum=Math.max(0,sceneState.getSceneFiles().size()-8);
+        sceneDropdownOffset=Math.max(0,Math.min(maximum,
+                sceneDropdownOffset+(direction>0?-1:1)));
+        return true;
+    }
     private boolean transformDragging;
 
     public AnimationEditorInput(
@@ -170,6 +189,7 @@ public class AnimationEditorInput
     public void setSceneDropdownOpen(boolean value)
     {
         this.sceneDropdownOpen = value;
+        if(value)getSceneDropdownOffset();
     }
 
     /*
@@ -390,8 +410,7 @@ public class AnimationEditorInput
                 && mouseY <=
                 AnimationEditorScreen.TOP_BAR_HEIGHT - 3)
         {
-            this.sceneDropdownOpen =
-                    !this.sceneDropdownOpen;
+            this.setSceneDropdownOpen(!this.sceneDropdownOpen);
 
             this.editorModeController.closeDropdown();
             this.editorThemeController.closeDropdown();
@@ -427,7 +446,7 @@ public class AnimationEditorInput
                     && mouseY < y + count * rowHeight)
             {
                 int sceneIndex =
-                        (mouseY - y) / rowHeight;
+                        getSceneDropdownOffset()+(mouseY-y)/rowHeight;
 
                 if (sceneIndex >= 0
                         && sceneIndex <
@@ -1116,6 +1135,11 @@ public class AnimationEditorInput
              * CAMERA owns both sidebars. Route scrolling before actor list
              * and viewport so the old hidden actor list cannot consume it.
              */
+            // SCENE menu floats over the preview/actor list and owns
+            // the wheel while open; otherwise those hidden widgets
+            // consume the event and files beyond row eight are unreachable.
+            if(scrollSceneDropdown(mouseX,mouseY,direction))
+                return;
             if (this.screen.scrollCameraWorkspace(mouseX,mouseY,direction))
                 return;
 
