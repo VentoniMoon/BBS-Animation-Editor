@@ -933,16 +933,32 @@ public final class CameraWorkspace
         cameraTimeline.setLength(Math.max(1,length));
         cameraTimeline.clampOffset(Math.max(0,length-1),timelineW);
         // Camera viewer and clip authoring buttons are drawn beside Play.
-        // This prevents controls from covering the cinematic image.
-        GuiScreen.drawRect(0,25,timelineX,top,0xFF191E24);
-        GuiScreen.drawRect(right,25,width,top,0xFF191E24);
-        mc.fontRenderer.drawString("PRESETS",10,34,0xFF64CAFF);
-        mc.fontRenderer.drawString("Saved presets",10,53,0xFF87939D);
-        mc.fontRenderer.drawString("RMB clip to save",10,69,0xFF87939D);
+        // Preset library occupies a framed inspector rather than loose text.
+        GuiScreen.drawRect(0,25,timelineX,top,
+                EditorVisualStyle.themedSurface(0.07F));
+        GuiScreen.drawRect(right,25,width,top,
+                EditorVisualStyle.themedSurface(0.07F));
+        Minecraft fontMc=mc;
+        EditorVisualStyle.drawCameraTabs(fontMc,timelineX,0);
+        GuiScreen.drawRect(4,58,timelineX-4,top-8,
+                EditorVisualStyle.themedSurface(0.045F));
+        GuiScreen.drawRect(4,58,timelineX-4,59,
+                EditorVisualStyle.themedSurface(0.25F));
+        GuiScreen.drawRect(5,64,8,80,EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString("SAVED PRESETS",12,67,
+                EditorThemeManager.get().getAccentBright());
+        mc.fontRenderer.drawString("RMB clip to save",9,82,0xFFAEB4BD);
         int maxPresets=Math.max(0,(top-100)/17);
         for(int i=0;i<maxPresets&&presetScroll+i<presetNames.size();i++)
-            mc.fontRenderer.drawString(presetNames.get(presetScroll+i),
-                    12,95+i*17,0xFFD1DAE0);
+        {
+            int sy=92+i*17;
+            if(sy+16>=top-8)break;
+            GuiScreen.drawRect(8,sy,timelineX-9,sy+16,
+                    EditorVisualStyle.themedSurface(i%2==0?0.16F:0.11F));
+            mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
+                    presetNames.get(presetScroll+i),timelineX-23),
+                    14,sy+3,0xFFE0E3E8);
+        }
         if(lastError!=null)mc.fontRenderer.drawString(lastError,10,top-12,0xFFFF8888);
         if(selectedVideoProblem()!=null)
             mc.fontRenderer.drawString(
