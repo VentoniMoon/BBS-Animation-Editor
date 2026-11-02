@@ -789,6 +789,11 @@ public class AnimationEditorInput
                             this.screen.getTimelineHeight(),
                     AnimationEditorScreen.LEFT_PANEL_WIDTH))
             {
+                // Keep Character inspector and its key fields in sync with
+                // the mouse selection IMMEDIATELY, not on the next tick.
+                // In particular, a single right click must retain the
+                // selected key and show its editable settings.
+                this.screen.syncCharacterEditor();
                 this.markDirty();
                 return;
             }
