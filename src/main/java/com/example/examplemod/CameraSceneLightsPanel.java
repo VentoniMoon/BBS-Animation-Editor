@@ -275,14 +275,18 @@ public final class CameraSceneLightsPanel
                     0xFFADBBC1);
             Gui.drawRect(x+48,yy,x+175,yy+17,FIELD_BG);
             Gui.drawRect(x+48,yy+16,x+175,yy+17,0xFF384148);
+            Gui.drawRect(x+49,yy+1,x+65,yy+16,0xFF293640);
+            Gui.drawRect(x+159,yy+1,x+174,yy+16,0xFF293640);
+            mc.fontRenderer.drawString("<",x+54,yy+4,0xFF6BC9F4);
+            mc.fontRenderer.drawString(">",x+163,yy+4,0xFF6BC9F4);
             if(field!=null&&fieldAxis==i)
                 field.drawTextBox();
             else
                 mc.fontRenderer.drawString(
                         mc.fontRenderer.trimStringToWidth(
-                            String.format(Locale.ROOT,"%.3f",
-                                component(light,tab,i)),116),
-                        x+53,yy+4,0xFFE6F0F3);
+                            EditorNumericStep.format(
+                                component(light,tab,i)),87),
+                        x+70,yy+4,0xFFE6F0F3);
         }
 
         mc.fontRenderer.drawString("WORLD COORDINATES / BLOCKS",
@@ -329,6 +333,26 @@ public final class CameraSceneLightsPanel
             else l.targetZ=value;
         }
     }
+    private void nudgeWorldCoordinate(AnimationEditorScreen screen,
+            CameraSceneLights.Light light,int axis,int direction,
+            boolean keyboard)
+    {
+        if(light==null)return;
+        double previous=component(light,tab,axis);
+        double next=EditorNumericStep.adjust(previous,direction,keyboard);
+        if(Math.abs(next)>30000000D)return;
+        set(light,tab,axis,next);
+        if(BetterLightsWorldState.points(light.x,light.y,light.z,
+                light.targetX,light.targetY,light.targetZ)==null)
+        {
+            set(light,tab,axis,previous);
+            warning="Origin and Target cannot coincide";
+            return;
+        }
+        warning=null;
+        screen.getCameraWorkspace().saveScene();
+    }
+
     private void commit(AnimationEditorScreen screen)
     {
         if(field==null||fieldAxis<0)return;
@@ -462,9 +486,15 @@ public final class CameraSceneLightsPanel
             if(mx>=leftRight+48&&mx<leftRight+175&&
                     my>=yy&&my<yy+17)
             {
+                if(mx<leftRight+65||mx>=leftRight+159)
+                {
+                    nudgeWorldCoordinate(screen,light,i,
+                            mx<leftRight+65?-1:1,false);
+                    return true;
+                }
                 fieldAxis=i;
                 field=new GuiTextField(18618,Minecraft.getMinecraft().fontRenderer,
-                        leftRight+52,yy+1,117,15);
+                        leftRight+69,yy+1,88,15);
                 field.setText(String.format(Locale.ROOT,"%.5f",
                         component(light,tab,i)));
                 field.setFocused(true);
@@ -481,6 +511,18 @@ public final class CameraSceneLightsPanel
             if(key==Keyboard.KEY_RETURN||key==Keyboard.KEY_NUMPADENTER||
                     key==Keyboard.KEY_TAB){commit(screen);return true;}
             if(key==Keyboard.KEY_ESCAPE){field=null;fieldAxis=-1;return true;}
+            if(key==Keyboard.KEY_UP||key==Keyboard.KEY_DOWN)
+            {
+                CameraSceneLights.Light current=sync(screen);
+                if(current!=null&&fieldAxis>=0)
+                {
+                    nudgeWorldCoordinate(screen,current,fieldAxis,
+                            key==Keyboard.KEY_UP?1:-1,true);
+                    field.setText(EditorNumericStep.format(
+                            component(current,tab,fieldAxis)));
+                }
+                return true;
+            }
             field.textboxKeyTyped(c,key);return true;
         }
         if(tab==2&&nativeSettings.keyTyped(screen,c,key))
