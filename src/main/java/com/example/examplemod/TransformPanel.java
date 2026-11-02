@@ -18,13 +18,13 @@ public class TransformPanel
      * =========================================================
      */
 
-    private static final int PANEL_BACKGROUND = 0xFF252629;
-    private static final int PANEL_BORDER = 0xFF111214;
+    private static final int PANEL_BACKGROUND = 0xFF19232C;
+    private static final int PANEL_BORDER = 0xFF17222B;
 
-    private static final int HEADER_BACKGROUND = 0xFF303134;
-    private static final int HEADER_BOTTOM = 0xFF18191B;
+    private static final int HEADER_BACKGROUND = 0xFF27343F;
+    private static final int HEADER_BOTTOM = 0xFF22303B;
 
-    private static final int SECTION_LINE = 0xFF3A3B3E;
+    private static final int SECTION_LINE = 0xFF384148;
 
     private static final int TEXT = 0xFFE0E0E0;
     private static final int TEXT_SECONDARY = 0xFF999999;
