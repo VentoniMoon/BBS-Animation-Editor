@@ -160,7 +160,7 @@ public class AnimationValueControl
 
         // Direct arrow clicks perform a single exact 1/16 adjustment,
         // never start the horizontal dragging/editing gesture.
-        if(mouseX>=x+width-40&&mouseX<x+width-25)
+        if(mouseX>=x+28&&mouseX<x+45)
         {
             value=(float)EditorNumericStep.adjust(value,-1,false);
             editing=false;dragging=false;
@@ -760,11 +760,11 @@ public class AnimationValueControl
 
         // Reserve arrow buttons on BOTH sides of the numeric value.
         // Keep direct drag/edit in the remaining center area.
-        net.minecraft.client.gui.Gui.drawRect(x+width-41,y+1,
-                x+width-24,y+height-1,0xFF252D34);
+        net.minecraft.client.gui.Gui.drawRect(x+28,y+1,
+                x+45,y+height-1,0xFF252D34);
         net.minecraft.client.gui.Gui.drawRect(x+width-21,y+1,
                 x+width-4,y+height-1,0xFF252D34);
-        font.drawString("<",x+width-36,y+4,
+        font.drawString("<",x+33,y+4,
                 EditorThemeManager.get().getAccentBright());
         font.drawString(">",x+width-16,y+4,
                 EditorThemeManager.get().getAccentBright());
@@ -772,7 +772,7 @@ public class AnimationValueControl
                 text,
                 this.x +
                         this.width -
-                        valueWidth - 45,
+                        valueWidth - 27,
                 this.y + 4,
                 this.editing
                         ? ACTIVE_TEXT
