@@ -24,6 +24,8 @@ public class BlockbusterActorPreviewRenderer
 {
     private EntityActor actor;
     private boolean preparedForMirror;
+    private BlockbusterSceneActorData preparedActorData;
+    private int preparedActorFrame;
     private static boolean nativeRasterStateReported;
     private float preparedPartialTicks;
 
@@ -1550,6 +1552,8 @@ public class BlockbusterActorPreviewRenderer
         // From here the cached actor is ready for a second VIEW ONLY.
         // The mirror pass must never call drawActor() / prepare() again.
         preparedPartialTicks=actorPartialTicks;
+        preparedActorData=actorData;
+        preparedActorFrame=previewFrame;
         preparedForMirror=true;
 
         /*
@@ -1649,6 +1653,18 @@ public class BlockbusterActorPreviewRenderer
     }
 
     private void renderPreparedCamera(Minecraft mc,PreviewCameraPose view,
+            int targetWidth,int targetHeight,boolean mirror)
+    {
+        if(preparedActorData==null)return;
+        try(CharacterBodyPartPreviewState.Scope context=
+                CharacterBodyPartPreviewState.enter(
+                        preparedActorData,preparedActorFrame))
+        {
+            renderPreparedCameraScoped(mc,view,targetWidth,targetHeight,mirror);
+        }
+    }
+
+    private void renderPreparedCameraScoped(Minecraft mc,PreviewCameraPose view,
             int targetWidth,int targetHeight,boolean mirror)
     {
         if(!preparedForMirror||actor==null||actor.world!=mc.world||
@@ -1763,6 +1779,17 @@ public class BlockbusterActorPreviewRenderer
      */
     public boolean renderPreparedShadow(Minecraft mc)
     {
+        if(preparedActorData==null)return false;
+        try(CharacterBodyPartPreviewState.Scope context=
+                CharacterBodyPartPreviewState.enter(
+                        preparedActorData,preparedActorFrame))
+        {
+            return renderPreparedShadowScoped(mc);
+        }
+    }
+
+    private boolean renderPreparedShadowScoped(Minecraft mc)
+    {
         if(mc==null||!preparedForMirror||actor==null||
                 actor.world!=mc.world||actor.isDead||
                 actor.getMorph()==null)return false;
@@ -1818,6 +1845,8 @@ public class BlockbusterActorPreviewRenderer
 
         this.actor = null;
         this.preparedForMirror=false;
+        this.preparedActorData=null;
+        this.preparedActorFrame=0;
 
         this.loadedMorphSignature = "";
 
