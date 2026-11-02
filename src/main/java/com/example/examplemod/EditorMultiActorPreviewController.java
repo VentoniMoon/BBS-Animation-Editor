@@ -191,6 +191,18 @@ public final class EditorMultiActorPreviewController
     public void renderPreparedMirrorActors(Minecraft mc,PreviewCameraPose view,
             int width,int height)
     {
+        renderPreparedCameraActors(mc,view,width,height,true);
+    }
+
+    public void renderPreparedNativeActors(Minecraft mc,PreviewCameraPose view,
+            int width,int height)
+    {
+        renderPreparedCameraActors(mc,view,width,height,false);
+    }
+
+    private void renderPreparedCameraActors(Minecraft mc,PreviewCameraPose view,
+            int width,int height,boolean mirror)
+    {
         if(!showAllActors||mc==null||view==null)return;
         List<AnimationBoneSnapshot> selectedBlockbuster =
                 BlockbusterPreviewAnimationState.getSnapshots();
@@ -208,7 +220,10 @@ public final class EditorMultiActorPreviewController
                 if(own==null||entry.getValue()==null)continue;
                 BlockbusterPreviewAnimationState.set(own,mirrorFrame);
                 EmoticonsPreviewAnimationState.set(own,mirrorFrame);
-                entry.getValue().renderPreparedMirror(mc,view,width,height);
+                if(mirror)
+                    entry.getValue().renderPreparedMirror(mc,view,width,height);
+                else
+                    entry.getValue().renderPreparedNative(mc,view,width,height);
             }
         }
         finally
