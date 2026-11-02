@@ -8,18 +8,24 @@ import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL20;
 
 /**
- * A/B diagnostic for the diagonal stripes on shader-lit actor surfaces.
+ * Actor-only workaround for incorrect BSL/OptiFine sun-shadow samples.
  *
- * When explicitly toggled by Ctrl+Shift+F7, replace ONLY the two OptiFine
- * sun-shadow samplers with a 1x1 maximum-depth map while drawing a recorded
- * actor. The world and the shader pack are never modified. This distinguishes
- * shadow-map sampling from normal/lighting GBuffer problems.
+ * The user-tested F7 result is the editor default: while drawing a recorded
+ * actor, shadow samplers on OptiFine units 4/5 see a 1x1 maximum-depth map.
+ * This preserves shaderpack colors and lighting, while preventing diagonal
+ * bands on sunlit actor faces. The world's shadow textures are restored
+ * immediately after each actor; the rest of the scene remains unchanged.
  *
- * Disabled by default. Must only run on the OpenGL render thread.
+ * Ctrl+Shift+F7 can still restore native receiving shadows for debugging.
+ * Set -Dbbs.editor.actorShadowSamplingFix=false at startup to opt out.
+ * Use only from the OpenGL render thread.
  */
 public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
 {
-    private static boolean bypass;
+    private static final boolean DEFAULT_BYPASS =
+            !"false".equalsIgnoreCase(System.getProperty(
+                    "bbs.editor.actorShadowSamplingFix", "true"));
+    private static boolean bypass=DEFAULT_BYPASS;
     private static int unshadowedDepthTexture;
     private static boolean warned;
     private static boolean activeReported;
@@ -43,16 +49,17 @@ public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
         bypass=!bypass;
         activeReported=false;
         unavailableReported=false;
-        System.out.println("[BBS Editor][Actor Shadow A/B] "+
-                (bypass?"Shadow samplers bypassed for actors ONLY":
-                        "Original shadow samplers restored"));
+        System.out.println("[BBS Editor][Actor Sun Shadow] "+
+                (bypass
+                        ? "Actor-only shadow sampling fix enabled"
+                        : "Native actor shadow sampling enabled (experimental)"));
         return bypass;
     }
 
     public static BbsFsActorShadowSamplingProbe begin()
     {
-        // A null try-with-resources resource is legal in Java 8. The normal
-        // render path avoids even one glGetInteger/readback per actor.
+        // A null try-with-resources resource is legal in Java 8. Explicit
+        // raw-shadow mode avoids any diagnostic OpenGL readbacks per actor.
         if(!bypass)return null;
         BbsFsActorShadowSamplingProbe probe=
                 new BbsFsActorShadowSamplingProbe();
@@ -173,10 +180,13 @@ public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
         if(active)restore();
     }
 
-    /** Dispose the private diagnostic texture on the GL thread at editor exit. */
+    /** Release the private texture on the GL thread and reset per-session state. */
     public static void dispose()
     {
-        bypass=false;
+        bypass=DEFAULT_BYPASS;
+        activeReported=false;
+        unavailableReported=false;
+        warned=false;
         if(unshadowedDepthTexture!=0)
         {
             GL11.glDeleteTextures(unshadowedDepthTexture);
