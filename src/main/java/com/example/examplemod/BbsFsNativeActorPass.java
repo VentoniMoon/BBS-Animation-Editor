@@ -212,7 +212,8 @@ public final class BbsFsNativeActorPass
                 BbsFsWorldCameraDriver.nativeViewportForActorStage();
         if (mc==null||viewport==null||mc.world==null||
                 !(mc.currentScreen instanceof AnimationEditorScreen)||
-                CameraSceneMirrorRenderer.isCapturing())return;
+                CameraSceneMirrorRenderer.isCapturing() ||
+                BbsFsOptiFineEntityStage.isShadowPass())return;
         try
         {
             java.nio.IntBuffer vp=org.lwjgl.BufferUtils.createIntBuffer(16);
