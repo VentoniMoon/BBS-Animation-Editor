@@ -64,6 +64,13 @@ minecraft {
             // or the system PATH "ffmpeg" default. Never bundled in the JAR.
             property 'bbs.editor.export.ffmpeg',
                     System.getProperty('bbs.editor.export.ffmpeg', 'ffmpeg')
+            // Test the BetterLights shadow path separately from point
+            // lighting inside the experimental BSL planar mirror.
+            // Off by default; -D...=true changes only mirror shaders.
+            property 'bbs.editor.camera.mirrorBSLDisableBetterLightsShadows',
+                    System.getProperty(
+                            'bbs.editor.camera.mirrorBSLDisableBetterLightsShadows',
+                            'false')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
