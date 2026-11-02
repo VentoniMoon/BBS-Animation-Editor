@@ -78,6 +78,17 @@ minecraft {
                     System.getProperty(
                             'bbs.editor.camera.mirrorBSLForceNativeLightRefresh',
                             'true')
+            // Explicit opt-in to inspect the actual OptiFine + BetterLights
+            // fragment math used by the mirror. Writes one local .fsh file
+            // to the game's debug directory; never uploads it.
+            property 'bbs.editor.camera.mirrorBSLDumpBetterLightsGLSL',
+                    System.getProperty(
+                            'bbs.editor.camera.mirrorBSLDumpBetterLightsGLSL',
+                            'false')
+            property 'bbs.editor.camera.mirrorBSLNativeLightRefresh',
+                    System.getProperty(
+                            'bbs.editor.camera.mirrorBSLNativeLightRefresh',
+                            'true')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
