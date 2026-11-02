@@ -74,6 +74,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean nativeLightRefreshLogged;
     private static boolean nativeLightRefreshEmptyLogged;
     private static boolean nativeLightRefreshErrorLogged;
+    private static boolean forcedLightRefreshLogged;
+    private final Map<Integer,BetterLightsProgramState> nativeLightStates=
+            new HashMap<Integer,BetterLightsProgramState>();
     private static int mirrorLightCountReports;
     private static boolean mirrorLightCountPromoted;
     private static int lastRegisteredMirrorLightCount=-1;
@@ -250,10 +253,16 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
 
     private void refreshBetterLightsProgram(Object program,int pid)
     {
-        if(worldLightPositions.isEmpty()||pid<=0||
+        // BetterLights can also be placed directly through its OWN mod:
+        // those native casters are not in our editor-owned registry.
+        // Do not gate the provider refresh on worldLightPositions.
+        if(pid<=0||
                 "false".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLNativeLightRefresh",
                         "true")))return;
+        boolean force="true".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.camera.mirrorBSLForceNativeLightRefresh",
+                "true"));
         int loc=GL20.glGetUniformLocation(pid,"lightCount");
         if(loc<0)return;
         IntBuffer beforeBuffer=BufferUtils.createIntBuffer(16);
@@ -261,18 +270,28 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         int before=beforeBuffer.get(0);
         // The previous log called any positive light count "populated"
         // even when previous==after==1. That was a false success.
-        // If native light structs are already active, do not call the
-        // expensive OptiFine selector or modify its alpha/blend state.
-        if(before>0)
+        // A positive lightCount only proves registration, NOT that the
+        // native provider recomputed camera-relative fields for this
+        // reflected render. Refresh even populated programs by default
+        // while keeping an explicit rollback switch.
+        if(before>0&&!force)
         {
             CameraMirrorBetterLightsSnapshot.capture(
                     pid,worldLightPositions,mainCameraPosition());
             CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
             return;
         }
-        // A successful native hook changes the program's shared values.
-        // The previous light count must be restored when the mirror scope
-        // closes so the main OptiFine camera cannot inherit mirror lights.
+        // The native provider works on SHARED OptiFine programs.
+        // Snapshot their complete BetterLights uniforms before the first
+        // mirrored refresh. Light count alone is insufficient: the shader
+        // injector can change per-caster positions, attenuation, shadow
+        // matrices and flare fields. close() restores the original values
+        // after this auxiliary pass, including if a stage throws.
+        if(force&&!nativeLightStates.containsKey(pid))
+            nativeLightStates.put(pid,
+                    BetterLightsProgramState.capture(pid));
+        // Keep the existing scalar lightCount guard for the non-forced
+        // path and as a fallback if the program does not expose structs.
         restored.add(UniformBackup.captureInt(pid,loc));
         Object savedProgram=null,savedBuffers=null;
         int savedId=0;
@@ -309,6 +328,19 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 CameraMirrorBetterLightsSnapshot.capture(
                         pid,worldLightPositions,mainCameraPosition());
                 CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
+                if(force&&!forcedLightRefreshLogged)
+                {
+                    forcedLightRefreshLogged=true;
+                    System.out.println(
+                        "[BBS Editor][Mirror][BetterLights][Refresh] "+
+                        "Native OptiFine hook refreshed even with "+
+                        "existing lightCount: before="+before+
+                        " after="+after+" program="+pid+
+                        " savedLightUniforms="+
+                        nativeLightStates.get(pid).fields.size()+
+                        " (main shader uniforms restored on exit; "+
+                        "disable via mirrorBSLForceNativeLightRefresh=false)");
+                }
                 if(after>before&&!nativeLightRefreshLogged)
                 {
                     nativeLightRefreshLogged=true;
@@ -2245,6 +2277,11 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         {
             for(int i=restored.size()-1;i>=0;i--)
                 restored.get(i).restore();
+            // Per-source state must win over any later camera-program
+            // backups. Only native programs touched by the mirror's
+            // BetterLights provider hook are restored.
+            for(BetterLightsProgramState state:nativeLightStates.values())
+                state.restore();
         }
         catch(Throwable t){failure=t;}
         finally
@@ -2297,6 +2334,151 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         if(failure!=null)
             throw new IllegalStateException(
                     "BSL mirror state restoration failed",failure);
+    }
+
+    /**
+     * Complete BetterLights GLSL struct snapshot for native OptiFine
+     * programs touched by a mirrored update. Shaderpack-provided fields
+     * are discovered from active uniforms; no assumed struct layout.
+     *
+     * Read with 16-slot buffers: LWJGL2's glGetUniform wrappers require
+     * that capacity even for a scalar. No persistent GL texture/VAO/FBO
+     * state is touched here.
+     */
+    private static final class BetterLightsProgramState
+    {
+        final int program;
+        final List<LightField> fields=new ArrayList<LightField>();
+        BetterLightsProgramState(int program){this.program=program;}
+
+        static BetterLightsProgramState capture(int program)
+        {
+            BetterLightsProgramState out=
+                    new BetterLightsProgramState(program);
+            int total=Math.min(2048,GL20.glGetProgrami(program,
+                    GL20.GL_ACTIVE_UNIFORMS));
+            for(int i=0;i<total;i++)
+            {
+                IntBuffer meta=BufferUtils.createIntBuffer(2);
+                String base=GL20.glGetActiveUniform(program,i,256,meta);
+                if(base==null||
+                        !("lightCount".equals(base)||
+                          base.startsWith("lights[")))continue;
+                int type=meta.get(1);
+                if(!LightField.supported(type))continue;
+                int amount=Math.max(1,Math.min(16,meta.get(0)));
+                for(int slot=0;slot<amount;slot++)
+                {
+                    String name=base;
+                    if(amount>1)
+                    {
+                        int start=base.indexOf("[0]");
+                        if(start<0)continue;
+                        name=base.substring(0,start)+"["+slot+"]"+
+                                base.substring(start+3);
+                    }
+                    int location=GL20.glGetUniformLocation(program,name);
+                    if(location>=0)
+                        out.fields.add(LightField.capture(
+                                location,type,program));
+                }
+            }
+            return out;
+        }
+
+        void restore()
+        {
+            GL20.glUseProgram(program);
+            for(LightField field:fields)field.restore();
+        }
+    }
+
+    private static final class LightField
+    {
+        final int location,type;
+        final float[] floats;
+        final int[] integers;
+        LightField(int location,int type,float[] floats,int[] integers)
+        {
+            this.location=location;this.type=type;
+            this.floats=floats;this.integers=integers;
+        }
+
+        static boolean integer(int type)
+        {
+            return type==GL11.GL_INT||type==GL20.GL_BOOL||
+                    type==GL20.GL_INT_VEC2||
+                    type==GL20.GL_INT_VEC3||
+                    type==GL20.GL_INT_VEC4||
+                    type==GL20.GL_BOOL_VEC2||
+                    type==GL20.GL_BOOL_VEC3||
+                    type==GL20.GL_BOOL_VEC4;
+        }
+
+        static boolean supported(int type)
+        {
+            return integer(type)||type==GL11.GL_FLOAT||
+                    type==GL20.GL_FLOAT_VEC2||
+                    type==GL20.GL_FLOAT_VEC3||
+                    type==GL20.GL_FLOAT_VEC4||
+                    type==GL20.GL_FLOAT_MAT3||
+                    type==GL20.GL_FLOAT_MAT4;
+        }
+
+        static LightField capture(int location,int type,int pid)
+        {
+            if(integer(type))
+            {
+                IntBuffer data=BufferUtils.createIntBuffer(16);
+                GL20.glGetUniform(pid,location,data);
+                return new LightField(location,type,null,new int[]{
+                        data.get(0),data.get(1),data.get(2),data.get(3)});
+            }
+            FloatBuffer data=BufferUtils.createFloatBuffer(16);
+            GL20.glGetUniform(pid,location,data);
+            float[] saved=new float[16];
+            for(int i=0;i<16;i++)saved[i]=data.get(i);
+            return new LightField(location,type,saved,null);
+        }
+
+        void restore()
+        {
+            if(integer(type))
+            {
+                if(type==GL20.GL_INT_VEC2||type==GL20.GL_BOOL_VEC2)
+                    GL20.glUniform2i(location,integers[0],integers[1]);
+                else if(type==GL20.GL_INT_VEC3||
+                        type==GL20.GL_BOOL_VEC3)
+                    GL20.glUniform3i(location,integers[0],integers[1],
+                            integers[2]);
+                else if(type==GL20.GL_INT_VEC4||
+                        type==GL20.GL_BOOL_VEC4)
+                    GL20.glUniform4i(location,integers[0],integers[1],
+                            integers[2],integers[3]);
+                else GL20.glUniform1i(location,integers[0]);
+                return;
+            }
+            if(type==GL11.GL_FLOAT)GL20.glUniform1f(location,floats[0]);
+            else if(type==GL20.GL_FLOAT_VEC2)
+                GL20.glUniform2f(location,floats[0],floats[1]);
+            else if(type==GL20.GL_FLOAT_VEC3)
+                GL20.glUniform3f(location,
+                        floats[0],floats[1],floats[2]);
+            else if(type==GL20.GL_FLOAT_VEC4)
+                GL20.glUniform4f(location,
+                        floats[0],floats[1],floats[2],floats[3]);
+            else if(type==GL20.GL_FLOAT_MAT3||
+                    type==GL20.GL_FLOAT_MAT4)
+            {
+                FloatBuffer matrix=BufferUtils.createFloatBuffer(
+                        type==GL20.GL_FLOAT_MAT3?9:16);
+                matrix.put(floats,0,type==GL20.GL_FLOAT_MAT3?9:16);
+                matrix.flip();
+                if(type==GL20.GL_FLOAT_MAT3)
+                    GL20.glUniformMatrix3(location,false,matrix);
+                else GL20.glUniformMatrix4(location,false,matrix);
+            }
+        }
     }
 
     private static final class UniformBackup
