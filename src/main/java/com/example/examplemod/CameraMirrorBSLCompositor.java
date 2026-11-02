@@ -74,6 +74,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean nativeLightRefreshLogged;
     private static boolean nativeLightRefreshEmptyLogged;
     private static boolean nativeLightRefreshErrorLogged;
+    private static int mirrorLightCountReports;
+    private static boolean mirrorLightCountPromoted;
+    private static int lastRegisteredMirrorLightCount=-1;
     private static int betterLightsShadowDiagnosticCount;
     private static double[] lastBetterLightsShadowDiagnosticEye;
     private static boolean betterLightsShadowBypassLogged;
@@ -178,6 +181,15 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             throw new IllegalStateException("Recursive BSL mirror compositor");
         CameraMirrorBSLCompositor result=
                 new CameraMirrorBSLCompositor(targets,view,mainView);
+        if(lastRegisteredMirrorLightCount!=result.worldLightPositions.size())
+        {
+            lastRegisteredMirrorLightCount=result.worldLightPositions.size();
+            System.out.println(
+                "[BBS Editor][Mirror][BetterLights][Slots] "+
+                "Registered editor world casters="+
+                lastRegisteredMirrorLightCount+
+                " (actor and CAMERA static lights)");
+        }
         current=result;
         try
         {
@@ -288,9 +300,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 IntBuffer refreshed=BufferUtils.createIntBuffer(16);
                 GL20.glGetUniform(pid,current,refreshed);
                 int after=refreshed.get(0);
-                if(after>0)
-                    CameraMirrorBetterLightsSnapshot.capture(
-                            pid,worldLightPositions,mainCameraPosition());
+                // Even lightCount=0 may contain verified populated
+                // BetterLights struct slots in the native GL program.
+                CameraMirrorBetterLightsSnapshot.capture(
+                        pid,worldLightPositions,mainCameraPosition());
                 CameraMirrorBetterLightsProbe.inspectAfterRefresh(pid);
                 if(after>before&&!nativeLightRefreshLogged)
                 {
@@ -1600,6 +1613,51 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         }
     }
 
+    /**
+     * The native OptiFine selector may leave BetterLights lightCount at
+     * 0 or a smaller main-camera count while its GPU structs already
+     * contain registered sources visible from the mirror. Promote only
+     * the contiguous verified prefix and restore the previous count
+     * when leaving this private compositor.
+     */
+    private void correctMirrorBetterLightsCount(int pid)
+    {
+        if(worldLightPositions.isEmpty())return;
+        int loc=GL20.glGetUniformLocation(pid,"lightCount");
+        if(loc<0)return;
+        IntBuffer nativeValue=BufferUtils.createIntBuffer(16);
+        GL20.glGetUniform(pid,loc,nativeValue);
+        int count=nativeValue.get(0);
+        int verified=CameraMirrorBetterLightsSnapshot.validatedPrefix(
+                pid,worldLightPositions);
+        if(verified>count)
+        {
+            restored.add(UniformBackup.captureInt(pid,loc));
+            GL20.glUniform1i(loc,verified);
+            if(!mirrorLightCountPromoted)
+            {
+                mirrorLightCountPromoted=true;
+                System.out.println(
+                    "[BBS Editor][Mirror][BetterLights][Slots] "+
+                    "Promoted mirror-only lightCount "+count+" -> "+
+                    verified+" program="+pid+
+                    " registered="+worldLightPositions.size()+
+                    " (world position and enabled-state verified)");
+            }
+        }
+        if(mirrorLightCountReports<4&&
+                (mirrorLightCountReports==0||verified!=count))
+        {
+            mirrorLightCountReports++;
+            System.out.println(
+                "[BBS Editor][Mirror][BetterLights][Slots] "+
+                "program="+pid+" nativeCount="+count+
+                " verifiedPrefix="+verified+
+                " registered="+worldLightPositions.size()+
+                " effectiveCount="+Math.max(count,verified));
+        }
+    }
+
     private void overrideCamera(int pid)
     {
         write3(pid,"cameraPosition",(float)view.x,
@@ -1700,6 +1758,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
             writeMatrix(pid,"shadowProjectionInverse",
                     privateShadowProjection,true);
         }
+        correctMirrorBetterLightsCount(pid);
     }
 
     /**
