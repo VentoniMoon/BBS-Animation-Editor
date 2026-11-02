@@ -1604,12 +1604,8 @@ public class CharacterTimelineEditorController
                             timelineStartX
                     );
 
-            this.timeline.setTick(
-                    Math.max(
-                            FIRST_FRAME,
-                            frame
-                    )
-            );
+            setCurrentFrame(Math.max(FIRST_FRAME,
+                    Math.min(scrubbingMaximumFrame, frame)));
 
             resetDoubleClickState();
 
