@@ -1290,14 +1290,18 @@ public class BlockbusterActorPreviewRenderer
          * =====================================================
          */
 
-        renderManager.viewerPosX =
-                0.0D;
-
-        renderManager.viewerPosY =
-                0.0D;
-
-        renderManager.viewerPosZ =
-                0.0D;
+        boolean nativeGBuffer=BbsFsNativeActorPass.isNativeEntityStage();
+        // Native Minecraft entity transforms use coordinates relative to
+        // RenderManager.viewerPos. Previously we set viewerPos=0 and
+        // reconstructed a separate editor camera matrix. OptiFine still
+        // held the ORIGINAL camera matrices in shader uniforms, causing
+        // diagonal self-shadow samples on sunlit actor polygons.
+        if(!nativeGBuffer)
+        {
+            renderManager.viewerPosX = 0.0D;
+            renderManager.viewerPosY = 0.0D;
+            renderManager.viewerPosZ = 0.0D;
+        }
 
         /*
          * =====================================================
@@ -1305,85 +1309,103 @@ public class BlockbusterActorPreviewRenderer
          * =====================================================
          */
 
-        GL11.glMatrixMode(
-                GL11.GL_PROJECTION
-        );
-
-        GL11.glLoadIdentity();
-
-        float aspect =
-                (float) previewWidth /
-                        (float) previewHeight;
-
-        /*
-         * Match the native Minecraft/OptiFine depth written before the GUI.
-         * The capture's X/Y crop is corrected in the projection matrix.
-         * Only fall back to the historical editor camera if the world pass
-         * has not provided a usable projection (e.g. an empty dimension).
-         */
-        if (BbsFsNativeActorPass.isRendering())
+        if(nativeGBuffer)
         {
-            /*
-             * RenderWorldLastEvent is still in the full-size world target.
-             * The actual Minecraft projection must NOT be film-cropped yet.
-             * The film capture will perform the crop once for everyone.
-             */
-            if (!BbsFsWorldProjection.loadForNativeWorld())
-                GLU.gluPerspective(camera.getFov(), aspect,
-                        camera.getNearPlane(),
-                        Math.max(camera.getFarPlane(), 500.0F));
+            // Same projection + modelview that native OptiFine uploaded as
+            // gbufferProjection and gbufferModelViewInverse. Never rebuild
+            // yaw/pitch/translation while sampling the sun shadow atlas.
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glLoadIdentity();
+            if(!BbsFsWorldProjection.loadForNativeWorld())
+                throw new IllegalStateException(
+                        "Native entity projection was not captured");
+            if(!BbsFsNativeActorPass.loadNativeEntityModelView())
+                throw new IllegalStateException(
+                        "Native entity modelview was not captured");
         }
-        else if (!BbsFsWorldProjection.loadForPreview(
-                previewWidth, previewHeight))
+        else
         {
-            GLU.gluPerspective(
-                    camera.getFov(), aspect,
-                    camera.getNearPlane(),
-                    Math.max(camera.getFarPlane(), 500.0F)
+            GL11.glMatrixMode(
+                    GL11.GL_PROJECTION
             );
+
+            GL11.glLoadIdentity();
+
+            float aspect =
+                    (float) previewWidth /
+                            (float) previewHeight;
+
+            /*
+             * Match the native Minecraft/OptiFine depth written before the GUI.
+             * The capture's X/Y crop is corrected in the projection matrix.
+             * Only fall back to the historical editor camera if the world pass
+             * has not provided a usable projection (e.g. an empty dimension).
+             */
+            if (BbsFsNativeActorPass.isRendering())
+            {
+                /*
+                 * RenderWorldLastEvent is still in the full-size world target.
+                 * The actual Minecraft projection must NOT be film-cropped yet.
+                 * The film capture will perform the crop once for everyone.
+                 */
+                if (!BbsFsWorldProjection.loadForNativeWorld())
+                    GLU.gluPerspective(camera.getFov(), aspect,
+                            camera.getNearPlane(),
+                            Math.max(camera.getFarPlane(), 500.0F));
+            }
+            else if (!BbsFsWorldProjection.loadForPreview(
+                    previewWidth, previewHeight))
+            {
+                GLU.gluPerspective(
+                        camera.getFov(), aspect,
+                        camera.getNearPlane(),
+                        Math.max(camera.getFarPlane(), 500.0F)
+                );
+            }
+
+            /*
+             * =====================================================
+             * MODELVIEW
+             * =====================================================
+             */
+
+            GL11.glMatrixMode(
+                    GL11.GL_MODELVIEW
+            );
+
+            GL11.glLoadIdentity();
+
+            GL11.glRotatef(-camera.getRoll(), 0F, 0F, 1F);
+            GL11.glRotatef(
+                    -camera.getPitch(),
+                    1.0F,
+                    0.0F,
+                    0.0F
+            );
+
+            GL11.glRotatef(
+                    -camera.getYaw(),
+                    0.0F,
+                    1.0F,
+                    0.0F
+            );
+
+            double cameraX =
+                    camera.getCameraX();
+
+            double cameraY =
+                    camera.getCameraY();
+
+            double cameraZ =
+                    camera.getCameraZ();
+
+            GL11.glTranslated(
+                    -cameraX,
+                    -cameraY,
+                    -cameraZ
+            );
+
         }
-
-        /*
-         * =====================================================
-         * MODELVIEW
-         * =====================================================
-         */
-
-        GL11.glMatrixMode(
-                GL11.GL_MODELVIEW
-        );
-
-        GL11.glLoadIdentity();
-
-        GL11.glRotatef(-camera.getRoll(), 0F, 0F, 1F);
-        GL11.glRotatef(
-                -camera.getPitch(),
-                1.0F,
-                0.0F,
-                0.0F
-        );
-
-        GL11.glRotatef(
-                -camera.getYaw(),
-                0.0F,
-                1.0F,
-                0.0F
-        );
-
-        double cameraX =
-                camera.getCameraX();
-
-        double cameraY =
-                camera.getCameraY();
-
-        double cameraZ =
-                camera.getCameraZ();
-
-        GL11.glTranslated(
-                -cameraX,
-                -cameraY,
-                -cameraZ
-        );
 
         /*
          * =====================================================
@@ -1509,9 +1531,9 @@ public class BlockbusterActorPreviewRenderer
             BbsFsOptiFineEntityStage.beforeEntity(entityActor);
             renderManager.renderEntity(
                     entityActor,
-                    entityActor.posX,
-                    entityActor.posY,
-                    entityActor.posZ,
+                    entityActor.posX - (nativeGBuffer ? oldViewerPosX : 0D),
+                    entityActor.posY - (nativeGBuffer ? oldViewerPosY : 0D),
+                    entityActor.posZ - (nativeGBuffer ? oldViewerPosZ : 0D),
                     entityActor.rotationYaw,
                     actorPartialTicks,
                     true
