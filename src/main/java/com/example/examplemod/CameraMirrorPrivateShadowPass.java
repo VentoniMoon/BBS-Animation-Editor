@@ -27,9 +27,9 @@ import org.lwjgl.opengl.GL30;
  * No OptiFine sfb, shadow textures, world, entity tick or chunk queue
  * is modified. Always invoked on Minecraft's render thread.
  *
- * Initial scope: chunk/terrain casters, including alpha-test and optional
- * translucent layers. Actor casters will require a separate prepared-pose
- * shadow hook; actor receiving shadows continues to work.
+ * Caster scope: chunk/terrain plus PREPARED Blockbuster actor meshes, 
+ * including current Morph/Body Parts poses (without an extra physics tick).
+ * The actor shadow replay belongs to this private shadow map only.
  */
 public final class CameraMirrorPrivateShadowPass implements AutoCloseable
 {
@@ -40,6 +40,8 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
     private final int[] colors;
     private boolean ready,closed;
     private static boolean logged;
+    private static boolean actorLogged;
+    private static boolean actorWarningLogged;
 
     private CameraMirrorPrivateShadowPass(int w,int h,int dc,int cc)
     {
@@ -266,6 +268,76 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
                         partialTicks,2,eye);
                 world.renderBlockLayer(BlockRenderLayer.CUTOUT,
                         partialTicks,2,eye);
+                // Forge WorldLast has already prepared actor morphs and
+                // animated body parts for the native camera. Include them
+                // here BEFORE the opaque shadow depth is copied to
+                // shadowtex1. A prepared replay never runs Jolt a second
+                // time or mutates any actor's recorded frame.
+                if(!"false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLActorShadows","true"))&&
+                        mc.currentScreen instanceof AnimationEditorScreen)
+                {
+                    try
+                    {
+                        // Chunk rendering can switch the selected native
+                        // shader, color mask and draw FBO. Reset the PRIVATE
+                        // shadow target and light matrices before actors.
+                        bindDraw();
+                        GL11.glMatrixMode(GL11.GL_PROJECTION);
+                        projection.rewind();GL11.glLoadMatrix(projection);
+                        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                        lightView.rewind();GL11.glLoadMatrix(lightView);
+                        GL20.glUseProgram(shadowProgram);
+                        owner.bindPrivateShadowProgram(optiProgram,
+                                shadowProgram,projection,lightView);
+                        GL11.glEnable(GL11.GL_DEPTH_TEST);
+                        GL11.glDepthMask(true);
+                        GL11.glColorMask(true,true,true,true);
+                        GL11.glDisable(GL11.GL_BLEND);
+                        GL11.glEnable(GL11.GL_ALPHA_TEST);
+                        GL11.glAlphaFunc(GL11.GL_GREATER,0.1F);
+                        int drawn=((AnimationEditorScreen)mc.currentScreen)
+                                .renderPreparedActorsInShadow(mc);
+                        if(drawn>0&&!actorLogged)
+                        {
+                            actorLogged=true;
+                            System.out.println(TAG+
+                                    "Prepared actor shadow casters="+drawn+
+                                    " (real mesh, cached pose, no physics step)");
+                        }
+                    }
+                    catch(Throwable actorError)
+                    {
+                        // Actor shadow rendering is optional. A broken
+                        // third-party morph must not invalidate the entire
+                        // previously working terrain shadow reflection.
+                        if(!actorWarningLogged)
+                        {
+                            actorWarningLogged=true;
+                            System.err.println(TAG+
+                                    "Prepared actor caster unavailable: "+
+                                    actorError);
+                            actorError.printStackTrace();
+                        }
+                    }
+                    finally
+                    {
+                        // Reassert private targets and shadow light matrices
+                        // even when an actor's RenderManager uses another
+                        // texture/program. The following depthtex1 copy
+                        // must read the correct private framebuffer.
+                        bindDraw();
+                        GL11.glMatrixMode(GL11.GL_PROJECTION);
+                        projection.rewind();GL11.glLoadMatrix(projection);
+                        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                        lightView.rewind();GL11.glLoadMatrix(lightView);
+                        GL20.glUseProgram(shadowProgram);
+                        owner.bindPrivateShadowProgram(optiProgram,
+                                shadowProgram,projection,lightView);
+                        GL11.glEnable(GL11.GL_DEPTH_TEST);
+                        GL11.glDepthMask(true);
+                    }
+                }
                 if(depthCount>1)
                 {
                     // Native OptiFine copies opaque depth to shadowtex1
