@@ -161,17 +161,12 @@ public final class CameraSceneLightsPanel
         leftRight=screen.width-185;
         top=25;bottom=panelBottom;
         Minecraft mc=Minecraft.getMinecraft();
-        Gui.drawRect(0,25,LEFT,54,0xFF1D303B);
-        mc.fontRenderer.drawString("CLIPS",5,36,
-                opened?0xFF899DAA:0xFF60C8FA);
-        mc.fontRenderer.drawString("LIGHTS",47,36,
-                opened?0xFF60C8FA:0xFF899DAA);
-        mc.fontRenderer.drawString("MIRRORS",88,36,0xFF899DAA);
+        EditorVisualStyle.drawCameraTabs(mc,LEFT,opened?1:0);
         if(!opened)return;
         CameraSceneLights.Light selected=sync(screen);
         Gui.drawRect(0,54,LEFT,panelBottom,0xFF19232C);
-        Gui.drawRect(4,61,LEFT/2-2,82,0xFF31495D);
-        Gui.drawRect(LEFT/2+2,61,LEFT-4,82,0xFF31495D);
+        Gui.drawRect(4,61,LEFT/2-2,82,EditorVisualStyle.themedSurface(0.23F));
+        Gui.drawRect(LEFT/2+2,61,LEFT-4,82,EditorVisualStyle.themedSurface(0.23F));
         mc.fontRenderer.drawString("+ ADD",11,68,0xFFFFFFFF);
         mc.fontRenderer.drawString("REMOVE",LEFT/2+5,68,0xFFFFFFFF);
         java.util.List<CameraSceneLights.Light> lights=
@@ -183,7 +178,7 @@ public final class CameraSceneLightsPanel
             if(row+20>=panelBottom)break;
             CameraSceneLights.Light light=lights.get(i);
             if(light==selected)
-                Gui.drawRect(4,row-2,LEFT-4,row+18,0xFF34536A);
+                Gui.drawRect(4,row-2,LEFT-4,row+18,EditorVisualStyle.themedSurface(0.29F));
             String label=mc.fontRenderer.trimStringToWidth(
                     (light.enabled?"":"[ ] ")+light.name,LEFT-16);
             mc.fontRenderer.drawString(label,9,row+3,
