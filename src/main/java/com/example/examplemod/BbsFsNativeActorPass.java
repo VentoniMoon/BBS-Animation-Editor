@@ -1,6 +1,8 @@
 package com.example.examplemod;
 
 import net.minecraft.client.Minecraft;
+import java.lang.reflect.Field;
+import org.lwjgl.opengl.GL11;
 import net.minecraft.client.shader.Framebuffer;
 
 /**
@@ -28,6 +30,12 @@ public final class BbsFsNativeActorPass
     private static int renderedSequence = -1;
     private static int nativeViewportWidth, nativeViewportHeight;
     private static boolean diagnosed;
+    private static boolean earlyDiagnosed;
+    private static boolean earlyErrorReported;
+    private static boolean earlyPrepared;
+    private static boolean earlyAttempted;
+    private static Framebuffer preparationFramebuffer;
+    private static Field minecraftFramebuffer;
 
     private BbsFsNativeActorPass() {}
 
@@ -35,6 +43,121 @@ public final class BbsFsNativeActorPass
     {
         frameSequence++;
         renderedThisFrame = false;
+        earlyPrepared = false;
+        earlyAttempted = false;
+    }
+
+    /** Reclaim the private preparation surface on editor/world shutdown. */
+    public static void release()
+    {
+        if(preparationFramebuffer!=null)
+        {
+            preparationFramebuffer.deleteFramebuffer();
+            preparationFramebuffer=null;
+        }
+        earlyPrepared=false;
+        earlyAttempted=false;
+    }
+
+    /**
+     * Prepare once BEFORE OptiFine's beginRender/shadow map. The normal
+     * actor renderer still owns animation, Body Parts, Weld and Jolt;
+     * we invoke it exactly once, but draw into a small PRIVATE FBO.
+     * The main film and the native sun-shadow atlas then replay the
+     * resulting pose, with no new animation/physics evaluation.
+     *
+     * A temporary Minecraft.framebufferMc redirect prevents morph
+     * renderers which bind mc.getFramebuffer() internally from damaging
+     * the main frame while we precompute their transforms.
+     */
+    public static void prepareBeforeShadows(Minecraft mc,
+            AnimationEditorScreen editor,EditorSceneViewport viewport)
+    {
+        if(!Boolean.getBoolean(
+                "bbs.editor.camera.nativeActorSunShadows")||
+                rendering||earlyAttempted||mc==null||mc.world==null||
+                editor==null||viewport==null||mc.player==null||
+                viewport.getWidth()<=0||viewport.getHeight()<=0)
+            return;
+        earlyAttempted=true;
+        Framebuffer original=mc.getFramebuffer();
+        if(original==null)return;
+        try
+        {
+            if(preparationFramebuffer==null)
+                preparationFramebuffer=new Framebuffer(128,72,true);
+            if(minecraftFramebuffer==null)
+            {
+                minecraftFramebuffer=Minecraft.class
+                        .getDeclaredField("framebufferMc");
+                minecraftFramebuffer.setAccessible(true);
+            }
+            nativeViewportWidth=Math.max(1,mc.displayWidth);
+            nativeViewportHeight=Math.max(1,mc.displayHeight);
+            rendering=true;
+            try(BbsFsWorldGlGuard guard=new BbsFsWorldGlGuard(mc))
+            {
+                try
+                {
+                    minecraftFramebuffer.set(mc,preparationFramebuffer);
+                    preparationFramebuffer.bindFramebuffer(true);
+                    preparationFramebuffer.framebufferClear();
+                    preparationFramebuffer.bindFramebuffer(true);
+                    GL11.glViewport(0,0,128,72);
+                    // The current world projection is not available yet.
+                    // drawActor() falls back to the camera's FOV while
+                    // preparing the exact recorded pose. These pixels are
+                    // deliberately discarded, not shown in the film.
+                    earlyPrepared=editor.renderActorsInNativeWorld();
+                }
+                finally
+                {
+                    minecraftFramebuffer.set(mc,original);
+                }
+            }
+            if(earlyPrepared&&!earlyDiagnosed)
+            {
+                earlyDiagnosed=true;
+                System.out.println(
+                        "[BBS Editor][Actor Sun Shadow] "+
+                        "Early actor pose prepared before OptiFine shadow "+
+                        "map (private FBO; Jolt once)");
+            }
+        }
+        catch(Throwable e)
+        {
+            earlyPrepared=false;
+            if(!earlyErrorReported)
+            {
+                earlyErrorReported=true;
+                System.err.println(
+                        "[BBS Editor][Actor Sun Shadow] "+
+                        "Early pose preparation failed: "+e);
+                e.printStackTrace();
+            }
+        }
+        finally
+        {
+            // Do not render again after a partially failed preparation:
+            // it may already have stepped a physics simulation.
+            rendering=false;
+            nativeViewportWidth=nativeViewportHeight=0;
+            try
+            {
+                if(minecraftFramebuffer!=null)
+                    minecraftFramebuffer.set(mc,original);
+            }
+            catch(IllegalAccessException unsafe)
+            {
+                throw new IllegalStateException(
+                        "Cannot restore Minecraft framebuffer",unsafe);
+            }
+        }
+    }
+
+    public static boolean preparedBeforeShadows()
+    {
+        return earlyPrepared;
     }
 
     public static boolean isRendering()
@@ -73,6 +196,9 @@ public final class BbsFsNativeActorPass
                 mc == null || editor == null || viewport == null ||
                 !BbsFsWorldProjection.isCaptured() || mc.world == null)
             return;
+        // A failed early pass may already have advanced Jolt. Never
+        // advance it a second time in this very same Minecraft frame.
+        if(earlyAttempted&&!earlyPrepared)return;
 
         Framebuffer target = mc.getFramebuffer();
         if (target == null || target.framebufferWidth <= 0 ||
@@ -106,7 +232,15 @@ public final class BbsFsNativeActorPass
                 try (BbsFsOptiFineEntityStage shaders =
                              BbsFsOptiFineEntityStage.open())
                 {
-                    if (!editor.renderActorsInNativeWorld()) return;
+                    if(earlyPrepared)
+                    {
+                        PreviewCameraPose pose=
+                                BbsFsWorldCameraDriver.nativeActorPose(viewport);
+                        if(pose==null)return;
+                        editor.renderPreparedActorsInNativeWorld(mc,pose,
+                                worldWidth,worldHeight);
+                    }
+                    else if (!editor.renderActorsInNativeWorld()) return;
                 }
             }
             finally
