@@ -456,8 +456,8 @@ public class BodyPartsEditorPanel
     private int getGlobalMaxScroll()
     {
         int[] offsets = getGlobalControlOffsets();
-        // Last field has 16px height; include a 3px bottom inset.
-        int contentHeight = 3 + offsets[offsets.length - 1] + 16 + 3;
+        // Last field has 16px height; reserve a small 2px inset.
+        int contentHeight = 3 + offsets[offsets.length - 1] + 16 + 2;
         return Math.max(0, contentHeight - getGlobalViewportHeight());
     }
 
