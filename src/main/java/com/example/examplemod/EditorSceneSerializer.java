@@ -1332,6 +1332,10 @@ public final class EditorSceneSerializer
                                 .name()
                 );
             }
+            // Expanded CAMERA preset is stored separately: old McLib
+            // scene keys still load unchanged.
+            if(!keyframe.getEditorCurve().isEmpty())
+                tag.setString("EditorCurve",keyframe.getEditorCurve());
 
 
             /*
@@ -1579,6 +1583,9 @@ public final class EditorSceneSerializer
                 }
             }
 
+
+            if(tag.hasKey("EditorCurve"))
+                keyframe.setEditorCurve(tag.getString("EditorCurve"));
 
             /*
              * -------------------------------------------------
