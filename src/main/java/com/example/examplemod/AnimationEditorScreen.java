@@ -535,6 +535,11 @@ public class AnimationEditorScreen extends GuiScreen
                                         interpolationPanel
                                                 .getSelectedEasing()
                                 );
+                                // Empty keeps exact native McLib interpolation;
+                                // nonempty enables one of CAMERA's expanded
+                                // easing presets in the POSE evaluator.
+                                keyframe.setEditorCurve(
+                                        interpolationPanel.getSelectedCurve());
 
                                 markEditorDirty();
                             }
@@ -3073,6 +3078,8 @@ public class AnimationEditorScreen extends GuiScreen
                             selectedKeyframe
                                     .getEasing()
                     );
+            this.interpolationPanel.setSelectedCurve(
+                    selectedKeyframe.getEditorCurve());
         }
 
         this.interpolationPanel.draw(
