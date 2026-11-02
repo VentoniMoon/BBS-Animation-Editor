@@ -4307,6 +4307,7 @@ public class AnimationEditorScreen extends GuiScreen
                 isCtrlKeyDown() && isShiftKeyDown())
         {
             selectedActorFirstProbe=!selectedActorFirstProbe;
+            BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(true);
             System.out.println("[BBS Editor][MultiActor A/B] "+
                     (selectedActorFirstProbe
                             ?"Selected actor rendered FIRST"
@@ -4629,6 +4630,7 @@ public class AnimationEditorScreen extends GuiScreen
     {
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
+        BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(false);
         BbsFsActorShadowSamplingProbe.dispose();
         BbsFsNativeActorSunShadowOverlay.resetEditorOverride();
         BetterLightsWorldEngine.reset();
