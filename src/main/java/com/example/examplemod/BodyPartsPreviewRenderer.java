@@ -35,6 +35,35 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, AbstractMorph> preparedMorphs =
             new IdentityHashMap<BodyPartModelData, AbstractMorph>();
 
+    /**
+     * A background actor can have real Metamorph Body Parts embedded in its
+     * original morph NBT without any editor BODY PARTS tracks. Previously
+     * prepareModels() cleared manager.parts unconditionally, discarding those
+     * native parts, sometimes leaving only the head/primary morph visible.
+     *
+     * This renderer belongs to exactly one preview EntityActor, so retain a
+     * per-morph snapshot, NEVER a global list shared between scene actors.
+     * Tracks override the native list when they exist; an empty track list
+     * restores the embedded native parts instead of silently deleting them.
+     */
+    private AbstractMorph nativePartsOwner;
+    private final List<BodyPart> originalNativeParts =
+            new ArrayList<BodyPart>();
+
+    private void rememberNativeParts(AbstractMorph morph,
+            BodyPartManager manager)
+    {
+        if(nativePartsOwner == morph)return;
+        nativePartsOwner=morph;
+        originalNativeParts.clear();
+        if(manager!=null && manager.parts!=null)
+            originalNativeParts.addAll(manager.parts);
+        if(!originalNativeParts.isEmpty())
+            System.out.println("[BBS Editor][MultiActor Parts] Preserved "+
+                    originalNativeParts.size()+" native attachment(s) for "+
+                    morph.getClass().getSimpleName());
+    }
+
     /*
      * Preserve the unanimated pose of each runtime child morph. Some
      * morph-backed Body Parts reuse the same CustomMorph across preview
@@ -2134,10 +2163,14 @@ public class BodyPartsPreviewRenderer
         {
             return;
         }
+        rememberNativeParts(abstractMorph,manager);
 
         /*
-         * The editor is the source of truth for the current frame.
-         * Do not leave body parts from a previous frame alive.
+         * The editor is the source of truth for the current frame when
+         * authored attachments exist. If there are NO editor tracks,
+         * keep the native attachments from the original morph NBT.
+         * They are needed for nonselected actors and for transitions
+         * between selected and background renderers.
          */
         physicsFrames.beginFrame(frame);
         // The Jolt bridge needs the current playback mode but should not
@@ -2171,6 +2204,10 @@ public class BodyPartsPreviewRenderer
         // the passive sample is stale and was spamming the log.
         if (models == null || models.isEmpty())
         {
+            // Always restore from our ORIGINAL snapshot: in this session
+            // manager.parts may currently contain editor-generated objects
+            // from a previously selected actor/track.
+            manager.parts.addAll(originalNativeParts);
             return;
         }
 
@@ -3245,6 +3282,8 @@ public class BodyPartsPreviewRenderer
 
     public void clear()
     {
+        nativePartsOwner=null;
+        originalNativeParts.clear();
         bakeController.reset();
         parentColliderCaches.clear();
         parentEmoticonsColliders=null;
