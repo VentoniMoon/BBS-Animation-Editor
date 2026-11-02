@@ -573,17 +573,6 @@ public class EditorTimelineController
         int tracksTop =
                 timelineTop + 35;
 
-        // The ruler playhead is draggable throughout the scene with LMB.
-        if (mouseButton == 0 && mouseX >= leftPanelWidth && mouseX < width
-                && mouseY >= timelineTop && mouseY < tracksTop)
-        {
-            draggingPlayhead = true;
-            scrubbingMaximumFrame = getMaximumFrame(sceneLength);
-            scrubbingStartX = leftPanelWidth;
-            updatePlayheadFromMouse(mouseX);
-            return true;
-        }
-
         int visibleBoneCount =
                 Math.max(
                         0,
@@ -1330,6 +1319,19 @@ int trackColor =
 
         int tracksTop =
                 timelineTop + 35;
+
+        // The ruler playhead is draggable throughout the scene with LMB.
+        if (mouseButton == 0 && mouseX >= leftPanelWidth && mouseX < width
+                && mouseY >= timelineTop && mouseY < tracksTop)
+        {
+            draggingPlayhead = true;
+            scrubbingMaximumFrame = getMaximumFrame(sceneLength);
+            scrubbingStartX = leftPanelWidth;
+            updatePlayheadFromMouse(mouseX);
+            return true;
+        }
+
+
 
         int relativeY =
                 mouseY -
