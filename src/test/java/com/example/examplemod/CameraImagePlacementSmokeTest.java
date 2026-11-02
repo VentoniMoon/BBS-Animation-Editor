@@ -38,8 +38,26 @@ public final class CameraImagePlacementSmokeTest
         close(cover.height(),960,"cover box height");
         if(!(cover.u0>0D && cover.u1<1D))
             throw new AssertionError("portrait cover crops source X UV");
-        close(cover.v0,1D,"wide source cover keeps default upper V");
-        close(cover.v1,0D,"wide source cover keeps default lower V");
+        close(cover.v0,0D,"wide source cover keeps top V=0");
+        close(cover.v1,1D,"wide source cover keeps bottom V=1");
+
+        // Regression for the user's upside-down IMAGE and VIDEO frames:
+        // a top-left source pixel must land at top-left of the film. Both
+        // media types call this SAME placement method in the compositor.
+        // The old implementation sent V=1 to the film's top, which flipped
+        // every BufferedImage/DynamicTexture vertically.
+        CameraImagePlacement.Rect upright=CameraImagePlacement.calculate(
+                0,0,320,240,640,480,"contain",false,false);
+        close(upright.u0,0D,"unflipped left source pixel");
+        close(upright.u1,1D,"unflipped right source pixel");
+        close(upright.v0,0D,"unflipped top source pixel");
+        close(upright.v1,1D,"unflipped bottom source pixel");
+        CameraImagePlacement.Rect tallCover=CameraImagePlacement.calculate(
+                0,0,320,180,400,800,"cover",false,false);
+        close(tallCover.u0,0D,"tall cover keeps left U");
+        close(tallCover.u1,1D,"tall cover keeps right U");
+        close(tallCover.v0,0.359375D,"tall cover trims source top");
+        close(tallCover.v1,0.640625D,"tall cover trims source bottom");
 
         // Orientation is independent of aspect and is never affected by FPS.
         CameraImagePlacement.Rect normal=CameraImagePlacement.calculate(
@@ -54,6 +72,16 @@ public final class CameraImagePlacementSmokeTest
         close(mirrorY.v1,normal.v0,"vertical mirror reverses V1");
         close(mirrorX.width(),normal.width(),"X reflection preserves width");
         close(mirrorY.height(),normal.height(),"Y reflection preserves height");
+        close(mirrorX.v0,0D,"X-only flip keeps top upright");
+        close(mirrorX.v1,1D,"X-only flip keeps bottom upright");
+        close(mirrorY.u0,0D,"Y-only flip keeps left unchanged");
+        close(mirrorY.u1,1D,"Y-only flip keeps right unchanged");
+        CameraImagePlacement.Rect both=CameraImagePlacement.calculate(
+                0,0,320,240,640,480,"contain",true,true);
+        close(both.u0,1D,"explicit flipX starts at right");
+        close(both.u1,0D,"explicit flipX ends at left");
+        close(both.v0,1D,"explicit flipY starts at bottom");
+        close(both.v1,0D,"explicit flipY ends at top");
 
         CameraImagePlacement.Rect legacy=CameraImagePlacement.calculate(
                 0,0,540,960,1200,800,null,false,false);
