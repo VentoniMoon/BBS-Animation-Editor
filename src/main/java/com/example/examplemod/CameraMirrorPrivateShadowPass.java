@@ -220,6 +220,11 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
         {
             bindDraw();checkComplete();
             GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            // Shadow casters can sit beyond the physical mirror plane
+            // while still projecting onto visible reflected geometry.
+            // The mirror's camera-space clip plane belongs to the GBuffer,
+            // never the independent light-space shadow map.
+            GL11.glDisable(GL11.GL_CLIP_PLANE0);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDepthFunc(GL11.GL_LEQUAL);
             GL11.glDepthMask(true);
