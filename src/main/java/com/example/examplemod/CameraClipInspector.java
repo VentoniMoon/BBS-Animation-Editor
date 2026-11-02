@@ -760,13 +760,21 @@ public final class CameraClipInspector
         optionScroll=Math.max(0,Math.min(
                 EditorInterpolationCurvePicker.maxRowOffset(entries,rows),
                 optionScroll));
-        int mx=mc.currentScreen==null?-1:
+        int physicalX=mc.currentScreen==null?-1:
                 org.lwjgl.input.Mouse.getX()*
                         mc.currentScreen.width/Math.max(1,mc.displayWidth);
-        int my=mc.currentScreen==null?-1:
+        int physicalY=mc.currentScreen==null?-1:
                 mc.currentScreen.height-
                 org.lwjgl.input.Mouse.getY()*
                         mc.currentScreen.height/Math.max(1,mc.displayHeight)-1;
+        // CAMERA inspector uses a scaled virtual layout; the picker is
+        // drawn before hits are converted back to real screen pixels.
+        // Convert hover coordinates too, otherwise labels/curves highlight
+        // the wrong thumbnail when uiScale != 1.
+        int mx=physicalX<0?-1:
+                right+Math.round((physicalX-right)/uiScale);
+        int my=physicalY<0?-1:
+                CONTENT_TOP+Math.round((physicalY-CONTENT_TOP)/uiScale);
         EditorInterpolationCurvePicker.draw(entries,lx,gridY,gridW,
                 rows,optionScroll,"",mx,my);
         int cellW=Math.max(1,gridW/
