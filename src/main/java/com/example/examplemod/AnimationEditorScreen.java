@@ -3852,12 +3852,13 @@ public class AnimationEditorScreen extends GuiScreen
         int right=width-7;
         int left=Math.max(LEFT_PANEL_WIDTH+4,right-83);
         int top=timelineTop+2;
-        drawRect(left-2,top-1,right+1,top+16,0xEB122630);
-        drawRect(left,top,right,top+14,
-                this.wavAudio.isAudible()?0xFF315567:0xFF564245);
+        // The WAV monitoring toggle should remain visible and clickable
+        // without an opaque rectangle covering the ruler/waveform.
+        // The click region in clickWavMonitor remains unchanged.
         fontRenderer.drawString(this.wavAudio.isAudible()
                         ?"WAV SOUND ON":"WAV MUTED",
-                left+5,top+3,0xFFE6EFF5);
+                left+5,top+3,
+                this.wavAudio.isAudible()?0xFF91D9EE:0xFFCBD4DC);
     }
 
     /** Only intercept the tiny WAV monitor button above the sound waveform. */
