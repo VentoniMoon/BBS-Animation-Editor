@@ -81,11 +81,45 @@ public final class CameraBetterLightsCameraOrigin
         entity.lastTickPosY=pos[7];entity.lastTickPosZ=pos[8];
     }
 
+    /**
+     * Keep BetterLights' player-derived coordinate origin aligned with the
+     * mirror for the ENTIRE auxiliary render, including the private BSL
+     * deferred/composite/final stages which run AFTER terrain/actors.
+     *
+     * The detached preview entity is moved later by the world callback;
+     * the immutable reflected pose is already available before BSL starts.
+     * All position history fields are set to the same pose so BetterLights
+     * interpolation cannot blend main and reflected camera coordinates.
+     */
+    public static MirrorScope beginMirror(Minecraft mc,
+            PreviewCameraPose reflected)
+    {
+        if(reflected==null)return new MirrorScope(null);
+        return beginMirrorCoordinates(mc,new double[]{
+                reflected.x,reflected.y,reflected.z,
+                reflected.x,reflected.y,reflected.z,
+                reflected.x,reflected.y,reflected.z});
+    }
+
     public static MirrorScope beginMirror(Minecraft mc,Entity reflected)
     {
-        if(!active||mc==null||reflected==null||
+        if(reflected==null||mc==null||
+                mc.getRenderViewEntity()!=reflected)
+            return new MirrorScope(null);
+        return beginMirrorCoordinates(mc,new double[]{
+                reflected.posX,reflected.posY,reflected.posZ,
+                reflected.prevPosX,reflected.prevPosY,reflected.prevPosZ,
+                reflected.lastTickPosX,reflected.lastTickPosY,
+                reflected.lastTickPosZ});
+    }
+
+    private static MirrorScope beginMirrorCoordinates(Minecraft mc,
+            double[] pose)
+    {
+        if(!active||mc==null||pose==null||
                 mc.player!=savedPlayer||
-                mc.getRenderViewEntity()!=reflected||
+                mc.getRenderViewEntity()==null||
+                mc.getRenderViewEntity()==mc.player||
                 !Loader.isModLoaded("better_lights")||
                 "false".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.camera.mirrorBSLLightOrigin","true")))
@@ -95,12 +129,6 @@ public final class CameraBetterLightsCameraOrigin
                     "Recursive CAMERA mirror BetterLights light origin");
         MirrorScope scope=new MirrorScope(mc.player);
         currentMirror=scope;
-        double[] pose={
-                reflected.posX,reflected.posY,reflected.posZ,
-                reflected.prevPosX,reflected.prevPosY,reflected.prevPosZ,
-                reflected.lastTickPosX,reflected.lastTickPosY,
-                reflected.lastTickPosZ
-        };
         write(mc.player,pose);
         if(!mirrorReported)
         {
