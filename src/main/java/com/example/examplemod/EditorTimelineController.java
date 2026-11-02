@@ -201,6 +201,12 @@ public class EditorTimelineController
 
     private int boneScroll = 0;
 
+    private long lastRightKeyClickTime = 0L;
+    private int lastRightKeyClickX = -1;
+    private int lastRightKeyClickY = -1;
+    private int lastRightKeyClickBone = -1;
+    private AnimationKeyframe lastRightKeyClickFrame = null;
+
     private long lastTimelineClickTime = 0L;
 
     private int lastTimelineClickX = -1;
@@ -1490,11 +1496,29 @@ int trackColor =
 
             if (clickedKeyframe != null)
             {
-                this.keyframeController
-                        .requestDelete(
-                                bone,
-                                clickedKeyframe
-                        );
+                long now = System.currentTimeMillis();
+                boolean doubleRightClick =
+                        this.lastRightKeyClickFrame == clickedKeyframe
+                        && this.lastRightKeyClickBone == boneIndex
+                        && Math.abs(this.lastRightKeyClickX - mouseX) <= DOUBLE_CLICK_DISTANCE
+                        && Math.abs(this.lastRightKeyClickY - mouseY) <= DOUBLE_CLICK_DISTANCE
+                        && now - this.lastRightKeyClickTime <= DOUBLE_CLICK_DELAY;
+
+                if (doubleRightClick)
+                {
+                    this.keyframeController.requestDelete(bone, clickedKeyframe);
+                    this.keyframeController.confirmDelete();
+                    this.lastRightKeyClickTime = 0L;
+                    this.lastRightKeyClickFrame = null;
+                }
+                else
+                {
+                    this.lastRightKeyClickTime = now;
+                    this.lastRightKeyClickX = mouseX;
+                    this.lastRightKeyClickY = mouseY;
+                    this.lastRightKeyClickBone = boneIndex;
+                    this.lastRightKeyClickFrame = clickedKeyframe;
+                }
 
                 return true;
             }
