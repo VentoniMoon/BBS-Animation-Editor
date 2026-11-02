@@ -76,6 +76,9 @@ public class CharacterStateResolver
     private String lastMorphSignature;
 
     private String lastActorId;
+    // The selected preview EntityActor can be recreated without changing
+    // its scene ID or Morph NBT (e.g. selection/background ownership swap).
+    private EntityActor lastRuntimeActor;
 
 
     public CharacterStateResolver()
@@ -115,13 +118,12 @@ public class CharacterStateResolver
          * При переключении Actor старое состояние
          * больше не считается применённым.
          */
-        if (!actorId.equals(this.lastActorId))
+        if (!actorId.equals(this.lastActorId) ||
+                this.lastRuntimeActor != runtimeActor)
         {
-            this.lastActorId =
-                    actorId;
-
-            this.lastMorphSignature =
-                    null;
+            this.lastActorId = actorId;
+            this.lastRuntimeActor = runtimeActor;
+            this.lastMorphSignature = null;
         }
 
 
@@ -718,8 +720,8 @@ public class CharacterStateResolver
         this.lastMorphSignature =
                 null;
 
-        this.lastActorId =
-                "";
+        this.lastActorId = "";
+        this.lastRuntimeActor = null;
     }
 
 
