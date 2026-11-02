@@ -220,6 +220,44 @@ public final class EditorMultiActorPreviewController
         }
     }
 
+    /**
+     * Replays only cached poses into the ACTIVE shadow target. In
+     * particular, restore the per-actor Emoticons/Blockbuster snapshot
+     * context before each render, matching the mirror's normal replay.
+     */
+    public int renderPreparedShadowActors(Minecraft mc)
+    {
+        if(!showAllActors||mc==null)return 0;
+        List<AnimationBoneSnapshot> selectedBlockbuster=
+                BlockbusterPreviewAnimationState.getSnapshots();
+        List<AnimationBoneSnapshot> selectedEmoticons=
+                EmoticonsPreviewAnimationState.getSnapshots();
+        int selectedBlockbusterFrame=BlockbusterPreviewAnimationState.getFrame();
+        int selectedEmoticonsFrame=EmoticonsPreviewAnimationState.getFrame();
+        int rendered=0;
+        try
+        {
+            for(Map.Entry<String,BlockbusterActorPreviewRenderer> entry:
+                    renderers.entrySet())
+            {
+                List<AnimationBoneSnapshot> own=
+                        mirrorPoseContexts.get(entry.getKey());
+                if(own==null||entry.getValue()==null)continue;
+                BlockbusterPreviewAnimationState.set(own,mirrorFrame);
+                EmoticonsPreviewAnimationState.set(own,mirrorFrame);
+                if(entry.getValue().renderPreparedShadow(mc))rendered++;
+            }
+        }
+        finally
+        {
+            BlockbusterPreviewAnimationState.set(selectedBlockbuster,
+                    selectedBlockbusterFrame);
+            EmoticonsPreviewAnimationState.set(selectedEmoticons,
+                    selectedEmoticonsFrame);
+        }
+        return rendered;
+    }
+
     public void reset()
     {
         for (BlockbusterActorPreviewRenderer renderer : renderers.values())

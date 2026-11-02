@@ -321,6 +321,13 @@ public class EditorSceneViewport
         this.actorPreviewRenderer.renderPreparedMirror(mc,view,width,height);
     }
 
+    /** Draw the selected actor's already posed mesh into the shadow map. */
+    public boolean renderPreparedShadowActor(Minecraft mc)
+    {
+        return this.actorPreviewRenderer!=null&&
+                this.actorPreviewRenderer.renderPreparedShadow(mc);
+    }
+
     public void beginNativeActorFrame()
     {
         /* Called BEFORE RenderWorldLastEvent's selected actor draw, not by

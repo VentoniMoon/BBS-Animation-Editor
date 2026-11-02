@@ -1644,6 +1644,54 @@ public class BlockbusterActorPreviewRenderer
         }
     }
 
+    /**
+     * Replay this frame's PREPARED actor geometry into the current shadow
+     * depth target. This does not advance the scene, evaluate animations,
+     * prepare Body Parts, bake physics, or run Jolt again.
+     *
+     * The caller supplies the shadow projection and light-space modelview;
+     * RenderManager receives absolute actor coordinates with a zero viewer
+     * origin, just as the cached mirror replay does. In particular, do
+     * NOT call renderPreparedMirror(), which installs a perspective camera
+     * and ProgramEntities rather than preserving ProgramShadow.
+     *
+     * The caller must rebind its shadow program/FBO after a morph renderer
+     * because third-party render layers can change GL bindings.
+     */
+    public boolean renderPreparedShadow(Minecraft mc)
+    {
+        if(mc==null||!preparedForMirror||actor==null||
+                actor.world!=mc.world||actor.isDead||
+                actor.getMorph()==null)return false;
+        // A BetterLightsMorph is a source of illumination, not an opaque
+        // humanoid mesh; rendering it into a shadow map is incorrect.
+        if(actor.getMorph().getClass().getName()
+                .endsWith(".BetterLightsMorph"))return false;
+        RenderManager manager=mc.getRenderManager();
+        if(manager==null)return false;
+        try(BbsFsWorldGlGuard guard=new BbsFsWorldGlGuard(mc))
+        {
+            manager.viewerPosX=manager.viewerPosY=manager.viewerPosZ=0D;
+            GlStateManager.setActiveTexture(
+                    net.minecraft.client.renderer.OpenGlHelper.defaultTexUnit);
+            GlStateManager.bindTexture(0);
+            GlStateManager.enableDepth();
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            GlStateManager.depthMask(true);
+            GlStateManager.enableTexture2D();
+            GlStateManager.enableAlpha();
+            // Alpha-tested hair, clothing, Body Parts, Chameleon and
+            // Emoticons all share their visible silhouette with this
+            // caster path; do not replace them with bounding boxes.
+            GL11.glAlphaFunc(GL11.GL_GREATER,0.1F);
+            GlStateManager.disableBlend();
+            GlStateManager.disableLighting();
+            manager.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
+                    actor.rotationYaw,preparedPartialTicks,true);
+            return true;
+        }
+    }
+
     /** The selected actor's opt-in Jolt -> Body Parts key bake session. */
     public BodyPartPhysicsBakeController getPhysicsBakeController()
     {
