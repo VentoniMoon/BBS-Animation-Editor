@@ -2,6 +2,9 @@ package com.example.examplemod;
 
 import java.lang.reflect.Method;
 import java.io.InputStream;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import net.minecraft.client.Minecraft;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
@@ -37,6 +40,7 @@ public final class CameraMirrorShaderClip
     private static final Map<Integer,Boolean> UNSUPPORTED=
             new HashMap<Integer,Boolean>();
     private static boolean once,warning;
+    private static boolean fragmentSourceDumped;
 
     private CameraMirrorShaderClip(){}
 
@@ -47,6 +51,7 @@ public final class CameraMirrorShaderClip
         UNSUPPORTED.clear();
         once=false;
         warning=false;
+        fragmentSourceDumped=false;
     }
 
     public static int program(int original,Object optifineProgram)
@@ -148,6 +153,7 @@ public final class CameraMirrorShaderClip
             String fragmentSource=GL20.glGetShaderSource(fragment,
                     Math.max(8192,GL20.glGetShaderi(fragment,
                             GL20.GL_SHADER_SOURCE_LENGTH)));
+            dumpBetterLightsFragmentSource(programName,fragmentSource);
             String clippedFragment=injectFragmentClip(fragmentSource);
             int privateFragment=GL20.glCreateShader(GL20.GL_FRAGMENT_SHADER);
             GL20.glShaderSource(privateFragment,clippedFragment);
@@ -226,6 +232,48 @@ public final class CameraMirrorShaderClip
         if(input==null)return false;
         input.close();
         return true;
+    }
+
+    /**
+     * Optional precise investigation of the shaderpack's REAL compiled
+     * BetterLights calculations. The OptiFine compiler has already
+     * resolved #includes, shader options and the BetterLights injection.
+     * Never upload/copy this source to the network; write one local file
+     * only after a user explicitly enables the debug JVM property.
+     */
+    private static void dumpBetterLightsFragmentSource(String programName,
+            String fragmentSource)
+    {
+        if(fragmentSourceDumped||
+                !Boolean.getBoolean(
+                    "bbs.editor.camera.mirrorBSLDumpBetterLightsGLSL"))
+            return;
+        if(fragmentSource==null||fragmentSource.isEmpty())return;
+        fragmentSourceDumped=true;
+        try
+        {
+            File root=new File(Minecraft.getMinecraft().mcDataDir,
+                    "config/bbs-editor/debug");
+            if(!root.isDirectory()&&!root.mkdirs())
+                throw new java.io.IOException(
+                        "Unable to create debug directory: "+root);
+            File out=new File(root,
+                    "mirror-betterlights-preprocessed.fsh");
+            Files.write(out.toPath(),fragmentSource.getBytes(
+                    StandardCharsets.UTF_8));
+            System.out.println(
+                "[BBS Editor][Mirror][BetterLights][ShaderDump] "+
+                "OptiFine-preprocessed fragment program="+programName+
+                " chars="+fragmentSource.length()+
+                " localFile="+out.getAbsolutePath()+
+                " (nothing uploaded)");
+        }
+        catch(Exception failure)
+        {
+            System.err.println(
+                "[BBS Editor][Mirror][BetterLights][ShaderDump] "+
+                "unavailable: "+failure);
+        }
     }
 
     private static String injectClipVertex(String source)
