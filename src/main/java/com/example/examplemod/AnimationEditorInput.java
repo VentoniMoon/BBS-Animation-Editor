@@ -516,8 +516,10 @@ public class AnimationEditorInput
          * =========================================================
          */
 
-        if (this.editorModeController.getMode()
-                == EditorModeController.EditorMode.POSE
+        if ((this.editorModeController.getMode()
+                == EditorModeController.EditorMode.POSE||
+                this.editorModeController.getMode()
+                == EditorModeController.EditorMode.BODY_PARTS)
                 && this.interpolationPanel.mouseClicked(
                 mouseX,
                 mouseY,
@@ -1209,8 +1211,10 @@ public class AnimationEditorInput
              * INTERPOLATION / VIEWPORT / POSE TIMELINE
              * =====================================================
              */
-            if (this.editorModeController.getMode()
-                    == EditorModeController.EditorMode.POSE
+            if ((this.editorModeController.getMode()
+                    == EditorModeController.EditorMode.POSE||
+                    this.editorModeController.getMode()
+                    == EditorModeController.EditorMode.BODY_PARTS)
                     && this.interpolationPanel.mouseScrolled(
                     mouseX,
                     mouseY,
