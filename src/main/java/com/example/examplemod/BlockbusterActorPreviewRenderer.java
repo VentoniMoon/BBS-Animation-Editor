@@ -71,16 +71,19 @@ public class BlockbusterActorPreviewRenderer
             CustomMorph bb=(CustomMorph)morph;
             details.append(" model=").append(bb.getKey())
                     .append(" customPose=")
-                    .append(bb.customPose==null?"null":bb.customPose.limbs.size())
+                    .append(bb.customPose==null||bb.customPose.limbs==null
+                            ?"null":bb.customPose.limbs.size())
                     .append(" nativeParts=")
-                    .append(bb.parts==null?-1:bb.parts.parts.size())
+                    .append(bb.parts==null||bb.parts.parts==null
+                            ?-1:bb.parts.parts.size())
                     .append(" skin=").append(bb.skin);
         }
         else if(morph instanceof AnimatedMorph)
         {
             AnimatedMorph em=(AnimatedMorph)morph;
             details.append(" animation=").append(em.animationName);
-            if(em.animator==null||em.animator.animation==null)
+            if(em.animator==null||em.animator.animation==null||
+                    em.animator.animation.meshes==null)
                 details.append(" animator=unloaded");
             else
             {
