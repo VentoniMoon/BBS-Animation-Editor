@@ -158,6 +158,21 @@ public class AnimationValueControl
             return false;
         }
 
+        // Direct arrow clicks perform a single exact 1/16 adjustment,
+        // never start the horizontal dragging/editing gesture.
+        if(mouseX>=x+width-40&&mouseX<x+width-25)
+        {
+            value=(float)EditorNumericStep.adjust(value,-1,false);
+            editing=false;dragging=false;
+            return true;
+        }
+        if(mouseX>=x+width-20&&mouseX<x+width-5)
+        {
+            value=(float)EditorNumericStep.adjust(value,1,false);
+            editing=false;dragging=false;
+            return true;
+        }
+
         long currentTime =
                 System.currentTimeMillis();
 
@@ -253,9 +268,20 @@ public class AnimationValueControl
             char typedChar,
             int keyCode)
     {
-        if (!this.editing)
+        if(!this.editing)return false;
+
+        // Fine keyboard edits are exact 1/32 increments (32 keys = 1).
+        // Update the stored value as well as the visible editing buffer.
+        if(keyCode==Keyboard.KEY_UP||keyCode==Keyboard.KEY_DOWN)
         {
-            return false;
+            double current=value;
+            try{current=Double.parseDouble(inputText);}
+            catch(NumberFormatException ignored){}
+            value=(float)EditorNumericStep.adjust(current,
+                    keyCode==Keyboard.KEY_UP?1:-1,true);
+            inputText=EditorNumericStep.format(value);
+            selectAll=false;
+            return true;
         }
 
         /*
@@ -732,11 +758,21 @@ public class AnimationValueControl
                         text
                 );
 
+        // Reserve arrow buttons on BOTH sides of the numeric value.
+        // Keep direct drag/edit in the remaining center area.
+        net.minecraft.client.gui.Gui.drawRect(x+width-41,y+1,
+                x+width-24,y+height-1,0xFF252D34);
+        net.minecraft.client.gui.Gui.drawRect(x+width-21,y+1,
+                x+width-4,y+height-1,0xFF252D34);
+        font.drawString("<",x+width-36,y+4,
+                EditorThemeManager.get().getAccentBright());
+        font.drawString(">",x+width-16,y+4,
+                EditorThemeManager.get().getAccentBright());
         font.drawString(
                 text,
                 this.x +
                         this.width -
-                        valueWidth - 6,
+                        valueWidth - 45,
                 this.y + 4,
                 this.editing
                         ? ACTIVE_TEXT
@@ -780,11 +816,7 @@ public class AnimationValueControl
     private String format(
             float value)
     {
-        return String.format(
-                java.util.Locale.US,
-                "%.2f",
-                value
-        );
+        return EditorNumericStep.format(value);
     }
 
     /*
