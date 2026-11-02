@@ -103,6 +103,18 @@ public class BodyPartsEditorController
         selectActor(selectedActorId);
     }
 
+    /**
+     * Distinguish an untouched background actor (whose original morph may
+     * include native Body Parts) from one whose editor tracks were explicitly
+     * loaded, imported or deleted. Empty authored tracks must stay empty.
+     */
+    public boolean hasEditorStateForActor(String actorId)
+    {
+        return actorId != null &&
+                (actorId.equals(this.activeActorId) ||
+                        this.modelsByActor.containsKey(actorId));
+    }
+
     public List<BodyPartModelData> getModelsForActor(String actorId)
     {
         if (actorId != null && actorId.equals(this.activeActorId))
