@@ -103,7 +103,7 @@ public final class CameraSceneMirrorsPanel
         Gui.drawRect(inspectorLeft,25,screen.width,panelBottom,EditorVisualStyle.themedSurface(0.070F));
         Gui.drawRect(inspectorLeft,25,inspectorLeft+2,panelBottom,EditorVisualStyle.themedSurface(0.220F));
         mc.fontRenderer.drawString("MIRROR PROPERTIES",inspectorLeft+9,35,
-                0xFF7DD4F8);
+                EditorThemeManager.get().getAccentBright());
         CameraSceneMirrors.Mirror m=list(screen).selected();
         if(m==null)
         {
