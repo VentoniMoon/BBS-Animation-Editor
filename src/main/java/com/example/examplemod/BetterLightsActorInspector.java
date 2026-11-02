@@ -276,7 +276,7 @@ public final class BetterLightsActorInspector
         {
             int sx=x+9+(i%2)*85, sy=y+(i/2)*21;
             Gui.drawRect(sx,sy,sx+80,sy+19,
-                    section==i?0xFF333A40:0xFF252A30);
+                    section==i?EditorVisualStyle.themedSurface(0.240F):EditorVisualStyle.themedSurface(0.120F));
             Gui.drawRect(sx,sy+17,sx+80,sy+19,
                     section==i?accent:0xFF3B464D);
             String label=BetterLightsPanelModel.TITLES[i];
@@ -292,7 +292,7 @@ public final class BetterLightsActorInspector
         FontRenderer f=mc.fontRenderer;
         int accent=EditorThemeManager.get().getAccent();
         Object value=entry.value.getValue();
-        Gui.drawRect(x+9,cy,x+176,cy+42,0xFF20262B);
+        Gui.drawRect(x+9,cy,x+176,cy+42,EditorVisualStyle.themedSurface(0.120F));
         String label=BetterLightsPanelModel.label(entry.title);
         f.drawString(f.trimStringToWidth(label,
                 value instanceof Number ? 88 : 154),
@@ -326,8 +326,8 @@ public final class BetterLightsActorInspector
             String number=String.format(Locale.ROOT,
                     value instanceof Integer?"%.0f":"%.4f",
                     ((Number)value).doubleValue());
-            Gui.drawRect(x+103,cy+1,x+118,cy+17,0xFF34536A);
-            Gui.drawRect(x+160,cy+1,x+175,cy+17,0xFF34536A);
+            Gui.drawRect(x+103,cy+1,x+118,cy+17,EditorVisualStyle.themedSurface(0.290F));
+            Gui.drawRect(x+160,cy+1,x+175,cy+17,EditorVisualStyle.themedSurface(0.290F));
             f.drawString("<",x+108,cy+4,0xFFE6F0F3);
             f.drawString(">",x+165,cy+4,0xFFE6F0F3);
             f.drawString(f.trimStringToWidth(number,40),x+120,cy+4,0xFFE4EFF4);
