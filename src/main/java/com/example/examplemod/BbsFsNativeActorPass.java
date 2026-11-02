@@ -26,6 +26,15 @@ public final class BbsFsNativeActorPass
      */
     private static boolean rendering;
     private static boolean nativeEntityStage;
+    // Snapshot of the EXACT world-space view matrix used by OptiFine when
+    // uploading gbufferModelView / gbufferModelViewInverse. Reconstructing
+    // this matrix from editor yaw/pitch makes the shader's sun-shadow
+    // sampling disagree with the geometry on bright-facing actor surfaces.
+    private static final java.nio.FloatBuffer nativeEntityModelView =
+            org.lwjgl.BufferUtils.createFloatBuffer(16);
+    private static boolean nativeEntityViewCaptured;
+    private static boolean nativeEntityViewLogged;
+
     private static boolean stageDiagnosticReported;
     private static boolean stageFailureReported;
     private static boolean renderedThisFrame;
@@ -48,6 +57,7 @@ public final class BbsFsNativeActorPass
         renderedThisFrame = false;
         earlyPrepared = false;
         earlyAttempted = false;
+        nativeEntityViewCaptured=false;
     }
 
     /** Reclaim the private preparation surface on editor/world shutdown. */
@@ -191,6 +201,20 @@ public final class BbsFsNativeActorPass
     {
         return nativeEntityStage;
     }
+    
+    /**
+     * Use this only while drawing the main world's actor GBuffer. It is the
+     * camera matrix already known to OptiFine, not a second editor camera.
+     */
+    public static boolean loadNativeEntityModelView()
+    {
+        if(!nativeEntityStage||!nativeEntityViewCaptured)return false;
+        nativeEntityModelView.rewind();
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glLoadMatrix(nativeEntityModelView);
+        return true;
+    }
+
 
     /**
      * OptiFine G5 invokes Shaders.endEntities BEFORE deferred processing.
@@ -223,6 +247,18 @@ public final class BbsFsNativeActorPass
             // Projection is captured *before* the actor's guard changes it.
             BbsFsWorldProjection.capture(width,height);
             if(!BbsFsWorldProjection.isCaptured())return;
+            nativeEntityModelView.clear();
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX,
+                    nativeEntityModelView);
+            nativeEntityModelView.rewind();
+            nativeEntityViewCaptured=true;
+            if(!nativeEntityViewLogged)
+            {
+                nativeEntityViewLogged=true;
+                System.out.println("[BBS Editor][Actor Shadow] "+
+                        "Captured native OptiFine GBuffer modelview; "+
+                        "actor geometry will match gbufferModelViewInverse.");
+            }
             AnimationEditorScreen editor=
                     (AnimationEditorScreen)mc.currentScreen;
             nativeEntityStage=true;
