@@ -324,16 +324,24 @@ public class BodyPartsTimelineController
             drawModelBackButton(mc, width, height - getTimelineHeight());
     }
 
+    private static final int BACK_WIDTH = 94;
+    private static final int BACK_HEIGHT = 14;
+    private static final int BACK_OFFSET_Y = 20;
+
     private void drawModelBackButton(Minecraft mc, int width, int top)
     {
-        int left = width - 211;
-        int right = width - 95;
-        int y = top + 3;
-        Gui.drawRect(left, y, right, y + 19, 0xFF253440);
-        Gui.drawRect(left, y, left + 3, y + 19,
+        // Same right alignment as WAV SOUND; compact control below it,
+        // entirely inside the 35px timeline header.
+        int right = width - 8;
+        int left = right - BACK_WIDTH;
+        int y = top + BACK_OFFSET_Y;
+        Gui.drawRect(left,y,right,y+BACK_HEIGHT,
+                EditorVisualStyle.themedSurface(0.22F));
+        Gui.drawRect(left,y,right,y+1,
+                EditorVisualStyle.themedSurface(0.31F));
+        Gui.drawRect(left,y+BACK_HEIGHT-2,right,y+BACK_HEIGHT-1,
                 EditorThemeManager.get().getAccent());
-        Gui.drawRect(left, y + 18, right, y + 19, border());
-        mc.fontRenderer.drawString("< BACK TO PARTS", left + 9, y + 6,
+        mc.fontRenderer.drawString("< BACK TO PARTS", left+6,y+3,
                 EditorThemeManager.get().getAccentBright());
     }
 
@@ -888,8 +896,9 @@ public class BodyPartsTimelineController
                 controller.getSelectedModel();
 
         if (model != null && mouseButton == 0 &&
-                mouseY >= top + 3 && mouseY < top + 22 &&
-                mouseX >= width - 211 && mouseX < width - 95)
+                mouseY >= top + BACK_OFFSET_Y &&
+                mouseY < top + BACK_OFFSET_Y + BACK_HEIGHT &&
+                mouseX >= width - 8 - BACK_WIDTH && mouseX < width - 8)
         {
             controller.backToModelTracks();
             boneScroll = 0;
