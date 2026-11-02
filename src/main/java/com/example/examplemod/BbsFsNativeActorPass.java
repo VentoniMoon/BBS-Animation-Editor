@@ -73,9 +73,14 @@ public final class BbsFsNativeActorPass
     public static void prepareBeforeShadows(Minecraft mc,
             AnimationEditorScreen editor,EditorSceneViewport viewport)
     {
+        // The transformer may process ShadersRender lazily (after the
+        // FIRST RenderTick.START), so testing its installed flag here
+        // causes a permanent chicken-and-egg failure on some OptiFine
+        // layouts. Prepare whenever the explicit user flag is enabled:
+        // the normal film renderer replays that pose even if the native
+        // shadow hook never appears, without an extra Jolt tick.
         if(!Boolean.getBoolean(
                 "bbs.editor.camera.nativeActorSunShadows")||
-                !CameraShaderCurveTransformer.nativeShadowHookInstalled()||
                 rendering||earlyAttempted||mc==null||mc.world==null||
                 editor==null||viewport==null||mc.player==null||
                 viewport.getWidth()<=0||viewport.getHeight()<=0)

@@ -37,6 +37,13 @@ public final class BbsFsNativeActorSunShadowOverlay
 
     private BbsFsNativeActorSunShadowOverlay(){}
     private static boolean earlyHookLogged;
+    private static boolean shadowRenderedThisFrame;
+    private static boolean callbackReported;
+
+    public static void beginFrame()
+    {
+        shadowRenderedThisFrame=false;
+    }
 
     /**
      * ASM callback immediately after ShadersRender.renderShadowMap()
@@ -49,11 +56,23 @@ public final class BbsFsNativeActorSunShadowOverlay
         if(!Boolean.getBoolean(
                     "bbs.editor.camera.nativeActorSunShadows"))
             return;
+        if(shadowRenderedThisFrame)return;
         Minecraft mc=Minecraft.getMinecraft();
         if(mc==null||
                 !(mc.currentScreen instanceof AnimationEditorScreen)||
                 CameraSceneMirrorRenderer.isCapturing()||
-                !BbsFsNativeActorPass.preparedBeforeShadows())return;
+                !BbsFsNativeActorPass.preparedBeforeShadows())
+        {
+            if(!callbackReported)
+            {
+                callbackReported=true;
+                System.out.println(TAG+
+                        "Native shadow callback arrived without prepared "+
+                        "CAMERA actor poses (the sun shadow map may be "+
+                        "disabled, or the editor tick is not active)");
+            }
+            return;
+        }
         AnimationEditorScreen editor=(AnimationEditorScreen)mc.currentScreen;
         PreviewCameraPose pose=editor.getCameraWorkspaceNativePose();
         if(pose==null)return;
@@ -64,6 +83,10 @@ public final class BbsFsNativeActorSunShadowOverlay
                     "Native shadow-map completion intercepted BEFORE "+
                     "terrain GBuffer; replaying prepared actors");
         }
+        // Two compatibility hooks may fire for the same map
+        // (ShadersRender return and Shaders.beginRender callsite). Only
+        // the FIRST one may write native depth this frame.
+        shadowRenderedThisFrame=true;
         render(mc,editor,pose);
     }
 
