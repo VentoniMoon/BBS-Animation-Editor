@@ -2082,6 +2082,10 @@ public class AnimationEditorScreen extends GuiScreen
             else this.cameraWorkspace.pauseAudio();
             drawTimeline();
             drawWavWaveform();
+            // WAV waveform is drawn on top of the timeline. Restore the
+            // nested Body Parts return control above the audio overlay.
+            if (this.editorModeController.getMode() == EditorModeController.EditorMode.BODY_PARTS)
+                this.bodyPartsTimelineController.drawModelBackButtonOverlay(this.mc, width, height);
             drawInterpolationPanel(mouseX, mouseY);
         }
 
