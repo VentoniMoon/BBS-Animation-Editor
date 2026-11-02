@@ -366,6 +366,8 @@ public final class CameraSceneMirrorRenderer
                                     bslTargets,reflected,camera))
                     {
                         pass.draw(reflected);
+                        CameraBetterLightsCameraOrigin.verifyBeforeComposite(
+                                mc,reflected);
                         bsl.compose(texture.framebufferObject,w,h,bslHdr);
                         // Denoising is only suitable after final LDR
                         // conversion. The HDR mirror is tonemapped once
