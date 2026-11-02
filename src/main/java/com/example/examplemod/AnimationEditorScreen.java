@@ -60,6 +60,11 @@ public class AnimationEditorScreen extends GuiScreen
     private final PreviewSceneRenderCoordinator preview3 =
             new PreviewSceneRenderCoordinator();
 
+    // Explicit A/B investigation of mixed Blockbuster/Emoticons visibility.
+    // Normally the selected actor is drawn LAST. Render order should not
+    // change a morph's geometry or 3D skin layer; F10 reveals state leaks.
+    private boolean selectedActorFirstProbe;
+
     private final EditorPreviewAutoFocusController previewAutoFocus =
             new EditorPreviewAutoFocusController();
 
@@ -2113,6 +2118,16 @@ public class AnimationEditorScreen extends GuiScreen
             );
         }
 
+        if(selectedActorFirstProbe)
+        {
+            String label="ACTOR ORDER A/B: SELECTED FIRST (Ctrl+Shift+F10)";
+            int left=LEFT_PANEL_WIDTH+9;
+            int labelWidth=Math.min(width-left-12,
+                    fontRenderer.getStringWidth(label)+13);
+            drawRect(left,104,left+labelWidth,121,0xEC1B2431);
+            fontRenderer.drawString(fontRenderer.trimStringToWidth(
+                    label,labelWidth-10),left+5,108,0xFF92DEFF);
+        }
         if(BbsFsNativeActorSunShadowOverlay.isEnabled() &&
                 !BbsFsActorShadowSamplingProbe.isBypassed())
         {
@@ -3194,19 +3209,24 @@ public class AnimationEditorScreen extends GuiScreen
 
         /* Background renderer saves/restores the selected actor animation
          * state. This ordering is the same as PreviewSceneRenderCoordinator. */
-        this.multiActorPreview.drawBackgroundActors(
-                mc, this.sceneViewport, this.sceneState,
-                selected,frame,this.bodyPartsController,
-                CameraVisualFrameClock.sceneTime(frame));
-
         BlockbusterRecordFrame selectedFrame=
                 CameraVisualFrameClock.hasSample(frame)
                     ?CameraExportActorFrameSampler.sample(
                             getSelectedActorRecord(),frame,
                             CameraVisualFrameClock.fraction(frame))
                     :getCurrentRecordFrame();
-        this.sceneViewport.drawActor(
-                mc, selected, selectedFrame);
+
+        // A/B diagnostic only. Render each actor exactly once in both
+        // orders, keeping all original per-actor animation/physics owners.
+        // Selection MUST NOT affect the appearance of the other actors.
+        if(selectedActorFirstProbe)
+            this.sceneViewport.drawActor(mc,selected,selectedFrame);
+        this.multiActorPreview.drawBackgroundActors(
+                mc, this.sceneViewport, this.sceneState,
+                selected,frame,this.bodyPartsController,
+                CameraVisualFrameClock.sceneTime(frame));
+        if(!selectedActorFirstProbe)
+            this.sceneViewport.drawActor(mc,selected,selectedFrame);
         // Light casters (POSE and CAMERA) were prepared at RenderTick.START
         // before OptiFine rendered the WORLD. Do not create light entities
         // or update light uniforms from RenderWorldLast a second time.
@@ -4280,6 +4300,19 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        // A/B actor render order: selects whether the chosen character is
+        // drawn before or after the background actors. This tests for
+        // cross-morph state leaks without changing the actual scene.
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_F10 &&
+                isCtrlKeyDown() && isShiftKeyDown())
+        {
+            selectedActorFirstProbe=!selectedActorFirstProbe;
+            System.out.println("[BBS Editor][MultiActor A/B] "+
+                    (selectedActorFirstProbe
+                            ?"Selected actor rendered FIRST"
+                            :"Selected actor rendered LAST"));
+            return;
+        }
         // Diagnostic only: add actor silhouettes to the native sun-shadow
         // atlas. Does not silently override the clean actor-shadow default.
         if(keyCode==org.lwjgl.input.Keyboard.KEY_F6 &&
