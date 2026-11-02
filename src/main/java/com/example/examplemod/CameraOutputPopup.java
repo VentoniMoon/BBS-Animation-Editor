@@ -16,11 +16,11 @@ import net.minecraft.client.gui.GuiTextField;
 public final class CameraOutputPopup
 {
     private static final int BG=0xF21A2026;
-    private static final int ROW=0xFF28313A;
-    private static final int SELECTED=0xFF294E62;
+    private static int ROW(){return EditorVisualStyle.themedSurface(0.18F);}
+    private static int SELECTED(){return EditorVisualStyle.themedSurface(0.28F);}
     private static final int TEXT=0xFFE2EDF4;
     private static final int MUTED=0xFFA4B7C3;
-    private static final int BLUE=0xFF65CDF7;
+    private static int BLUE(){return EditorThemeManager.get().getAccentBright();}
     private static final int HEADER_HEIGHT=26;
     private static final int ROW_HEIGHT=18;
 
@@ -65,9 +65,9 @@ public final class CameraOutputPopup
     private static void drawArrows(FontRenderer font,GuiTextField field)
     {
         if(field==null)return;
-        Gui.drawRect(field.x-15,field.y,field.x-1,field.y+19,0xFF34536A);
+        Gui.drawRect(field.x-15,field.y,field.x-1,field.y+19,EditorVisualStyle.themedSurface(0.28F));
         Gui.drawRect(field.x+field.width+1,field.y,
-                field.x+field.width+15,field.y+19,0xFF34536A);
+                field.x+field.width+15,field.y+19,EditorVisualStyle.themedSurface(0.28F));
         font.drawString("<",field.x-10,field.y+5,TEXT);
         font.drawString(">",field.x+field.width+5,field.y+5,TEXT);
     }
@@ -129,8 +129,8 @@ public final class CameraOutputPopup
         listBottom=y+height-6;
         Gui.drawRect(x-2,y-2,x+width+2,y+height+2,0xE900080C);
         Gui.drawRect(x,y,x+width,y+height,BG);
-        Gui.drawRect(x,y,x+width,y+2,BLUE);
-        font.drawString("OUTPUT FORMAT",x+10,y+9,BLUE);
+        Gui.drawRect(x,y,x+width,y+2,BLUE());
+        font.drawString("OUTPUT FORMAT",x+10,y+9,BLUE());
         font.drawString("x",x+width-13,y+9,TEXT);
         clicked.clear();
         if(editingCustom)
@@ -155,8 +155,8 @@ public final class CameraOutputPopup
             boolean over=mouseX>=listX&&mouseX<x+width-7
                     &&mouseY>=yy&&mouseY<yy+ROW_HEIGHT;
             Gui.drawRect(listX,yy,x+width-7,yy+ROW_HEIGHT-1,
-                    chosen?SELECTED:over?0xFF303E48:ROW);
-            if(chosen)Gui.drawRect(listX,yy,listX+2,yy+ROW_HEIGHT-1,BLUE);
+                    chosen?SELECTED():over?0xFF303E48:ROW());
+            if(chosen)Gui.drawRect(listX,yy,listX+2,yy+ROW_HEIGHT-1,BLUE());
             // A tiny frame silhouette shows the actual aspect of each
             // output preset, not just a label such as "16:9".
             if(o.preset!=null)
@@ -173,7 +173,7 @@ public final class CameraOutputPopup
                 }
                 int px=listX+17-rw/2,py=yy+9-rh/2;
                 Gui.drawRect(px,py,px+rw,py+rh,
-                        chosen?BLUE:0xFF6C8798);
+                        chosen?BLUE():0xFF6C8798);
                 if(rw>3&&rh>3)
                     Gui.drawRect(px+1,py+1,px+rw-1,py+rh-1,
                             chosen?0xFF264D62:0xFF192730);
@@ -186,9 +186,9 @@ public final class CameraOutputPopup
             {
                 String size=o.preset.dimensions();
                 font.drawString(size,x+width-12-font.getStringWidth(size),
-                        yy+5,chosen?BLUE:MUTED);
+                        yy+5,chosen?BLUE():MUTED);
             }
-            else font.drawString(">",x+width-23,yy+5,BLUE);
+            else font.drawString(">",x+width-23,yy+5,BLUE());
             clicked.add(new int[]{i,yy,yy+ROW_HEIGHT});
         }
         if(scrollMax>0)
@@ -197,7 +197,7 @@ public final class CameraOutputPopup
             int thumb=Math.max(10,(int)((long)track*track/Math.max(1,total)));
             int pos=scroll*(track-thumb)/Math.max(1,scrollMax);
             Gui.drawRect(x+width-4,listTop+pos,
-                    x+width-2,listTop+pos+thumb,BLUE);
+                    x+width-2,listTop+pos+thumb,BLUE());
         }
     }
 
@@ -229,10 +229,10 @@ public final class CameraOutputPopup
         drawArrows(font,widthInput);
         drawArrows(font,heightInput);
         applyX=x+width-76;applyY=y+128;backX=x+10;
-        Gui.drawRect(backX,applyY,backX+58,applyY+20,ROW);
-        Gui.drawRect(applyX,applyY,applyX+64,applyY+20,SELECTED);
+        Gui.drawRect(backX,applyY,backX+58,applyY+20,ROW());
+        Gui.drawRect(applyX,applyY,applyX+64,applyY+20,SELECTED());
         font.drawString("Cancel",backX+9,applyY+6,TEXT);
-        font.drawString("Apply",applyX+16,applyY+6,BLUE);
+        font.drawString("Apply",applyX+16,applyY+6,BLUE());
         font.drawString("Even dimensions; 128-8192 px",
                 x+11,y+160,MUTED);
         if(error!=null)
@@ -257,7 +257,7 @@ public final class CameraOutputPopup
             else
             {rw=maxW;rh=Math.max(2,(int)Math.round(rw/aspect));}
             int px=x+(width-rw)/2,py=y+219+(maxH-rh)/2;
-            Gui.drawRect(px-1,py-1,px+rw+1,py+rh+1,BLUE);
+            Gui.drawRect(px-1,py-1,px+rw+1,py+rh+1,BLUE());
             Gui.drawRect(px,py,px+rw,py+rh,0xFF304A5E);
             font.drawString("FRAME PREVIEW",x+11,y+200,MUTED);
         }
