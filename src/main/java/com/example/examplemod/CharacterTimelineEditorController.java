@@ -220,6 +220,10 @@ public class CharacterTimelineEditorController
      * Нужно только для определения двойного клика
      * по пустому месту.
      */
+    private boolean draggingPlayhead = false;
+    private int scrubbingMaximumFrame = 0;
+    private int scrubbingStartX = 0;
+
     private long lastLeftClickTime = 0L;
 
     private int lastLeftClickTrack = -1;
@@ -1590,6 +1594,10 @@ public class CharacterTimelineEditorController
 
         if (mouseY < tracksTop)
         {
+            if (mouseButton != 0) return false;
+            draggingPlayhead = true;
+            scrubbingMaximumFrame = Math.max(FIRST_FRAME, sceneLength - 1);
+            scrubbingStartX = timelineStartX;
             int frame =
                     getFrameFromMouseX(
                             mouseX,
@@ -1976,6 +1984,13 @@ public class CharacterTimelineEditorController
             return false;
         }
 
+        if (draggingPlayhead)
+        {
+            int frame = getFrameFromMouseX(mouseX, scrubbingStartX);
+            setCurrentFrame(Math.max(FIRST_FRAME, Math.min(scrubbingMaximumFrame, frame)));
+            return true;
+        }
+
         if (this.draggingBodyPart &&
                 this.dragBodyPartModel != null)
         {
@@ -2110,6 +2125,7 @@ public class CharacterTimelineEditorController
 
     public void mouseReleased()
     {
+        draggingPlayhead = false;
         this.draggingKey = false;
         this.dragTrack = -1;
         this.dragKey = null;
