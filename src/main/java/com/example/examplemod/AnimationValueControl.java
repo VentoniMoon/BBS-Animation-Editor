@@ -37,25 +37,25 @@ public class AnimationValueControl
      */
 
     private static final int BACKGROUND =
-            0xFF303134;
+            0xFF10151A;
 
     private static final int BACKGROUND_HOVER =
-            0xFF3A3B3E;
+            0xFF1B2730;
 
     private static final int BACKGROUND_ACTIVE =
-            0xFF4A4C4F;
+            0xFF263741;
 
     private static final int BACKGROUND_EDITING =
-            0xFF55575A;
+            0xFF314550;
 
     private static final int BORDER =
-            0xFF18191B;
+            0xFF0D1318;
 
     private static final int BORDER_HOVER =
-            0xFF55575A;
+            0xFF314550;
 
     private static final int LABEL_BACKGROUND =
-            0xFF292A2D;
+            0xFF2B333C;
 
     private static final int LABEL_TEXT =
             0xFFAAAAAA;
@@ -713,7 +713,7 @@ public class AnimationValueControl
                 this.y + 3,
                 this.x + 26,
                 this.y + this.height - 3,
-                0xFF45474A
+                0xFF364550
         );
 
         /*
