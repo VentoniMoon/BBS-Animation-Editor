@@ -164,7 +164,7 @@ public final class CameraSceneLightsPanel
         EditorVisualStyle.drawCameraTabs(mc,LEFT,opened?1:0);
         if(!opened)return;
         CameraSceneLights.Light selected=sync(screen);
-        Gui.drawRect(0,54,LEFT,panelBottom,0xFF19232C);
+        Gui.drawRect(0,54,LEFT,panelBottom,EditorVisualStyle.themedSurface(0.075F));
         Gui.drawRect(4,61,LEFT/2-2,82,EditorVisualStyle.themedSurface(0.23F));
         Gui.drawRect(LEFT/2+2,61,LEFT-4,82,EditorVisualStyle.themedSurface(0.23F));
         mc.fontRenderer.drawString("+ ADD",11,68,0xFFFFFFFF);
@@ -199,9 +199,9 @@ public final class CameraSceneLightsPanel
     private static final int FIRST_FIELD_Y=123;
     private static final int FIELD_SPACING=23;
     private static final int TOGGLE_Y=246;
-    private static final int INSPECTOR_BG=0xFF191D21;
-    private static final int SECTION_BG=0xFF2B2D30;
-    private static final int FIELD_BG=0xFF10151A;
+    private static int INSPECTOR_BG(){return EditorVisualStyle.themedSurface(0.07F);}
+    private static int SECTION_BG(){return EditorVisualStyle.themedSurface(0.18F);}
+    private static int FIELD_BG(){return EditorVisualStyle.themedSurface(0.045F);}
 
     private static int tabX(int x,int index)
     {
@@ -210,7 +210,7 @@ public final class CameraSceneLightsPanel
     private void section(Minecraft mc,int x,int y,String title)
     {
         int accent=EditorThemeManager.get().getAccent();
-        Gui.drawRect(x+7,y,x+178,y+16,SECTION_BG);
+        Gui.drawRect(x+7,y,x+178,y+16,SECTION_BG());
         Gui.drawRect(x+7,y,x+10,y+16,accent);
         mc.fontRenderer.drawString(title,x+15,y+4,0xFFE2E5E6);
     }
@@ -224,8 +224,8 @@ public final class CameraSceneLightsPanel
         Minecraft mc=Minecraft.getMinecraft();
         int accent=EditorThemeManager.get().getAccent();
         int bright=EditorThemeManager.get().getAccentBright();
-        Gui.drawRect(x,25,screen.width,panelBottom,INSPECTOR_BG);
-        Gui.drawRect(x,25,x+2,panelBottom,0xFF30383E);
+        Gui.drawRect(x,25,screen.width,panelBottom,INSPECTOR_BG());
+        Gui.drawRect(x,25,x+2,panelBottom,EditorVisualStyle.themedSurface(0.200F));
         mc.fontRenderer.drawString("LIGHT PROPERTIES",x+10,34,bright);
 
         if(light==null)
@@ -234,7 +234,7 @@ public final class CameraSceneLightsPanel
                     0xFF8C999F);
             return;
         }
-        Gui.drawRect(x+7,46,x+178,63,0xFF272E34);
+        Gui.drawRect(x+7,46,x+178,63,EditorVisualStyle.themedSurface(0.150F));
         Gui.drawRect(x+7,46,x+10,63,accent);
         String name=mc.fontRenderer.trimStringToWidth(light.name,119);
         mc.fontRenderer.drawString(name,x+15,50,0xFFE8F1F3);
@@ -248,7 +248,7 @@ public final class CameraSceneLightsPanel
         {
             int tx=tabX(x,i);
             Gui.drawRect(tx,TAB_Y,tx+55,TAB_Y+TAB_HEIGHT,
-                    tab==i?SECTION_BG:0xFF21262B);
+                    tab==i?SECTION_BG():0xFF21262B);
             Gui.drawRect(tx,TAB_Y+TAB_HEIGHT-2,tx+55,
                     TAB_Y+TAB_HEIGHT,tab==i?accent:0xFF343C43);
             int textX=tx+(55-mc.fontRenderer.getStringWidth(tabs[i]))/2;
@@ -268,10 +268,10 @@ public final class CameraSceneLightsPanel
             int yy=FIRST_FIELD_Y+i*FIELD_SPACING;
             mc.fontRenderer.drawString(axes[i],x+13,yy+4,
                     0xFFADBBC1);
-            Gui.drawRect(x+48,yy,x+175,yy+17,FIELD_BG);
+            Gui.drawRect(x+48,yy,x+175,yy+17,FIELD_BG());
             Gui.drawRect(x+48,yy+16,x+175,yy+17,0xFF384148);
-            Gui.drawRect(x+48,yy,x+62,yy+16,0xFF34536A);
-            Gui.drawRect(x+161,yy,x+175,yy+16,0xFF34536A);
+            Gui.drawRect(x+48,yy,x+62,yy+16,EditorVisualStyle.themedSurface(0.280F));
+            Gui.drawRect(x+161,yy,x+175,yy+16,EditorVisualStyle.themedSurface(0.280F));
             mc.fontRenderer.drawString("<",x+52,yy+4,0xFFE6F0F3);
             mc.fontRenderer.drawString(">",x+165,yy+4,0xFFE6F0F3);
             if(field!=null&&fieldAxis==i)
@@ -290,7 +290,7 @@ public final class CameraSceneLightsPanel
                 x+11,216,0xFFAABAC2);
 
         section(mc,x,229,"SOURCE");
-        Gui.drawRect(x+11,TOGGLE_Y,x+175,TOGGLE_Y+17,FIELD_BG);
+        Gui.drawRect(x+11,TOGGLE_Y,x+175,TOGGLE_Y+17,FIELD_BG());
         Gui.drawRect(x+11,TOGGLE_Y+16,x+175,TOGGLE_Y+17,
                 0xFF384148);
         mc.fontRenderer.drawString("Enabled",x+17,TOGGLE_Y+4,
