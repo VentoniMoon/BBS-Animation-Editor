@@ -89,6 +89,8 @@ public class BodyPartsTimelineController
     private int dragMode;
     private int dragMouseX;
     private int dragMouseY;
+    private boolean draggingPlayhead = false;
+    private int scrubbingMaximumFrame = 0;
     private boolean dragMoved;
     private int dragStartFrame;
     private int dragEndFrame;
@@ -887,6 +889,9 @@ public class BodyPartsTimelineController
 
         if (mouseY < tracksTop)
         {
+            if (mouseButton != 0 || mouseX < TIMELINE_START_X) return false;
+            draggingPlayhead = true;
+            scrubbingMaximumFrame = getMaximumFrame(sceneLength, model);
             int frame =
                     timeline.getFrameFromMouseX(
                             mouseX,
@@ -1340,6 +1345,13 @@ public class BodyPartsTimelineController
             return false;
         }
 
+        if (draggingPlayhead)
+        {
+            int frame = timeline.getFrameFromMouseX(mouseX, TIMELINE_START_X);
+            timeline.setTick(Math.max(FIRST_FRAME, Math.min(scrubbingMaximumFrame, frame)));
+            return true;
+        }
+
         if (controller.getSelectedModel() == null)
         {
             return dragAttachment(
@@ -1513,6 +1525,7 @@ public class BodyPartsTimelineController
 
     public void mouseReleased()
     {
+        draggingPlayhead = false;
         /*
          * A single click selects the attachment.
          * Opening Level 2 is intentionally handled only by the
