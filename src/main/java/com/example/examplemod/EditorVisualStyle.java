@@ -39,8 +39,8 @@ public final class EditorVisualStyle
         Gui.drawRect(0,53,leftWidth,54,themedSurface(0.28F));
         for(int i=0;i<3;i++)
         {
-            int x1=i*leftWidth/3;
-            int x2=(i+1)*leftWidth/3;
+            int x1=i==0?0:i==1?43:87;
+            int x2=i==0?43:i==1?87:leftWidth;
             boolean active=i==selected;
             Gui.drawRect(x1+1,27,x2-1,52,
                     active?themedSurface(0.24F):themedSurface(0.10F));
