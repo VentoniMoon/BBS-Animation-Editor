@@ -33,6 +33,36 @@ public final class CameraExportDialog
     private GuiTextField widthField,heightField,ffmpegField,outputField;
     private String error;
 
+    private static void drawDimensionArrows(FontRenderer font,GuiTextField field)
+    {
+        if(field==null)return;
+        Gui.drawRect(field.x-15,field.y,field.x-1,field.y+18,0xFF34536A);
+        Gui.drawRect(field.x+field.width+1,field.y,
+                field.x+field.width+15,field.y+18,0xFF34536A);
+        font.drawString("<",field.x-10,field.y+5,WHITE);
+        font.drawString(">",field.x+field.width+5,field.y+5,WHITE);
+    }
+
+    private boolean dimensionArrow(GuiTextField field,int mx,int my)
+    {
+        if(field==null||my<field.y||my>=field.y+18)return false;
+        int direction=mx>=field.x-15&&mx<field.x-1?-1:
+                mx>=field.x+field.width+1&&mx<field.x+field.width+15?1:0;
+        if(direction==0)return false;
+        try
+        {
+            int value=Integer.parseInt(field.getText());
+            int next=Math.max(128,Math.min(8192,value+2*direction));
+            // Film dimensions must be even for yuv420p.
+            if((next&1)!=0)next+=direction>0?1:-1;
+            field.setText(Integer.toString(next));
+            widthField.setFocused(field==widthField);
+            heightField.setFocused(field==heightField);
+        }
+        catch(NumberFormatException ignored) { }
+        return true;
+    }
+
     public boolean isOpen(){return open;}
 
     public void open(AnimationEditorScreen editor)
@@ -183,8 +213,10 @@ public final class CameraExportDialog
 
         font.drawString("Resolution",x+15,y+58,MUTED);
         widthField.drawTextBox();
+        drawDimensionArrows(font,widthField);
         font.drawString("x",x+179,y+58,MUTED);
         heightField.drawTextBox();
+        drawDimensionArrows(font,heightField);
         font.drawString("MP4  -  H.264 / yuv420p",x+15,y+83,WHITE);
         font.drawString("FPS",x+15,y+101,MUTED);
         int fpsStart=x+85;
@@ -293,6 +325,8 @@ public final class CameraExportDialog
         if(mx<x||mx>=x+w||my<y||my>=y+h)
         {close();return true;}
 
+        if(dimensionArrow(widthField,mx,my)||dimensionArrow(heightField,mx,my))
+            return true;
         widthField.mouseClicked(mx,my,mouseButton);
         heightField.mouseClicked(mx,my,mouseButton);
         ffmpegField.mouseClicked(mx,my,mouseButton);
@@ -391,6 +425,25 @@ public final class CameraExportDialog
         {
             begin(editor);
             return true;
+        }
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_UP||
+                keyCode==org.lwjgl.input.Keyboard.KEY_DOWN)
+        {
+            GuiTextField focused=widthField.isFocused()?widthField:
+                    heightField.isFocused()?heightField:null;
+            if(focused!=null)
+            {
+                try
+                {
+                    int old=Integer.parseInt(focused.getText());
+                    int delta=keyCode==org.lwjgl.input.Keyboard.KEY_UP?2:-2;
+                    int next=Math.max(128,Math.min(8192,old+delta));
+                    if((next&1)!=0)next+=delta>0?1:-1;
+                    focused.setText(Integer.toString(next));
+                }
+                catch(NumberFormatException ignored) { }
+                return true;
+            }
         }
         widthField.textboxKeyTyped(character,keyCode);
         heightField.textboxKeyTyped(character,keyCode);
