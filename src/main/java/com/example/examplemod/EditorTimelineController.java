@@ -645,6 +645,24 @@ public class EditorTimelineController
             );
         }
 
+        // Empty lanes must also show CAMERA's grid; otherwise only
+        // populated bones have vertical divisions and the rest remains
+        // a featureless dark block.
+        int remainingBones=Math.max(0,
+                this.actorPreviewController.getBones().size()-this.boneScroll);
+        for(int row=Math.min(visibleBoneCount,remainingBones);
+                row<visibleBoneCount;row++)
+        {
+            int y=tracksTop+row*TRACK_HEIGHT;
+            Gui.drawRect(0,y,width,y+TRACK_HEIGHT,
+                    row%2==0?getTimelineTrackColor():
+                            getTimelineTrackAltColor());
+            Gui.drawRect(0,y+TRACK_HEIGHT-1,width,y+TRACK_HEIGHT,
+                    getTimelineTrackBorderColor());
+            EditorTimelineSkin.gridRow(this.timeline,leftPanelWidth,
+                    width,y,TRACK_HEIGHT);
+        }
+
         /*
          * =====================================================
          * PLAYHEAD
