@@ -36,6 +36,36 @@ public final class BbsFsNativeActorSunShadowOverlay
     private static boolean logged,warning;
 
     private BbsFsNativeActorSunShadowOverlay(){}
+    private static boolean earlyHookLogged;
+
+    /**
+     * ASM callback immediately after ShadersRender.renderShadowMap()
+     * returns from Shaders.beginRender(), BEFORE vanilla draws gbuffers
+     * terrain. The actor poses were evaluated at RenderTick.START and
+     * never need to be re-ticked.
+     */
+    public static void onNativeShadowMapCompleted()
+    {
+        if(!Boolean.getBoolean(
+                    "bbs.editor.camera.nativeActorSunShadows"))
+            return;
+        Minecraft mc=Minecraft.getMinecraft();
+        if(mc==null||
+                !(mc.currentScreen instanceof AnimationEditorScreen)||
+                CameraSceneMirrorRenderer.isCapturing()||
+                !BbsFsNativeActorPass.preparedBeforeShadows())return;
+        AnimationEditorScreen editor=(AnimationEditorScreen)mc.currentScreen;
+        PreviewCameraPose pose=editor.getCameraWorkspaceNativePose();
+        if(pose==null)return;
+        if(!earlyHookLogged)
+        {
+            earlyHookLogged=true;
+            System.out.println(TAG+
+                    "Native shadow-map completion intercepted BEFORE "+
+                    "terrain GBuffer; replaying prepared actors");
+        }
+        render(mc,editor,pose);
+    }
 
     public static void render(Minecraft mc,
             AnimationEditorScreen editor,PreviewCameraPose mainEye)
@@ -157,7 +187,8 @@ public final class BbsFsNativeActorSunShadowOverlay
                 System.out.println(TAG+
                         "Augmented native OptiFine depth maps with "+
                         total+" prepared actor draws, width="+width+
-                        " height="+height+" (late composite experiment)");
+                        " height="+height+
+                        " (pre-GBuffer native sun-shadow update)");
             }
         }
         catch(Throwable error)
