@@ -33,11 +33,15 @@ public final class CameraImagePlacement
                 !Double.isFinite(right)||!Double.isFinite(bottom)||
                 !(right>left)||!(bottom>top))
             throw new IllegalArgumentException("Invalid image clip bounds");
+        // BufferedImage rows arrive top-to-bottom, and DynamicTexture
+        // uploads them unchanged. In GL texture coordinates, that means
+        // source pixel (0,0) occupies V=0. Our film quad ALSO has a
+        // top-left origin (glOrtho(0,width,height,0,...)), so UVs must
+        // increase from top to bottom: V=0 at the quad's top, V=1 below.
+        // The former V=1 -> 0 mapping inverted both IMAGE and VIDEO.
+        // Keep U unchanged: the uploaded source is NOT mirrored horizontally.
         double u0=0D,u1=1D;
-        // DynamicTexture follows the pre-existing CAMERA texture upload
-        // convention. Keep the base UV orientation intact; mirroring is
-        // explicitly controlled per IMAGE clip, never inferred from FPS.
-        double v0=1D,v1=0D;
+        double v0=0D,v1=1D;
         String fit=mode==null?"contain":mode.trim().toLowerCase(Locale.ROOT);
         if(!fit.equals("stretch")&&sourceWidth>0&&sourceHeight>0)
         {
@@ -57,8 +61,9 @@ public final class CameraImagePlacement
                 else
                 {
                     double fraction=sourceAspect/boxAspect;
-                    // V is reversed for this existing compositor upload path.
-                    v0=(1D+fraction)/2D;
+                    // Crop equally from the top and bottom of the upright
+                    // image, regardless of clip rotation or video FPS.
+                    v0=(1D-fraction)/2D;
                     v1=1D-v0;
                 }
             }
