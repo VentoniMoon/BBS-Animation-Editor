@@ -325,12 +325,12 @@ public final class BetterLightsActorInspector
                     entry.value.getValue() instanceof Integer?"%.0f":"%.3f",
                     ((Number)value).doubleValue());
             int tw=f.getStringWidth(number);
-            Gui.drawRect(x+123,cy,x+139,cy+17,0xFF293640);
+            Gui.drawRect(x+82,cy,x+98,cy+17,0xFF293640);
             Gui.drawRect(x+158,cy,x+174,cy+17,0xFF293640);
-            f.drawString("<",x+128,cy+4,accent);
+            f.drawString("<",x+87,cy+4,accent);
             f.drawString(">",x+163,cy+4,accent);
-            f.drawString(f.trimStringToWidth(number,33),
-                    x+156-Math.min(33,tw),cy+4,0xFFE4EFF4);
+            f.drawString(f.trimStringToWidth(number,55),
+                    x+155-Math.min(55,tw),cy+4,0xFFE4EFF4);
             if(entry.value instanceof GenericNumberValue)
             {
                 GenericNumberValue<?> n=
@@ -716,11 +716,11 @@ public final class BetterLightsActorInspector
         }
         if(value instanceof Number&&target.value instanceof GenericNumberValue
                 &&my>=cy&&my<cy+18&&
-                ((mx>=x+123&&mx<x+139)||
+                ((mx>=x+82&&mx<x+98)||
                  (mx>=x+158&&mx<x+174)))
         {
             nudgeNativeValue(screen,target,
-                    mx<x+139?-1:1,false);
+                    mx<x+98?-1:1,false);
             return true;
         }
         if(value instanceof Number&&target.value instanceof GenericNumberValue
