@@ -149,7 +149,7 @@ public final class CameraSceneLightsPanel
     private int visibleLights()
     {
         // Leave room for the scroll-count footer at the bottom.
-        return Math.max(0,(bottom-92-19)/21);
+        return Math.max(0,(bottom-106-19)/21);
     }
     private void clampList(int count)
     {
@@ -169,21 +169,34 @@ public final class CameraSceneLightsPanel
         Gui.drawRect(LEFT/2+2,61,LEFT-4,82,EditorVisualStyle.themedSurface(0.23F));
         mc.fontRenderer.drawString("+ ADD",11,68,0xFFFFFFFF);
         mc.fontRenderer.drawString("REMOVE",LEFT/2+5,68,0xFFFFFFFF);
+        Gui.drawRect(4,87,LEFT-4,panelBottom-7,
+                EditorVisualStyle.themedSurface(0.045F));
+        Gui.drawRect(4,87,LEFT-4,88,
+                EditorVisualStyle.themedSurface(0.30F));
+        Gui.drawRect(6,91,9,102,EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString("SCENE LIGHTS",13,93,
+                EditorThemeManager.get().getAccentBright());
         java.util.List<CameraSceneLights.Light> lights=
                 screen.getSceneState().getCameraLights().all();
         clampList(lights.size());
         for(int i=listScroll;i<lights.size();i++)
         {
-            int row=92+(i-listScroll)*21;
+            int row=106+(i-listScroll)*21;
             if(row+20>=panelBottom)break;
             CameraSceneLights.Light light=lights.get(i);
+            Gui.drawRect(8,row-2,LEFT-8,row+17,
+                    EditorVisualStyle.themedSurface(light==selected?0.28F:
+                            (i%2==0?0.14F:0.10F)));
             if(light==selected)
-                Gui.drawRect(4,row-2,LEFT-4,row+18,EditorVisualStyle.themedSurface(0.29F));
+                Gui.drawRect(8,row-2,10,row+17,
+                        EditorThemeManager.get().getAccent());
             String label=mc.fontRenderer.trimStringToWidth(
                     (light.enabled?"":"[ ] ")+light.name,LEFT-16);
             mc.fontRenderer.drawString(label,9,row+3,
                     light.enabled?0xFFE0F2FE:0xFF82919C);
         }
+        if(lights.isEmpty())
+            mc.fontRenderer.drawString("No lights yet",12,111,0xFF929CA8);
         if(lights.size()>visibleLights())
             mc.fontRenderer.drawString(
                     (listScroll+1)+"-"+Math.min(lights.size(),
@@ -433,8 +446,8 @@ public final class CameraSceneLightsPanel
                 screen.getCameraWorkspace().saveScene();
                 return true;
             }
-            int index=listScroll+(my-92)/21;
-            if(my>=92&&index>=0&&index<list.all().size())
+            int index=listScroll+(my-106)/21;
+            if(my>=106&&index>=0&&index<list.all().size())
             {
                 list.select(list.all().get(index).id);
                 choose(screen,list.selected());
