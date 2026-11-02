@@ -90,6 +90,22 @@ public final class BbsFsOptiFineEntityStage implements AutoCloseable
         }
     }
 
+    public static boolean isShadowPass()
+    {
+        initialize();
+        if(shadersClass==null)return false;
+        try
+        {
+            return shadersClass.getField("isShadowPass").getBoolean(null);
+        }
+        catch(ReflectiveOperationException ignored)
+        {
+            // Unsupported OptiFine layouts keep the perspective safety
+            // check in BbsFsWorldProjection.capture() as a second guard.
+            return false;
+        }
+    }
+
     public static void beforeEntity(Entity actor)
     {
         initialize();
