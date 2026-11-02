@@ -39,6 +39,7 @@ public final class BbsFsNativeActorSunShadowOverlay
     private static boolean earlyHookLogged;
     private static boolean shadowRenderedThisFrame;
     private static boolean callbackReported;
+    private static boolean overlayBypassLogged;
 
     public static void beginFrame()
     {
@@ -57,6 +58,22 @@ public final class BbsFsNativeActorSunShadowOverlay
                     "bbs.editor.camera.nativeActorSunShadows"))
             return;
         if(shadowRenderedThisFrame)return;
+        // Diagnostic isolation: prepare/replay the actor exactly as in
+        // the full feature, but bypass ONLY native shadow atlas writes.
+        // This distinguishes prepass GL state pollution from a corrupted
+        // native OptiFine depth attachment without disabling the mirror.
+        if(Boolean.getBoolean(
+                "bbs.editor.camera.nativeActorSunShadows.skipOverlay"))
+        {
+            if(!overlayBypassLogged)
+            {
+                overlayBypassLogged=true;
+                System.out.println(TAG+
+                        "Native shadow overlay bypassed for A/B test; "+
+                        "early pose preparation remains active");
+            }
+            return;
+        }
         Minecraft mc=Minecraft.getMinecraft();
         if(mc==null||
                 !(mc.currentScreen instanceof AnimationEditorScreen)||
@@ -97,6 +114,10 @@ public final class BbsFsNativeActorSunShadowOverlay
                     "bbs.editor.camera.nativeActorSunShadows")||
                 mc==null||editor==null||mainEye==null||
                 mc.world==null)return;
+        // Keep Minecraft's cached texture/alpha flags synchronized with
+        // raw GL restoration after third-party actor/morph rendering.
+        BbsFsGlStateResync.Snapshot glBefore=
+                BbsFsGlStateResync.capture();
         int fbo=0;
         int priorDraw=GL11.glGetInteger(
                 GL30.GL_DRAW_FRAMEBUFFER_BINDING);
@@ -113,9 +134,26 @@ public final class BbsFsNativeActorSunShadowOverlay
         Field nativeShadowPassFlag=null;
         boolean nativeShadowPassChanged=false;
         boolean previousShadowPass=false;
+        Field activeProgramField=null,activeProgramIdField=null,
+                activeDrawBuffersField=null;
+        Object oldActiveProgram=null,oldActiveDrawBuffers=null;
+        int oldActiveProgramId=0;
+        boolean nativeBookkeepingCaptured=false;
         try
         {
             Class<?> shaders=Class.forName("net.optifine.shaders.Shaders");
+            // Entity renderers can call native OptiFine shader functions.
+            // Merely restoring glUseProgram(previous) does NOT restore
+            // Shaders.activeProgram / activeProgramID / draw buffers.
+            // Without these, subsequent terrain/shader stages may skip
+            // necessary program switches and draw with stale attachments.
+            activeProgramField=field(shaders,"activeProgram");
+            activeProgramIdField=field(shaders,"activeProgramID");
+            activeDrawBuffersField=field(shaders,"activeDrawBuffers");
+            oldActiveProgram=activeProgramField.get(null);
+            oldActiveProgramId=activeProgramIdField.getInt(null);
+            oldActiveDrawBuffers=activeDrawBuffersField.get(null);
+            nativeBookkeepingCaptured=true;
             Object program=shaders.getField("ProgramShadow").get(null);
             if(program==null)return;
             int pid=((Number)program.getClass().getMethod("getId")
@@ -158,6 +196,8 @@ public final class BbsFsNativeActorSunShadowOverlay
             GL11.glDrawBuffer(GL11.GL_NONE);
             GL11.glReadBuffer(GL11.GL_NONE);
             GL11.glViewport(0,0,width,height);
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            GL11.glDisable(GL11.GL_CLIP_PLANE0);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glDepthFunc(GL11.GL_LEQUAL);
             GL11.glDepthMask(true);
@@ -239,6 +279,24 @@ public final class BbsFsNativeActorSunShadowOverlay
         }
         finally
         {
+            // Keep the native Program state in sync with the restored
+            // OpenGL program. Restore after all shadow entity callbacks,
+            // even when one morph fails while drawing its silhouette.
+            if(nativeBookkeepingCaptured)
+            {
+                try
+                {
+                    activeProgramField.set(null,oldActiveProgram);
+                    activeProgramIdField.setInt(null,oldActiveProgramId);
+                    activeDrawBuffersField.set(null,oldActiveDrawBuffers);
+                }
+                catch(IllegalAccessException restore)
+                {
+                    System.err.println(TAG+
+                            "Failed to restore OptiFine program state: "+
+                            restore);
+                }
+            }
             if(nativeShadowPassChanged)
             {
                 try{nativeShadowPassFlag.setBoolean(null,
@@ -277,6 +335,10 @@ public final class BbsFsNativeActorSunShadowOverlay
                     viewport.get(2),viewport.get(3));
             GL20.glUseProgram(priorProgram);
             GL11.glMatrixMode(priorMode);
+            // glPopAttrib does not restore the GlStateManager Java-side
+            // cache. Do this LAST, after all auxiliary FBO/texture work,
+            // so the next BSL world pass sees consistent GPU state.
+            BbsFsGlStateResync.restore(glBefore);
         }
     }
 

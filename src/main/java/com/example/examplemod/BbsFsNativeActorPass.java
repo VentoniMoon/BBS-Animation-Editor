@@ -88,6 +88,13 @@ public final class BbsFsNativeActorPass
         earlyAttempted=true;
         Framebuffer original=mc.getFramebuffer();
         if(original==null)return;
+        // This hidden actor draw runs BEFORE vanilla renderWorld(). If a
+        // third-party Morph or Body Parts renderer changes Minecraft's
+        // GlStateManager cache, the raw BbsFsWorldGlGuard glPopAttrib is
+        // not sufficient: the next world render can have missing blend,
+        // alpha, textures or incorrect lightmap state.
+        BbsFsGlStateResync.Snapshot glBefore=
+                BbsFsGlStateResync.capture();
         try
         {
             if(preparationFramebuffer==null)
@@ -157,6 +164,12 @@ public final class BbsFsNativeActorPass
             {
                 throw new IllegalStateException(
                         "Cannot restore Minecraft framebuffer",unsafe);
+            }
+            finally
+            {
+                // Sync both real GL and Minecraft's cached state after
+                // the private FBO has been unbound by WorldGlGuard.
+                BbsFsGlStateResync.restore(glBefore);
             }
         }
     }

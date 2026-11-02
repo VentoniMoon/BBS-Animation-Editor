@@ -29,6 +29,7 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
     private final IntBuffer viewport = BufferUtils.createIntBuffer(16);
     private final int projectionDepth;
     private final int modelviewDepth;
+    private final int texture0Depth,texture1Depth;
     private final RenderManager manager;
     private final double viewerX, viewerY, viewerZ;
     private boolean closed;
@@ -58,6 +59,19 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
         modelviewDepth = GL11.glGetInteger(GL11.GL_MODELVIEW_STACK_DEPTH);
         GL11.glPushMatrix();
 
+        // Actor morphs may change texture matrices (notably the OptiFine
+        // lightmap matrix in unit 1) without unwinding their stacks. Saving
+        // only MODELVIEW and PROJECTION is insufficient: BSL terrain later
+        // reads gl_TextureMatrix[1]. Preserve both texture-unit matrices.
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glMatrixMode(GL11.GL_TEXTURE);
+        texture0Depth=GL11.glGetInteger(GL11.GL_TEXTURE_STACK_DEPTH);
+        GL11.glPushMatrix();
+        GL13.glActiveTexture(GL13.GL_TEXTURE1);
+        GL11.glMatrixMode(GL11.GL_TEXTURE);
+        texture1Depth=GL11.glGetInteger(GL11.GL_TEXTURE_STACK_DEPTH);
+        GL11.glPushMatrix();
+        GL13.glActiveTexture(oldTextureUnit);
         GL11.glMatrixMode(oldMatrixMode);
     }
 
@@ -81,6 +95,12 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
                     modelviewDepth);
             restoreMatrixStack(GL11.GL_PROJECTION,
                     GL11.GL_PROJECTION_STACK_DEPTH, projectionDepth);
+            GL13.glActiveTexture(GL13.GL_TEXTURE1);
+            restoreMatrixStack(GL11.GL_TEXTURE,
+                    GL11.GL_TEXTURE_STACK_DEPTH,texture1Depth);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            restoreMatrixStack(GL11.GL_TEXTURE,
+                    GL11.GL_TEXTURE_STACK_DEPTH,texture0Depth);
         }
         finally
         {
