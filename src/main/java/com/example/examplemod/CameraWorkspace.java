@@ -290,6 +290,27 @@ public final class CameraWorkspace
             return false;
         }
         if(keyCode==1){editField=null;return true;}
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_UP ||
+                keyCode==org.lwjgl.input.Keyboard.KEY_DOWN)
+        {
+            Double current=finiteDouble(editField.getText());
+            if(current!=null&&!namingPreset)
+            {
+                String property=keyField!=null?keyField:editKey;
+                boolean integer=property!=null&&(
+                        "tick".equals(property)||"mask".equals(property)||
+                        "@start".equals(property)||"@duration".equals(property)||
+                        "@layer".equals(property));
+                double step=integer?1D:0.03125D;
+                double next=current+(keyCode==org.lwjgl.input.Keyboard.KEY_UP?step:-step);
+                String value=Double.toString(next);
+                editField.setText(value);
+                if(keyField!=null)applyKeyField(keyField,value);
+                else if(editClip!=null&&editKey!=null&&
+                        applyClipField(editClip,editKey,value))saveScene();
+                return true;
+            }
+        }
         if(keyCode==28||keyCode==156)
         {
             String value=editField.getText();
@@ -1404,6 +1425,37 @@ public final class CameraWorkspace
             {
                 inspector.toggleSection(hit.key.substring("@fold:".length()));
                 inspectorScroll=0;
+                return true;
+            }
+            // Numeric arrows are independent from click-to-type and drag.
+            if(hit.stepDirection!=0)
+            {
+                Double n=finiteDouble(hit.value);
+                if(n!=null)
+                {
+                    boolean integer="tick".equals(hit.key)||
+                            "mask".equals(hit.key)||"@start".equals(hit.key)||
+                            "@duration".equals(hit.key)||"@layer".equals(hit.key);
+                    double value=n+hit.stepDirection*(integer?1D:0.0625D);
+                    if(hit.keyframe)
+                    {
+                        CameraClipDocument.Key chosen=selectedKey!=null&&
+                                keyOwner==clip?selectedKey:
+                                clip.keys.isEmpty()?null:clip.keys.get(0);
+                        if(chosen!=null)
+                        {
+                            selectedKey=chosen;keyOwner=clip;
+                            applyKeyField(hit.key,Double.toString(value));
+                        }
+                    }
+                    else
+                    {
+                        String field=hit.component<0?hit.key:
+                                hit.key+"#"+hit.component;
+                        if(applyClipField(clip,field,Double.toString(value)))
+                            saveScene();
+                    }
+                }
                 return true;
             }
             Double raw=finiteDouble(hit.value);
