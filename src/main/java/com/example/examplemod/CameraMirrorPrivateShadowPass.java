@@ -290,6 +290,19 @@ public final class CameraMirrorPrivateShadowPass implements AutoCloseable
                         GL20.glUseProgram(shadowProgram);
                         owner.bindPrivateShadowProgram(optiProgram,
                                 shadowProgram,projection,lightView);
+                        // World chunk shaders submit positions RELATIVE to
+                        // the reflected camera, but our prepared actors are
+                        // rendered by RenderManager in ABSOLUTE world XYZ
+                        // (viewer origin = 0). Align both geometry sources:
+                        //
+                        // shadowView * (actorWorld - reflectedEye)
+                        //
+                        // Do NOT encode this translation in OptiFine's
+                        // shadowModelView uniform: BSL uses that same
+                        // uniform to sample the chunk-based shadow map.
+                        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                        GL11.glTranslated(-reflected.x,
+                                -reflected.y,-reflected.z);
                         GL11.glEnable(GL11.GL_DEPTH_TEST);
                         GL11.glDepthMask(true);
                         GL11.glColorMask(true,true,true,true);
