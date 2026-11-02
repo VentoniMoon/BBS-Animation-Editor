@@ -51,9 +51,11 @@ public final class BbsFsActorShadowSamplingProbe implements AutoCloseable
 
     public static BbsFsActorShadowSamplingProbe begin()
     {
+        // A null try-with-resources resource is legal in Java 8. The normal
+        // render path avoids even one glGetInteger/readback per actor.
+        if(!bypass)return null;
         BbsFsActorShadowSamplingProbe probe=
                 new BbsFsActorShadowSamplingProbe();
-        if(!bypass)return probe;
         if(GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM)==0)
         {
             if(!unavailableReported)
