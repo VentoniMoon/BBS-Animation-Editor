@@ -42,13 +42,13 @@ public final class BodyPartPhysicsPanel
     {
         if(this.settings==null)return;
         int accent=EditorThemeManager.get().getAccent();
-        Gui.drawRect(x,y,x+175,y+235,0xFF19232C);
-        Gui.drawRect(x,y,x+175,y+22,0xFF27343F);
+        Gui.drawRect(x,y,x+175,y+235,EditorVisualStyle.themedSurface(0.080F));
+        Gui.drawRect(x,y,x+175,y+22,EditorVisualStyle.themedSurface(0.170F));
         Gui.drawRect(x,y,x+3,y+22,accent);
         Gui.drawRect(x+5,y+2,x+87,y+21,
-                colliderTab?0xFF25313D:0xFF34536A);
+                colliderTab?EditorVisualStyle.themedSurface(0.170F):EditorVisualStyle.themedSurface(0.290F));
         Gui.drawRect(x+88,y+2,x+174,y+21,
-                colliderTab?0xFF34536A:0xFF25313D);
+                colliderTab?EditorVisualStyle.themedSurface(0.290F):EditorVisualStyle.themedSurface(0.170F));
         mc.fontRenderer.drawString("CHAINS",x+13,y+7,0xFFE0E0E0);
         mc.fontRenderer.drawString("COLLIDERS",x+96,y+7,0xFFE0E0E0);
         mc.fontRenderer.drawString(trim(mc,boneName,155),x+9,y+31,0xFFAAAAAA);
@@ -88,7 +88,7 @@ public final class BodyPartPhysicsPanel
         String number = String.format(java.util.Locale.ROOT, "%.4f", value);
         int id = colliderTab ? 3 : lineY == 77 ? 0 : lineY == 108 ? 1 : 2;
         Gui.drawRect(x + 87, y + lineY - 4, x + 174, y + lineY + 13,
-                id == activeNumericProperty ? 0xFF34536A : 0xFF26343E);
+                id == activeNumericProperty ? EditorVisualStyle.themedSurface(0.290F) : EditorVisualStyle.themedSurface(0.130F));
         mc.fontRenderer.drawString(number, x + 110, y + lineY, 0xFFE6F0F3);
         drawButton(mc, "<", x + 89, y + lineY - 4);
         drawButton(mc, ">", x + 155, y + lineY - 4);
@@ -105,7 +105,7 @@ public final class BodyPartPhysicsPanel
 
     private void drawButton(Minecraft mc, String text, int left, int top)
     {
-        Gui.drawRect(left, top, left + 17, top + 17, 0xFF34536A);
+        Gui.drawRect(left, top, left + 17, top + 17, EditorVisualStyle.themedSurface(0.290F));
         mc.fontRenderer.drawString(text, left + 6, top + 4, 0xFFFFFFFF);
     }
 
