@@ -238,29 +238,7 @@ public class AnimationEditorInput
          * =========================================================
          */
 
-        if (isDeleteDialogOpen())
-        {
-            int result =
-                    this.deleteDialog.mouseClicked(
-                            this.screen.width,
-                            this.screen.height,
-                            mouseX,
-                            mouseY,
-                            mouseButton
-                    );
-
-            if (result == 2)
-            {
-                confirmDeleteKeyframe();
-            }
-            else if (result == 1 || result == 3)
-            {
-                clearPendingDelete();
-            }
-
-            return;
-        }
-
+        // Timeline controllers now handle double-right-click deletion inline.
         this.transformDragging = false;
 
         /* Stage 8 Preview visibility / camera toggles get first chance. */
@@ -1430,16 +1408,6 @@ public class AnimationEditorInput
          * DELETE DIALOG
          * =========================================================
          */
-
-        if (isDeleteDialogOpen())
-        {
-            if (keyCode == Keyboard.KEY_ESCAPE)
-            {
-                clearPendingDelete();
-            }
-
-            return;
-        }
 
         /*
          * =========================================================
