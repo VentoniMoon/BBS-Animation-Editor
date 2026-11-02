@@ -67,3 +67,27 @@ git switch --track origin/alpha/ui-parity-timelines-character-scene-interpolatio
 ```
 
 The native sun-shadow flag is opt-in. Its use here preserves the user's previously verified sunlight caster path during alpha regression.
+
+
+## Alpha inspector / numeric / timeline finish pass (PR #146)
+
+These checks remain **unverified in-game** until explicitly tested.
+
+| ID | Interaction | Verification | Status |
+|---|---|---|---|
+| FIN-01 | Numeric ± mouse | On a POSE X=0 field, click > exactly 2/4/8/16 times | 0.125/0.25/0.5/1 respectively (step 0.0625) | [ ] |
+| FIN-02 | Numeric ± keyboard | Focus a numeric value and press ↑ exactly 32 times | Exactly +1 from starting value (step 0.03125) | [ ] |
+| FIN-03 | Downwards/negative numbers | Click < repeatedly and use ↓ on negative positions/angles | Symmetric fine steps, no accumulation/rounding loss on save/reopen | [ ] |
+| FIN-04 | Numeric field persistence | Edit POSE/BODY PARTS global transform and CAMERA key field by arrow, then seek away/back | Updated number persists and keyed scene values change | [ ] |
+| FIN-05 | LIGHT numbers | Edit static source X/Y/Z and target X/Y/Z, and BetterLights native parameters via arrow/keyboard | Exactly expected value, valid bounds, saves in scene | [ ] |
+| FIN-06 | Integer-only fields | Adjust start, duration, layer, tick, channel mask, Character fade/tick | Integer +1/-1; no fractional frame or invalid mask | [ ] |
+| FIN-07 | Character style | Open APPEARANCE, ANIMATION SETUP, BODY PART OVERRIDES, ANIMATION PARAMETERS | Uniform CAMERA dark sections, accent strips, values and hover visuals | [ ] |
+| FIN-08 | Pose/BodyParts/Physics style | Toggle selected Body Parts model and Jolt physics panel | Consistent dark header, fields, highlights and no clipping | [ ] |
+| FIN-09 | Back from Body Part model | Enter selected internal Body Part model and inspect top ruler beside WAV label | BACK button visible, clickable, returns to overview | [ ] |
+| FIN-10 | LMB playhead drag | Drag ruler continuously from start to end in Pose, Character, both BodyParts subviews and CAMERA | Live playhead and animation frame follow cursor without losing grip | [ ] |
+| FIN-11 | Delete confirmation removed | RMB once then RMB twice quickly on same Pose key | First selects; second deletes key immediately, without modal | [ ] |
+| FIN-12 | Delete safety | RMB on two different keys, or press once and wait >350ms | No unintended deletion | [ ] |
+| FIN-13 | Body Parts alternating rows | Compare actor attachment + model-bone views against CAMERA timeline | Alternating dark tracks across both populated and empty rows; selected lane remains visible | [ ] |
+| FIN-14 | Renderer unchanged | Repeat the earlier working BSL sun shadows, BetterLights drift and mirror/font tests | No regression in scene and export | [ ] |
+
+**Precision rule:** 0.0625 = 1/16, 0.03125 = 1/32. Decimal UI rounding is not the source of truth. Whole-frame and count fields are intentionally integers.

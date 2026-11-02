@@ -208,6 +208,14 @@ public class EditorTimelineController
     private int lastTimelineClickY = -1;
 
     private int lastTimelineClickBone = -1;
+    private long lastRightTime;
+    private AnimationKeyframe lastRightKey;
+
+    private void resetRightDelete()
+    {
+        lastRightTime=0L;
+        lastRightKey=null;
+    }
 
 
     public EditorTimelineController(
@@ -251,6 +259,7 @@ public class EditorTimelineController
 
     public void resetClickState()
     {
+        resetRightDelete();
         this.lastTimelineClickTime = 0L;
 
         this.lastTimelineClickX = -1;
@@ -1494,16 +1503,26 @@ public class EditorTimelineController
                                     6
                             );
 
-            if (clickedKeyframe != null)
+            if(clickedKeyframe!=null)
             {
-                this.keyframeController
-                        .requestDelete(
-                                bone,
-                                clickedKeyframe
-                        );
-
+                long now=System.currentTimeMillis();
+                if(lastRightKey==clickedKeyframe&&
+                        now-lastRightTime<=350L)
+                {
+                    keyframeController.requestDelete(bone,clickedKeyframe);
+                    keyframeController.confirmDelete();
+                    resetRightDelete();
+                }
+                else
+                {
+                    lastRightTime=now;
+                    lastRightKey=clickedKeyframe;
+                    keyframeController.setSelectedKeyframe(
+                            bone,clickedKeyframe);
+                }
                 return true;
             }
+            resetRightDelete();
         }
 
         return true;

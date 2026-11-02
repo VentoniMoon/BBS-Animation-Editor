@@ -67,22 +67,22 @@ public class CharacterEditorPanel
      */
 
     private static final int COLOR_PANEL =
-            0xFF181818;
+            0xFF171D23;
 
     private static final int COLOR_PANEL_DARK =
-            0xFF111111;
+            0xFF10151A;
 
     private static final int COLOR_PANEL_LIGHT =
-            0xFF1D1D1D;
+            0xFF293038;
 
     private static final int COLOR_PANEL_HOVER =
-            0xFF252525;
+            0xFF36434D;
 
     private static final int COLOR_SELECTED =
-            0xFF282828;
+            0xFF26333D;
 
     private static final int COLOR_BORDER =
-            0xFF303030;
+            0xFF38454E;
 
     private static final int COLOR_TEXT =
             0xFFE2E5E7;
@@ -1014,16 +1014,10 @@ public class CharacterEditorPanel
                         : COLOR_PANEL_LIGHT
         );
 
-        if (opened)
-        {
-            drawRect(
-                    this.x + 5,
-                    y,
-                    this.x + 7,
-                    y + 24,
-                    getAccentColor()
-            );
-        }
+        // CAMERA-style section accent remains visible in collapsed
+        // groups, while the active group uses the brighter theme tone.
+        drawRect(this.x+5,y,this.x+8,y+24,
+                opened?getAccentBrightColor():getAccentColor());
 
         String arrow =
                 opened
@@ -2553,13 +2547,14 @@ public class CharacterEditorPanel
             int x,
             int y)
     {
-        drawColoredValue(
-                mc,
-                text,
-                x,
-                y,
-                COLOR_TEXT
-        );
+        // CAMERA inspector renders each value inside a dark field with a
+        // small bottom stroke; share that visual grammar with the read-
+        // only actor identity/frame metadata in CHARACTER.
+        int fieldWidth=Math.max(10,
+                this.x+this.width-10-(x-4));
+        drawRect(x-4,y-3,x-4+fieldWidth,y+14,0xFF10151A);
+        drawRect(x-4,y+13,x-4+fieldWidth,y+14,0xFF38454E);
+        drawColoredValue(mc,text,x,y,COLOR_TEXT);
     }
 
     private void drawColoredValue(

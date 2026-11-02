@@ -122,15 +122,15 @@ public class BodyPartsEditorPanel
     {
         if (mc == null) return;
 
-        drawRect(mc, x, y, x + WIDTH, y + panelHeight, 0xFF181818);
+        drawRect(mc, x, y, x + WIDTH, y + panelHeight, 0xFF171D23);
         BodyPartModelData selectedModel = controller.getSelectedModel();
         if (selectedModel != null)
         {
             /* Physics is isolated from the shared Pose TransformPanel. */
             drawRect(mc, x + 5, y + 5, x + 91, y + 25,
-                    physicsView ? 0xFF343638 : 0xFF484C50);
+                    physicsView ? 0xFF26333D : 0xFF394A56);
             drawRect(mc, x + 94, y + 5, x + 180, y + 25,
-                    physicsView ? 0xFF484C50 : 0xFF343638);
+                    physicsView ? 0xFF394A56 : 0xFF26333D);
             mc.fontRenderer.drawString("TRANSFORM", x + 13, y + 11, 0xFFFFFFFF);
             mc.fontRenderer.drawString("PHYSICS", x + 112, y + 11, 0xFFFFFFFF);
 
@@ -155,8 +155,8 @@ public class BodyPartsEditorPanel
             return;
         }
 
-        drawRect(mc, x, y, x + WIDTH, y + 25, 0xFF111111);
-        drawRect(mc, x, y + 24, x + WIDTH, y + 25, 0xFF303030);
+        drawRect(mc, x, y, x + WIDTH, y + 25, 0xFF10151A);
+        drawRect(mc, x, y + 24, x + WIDTH, y + 25, 0xFF38454E);
         drawRect(mc, x + 9, y + 7, x + 11, y + 18,
                 EditorThemeManager.get().getAccent());
         mc.fontRenderer.drawString("BODY PARTS", x + 16, y + 8, 0xFFE2E5E7);
@@ -206,7 +206,7 @@ public class BodyPartsEditorPanel
             AnimationTransform transform = selected.getGlobalTransform();
             int viewportTop = globalY + SECTION_HEIGHT;
             int viewportBottom = y + panelHeight - 5;
-            drawRect(mc, x + 6, viewportTop, x + WIDTH - 6, viewportBottom, 0xFF151515);
+            drawRect(mc, x + 6, viewportTop, x + WIDTH - 6, viewportBottom, 0xFF10151A);
             syncGlobalControls(transform, viewportTop);
             drawGlobalControls(mc, viewportTop, viewportBottom);
             writeGlobalTransform(transform);
@@ -220,7 +220,7 @@ public class BodyPartsEditorPanel
         boolean hovered = mouseX >= x + 7 && mouseX < x + WIDTH - 7
                 && mouseY >= drawY && mouseY < drawY + SECTION_HEIGHT;
         drawRect(mc, x + 7, drawY, x + WIDTH - 7, drawY + SECTION_HEIGHT,
-                hovered ? 0xFF252525 : 0xFF1D1D1D);
+                hovered ? 0xFF36434D : 0xFF293038);
         drawRect(mc, x + 7, drawY, x + 9, drawY + SECTION_HEIGHT,
                 EditorThemeManager.get().getAccent());
         mc.fontRenderer.drawString(title, x + 15, drawY + 6,
@@ -499,13 +499,17 @@ public class BodyPartsEditorPanel
             activeGlobalControl.finishEditing();
         }
 
-        activeGlobalControl = control;
-
-        return control.mouseClicked(
-                mouseX,
-                mouseY,
-                mouseButton
-        );
+        activeGlobalControl=control;
+        float before=control.getValue();
+        boolean handled=control.mouseClicked(mouseX,mouseY,mouseButton);
+        // A fine-step arrow click has no drag and no text-edit scope.
+        // Persist it immediately: syncGlobalControls() otherwise reads
+        // the OLD attachment transform on the next draw and loses it.
+        if(handled&&before!=control.getValue()&&
+                controller.getSelectedAttachment()!=null)
+            writeGlobalTransform(controller.getSelectedAttachment()
+                    .getGlobalTransform());
+        return handled;
     }
 
     private void mouseDraggedGlobalTransform(
@@ -656,7 +660,8 @@ public class BodyPartsEditorPanel
             char typedChar,
             int keyCode)
     {
-        if (controller.getSelectedModel() != null && physicsView) return false;
+        if(controller.getSelectedModel()!=null&&physicsView)
+            return physicsPanel.keyTyped(typedChar,keyCode);
         if (controller.getSelectedModel() == null &&
                 activeGlobalControl != null)
         {
@@ -718,18 +723,14 @@ public class BodyPartsEditorPanel
                 bx + bw,
                 by + bh,
                 hovered
-                        ? 0xFF252525
-                        : 0xFF202020
+                        ? 0xFF36434D
+                        : 0xFF222E37
         );
 
-        drawRect(
-                mc,
-                bx,
-                by,
-                bx + bw,
-                by + bh,
-                0xFF303030
-        );
+        // Only the bottom separator uses the border color. A former
+        // second full-size fill covered the hover color, making BUTTONS
+        // visually inert despite processing mouse presses.
+        drawRect(mc,bx,by+bh-1,bx+bw,by+bh,0xFF38454E);
 
         drawRect(
                 mc,
@@ -739,7 +740,7 @@ public class BodyPartsEditorPanel
                 by + 1,
                 hovered
                         ? EditorThemeManager.get().getAccent()
-                        : 0xFF303030
+                        : 0xFF38454E
         );
 
         mc.fontRenderer.drawString(

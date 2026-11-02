@@ -20,9 +20,9 @@ public class CharacterAnimationSetupPanel
 
     public static final int HEIGHT = 94;
 
-    private static final int COLOR_PANEL_DARK = 0xFF111111;
-    private static final int COLOR_PANEL_HOVER = 0xFF252525;
-    private static final int COLOR_BORDER = 0xFF303030;
+    private static final int COLOR_PANEL_DARK = 0xFF10151A;
+    private static final int COLOR_PANEL_HOVER = 0xFF34434E;
+    private static final int COLOR_BORDER = 0xFF38454E;
     private static final int COLOR_TEXT = 0xFFE2E5E7;
     private static final int COLOR_TEXT_SECONDARY = 0xFF9AA1A6;
     private static final int COLOR_TEXT_MUTED = 0xFF666D72;

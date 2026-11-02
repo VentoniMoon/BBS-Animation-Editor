@@ -13,6 +13,7 @@ public final class BodyPartPhysicsPanel
     private BodyPartCollisionSettings colliders;
     private boolean colliderTab;
     private int chainBones;
+    private int focusedNumber=-1; // gravity, stiffness, damping, scale
 
     public void setTarget(int x, int y, String boneName,
             BodyPartPhysicsSettings settings, BodyPartCollisionSettings colliders,
@@ -37,8 +38,8 @@ public final class BodyPartPhysicsPanel
     {
         if(this.settings==null)return;
         int accent=EditorThemeManager.get().getAccent();
-        Gui.drawRect(x,y,x+175,y+235,0xFF252629);
-        Gui.drawRect(x,y,x+175,y+22,0xFF303134);
+        Gui.drawRect(x,y,x+175,y+235,0xFF171D23);
+        Gui.drawRect(x,y,x+175,y+22,0xFF293038);
         Gui.drawRect(x,y,x+3,y+22,accent);
         Gui.drawRect(x+5,y+2,x+87,y+21,
                 colliderTab?0xFF303134:0xFF484C50);
@@ -80,10 +81,14 @@ public final class BodyPartPhysicsPanel
     private void drawValue(Minecraft mc, String title, float value, int lineY)
     {
         mc.fontRenderer.drawString(title, x + 9, y + lineY, 0xFFE0E0E0);
-        String number = String.format(java.util.Locale.ROOT, "%.2f", value);
-        mc.fontRenderer.drawString(number, x + 101, y + lineY, 0xFFCCCCCC);
-        drawButton(mc, "-", x + 136, y + lineY - 4);
-        drawButton(mc, "+", x + 155, y + lineY - 4);
+        String number=EditorNumericStep.format(value);
+        drawButton(mc,"<",x+92,y+lineY-4);
+        Gui.drawRect(x+110,y+lineY-4,x+149,y+lineY+13,
+                0xFF10151A);
+        mc.fontRenderer.drawString(
+                mc.fontRenderer.trimStringToWidth(number,35),
+                x+113,y+lineY,0xFFE5EFF3);
+        drawButton(mc,">",x+150,y+lineY-4);
     }
 
     private void drawToggle(Minecraft mc, String label, boolean selected, int lineY)
@@ -97,7 +102,7 @@ public final class BodyPartPhysicsPanel
 
     private void drawButton(Minecraft mc, String text, int left, int top)
     {
-        Gui.drawRect(left, top, left + 17, top + 17, 0xFF44474B);
+        Gui.drawRect(left,top,left+17,top+17,0xFF293640);
         mc.fontRenderer.drawString(text, left + 6, top + 4, 0xFFFFFFFF);
     }
 
@@ -137,8 +142,11 @@ public final class BodyPartPhysicsPanel
             }
             else if(row>=104 && row<=128)
             {
-                float delta=mouseX>=x+136 && mouseX<x+153?-0.05F:
-                        mouseX>=x+155 && mouseX<x+172?0.05F:0F;
+                focusedNumber=3;
+                float delta=mouseX>=x+92&&mouseX<x+109?
+                        (float)-EditorNumericStep.MOUSE:
+                        mouseX>=x+150&&mouseX<x+167?
+                        (float)EditorNumericStep.MOUSE:0F;
                 if(delta!=0F)
                     colliders.setScale(Math.min(2F,Math.max(0.25F,
                             colliders.getScale()+delta)));
@@ -147,19 +155,44 @@ public final class BodyPartPhysicsPanel
         }
         if(row>=47 && row<=64 && mouseX>=x+140)
             settings.setEnabled(!settings.isEnabled());
-        else if(row>=73 && row<=93)change(mouseX,0);
-        else if(row>=104 && row<=124)change(mouseX,1);
-        else if(row>=135 && row<=155)change(mouseX,2);
+        else if(row>=73 && row<=93){focusedNumber=0;change(mouseX,0);}
+        else if(row>=104 && row<=124){focusedNumber=1;change(mouseX,1);}
+        else if(row>=135 && row<=155){focusedNumber=2;change(mouseX,2);}
         else if(row>=167 && row<=185 && mouseX>=x+140)
             settings.setBodyCollisions(!settings.hasBodyCollisions());
+        return true;
+    }
+
+    public boolean keyTyped(char typedChar,int keyCode)
+    {
+        if(focusedNumber<0)return false;
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_ESCAPE)
+        {
+            focusedNumber=-1;return true;
+        }
+        if(keyCode!=org.lwjgl.input.Keyboard.KEY_UP&&
+                keyCode!=org.lwjgl.input.Keyboard.KEY_DOWN)return false;
+        float delta=(float)(keyCode==org.lwjgl.input.Keyboard.KEY_UP?
+                EditorNumericStep.KEYBOARD:-EditorNumericStep.KEYBOARD);
+        if(focusedNumber==3&&colliders!=null)
+            colliders.setScale(Math.min(2F,Math.max(0.25F,
+                    colliders.getScale()+delta)));
+        else if(focusedNumber==0)
+            settings.setGravity(settings.getGravity()+delta);
+        else if(focusedNumber==1)
+            settings.setStiffness(settings.getStiffness()+delta);
+        else if(focusedNumber==2)
+            settings.setDamping(settings.getDamping()+delta);
         return true;
     }
 
     private void change(int mouseX, int property)
     {
         float delta;
-        if (mouseX >= x + 136 && mouseX < x + 153) delta = -0.05F;
-        else if (mouseX >= x + 155 && mouseX < x + 172) delta = 0.05F;
+        if(mouseX>=x+92&&mouseX<x+109)
+            delta=(float)-EditorNumericStep.MOUSE;
+        else if(mouseX>=x+150&&mouseX<x+167)
+            delta=(float)EditorNumericStep.MOUSE;
         else return;
         if (property == 0) settings.setGravity(settings.getGravity() + delta);
         else if (property == 1) settings.setStiffness(settings.getStiffness() + delta);

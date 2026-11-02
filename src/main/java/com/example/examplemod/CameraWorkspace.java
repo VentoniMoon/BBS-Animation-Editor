@@ -306,6 +306,29 @@ public final class CameraWorkspace
             }
             editField=null;editKey=null;keyField=null;return true;
         }
+        // Fine keyboard increments apply immediately to the currently
+        // focused numeric CAMERA field, but not titles/preset names.
+        if((keyCode==org.lwjgl.input.Keyboard.KEY_UP||
+                keyCode==org.lwjgl.input.Keyboard.KEY_DOWN)&&
+                !namingPreset&&editField!=null)
+        {
+            Double parsed=finiteDouble(editField.getText());
+            if(parsed!=null)
+            {
+                String target=keyField!=null?keyField:editKey;
+                boolean integer=EditorNumericStep.isIntegralField(target);
+                double delta=integer?1D:EditorNumericStep.KEYBOARD;
+                double next=parsed+(keyCode==
+                        org.lwjgl.input.Keyboard.KEY_UP?delta:-delta);
+                String text=integer?Long.toString(Math.round(next)):
+                        EditorNumericStep.format(next);
+                editField.setText(text);
+                if(keyField!=null)applyKeyField(keyField,text);
+                else if(editClip!=null&&editKey!=null&&
+                        applyClipField(editClip,editKey,text))saveScene();
+                return true;
+            }
+        }
         editField.textboxKeyTyped(typedChar,keyCode);
         return true;
     }
@@ -1404,6 +1427,36 @@ public final class CameraWorkspace
             {
                 inspector.toggleSection(hit.key.substring("@fold:".length()));
                 inspectorScroll=0;
+                return true;
+            }
+            // Dedicated arrows never enter a text edit or drag.
+            if(hit.key.startsWith("@nudge:"))
+            {
+                int sign=hit.key.charAt(7)=='+'?1:-1;
+                String original=hit.key.substring(9);
+                Double current=finiteDouble(hit.value);
+                if(current!=null)
+                {
+                    boolean integer=EditorNumericStep.isIntegralField(original);
+                    double next=current+sign*(integer?1D:
+                            EditorNumericStep.MOUSE);
+                    String updated=integer?Long.toString(Math.round(next)):
+                            EditorNumericStep.format(next);
+                    if(hit.keyframe)
+                    {
+                        if(selectedKey==null||keyOwner!=clip)
+                        {
+                            if(clip.keys.isEmpty())return true;
+                            selectedKey=clip.keys.get(0);keyOwner=clip;
+                        }
+                        applyKeyField(original,updated);
+                    }
+                    else if(applyClipField(clip,
+                            hit.component<0?original:
+                                    original+"#"+hit.component,updated))
+                        saveScene();
+                }
+                numericDragCandidate=null;
                 return true;
             }
             Double raw=finiteDouble(hit.value);

@@ -2113,23 +2113,8 @@ public class AnimationEditorScreen extends GuiScreen
                 partialTicks
         );
 
-        if (isDeleteDialogOpen())
-        {
-            this.deleteDialog.open(
-                    this.keyframeController
-                            .getPendingDeleteFrame()
-            );
-
-            this.deleteDialog.draw(
-                    this,
-                    this.fontRenderer,
-                    this.width,
-                    this.height,
-                    mouseX,
-                    mouseY,
-                    getAccentColor()
-            );
-        }
+        // Destructive editing is a deliberate double RMB on the key.
+        // The legacy modal is no longer painted over the entire editor.
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA)
             cameraExportDialog.draw(this,mouseX,mouseY);

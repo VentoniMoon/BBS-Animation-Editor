@@ -18,13 +18,13 @@ public class TransformPanel
      * =========================================================
      */
 
-    private static final int PANEL_BACKGROUND = 0xFF252629;
-    private static final int PANEL_BORDER = 0xFF111214;
+    private static final int PANEL_BACKGROUND = 0xFF171D23;
+    private static final int PANEL_BORDER = 0xFF0E1419;
 
-    private static final int HEADER_BACKGROUND = 0xFF303134;
-    private static final int HEADER_BOTTOM = 0xFF18191B;
+    private static final int HEADER_BACKGROUND = 0xFF293038;
+    private static final int HEADER_BOTTOM = 0xFF38454E;
 
-    private static final int SECTION_LINE = 0xFF3A3B3E;
+    private static final int SECTION_LINE = 0xFF2A3842;
 
     private static final int TEXT = 0xFFE0E0E0;
     private static final int TEXT_SECONDARY = 0xFF999999;
@@ -455,14 +455,9 @@ public class TransformPanel
             int drawY,
             int accent)
     {
-        drawRect(
-                mc,
-                drawX,
-                drawY + 1,
-                drawX + 3,
-                drawY + 10,
-                accent
-        );
+        drawRect(mc,drawX,drawY-2,drawX+PANEL_WIDTH-18,
+                drawY+12,0xFF293038);
+        drawRect(mc,drawX,drawY-2,drawX+3,drawY+12,accent);
 
         font.drawString(
                 title,
@@ -543,6 +538,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -562,6 +558,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -581,6 +578,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -603,6 +601,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -622,6 +621,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -641,6 +641,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -660,6 +661,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -679,6 +681,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -698,6 +701,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -798,12 +802,10 @@ public class TransformPanel
 
         if (handled)
         {
-            if (!this.activeControl.isEditing())
-            {
-                writeControlsToKeyframe(
-                        keyframe
-                );
-            }
+            if(!this.activeControl.isEditing()||
+                    keyCode==org.lwjgl.input.Keyboard.KEY_UP||
+                    keyCode==org.lwjgl.input.Keyboard.KEY_DOWN)
+                writeControlsToKeyframe(keyframe);
 
             return true;
         }
