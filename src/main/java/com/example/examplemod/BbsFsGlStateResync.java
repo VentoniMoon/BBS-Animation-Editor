@@ -103,16 +103,12 @@ public final class BbsFsGlStateResync
         GlStateManager.setActiveTexture(unit);
         // Reset the cached binding independently of the old raw-GL
         // binding. Texture names are non-negative and 0 is always safe.
-        if(texture==0)
-        {
-            GlStateManager.bindTexture(1);
-            GlStateManager.bindTexture(0);
-        }
-        else
-        {
-            GlStateManager.bindTexture(0);
-            GlStateManager.bindTexture(texture);
-        }
+        GlStateManager.bindTexture(0);
+        if(texture!=0)GlStateManager.bindTexture(texture);
+        // The cache may have already claimed this name before raw
+        // glPopAttrib restored a different binding. Reassert the actual
+        // driver binding even if the cached operation was skipped.
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
         if(enabled)
         {
             GlStateManager.disableTexture2D();
