@@ -3,6 +3,7 @@ package com.example.examplemod;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
 
 /**
  * Reconcile the OpenGL driver with Minecraft 1.12.2's GlStateManager cache.
@@ -24,11 +25,13 @@ public final class BbsFsGlStateResync
         final boolean blend,alpha,depth,cull,lighting,fog;
         final boolean texture0Enabled,texture1Enabled;
         final int texture0,texture1,activeTexture;
+        final int clientActiveTexture,arrayBuffer,elementBuffer;
 
         private Snapshot(boolean blend,boolean alpha,boolean depth,
                 boolean cull,boolean lighting,boolean fog,
                 boolean texture0Enabled,boolean texture1Enabled,
-                int texture0,int texture1,int activeTexture)
+                int texture0,int texture1,int activeTexture,
+                int clientActiveTexture,int arrayBuffer,int elementBuffer)
         {
             this.blend=blend;this.alpha=alpha;this.depth=depth;
             this.cull=cull;this.lighting=lighting;this.fog=fog;
@@ -36,6 +39,9 @@ public final class BbsFsGlStateResync
             this.texture1Enabled=texture1Enabled;
             this.texture0=texture0;this.texture1=texture1;
             this.activeTexture=activeTexture;
+            this.clientActiveTexture=clientActiveTexture;
+            this.arrayBuffer=arrayBuffer;
+            this.elementBuffer=elementBuffer;
         }
     }
 
@@ -44,6 +50,10 @@ public final class BbsFsGlStateResync
     public static Snapshot capture()
     {
         int active=GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int clientActive=GL11.glGetInteger(GL13.GL_CLIENT_ACTIVE_TEXTURE);
+        int arrayBuffer=GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
+        int elementBuffer=GL11.glGetInteger(
+                GL15.GL_ELEMENT_ARRAY_BUFFER_BINDING);
         boolean t0Enabled=false,t1Enabled=false;
         int t0=0,t1=0;
         try
@@ -66,7 +76,8 @@ public final class BbsFsGlStateResync
                 GL11.glIsEnabled(GL11.GL_CULL_FACE),
                 GL11.glIsEnabled(GL11.GL_LIGHTING),
                 GL11.glIsEnabled(GL11.GL_FOG),
-                t0Enabled,t1Enabled,t0,t1,active);
+                t0Enabled,t1Enabled,t0,t1,active,
+                clientActive,arrayBuffer,elementBuffer);
     }
 
     public static void restore(Snapshot snapshot)
@@ -94,6 +105,14 @@ public final class BbsFsGlStateResync
         GlStateManager.setActiveTexture(GL13.GL_TEXTURE0);
         GlStateManager.setActiveTexture(GL13.GL_TEXTURE1);
         GlStateManager.setActiveTexture(snapshot.activeTexture);
+        // Emoticons GL15 vertex buffers and texture coordinate arrays use
+        // CLIENT_ACTIVE_TEXTURE, not the ordinary ACTIVE_TEXTURE above.
+        // Restore both client-array buffer targets so a subsequent
+        // Blockbuster or Emoticons renderer starts from the expected state.
+        GL13.glClientActiveTexture(snapshot.clientActiveTexture);
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER,snapshot.arrayBuffer);
+        GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER,
+                snapshot.elementBuffer);
     }
 
     private static void forceTexture(int unit,int texture,boolean enabled)
