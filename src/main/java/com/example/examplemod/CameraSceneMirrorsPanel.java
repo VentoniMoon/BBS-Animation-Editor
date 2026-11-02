@@ -47,13 +47,10 @@ public final class CameraSceneMirrorsPanel
         if(!opened)return;
         bottom=panelBottom;
         Minecraft mc=Minecraft.getMinecraft();
-        Gui.drawRect(0,25,CameraWorkspace.CAMERA_LEFT_WIDTH,54,0xFF1D303B);
-        mc.fontRenderer.drawString("CLIPS",5,36,0xFF899DAA);
-        mc.fontRenderer.drawString("LIGHTS",47,36,0xFF899DAA);
-        mc.fontRenderer.drawString("MIRRORS",88,36,0xFF60C8FA);
+        EditorVisualStyle.drawCameraTabs(mc,CameraWorkspace.CAMERA_LEFT_WIDTH,2);
         Gui.drawRect(0,54,CameraWorkspace.CAMERA_LEFT_WIDTH,bottom,0xFF19232C);
-        Gui.drawRect(4,61,64,82,0xFF31495D);
-        Gui.drawRect(67,61,126,82,0xFF31495D);
+        Gui.drawRect(4,61,64,82,EditorVisualStyle.themedSurface(0.23F));
+        Gui.drawRect(67,61,126,82,EditorVisualStyle.themedSurface(0.23F));
         mc.fontRenderer.drawString("+ ADD",10,68,0xFFFFFFFF);
         mc.fontRenderer.drawString("DELETE",73,68,0xFFFFFFFF);
         mc.fontRenderer.drawString("SCENE MIRRORS",7,88,0xFF8DAAB9);
@@ -66,7 +63,7 @@ public final class CameraSceneMirrorsPanel
             if(yy+18>bottom)break;
             CameraSceneMirrors.Mirror m=all.get(i);
             if(m==list(screen).selected())
-                Gui.drawRect(4,yy-2,126,yy+17,0xFF34536A);
+                Gui.drawRect(4,yy-2,126,yy+17,EditorVisualStyle.themedSurface(0.29F));
             mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
                     (m.enabled?"":"[ ] ")+m.name,114),
                     8,yy+2,m.enabled?0xFFE0F2FE:0xFF82919C);
@@ -126,9 +123,9 @@ public final class CameraSceneMirrorsPanel
             Gui.drawRect(inspectorLeft+78,yy-4,inspectorLeft+175,yy+15,
                     0xFF10151A);
             Gui.drawRect(inspectorLeft+78,yy-4,inspectorLeft+92,yy+15,
-                    0xFF34536A);
+                    EditorVisualStyle.themedSurface(0.29F));
             Gui.drawRect(inspectorLeft+161,yy-4,inspectorLeft+175,yy+15,
-                    0xFF34536A);
+                    EditorVisualStyle.themedSurface(0.29F));
             mc.fontRenderer.drawString("<",inspectorLeft+82,yy,0xFFE3EFF4);
             mc.fontRenderer.drawString(">",inspectorLeft+165,yy,0xFFE3EFF4);
             if(field!=null&&edit==i)field.drawTextBox();
