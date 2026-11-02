@@ -164,7 +164,7 @@ public final class CameraClipInspector
         int lx=right+5,rx=width-6;
         int topY=Math.max(92,bottom-7*21-36);
         rect(lx-2,topY-22,rx+2,topY+7*21+23,0xFF080D11);
-        rect(lx,topY-20,rx,topY,0xFF293038);
+        rect(lx,topY-20,rx,topY,EditorVisualStyle.themedSurface(0.180F));
         text("CURVE CHANNELS",lx+6,topY-15,0xFF8BE2FF,rx-lx-65);
         text("RESCAN",rx-49,topY-15,0xFF8BE2FF,45);
         hits.add(new Hit("@curve:refresh",-1,rx-54,topY-21,
@@ -184,7 +184,7 @@ public final class CameraClipInspector
             hits.add(new Hit("@curve:set:"+id,-1,lx,pos,rx-lx,20,
                     id,false,false));
         }
-        rect(lx,topY+7*21+3,rx,topY+7*21+22,0xFF293038);
+        rect(lx,topY+7*21+3,rx,topY+7*21+22,EditorVisualStyle.themedSurface(0.180F));
         text(CameraShaderCurves.state(),lx+5,topY+7*21+8,
                 0xFF9CC4D6,rx-lx-10);
     }
@@ -223,7 +223,7 @@ public final class CameraClipInspector
         int at=y-scroll;
         if(!measuring&&visible(at,16))
         {
-            rect(right+5,at,width-6,at+16,0xFF2B2D30);
+            rect(right+5,at,width-6,at+16,EditorVisualStyle.themedSurface(0.180F));
             rect(right+5,at,right+8,at+16,accent);
             text(title,right+13,at+4,0xFFE2E5E6,width-right-24);
         }
@@ -238,7 +238,7 @@ public final class CameraClipInspector
         int at=y-scroll;
         if(!measuring&&visible(at,16))
         {
-            rect(right+5,at,width-6,at+16,0xFF2B2D30);
+            rect(right+5,at,width-6,at+16,EditorVisualStyle.themedSurface(0.180F));
             rect(right+5,at,right+8,at+16,accent);
             text(title,right+13,at+4,0xFFE2E5E6,width-right-43);
             text(expanded?"v":">",width-22,at+3,0xFF6AC9F3,12);
@@ -292,8 +292,8 @@ public final class CameraClipInspector
         {
             int x=right+Math.min(91,(width-right)/2), w=width-x-10;
             text(title,right+9,at+4,0xFFADBBC1,x-right-12);
-            rect(x,at,x+w,at+16,0xFF10151A);
-            rect(x,at+15,x+w,at+16,0xFF384148);
+            rect(x,at,x+w,at+16,EditorVisualStyle.themedSurface(0.045F));
+            rect(x,at+15,x+w,at+16,EditorVisualStyle.themedSurface(0.200F));
             boolean toggle="true".equalsIgnoreCase(value)||
                     "false".equalsIgnoreCase(value);
             if(toggle)
@@ -304,8 +304,8 @@ public final class CameraClipInspector
             }
             else if(numeric(value))
             {
-                rect(x,at,x+14,at+16,0xFF34536A);
-                rect(x+w-14,at,x+w,at+16,0xFF34536A);
+                rect(x,at,x+14,at+16,EditorVisualStyle.themedSurface(0.260F));
+                rect(x+w-14,at,x+w,at+16,EditorVisualStyle.themedSurface(0.260F));
                 text("<",x+4,at+4,0xFFE6F0F3,10);
                 text(">",x+w-10,at+4,0xFFE6F0F3,10);
                 text(compact(value),x+17,at+4,0xFFE6F0F3,w-33);
@@ -354,11 +354,11 @@ public final class CameraClipInspector
             {
                 int x=right+48,w=width-x-10;
                 text(axisLabels[i],right+13,pos+4,0xFF9FBBCB,32);
-                rect(x,pos,x+w,pos+16,0xFF10151A);
-                rect(x,pos+15,x+w,pos+16,0xFF384148);
+                rect(x,pos,x+w,pos+16,EditorVisualStyle.themedSurface(0.045F));
+                rect(x,pos+15,x+w,pos+16,EditorVisualStyle.themedSurface(0.200F));
                 String value=parts[i].trim();
-                rect(x,pos,x+14,pos+16,0xFF34536A);
-                rect(x+w-14,pos,x+w,pos+16,0xFF34536A);
+                rect(x,pos,x+14,pos+16,EditorVisualStyle.themedSurface(0.260F));
+                rect(x+w-14,pos,x+w,pos+16,EditorVisualStyle.themedSurface(0.260F));
                 text("<",x+4,pos+4,0xFFE6F0F3,10);
                 text(">",x+w-10,pos+4,0xFFE6F0F3,10);
                 text(compact(value),x+17,pos+4,0xFFE6F0F3,w-33);
@@ -386,7 +386,7 @@ public final class CameraClipInspector
             if(!measuring&&visible(pos,16))
             {
                 boolean enabled=(mask&(1<<i))!=0;
-                rect(right+12,pos,width-11,pos+16,0xFF10151A);
+                rect(right+12,pos,width-11,pos+16,EditorVisualStyle.themedSurface(0.045F));
                 text(names[i],right+19,pos+4,0xFFBFCDD5,width-right-58);
                 rect(width-30,pos+2,width-17,pos+14,
                         enabled?accent:0xFF555E66);
@@ -401,7 +401,7 @@ public final class CameraClipInspector
         int at=y-scroll;
         if(!measuring&&visible(at,16))
         {
-            rect(right+10,at,width-11,at+16,0xFF30383F);
+            rect(right+10,at,width-11,at+16,EditorVisualStyle.themedSurface(0.230F));
             rect(right+10,at+15,width-11,at+16,accent);
             text(text,right+16,at+4,0xFFE5F4FA,width-right-33);
             hits.add(new Hit(action,-1,right+10,at,width-right-21,
@@ -420,7 +420,7 @@ public final class CameraClipInspector
             for(int i=0;i<3;i++)
             {
                 int x=bx+i*(w+2);
-                rect(x,at,x+w,at+16,0xFF30383F);
+                rect(x,at,x+w,at+16,EditorVisualStyle.themedSurface(0.230F));
                 text(labels[i],x+3,at+4,0xFFC7DBE5,w-5);
                 hits.add(new Hit(keys[i],-1,x,at,w,16,"",false,false));
             }
@@ -790,7 +790,7 @@ public final class CameraClipInspector
         rect(lx-2,topY-2,rx+2,
                 gridY+rows*EditorInterpolationCurvePicker.CELL_HEIGHT+2,
                 0xFF090D11);
-        rect(lx,topY,rx,topY+20,0xFF293038);
+        rect(lx,topY,rx,topY+20,EditorVisualStyle.themedSurface(0.180F));
         text("INTERPOLATION",lx+6,topY+5,0xFF9BDFFE,rx-lx-12);
         String[] entries=CameraInterpolation.OPTIONS;
         optionScroll=Math.max(0,Math.min(
@@ -843,7 +843,7 @@ public final class CameraClipInspector
         this.physicalBottom=timelineTop;
         this.accent=EditorThemeManager.get().getAccent();
         this.hits.clear();
-        rect(right,25,screen.width,timelineTop,0xFF191D21);
+        rect(right,25,screen.width,timelineTop,EditorVisualStyle.themedSurface(0.070F));
         rect(right,25,right+2,timelineTop,0xFF30383E);
         text("CLIP PROPERTIES",right+10,34,
                 EditorThemeManager.get().getAccentBright(),screen.width-right-18);
@@ -858,7 +858,7 @@ public final class CameraClipInspector
             closeInterpolation();closeCurvePicker();optionScroll=0;
         }
         selectedClip=clip;
-        rect(right+7,46,screen.width-7,63,0xFF272E34);
+        rect(right+7,46,screen.width-7,63,EditorVisualStyle.themedSurface(0.150F));
         rect(right+7,46,right+10,63,clip.kind.color);
         text(clip.title,right+15,50,0xFFE8F1F3,screen.width-right-25);
 
