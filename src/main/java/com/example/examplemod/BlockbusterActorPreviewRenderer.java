@@ -1402,6 +1402,15 @@ public class BlockbusterActorPreviewRenderer
         );
         GlStateManager.bindTexture(0);
 
+        // The editor actor is drawn at RenderWorldLast, after OptiFine's
+        // native shadow and transparency passes. The visible GBuffer must
+        // not inherit the shadow map's depth polygon offset or any screen-
+        // door raster coverage from an earlier pass. Those states can cause
+        // diagonal stripes on otherwise opaque Emoticons/Chameleon faces.
+        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+        GL11.glDisable(GL11.GL_POLYGON_STIPPLE);
+        GL11.glDisable(org.lwjgl.opengl.GL13.GL_SAMPLE_ALPHA_TO_COVERAGE);
+
         GlStateManager.enableDepth();
 
         GlStateManager.depthFunc(
@@ -1637,6 +1646,11 @@ public class BlockbusterActorPreviewRenderer
             GlStateManager.setActiveTexture(
                     net.minecraft.client.renderer.OpenGlHelper.defaultTexUnit);
             GlStateManager.bindTexture(0);
+            // Replay to the main world/mirror, not OptiFine's shadow atlas.
+            // The caller may have just used depth-offset caster geometry.
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glDisable(GL11.GL_POLYGON_STIPPLE);
+            GL11.glDisable(org.lwjgl.opengl.GL13.GL_SAMPLE_ALPHA_TO_COVERAGE);
             GlStateManager.enableDepth();
             GlStateManager.depthFunc(GL11.GL_LEQUAL);
             GlStateManager.depthMask(true);
