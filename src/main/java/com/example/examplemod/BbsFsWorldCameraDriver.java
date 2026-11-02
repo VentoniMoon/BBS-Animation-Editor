@@ -39,6 +39,7 @@ public final class BbsFsWorldCameraDriver
     private boolean registered;
     private boolean controlling;
     private PreviewCameraPose activePose;
+    private static boolean shadowStartupReported;
 
     /**
      * The exact camera used for the native Minecraft world frame.
@@ -100,6 +101,7 @@ public final class BbsFsWorldCameraDriver
         BbsFsWorldProjection.beginFrame();
         BbsFsWorldFrameCapture.beginNativeFrame();
         BbsFsNativeActorPass.beginFrame();
+        BbsFsNativeActorSunShadowOverlay.beginFrame();
         Minecraft mc = Minecraft.getMinecraft();
         if (viewport == null || !(mc.currentScreen instanceof AnimationEditorScreen)
                 || mc.world == null || mc.player == null)
@@ -112,6 +114,23 @@ public final class BbsFsWorldCameraDriver
             release();
 
         AnimationEditorScreen editor=(AnimationEditorScreen)mc.currentScreen;
+        if(!shadowStartupReported)
+        {
+            shadowStartupReported=true;
+            System.out.println(
+                    "[BBS Editor][Actor Sun Shadow] [Startup] "+
+                    "flag="+Boolean.getBoolean(
+                        "bbs.editor.camera.nativeActorSunShadows")+
+                    " corePluginLoaded="+
+                        CameraShaderCurveCorePlugin.registeredAtLaunch()+
+                    " curveTransformerInstalled="+
+                        CameraShaderCurveTransformer.installed()+
+                    " nativeSunShadowHook="+
+                        CameraShaderCurveTransformer.nativeShadowHookInstalled()+
+                    " hookDetail="+
+                        CameraShaderCurveTransformer.nativeShadowHookDiagnostic()+
+                    " (default flag=false; use Gradle -D...=true)");
+        }
         // Offline VIDEO (when explicitly started) owns each exact scene
         // tick BEFORE the native camera entity and recorded actor pass sample
         // their poses. Normal CAMERA preview remains completely unchanged.
