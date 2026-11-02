@@ -20,8 +20,8 @@ import net.minecraft.client.gui.GuiTextField;
 public final class CameraExportDialog
 {
     private static final int PANEL=0xF41A222B;
-    private static final int BORDER=0xFF415767;
-    private static final int BLUE=0xFF65CDF7;
+    private static int BORDER(){return EditorVisualStyle.themedSurface(0.27F);}
+    private static int BLUE(){return EditorThemeManager.get().getAccentBright();}
     private static final int MUTED=0xFFAABCCA;
     private static final int WHITE=0xFFE5EFF4;
     private static final int[] QUALITY={18,22,26};
@@ -36,9 +36,9 @@ public final class CameraExportDialog
     private static void drawDimensionArrows(FontRenderer font,GuiTextField field)
     {
         if(field==null)return;
-        Gui.drawRect(field.x-15,field.y,field.x-1,field.y+18,0xFF34536A);
+        Gui.drawRect(field.x-15,field.y,field.x-1,field.y+18,EditorVisualStyle.themedSurface(0.28F));
         Gui.drawRect(field.x+field.width+1,field.y,
-                field.x+field.width+15,field.y+18,0xFF34536A);
+                field.x+field.width+15,field.y+18,EditorVisualStyle.themedSurface(0.28F));
         font.drawString("<",field.x-10,field.y+5,WHITE);
         font.drawString(">",field.x+field.width+5,field.y+5,WHITE);
     }
@@ -158,10 +158,10 @@ public final class CameraExportDialog
         Gui.drawRect(0,0,editor.width,editor.height,0xD9080E15);
         Gui.drawRect(x-3,y-3,x+w+3,y+h+3,0xF6071017);
         Gui.drawRect(x,y,x+w,y+h,PANEL);
-        Gui.drawRect(x,y,x+w,y+2,BLUE);
+        Gui.drawRect(x,y,x+w,y+2,BLUE());
         CameraNativeFrameProbe.resyncDefaultTextureForGui();
-        font.drawString("CAMERA  /  RENDERING VIDEO",x+15,y+13,BLUE);
-        Gui.drawRect(x+12,y+32,x+w-12,y+33,BORDER);
+        font.drawString("CAMERA  /  RENDERING VIDEO",x+15,y+13,BLUE());
+        Gui.drawRect(x+12,y+32,x+w-12,y+33,BORDER());
         String format=plan==null?"MP4 / H.264":
                 plan.width+" x "+plan.height+"  |  "+plan.fps+
                 " FPS  |  H.264 / MP4";
@@ -181,7 +181,7 @@ public final class CameraExportDialog
         int barY=y+h-61;
         Gui.drawRect(x+15,barY,x+w-15,barY+8,0xFF243846);
         int fill=(int)((long)(w-30)*encoded/total);
-        Gui.drawRect(x+15,barY,x+15+fill,barY+8,BLUE);
+        Gui.drawRect(x+15,barY,x+15+fill,barY+8,BLUE());
         int buttonY=y+h-34;
         drawButton(font,x+15,buttonY,w-30,"CANCEL EXPORT",true);
     }
@@ -201,15 +201,15 @@ public final class CameraExportDialog
         Gui.drawRect(0,0,editor.width,editor.height,0xA900070C);
         Gui.drawRect(x-2,y-2,x+w+2,y+h+2,0xEB071017);
         Gui.drawRect(x,y,x+w,y+h,PANEL);
-        Gui.drawRect(x,y,x+w,y+2,BLUE);
+        Gui.drawRect(x,y,x+w,y+2,BLUE());
         // Rebind the real GL texture state immediately before painting the
         // modal text. This is needed even if START RENDER fails its FFmpeg /
         // ffprobe preflight and no native frame is ever captured. It also
         // protects the dialog from texture mutations later in drawPreview.
         CameraNativeFrameProbe.resyncDefaultTextureForGui();
-        font.drawString("CAMERA  /  EXPORT VIDEO",x+15,y+13,BLUE);
+        font.drawString("CAMERA  /  EXPORT VIDEO",x+15,y+13,BLUE());
         font.drawString("x",x+w-20,y+13,WHITE);
-        Gui.drawRect(x+12,y+32,x+w-12,y+33,BORDER);
+        Gui.drawRect(x+12,y+32,x+w-12,y+33,BORDER());
 
         font.drawString("Resolution",x+15,y+58,MUTED);
         widthField.drawTextBox();
@@ -224,10 +224,10 @@ public final class CameraExportDialog
         {
             int bx=fpsStart+i*66;
             Gui.drawRect(bx,y+96,bx+60,y+116,
-                    i==fpsIndex?0xFF31586C:0xFF293540);
-            if(i==fpsIndex)Gui.drawRect(bx,y+114,bx+60,y+116,BLUE);
+                    i==fpsIndex?EditorVisualStyle.themedSurface(0.29F):EditorVisualStyle.themedSurface(0.17F));
+            if(i==fpsIndex)Gui.drawRect(bx,y+114,bx+60,y+116,BLUE());
             font.drawString(Integer.toString(FPS[i]),bx+18,y+102,
-                    i==fpsIndex?BLUE:WHITE);
+                    i==fpsIndex?BLUE():WHITE);
         }
 
         font.drawString("Encoding quality",x+15,y+120,MUTED);
@@ -236,11 +236,11 @@ public final class CameraExportDialog
         {
             int bx=x+15+i*(bw+gap);
             Gui.drawRect(bx,y+133,bx+bw,y+154,
-                    i==quality?0xFF31586C:0xFF293540);
-            if(i==quality)Gui.drawRect(bx,y+152,bx+bw,y+154,BLUE);
+                    i==quality?EditorVisualStyle.themedSurface(0.29F):EditorVisualStyle.themedSurface(0.17F));
+            if(i==quality)Gui.drawRect(bx,y+152,bx+bw,y+154,BLUE());
             String label=QUALITY_LABELS[i];
             font.drawString(font.trimStringToWidth(label,bw-8),
-                    bx+4,y+139,i==quality?BLUE:WHITE);
+                    bx+4,y+139,i==quality?BLUE():WHITE);
         }
 
         font.drawString("FFmpeg executable (ffmpeg or absolute path)",
@@ -263,7 +263,7 @@ public final class CameraExportDialog
                 mediaCount+"  |  Audio clips: "+audioCount+" (AAC)";
         font.drawString(font.trimStringToWidth(
                     video.isExporting()?video.getStage():capability,w-30),
-                x+15,y+239,video.isExporting()?BLUE:MUTED);
+                x+15,y+239,video.isExporting()?BLUE():MUTED);
 
         int buttonY=y+h-34;
         if(video.isExporting())
@@ -273,7 +273,7 @@ public final class CameraExportDialog
             Gui.drawRect(x+15,buttonY-10,x+w-15,buttonY-6,
                     0xFF243847);
             int fill=(int)((long)(w-30)*Math.min(total,encoded)/total);
-            Gui.drawRect(x+15,buttonY-10,x+15+fill,buttonY-6,BLUE);
+            Gui.drawRect(x+15,buttonY-10,x+15+fill,buttonY-6,BLUE());
             drawButton(font,x+15,buttonY,w-30,"CANCEL EXPORT",true);
         }
         else
@@ -289,7 +289,7 @@ public final class CameraExportDialog
         else if(video.isExporting())
             font.drawString("Encoded: "+video.getEncodedFrames()+"/"+
                     video.getTotalFrames()+"    Captured: "+
-                    video.getCapturedFrames(),x+15,y+h-47,BLUE);
+                    video.getCapturedFrames(),x+15,y+h-47,BLUE());
         else if(video.status()!=null&&!video.status().isEmpty())
             font.drawString(font.trimStringToWidth(video.status(),w-30),
                     x+15,y+h-46,MUTED);
@@ -301,9 +301,9 @@ public final class CameraExportDialog
         Gui.drawRect(bx,by,bx+bw,by+23,
                 active?0xFF315A70:0xFF2D3740);
         Gui.drawRect(bx,by+21,bx+bw,by+23,
-                active?BLUE:0xFF617482);
+                active?BLUE():0xFF617482);
         font.drawString(label,bx+Math.max(5,(bw-
-                font.getStringWidth(label))/2),by+7,active?BLUE:WHITE);
+                font.getStringWidth(label))/2),by+7,active?BLUE():WHITE);
     }
 
     public boolean mouseClicked(AnimationEditorScreen editor,int mx,int my,
