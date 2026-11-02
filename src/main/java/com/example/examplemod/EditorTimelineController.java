@@ -259,6 +259,7 @@ public class EditorTimelineController
 
     public void resetClickState()
     {
+        resetRightDelete();
         this.lastTimelineClickTime = 0L;
 
         this.lastTimelineClickX = -1;
