@@ -379,16 +379,14 @@ public class EditorSceneViewport
         int viewportWidth = BbsFsNativeActorPass.worldViewportWidth();
         int viewportHeight = BbsFsNativeActorPass.worldViewportHeight();
 
-        this.actorPreviewRenderer.drawActor(
-                mc,
-                actorData,
-                frame,
-                this.cameraForNativeActor(),
-                0,
-                0,
-                viewportWidth,
-                viewportHeight
-        );
+        try(CharacterBodyPartPreviewState.Scope context=
+                CharacterBodyPartPreviewState.enter(
+                        actorData,BlockbusterPreviewAnimationState.getFrame()))
+        {
+            this.actorPreviewRenderer.drawActor(
+                    mc,actorData,frame,this.cameraForNativeActor(),
+                    0,0,viewportWidth,viewportHeight);
+        }
 
 
     }
@@ -406,10 +404,15 @@ public class EditorSceneViewport
     {
         if (!BbsFsNativeActorPass.isRendering() ||
                 mc == null || renderer == null || frame == null) return;
-        renderer.drawActor(
-                mc, data, frame, this.cameraForNativeActor(), 0, 0,
-                BbsFsNativeActorPass.worldViewportWidth(),
-                BbsFsNativeActorPass.worldViewportHeight());
+        try(CharacterBodyPartPreviewState.Scope context=
+                CharacterBodyPartPreviewState.enter(
+                        data,BlockbusterPreviewAnimationState.getFrame()))
+        {
+            renderer.drawActor(
+                    mc,data,frame,this.cameraForNativeActor(),0,0,
+                    BbsFsNativeActorPass.worldViewportWidth(),
+                    BbsFsNativeActorPass.worldViewportHeight());
+        }
     }
 
     /**
