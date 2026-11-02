@@ -75,6 +75,8 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean nativeLightRefreshEmptyLogged;
     private static boolean nativeLightRefreshErrorLogged;
     private static boolean forcedLightRefreshLogged;
+    private static final java.util.Set<Integer> MIRROR_BL_PLAYER_ORIGIN_LOGS=
+            new java.util.HashSet<Integer>();
     private static final java.util.Set<String> LIGHT_REFRESH_GATE_LOGS=
             new java.util.HashSet<String>();
     private final Map<Integer,BetterLightsProgramState> nativeLightStates=
@@ -1879,10 +1881,51 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 " slots="+positions);
     }
 
+    /**
+     * The actual OptiFine/BetterLights-injected terrain GLSL uses TWO
+     * independently uploaded view origins:
+     *
+     *   vec4 position = gbufferModelViewInverse *
+     *                   gl_ModelViewMatrix * gl_Vertex;
+     *   BLposition = position.xyz + playerPosition;
+     *   posToLight = lights[i].position - BLposition;
+     *
+     * "position" is relative to the REFLECTED eye in our chunk VBO pass
+     * and lights[i].position is an absolute world coordinate. Updating
+     * only BSL cameraPosition leaves the BetterLights "playerPosition"
+     * at its main-camera value (or zero), making a stationary world light
+     * slide as the main preview camera translates.
+     *
+     * Keep this override mirror-only and use the normal per-program
+     * UniformBackup so shared OptiFine programs are restored on close.
+     * Skip non-BetterLights programs and packs without these uniforms.
+     */
+    private void overrideBetterLightsPlayerOrigin(int pid)
+    {
+        if(GL20.glGetUniformLocation(pid,"lightCount")<0)return;
+        int loc=GL20.glGetUniformLocation(pid,"playerPosition");
+        if(loc<0)return;
+        if(MIRROR_BL_PLAYER_ORIGIN_LOGS.add(pid))
+        {
+            FloatBuffer previous=BufferUtils.createFloatBuffer(16);
+            GL20.glGetUniform(pid,loc,previous);
+            System.out.println(
+                    "[BBS Editor][Mirror][BetterLights][PlayerOrigin] "+
+                    "program="+pid+" native="+previous.get(0)+","+
+                    previous.get(1)+","+previous.get(2)+
+                    " reflected="+view.x+","+view.y+","+view.z+
+                    " (same reflected origin as cameraPosition; "+
+                    "original uniform restored after mirror)");
+        }
+        write3(pid,"playerPosition",
+                (float)view.x,(float)view.y,(float)view.z);
+    }
+
     private void overrideCamera(int pid)
     {
         write3(pid,"cameraPosition",(float)view.x,
                 (float)view.y,(float)view.z);
+        overrideBetterLightsPlayerOrigin(pid);
         // BSL temporal reprojection must not use the MAIN camera's
         // previous position while the mirror uses a reflected camera.
         // Until mirror-only history is implemented, initialize the
