@@ -31,7 +31,7 @@ import org.lwjgl.input.Keyboard;
  */
 public final class BetterLightsActorInspector
 {
-    private static final int BG=0xFF25292F;
+    private static final int BG=EditorVisualStyle.themedSurface(0.09F);
     private static final int FIELD=0xFF151D25;
     private static final int LABEL=0xFFA9C0CC;
     private static final int TEXT=0xFFE4EEF2;
@@ -106,9 +106,9 @@ public final class BetterLightsActorInspector
     {
         int y=panelBottom-32;
         Gui.drawRect(panelX+7,y,panelX+95,y+25,
-                rigTab?0xFF3A7898:0xFF283841);
+                rigTab?EditorVisualStyle.themedSurface(0.30F):EditorVisualStyle.themedSurface(0.15F));
         Gui.drawRect(panelX+96,y,panelX+180,y+25,
-                !rigTab?0xFF3A7898:0xFF283841);
+                !rigTab?EditorVisualStyle.themedSurface(0.30F):EditorVisualStyle.themedSurface(0.15F));
         mc.fontRenderer.drawString("RIG KEYS",panelX+16,y+8,
                 0xFFFFFFFF);
         mc.fontRenderer.drawString("LIGHT",panelX+118,y+8,
@@ -426,8 +426,8 @@ public final class BetterLightsActorInspector
         cameraLayout=false;
         load(current);
         x=left;this.top=top;this.bottom=bottom;
-        Gui.drawRect(left+4,top+9,left+181,bottom-4,0xFF25292F);
-        Gui.drawRect(left+4,top+9,left+181,top+33,0xFF303C45);
+        Gui.drawRect(left+4,top+9,left+181,bottom-4,EditorVisualStyle.themedSurface(0.09F));
+        Gui.drawRect(left+4,top+9,left+181,top+33,EditorVisualStyle.themedSurface(0.17F));
         Gui.drawRect(left+4,top+9,left+7,top+33,
                 EditorThemeManager.get().getAccent());
         FontRenderer f=mc.fontRenderer;
@@ -467,7 +467,7 @@ public final class BetterLightsActorInspector
         x=left;this.top=top;this.bottom=bottom;
         int accent=EditorThemeManager.get().getAccent();
         FontRenderer f=mc.fontRenderer;
-        Gui.drawRect(left+7,top+2,left+178,top+18,0xFF2B2D30);
+        Gui.drawRect(left+7,top+2,left+178,top+18,EditorVisualStyle.themedSurface(0.17F));
         Gui.drawRect(left+7,top+2,left+10,top+18,accent);
         f.drawString("BETTERLIGHTS",left+15,top+6,0xFFE2E5E6);
         if(morph==null)
