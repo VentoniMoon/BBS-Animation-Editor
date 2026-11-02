@@ -248,7 +248,9 @@ public final class CameraMirrorShaderClip
                 !Boolean.getBoolean(
                     "bbs.editor.camera.mirrorBSLDumpBetterLightsGLSL"))
             return;
-        if(fragmentSource==null||fragmentSource.isEmpty())return;
+        if(fragmentSource==null||fragmentSource.isEmpty()||
+                !fragmentSource.contains("lightCount")||
+                !fragmentSource.contains("lights["))return;
         fragmentSourceDumped=true;
         try
         {
