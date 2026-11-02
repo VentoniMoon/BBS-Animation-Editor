@@ -723,14 +723,8 @@ public class BodyPartsEditorPanel
                         : 0xFF26343E
         );
 
-        drawRect(
-                mc,
-                bx,
-                by,
-                bx + bw,
-                by + bh,
-                0xFF384148
-        );
+        // Only a thin border: don't paint over the hover fill.
+        drawRect(mc, bx, by + bh - 1, bx + bw, by + bh, 0xFF384148);
 
         drawRect(
                 mc,
