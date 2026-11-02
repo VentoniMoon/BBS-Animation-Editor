@@ -74,6 +74,9 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static boolean nativeLightRefreshLogged;
     private static boolean nativeLightRefreshEmptyLogged;
     private static boolean nativeLightRefreshErrorLogged;
+    private static int betterLightsShadowDiagnosticCount;
+    private static double[] lastBetterLightsShadowDiagnosticEye;
+    private static boolean betterLightsShadowBypassLogged;
     private final Class<?> shaders;
     private final Field worldRenderingFlag;
     private final Field[] safetyFlags;
@@ -894,6 +897,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 CameraMirrorBetterLightsSnapshot.applyToPrivateClone(
                         pid,worldLightPositions,mainCameraPosition());
             overrideCamera(pid);
+            diagnoseBetterLightsShadowSpace(pid);
             // gl_ClipVertex is not a reliable clipping contract with
             // programmable BSL terrain programs. The mirror-only cloned
             // FRAGMENT shader independently discards any surface behind
@@ -1032,6 +1036,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 GL20.glUseProgram(pid);
                 bindInputs(pid);
                 overrideCamera(pid);
+                diagnoseBetterLightsShadowSpace(pid);
                 drawQuad();
                 if(!firstFrameLogged)
                 {
@@ -1103,6 +1108,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 targets.bindCompositeOutputs(plan);
                 bindInputs(pid);
                 overrideCamera(pid);
+                diagnoseBetterLightsShadowSpace(pid);
                 drawQuad();
                 targets.commitCompositeOutputs(plan);
             }
@@ -1479,6 +1485,119 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
         GL20.glUniform1i(loc,unit);
         GL13.glActiveTexture(GL13.GL_TEXTURE0+unit);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D,texture);
+    }
+
+    /**
+     * Isolate the BetterLights light/shadow coordinate paths without
+     * altering native caster properties, BSL's global sun shadows or
+     * the private mirror projection. The world light position is kept.
+     *
+     * With -Dbbs.editor.camera.mirrorBSLDisableBetterLightsShadows=true
+     * only the injected per-caster shadow sampler is disabled for the
+     * mirror. If the light patch keeps moving, its cause is upstream of
+     * local BetterLights shadow projection.
+     */
+    private void diagnoseBetterLightsShadowSpace(int pid)
+    {
+        if(worldLightPositions.isEmpty())return;
+        int countLoc=GL20.glGetUniformLocation(pid,"lightCount");
+        if(countLoc<0)return;
+        IntBuffer countBuffer=BufferUtils.createIntBuffer(16);
+        GL20.glGetUniform(pid,countLoc,countBuffer);
+        int count=Math.max(0,Math.min(16,countBuffer.get(0)));
+        if(count==0)return;
+        boolean disable=Boolean.getBoolean(
+                "bbs.editor.camera.mirrorBSLDisableBetterLightsShadows");
+        for(int i=0;i<count;i++)
+        {
+            String base="lights["+i+"].";
+            int enabledLoc=GL20.glGetUniformLocation(
+                    pid,base+"isEnabled");
+            if(enabledLoc>=0)
+            {
+                IntBuffer enabled=BufferUtils.createIntBuffer(16);
+                GL20.glGetUniform(pid,enabledLoc,enabled);
+                if(enabled.get(0)==0)continue;
+            }
+            int shadowLoc=GL20.glGetUniformLocation(
+                    pid,base+"shadowsEnabled");
+            int nativeShadow=-1;
+            if(shadowLoc>=0)
+            {
+                IntBuffer original=BufferUtils.createIntBuffer(16);
+                GL20.glGetUniform(pid,shadowLoc,original);
+                nativeShadow=original.get(0);
+                if(disable&&nativeShadow!=0)
+                {
+                    // Restore on compositor.close(), including programs
+                    // borrowed from main OptiFine. Private clones are
+                    // exclusively mirror-owned.
+                    restored.add(UniformBackup.captureInt(pid,shadowLoc));
+                    GL20.glUniform1i(shadowLoc,0);
+                }
+            }
+            // One representative populated caster per meaningful camera
+            // translation, rather than exhausting the log budget in
+            // the first render frame before the user starts moving.
+            double[] mainEye=new double[]{
+                    mainView.x,mainView.y,mainView.z};
+            if(betterLightsShadowDiagnosticCount<12&&
+                    (lastBetterLightsShadowDiagnosticEye==null||
+                     CameraMirrorLightSpace.cameraMoved(
+                         lastBetterLightsShadowDiagnosticEye,mainEye,0.5D)))
+            {
+                int positionLoc=GL20.glGetUniformLocation(
+                        pid,base+"position");
+                float[] pos=null;
+                if(positionLoc>=0)
+                {
+                    FloatBuffer p=BufferUtils.createFloatBuffer(16);
+                    GL20.glGetUniform(pid,positionLoc,p);
+                    pos=new float[]{p.get(0),p.get(1),p.get(2)};
+                }
+                int matrixLoc=GL20.glGetUniformLocation(
+                        pid,base+"shadowViewMatrix");
+                float[] matrixTranslation=null;
+                if(matrixLoc>=0)
+                {
+                    FloatBuffer m=BufferUtils.createFloatBuffer(16);
+                    GL20.glGetUniform(pid,matrixLoc,m);
+                    matrixTranslation=new float[]{
+                            m.get(12),m.get(13),m.get(14)};
+                }
+                if(pos==null||worldLightPositions.isEmpty())
+                    continue;
+                boolean verified=false;
+                for(double[] source:worldLightPositions)
+                    if(source!=null&&source.length>=3&&
+                            Math.abs(pos[0]-source[0])<0.2D&&
+                            Math.abs(pos[1]-source[1])<0.2D&&
+                            Math.abs(pos[2]-source[2])<0.2D)
+                        verified=true;
+                if(!verified)continue;
+                lastBetterLightsShadowDiagnosticEye=mainEye;
+                betterLightsShadowDiagnosticCount++;
+                System.out.println(
+                        "[BBS Editor][Mirror][BetterLights][Spatial] "+
+                        "program="+pid+" slot="+i+
+                        " position="+java.util.Arrays.toString(pos)+
+                        " mainEye="+mainView.x+","+mainView.y+","+
+                        mainView.z+" mirrorEye="+view.x+","+
+                        view.y+","+view.z+
+                        " shadowEnabled="+nativeShadow+
+                        " shadowViewTranslation="+
+                        java.util.Arrays.toString(matrixTranslation)+
+                        " shadowBypass="+disable);
+            }
+        }
+        if(disable&&!betterLightsShadowBypassLogged)
+        {
+            betterLightsShadowBypassLogged=true;
+            System.out.println(
+                    "[BBS Editor][Mirror][BetterLights][Spatial] "+
+                    "Mirror-local BetterLights shadow A/B bypass active; "+
+                    "global BSL sun shadows unchanged");
+        }
     }
 
     private void overrideCamera(int pid)
