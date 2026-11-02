@@ -1658,7 +1658,13 @@ public class BlockbusterActorPreviewRenderer
         if(rm==null)return;
         try(BbsFsWorldGlGuard guard=new BbsFsWorldGlGuard(mc))
         {
-            rm.viewerPosX=rm.viewerPosY=rm.viewerPosZ=0D;
+            boolean nativeGBuffer=!mirror&&
+                    BbsFsNativeActorPass.isNativeEntityStage();
+            double nativeViewerX=rm.viewerPosX;
+            double nativeViewerY=rm.viewerPosY;
+            double nativeViewerZ=rm.viewerPosZ;
+            if(!nativeGBuffer)
+                rm.viewerPosX=rm.viewerPosY=rm.viewerPosZ=0D;
             GL11.glMatrixMode(GL11.GL_PROJECTION);
             GL11.glLoadIdentity();
             if(!mirror&&BbsFsWorldProjection.isCaptured())
@@ -1678,11 +1684,20 @@ public class BlockbusterActorPreviewRenderer
             if(mirror)
                 CameraSceneMirrorRenderer.installShaderObliqueProjection(view);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glLoadIdentity();
-            GL11.glRotatef(-view.roll,0F,0F,1F);
-            GL11.glRotatef(-view.pitch,1F,0F,0F);
-            GL11.glRotatef(-view.yaw,0F,1F,0F);
-            GL11.glTranslated(-view.x,-view.y,-view.z);
+            if(nativeGBuffer)
+            {
+                if(!BbsFsNativeActorPass.loadNativeEntityModelView())
+                    throw new IllegalStateException(
+                            "Missing native modelview during actor replay");
+            }
+            else
+            {
+                GL11.glLoadIdentity();
+                GL11.glRotatef(-view.roll,0F,0F,1F);
+                GL11.glRotatef(-view.pitch,1F,0F,0F);
+                GL11.glRotatef(-view.yaw,0F,1F,0F);
+                GL11.glTranslated(-view.x,-view.y,-view.z);
+            }
 
             GlStateManager.setActiveTexture(
                     net.minecraft.client.renderer.OpenGlHelper.defaultTexUnit);
@@ -1717,7 +1732,10 @@ public class BlockbusterActorPreviewRenderer
                 try(BbsFsActorShadowSamplingProbe shadowProbe=
                         !mirror?BbsFsActorShadowSamplingProbe.begin():null)
                 {
-                    rm.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
+                    rm.renderEntity(actor,
+                            actor.posX-(nativeGBuffer?nativeViewerX:0D),
+                            actor.posY-(nativeGBuffer?nativeViewerY:0D),
+                            actor.posZ-(nativeGBuffer?nativeViewerZ:0D),
                             actor.rotationYaw,preparedPartialTicks,true);
                 }
             }
