@@ -325,7 +325,12 @@ public final class BetterLightsActorInspector
                     entry.value.getValue() instanceof Integer?"%.0f":"%.3f",
                     ((Number)value).doubleValue());
             int tw=f.getStringWidth(number);
-            f.drawString(number,x+172-tw,cy+3,0xFFE4EFF4);
+            Gui.drawRect(x+123,cy,x+139,cy+17,0xFF293640);
+            Gui.drawRect(x+158,cy,x+174,cy+17,0xFF293640);
+            f.drawString("<",x+128,cy+4,accent);
+            f.drawString(">",x+163,cy+4,accent);
+            f.drawString(f.trimStringToWidth(number,33),
+                    x+156-Math.min(33,tw),cy+4,0xFFE4EFF4);
             if(entry.value instanceof GenericNumberValue)
             {
                 GenericNumberValue<?> n=
@@ -576,6 +581,29 @@ public final class BetterLightsActorInspector
         return false;
     }
 
+    private void nudgeNativeValue(AnimationEditorScreen screen,
+            Entry entry,int direction,boolean keyboard)
+    {
+        if(entry==null||!(entry.value instanceof GenericNumberValue))return;
+        Object old=entry.value.getValue();
+        if(!(old instanceof Number))return;
+        GenericNumberValue<?> numeric=(GenericNumberValue<?>)entry.value;
+        double next=EditorNumericStep.adjust(
+                ((Number)old).doubleValue(),direction,keyboard);
+        if(old instanceof Integer)
+            next=Math.round(((Number)old).doubleValue()+direction);
+        double min=numeric.getMin().doubleValue();
+        double max=numeric.getMax().doubleValue();
+        if(Double.isFinite(min))next=Math.max(min,next);
+        if(Double.isFinite(max))next=Math.min(max,next);
+        if(!Double.isFinite(next))return;
+        if(old instanceof Integer)entry.value.setValue((int)Math.round(next));
+        else if(old instanceof Float)entry.value.setValue((float)next);
+        else if(old instanceof Double)entry.value.setValue(next);
+        else return;
+        if(!old.equals(entry.value.getValue()))saveNativeValue(screen);
+    }
+
     private void adjustNumber(AnimationEditorScreen screen,
             Entry entry,int mx)
     {
@@ -687,6 +715,15 @@ public final class BetterLightsActorInspector
             return true;
         }
         if(value instanceof Number&&target.value instanceof GenericNumberValue
+                &&my>=cy&&my<cy+18&&
+                ((mx>=x+123&&mx<x+139)||
+                 (mx>=x+158&&mx<x+174)))
+        {
+            nudgeNativeValue(screen,target,
+                    mx<x+139?-1:1,false);
+            return true;
+        }
+        if(value instanceof Number&&target.value instanceof GenericNumberValue
                 &&my>=cy+23&&my<cy+42)
         {
             GenericNumberValue<?> n=(GenericNumberValue<?>)target.value;
@@ -743,6 +780,17 @@ public final class BetterLightsActorInspector
             editing=null;
             input=null;
             error=null;
+            return true;
+        }
+        if(code==Keyboard.KEY_UP||code==Keyboard.KEY_DOWN)
+        {
+            if(editing.value.getValue() instanceof Number&&
+                    editing.value instanceof GenericNumberValue)
+            {
+                nudgeNativeValue(screen,editing,
+                        code==Keyboard.KEY_UP?1:-1,true);
+                input.setText(text(editing.value));
+            }
             return true;
         }
         input.textboxKeyTyped(c,code);
