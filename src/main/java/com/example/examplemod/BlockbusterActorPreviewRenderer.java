@@ -28,6 +28,81 @@ public class BlockbusterActorPreviewRenderer
     private int preparedActorFrame;
     private static boolean nativeRasterStateReported;
 
+    /** A/B rendering diagnostics, enabled only by the explicit F10 probe. */
+    private static boolean mixedActorDiagnostics;
+    private static final java.util.Set<String> printedActorDiagnostics =
+            new java.util.HashSet<String>();
+
+    public static void setMixedActorDiagnostics(boolean enabled)
+    {
+        mixedActorDiagnostics=enabled;
+        printedActorDiagnostics.clear();
+    }
+
+    private void diagnoseActorGeometry(
+            BlockbusterSceneActorData data,EntityActor actor,
+            java.util.List<AnimationBoneSnapshot> snapshots)
+    {
+        if(!mixedActorDiagnostics||data==null||actor==null)return;
+        AbstractMorph morph=actor.getMorph();
+        if(morph==null)return;
+        boolean selected=this.bodyPartsController!=null;
+        String signature=data.getId()+"|"+selected+"|"+
+                morph.getClass().getName();
+        if(!printedActorDiagnostics.add(signature))return;
+        StringBuilder details=new StringBuilder();
+        int count=snapshots==null?0:snapshots.size();
+        int changed=0;
+        if(snapshots!=null)
+            for(AnimationBoneSnapshot snap:snapshots)
+                if(snap!=null&&(
+                        Math.abs(snap.getPositionX())>0.0001F||
+                        Math.abs(snap.getPositionY())>0.0001F||
+                        Math.abs(snap.getPositionZ())>0.0001F||
+                        Math.abs(snap.getRotationX())>0.0001F||
+                        Math.abs(snap.getRotationY())>0.0001F||
+                        Math.abs(snap.getRotationZ())>0.0001F||
+                        Math.abs(snap.getScaleX()-1F)>0.0001F||
+                        Math.abs(snap.getScaleY()-1F)>0.0001F||
+                        Math.abs(snap.getScaleZ()-1F)>0.0001F))
+                    changed++;
+        if(morph instanceof CustomMorph)
+        {
+            CustomMorph bb=(CustomMorph)morph;
+            details.append(" model=").append(bb.getKey())
+                    .append(" customPose=")
+                    .append(bb.customPose==null?"null":bb.customPose.limbs.size())
+                    .append(" nativeParts=")
+                    .append(bb.parts==null?-1:bb.parts.parts.size())
+                    .append(" skin=").append(bb.skin);
+        }
+        else if(morph instanceof AnimatedMorph)
+        {
+            AnimatedMorph em=(AnimatedMorph)morph;
+            details.append(" animation=").append(em.animationName);
+            if(em.animator==null||em.animator.animation==null)
+                details.append(" animator=unloaded");
+            else
+            {
+                details.append(" meshes=")
+                        .append(em.animator.animation.meshes.size());
+                for(mchorse.emoticons.skin_n_bones.api.animation.AnimationMesh mesh:
+                        em.animator.animation.meshes)
+                {
+                    if(mesh!=null)
+                        details.append(" [").append(mesh.name)
+                                .append(" alpha=").append(mesh.alpha)
+                                .append("]");
+                }
+            }
+        }
+        System.out.println("[BBS Editor][MultiActor A/B] actor="+data.getId()+
+                " role="+(selected?"SELECTED":"background")+
+                " morph="+morph.getClass().getSimpleName()+
+                " keys="+count+" changed="+changed+details);
+    }
+
+
     /**
      * Blockbuster 1.12's ModelExtrudedLayer renders the 3D outer skin via
      * RenderCustomModel.lastTexture, a STATIC value shared by every morph.
@@ -1459,6 +1534,9 @@ public class BlockbusterActorPreviewRenderer
             );
 
         }
+
+        diagnoseActorGeometry(actorData,entityActor,
+                BlockbusterPreviewAnimationState.getSnapshots());
 
         /*
          * =====================================================
