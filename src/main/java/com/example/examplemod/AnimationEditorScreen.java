@@ -2124,9 +2124,11 @@ public class AnimationEditorScreen extends GuiScreen
             fontRenderer.drawString(fontRenderer.trimStringToWidth(
                     atlasLabel,labelWidth-10),left+5,89,0xFF99FFB4);
         }
-        if(BbsFsActorShadowSamplingProbe.isBypassed())
+        // The tested clean-shadow result is standard now: no diagnostic
+        // banner in normal use. Only flag the experimental raw-shadow mode.
+        if(!BbsFsActorShadowSamplingProbe.isBypassed())
         {
-            String probeLabel="ACTOR A/B: SUN SHADOW SAMPLERS OFF (Ctrl+Shift+F7)";
+            String probeLabel="ACTOR SUN SHADOWS: EXPERIMENTAL (Ctrl+Shift+F7)";
             int left=LEFT_PANEL_WIDTH+9;
             int labelWidth=Math.min(width-left-12,
                     fontRenderer.getStringWidth(probeLabel)+13);
@@ -4278,19 +4280,16 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
-        // Compare the REAL OptiFine sun-shadow atlas with/without
-        // editor actor silhouettes. This is independent of the F7
-        // no-shadow texture probe and remains disabled by default.
+        // Diagnostic only: add actor silhouettes to the native sun-shadow
+        // atlas. Does not silently override the clean actor-shadow default.
         if(keyCode==org.lwjgl.input.Keyboard.KEY_F6 &&
                 isCtrlKeyDown() && isShiftKeyDown())
         {
             BbsFsNativeActorSunShadowOverlay.toggleForEditor();
-            if(BbsFsActorShadowSamplingProbe.isBypassed())
-                BbsFsActorShadowSamplingProbe.toggle();
             return;
         }
-        // Render-only A/B test for diagonal striping on BSL-lit actors.
-        // Ctrl+Shift+F7 toggles just actor shadow-map sampling.
+        // Debug shortcut: compare native sun-shadow receiving with the
+        // user-tested clean default, only for recorded actors.
         if(keyCode==org.lwjgl.input.Keyboard.KEY_F7 &&
                 isCtrlKeyDown() && isShiftKeyDown())
         {
