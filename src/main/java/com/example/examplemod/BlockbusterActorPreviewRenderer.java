@@ -27,6 +27,49 @@ public class BlockbusterActorPreviewRenderer
     private BlockbusterSceneActorData preparedActorData;
     private int preparedActorFrame;
     private static boolean nativeRasterStateReported;
+
+    /**
+     * Blockbuster 1.12's ModelExtrudedLayer renders the 3D outer skin via
+     * RenderCustomModel.lastTexture, a STATIC value shared by every morph.
+     * A different actor (or an Emoticons mesh) can leave the previous skin
+     * there. Then a selected BB morph's outer layer is generated using the
+     * wrong actor's texture. Seed the correct BB texture per actor and
+     * restore the previous value afterwards, including exceptions.
+     */
+    private static final class OuterSkinTextureScope implements AutoCloseable
+    {
+        private final net.minecraft.util.ResourceLocation previous;
+        private final boolean active;
+
+        private OuterSkinTextureScope(AbstractMorph morph)
+        {
+            active=morph instanceof CustomMorph;
+            previous=active
+                    ?mchorse.blockbuster.client.render.RenderCustomModel.lastTexture
+                    :null;
+            if(active)
+            {
+                CustomMorph custom=(CustomMorph)morph;
+                net.minecraft.util.ResourceLocation texture=custom.skin;
+                if(texture==null && custom.model!=null)
+                    texture=custom.model.defaultTexture;
+                mchorse.blockbuster.client.render.RenderCustomModel.lastTexture=
+                        texture;
+            }
+        }
+
+        static OuterSkinTextureScope begin(AbstractMorph morph)
+        {
+            return new OuterSkinTextureScope(morph);
+        }
+
+        @Override public void close()
+        {
+            if(active)
+                mchorse.blockbuster.client.render.RenderCustomModel.lastTexture=
+                        previous;
+        }
+    }
     private float preparedPartialTicks;
 
     private String loadedMorphSignature = "";
@@ -1534,6 +1577,8 @@ public class BlockbusterActorPreviewRenderer
          */
         try (ChameleonWeldPreviewPass weld=
                 this.bodyPartsPreviewRenderer.beginWeldPreview(actorPartialTicks);
+             OuterSkinTextureScope skin=
+                OuterSkinTextureScope.begin(entityActor.getMorph());
              BbsFsActorShadowSamplingProbe shadowProbe=
                 BbsFsActorShadowSamplingProbe.begin())
         {
@@ -1754,8 +1799,10 @@ public class BlockbusterActorPreviewRenderer
                     CameraMirrorOptiFineBackend.stage("ProgramEntities");
                 else
                     BbsFsOptiFineEntityStage.beforeEntity(actor);
-                try(BbsFsActorShadowSamplingProbe shadowProbe=
-                        !mirror?BbsFsActorShadowSamplingProbe.begin():null)
+                try(OuterSkinTextureScope skin=
+                            OuterSkinTextureScope.begin(actor.getMorph());
+                    BbsFsActorShadowSamplingProbe shadowProbe=
+                            !mirror?BbsFsActorShadowSamplingProbe.begin():null)
                 {
                     rm.renderEntity(actor,
                             actor.posX-(nativeGBuffer?nativeViewerX:0D),
