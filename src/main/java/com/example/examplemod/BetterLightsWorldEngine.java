@@ -115,19 +115,21 @@ public final class BetterLightsWorldEngine
             update(id,base,settings,world);
         }
 
-        // CAMERA statics share the SAME runtime slot and coordinate model.
-        // They are never translated into dummy Blockbuster actor records.
-        if(editor.isCameraMode())
-            for(CameraSceneLights.Light light:scene.getCameraLights().all())
-            {
-                if(light==null||!light.enabled)continue;
-                String id="camera:"+light.id;
-                present.add(id);
-                update(id,light.morph,light.morph,
-                        BetterLightsWorldState.points(
-                                light.x,light.y,light.z,
-                                light.targetX,light.targetY,light.targetZ));
-            }
+        // CAMERA static lights are properties of the SCENE, not the
+        // CAMERA editor tab. Keep their native LightCaster slots alive
+        // while inspecting ACTORS/BODY PARTS/PHYSICS and in the planar
+        // mirror, too. Previously switching away from CAMERA unregistered
+        // them even though they remained authored in the scene.
+        for(CameraSceneLights.Light light:scene.getCameraLights().all())
+        {
+            if(light==null||!light.enabled)continue;
+            String id="camera:"+light.id;
+            present.add(id);
+            update(id,light.morph,light.morph,
+                    BetterLightsWorldState.points(
+                            light.x,light.y,light.z,
+                            light.targetX,light.targetY,light.targetZ));
+        }
         Iterator<Map.Entry<String,Slot>> it=SLOTS.entrySet().iterator();
         while(it.hasNext())
         {
