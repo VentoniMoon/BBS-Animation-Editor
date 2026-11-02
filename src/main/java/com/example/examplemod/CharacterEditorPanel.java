@@ -696,17 +696,43 @@ public class CharacterEditorPanel
                 "CHARACTER"
         );
 
-        // Keep the inspector header fixed; clip and scroll the sections below it.
-        net.minecraft.client.gui.ScaledResolution resolution =
-                new net.minecraft.client.gui.ScaledResolution(mc);
-        int scale = resolution.getScaleFactor();
+        // The editor renders in its OWN full-window canvas, even when
+        // vanilla ScaledResolution uses GUI scale 2/3/Auto. Using vanilla
+        // getScaledHeight() here moved the scissor rectangle OFF SCREEN:
+        // Character input still worked, but its entire accordion was
+        // invisible. Derive physical GL clip pixels from the same editor
+        // coordinates and the CURRENT draw viewport instead.
         int contentTop = this.y + 30;
         int contentBottom = this.y + this.height;
-        org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL11.GL_SCISSOR_TEST);
-        org.lwjgl.opengl.GL11.glScissor(this.x * scale,
-                (resolution.getScaledHeight() - contentBottom) * scale,
-                this.width * scale,
-                Math.max(0, contentBottom - contentTop) * scale);
+        java.nio.IntBuffer viewport=org.lwjgl.BufferUtils.createIntBuffer(16);
+        org.lwjgl.opengl.GL11.glGetInteger(
+                org.lwjgl.opengl.GL11.GL_VIEWPORT,viewport);
+        int viewportX=viewport.get(0),viewportY=viewport.get(1);
+        int viewportWidth=viewport.get(2),viewportHeight=viewport.get(3);
+        int canvasWidth=Math.max(1,mc.currentScreen==null?
+                mc.displayWidth:mc.currentScreen.width);
+        int canvasHeight=Math.max(1,mc.currentScreen==null?
+                mc.displayHeight:mc.currentScreen.height);
+        int clipX=viewportX+
+                Math.round((float)this.x*viewportWidth/canvasWidth);
+        int clipRight=viewportX+
+                Math.round((float)(this.x+this.width)*
+                        viewportWidth/canvasWidth);
+        int clipY=viewportY+
+                Math.round((float)(canvasHeight-contentBottom)*
+                        viewportHeight/canvasHeight);
+        int clipTop=viewportY+
+                Math.round((float)(canvasHeight-contentTop)*
+                        viewportHeight/canvasHeight);
+        // Preserve outer scissor when GUI rendering is nested in another
+        // pass. Never disable a caller's scissor unconditionally.
+        org.lwjgl.opengl.GL11.glPushAttrib(
+                org.lwjgl.opengl.GL11.GL_SCISSOR_BIT);
+        org.lwjgl.opengl.GL11.glEnable(
+                org.lwjgl.opengl.GL11.GL_SCISSOR_TEST);
+        org.lwjgl.opengl.GL11.glScissor(
+                clipX,clipY,Math.max(0,clipRight-clipX),
+                Math.max(0,clipTop-clipY));
         this.y -= this.sectionScrollOffset;
 
         int cursorY =
@@ -902,7 +928,7 @@ public class CharacterEditorPanel
                 bottomOfSections + this.sectionScrollOffset -
                 (originalY + this.height - 5));
         this.y = originalY;
-        org.lwjgl.opengl.GL11.glDisable(org.lwjgl.opengl.GL11.GL_SCISSOR_TEST);
+        org.lwjgl.opengl.GL11.glPopAttrib();
 
         this.animationSetupPanel.drawPopup(
                 mc,

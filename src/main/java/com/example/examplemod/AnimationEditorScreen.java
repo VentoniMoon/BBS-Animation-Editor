@@ -1950,6 +1950,15 @@ public class AnimationEditorScreen extends GuiScreen
             this.mc.entityRenderer.setupOverlayRendering();
             CameraNativeFrameProbe.resyncDefaultTextureForGui();
         }
+        // The normal (non-export) film-to-GUI path lacked the same GL
+        // texture cache reset. With a visible BSL mirror, raw reflection
+        // passes could leave alpha/blend caches disagreeing with the
+        // actual driver: the transparent font atlas became black boxes
+        // under EVERY text label. Only resync after native frame capture,
+        // never during BSL/mirror/shadow geometry or film export.
+        if(!cameraVideoExport.isExporting()&&
+                CameraSceneMirrorRenderer.hasCapturedReflection())
+            CameraMirrorGuiFontState.resync();
 
         // Minecraft passes mouse positions in its user-selected GUI scale.
         // The editor draws in its own logical pixels, so sample the physical
