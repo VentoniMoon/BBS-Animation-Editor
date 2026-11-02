@@ -40,26 +40,40 @@ public class AnimationValueControl
      * =========================================================
      */
 
-    private static final int BACKGROUND =
-            EditorVisualStyle.themedSurface(0.17F);
+    private static int BACKGROUND()
+    {
+        return EditorVisualStyle.themedSurface(0.17F);
+    }
 
-    private static final int BACKGROUND_HOVER =
-            EditorVisualStyle.themedSurface(0.23F);
+    private static int BACKGROUND_HOVER()
+    {
+        return EditorVisualStyle.themedSurface(0.23F);
+    }
 
-    private static final int BACKGROUND_ACTIVE =
-            EditorVisualStyle.themedSurface(0.28F);
+    private static int BACKGROUND_ACTIVE()
+    {
+        return EditorVisualStyle.themedSurface(0.28F);
+    }
 
-    private static final int BACKGROUND_EDITING =
-            EditorVisualStyle.themedSurface(0.33F);
+    private static int BACKGROUND_EDITING()
+    {
+        return EditorVisualStyle.themedSurface(0.33F);
+    }
 
-    private static final int BORDER =
-            EditorVisualStyle.themedSurface(0.06F);
+    private static int BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.06F);
+    }
 
-    private static final int BORDER_HOVER =
-            EditorVisualStyle.themedSurface(0.33F);
+    private static int BORDER_HOVER()
+    {
+        return EditorVisualStyle.themedSurface(0.33F);
+    }
 
-    private static final int LABEL_BACKGROUND =
-            EditorVisualStyle.themedSurface(0.11F);
+    private static int LABEL_BACKGROUND()
+    {
+        return EditorVisualStyle.themedSurface(0.11F);
+    }
 
     private static final int LABEL_TEXT =
             0xFFAAAAAA;
@@ -645,7 +659,7 @@ public class AnimationValueControl
 
         /*
          * =====================================================
-         * BACKGROUND
+         * BACKGROUND()
          * =====================================================
          */
 
@@ -654,22 +668,22 @@ public class AnimationValueControl
         if (this.editing)
         {
             backgroundColor =
-                    BACKGROUND_EDITING;
+                    BACKGROUND_EDITING();
         }
         else if (this.dragging)
         {
             backgroundColor =
-                    BACKGROUND_ACTIVE;
+                    BACKGROUND_ACTIVE();
         }
         else if (hovered)
         {
             backgroundColor =
-                    BACKGROUND_HOVER;
+                    BACKGROUND_HOVER();
         }
         else
         {
             backgroundColor =
-                    BACKGROUND;
+                    BACKGROUND();
         }
 
         /*
@@ -686,12 +700,12 @@ public class AnimationValueControl
         else if (hovered || this.dragging)
         {
             borderColor =
-                    BORDER_HOVER;
+                    BORDER_HOVER();
         }
         else
         {
             borderColor =
-                    BORDER;
+                    BORDER();
         }
 
         net.minecraft.client.gui.Gui.drawRect(
@@ -725,7 +739,7 @@ public class AnimationValueControl
                 this.y + 1,
                 this.x + 25,
                 this.y + this.height - 1,
-                LABEL_BACKGROUND
+                LABEL_BACKGROUND()
         );
 
         /*
@@ -744,9 +758,9 @@ public class AnimationValueControl
         int rightArrowX = this.x + this.width - ARROW_WIDTH;
         int arrowColor = getAccent();
         net.minecraft.client.gui.Gui.drawRect(leftArrowX, this.y + 1,
-                leftArrowX + ARROW_WIDTH, this.y + this.height - 1, LABEL_BACKGROUND);
+                leftArrowX + ARROW_WIDTH, this.y + this.height - 1, LABEL_BACKGROUND());
         net.minecraft.client.gui.Gui.drawRect(rightArrowX, this.y + 1,
-                rightArrowX + ARROW_WIDTH - 1, this.y + this.height - 1, LABEL_BACKGROUND);
+                rightArrowX + ARROW_WIDTH - 1, this.y + this.height - 1, LABEL_BACKGROUND());
         font.drawString("<", leftArrowX + 5, this.y + 4, arrowColor);
         font.drawString(">", rightArrowX + 5, this.y + 4, arrowColor);
 
