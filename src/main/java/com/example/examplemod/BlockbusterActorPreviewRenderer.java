@@ -1500,7 +1500,9 @@ public class BlockbusterActorPreviewRenderer
          * by default; never changes Jolt, scene records or morph data.
          */
         try (ChameleonWeldPreviewPass weld=
-                this.bodyPartsPreviewRenderer.beginWeldPreview(actorPartialTicks))
+                this.bodyPartsPreviewRenderer.beginWeldPreview(actorPartialTicks);
+             BbsFsActorShadowSamplingProbe shadowProbe=
+                BbsFsActorShadowSamplingProbe.begin())
         {
             // Match OptiFine's RenderGlobal entity pass (entity ID/material
             // uniforms), in addition to the correct world lightmap coords.
@@ -1690,8 +1692,12 @@ public class BlockbusterActorPreviewRenderer
                     CameraMirrorOptiFineBackend.stage("ProgramEntities");
                 else
                     BbsFsOptiFineEntityStage.beforeEntity(actor);
-                rm.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
-                        actor.rotationYaw,preparedPartialTicks,true);
+                try(BbsFsActorShadowSamplingProbe shadowProbe=
+                        !mirror?BbsFsActorShadowSamplingProbe.begin():null)
+                {
+                    rm.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
+                            actor.rotationYaw,preparedPartialTicks,true);
+                }
             }
             finally
             {
