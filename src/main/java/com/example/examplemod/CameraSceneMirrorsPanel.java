@@ -53,7 +53,13 @@ public final class CameraSceneMirrorsPanel
         Gui.drawRect(67,61,126,82,EditorVisualStyle.themedSurface(0.23F));
         mc.fontRenderer.drawString("+ ADD",10,68,0xFFFFFFFF);
         mc.fontRenderer.drawString("DELETE",73,68,0xFFFFFFFF);
-        mc.fontRenderer.drawString("SCENE MIRRORS",7,88,0xFF8DAAB9);
+        Gui.drawRect(4,87,CameraWorkspace.CAMERA_LEFT_WIDTH-4,bottom-7,
+                EditorVisualStyle.themedSurface(0.045F));
+        Gui.drawRect(4,87,CameraWorkspace.CAMERA_LEFT_WIDTH-4,88,
+                EditorVisualStyle.themedSurface(0.30F));
+        Gui.drawRect(6,90,9,101,EditorThemeManager.get().getAccent());
+        mc.fontRenderer.drawString("SCENE MIRRORS",13,92,
+                EditorThemeManager.get().getAccentBright());
         List<CameraSceneMirrors.Mirror> all=list(screen).all();
         listScroll=Math.max(0,Math.min(listScroll,
                 Math.max(0,all.size()-visible())));
@@ -62,12 +68,18 @@ public final class CameraSceneMirrorsPanel
             int yy=106+(i-listScroll)*21;
             if(yy+18>bottom)break;
             CameraSceneMirrors.Mirror m=all.get(i);
+            Gui.drawRect(8,yy-2,CameraWorkspace.CAMERA_LEFT_WIDTH-8,yy+17,
+                    EditorVisualStyle.themedSurface(m==list(screen).selected()?
+                            0.28F:(i%2==0?0.14F:0.10F)));
             if(m==list(screen).selected())
-                Gui.drawRect(4,yy-2,126,yy+17,EditorVisualStyle.themedSurface(0.29F));
+                Gui.drawRect(8,yy-2,10,yy+17,
+                        EditorThemeManager.get().getAccent());
             mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
                     (m.enabled?"":"[ ] ")+m.name,114),
                     8,yy+2,m.enabled?0xFFE0F2FE:0xFF82919C);
         }
+        if(all.isEmpty())
+            mc.fontRenderer.drawString("No mirrors yet",12,111,0xFF929CA8);
     }
     private static final String[] LABELS={
             "X","Y","Z","YAW (DEG)","WIDTH","HEIGHT"};
