@@ -149,7 +149,7 @@ public final class CameraClipInspector
             rect(x,at+11,x+w,at+28,0xFF293139);
             rect(x,at+27,x+w,at+28,accent);
             text(curveTitle(selected),x+6,at+15,0xFFE6F0F3,w-25);
-            text("v",x+w-15,at+15,0xFF75D1F5,10);
+            text("v",x+w-15,at+15,EditorThemeManager.get().getAccentBright(),10);
             hits.add(new Hit("@curve:open",-1,x,at+11,w,17,
                     selected,false,false));
         }
@@ -165,8 +165,8 @@ public final class CameraClipInspector
         int topY=Math.max(92,bottom-7*21-36);
         rect(lx-2,topY-22,rx+2,topY+7*21+23,0xFF080D11);
         rect(lx,topY-20,rx,topY,EditorVisualStyle.themedSurface(0.180F));
-        text("CURVE CHANNELS",lx+6,topY-15,0xFF8BE2FF,rx-lx-65);
-        text("RESCAN",rx-49,topY-15,0xFF8BE2FF,45);
+        text("CURVE CHANNELS",lx+6,topY-15,EditorThemeManager.get().getAccentBright(),rx-lx-65);
+        text("RESCAN",rx-49,topY-15,EditorThemeManager.get().getAccentBright(),45);
         hits.add(new Hit("@curve:refresh",-1,rx-54,topY-21,
                 54,21,"",false,false));
         for(int i=0;i<7;i++)
@@ -241,7 +241,7 @@ public final class CameraClipInspector
             rect(right+5,at,width-6,at+16,EditorVisualStyle.themedSurface(0.180F));
             rect(right+5,at,right+8,at+16,accent);
             text(title,right+13,at+4,0xFFE2E5E6,width-right-43);
-            text(expanded?"v":">",width-22,at+3,0xFF6AC9F3,12);
+            text(expanded?"v":">",width-22,at+3,EditorThemeManager.get().getAccentBright(),12);
             hits.add(new Hit("@fold:"+(defaultClosed?"open:":"close:")+id,
                     -1,right+5,at,width-right-11,16,"",false,false));
         }
@@ -475,7 +475,7 @@ public final class CameraClipInspector
             rect(bx,by+15,bx+bw,by+16,0xFF414D56);
             text(CameraInterpolation.displayName(value),bx+7,by+4,
                     0xFFE5EFF2,bw-25);
-            text("v",bx+bw-13,by+3,0xFF6BC9F4,12);
+            text("v",bx+bw-13,by+3,EditorThemeManager.get().getAccentBright(),12);
             hits.add(new Hit("@interp:open:"+key,-1,bx,by,bw,16,
                     value,false,false));
             int gx=bx+1,gy=by+18,gw=bw-2,gh=19;
@@ -791,7 +791,7 @@ public final class CameraClipInspector
                 gridY+rows*EditorInterpolationCurvePicker.CELL_HEIGHT+2,
                 0xFF090D11);
         rect(lx,topY,rx,topY+20,EditorVisualStyle.themedSurface(0.180F));
-        text("INTERPOLATION",lx+6,topY+5,0xFF9BDFFE,rx-lx-12);
+        text("INTERPOLATION",lx+6,topY+5,EditorThemeManager.get().getAccentBright(),rx-lx-12);
         String[] entries=CameraInterpolation.OPTIONS;
         optionScroll=Math.max(0,Math.min(
                 EditorInterpolationCurvePicker.maxRowOffset(entries,rows),
