@@ -71,6 +71,13 @@ minecraft {
                     System.getProperty(
                             'bbs.editor.camera.mirrorBSLDisableBetterLightsShadows',
                             'false')
+            // Re-evaluate BetterLights for the reflected camera even when
+            // a native OptiFine program already reports lightCount > 0.
+            // Disable to A/B compare and isolate any performance regression.
+            property 'bbs.editor.camera.mirrorBSLForceNativeLightRefresh',
+                    System.getProperty(
+                            'bbs.editor.camera.mirrorBSLForceNativeLightRefresh',
+                            'true')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
