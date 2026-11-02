@@ -67,22 +67,22 @@ public class CharacterEditorPanel
      */
 
     private static final int COLOR_PANEL =
-            0xFF181818;
+            0xFF171D23;
 
     private static final int COLOR_PANEL_DARK =
-            0xFF111111;
+            0xFF10151A;
 
     private static final int COLOR_PANEL_LIGHT =
-            0xFF1D1D1D;
+            0xFF293038;
 
     private static final int COLOR_PANEL_HOVER =
-            0xFF252525;
+            0xFF36434D;
 
     private static final int COLOR_SELECTED =
-            0xFF282828;
+            0xFF26333D;
 
     private static final int COLOR_BORDER =
-            0xFF303030;
+            0xFF38454E;
 
     private static final int COLOR_TEXT =
             0xFFE2E5E7;
@@ -1014,16 +1014,10 @@ public class CharacterEditorPanel
                         : COLOR_PANEL_LIGHT
         );
 
-        if (opened)
-        {
-            drawRect(
-                    this.x + 5,
-                    y,
-                    this.x + 7,
-                    y + 24,
-                    getAccentColor()
-            );
-        }
+        // CAMERA-style section accent remains visible in collapsed
+        // groups, while the active group uses the brighter theme tone.
+        drawRect(this.x+5,y,this.x+8,y+24,
+                opened?getAccentBrightColor():getAccentColor());
 
         String arrow =
                 opened
