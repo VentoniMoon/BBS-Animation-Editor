@@ -2714,15 +2714,17 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
 
+        int first=this.editorInput.getSceneDropdownOffset();
         for (int i = 0; i < count; i++)
         {
-            File file = sceneFiles.get(i);
+            int sceneIndex=first+i;
+            File file = sceneFiles.get(sceneIndex);
 
             int rowY =
                     y + i * rowHeight;
 
             boolean selected =
-                    i == selectedScene;
+                    sceneIndex == selectedScene;
 
             boolean hovered =
                     mouseX >= x
@@ -2779,6 +2781,18 @@ public class AnimationEditorScreen extends GuiScreen
                             ? getAccentBrightColor()
                             : COLOR_TEXT
             );
+        }
+        if(sceneFiles.size()>count&&count>0)
+        {
+            // Visible scroll thumb; the selected scene is tracked by its
+            // original index instead of the row currently on screen.
+            int barX=x+dropdownWidth-4;
+            drawRect(barX,y,barX+3,y+dropdownHeight,0xFF17242B);
+            int knob=Math.max(10,dropdownHeight*count/sceneFiles.size());
+            int maxOffset=Math.max(1,sceneFiles.size()-count);
+            int knobY=y+(dropdownHeight-knob)*first/maxOffset;
+            drawRect(barX,knobY,barX+3,knobY+knob,
+                    getAccentBrightColor());
         }
     }
 
