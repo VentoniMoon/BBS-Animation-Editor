@@ -101,6 +101,13 @@ minecraft {
                     System.getProperty(
                             'bbs.editor.camera.nativeActorSunShadows.skipOverlay',
                             'false')
+            // Diagnose black backgrounds behind ALL text when a BSL
+            // mirror is in view. The normal GUI resync is enabled;
+            // passing false isolates it without touching mirror shading.
+            property 'bbs.editor.camera.mirrorGuiFontState',
+                    System.getProperty(
+                            'bbs.editor.camera.mirrorGuiFontState',
+                            'true')
 
             property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
             property 'forge.logging.console.level', 'debug'
