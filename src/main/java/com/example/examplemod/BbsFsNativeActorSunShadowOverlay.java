@@ -55,6 +55,7 @@ public final class BbsFsNativeActorSunShadowOverlay
         IntBuffer viewport=BufferUtils.createIntBuffer(16);
         GL11.glGetInteger(GL11.GL_VIEWPORT,viewport);
         int old4=0,old5=0;
+        boolean touched4=false,touched5=false;
         boolean pushed=false,projectionPushed=false,modelPushed=false;
         try
         {
@@ -88,9 +89,11 @@ public final class BbsFsNativeActorSunShadowOverlay
             // units temporarily to avoid a read/write feedback loop.
             GL13.glActiveTexture(GL13.GL_TEXTURE4);
             old4=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+            touched4=true;
             GL11.glBindTexture(GL11.GL_TEXTURE_2D,0);
             GL13.glActiveTexture(GL13.GL_TEXTURE5);
             old5=GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+            touched5=true;
             GL11.glBindTexture(GL11.GL_TEXTURE_2D,0);
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
 
@@ -181,10 +184,16 @@ public final class BbsFsNativeActorSunShadowOverlay
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER,priorDraw);
             if(fbo>0)GL30.glDeleteFramebuffers(fbo);
             if(pushed)GL11.glPopAttrib();
-            GL13.glActiveTexture(GL13.GL_TEXTURE4);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D,old4);
-            GL13.glActiveTexture(GL13.GL_TEXTURE5);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D,old5);
+            if(touched4)
+            {
+                GL13.glActiveTexture(GL13.GL_TEXTURE4);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D,old4);
+            }
+            if(touched5)
+            {
+                GL13.glActiveTexture(GL13.GL_TEXTURE5);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D,old5);
+            }
             GL13.glActiveTexture(priorUnit);
             GL11.glViewport(viewport.get(0),viewport.get(1),
                     viewport.get(2),viewport.get(3));
