@@ -638,6 +638,7 @@ public class EditorTimelineController
                     width,
                     bone,
                     trackY,
+                    visibleIndex,
                     boneIndex ==
                             this.keyframeController
                                     .getSelectedBoneIndex(),
@@ -971,6 +972,7 @@ public class EditorTimelineController
             int width,
             AnimationBone bone,
             int trackY,
+            int visibleTrackIndex,
             boolean selected,
             int timelineStartX)
     {
@@ -981,20 +983,12 @@ public class EditorTimelineController
          * Alternating track background.
          */
 
-        int visibleTrackIndex =
-                (
-                        trackY -
-                                (
-                                        trackY /
-                                                TRACK_HEIGHT
-                                ) *
-                                        TRACK_HEIGHT
-                );
-
-        int trackColor =
+int trackColor =
                 selected
                         ? getTimelineTrackSelectedColor()
-                        : getTimelineTrackColor();
+                        : (visibleTrackIndex % 2 == 0
+                                ? getTimelineTrackColor()
+                                : getTimelineTrackAltColor());
 
         /*
          * Full track.
