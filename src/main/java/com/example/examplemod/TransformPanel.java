@@ -448,28 +448,16 @@ public class TransformPanel
      */
 
     private void drawSectionHeader(
-            Minecraft mc,
-            FontRenderer font,
-            String title,
-            int drawX,
-            int drawY,
-            int accent)
+            Minecraft mc, FontRenderer font, String title,
+            int drawX, int drawY, int accent)
     {
-        drawRect(
-                mc,
-                drawX,
-                drawY + 1,
-                drawX + 3,
-                drawY + 10,
-                accent
-        );
-
-        font.drawString(
-                title,
-                drawX + 7,
-                drawY,
-                accent
-        );
+        // Same full-width title bar and theme-accent rail as CAMERA.
+        drawRect(mc, drawX, drawY - 3,
+                drawX + PANEL_WIDTH - 14, drawY + 12, HEADER_BACKGROUND);
+        drawRect(mc, drawX, drawY - 3, drawX + 3,
+                drawY + 12, getAccentColor());
+        font.drawString(title.toUpperCase(java.util.Locale.ROOT),
+                drawX + 9, drawY, TEXT);
     }
 
     /*
