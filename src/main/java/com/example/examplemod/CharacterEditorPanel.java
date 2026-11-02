@@ -2547,13 +2547,14 @@ public class CharacterEditorPanel
             int x,
             int y)
     {
-        drawColoredValue(
-                mc,
-                text,
-                x,
-                y,
-                COLOR_TEXT
-        );
+        // CAMERA inspector renders each value inside a dark field with a
+        // small bottom stroke; share that visual grammar with the read-
+        // only actor identity/frame metadata in CHARACTER.
+        int fieldWidth=Math.max(10,
+                this.x+this.width-10-(x-4));
+        drawRect(x-4,y-3,x-4+fieldWidth,y+14,0xFF10151A);
+        drawRect(x-4,y+13,x-4+fieldWidth,y+14,0xFF38454E);
+        drawColoredValue(mc,text,x,y,COLOR_TEXT);
     }
 
     private void drawColoredValue(
