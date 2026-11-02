@@ -499,13 +499,17 @@ public class BodyPartsEditorPanel
             activeGlobalControl.finishEditing();
         }
 
-        activeGlobalControl = control;
-
-        return control.mouseClicked(
-                mouseX,
-                mouseY,
-                mouseButton
-        );
+        activeGlobalControl=control;
+        float before=control.getValue();
+        boolean handled=control.mouseClicked(mouseX,mouseY,mouseButton);
+        // A fine-step arrow click has no drag and no text-edit scope.
+        // Persist it immediately: syncGlobalControls() otherwise reads
+        // the OLD attachment transform on the next draw and loses it.
+        if(handled&&before!=control.getValue()&&
+                controller.getSelectedAttachment()!=null)
+            writeGlobalTransform(controller.getSelectedAttachment()
+                    .getGlobalTransform());
+        return handled;
     }
 
     private void mouseDraggedGlobalTransform(
