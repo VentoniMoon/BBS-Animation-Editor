@@ -364,20 +364,27 @@ public class BodyPartsEditorPanel
         int secondTabLeft = firstTabLeft + MODEL_TAB_WIDTH + TAB_GAP;
         if (mouseY >= tabY && mouseY < tabY + TAB_HEIGHT)
         {
-            if (mouseX >= firstTabLeft &&
-                    mouseX < firstTabLeft + MODEL_TAB_WIDTH)
+            boolean clickModel = mouseX >= firstTabLeft &&
+                    mouseX < firstTabLeft + MODEL_TAB_WIDTH;
+            boolean clickGlobal = mouseX >= secondTabLeft &&
+                    mouseX < x + WIDTH - TAB_LEFT;
+            if (clickModel || clickGlobal)
             {
-                modelSectionOpen = true;
-                globalSectionOpen = false;
-                activeGlobalControl = null;
-                return true;
-            }
-            if (mouseX >= secondTabLeft && mouseX < x + WIDTH - TAB_LEFT)
-            {
-                modelSectionOpen = false;
-                globalSectionOpen = true;
-                globalScroll = 0;
-                activeGlobalControl = null;
+                boolean switching = (clickModel && !modelSectionOpen) ||
+                        (clickGlobal && !globalSectionOpen);
+                if (switching)
+                {
+                    // Preserve the typed transform before hiding its tab.
+                    if (activeGlobalControl != null)
+                    {
+                        activeGlobalControl.finishEditing();
+                        writeGlobalTransform(selected.getGlobalTransform());
+                        activeGlobalControl = null;
+                    }
+                    modelSectionOpen = clickModel;
+                    globalSectionOpen = clickGlobal;
+                    globalScroll = 0;
+                }
                 return true;
             }
         }
