@@ -1958,7 +1958,7 @@ public class AnimationEditorScreen extends GuiScreen
         // never during BSL/mirror/shadow geometry or film export.
         if(!cameraVideoExport.isExporting()&&
                 CameraSceneMirrorRenderer.hasCapturedReflection())
-            CameraNativeFrameProbe.resyncMirrorGuiFonts();
+            CameraMirrorGuiFontState.resync();
 
         // Minecraft passes mouse positions in its user-selected GUI scale.
         // The editor draws in its own logical pixels, so sample the physical
