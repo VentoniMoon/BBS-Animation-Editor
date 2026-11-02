@@ -331,6 +331,31 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 IntBuffer refreshed=BufferUtils.createIntBuffer(16);
                 GL20.glGetUniform(pid,current,refreshed);
                 int after=refreshed.get(0);
+                // Some BetterLights versions refuse to upload in the
+                // auxiliary pass (OptiFine world-render flag is safely
+                // disabled). If a populated program is cleared, restore
+                // the exact native uniforms captured before this attempt
+                // rather than making the mirror lose all its light.
+                if(force&&before>0&&after==0)
+                {
+                    BetterLightsProgramState saved=
+                            nativeLightStates.get(pid);
+                    if(saved!=null)
+                    {
+                        saved.restore();
+                        GL20.glUseProgram(pid);
+                        after=before;
+                        if(!nativeLightRefreshEmptyLogged)
+                        {
+                            nativeLightRefreshEmptyLogged=true;
+                            System.out.println(
+                                "[BBS Editor][Mirror][BetterLights][Refresh] "+
+                                "Provider returned zero from a populated "+
+                                "program="+pid+"; prior light fields "+
+                                "restored for this mirror draw");
+                        }
+                    }
+                }
                 // Even lightCount=0 may contain verified populated
                 // BetterLights struct slots in the native GL program.
                 CameraMirrorBetterLightsSnapshot.capture(
