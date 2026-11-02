@@ -1318,55 +1318,9 @@ public class CharacterTimelineEditorController
     }
 
     private void drawKeyframe(
-            GuiScreen screen,
-            int x,
-            int y,
-            boolean selected)
+            GuiScreen screen,int x,int y,boolean selected)
     {
-        int color =
-                selected
-                        ? getAccentColor()
-                        : getTimelineKeyframeColor();
-
-        screen.drawRect(
-                x - 1,
-                y - 6,
-                x + 2,
-                y + 7,
-                color
-        );
-
-        screen.drawRect(
-                x - 3,
-                y - 4,
-                x + 4,
-                y + 5,
-                color
-        );
-
-        screen.drawRect(
-                x - 5,
-                y - 2,
-                x + 6,
-                y + 3,
-                color
-        );
-
-        screen.drawRect(
-                x - 1,
-                y - 4,
-                x + 2,
-                y + 5,
-                getTimelineKeyframeInnerColor()
-        );
-
-        screen.drawRect(
-                x - 3,
-                y - 2,
-                x + 4,
-                y + 3,
-                getTimelineKeyframeInnerColor()
-        );
+        EditorTimelineSkin.key(x,y,selected);
     }
 
 
