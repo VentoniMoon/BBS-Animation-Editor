@@ -15,8 +15,14 @@ public class CharacterAnimationParametersPanel
 {
     public static final int HEIGHT = 140;
 
-    private static final int COLOR_PANEL_DARK = 0xFF202D38;
-    private static final int COLOR_BORDER = 0xFF384148;
+    private static int COLOR_PANEL_DARK()
+    {
+        return EditorVisualStyle.themedSurface(0.100F);
+    }
+    private static int COLOR_BORDER()
+    {
+        return EditorVisualStyle.themedSurface(0.180F);
+    }
     private static final int COLOR_TEXT = 0xFFE2E5E7;
     private static final int COLOR_TEXT_SECONDARY = 0xFF9AA1A6;
     private static final int COLOR_TEXT_MUTED = 0xFF666D72;
@@ -537,7 +543,7 @@ public class CharacterAnimationParametersPanel
     {
         if (field == null) return;
         int accent = EditorThemeManager.get().getAccent();
-        int arrowBg = 0xFF34536A;
+        int arrowBg = EditorVisualStyle.themedSurface(0.28F);
         drawRect(field.x - 17, field.y, field.x - 2, field.y + 17, arrowBg);
         drawRect(field.x + field.width + 1, field.y,
                 field.x + field.width + 16, field.y + 17, arrowBg);
@@ -546,9 +552,9 @@ public class CharacterAnimationParametersPanel
         mc.fontRenderer.drawString(">", field.x + field.width + 6,
                 field.y + 4, 0xFFE6F0F3);
         drawRect(field.x - 1, field.y - 1, field.x + field.width + 1,
-                field.y + field.height + 1, field.isFocused() ? accent : COLOR_BORDER);
+                field.y + field.height + 1, field.isFocused() ? accent : COLOR_BORDER());
         drawRect(field.x, field.y, field.x + field.width, field.y + field.height,
-                0xFF26343E);
+                EditorVisualStyle.themedSurface(0.15F));
         int originalY = field.y;
         field.y = originalY + 2;
         field.drawTextBox();
@@ -568,7 +574,7 @@ public class CharacterAnimationParametersPanel
                 y + 17,
                 enabled
                         ? EditorThemeManager.get().getAccent()
-                        : COLOR_PANEL_DARK
+                        : COLOR_PANEL_DARK()
         );
 
         drawRect(
@@ -576,7 +582,7 @@ public class CharacterAnimationParametersPanel
                 y,
                 x + 17,
                 y + 1,
-                COLOR_BORDER
+                COLOR_BORDER()
         );
 
         mc.fontRenderer.drawString(
