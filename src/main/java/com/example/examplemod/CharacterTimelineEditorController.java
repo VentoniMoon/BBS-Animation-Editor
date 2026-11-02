@@ -1870,7 +1870,7 @@ public class CharacterTimelineEditorController
                 timelineTop +
                         getTimelineHeight(),
                 timelineStartX,
-                0,
+                Math.max(1, this.timeline.getLength()),
                 timelineTop
         );
     }
