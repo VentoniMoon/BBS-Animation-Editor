@@ -543,6 +543,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -562,6 +563,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -581,6 +583,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -603,6 +606,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -622,6 +626,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -641,6 +646,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -660,6 +666,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -679,6 +686,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -698,6 +706,7 @@ public class TransformPanel
                     mouseY,
                     mouseButton
             );
+            writeControlsToKeyframe(keyframe);
 
             return true;
         }
@@ -798,12 +807,10 @@ public class TransformPanel
 
         if (handled)
         {
-            if (!this.activeControl.isEditing())
-            {
-                writeControlsToKeyframe(
-                        keyframe
-                );
-            }
+            if(!this.activeControl.isEditing()||
+                    keyCode==org.lwjgl.input.Keyboard.KEY_UP||
+                    keyCode==org.lwjgl.input.Keyboard.KEY_DOWN)
+                writeControlsToKeyframe(keyframe);
 
             return true;
         }
