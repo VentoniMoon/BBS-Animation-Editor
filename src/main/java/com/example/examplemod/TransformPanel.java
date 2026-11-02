@@ -778,16 +778,8 @@ public class TransformPanel
             );
         }
 
-        if (
-                mouseButton == 0 &&
-                        (
-                                this.activeControl == null ||
-                                        !this.activeControl.isEditing()
-                        )
-        )
-        {
-            this.activeControl = null;
-        }
+        // Retain the last clicked control after LMB release so keyboard
+        // Up/Down can adjust it by 1/32 without requiring double click.
     }
 
     /*
