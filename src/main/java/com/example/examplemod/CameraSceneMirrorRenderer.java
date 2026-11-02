@@ -338,7 +338,15 @@ public final class CameraSceneMirrorRenderer
             capturing=true;
             activeMirror=picked;
             bslEffectiveNear=Float.NaN;
-            try
+            // BetterLights derives its view origin from mc.player,
+            // while CAMERA renders through a detached preview entity.
+            // The private BSL composer continues AFTER pass.draw()
+            // returns, so a scope in the terrain callback alone is too
+            // short: deferred/composite/final would use MAIN-camera origin.
+            // Hold the reflected origin through the WHOLE capture, then
+            // restore the outer main-camera origin even if rendering fails.
+            try(CameraBetterLightsCameraOrigin.MirrorScope lightOrigin=
+                    CameraBetterLightsCameraOrigin.beginMirror(mc,reflected))
             {
                 minecraftFramebufferField.set(mc,texture);
                 texture.bindFramebuffer(true);
@@ -358,6 +366,8 @@ public final class CameraSceneMirrorRenderer
                                     bslTargets,reflected,camera))
                     {
                         pass.draw(reflected);
+                        CameraBetterLightsCameraOrigin.verifyBeforeComposite(
+                                mc,reflected);
                         bsl.compose(texture.framebufferObject,w,h,bslHdr);
                         // Denoising is only suitable after final LDR
                         // conversion. The HDR mirror is tonemapped once
