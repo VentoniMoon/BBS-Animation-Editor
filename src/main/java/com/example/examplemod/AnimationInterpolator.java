@@ -337,6 +337,18 @@ public class AnimationInterpolator
         mcNextNext.prev =
                 mcNext;
 
+        // Expanded camera easing is an opt-in editor curve. Existing
+        // McLib interpolation remains byte-for-byte intact when empty.
+        // This uses the exact same curve sampler as CAMERA; overshoot
+        // (Back/Elastic/Bounce) is intentionally retained for animation.
+        String curve=previous.getEditorCurve();
+        if(curve!=null&&!curve.isEmpty())
+        {
+            float eased=(float)CameraInterpolation.sample(factor,curve);
+            float a=getChannelValue(previous,channel);
+            float b=getChannelValue(next,channel);
+            return a+(b-a)*eased;
+        }
         /*
          * McLib использует interpolation/easing
          * первого keyframe пары.
