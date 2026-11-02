@@ -77,6 +77,10 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
     private static int mirrorLightCountReports;
     private static boolean mirrorLightCountPromoted;
     private static int lastRegisteredMirrorLightCount=-1;
+    private static final java.util.Set<String> LIGHT_STAGE_SAMPLES=
+            new java.util.HashSet<String>();
+    private static double[] lightStageSampleEye;
+    private static int lightStageSampleCount;
     private static int betterLightsShadowDiagnosticCount;
     private static double[] lastBetterLightsShadowDiagnosticEye;
     private static boolean betterLightsShadowBypassLogged;
@@ -911,6 +915,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                         pid,worldLightPositions,mainCameraPosition());
             overrideCamera(pid);
             diagnoseBetterLightsShadowSpace(pid);
+            traceBetterLightsStage(pid,"geometry:"+name);
             // gl_ClipVertex is not a reliable clipping contract with
             // programmable BSL terrain programs. The mirror-only cloned
             // FRAGMENT shader independently discards any surface behind
@@ -1050,6 +1055,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 bindInputs(pid);
                 overrideCamera(pid);
                 diagnoseBetterLightsShadowSpace(pid);
+                traceBetterLightsStage(pid,"final");
                 drawQuad();
                 if(!firstFrameLogged)
                 {
@@ -1122,6 +1128,7 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 bindInputs(pid);
                 overrideCamera(pid);
                 diagnoseBetterLightsShadowSpace(pid);
+                traceBetterLightsStage(pid,field+":"+i);
                 drawQuad();
                 targets.commitCompositeOutputs(plan);
             }
@@ -1656,6 +1663,89 @@ public final class CameraMirrorBSLCompositor implements AutoCloseable
                 " registered="+worldLightPositions.size()+
                 " effectiveCount="+Math.max(count,verified));
         }
+    }
+
+    /**
+     * Spatial trace at the actual GPU draw boundaries, not at an earlier
+     * ProgramSky or unpopulated first OptiFine selection. A registered
+     * editor caster does not prove that BetterLights selected it for the
+     * reflected camera. We report both the GLSL lightCount and the
+     * independent enabled/position-populated slots.
+     *
+     * Sample again after the MAIN camera moves rather than exhausting the
+     * budget during the first frame. Never mutate light uniforms here.
+     */
+    private void traceBetterLightsStage(int pid,String stage)
+    {
+        if(worldLightPositions.isEmpty()||pid<=0||
+                !Boolean.parseBoolean(System.getProperty(
+                        "bbs.editor.camera.mirrorBSLTraceLightStages",
+                        "true")))return;
+        int countLoc=GL20.glGetUniformLocation(pid,"lightCount");
+        if(countLoc<0)return;
+        double[] main=new double[]{
+                mainView.x,mainView.y,mainView.z};
+        if(lightStageSampleEye==null||
+                CameraMirrorLightSpace.cameraMoved(
+                        lightStageSampleEye,main,0.75D))
+        {
+            lightStageSampleEye=main;
+            LIGHT_STAGE_SAMPLES.clear();
+        }
+        // Avoid flooding the log on every frame with the same program.
+        if(lightStageSampleCount>=75||
+                !LIGHT_STAGE_SAMPLES.add(stage+":"+pid))return;
+        lightStageSampleCount++;
+        IntBuffer count=BufferUtils.createIntBuffer(16);
+        GL20.glGetUniform(pid,countLoc,count);
+        int reported=count.get(0);
+        int enabled=0,owned=0;
+        StringBuilder positions=new StringBuilder();
+        for(int i=0;i<16;i++)
+        {
+            String base="lights["+i+"].";
+            int activeLoc=GL20.glGetUniformLocation(pid,
+                    base+"isEnabled");
+            int posLoc=GL20.glGetUniformLocation(pid,
+                    base+"position");
+            if(activeLoc<0||posLoc<0)break;
+            IntBuffer active=BufferUtils.createIntBuffer(16);
+            GL20.glGetUniform(pid,activeLoc,active);
+            if(active.get(0)!=1)continue;
+            FloatBuffer xyz=BufferUtils.createFloatBuffer(16);
+            GL20.glGetUniform(pid,posLoc,xyz);
+            float x=xyz.get(0),y=xyz.get(1),z=xyz.get(2);
+            if(!Float.isFinite(x)||!Float.isFinite(y)||
+                    !Float.isFinite(z))continue;
+            enabled++;
+            boolean matches=false;
+            for(double[] registered:worldLightPositions)
+                if(registered!=null&&registered.length>=3&&
+                        Math.abs(x-registered[0])<0.2D&&
+                        Math.abs(y-registered[1])<0.2D&&
+                        Math.abs(z-registered[2])<0.2D)
+                {
+                    matches=true;
+                    break;
+                }
+            if(matches)owned++;
+            if(positions.length()<220)
+                positions.append(i).append(matches?"*":"")
+                        .append("=(").append(x).append(",")
+                        .append(y).append(",").append(z).append(") ");
+        }
+        int prefix=CameraMirrorBetterLightsSnapshot.validatedPrefix(
+                pid,worldLightPositions);
+        System.out.println(
+                "[BBS Editor][Mirror][BetterLights][Stage] "+
+                "stage="+stage+" program="+pid+
+                " lightCount="+reported+
+                " enabledSlots="+enabled+" editorMatched="+owned+
+                " validatedPrefix="+prefix+
+                " registered="+worldLightPositions.size()+
+                " mainEye="+java.util.Arrays.toString(main)+
+                " mirrorEye="+view.x+","+view.y+","+view.z+
+                " slots="+positions);
     }
 
     private void overrideCamera(int pid)
