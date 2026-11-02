@@ -50,6 +50,16 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
         viewerZ = manager == null ? 0D : manager.viewerPosZ;
 
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        // Emoticons 1.12 renders skinned meshes through VBO-backed
+        // glVertexPointer/glNormalPointer/glTexCoordPointer. The GL server
+        // attribute stack above does NOT include client array pointers,
+        // client-active texture unit or array-buffer bindings. When a
+        // Blockbuster morph precedes an Emoticons morph, stale client
+        // attributes can make everything except independently rendered
+        // head geometry disappear. Preserve them at every actor boundary.
+        GL11.glPushClientAttrib(GL11.GL_CLIENT_ALL_ATTRIB_BITS);
+        org.lwjgl.opengl.GL13.glClientActiveTexture(
+                org.lwjgl.opengl.GL13.GL_TEXTURE0);
 
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         projectionDepth = GL11.glGetInteger(GL11.GL_PROJECTION_STACK_DEPTH);
@@ -111,6 +121,7 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
                     oldDrawFramebuffer);
             GL11.glViewport(viewport.get(0), viewport.get(1),
                     viewport.get(2), viewport.get(3));
+            GL11.glPopClientAttrib();
             GL11.glPopAttrib();
             GL13.glActiveTexture(oldTextureUnit);
             GL20.glUseProgram(oldShaderProgram);
