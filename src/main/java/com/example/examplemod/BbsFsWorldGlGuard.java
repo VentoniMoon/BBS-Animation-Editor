@@ -57,7 +57,7 @@ public final class BbsFsWorldGlGuard implements AutoCloseable
         // Blockbuster morph precedes an Emoticons morph, stale client
         // attributes can make everything except independently rendered
         // head geometry disappear. Preserve them at every actor boundary.
-        GL11.glPushClientAttrib(GL11.GL_CLIENT_ALL_ATTRIB_BITS);
+        GL11.glPushClientAttrib(GL11.GL_ALL_CLIENT_ATTRIB_BITS);
         org.lwjgl.opengl.GL13.glClientActiveTexture(
                 org.lwjgl.opengl.GL13.GL_TEXTURE0);
 
