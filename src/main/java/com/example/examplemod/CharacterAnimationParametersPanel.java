@@ -13,7 +13,7 @@ import org.lwjgl.input.Keyboard;
 
 public class CharacterAnimationParametersPanel
 {
-    public static final int HEIGHT = 78;
+    public static final int HEIGHT = 140;
 
     private static final int COLOR_PANEL_DARK = 0xFF202D38;
     private static final int COLOR_BORDER = 0xFF384148;
@@ -121,29 +121,18 @@ public class CharacterAnimationParametersPanel
                 this.y + 4
         );
 
-        drawLabel(mc, "Speed", this.x + 12, this.y + 23);
-        drawLabel(mc, "Fade", this.x + 88, this.y + 23);
-        drawLabel(mc, "Tick", this.x + 12, this.y + 41);
+        drawLabel(mc, "Speed", this.x + 12, this.y + 25);
+        drawLabel(mc, "Fade", this.x + 12, this.y + 47);
+        drawLabel(mc, "Tick", this.x + 12, this.y + 69);
 
         drawTextFieldFrame(this.speedField);
         drawTextFieldFrame(this.fadeField);
         drawTextFieldFrame(this.tickField);
 
-        drawLabel(mc, "Clamp", this.x + 88, this.y + 41);
-        drawToggle(
-                mc,
-                this.x + 123,
-                this.y + 36,
-                config.clamp
-        );
-
-        drawLabel(mc, "Reset", this.x + 12, this.y + 59);
-        drawToggle(
-                mc,
-                this.x + 48,
-                this.y + 54,
-                config.reset
-        );
+        drawLabel(mc, "Clamp", this.x + 12, this.y + 97);
+        drawToggle(mc, this.x + 145, this.y + 91, config.clamp);
+        drawLabel(mc, "Reset", this.x + 12, this.y + 119);
+        drawToggle(mc, this.x + 145, this.y + 113, config.reset);
     }
 
     public boolean mouseClicked(
@@ -157,6 +146,13 @@ public class CharacterAnimationParametersPanel
         }
 
         ensureTextFields(Minecraft.getMinecraft());
+
+        if (clickStepper(this.speedField,
+                CharacterAnimationSetupController.PARAM_SPEED, false, mouseX, mouseY)) return true;
+        if (clickStepper(this.fadeField,
+                CharacterAnimationSetupController.PARAM_FADE, true, mouseX, mouseY)) return true;
+        if (clickStepper(this.tickField,
+                CharacterAnimationSetupController.PARAM_TICK, true, mouseX, mouseY)) return true;
 
         if (this.speedField.mouseClicked(
                 mouseX,
@@ -185,8 +181,8 @@ public class CharacterAnimationParametersPanel
         ActionConfig config = getSelectedConfig();
 
         if (isInside(
-                this.x + 123,
-                this.y + 36,
+                this.x + 145,
+                this.y + 91,
                 17,
                 17,
                 mouseX,
@@ -201,8 +197,8 @@ public class CharacterAnimationParametersPanel
         }
 
         if (isInside(
-                this.x + 48,
-                this.y + 54,
+                this.x + 145,
+                this.y + 113,
                 17,
                 17,
                 mouseX,
@@ -225,6 +221,30 @@ public class CharacterAnimationParametersPanel
         if (this.selectedKey == null)
         {
             return false;
+        }
+
+        if ((keyCode == Keyboard.KEY_UP || keyCode == Keyboard.KEY_DOWN) &&
+                this.speedField != null)
+        {
+            int dir = keyCode == Keyboard.KEY_UP ? 1 : -1;
+            if (this.speedField.isFocused())
+            {
+                nudgeField(this.speedField, CharacterAnimationSetupController.PARAM_SPEED,
+                        false, dir, 0.03125F);
+                return true;
+            }
+            if (this.fadeField.isFocused())
+            {
+                nudgeField(this.fadeField, CharacterAnimationSetupController.PARAM_FADE,
+                        true, dir, 1F);
+                return true;
+            }
+            if (this.tickField.isFocused())
+            {
+                nudgeField(this.tickField, CharacterAnimationSetupController.PARAM_TICK,
+                        true, dir, 1F);
+                return true;
+            }
         }
 
         if (this.speedField != null &&
@@ -340,25 +360,16 @@ public class CharacterAnimationParametersPanel
 
     private void positionTextFields()
     {
-        if (this.speedField == null)
+        if (this.speedField == null) return;
+        GuiTextField[] fields = {speedField, fadeField, tickField};
+        for (int i = 0; i < fields.length; i++)
         {
-            return;
+            GuiTextField field = fields[i];
+            field.x = x + 92;
+            field.y = y + 20 + i * 22;
+            field.width = 62;
+            field.height = 17;
         }
-
-        this.speedField.x = this.x + 48;
-        this.speedField.y = this.y + 19;
-        this.speedField.width = 38;
-        this.speedField.height = 16;
-
-        this.fadeField.x = this.x + 123;
-        this.fadeField.y = this.y + 19;
-        this.fadeField.width = 34;
-        this.fadeField.height = 16;
-
-        this.tickField.x = this.x + 48;
-        this.tickField.y = this.y + 37;
-        this.tickField.width = 38;
-        this.tickField.height = 16;
     }
 
     private void syncFields()
@@ -493,21 +504,51 @@ public class CharacterAnimationParametersPanel
                 );
     }
 
+    private boolean clickStepper(GuiTextField field, String parameter,
+            boolean integer, int mouseX, int mouseY)
+    {
+        if (field == null) return false;
+        if (isInside(field.x - 17, field.y, 15, 17, mouseX, mouseY))
+        {
+            nudgeField(field, parameter, integer, -1, integer ? 1F : 0.0625F);
+            return true;
+        }
+        if (isInside(field.x + field.width + 1, field.y, 15, 17, mouseX, mouseY))
+        {
+            nudgeField(field, parameter, integer, 1, integer ? 1F : 0.0625F);
+            return true;
+        }
+        return false;
+    }
+
+    private void nudgeField(GuiTextField field, String parameter,
+            boolean integer, int direction, float step)
+    {
+        float previous;
+        try { previous = Float.parseFloat(field.getText()); }
+        catch (NumberFormatException ignored) { previous = 0F; }
+        float next = previous + direction * step;
+        if (integer) field.setText(Integer.toString(Math.max(0, Math.round(next))));
+        else field.setText(String.format(java.util.Locale.US, "%.5f", next));
+        applyNumericField(parameter, field, integer);
+    }
+
     private void drawTextFieldFrame(GuiTextField field)
     {
-        if (field == null)
-        {
-            return;
-        }
-
-        drawRect(
-                field.x - 1,
-                field.y - 1,
-                field.x + field.width + 1,
-                field.y + field.height + 1,
-                COLOR_BORDER
-        );
-
+        if (field == null) return;
+        int accent = EditorThemeManager.get().getAccent();
+        int arrowBg = 0xFF34536A;
+        drawRect(field.x - 17, field.y, field.x - 2, field.y + 17, arrowBg);
+        drawRect(field.x + field.width + 1, field.y,
+                field.x + field.width + 16, field.y + 17, arrowBg);
+        Minecraft mc = Minecraft.getMinecraft();
+        mc.fontRenderer.drawString("<", field.x - 12, field.y + 4, 0xFFE6F0F3);
+        mc.fontRenderer.drawString(">", field.x + field.width + 6,
+                field.y + 4, 0xFFE6F0F3);
+        drawRect(field.x - 1, field.y - 1, field.x + field.width + 1,
+                field.y + field.height + 1, field.isFocused() ? accent : COLOR_BORDER);
+        drawRect(field.x, field.y, field.x + field.width, field.y + field.height,
+                0xFF26343E);
         int originalY = field.y;
         field.y = originalY + 2;
         field.drawTextBox();
