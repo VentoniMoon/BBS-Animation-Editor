@@ -183,6 +183,12 @@ public final class BbsFsWorldCameraDriver
             org.lwjgl.opengl.GL11.glDisable(
                     org.lwjgl.opengl.GL11.GL_CLIP_PLANE0);
 
+        // Record the exact posed actor meshes BEFORE OptiFine's
+        // Shaders.beginRender -> renderShadowMap. A tiny isolated FBO
+        // receives the invisible preparation draw; the real world,
+        // native sun shadow map and mirror replay the cached pose.
+        BbsFsNativeActorPass.prepareBeforeShadows(mc,editor,viewport);
+
         // Normally a no-op. The one-frame diagnostic is guarded by an
         // explicit JVM flag and uses the native Minecraft world pass.
         CameraNativeFrameProbe.beforeWorld(mc);
@@ -239,14 +245,9 @@ public final class BbsFsWorldCameraDriver
                 // reflection pass without re-running their animation.
                 BbsFsNativeActorPass.render(mc,editor,viewport,
                         event.getPartialTicks(),worldWidth,worldHeight);
-                // Experimental late native OptiFine sun-shadow overlay:
-                // replays the just-prepared actor pose into existing shadow
-                // depth maps before BSL's deferred/composite, when enabled.
-                // Default OFF; does not attempt to rerun native world
-                // shadows or to step actor physics again.
-                if(activePose!=null)
-                    BbsFsNativeActorSunShadowOverlay.render(
-                            mc,editor,activePose);
+                // Sun shadows are now augmented by the transformer
+                // immediately AFTER OptiFine's native shadow pass and
+                // BEFORE world GBuffer terrain. WorldLast is too late.
                 if(editor.getSceneState()!=null&&activePose!=null)
                 {
                     final PreviewCameraPose mainPose=activePose;
@@ -434,6 +435,7 @@ public final class BbsFsWorldCameraDriver
 
     private void release()
     {
+        BbsFsNativeActorPass.release();
         CameraBetterLightsCameraOrigin.end();
         CameraShaderCurves.clearFrame();
         CameraSceneMirrorRenderer.reset();
