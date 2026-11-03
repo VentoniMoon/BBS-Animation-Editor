@@ -32,11 +32,14 @@ public class BlockbusterActorPreviewRenderer
     private static boolean mixedActorDiagnostics;
     private static final java.util.Set<String> printedActorDiagnostics =
             new java.util.HashSet<String>();
+    private static final java.util.Set<String> printedMeshDiagnostics =
+            new java.util.HashSet<String>();
 
     public static void setMixedActorDiagnostics(boolean enabled)
     {
         mixedActorDiagnostics=enabled;
         printedActorDiagnostics.clear();
+        printedMeshDiagnostics.clear();
     }
 
     private void diagnoseActorGeometry(
@@ -134,6 +137,60 @@ public class BlockbusterActorPreviewRenderer
                 " keys="+count+" changed="+changed+details+gl);
     }
 
+
+    /**
+     * A visible Emoticons head with a missing/triangulated body can originate
+     * either from CPU skinning (NaN/huge vertex coordinates) or a later GL
+     * pipeline state conflict. Sample the actual float buffer AFTER native
+     * AnimatorController.renderAnimation -> AnimationMesh.updateMesh(), not
+     * just the mesh metadata that was available before drawing. Read-only.
+     */
+    private void diagnoseRenderedEmoticons(BlockbusterSceneActorData data,
+            EntityActor actor)
+    {
+        if(!mixedActorDiagnostics||data==null||actor==null||
+                !(actor.getMorph() instanceof AnimatedMorph))return;
+        AnimatedMorph em=(AnimatedMorph)actor.getMorph();
+        if(em.animator==null||em.animator.animation==null||
+                em.animator.animation.meshes==null)return;
+        boolean selected=bodyPartsController!=null;
+        String key=data.getId()+"|"+selected;
+        if(!printedMeshDiagnostics.add(key))return;
+        for(mchorse.emoticons.skin_n_bones.api.animation.AnimationMesh m:
+                em.animator.animation.meshes)
+        {
+            if(m==null||!"body".equals(m.name)||m.vertices==null)continue;
+            java.nio.FloatBuffer b=m.vertices;
+            int limit=b.limit(),bad=0,extreme=0;
+            float maxAbs=0F;
+            for(int i=0;i+3<limit;i+=4)
+            {
+                for(int j=0;j<3;j++)
+                {
+                    float v=b.get(i+j);
+                    if(Float.isNaN(v)||Float.isInfinite(v))bad++;
+                    else
+                    {
+                        maxAbs=Math.max(maxAbs,Math.abs(v));
+                        if(Math.abs(v)>1000F)extreme++;
+                    }
+                }
+            }
+            System.out.println("[BBS Editor][MultiActor Mesh] actor="+
+                    data.getId()+" role="+(selected?"SELECTED":"background")+
+                    " bodyVertices="+(limit/4)+" nonFinite="+bad+
+                    " extreme="+extreme+" maxAbs="+maxAbs+
+                    " alphaFunc="+GL11.glGetInteger(GL11.GL_ALPHA_TEST_FUNC)+
+                    " alphaRef="+GL11.glGetFloat(GL11.GL_ALPHA_TEST_REF)+
+                    " depthFunc="+GL11.glGetInteger(GL11.GL_DEPTH_FUNC)+
+                    " depthWrite="+GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK)+
+                    " cull="+GL11.glIsEnabled(GL11.GL_CULL_FACE));
+            return;
+        }
+        System.out.println("[BBS Editor][MultiActor Mesh] actor="+
+                data.getId()+" role="+(selected?"SELECTED":"background")+
+                " body=unavailable");
+    }
 
     /**
      * Blockbuster 1.12's ModelExtrudedLayer renders the 3D outer skin via
@@ -1760,6 +1817,7 @@ public class BlockbusterActorPreviewRenderer
                     actorPartialTicks,
                     true
             );
+            diagnoseRenderedEmoticons(actorData,entityActor);
         }
 
         /*
@@ -1875,12 +1933,25 @@ public class BlockbusterActorPreviewRenderer
     private void renderPreparedCamera(Minecraft mc,PreviewCameraPose view,
             int targetWidth,int targetHeight,boolean mirror)
     {
-        if(preparedActorData==null)return;
-        try(CharacterBodyPartPreviewState.Scope context=
-                CharacterBodyPartPreviewState.enter(
-                        preparedActorData,preparedActorFrame))
+        if(preparedActorData==null||mc==null||mc.world==null)return;
+        // WorldGlGuard restores GL driver attributes, but its glPopAttrib
+        // does not restore Minecraft's cached alpha/depth/texture flags and
+        // function values. Isolate EACH prepared native replay just like
+        // an ordinary actor draw, regardless of draw order.
+        BbsFsGlStateResync.Snapshot beforeReplay=
+                BbsFsGlStateResync.capture();
+        try
         {
-            renderPreparedCameraScoped(mc,view,targetWidth,targetHeight,mirror);
+            try(CharacterBodyPartPreviewState.Scope context=
+                    CharacterBodyPartPreviewState.enter(
+                            preparedActorData,preparedActorFrame))
+            {
+                renderPreparedCameraScoped(mc,view,targetWidth,targetHeight,mirror);
+            }
+        }
+        finally
+        {
+            BbsFsGlStateResync.restore(beforeReplay);
         }
     }
 
