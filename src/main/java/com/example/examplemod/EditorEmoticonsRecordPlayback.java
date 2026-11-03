@@ -140,6 +140,12 @@ public final class EditorEmoticonsRecordPlayback
         actor.fallDistance=current.getFallDistance();
         boolean takeoff=previous!=null&&previous.isGround()&&
                 !current.isGround();
+        // If a player steps off a ledge, position-delta fallback can infer
+        // negative MY even though no jump occurred. Native Emoticons checks
+        // abs(motionY), so this would falsely start its jump action. An
+        // actual jump has a positive takeoff impulse; preserve falls later.
+        if(takeoff&&actor.motionY<0D)
+            actor.motionY=0D;
         if(takeoff&&Math.abs(actor.motionY)<=0.2D)
         {
             // Many recorded jumps change Ground one tick BEFORE Y moves,
