@@ -4071,10 +4071,16 @@ public class EditorGizmoController
         AnimationBone parent = bone == null ? null : bone.getParent();
         AnimationBone basisBone = parent != null ? parent : bone;
 
+        // Root bones have no parent rotation. Their translation is applied
+        // BEFORE their own rotation by ModelCustomRenderer. Passing the root
+        // to the regular composed-axes path accidentally rotates translation
+        // handles together with a 180-degree model/editor rest rotation.
+        // Child bones still use their PARENT's evaluated hierarchy.
         return getBodyPartComposedWorldAxes(
                 basisBone,
                 selectedKeyframe,
-                recordFrame
+                recordFrame,
+                parent == null
         );
     }
 
@@ -4090,6 +4096,16 @@ public class EditorGizmoController
             AnimationBone bone,
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
+    {
+        return getBodyPartComposedWorldAxes(
+                bone,selectedKeyframe,recordFrame,false);
+    }
+
+    private double[][] getBodyPartComposedWorldAxes(
+            AnimationBone bone,
+            AnimationKeyframe selectedKeyframe,
+            BlockbusterRecordFrame recordFrame,
+            boolean skipInternalRotation)
     {
         if (bone == null)
         {
@@ -4168,7 +4184,7 @@ public class EditorGizmoController
 
         float[][] internalMatrix = identityRotationMatrix();
 
-        if (this.bodyPartTarget != null &&
+        if (!skipInternalRotation && this.bodyPartTarget != null &&
                 bone != this.bodyPartAttachmentBone)
         {
             /*
@@ -5267,8 +5283,12 @@ public class EditorGizmoController
         }
 
         int frame = this.activeKeyframe.getFrame();
+        // Translation is authored in the parent bone's coordinate system,
+        // before the selected bone's own Euler rotation. Do not rotate its
+        // position delta by the selected bone (particularly wrong at 180°).
+        // The parent rotation still contributes to the rendered handle.
         float[][] localRotation =
-                getBodyPartLocalRotationMatrix(this.activeBone, frame);
+                getBodyPartLocalRotationMatrix(this.activeBone.getParent(),frame);
 
         if (localRotation == null)
         {
