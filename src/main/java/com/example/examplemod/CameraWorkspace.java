@@ -46,6 +46,12 @@ public final class CameraWorkspace
     {
         mirrorPanel.drawGuide(screen,x,y,w,h);
     }
+    /** Reuse POSE's native 3D arrow/plane handles for scene mirrors. */
+    public void drawNativeMirrorGizmo(AnimationEditorScreen screen,
+            Minecraft mc,int filmX,int filmY,int filmW,int filmH)
+    {
+        mirrorPanel.drawNativeGizmo(screen,mc,filmX,filmY,filmW,filmH);
+    }
 
     public boolean beginLightGizmo(AnimationEditorScreen screen,
             int mx,int my,int button,int filmX,int filmY,int filmW,int filmH)
