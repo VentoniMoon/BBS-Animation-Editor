@@ -23,6 +23,68 @@ public final class CameraSceneMirrorsPanel
     private CameraSceneMirrors.Mirror dragging;
     private double startX,startY,startZ,hitX,hitY,hitZ;
     private boolean dirty;
+    /**
+     * A transient editor-only rig reuses the verified 3D POSITION handles
+     * from the static light editor. The mirror itself has no keyframes.
+     */
+    private final EditorGizmoController moveGizmo=new EditorGizmoController();
+    private final EditorCamera moveCamera=new EditorCamera();
+    private final ActorAnimationData moveRig=
+            new ActorAnimationData("camera-static-mirror-gizmo");
+    private final AnimationBone moveBone=new AnimationBone(BetterLightsRig.ORIGIN);
+    private final AnimationKeyframe moveKey=new AnimationKeyframe(0);
+    private CameraSceneMirrors.Mirror gizmoMirror;
+    private double gizmoStartX,gizmoStartY,gizmoStartZ;
+    private boolean yawMode;
+    private CameraSceneMirrors.Mirror yawDragging;
+    private double yawStart,yawLastAngle,yawAccumulated;
+    private int yawStartMouseX;
+    private boolean yawRayValid;
+
+    public CameraSceneMirrorsPanel()
+    {
+        moveRig.getBones().add(moveBone);
+        moveGizmo.setLightRigTarget(moveRig);
+        moveGizmo.setMode(EditorGizmoController.Mode.POSITION);
+    }
+
+    private void stopGizmo()
+    {
+        moveGizmo.mouseReleased();
+        moveKey.getTransform().setPosition(0F,0F,0F);
+        gizmoMirror=null;
+        yawDragging=null;
+        yawRayValid=false;
+    }
+
+    private EditorCamera cameraForGizmo(AnimationEditorScreen screen)
+    {
+        PreviewCameraPose pose=screen.getCameraWorkspaceNativePose();
+        if(pose==null)return null;
+        moveCamera.apply(pose);
+        return moveCamera;
+    }
+
+    private static BlockbusterRecordFrame pointFrame(CameraSceneMirrors.Mirror m)
+    {
+        BlockbusterRecordFrame frame=new BlockbusterRecordFrame();
+        frame.setX(m.x);frame.setY(m.y);frame.setZ(m.z);
+        return frame;
+    }
+
+    /** Same 3D move arrows and planes as POSE/LIGHTS, in the Preview FBO. */
+    public void drawNativeGizmo(AnimationEditorScreen screen,Minecraft mc,
+            int x,int y,int w,int h)
+    {
+        if(!opened||yawMode||screen.getCameraVideoExport().isExporting())
+            return;
+        CameraSceneMirrors.Mirror selected=list(screen).selected();
+        if(selected==null)return;
+        EditorCamera view=cameraForGizmo(screen);
+        if(view!=null)
+            moveGizmo.draw3D(mc,x,y,w,h,moveBone,moveKey,
+                    pointFrame(selected),view,true);
+    }
 
     public boolean opened(){return opened;}
     public void open(){opened=true;}
@@ -31,11 +93,13 @@ public final class CameraSceneMirrorsPanel
         commit(screen);
         opened=false;
         dragging=null;
+        stopGizmo();
     }
     public void reset()
     {
         opened=false;field=null;edit=-1;
         dragging=null;dirty=false;listScroll=0;
+        yawMode=false;stopGizmo();
     }
     private static CameraSceneMirrors list(AnimationEditorScreen screen)
     {
@@ -150,17 +214,27 @@ public final class CameraSceneMirrorsPanel
                 0xFFE0EAF0);
         mc.fontRenderer.drawString(m.enabled?"ON":"OFF",
                 inspectorLeft+145,262,m.enabled?0xFF8CF0AB:0xFFDD9C9C);
-        mc.fontRenderer.drawString("Drag the rectangle in preview",
-                inspectorLeft+10,291,0xFF8C9CA8);
+        Gui.drawRect(inspectorLeft+10,283,inspectorLeft+90,303,
+                EditorVisualStyle.themedSurface(yawMode?0.10F:0.34F));
+        Gui.drawRect(inspectorLeft+94,283,inspectorLeft+175,303,
+                EditorVisualStyle.themedSurface(yawMode?0.34F:0.10F));
+        mc.fontRenderer.drawString("MOVE XYZ",inspectorLeft+20,289,
+                yawMode?0xFF9FB4C1:0xFF9BE6FF);
+        mc.fontRenderer.drawString("ROTATE Y",inspectorLeft+104,289,
+                yawMode?0xFF9BE6FF:0xFF9FB4C1);
+        mc.fontRenderer.drawString(yawMode
+                ?"Drag the Yaw ring in Preview"
+                :"Drag XYZ handles (or mirror face)",
+                inspectorLeft+10,314,0xFF8C9CA8);
         mc.fontRenderer.drawString("Static scene object; no keys",
-                inspectorLeft+10,305,0xFF8C9CA8);
+                inspectorLeft+10,327,0xFF8C9CA8);
         mc.fontRenderer.drawString("Max 32 / reflection view: 1",
-                inspectorLeft+10,319,0xFF8C9CA8);
+                inspectorLeft+10,340,0xFF8C9CA8);
         // A single clipped line used to hide the important shaderpack
         // diagnostics (buffer count, deferred and composite stages). Wrap
         // them in the inspector so tests can report the actual blocker.
         String status=CameraSceneMirrorRenderer.status();
-        int lineY=334;
+        int lineY=357;
         for(int line=0;line<5&&status.length()>0&&
                 lineY+9<panelBottom;line++,lineY+=11)
         {
@@ -211,6 +285,7 @@ public final class CameraSceneMirrorsPanel
                     }
                 }
                 else mirrors.removeSelected();
+                stopGizmo();dragging=null;dirty=false;
                 screen.getCameraWorkspace().saveScene();
                 return true;
             }
@@ -218,7 +293,13 @@ public final class CameraSceneMirrorsPanel
             {
                 int index=listScroll+(my-106)/21;
                 if(index>=0&&index<mirrors.all().size())
+                {
+                    if(mirrors.selected()!=mirrors.all().get(index))
+                    {
+                        stopGizmo();dragging=null;dirty=false;
+                    }
                     mirrors.select(mirrors.all().get(index).id);
+                }
             }
             return true;
         }
@@ -227,6 +308,17 @@ public final class CameraSceneMirrorsPanel
         CameraSceneMirrors.Mirror m=list(screen).selected();
         if(m==null)return true;
         commit(screen);
+        if(my>=283&&my<303&&mx>=inspectorLeft+10&&
+                mx<inspectorLeft+175)
+        {
+            boolean rotate=mx>=inspectorLeft+94;
+            if(yawMode!=rotate)
+            {
+                stopGizmo();dragging=null;dirty=false;
+                yawMode=rotate;
+            }
+            return true;
+        }
         if(my>=257&&my<275)
         {
             m.enabled=!m.enabled;
