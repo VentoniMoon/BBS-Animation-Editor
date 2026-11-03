@@ -168,8 +168,14 @@ public final class CameraSceneMirrorRenderer
             if(!support.usable)
             {
                 CameraMirrorOptiFinePreflight.runOnce();
-                bslMultiPass=Boolean.getBoolean(
-                        "bbs.editor.camera.mirrorBSLExperimental")&&
+                // Activate the verified BSL v8.2.02 private mirror path
+                // automatically in the distributable mod. Keep an explicit
+                // -D...=false opt-out for troubleshooting; never turn on the
+                // experimental compositor for unrelated multipass packs.
+                bslMultiPass=!"false".equalsIgnoreCase(
+                        System.getProperty(
+                            "bbs.editor.camera.mirrorBSLExperimental",
+                            "true"))&&
                         support.message.startsWith(
                             "Multipass shaderpack: "+
                             "pack=BSL_v8.2.02-BetterLights.zip");
