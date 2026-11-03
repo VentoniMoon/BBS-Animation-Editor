@@ -95,7 +95,10 @@ public final class BbsFsGlStateResync
         // glPopAttrib restores these on the DRIVER, but not Minecraft's
         // cached alpha/depth/color/blend parameters. A later actor can
         // otherwise silently skip a necessary state change.
-        ByteBuffer color=BufferUtils.createByteBuffer(4);
+        // LWJGL 2.9.4 glGetBoolean(pname, ByteBuffer) validates a minimum
+        // of 16 remaining bytes even for GL_COLOR_WRITEMASK's four values.
+        // Only bytes 0..3 contain the red/green/blue/alpha write flags.
+        ByteBuffer color=BufferUtils.createByteBuffer(16);
         GL11.glGetBoolean(GL11.GL_COLOR_WRITEMASK,color);
         return new Snapshot(
                 GL11.glIsEnabled(GL11.GL_BLEND),
