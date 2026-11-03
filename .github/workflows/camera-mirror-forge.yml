@@ -43,6 +43,9 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsActorShadowSamplingProbe.java'
       - 'src/main/java/com/example/examplemod/BbsFsOptiFineEntityStage.java'
       - 'src/main/java/com/example/examplemod/CameraShaderCurveTransformer.java'
+      - 'src/main/java/com/example/examplemod/EditorThemeManager.java'
+      - 'src/main/java/com/example/examplemod/EditorThemePreferences.java'
+      - 'src/test/java/com/example/examplemod/EditorThemePersistenceSmokeTest.java'
       - 'src/main/java/com/example/examplemod/LegacyForgeEventIsolationTransformer.java'
       - 'src/main/java/com/example/examplemod/ForgeNetworkSideGuardTransformer.java'
       - 'src/main/java/com/example/examplemod/DevIBlockStateSrgBridgeTransformer.java'
@@ -100,6 +103,9 @@ on:
       - 'src/main/java/com/example/examplemod/BbsFsActorShadowSamplingProbe.java'
       - 'src/main/java/com/example/examplemod/BbsFsOptiFineEntityStage.java'
       - 'src/main/java/com/example/examplemod/CameraShaderCurveTransformer.java'
+      - 'src/main/java/com/example/examplemod/EditorThemeManager.java'
+      - 'src/main/java/com/example/examplemod/EditorThemePreferences.java'
+      - 'src/test/java/com/example/examplemod/EditorThemePersistenceSmokeTest.java'
       - 'src/main/java/com/example/examplemod/LegacyForgeEventIsolationTransformer.java'
       - 'src/main/java/com/example/examplemod/ForgeNetworkSideGuardTransformer.java'
       - 'src/main/java/com/example/examplemod/DevIBlockStateSrgBridgeTransformer.java'
@@ -122,6 +128,16 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
+      - name: Verify theme selection persists across game restarts (Java 8)
+        run: |
+          mkdir -p /tmp/bbs-theme-persistence-test
+          javac -d /tmp/bbs-theme-persistence-test \
+            src/main/java/com/example/examplemod/EditorTheme.java \
+            src/main/java/com/example/examplemod/EditorThemeManager.java \
+            src/main/java/com/example/examplemod/EditorThemePreferences.java \
+            src/test/java/com/example/examplemod/EditorThemePersistenceSmokeTest.java
+          java -cp /tmp/bbs-theme-persistence-test \
+            com.example.examplemod.EditorThemePersistenceSmokeTest
       - name: Ensure mirror does not start another world or simulation pass
         run: |
           ! grep -q 'entityRenderer.renderWorld(' src/main/java/com/example/examplemod/BbsFsWorldCameraDriver.java
