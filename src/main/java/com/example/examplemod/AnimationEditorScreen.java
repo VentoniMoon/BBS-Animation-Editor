@@ -3370,8 +3370,12 @@ public class AnimationEditorScreen extends GuiScreen
                             getCurrentRecordFrame(),
                             getPreviewInteractionCamera(), isGizmoEnabled());
                     if(isCameraMode())
+                    {
                         this.cameraWorkspace.drawNativeLightGizmo(
                                 this,mc,filmX,filmY,filmW,filmH);
+                        this.cameraWorkspace.drawNativeMirrorGizmo(
+                                this,mc,filmX,filmY,filmW,filmH);
+                    }
                 }
         );
         if(this.editorModeController.getMode()
