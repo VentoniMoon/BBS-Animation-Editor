@@ -403,17 +403,138 @@ public final class CameraSceneMirrorsPanel
                 listScroll+(direction>0?-1:1)));
         return true;
     }
-    /** Pick the actual rectangle, not an unbounded plane. */
+    /** World radius for the editor-only rotation ring, in blocks. */
+    private static double yawRadius(CameraSceneMirrors.Mirror mirror)
+    {
+        return Math.max(0.7D,Math.min(3.0D,mirror.width*0.48D));
+    }
+
+    private static float[] projectedYaw(CameraSceneMirrors.Mirror mirror,
+            PreviewCameraPose camera,double angle,double radius,
+            int px,int py,int pw,int ph)
+    {
+        double a=Math.toRadians(angle);
+        return PreviewCameraProjection.project(
+                mirror.x+Math.sin(a)*radius,
+                mirror.y,
+                mirror.z+Math.cos(a)*radius,
+                camera,px,py,pw,ph);
+    }
+
+    private static double segmentDistanceSq(double x,double y,
+            float[] a,float[] b)
+    {
+        double dx=b[0]-a[0],dy=b[1]-a[1];
+        double length=dx*dx+dy*dy;
+        if(length<1E-6D)return (x-a[0])*(x-a[0])+
+                (y-a[1])*(y-a[1]);
+        double t=Math.max(0D,Math.min(1D,
+                ((x-a[0])*dx+(y-a[1])*dy)/length));
+        double sx=a[0]+t*dx,sy=a[1]+t*dy;
+        return (x-sx)*(x-sx)+(y-sy)*(y-sy);
+    }
+
+    /** Projected circle hit test, including edge-on camera views. */
+    private static boolean hitYawRing(CameraSceneMirrors.Mirror m,
+            PreviewCameraPose camera,int mx,int my,
+            int px,int py,int pw,int ph)
+    {
+        double radius=yawRadius(m);
+        float[] previous=null;
+        for(int i=0;i<=72;i++)
+        {
+            float[] next=projectedYaw(m,camera,i*5D,radius,
+                    px,py,pw,ph);
+            if(previous!=null&&next!=null&&
+                    segmentDistanceSq(mx,my,previous,next)<=110D)
+                return true;
+            previous=next;
+        }
+        // The front-normal pointer is another grab handle, useful when
+        // the horizontal circle projects to a narrow line.
+        float[] origin=PreviewCameraProjection.project(
+                m.x,m.y,m.z,camera,px,py,pw,ph);
+        float[] tip=projectedYaw(m,camera,m.yaw,radius*1.2D,
+                px,py,pw,ph);
+        return origin!=null&&tip!=null&&
+                segmentDistanceSq(mx,my,origin,tip)<=110D;
+    }
+
+    /** Yaw = atan2(world X, world Z), matching CameraMirrorMath.normal. */
+    private static double rayYaw(CameraSceneMirrors.Mirror mirror,
+            PreviewCameraPose camera,int mx,int my,
+            int px,int py,int pw,int ph)
+    {
+        double[] ray=PreviewCameraProjection.ray(camera,mx,my,
+                px,py,pw,ph);
+        if(ray==null||Math.abs(ray[1])<1E-5D)
+            return Double.NaN;
+        double t=(mirror.y-camera.y)/ray[1];
+        if(t<=0D||t>2048D)return Double.NaN;
+        double dx=camera.x+ray[0]*t-mirror.x;
+        double dz=camera.z+ray[2]*t-mirror.z;
+        if(dx*dx+dz*dz<1E-6D)return Double.NaN;
+        return Math.toDegrees(Math.atan2(dx,dz));
+    }
+
+    /** Gizmo handles take precedence, but clicking a rectangle still selects. */
     public boolean beginDrag(AnimationEditorScreen screen,int mx,int my,
             int button,int px,int py,int pw,int ph)
     {
         if(!opened||button!=0||field!=null||
                 mx<px||my<py||mx>=px+pw||my>=py+ph)return false;
         PreviewCameraPose cam=screen.getCameraWorkspaceNativePose();
+        if(cam==null)return false;
+
+        CameraSceneMirrors mirrors=list(screen);
+        CameraSceneMirrors.Mirror selected=mirrors.selected();
+        if(selected!=null)
+        {
+            if(yawMode)
+            {
+                if(hitYawRing(selected,cam,mx,my,px,py,pw,ph))
+                {
+                    stopGizmo();
+                    dragging=null;
+                    yawDragging=selected;
+                    yawStart=selected.yaw;
+                    yawStartMouseX=mx;
+                    yawAccumulated=0D;
+                    yawLastAngle=rayYaw(selected,cam,mx,my,
+                            px,py,pw,ph);
+                    yawRayValid=Double.isFinite(yawLastAngle);
+                    dirty=false;
+                    return true;
+                }
+            }
+            else
+            {
+                EditorCamera view=cameraForGizmo(screen);
+                if(view!=null)
+                {
+                    stopGizmo();
+                    if(moveGizmo.mouseClicked(mx,my,button,px,py,pw,ph,
+                            moveBone,moveKey,pointFrame(selected),view,true))
+                    {
+                        if(moveGizmo.isDragging())
+                        {
+                            gizmoMirror=selected;
+                            gizmoStartX=selected.x;
+                            gizmoStartY=selected.y;
+                            gizmoStartZ=selected.z;
+                            dragging=null;
+                            dirty=false;
+                        }
+                        return true;
+                    }
+                }
+            }
+        }
+
         double[] ray=PreviewCameraProjection.ray(cam,mx,my,
                 px,py,pw,ph);
         if(ray==null)return false;
-        List<CameraSceneMirrors.Mirror> all=list(screen).all();
+        List<CameraSceneMirrors.Mirror> all=mirrors.all();
         for(int i=all.size()-1;i>=0;i--)
         {
             CameraSceneMirrors.Mirror m=all.get(i);
@@ -421,7 +542,14 @@ public final class CameraSceneMirrorsPanel
                     m.width,m.height,cam.x,cam.y,cam.z,
                     ray[0],ray[1],ray[2]);
             if(hit==null)continue;
-            list(screen).select(m.id);
+            if(m!=selected)stopGizmo();
+            mirrors.select(m.id);
+            // In ROTATE mode a face click selects; only the yaw ring rotates.
+            if(yawMode)
+            {
+                dragging=null;
+                return true;
+            }
             dragging=m;
             startX=m.x;startY=m.y;startZ=m.z;
             hitX=hit[0];hitY=hit[1];hitZ=hit[2];
@@ -430,11 +558,71 @@ public final class CameraSceneMirrorsPanel
         }
         return false;
     }
+
     public boolean drag(AnimationEditorScreen screen,int mx,int my,
             int px,int py,int pw,int ph)
     {
+        if(gizmoMirror!=null)
+        {
+            if(gizmoMirror!=list(screen).selected())
+            {
+                stopGizmo();
+                return true;
+            }
+            if(!moveGizmo.mouseDragged(mx,my))return true;
+            AnimationTransform t=moveKey.getTransform();
+            double x=gizmoStartX+t.getPositionX();
+            double y=gizmoStartY+t.getPositionY();
+            double z=gizmoStartZ+t.getPositionZ();
+            if(!Double.isFinite(x)||!Double.isFinite(y)||
+                    !Double.isFinite(z)||
+                    Math.abs(x)>29999999D||Math.abs(y)>29999999D||
+                    Math.abs(z)>29999999D)
+                return true;
+            dirty|=Math.abs(gizmoMirror.x-x)>1E-7D||
+                    Math.abs(gizmoMirror.y-y)>1E-7D||
+                    Math.abs(gizmoMirror.z-z)>1E-7D;
+            gizmoMirror.x=x;gizmoMirror.y=y;gizmoMirror.z=z;
+            return true;
+        }
+        if(yawDragging!=null)
+        {
+            if(yawDragging!=list(screen).selected())
+            {
+                stopGizmo();
+                return true;
+            }
+            PreviewCameraPose cam=screen.getCameraWorkspaceNativePose();
+            if(cam==null)return true;
+            double nextYaw;
+            if(yawRayValid)
+            {
+                double angle=rayYaw(yawDragging,cam,mx,my,
+                        px,py,pw,ph);
+                if(!Double.isFinite(angle))return true;
+                double step=angle-yawLastAngle;
+                while(step>180D)step-=360D;
+                while(step< -180D)step+=360D;
+                yawAccumulated+=step;
+                yawLastAngle=angle;
+                nextYaw=yawStart+yawAccumulated;
+            }
+            else
+            {
+                // At eye-level the horizontal ray is parallel to the yaw
+                // ring. Screen-horizontal motion remains a reliable control.
+                nextYaw=yawStart+(mx-yawStartMouseX)*0.55D;
+            }
+            if(Double.isFinite(nextYaw))
+            {
+                dirty|=Math.abs(yawDragging.yaw-nextYaw)>1E-7D;
+                yawDragging.yaw=nextYaw;
+            }
+            return true;
+        }
         if(dragging==null)return false;
         PreviewCameraPose cam=screen.getCameraWorkspaceNativePose();
+        if(cam==null)return true;
         double[] ray=PreviewCameraProjection.ray(cam,mx,my,
                 px,py,pw,ph);
         if(ray==null)return true;
@@ -449,11 +637,14 @@ public final class CameraSceneMirrorsPanel
         dirty=true;
         return true;
     }
+
     public void release(AnimationEditorScreen screen)
     {
         if(dirty)screen.getCameraWorkspace().saveScene();
+        stopGizmo();
         dragging=null;dirty=false;
     }
+
     /** Editor-only outline: not part of native world capture / MP4 output. */
     public void drawGuide(AnimationEditorScreen screen,
             int px,int py,int pw,int ph)
