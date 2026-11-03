@@ -63,6 +63,17 @@ minecraft {
                 jvmArg '-verbose:class'
             }
 
+            // Modern BetterLights Mixin needs ASM 9.x, but Forge 1.12's
+            // event hierarchy occasionally loses generated per-event
+            // ListenerList methods in this combined dev environment.
+            // Use our narrow, Forge-compatible fallback ONLY in that
+            // opt-in Mixin/ASM test profile (normal editor unchanged).
+            if (project.hasProperty('fixMixinAsm')) {
+                property 'bbs.editor.forgeEventIsolation',
+                        System.getProperty('bbs.editor.forgeEventIsolation',
+                                'true')
+            }
+
             // Explicit A/B switch for the experimental render-only
             // Chameleon Weld preview. Defaults OFF for normal sessions.
             property 'bbs.editor.weld.preview',
