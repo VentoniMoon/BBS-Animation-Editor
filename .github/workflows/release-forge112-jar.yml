@@ -1,0 +1,163 @@
+name: BBS Animation Editor 1.12.2 distributable JAR
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-forge112-jar.yml'
+      - 'build.gradle'
+      - 'src/main/java/**'
+      - 'src/main/resources/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Assemble reobfuscated Forge mod with Jolt Java 8
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout BBS Animation Editor
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned Jolt JNI 6.0.0 source
+        uses: actions/checkout@v4
+        with:
+          repository: stephengold/jolt-jni
+          ref: '6.0.0'
+          path: upstream-jolt
+          persist-credentials: false
+
+      - name: Install JDK 21 for source compatibility conversion
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build Java 8 Jolt JNI and hair prototype libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${{ runner.temp }}/jolt-java8"
+          python3 jolt-java8-port/tools/prepare_sources.py \
+            --upstream upstream-jolt --output "$OUT"
+          mkdir -p "$OUT/classes" libs
+          find "$OUT/src" \
+            jolt-java8-port/src/main/java/com/example/examplemod/physics \
+            src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java \
+            src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java \
+            src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java \
+            src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java \
+            src/main/java/com/example/examplemod/JoltColliderPrimitives.java \
+            src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java \
+            src/main/java/com/example/examplemod/JoltStaticPoseChange.java \
+            src/main/java/com/example/examplemod/JoltKinematicColliderSizing.java \
+            src/main/java/com/example/examplemod/JoltPhysicsTimeline.java \
+            src/main/java/com/example/examplemod/JoltPhysicsOfflineRunner.java \
+            -type f -name '*.java' | sort > "$OUT/sources.txt"
+          javac --release 8 -encoding UTF-8 -d "$OUT/classes" @"$OUT/sources.txt"
+          jar cf "$OUT/jolt-jni-6.0.0-java8.jar" \
+            -C "$OUT/classes" com/github/stephengold/joltjni
+          jar uf "$OUT/jolt-jni-6.0.0-java8.jar" \
+            -C "$OUT" UPSTREAM-LICENSE.txt
+          jar cf "$OUT/jolt-hair-prototype-java8.jar" \
+            -C "$OUT/classes" com/example/examplemod/physics
+
+      - name: Bundle pinned native Jolt for Windows and Linux x86-64
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${{ runner.temp }}/jolt-java8"
+          mkdir -p "$OUT/native-win" "$OUT/native-linux"
+          BASE="https://repo.maven.apache.org/maven2/com/github/stephengold"
+          curl --fail --location --retry 4 --retry-delay 2 \
+            "$BASE/jolt-jni-Windows64/6.0.0/jolt-jni-Windows64-6.0.0-ReleaseSp.jar" \
+            -o "$OUT/windows-jolt.jar"
+          curl --fail --location --retry 4 --retry-delay 2 \
+            "$BASE/jolt-jni-Linux64/6.0.0/jolt-jni-Linux64-6.0.0-ReleaseSp.jar" \
+            -o "$OUT/linux-jolt.jar"
+          (cd "$OUT/native-win" && jar xf "$OUT/windows-jolt.jar")
+          (cd "$OUT/native-linux" && jar xf "$OUT/linux-jolt.jar")
+          test -s "$OUT/native-win/windows/x86-64/com/github/stephengold/joltjni.dll"
+          test -s "$OUT/native-linux/linux/x86-64/com/github/stephengold/libjoltjni.so"
+          cp "$OUT/jolt-jni-6.0.0-java8.jar" \
+            libs/jolt-jni-6.0.0-java8-bundled.jar
+          jar uf libs/jolt-jni-6.0.0-java8-bundled.jar \
+            -C "$OUT/native-win" windows -C "$OUT/native-linux" linux
+          cp "$OUT/jolt-hair-prototype-java8.jar" \
+            libs/jolt-hair-prototype-java8.jar
+
+      - name: Switch to Minecraft 1.12.2's supported Java 8 runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Assemble and reobfuscate the actual distributable Forge mod
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace \
+            -PciDependencies -PenableJoltExperimental \
+            clean jar
+          test -s build/libs/bbs-animation-editor-0.1.0.jar
+
+      - name: Verify release manifest, mod identity, natives and bytecode
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, struct, zipfile
+          path = pathlib.Path("build/libs/bbs-animation-editor-0.1.0.jar")
+          with zipfile.ZipFile(path) as jar:
+              assert jar.testzip() is None, "Broken ZIP entry in distributable JAR"
+              names = set(jar.namelist())
+              required = [
+                  "META-INF/MANIFEST.MF",
+                  "mcmod.info",
+                  "com/example/examplemod/BBSAnimationEditor.class",
+                  "com/example/examplemod/CameraShaderCurveCorePlugin.class",
+                  "com/example/examplemod/AnimationEditorScreen.class",
+                  "com/example/examplemod/EditorThemePreferences.class",
+                  "com/example/examplemod/CameraSceneMirrorRenderer.class",
+                  "com/github/stephengold/joltjni/Jolt.class",
+                  "windows/x86-64/com/github/stephengold/joltjni.dll",
+                  "linux/x86-64/com/github/stephengold/libjoltjni.so",
+                  "assets/bbsanimationeditor/vosk_recognize.py",
+              ]
+              missing = [name for name in required if name not in names]
+              assert not missing, "Required release files missing: " + repr(missing)
+              manifest = jar.read("META-INF/MANIFEST.MF").decode("utf-8")
+              assert "FMLCorePlugin: com.example.examplemod.CameraShaderCurveCorePlugin" in manifest
+              assert "FMLCorePluginContainsFMLMod: true" in manifest
+              metadata = json.loads(jar.read("mcmod.info").decode("utf-8"))[0]
+              assert metadata["modid"] == "bbsanimationeditor", metadata
+              assert metadata["version"] == "0.1.0", metadata
+              assert metadata["mcversion"] == "1.12.2", metadata
+              own_classes = [n for n in names if n.startswith(
+                  ("com/example/examplemod/", "com/github/stephengold/joltjni/")
+              ) and n.endswith(".class")]
+              for name in own_classes:
+                  header = jar.read(name)[:8]
+                  assert header[:4] == b"\\xca\\xfe\\xba\\xbe", name
+                  major = struct.unpack(">H", header[6:8])[0]
+                  assert major <= 52, "{} requires Java newer than 8 (class {})".format(name, major)
+              print("Release JAR verified:", path, path.stat().st_size, "bytes")
+              print("Validated Java 8 classes:", len(own_classes))
+              print("Mod identity, Forge coremod, Jolt native DLL/SO: OK")
+          PY
+          (cd build/libs && sha256sum bbs-animation-editor-0.1.0.jar > SHA256SUMS.txt)
+
+      - name: Publish installable Forge mod artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbs-animation-editor-0.1.0-forge-1.12.2-jolt-java8
+          path: |
+            build/libs/bbs-animation-editor-0.1.0.jar
+            build/libs/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 90
