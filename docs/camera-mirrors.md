@@ -150,6 +150,21 @@ compiled BSL programs and the same posed world/actors:
 This is a **separate client JVM argument**. Without it the validated
 non-shader reflection and multipass tinted fallback behave as before.
 
+For the ForgeGradle `runClient` profile, instead of manually passing this
+JVM property, add one independent Gradle flag:
+
+```powershell
+.\gradlew.bat runClient -PenableJoltExperimental -PfixMixinAsm -PenableExperimentalBSLMirror
+```
+
+IntelliJ **Run > Edit Configurations > Gradle > Tasks and arguments**:
+`runClient -PenableJoltExperimental -PfixMixinAsm -PenableExperimentalBSLMirror`.
+The Gradle run config forwards the preview property to the **Minecraft
+client JVM**, not just the Gradle daemon. Only `enableExperimentalBSLMirror`
+turns on BSL reflection; `fixMixinAsm` and `enableJoltExperimental`
+are unrelated compatibility switches. This is opt-in for development only,
+not the final product's mirror settings.
+
 The experimental implementation allocates/reuses a separate private
 8-colortex/3-depth MRT, renders a reflected geometry pass into it, executes
 the seven active compiled BSL deferred/composite GLSL programs using each
