@@ -1748,6 +1748,16 @@ public class AnimationEditorScreen extends GuiScreen
                 return;
             }
 
+            // Background actor caches are reset above, but the selected
+            // actor has its own persistent native renderer in the viewport.
+            // Drop the previously prepared actor/pose immediately after a
+            // successful scene switch, before the new scene has a selection.
+            // This also prevents stale selected actors in mirror/shadow replay.
+            if (this.sceneViewport != null)
+                this.sceneViewport.resetSelectedActorForSceneChange();
+            this.characterStateResolver.reset();
+            CharacterBodyPartPreviewState.clear();
+
             if (this.editorInput != null)
             {
                 this.editorInput.resetInputState();
