@@ -5283,15 +5283,16 @@ public class EditorGizmoController
         }
 
         int frame = this.activeKeyframe.getFrame();
-        // Translation is authored in the parent bone's coordinate system,
-        // before the selected bone's own Euler rotation. Do not rotate its
-        // position delta by the selected bone (particularly wrong at 180°).
-        // The parent rotation still contributes to the rendered handle.
-        float[][] localRotation =
-                getBodyPartLocalRotationMatrix(
-                        isBlockbusterBodyPartTarget()
-                                ?this.activeBone.getParent():this.activeBone,
-                        frame);
+        // Blockbuster applies a bone's animated translation in its PARENT
+        // coordinate system. The displayed position handle already includes
+        // the parent/world orientation, so rotating the data delta again by
+        // the selected OR parent Euler angles double-applies a 180° turn.
+        // Each handle edits the corresponding parent-local data channel.
+        // Other Body Part adapters keep their established mapping.
+        boolean blockbusterTranslation=isBlockbusterBodyPartTarget();
+        float[][] localRotation=blockbusterTranslation
+                ?identityRotationMatrix()
+                :getBodyPartLocalRotationMatrix(this.activeBone,frame);
 
         if (localRotation == null)
         {
@@ -5351,8 +5352,11 @@ public class EditorGizmoController
             }
         }
 
-        float[][] internal =
-                getBodyPartInternalRotationMatrix(this.activeBone, frame);
+        // The conversion from world blocks to model pixels must use the
+        // same translation-space basis as the handle, not the rotated bone.
+        float[][] internal=blockbusterTranslation
+                ?identityRotationMatrix()
+                :getBodyPartInternalRotationMatrix(this.activeBone,frame);
 
         if (internal == null)
         {
