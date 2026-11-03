@@ -645,6 +645,59 @@ public final class CameraSceneMirrorsPanel
         dragging=null;dirty=false;
     }
 
+    /** A projected horizontal Y-axis ring and front-normal direction. */
+    private void drawYawGuide(CameraSceneMirrors.Mirror mirror,
+            PreviewCameraPose camera,int px,int py,int pw,int ph)
+    {
+        double radius=yawRadius(mirror);
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glLineWidth(2.8F);
+        GL11.glColor4f(1F,0.78F,0.24F,0.92F);
+
+        // A horizontal circle around the mirror center, in real world XYZ.
+        // Projection is the same as the mirror outline and mouse hit test.
+        float[] last=null;
+        for(int i=0;i<=72;i++)
+        {
+            float[] next=projectedYaw(mirror,camera,i*5D,radius,
+                    px,py,pw,ph);
+            if(next!=null&&last!=null)
+            {
+                GL11.glBegin(GL11.GL_LINES);
+                GL11.glVertex2f(last[0],last[1]);
+                GL11.glVertex2f(next[0],next[1]);
+                GL11.glEnd();
+            }
+            last=next;
+        }
+
+        // The cyan spoke is the reflective FRONT face; rotating the ring
+        // rotates this indicator and the actual mirror yaw together.
+        float[] center=PreviewCameraProjection.project(mirror.x,mirror.y,
+                mirror.z,camera,px,py,pw,ph);
+        float[] front=projectedYaw(mirror,camera,mirror.yaw,
+                radius*1.2D,px,py,pw,ph);
+        if(center!=null&&front!=null)
+        {
+            GL11.glColor4f(0.34F,0.91F,1F,1F);
+            GL11.glLineWidth(3.5F);
+            GL11.glBegin(GL11.GL_LINES);
+            GL11.glVertex2f(center[0],center[1]);
+            GL11.glVertex2f(front[0],front[1]);
+            GL11.glEnd();
+        }
+        GL11.glPopAttrib();
+        if(front!=null)
+        {
+            Minecraft.getMinecraft().fontRenderer.drawStringWithShadow(
+                    "YAW",Math.round(front[0]+7F),
+                    Math.round(front[1]-7F),0xFF8AE7FF);
+        }
+    }
+
     /** Editor-only outline: not part of native world capture / MP4 output. */
     public void drawGuide(AnimationEditorScreen screen,
             int px,int py,int pw,int ph)
@@ -671,6 +724,9 @@ public final class CameraSceneMirrorsPanel
         for(int i=0;i<4;i++)GL11.glVertex2f(pts[i][0],pts[i][1]);
         GL11.glEnd();
         GL11.glPopAttrib();
+
+        if(yawMode)
+            drawYawGuide(m,cam,px,py,pw,ph);
 
         // Explain the tinted surface in the actual viewport, not only in
         // the right inspector (which may be hidden or cropped). This overlay
