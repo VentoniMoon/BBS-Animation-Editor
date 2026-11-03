@@ -3171,8 +3171,15 @@ public class AnimationEditorScreen extends GuiScreen
     {
         if(mc==null||view==null||sceneViewport==null||
                 sceneState==null)return;
+        // The OptiFine early-preparation path replays already evaluated
+        // poses. A/B order testing must affect THIS visible path too,
+        // otherwise right-click/F10 reports an order change that never
+        // actually reaches the screen when shadow preparation is active.
+        if(selectedActorFirstProbe)
+            sceneViewport.renderPreparedNativeActor(mc,view,width,height);
         multiActorPreview.renderPreparedNativeActors(mc,view,width,height);
-        sceneViewport.renderPreparedNativeActor(mc,view,width,height);
+        if(!selectedActorFirstProbe)
+            sceneViewport.renderPreparedNativeActor(mc,view,width,height);
     }
 
     /**
