@@ -78,17 +78,17 @@ public final class EmoticonsRecordPlaybackSmoke
         EntityActor delayedActor=new EntityActor();
         AnimatedMorph delayedMorph=new AnimatedMorph();
         EditorEmoticonsRecordPlayback delayedClock=new EditorEmoticonsRecordPlayback();
-        delayedClock.update(delayedActor,delayedMorph,4);
+        delayedClock.update(delayedActor,delayedMorph,delayedRecord,4);
         check(delayedMorph.animator.jumpStarts==1,
                 "Jump at first airborne frame was missed when MY was zero");
         check(delayedActor.isAirBorne,
                 "Blockbuster airborne flag was not forwarded");
         check(delayedActor.motionY>.2D,
                 "Takeoff impulse was not reconstructed from next frame");
-        delayedClock.update(delayedActor,delayedMorph,5);
+        delayedClock.update(delayedActor,delayedMorph,delayedRecord,5);
         check(delayedMorph.animator.jumpStarts==1,
                 "Jump was triggered twice during same airborne interval");
-        delayedClock.update(delayedActor,delayedMorph,7);
+        delayedClock.update(delayedActor,delayedMorph,delayedRecord,7);
         check(delayedMorph.animator.jumpStarts==1,
                 "Jump disappeared after full timeline seek");
 
