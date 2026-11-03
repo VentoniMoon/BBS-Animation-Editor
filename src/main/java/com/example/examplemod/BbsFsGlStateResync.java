@@ -3,7 +3,10 @@ package com.example.examplemod;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.BufferUtils;
+import java.nio.ByteBuffer;
 
 /**
  * Reconcile the OpenGL driver with Minecraft 1.12.2's GlStateManager cache.
@@ -26,12 +29,20 @@ public final class BbsFsGlStateResync
         final boolean texture0Enabled,texture1Enabled;
         final int texture0,texture1,activeTexture;
         final int clientActiveTexture,arrayBuffer,elementBuffer;
+        final int alphaFunc,depthFunc;
+        final float alphaRef;
+        final boolean depthWrite,colorRed,colorGreen,colorBlue,colorAlpha;
+        final int blendSrcRgb,blendDstRgb,blendSrcAlpha,blendDstAlpha;
 
         private Snapshot(boolean blend,boolean alpha,boolean depth,
                 boolean cull,boolean lighting,boolean fog,
                 boolean texture0Enabled,boolean texture1Enabled,
                 int texture0,int texture1,int activeTexture,
-                int clientActiveTexture,int arrayBuffer,int elementBuffer)
+                int clientActiveTexture,int arrayBuffer,int elementBuffer,
+                int alphaFunc,float alphaRef,int depthFunc,boolean depthWrite,
+                boolean colorRed,boolean colorGreen,
+                boolean colorBlue,boolean colorAlpha,
+                int blendSrcRgb,int blendDstRgb,int blendSrcAlpha,int blendDstAlpha)
         {
             this.blend=blend;this.alpha=alpha;this.depth=depth;
             this.cull=cull;this.lighting=lighting;this.fog=fog;
@@ -42,6 +53,18 @@ public final class BbsFsGlStateResync
             this.clientActiveTexture=clientActiveTexture;
             this.arrayBuffer=arrayBuffer;
             this.elementBuffer=elementBuffer;
+            this.alphaFunc=alphaFunc;
+            this.alphaRef=alphaRef;
+            this.depthFunc=depthFunc;
+            this.depthWrite=depthWrite;
+            this.colorRed=colorRed;
+            this.colorGreen=colorGreen;
+            this.colorBlue=colorBlue;
+            this.colorAlpha=colorAlpha;
+            this.blendSrcRgb=blendSrcRgb;
+            this.blendDstRgb=blendDstRgb;
+            this.blendSrcAlpha=blendSrcAlpha;
+            this.blendDstAlpha=blendDstAlpha;
         }
     }
 
@@ -69,6 +92,11 @@ public final class BbsFsGlStateResync
         {
             GL13.glActiveTexture(active);
         }
+        // glPopAttrib restores these on the DRIVER, but not Minecraft's
+        // cached alpha/depth/color/blend parameters. A later actor can
+        // otherwise silently skip a necessary state change.
+        ByteBuffer color=BufferUtils.createByteBuffer(4);
+        GL11.glGetBoolean(GL11.GL_COLOR_WRITEMASK,color);
         return new Snapshot(
                 GL11.glIsEnabled(GL11.GL_BLEND),
                 GL11.glIsEnabled(GL11.GL_ALPHA_TEST),
@@ -77,7 +105,17 @@ public final class BbsFsGlStateResync
                 GL11.glIsEnabled(GL11.GL_LIGHTING),
                 GL11.glIsEnabled(GL11.GL_FOG),
                 t0Enabled,t1Enabled,t0,t1,active,
-                clientActive,arrayBuffer,elementBuffer);
+                clientActive,arrayBuffer,elementBuffer,
+                GL11.glGetInteger(GL11.GL_ALPHA_TEST_FUNC),
+                GL11.glGetFloat(GL11.GL_ALPHA_TEST_REF),
+                GL11.glGetInteger(GL11.GL_DEPTH_FUNC),
+                GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
+                color.get(0)!=0,color.get(1)!=0,
+                color.get(2)!=0,color.get(3)!=0,
+                GL11.glGetInteger(GL14.GL_BLEND_SRC_RGB),
+                GL11.glGetInteger(GL14.GL_BLEND_DST_RGB),
+                GL11.glGetInteger(GL14.GL_BLEND_SRC_ALPHA),
+                GL11.glGetInteger(GL14.GL_BLEND_DST_ALPHA));
     }
 
     public static void restore(Snapshot snapshot)
@@ -100,6 +138,16 @@ public final class BbsFsGlStateResync
         forceCull(snapshot.cull);
         forceLighting(snapshot.lighting);
         forceFog(snapshot.fog);
+        // GL's push/pop attribute stack does not synchronize these cached
+        // Minecraft 1.12.2 parameters. Force a distinct intermediate value
+        // before restoring the saved one so the cache cannot skip the write.
+        forceAlphaFunc(snapshot.alphaFunc,snapshot.alphaRef);
+        forceDepthFunc(snapshot.depthFunc);
+        forceDepthMask(snapshot.depthWrite);
+        forceColorMask(snapshot.colorRed,snapshot.colorGreen,
+                snapshot.colorBlue,snapshot.colorAlpha);
+        forceBlendFunc(snapshot.blendSrcRgb,snapshot.blendDstRgb,
+                snapshot.blendSrcAlpha,snapshot.blendDstAlpha);
 
         // Restore the original active sampler in both LWJGL and the cache.
         GlStateManager.setActiveTexture(GL13.GL_TEXTURE0);
@@ -113,6 +161,45 @@ public final class BbsFsGlStateResync
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER,snapshot.arrayBuffer);
         GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER,
                 snapshot.elementBuffer);
+    }
+
+    private static void forceAlphaFunc(int func,float ref)
+    {
+        GlStateManager.alphaFunc(func==GL11.GL_ALWAYS
+                ?GL11.GL_NEVER:GL11.GL_ALWAYS,0.5F);
+        GlStateManager.alphaFunc(func,ref);
+    }
+
+    private static void forceDepthFunc(int func)
+    {
+        GlStateManager.depthFunc(func==GL11.GL_ALWAYS
+                ?GL11.GL_NEVER:GL11.GL_ALWAYS);
+        GlStateManager.depthFunc(func);
+    }
+
+    private static void forceDepthMask(boolean enabled)
+    {
+        GlStateManager.depthMask(!enabled);
+        GlStateManager.depthMask(enabled);
+    }
+
+    private static void forceColorMask(boolean r,boolean g,
+            boolean b,boolean a)
+    {
+        GlStateManager.colorMask(!r,!g,!b,!a);
+        GlStateManager.colorMask(r,g,b,a);
+    }
+
+    private static void forceBlendFunc(int srcRgb,int dstRgb,
+            int srcAlpha,int dstAlpha)
+    {
+        // Different from the recorded blend function even if it was the
+        // usual ONE/ZERO opaque baseline.
+        int alt=srcRgb==GL11.GL_ONE?GL11.GL_ZERO:GL11.GL_ONE;
+        GlStateManager.tryBlendFuncSeparate(alt,GL11.GL_ZERO,
+                GL11.GL_ONE,GL11.GL_ZERO);
+        GlStateManager.tryBlendFuncSeparate(srcRgb,dstRgb,
+                srcAlpha,dstAlpha);
     }
 
     private static void forceTexture(int unit,int texture,boolean enabled)
