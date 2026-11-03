@@ -296,11 +296,11 @@ jar {
                 "FMLCorePlugin": "com.example.examplemod.CameraShaderCurveCorePlugin",
                 "FMLCorePluginContainsFMLMod": "true",
                 "Specification-Title": "bbsanimationeditor",
-                "Specification-Vendor": "examplemod",
-                "Specification-Version": "1",
+                "Specification-Vendor": "VentoniMoon",
+                "Specification-Version": "${version}",
                 "Implementation-Title": project.name,
                 "Implementation-Version": "${version}",
-                "Implementation-Vendor": "examplemod",
+                "Implementation-Vendor": "VentoniMoon",
                 "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
