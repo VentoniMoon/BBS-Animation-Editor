@@ -38,6 +38,12 @@ repositories {
 minecraft {
     mappings channel: 'snapshot', version: '20171003-1.12'
 
+    // The bundled 1.12.2 CTM mod registers its texture metadata through
+    // Minecraft.metadataSerializer_. In a deobfuscated ForgeGradle client,
+    // ATs declared by runtime run/mods jars may not transform Minecraft.
+    // Apply CTM's own SRG field rule at the workspace level as well.
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
     runs {
         client {
             // Opt-in isolated modpack/world stress profile. Normal runClient
