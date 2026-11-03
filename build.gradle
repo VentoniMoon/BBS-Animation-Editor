@@ -72,6 +72,12 @@ minecraft {
                 property 'bbs.editor.forgeEventIsolation',
                         System.getProperty('bbs.editor.forgeEventIsolation',
                                 'true')
+                // Known ForgeGradle#748: contaminated Side.BUKKIT makes FML
+                // NetworkRegistry.newChannel() dereference a missing map.
+                // Patch only the two valid network sides, not the enum itself.
+                property 'bbs.editor.forgeNetworkSideGuard',
+                        System.getProperty('bbs.editor.forgeNetworkSideGuard',
+                                'true')
             }
 
             // Explicit A/B switch for the experimental render-only
@@ -157,15 +163,9 @@ minecraft {
 dependencies {
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2860'
 
-    // ForgeGradle 3 + Minecraft 1.12.2 can expose a MergeTool copy of
-    // net.minecraftforge.fml.relauncher.Side containing an extra BUKKIT
-    // enum constant on runClient's raw (non-recomp) runtime classpath.
-    // FML NetworkRegistry only initializes CLIENT / SERVER channel maps,
-    // so its newChannel() then NPEs at line 207 during FML construction.
-    // Use the older compatible MergeTool on the project runtime classpath,
-    // as documented by ForgeGradle issue #748 / #750. Do not put the tool
-    // JAR itself in run/mods; it is a dev build dependency, not a Forge mod.
-    implementation('net.minecraftforge:mergetool:0.2.3.3') { force = true }
+    // ForgeGradle's MergeTool is a build tool, NOT a mod/runtime library.
+    // Do not put a MergeTool JAR on the game classpath. The opt-in
+    // ForgeNetworkSideGuardTransformer handles unexpected Side.BUKKIT.
 
     if (project.hasProperty('ciDependencies')) {
         // Exact versions already used in the user's dev modpack.
