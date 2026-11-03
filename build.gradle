@@ -178,6 +178,41 @@ dependencies {
 }
 
 /*
+ * Opt-in ASM runtime override for the *new* Mixin bundled by BetterLights.
+ *
+ * ForgeGradle's 1.12.2 launch classpath currently selects asm-6.0.jar,
+ * while Mixin's LanguageFeatures directly references ConstantDynamic.
+ * This class was added in ASM 6.2; recent Mixin also uses ASM 9.x APIs.
+ * Match the entire ASM family at 9.6 so tree/commons/analysis/util do
+ * not accidentally mix old and new versions during class transformation.
+ *
+ * Deliberately runtime-only and opt-in: the normal editor launch and
+ * the ForgeGradle build plugin's own classloader are not modified.
+ * Test with: runClient -PfixMixinAsm -PenableJoltExperimental
+ */
+if (project.hasProperty('fixMixinAsm')) {
+    def asmVersion = '9.6'
+    def asmModules = ['asm', 'asm-tree', 'asm-commons', 'asm-analysis', 'asm-util']
+
+    configurations.all {
+        if (name == 'runtimeClasspath' || name == 'runtime') {
+            resolutionStrategy.eachDependency { details ->
+                if (details.requested.group == 'org.ow2.asm'
+                        && asmModules.contains(details.requested.name)) {
+                    details.useVersion(asmVersion)
+                }
+            }
+        }
+    }
+
+    dependencies {
+        asmModules.each { moduleName ->
+            runtimeOnly "org.ow2.asm:${moduleName}:${asmVersion}"
+        }
+    }
+}
+
+/*
  * Native Jolt is an opt-in EXPERIMENTAL preview for Java 8.
  *
  * Obtain the two JARs from the jolt-java8-experimental-jars GitHub Actions
