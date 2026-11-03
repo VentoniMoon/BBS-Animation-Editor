@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'build.gradle'
+      - 'src/main/resources/META-INF/accesstransformer.cfg'
       - 'src/main/java/com/example/examplemod/CameraMirrorMath.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
@@ -56,6 +58,8 @@ on:
       - '.github/workflows/camera-mirror-forge.yml'
   pull_request:
     paths:
+      - 'build.gradle'
+      - 'src/main/resources/META-INF/accesstransformer.cfg'
       - 'src/main/java/com/example/examplemod/CameraMirrorMath.java'
       - 'src/main/java/com/example/examplemod/CameraMirrorObliqueProjection.java'
       - 'src/main/java/com/example/examplemod/CameraSceneMirrors.java'
