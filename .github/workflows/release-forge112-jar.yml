@@ -101,9 +101,23 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew --no-daemon --stacktrace \
-            -PciDependencies -PenableJoltExperimental \
-            clean jar
+          # CurseMaven occasionally resets older ForgeGradle requests.
+          # Retry networking failures without changing dependency versions.
+          built=false
+          for attempt in 1 2 3 4; do
+            echo "Forge 1.12.2 packaging attempt $attempt of 4"
+            if ./gradlew --no-daemon --stacktrace \
+                 -PciDependencies -PenableJoltExperimental \
+                 clean jar; then
+              built=true
+              break
+            fi
+            if [ "$attempt" -lt 4 ]; then
+              echo "Retrying transient Gradle/CurseMaven failure"
+              sleep 15
+            fi
+          done
+          test "$built" = true
           test -s build/libs/bbs-animation-editor-0.1.0.jar
 
       - name: Verify release manifest, mod identity, natives and bytecode
