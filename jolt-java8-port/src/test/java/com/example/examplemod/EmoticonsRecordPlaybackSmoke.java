@@ -63,7 +63,46 @@ public final class EmoticonsRecordPlaybackSmoke
         clock.update(actor,morph,record,6);
         check(morph.animator!=beforeConfig,"Updated Character action setup kept stale animator");
         check(morph.animator.jumpStarts==1,"Jump missing after action setup changed");
-        System.out.println("Emoticons paused walk, recorded jump, landing and seek reset: PASS");
+        // Blockbuster records can mark airborne before the first Y increase.
+        // If MY is zero at that boundary, Animator would miss its one-time
+        // wasOnGround -> !onGround jump event. Recover the next tick's rise.
+        List<BlockbusterRecordFrame> delayed=new ArrayList<BlockbusterRecordFrame>();
+        for(int tick=0;tick<9;tick++)
+        {
+            boolean ground=tick<4||tick>=7;
+            double y=tick<=4?0D:tick==5?0.42D:tick==6?0.70D:0D;
+            delayed.add(new BlockbusterRecordFrame(tick*.08D,y,0D,
+                    tick==5?.42D:tick==6?.28D:0D,ground));
+        }
+        BlockbusterRecord delayedRecord=new BlockbusterRecord(delayed);
+        EntityActor delayedActor=new EntityActor();
+        AnimatedMorph delayedMorph=new AnimatedMorph();
+        EditorEmoticonsRecordPlayback delayedClock=new EditorEmoticonsRecordPlayback();
+        delayedClock.update(delayedActor,delayedMorph,4);
+        check(delayedMorph.animator.jumpStarts==1,
+                "Jump at first airborne frame was missed when MY was zero");
+        check(delayedActor.isAirBorne,
+                "Blockbuster airborne flag was not forwarded");
+        check(delayedActor.motionY>.2D,
+                "Takeoff impulse was not reconstructed from next frame");
+        delayedClock.update(delayedActor,delayedMorph,5);
+        check(delayedMorph.animator.jumpStarts==1,
+                "Jump was triggered twice during same airborne interval");
+        delayedClock.update(delayedActor,delayedMorph,7);
+        check(delayedMorph.animator.jumpStarts==1,
+                "Jump disappeared after full timeline seek");
+
+        // A fall from a ledge must NOT count as jumping.
+        List<BlockbusterRecordFrame> falling=new ArrayList<BlockbusterRecordFrame>();
+        for(int tick=0;tick<5;tick++)
+            falling.add(new BlockbusterRecordFrame(tick*.08D,
+                    tick<2?1D:1D-(tick-1)*.25D,0D,0D,tick<2));
+        AnimatedMorph fallingMorph=new AnimatedMorph();
+        new EditorEmoticonsRecordPlayback().update(new EntityActor(),
+                fallingMorph,new BlockbusterRecord(falling),4);
+        check(fallingMorph.animator.jumpStarts==0,
+                "Walk-off ledge incorrectly triggered jump");
+        System.out.println("Emoticons walk, jump, delayed impulse, landing, seek and ledge: PASS");
     }
 }
 
@@ -89,6 +128,10 @@ final class BlockbusterRecordFrame
     float getMotionY(){return (float)my;}
     float getMotionZ(){return 0F;}
     boolean isGround(){return ground;}
+    boolean isAirborne(){return !ground;}
+    float getYawHead(){return 0F;}
+    boolean hasBodyYaw(){return false;}
+    float getBodyYaw(){return 0F;}
     boolean isSneaking(){return false;}
     boolean isSprinting(){return false;}
     float getFallDistance(){return 0F;}
