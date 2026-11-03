@@ -99,10 +99,26 @@ public class BlockbusterActorPreviewRenderer
                 }
             }
         }
+        // Record origin distinguishes an actual depth overlap of two
+        // actors at the same location from missing Emoticons body meshes.
+        // Client array state and active shader help identify cross-morph
+        // OpenGL contamination. Runs only for one opt-in A/B snapshot.
+        String gl=" program="+
+                org.lwjgl.opengl.GL11.glGetInteger(
+                        org.lwjgl.opengl.GL20.GL_CURRENT_PROGRAM)+
+                " clientUnit="+org.lwjgl.opengl.GL11.glGetInteger(
+                        org.lwjgl.opengl.GL13.GL_CLIENT_ACTIVE_TEXTURE)+
+                " vertexArray="+org.lwjgl.opengl.GL11.glIsEnabled(
+                        org.lwjgl.opengl.GL11.GL_VERTEX_ARRAY)+
+                " normalArray="+org.lwjgl.opengl.GL11.glIsEnabled(
+                        org.lwjgl.opengl.GL11.GL_NORMAL_ARRAY)+
+                " arrayBuffer="+org.lwjgl.opengl.GL11.glGetInteger(
+                        org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER_BINDING);
         System.out.println("[BBS Editor][MultiActor A/B] actor="+data.getId()+
                 " role="+(selected?"SELECTED":"background")+
                 " morph="+morph.getClass().getSimpleName()+
-                " keys="+count+" changed="+changed+details);
+                " pos=("+actor.posX+","+actor.posY+","+actor.posZ+")"+
+                " keys="+count+" changed="+changed+details+gl);
     }
 
 
