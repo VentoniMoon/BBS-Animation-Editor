@@ -79,7 +79,9 @@ public final class EditorEmoticonsRecordPlayback
         {
             BlockbusterRecordFrame current=record.getFrame(tick);
             if(current==null)continue;
-            installRecordState(entity,previous,current,tick);
+            BlockbusterRecordFrame next=tick+1<record.getFrames().size()
+                    ?record.getFrame(tick+1):null;
+            installRecordState(entity,previous,current,next,tick);
             // The GUI may pause the AnimatedMorph while scrubbing. Its
             // updateAnimator() intentionally skips native Animator.update()
             // when morph.isPaused(), so calling morph.update(entity) here
@@ -101,7 +103,8 @@ public final class EditorEmoticonsRecordPlayback
 
     private static void installRecordState(EntityActor actor,
             BlockbusterRecordFrame previous,
-            BlockbusterRecordFrame current,int tick)
+            BlockbusterRecordFrame current,
+            BlockbusterRecordFrame next,int tick)
     {
         actor.ticksExisted=tick;
         actor.prevPosX=previous==null?current.getX():previous.getX();
@@ -128,14 +131,40 @@ public final class EditorEmoticonsRecordPlayback
                 actor.motionY=current.getY()-previous.getY();
         }
 
+        // Blockbuster Frame.apply() carries BOTH the on-ground transition
+        // and airborne flag into EntityActor. Emoticons' Animator only
+        // triggers its secondary jump action on the FIRST airborne tick
+        // when abs(motionY)>0.2, while locomotion remains active.
         actor.onGround=current.isGround();
+        actor.isAirBorne=current.isAirborne();
         actor.fallDistance=current.getFallDistance();
+        boolean takeoff=previous!=null&&previous.isGround()&&
+                !current.isGround();
+        if(takeoff&&Math.abs(actor.motionY)<=0.2D)
+        {
+            // Many recorded jumps change Ground one tick BEFORE Y moves,
+            // or store a damped/zero MY at the threshold. The next Record
+            // position is the only safe source of that missing impulse.
+            // Never synthesize a jump for a walk-off ledge: require ascent.
+            double rise=current.getY()-previous.getY();
+            if(next!=null)
+                rise=Math.max(rise,next.getY()-current.getY());
+            if(rise>0.2D)
+                actor.motionY=rise;
+        }
         actor.setSneaking(current.isSneaking());
         actor.setSprinting(current.isSprinting());
         actor.rotationYaw=current.getYaw();
         actor.prevRotationYaw=previous==null?current.getYaw():previous.getYaw();
         actor.rotationPitch=current.getPitch();
         actor.prevRotationPitch=previous==null?current.getPitch():previous.getPitch();
+        actor.rotationYawHead=current.getYawHead();
+        actor.prevRotationYawHead=previous==null
+                ?current.getYawHead():previous.getYawHead();
+        actor.renderYawOffset=current.hasBodyYaw()
+                ?current.getBodyYaw():current.getYaw();
+        actor.prevRenderYawOffset=previous!=null&&previous.hasBodyYaw()
+                ?previous.getBodyYaw():actor.renderYawOffset;
 
         // Emoticons uses moveForward only to choose the playback direction.
         // Recover it from recorded displacement, not from the Preview camera.
