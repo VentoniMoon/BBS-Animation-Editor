@@ -40,7 +40,10 @@ minecraft {
 
     runs {
         client {
-            workingDirectory project.file('run')
+            // Opt-in isolated modpack/world stress profile. Normal runClient
+            // and its existing run/mods, saves and configuration are unchanged.
+            workingDirectory project.file(
+                    project.hasProperty('stressTest') ? 'run-stress' : 'run')
 
             // Explicit A/B switch for the experimental render-only
             // Chameleon Weld preview. Defaults OFF for normal sessions.
