@@ -412,6 +412,9 @@ public class AnimationEditorScreen extends GuiScreen
     public void initGui()
     {
         super.initGui();
+        // Persist the selected UI theme between Minecraft launches.
+        // This is client-local, independent of scenes and world saves.
+        EditorThemeManager.initialize(this.mc.mcDataDir);
         this.wavAudio.restoreAudible();
         this.wavAudio.restoreLastLoaded();
 
