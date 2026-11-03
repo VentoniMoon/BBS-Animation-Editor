@@ -8,7 +8,8 @@ import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 @IFMLLoadingPlugin.SortingIndex(1002)
 @IFMLLoadingPlugin.TransformerExclusions({
         "com.example.examplemod.CameraShaderCurveCorePlugin",
-        "com.example.examplemod.CameraShaderCurveTransformer"})
+        "com.example.examplemod.CameraShaderCurveTransformer",
+        "com.example.examplemod.LegacyForgeEventIsolationTransformer"})
 public final class CameraShaderCurveCorePlugin implements IFMLLoadingPlugin
 {
     private static volatile boolean loaded;
@@ -18,6 +19,13 @@ public final class CameraShaderCurveCorePlugin implements IFMLLoadingPlugin
 
     @Override public String[] getASMTransformerClass()
     {
+        if ("true".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.forgeEventIsolation", "false")))
+        {
+            return new String[]{
+                    "com.example.examplemod.CameraShaderCurveTransformer",
+                    "com.example.examplemod.LegacyForgeEventIsolationTransformer"};
+        }
         return new String[]{
                 "com.example.examplemod.CameraShaderCurveTransformer"};
     }
