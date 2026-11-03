@@ -24,6 +24,10 @@ repositories {
     flatDir {
         dir 'libs'
     }
+    // ASM overrides must resolve in local developer runs as well as CI.
+    if (project.hasProperty('fixMixinAsm')) {
+        mavenCentral()
+    }
     // CI can compile against the exact public 1.12.2 McHorse mod releases
     // when the user's local run/mods directory is intentionally absent.
     if (project.hasProperty('ciDependencies')) {
