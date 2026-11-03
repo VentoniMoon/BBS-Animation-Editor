@@ -93,9 +93,21 @@ public class BlockbusterActorPreviewRenderer
                         em.animator.animation.meshes)
                 {
                     if(mesh!=null)
+                    {
+                        mchorse.emoticons.skin_n_bones.api.animation.AnimationMeshConfig
+                                config=em.animator.userConfig==null||
+                                em.animator.userConfig.meshes==null
+                                ?null:em.animator.userConfig.meshes.get(mesh.name);
                         details.append(" [").append(mesh.name)
                                 .append(" alpha=").append(mesh.alpha)
+                                .append(" configVisible=")
+                                .append(config==null?"default":config.visible)
+                                .append(" vbo=").append(mesh.vertexBuffer)
+                                .append(" indices=")
+                                .append(mesh.data==null||mesh.data.indexData==null
+                                        ?-1:mesh.data.indexData.length)
                                 .append("]");
+                    }
                 }
             }
         }
@@ -118,6 +130,7 @@ public class BlockbusterActorPreviewRenderer
                 " role="+(selected?"SELECTED":"background")+
                 " morph="+morph.getClass().getSimpleName()+
                 " pos=("+actor.posX+","+actor.posY+","+actor.posZ+")"+
+                " invisible="+actor.isInvisible()+
                 " keys="+count+" changed="+changed+details+gl);
     }
 
