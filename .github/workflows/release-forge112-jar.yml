@@ -143,7 +143,7 @@ jobs:
               ) and n.endswith(".class")]
               for name in own_classes:
                   header = jar.read(name)[:8]
-                  assert header[:4] == b"\\xca\\xfe\\xba\\xbe", name
+                  assert header[:4] == bytes.fromhex("cafebabe"), name
                   major = struct.unpack(">H", header[6:8])[0]
                   assert major <= 52, "{} requires Java newer than 8 (class {})".format(name, major)
               print("Release JAR verified:", path, path.stat().st_size, "bytes")
