@@ -243,3 +243,9 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon --stacktrace -PciDependencies compileJava
+      - name: Verify opt-in BetterLights ASM 9.6 runtime dependency alignment
+        run: |
+          ./gradlew --no-daemon -PciDependencies -PfixMixinAsm dependencies --configuration runtimeClasspath > /tmp/bbs-asm-runtime.txt
+          for module in asm asm-tree asm-commons asm-analysis asm-util; do
+            grep -q "org.ow2.asm:${module}:9.6" /tmp/bbs-asm-runtime.txt
+          done
