@@ -1,16 +1,16 @@
 [
-{
-  "modid": "examplemod",
-  "name": "Example Mod",
-  "description": "Example placeholder mod.",
-  "version": "${version}",
-  "mcversion": "${mcversion}",
-  "url": "",
-  "updateUrl": "",
-  "authorList": ["ExampleDude"],
-  "credits": "The Forge and FML guys, for making this example",
-  "logoFile": "",
-  "screenshots": [],
-  "dependencies": []
-}
+  {
+    "modid": "bbsanimationeditor",
+    "name": "BBS Animation Editor",
+    "description": "Minecraft 1.12.2 animation and cinematic scene editor with CAMERA, Blockbuster actor animation, preview, lighting, mirrors and offline video export.",
+    "version": "0.1.0",
+    "mcversion": "1.12.2",
+    "url": "https://github.com/VentoniMoon/BBS-Animation-Editor",
+    "updateUrl": "",
+    "authorList": ["VentoniMoon"],
+    "credits": "Built for Minecraft Forge 1.12.2 with the McHorse animation ecosystem.",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": ["blockbuster", "mclib"]
+  }
 ]
