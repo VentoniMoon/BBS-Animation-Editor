@@ -336,6 +336,22 @@ public class EditorSceneViewport
                     mc,view,width,height);
     }
 
+    /**
+     * A scene switch invalidates the selected actor's prepared native
+     * replay, not only the unselected actor renderers. Without this reset,
+     * renderPreparedNativeActor() can draw the previous scene's actor until
+     * another actor is explicitly selected in the new scene.
+     *
+     * Keep the viewport/camera/FBO: only the actor-owned runtime cache and
+     * its physics overlay belong to the old scene.
+     */
+    public void resetSelectedActorForSceneChange()
+    {
+        this.actorPreviewRenderer.reset();
+        this.hasJoltActorOrigin = false;
+        this.lastJoltOverlayFrame = -1;
+    }
+
     public void beginNativeActorFrame()
     {
         /* Called BEFORE RenderWorldLastEvent's selected actor draw, not by
