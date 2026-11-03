@@ -78,6 +78,20 @@ minecraft {
                 property 'bbs.editor.forgeNetworkSideGuard',
                         System.getProperty('bbs.editor.forgeNetworkSideGuard',
                                 'true')
+
+                // Runtime mods such as MalisisCore bundle production (SRG)
+                // Mixin refmaps. A ForgeGradle MCP dev client uses method
+                // names like processPlayerDigging, but their refmaps target
+                // func_147345_a. Tell Mixin to remap those references using
+                // ForgeGradle's generated SRG -> MCP mapping file.
+                // Do not disable refmaps: that breaks mods built with
+                // different mapping snapshots.
+                def srgToMcp = project.file('build/createSrgToMcp/output.srg')
+                property 'mixin.env.remapRefMap', 'true'
+                property 'mixin.env.refMapRemappingFile',
+                        srgToMcp.absolutePath
+                property 'net.minecraftforge.gradle.GradleStart.srg.srg-mcp',
+                        srgToMcp.absolutePath
             }
 
             // Explicit A/B switch for the experimental render-only
