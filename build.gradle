@@ -51,6 +51,14 @@ minecraft {
             workingDirectory project.file(
                     project.hasProperty('stressTest') ? 'run-stress' : 'run')
 
+            // Opt-in classloader diagnostic for old Forge/Mixin/ASM conflicts.
+            // Capture the runClient console to locate the *actual* ASM JAR
+            // supplying org.objectweb.asm.ClassReader (rather than guessing
+            // from Gradle dependency lists or modifying user mods).
+            if (project.hasProperty('diagnoseAsmClasspath')) {
+                jvmArg '-verbose:class'
+            }
+
             // Explicit A/B switch for the experimental render-only
             // Chameleon Weld preview. Defaults OFF for normal sessions.
             property 'bbs.editor.weld.preview',
