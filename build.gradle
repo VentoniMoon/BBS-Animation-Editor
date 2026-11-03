@@ -102,6 +102,14 @@ minecraft {
                                 'true')
             }
 
+            // Explicit opt-in for the private multipass BSL mirror renderer.
+            // This is independent of ASM / Jolt stress testing. Do not enable
+            // it silently in packaged or ordinary development builds; the
+            // full BSL compositor is still experimental.
+            if (project.hasProperty('enableExperimentalBSLMirror')) {
+                property 'bbs.editor.camera.mirrorBSLExperimental', 'true'
+            }
+
             // Explicit A/B switch for the experimental render-only
             // Chameleon Weld preview. Defaults OFF for normal sessions.
             property 'bbs.editor.weld.preview',
