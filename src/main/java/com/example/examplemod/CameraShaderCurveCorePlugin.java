@@ -12,7 +12,8 @@ import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
         "com.example.examplemod.CameraShaderCurveCorePlugin",
         "com.example.examplemod.CameraShaderCurveTransformer",
         "com.example.examplemod.LegacyForgeEventIsolationTransformer",
-        "com.example.examplemod.ForgeNetworkSideGuardTransformer"})
+        "com.example.examplemod.ForgeNetworkSideGuardTransformer",
+        "com.example.examplemod.DevIBlockStateSrgBridgeTransformer"})
 public final class CameraShaderCurveCorePlugin implements IFMLLoadingPlugin
 {
     private static volatile boolean loaded;
@@ -33,6 +34,11 @@ public final class CameraShaderCurveCorePlugin implements IFMLLoadingPlugin
                 "bbs.editor.forgeNetworkSideGuard", "false")))
         {
             transformers.add("com.example.examplemod.ForgeNetworkSideGuardTransformer");
+        }
+        if ("true".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.mcpBlockStateSrgBridge", "false")))
+        {
+            transformers.add("com.example.examplemod.DevIBlockStateSrgBridgeTransformer");
         }
         return transformers.toArray(new String[transformers.size()]);
     }
