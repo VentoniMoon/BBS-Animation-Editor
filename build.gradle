@@ -92,6 +92,14 @@ minecraft {
                         srgToMcp.absolutePath
                 property 'net.minecraftforge.gradle.GradleStart.srg.srg-mcp',
                         srgToMcp.absolutePath
+
+                // MalisisCore's injected BlockModelShapes code still invokes
+                // IBlockState.func_177230_c() (SRG), despite refmap target
+                // remapping. Supply a development-only Java 8 default-method
+                // bridge to MCP IBlockState.getBlock(), not a mod JAR edit.
+                property 'bbs.editor.mcpBlockStateSrgBridge',
+                        System.getProperty('bbs.editor.mcpBlockStateSrgBridge',
+                                'true')
             }
 
             // Explicit A/B switch for the experimental render-only
