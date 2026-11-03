@@ -4080,7 +4080,7 @@ public class EditorGizmoController
                 basisBone,
                 selectedKeyframe,
                 recordFrame,
-                parent == null
+                parent == null && isBlockbusterBodyPartTarget()
         );
     }
 
@@ -5288,7 +5288,10 @@ public class EditorGizmoController
         // position delta by the selected bone (particularly wrong at 180°).
         // The parent rotation still contributes to the rendered handle.
         float[][] localRotation =
-                getBodyPartLocalRotationMatrix(this.activeBone.getParent(),frame);
+                getBodyPartLocalRotationMatrix(
+                        isBlockbusterBodyPartTarget()
+                                ?this.activeBone.getParent():this.activeBone,
+                        frame);
 
         if (localRotation == null)
         {
