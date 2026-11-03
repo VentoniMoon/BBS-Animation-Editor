@@ -4054,6 +4054,30 @@ public class EditorGizmoController
             AnimationKeyframe selectedKeyframe,
             BlockbusterRecordFrame recordFrame)
     {
+        if (this.globalTransformTarget != null)
+        {
+            /*
+             * The Body Part's GLOBAL position is applied BEFORE its global
+             * rotation, scale and the child morph's root mirror:
+             *
+             *  attachment * translate(globalPosition)
+             *             * rotate(globalRotation) * scale * childMorph
+             *
+             * Therefore global position handles must use the ATTACHMENT
+             * coordinate basis only. The previous composed-matrix path
+             * included globalRotation + childRootMatrix, reversing the
+             * displayed X/Z arrows at a 180-degree Y turn while dragging
+             * still wrote unrotated Position X/Y/Z.
+             *
+             * This is deliberately restricted to global POSITION. Internal
+             * bone translations still follow their parent model hierarchy;
+             * rotation/scale handles still follow the whole model rotation.
+             */
+            int frame=selectedKeyframe!=null
+                    ?selectedKeyframe.getFrame():this.gizmoFrame;
+            return getBodyPartAttachmentWorldAxes(frame,recordFrame);
+        }
+
         /*
          * The renderer applies a bone's translation BEFORE applying that
          * bone's own rotation. Therefore the visible translation axes must
