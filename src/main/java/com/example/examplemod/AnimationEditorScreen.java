@@ -3678,7 +3678,8 @@ public class AnimationEditorScreen extends GuiScreen
                                 sceneState.getCameraOutput().getWidth()+" x "+
                                 sceneState.getCameraOutput().getHeight()+")",
                         "Export video (MP4 / FFmpeg)"}
-                :new String[]{"Show all actors","Auto-focus selected key",
+                :new String[]{"Show all actors (right-click: render-order A/B)",
+                        "Auto-focus selected key",
                         navigation==EditorCamera.Mode.ORBIT
                                 ?"Orbit camera (switch to free)"
                                 :"Free camera (switch to orbit)",
@@ -3714,7 +3715,7 @@ public class AnimationEditorScreen extends GuiScreen
 
     public boolean clickStage8PreviewButton(int mouseX,int mouseY,int button)
     {
-        if(this.sceneViewport==null||button!=0)return false;
+        if(this.sceneViewport==null||(button!=0&&button!=1))return false;
         // Toolbar occupies the outer editor canvas even in portrait mode.
         int left=this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA
@@ -3732,6 +3733,7 @@ public class AnimationEditorScreen extends GuiScreen
         if(which>=count||offset%step>=PREVIEW_ICON_SIZE)return false;
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
         {
+            if(button!=0)return false;
             if(which==0)cameraWorkspace.toggleShotView();
             else if(which==1)
                 cameraWorkspace.togglePreviewRecordingFromToolbar(
@@ -3744,8 +3746,35 @@ public class AnimationEditorScreen extends GuiScreen
             }
             return true;
         }
-        if(which==0)multiActorPreview.toggleShowAllActors();
-        else if(which==1)previewAutoFocus.toggle();
+        if(which==0)
+        {
+            if(button==1)
+            {
+                // Mouse-accessible render-order probe. Some F10 shortcuts
+                // never reach GuiScreen on Windows; right-clicking the
+                // existing all-actors icon always reaches this handler.
+                selectedActorFirstProbe=!selectedActorFirstProbe;
+                BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(true);
+                System.out.println("[BBS Editor][MultiActor A/B] "+
+                        (selectedActorFirstProbe
+                                ?"Selected actor rendered FIRST"
+                                :"Selected actor rendered LAST"));
+            }
+            else
+            {
+                multiActorPreview.toggleShowAllActors();
+                // Capture once per change, including the selected-only
+                // baseline, without depending on keyboard modifiers.
+                BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(true);
+                System.out.println("[BBS Editor][MultiActor A/B] "+
+                        (multiActorPreview.isShowAllActors()
+                                ?"ALL ACTORS":"SELECTED ONLY")+
+                        " selectedFirst="+selectedActorFirstProbe);
+            }
+            return true;
+        }
+        if(button!=0)return false;
+        if(which==1)previewAutoFocus.toggle();
         else if(which==2)
         {
             EditorCamera.Mode current=this.sceneViewport.getCamera().getMode();
