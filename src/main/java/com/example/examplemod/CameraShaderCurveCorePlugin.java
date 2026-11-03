@@ -1,6 +1,8 @@
 package com.example.examplemod;
 
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 
 @IFMLLoadingPlugin.Name("BBS Animation Editor Shader Curves")
@@ -9,7 +11,8 @@ import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 @IFMLLoadingPlugin.TransformerExclusions({
         "com.example.examplemod.CameraShaderCurveCorePlugin",
         "com.example.examplemod.CameraShaderCurveTransformer",
-        "com.example.examplemod.LegacyForgeEventIsolationTransformer"})
+        "com.example.examplemod.LegacyForgeEventIsolationTransformer",
+        "com.example.examplemod.ForgeNetworkSideGuardTransformer"})
 public final class CameraShaderCurveCorePlugin implements IFMLLoadingPlugin
 {
     private static volatile boolean loaded;
@@ -19,15 +22,19 @@ public final class CameraShaderCurveCorePlugin implements IFMLLoadingPlugin
 
     @Override public String[] getASMTransformerClass()
     {
+        List<String> transformers = new ArrayList<String>();
+        transformers.add("com.example.examplemod.CameraShaderCurveTransformer");
         if ("true".equalsIgnoreCase(System.getProperty(
                 "bbs.editor.forgeEventIsolation", "false")))
         {
-            return new String[]{
-                    "com.example.examplemod.CameraShaderCurveTransformer",
-                    "com.example.examplemod.LegacyForgeEventIsolationTransformer"};
+            transformers.add("com.example.examplemod.LegacyForgeEventIsolationTransformer");
         }
-        return new String[]{
-                "com.example.examplemod.CameraShaderCurveTransformer"};
+        if ("true".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.forgeNetworkSideGuard", "false")))
+        {
+            transformers.add("com.example.examplemod.ForgeNetworkSideGuardTransformer");
+        }
+        return transformers.toArray(new String[transformers.size()]);
     }
     @Override public String getModContainerClass(){return null;}
     @Override public String getSetupClass(){return null;}
