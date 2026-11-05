@@ -42,6 +42,8 @@ public final class CameraSceneMirrorRenderer
     private static int sourceWidth,sourceHeight;
     private static net.minecraft.world.World lastWorld;
     private static boolean blockedByShaderpack;
+    /** A failed shader capture must not poison a later vanilla capture. */
+    private static Boolean lastShaderMode;
     private static String captureStatus="MIRROR: awaiting first frame";
     private static String lastPathDiagnostic="";
     private static void logPath(String reason)
@@ -108,6 +110,7 @@ public final class CameraSceneMirrorRenderer
         failed=false;warned=false;
         CameraMirrorOptiFinePreflight.reset();
         blockedByShaderpack=false;
+        lastShaderMode=null;
         captureStatus="MIRROR: awaiting first frame";
         lastPathDiagnostic="";
     }
@@ -124,6 +127,21 @@ public final class CameraSceneMirrorRenderer
         clipPlaneInstalled=false;
         blockedByShaderpack=false;
         if(capturing)return;
+        // The old fail-closed latch survived changing shaderpacks and even
+        // changing worlds in the same CAMERA session. That left the
+        // blue-gray fallback displayed indefinitely in both shader and
+        // shaderless modes, despite the new capture path being independent.
+        if(mc!=null&&lastWorld!=null&&lastWorld!=mc.world)
+            reset();
+        final boolean shadersNow=shaderpackActive();
+        if(lastShaderMode!=null &&
+                lastShaderMode.booleanValue()!=shadersNow)
+        {
+            logPath("Shader mode changed; releasing stale mirror capture "
+                    +"and rearming the isolated reflection target.");
+            reset();
+        }
+        lastShaderMode=Boolean.valueOf(shadersNow);
         if(failed)
         {
             captureStatus="MIRROR ERROR - SEE latest.log";
@@ -146,7 +164,6 @@ public final class CameraSceneMirrorRenderer
             return;
         }
         captureStatus="MIRROR: waiting for capture";
-        if(lastWorld!=null&&lastWorld!=mc.world)reset();
         lastWorld=mc.world;
         // OptiFine G5 owns a multi-attachment deferred GBuffer, shadow
         // textures and several composite programs. Rebinding only
@@ -154,7 +171,7 @@ public final class CameraSceneMirrorRenderer
         // those stages and risks overwriting the main shader frame.
         // A dedicated OptiFine render-target/state backend is required.
         // Do not disable this guard just to hide the tinted fallback.
-        final boolean shaderMirror=shaderpackActive();
+        final boolean shaderMirror=shadersNow;
         boolean bslMultiPass=false;
         if(shaderMirror)
         {
