@@ -419,3 +419,6 @@ bbsanimationeditor.ui.camera.translate.label=СМЕЩЕНИЕ
 bbsanimationeditor.ui.video.crf_high=Высокое (CRF 18)
 bbsanimationeditor.ui.video.crf_balanced=Сбалансированное (22)
 bbsanimationeditor.ui.video.crf_smaller=Компактное (26)
+bbsanimationeditor.ui.audio.found_count=Найдено WAV-файлов: %s
+bbsanimationeditor.ui.audio.generated_count=Создано ключей артикуляции: %s
+bbsanimationeditor.ui.audio.recognized_count=Распознано слов: %s, создано ключей: %s
