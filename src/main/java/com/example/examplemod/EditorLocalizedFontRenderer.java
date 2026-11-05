@@ -22,6 +22,19 @@ public final class EditorLocalizedFontRenderer extends FontRenderer
 {
     private static final float CYRILLIC_SCALE=1.28F;
 
+    /**
+     * Pixel-font baseline, not the top of the glyph quad. When the native
+     * Unicode glyphs are enlarged by 1.28x, scaling their baseline as well
+     * leaves the Cyrillic part of mixed strings visibly LOWER than ASCII
+     * (e.g. "СЦЕНА: Select Scene"). Compensate for the extra ascent in the
+     * same GUI coordinate system that all editor widgets use.
+     *
+     * Keep Cyrillic size and the original ASCII font completely unchanged.
+     * 7px is the baseline ascent of the glyph body (not the 9px line box).
+     */
+    private static final float CYRILLIC_BASELINE_UP =
+            (CYRILLIC_SCALE-1F)*7F;
+
     public EditorLocalizedFontRenderer(Minecraft mc)
     {
         super(mc.gameSettings,
@@ -67,7 +80,8 @@ public final class EditorLocalizedFontRenderer extends FontRenderer
                 {
                     // Only the native Unicode fallback is resized; Latin
                     // stays on Minecraft's own normal-height 8px font.
-                    GlStateManager.translate(cursor,y-0.65F,0F);
+                    GlStateManager.translate(
+                            cursor,y-CYRILLIC_BASELINE_UP,0F);
                     GlStateManager.scale(CYRILLIC_SCALE,CYRILLIC_SCALE,1F);
                     super.drawString(run,0F,0F,color,dropShadow);
                 }
