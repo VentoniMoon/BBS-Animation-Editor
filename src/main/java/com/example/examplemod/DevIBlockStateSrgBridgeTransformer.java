@@ -18,6 +18,7 @@ import org.objectweb.asm.tree.MethodNode;
  * Two independently observed missing links in the full dev modpack:
  *   IBlockState.func_177230_c() -> IBlockState.getBlock()
  *   Chunk.func_177435_g(BlockPos) -> Chunk.getBlockState(BlockPos)
+ *   CPacketPlayerDigging.func_179715_a() -> CPacketPlayerDigging.getPosition()
  *
  * Alias only when the MCP target exists and the SRG alias is absent.
  * This never changes vanilla semantics or edits any mod JAR, and is
@@ -29,17 +30,23 @@ public final class DevIBlockStateSrgBridgeTransformer implements IClassTransform
             "net.minecraft.block.state.IBlockState";
     private static final String CHUNK_TARGET =
             "net.minecraft.world.chunk.Chunk";
+    private static final String DIGGING_TARGET =
+            "net.minecraft.network.play.client.CPacketPlayerDigging";
 
     private static final String BLOCK_STATE_OWNER =
             "net/minecraft/block/state/IBlockState";
     private static final String CHUNK_OWNER =
             "net/minecraft/world/chunk/Chunk";
+    private static final String DIGGING_OWNER =
+            "net/minecraft/network/play/client/CPacketPlayerDigging";
 
     private static final String GET_BLOCK_DESC =
             "()Lnet/minecraft/block/Block;";
     private static final String GET_BLOCK_STATE_DESC =
             "(Lnet/minecraft/util/math/BlockPos;)"
             + "Lnet/minecraft/block/state/IBlockState;";
+    private static final String GET_DIGGING_POSITION_DESC =
+            "()Lnet/minecraft/util/math/BlockPos;";
 
     @Override
     public byte[] transform(String name, String transformedName, byte[] bytes)
@@ -50,14 +57,18 @@ public final class DevIBlockStateSrgBridgeTransformer implements IClassTransform
                 || BLOCK_STATE_TARGET.equals(transformedName);
         boolean chunk = CHUNK_TARGET.equals(name)
                 || CHUNK_TARGET.equals(transformedName);
-        if(!blockState && !chunk)return bytes;
+        boolean digging = DIGGING_TARGET.equals(name)
+                || DIGGING_TARGET.equals(transformedName);
+        if(!blockState && !chunk && !digging)return bytes;
 
-        final String owner = blockState ? BLOCK_STATE_OWNER : CHUNK_OWNER;
-        final String descriptor = blockState
-                ? GET_BLOCK_DESC : GET_BLOCK_STATE_DESC;
-        final String srgName = blockState
-                ? "func_177230_c" : "func_177435_g";
-        final String mcpName = blockState ? "getBlock" : "getBlockState";
+        final String owner = blockState ? BLOCK_STATE_OWNER
+                : chunk ? CHUNK_OWNER : DIGGING_OWNER;
+        final String descriptor = blockState ? GET_BLOCK_DESC
+                : chunk ? GET_BLOCK_STATE_DESC : GET_DIGGING_POSITION_DESC;
+        final String srgName = blockState ? "func_177230_c"
+                : chunk ? "func_177435_g" : "func_179715_a";
+        final String mcpName = blockState ? "getBlock"
+                : chunk ? "getBlockState" : "getPosition";
 
         try
         {
@@ -97,8 +108,11 @@ public final class DevIBlockStateSrgBridgeTransformer implements IClassTransform
 
             // For IBlockState, Java 8 allows a concrete default interface
             // method. For Chunk, this is an ordinary public instance method.
-            // Both invoke the ORIGINAL MCP method, preserving virtual
-            // dispatch (including overridden getBlockState in subclasses).
+            // All aliases invoke the ORIGINAL MCP method, preserving
+            // virtual dispatch (including overridden methods in subclasses).
+            // In particular, the digging packet's SRG getPosition bridge
+            // is needed by MalisisCore's injected server-side handler; the
+            // original bytecode otherwise disconnects the player on mining.
             MethodNode alias = new MethodNode(Opcodes.ACC_PUBLIC,
                     srgName, descriptor, null, null);
             alias.visitCode();

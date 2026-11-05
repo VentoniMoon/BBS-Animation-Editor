@@ -95,10 +95,11 @@ minecraft {
 
                 // MalisisCore's injected methods may retain production
                 // SRG calls despite refmap target remapping:
-                // IBlockState.func_177230_c() and (on MalisisDoors ticks)
-                // Chunk.func_177435_g(BlockPos). Supply dev-only aliases to
-                // MCP getBlock() and getBlockState(BlockPos). Never touch
-                // the release mod or any third-party JAR.
+                // IBlockState.func_177230_c(), Chunk.func_177435_g()
+                // (MalisisDoors updates), and CPacketPlayerDigging
+                // .func_179715_a() (server mining packets). Supply dev-only
+                // aliases to the corresponding MCP methods. Never modify
+                // the release mod, third-party JARs or the world itself.
                 property 'bbs.editor.mcpBlockStateSrgBridge',
                         System.getProperty('bbs.editor.mcpBlockStateSrgBridge',
                                 'true')

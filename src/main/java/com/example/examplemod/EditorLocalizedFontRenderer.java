@@ -22,6 +22,18 @@ public final class EditorLocalizedFontRenderer extends FontRenderer
 {
     private static final float CYRILLIC_SCALE=1.28F;
 
+    /**
+     * Mixed Latin/Cyrillic UI labels share one typographic baseline.
+     *
+     * The vanilla Unicode fallback has a different raster origin than the
+     * 8px ASCII atlas. Scaling Cyrillic 1.28x without compensating its
+     * baseline puts its glyphs several screen pixels below the English text.
+     * The 7px cap-height adjustment plus the native Unicode origin offset
+     * keeps both scripts aligned without changing their size/advance width.
+     */
+    private static final float CYRILLIC_BASELINE_UP =
+            (CYRILLIC_SCALE-1F)*7F+0.7F;
+
     public EditorLocalizedFontRenderer(Minecraft mc)
     {
         super(mc.gameSettings,
@@ -67,7 +79,7 @@ public final class EditorLocalizedFontRenderer extends FontRenderer
                 {
                     // Only the native Unicode fallback is resized; Latin
                     // stays on Minecraft's own normal-height 8px font.
-                    GlStateManager.translate(cursor,y-0.65F,0F);
+                    GlStateManager.translate(cursor,y-CYRILLIC_BASELINE_UP,0F);
                     GlStateManager.scale(CYRILLIC_SCALE,CYRILLIC_SCALE,1F);
                     super.drawString(run,0F,0F,color,dropShadow);
                 }
