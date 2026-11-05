@@ -419,3 +419,6 @@ bbsanimationeditor.ui.camera.translate.label=TRANSLATE
 bbsanimationeditor.ui.video.crf_high=High (CRF 18)
 bbsanimationeditor.ui.video.crf_balanced=Balanced (22)
 bbsanimationeditor.ui.video.crf_smaller=Smaller (26)
+bbsanimationeditor.ui.audio.found_count=Found WAV files: %s
+bbsanimationeditor.ui.audio.generated_count=Generated %s mouth texture keys
+bbsanimationeditor.ui.audio.recognized_count=Recognized %s words, created %s keys
