@@ -591,10 +591,18 @@ public final class EditorLanguage
             {
                 String translated=lookup(prefix);
                 if(!prefix.equals(translated))
+                {
+                    String suffix=english.substring(prefix.length());
+                    // The value after THEME:/MODE: is a fixed UI enum, not
+                    // a user file/morph name. Translate it as well; leave
+                    // SCENE:/ACTOR: values exactly as they were authored.
+                    if("THEME: ".equals(prefix)||"MODE: ".equals(prefix))
+                        suffix=lookup(suffix);
                     return translated+
                             (prefix.endsWith(" ")&&!translated.endsWith(" ")?
                                     " ":"")+
-                            english.substring(prefix.length());
+                            suffix;
+                }
             }
         return english;
     }
