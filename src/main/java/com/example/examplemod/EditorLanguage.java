@@ -514,8 +514,37 @@ public final class EditorLanguage
     {
         String key=ALIASES.get(original);
         if(key==null)return original;
+
+        // Use this mod's UTF-8 ru_ru catalog, not Minecraft's global
+        // English fallback. In 1.12.2 I18n.format(key) can return the
+        // English label even when gameSettings.language is "ru_ru".
+        // This is why the Cyrillic font was correct while ACTORS,
+        // TIMELINE, TRANSFORM and other UI labels remained English.
+        String russian=EditorLanguageCatalog.russian(key);
+        if(russian!=null)return russian;
+
+        // Resource-pack or custom keys are still allowed if no built-in
+        // translation exists. Do not mistake an untranslated key for text.
         String translated=I18n.format(key);
         return key.equals(translated)?original:translated;
+    }
+
+    private static String formatRussian(String key,Object...args)
+    {
+        String template=EditorLanguageCatalog.russian(key);
+        if(template!=null)
+        {
+            try
+            {
+                return String.format(Locale.ROOT,template,args);
+            }
+            catch(java.util.IllegalFormatException invalid)
+            {
+                System.err.println("[BBS Editor][Locale] Invalid format for "
+                        +key+": "+invalid.getMessage());
+            }
+        }
+        return I18n.format(key,args);
     }
 
     public static String tr(String english)
@@ -531,7 +560,7 @@ public final class EditorLanguage
         {
             String count=english.substring(0,english.length()-wavSuffix.length());
             if(count.matches("[0-9]+"))
-                return I18n.format(
+                return formatRussian(
                         "bbsanimationeditor.ui.audio.found_count",count);
         }
         final String generatedPrefix="Generated ";
@@ -542,7 +571,7 @@ public final class EditorLanguage
             String count=english.substring(generatedPrefix.length(),
                     english.length()-generatedSuffix.length());
             if(count.matches("[0-9]+"))
-                return I18n.format(
+                return formatRussian(
                         "bbsanimationeditor.ui.audio.generated_count",count);
         }
         if(english.startsWith("Recognized ")&&
@@ -553,7 +582,7 @@ public final class EditorLanguage
                     "^Recognized ([0-9]+) words, created ([0-9]+) keys$")
                     .matcher(english);
             if(parts.matches())
-                return I18n.format(
+                return formatRussian(
                         "bbsanimationeditor.ui.audio.recognized_count",
                         parts.group(1),parts.group(2));
         }
