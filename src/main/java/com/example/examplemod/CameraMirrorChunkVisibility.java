@@ -16,6 +16,7 @@ import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 import net.minecraft.client.renderer.chunk.CompiledChunk;
 import net.minecraft.client.renderer.chunk.RenderChunk;
 import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.AxisAlignedBB;
 
@@ -276,60 +277,83 @@ public final class CameraMirrorChunkVisibility
                 infoConstructor!=null;
         initialized=true;
         Class<?> cls=global.getClass();
-        infosField=findField(cls,"renderInfos",List.class);
-        frustumField=findField(cls,"viewFrustum",ViewFrustum.class);
-        containerField=findField(cls,"renderContainer",
-                ChunkRenderContainer.class);
-        dispatcherField=findField(cls,"renderDispatcher",
-                ChunkRenderDispatcher.class);
+        // renderInfos is NOT the only List in OptiFine's RenderGlobal:
+        // never select an arbitrary list by type. Match the verified
+        // 1.12.2 MCP, SRG and Notch field names instead.
+        infosField=findField(cls,List.class,
+                "renderInfos","field_72755_R","m");
+        frustumField=findField(cls,ViewFrustum.class,
+                "viewFrustum","field_175008_n","o");
+        containerField=findField(cls,ChunkRenderContainer.class,
+                "renderContainer","field_174996_N","O");
+        dispatcherField=findField(cls,ChunkRenderDispatcher.class,
+                "renderDispatcher","field_174995_M","N");
+
+        // In a reobfuscated JAR the nested class is RenderGlobal$a
+        // (not ContainerLocalRenderInformation). Identify its exact
+        // constructor shape rather than relying on its source name.
+        // The EnumFacing and int arguments distinguish the render-info
+        // container from unrelated OptiFine helper classes.
         for(Class<?> nested:RenderGlobal.class.getDeclaredClasses())
         {
-            if(!nested.getSimpleName().equals(
-                    "ContainerLocalRenderInformation"))continue;
             for(Constructor<?> ctor:nested.getDeclaredConstructors())
             {
                 Class<?>[] args=ctor.getParameterTypes();
-                if((args.length==4 &&
+                boolean nonStatic=args.length==4 &&
                         RenderGlobal.class.isAssignableFrom(args[0]) &&
-                        RenderChunk.class.isAssignableFrom(args[1]))||
-                    (args.length==3 &&
-                        RenderChunk.class.isAssignableFrom(args[0])))
+                        RenderChunk.class.isAssignableFrom(args[1]) &&
+                        args[2]==EnumFacing.class&&args[3]==int.class;
+                boolean staticInner=args.length==3 &&
+                        RenderChunk.class.isAssignableFrom(args[0]) &&
+                        args[1]==EnumFacing.class&&args[2]==int.class;
+                if(nonStatic||staticInner)
                 {
                     ctor.setAccessible(true);
                     infoConstructor=ctor;
                     break;
                 }
             }
+            if(infoConstructor!=null)break;
         }
-        return infosField!=null&&frustumField!=null&&
+        boolean ready=infosField!=null&&frustumField!=null&&
                 containerField!=null&&infoConstructor!=null;
+        if(!ready)
+            System.err.println("[BBS Editor][Mirror][Chunks] "+
+                    "Missing RenderGlobal members ("+cls.getName()+") "+
+                    "renderInfos="+(infosField!=null)+
+                    " viewFrustum="+(frustumField!=null)+
+                    " renderContainer="+(containerField!=null)+
+                    " infoConstructor="+(infoConstructor!=null));
+        return ready;
     }
 
-    private static Field findField(Class<?> cls,String name,Class<?> type)
+    private static Field findField(Class<?> cls,Class<?> type,String... names)
     {
-        try
+        for(Class<?> current=cls;current!=null;
+                current=current.getSuperclass())
         {
-            Field named=cls.getDeclaredField(name);
-            if(type.isAssignableFrom(named.getType()))
+            for(String name:names)
             {
-                named.setAccessible(true);
-                return named;
-            }
-        }
-        catch(ReflectiveOperationException ignored){}
-        // Runtime mappings may rename the MCP field. In these cases
-        // non-List fields have unique types in RenderGlobal.
-        if(type!=List.class)
-        {
-            for(Field f:cls.getDeclaredFields())
-            {
-                if(type.isAssignableFrom(f.getType()))
+                try
                 {
-                    f.setAccessible(true);
-                    return f;
+                    Field named=current.getDeclaredField(name);
+                    if(!type.isAssignableFrom(named.getType()))continue;
+                    named.setAccessible(true);
+                    return named;
                 }
+                catch(ReflectiveOperationException ignored){}
             }
+            // These object types are unique in vanilla RenderGlobal;
+            // OptiFine may rename them. Preserve the original type-only
+            // fallback for objects, but never for a List (several exist).
+            if(type!=List.class)
+                for(Field f:current.getDeclaredFields())
+                    if(type.isAssignableFrom(f.getType()))
+                    {
+                        f.setAccessible(true);
+                        return f;
+                    }
         }
-        return null; // fail closed instead of changing a different list
+        return null;
     }
 }
