@@ -1,0 +1,56 @@
+name: Editor Russian localization catalog
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/com/example/examplemod/EditorLanguage.java'
+      - 'src/main/java/com/example/examplemod/EditorLocalizedFontRenderer.java'
+      - 'src/main/resources/assets/bbsanimationeditor/lang/**'
+      - '.github/workflows/editor-locale-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/java/com/example/examplemod/EditorLanguage.java'
+      - 'src/main/java/com/example/examplemod/EditorLocalizedFontRenderer.java'
+      - 'src/main/resources/assets/bbsanimationeditor/lang/**'
+      - '.github/workflows/editor-locale-smoke.yml'
+
+jobs:
+  language-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Russian/English keys, alias references and UTF-8
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          root=pathlib.Path('src/main/resources/assets/bbsanimationeditor/lang')
+          java=pathlib.Path('src/main/java/com/example/examplemod/EditorLanguage.java').read_text(encoding='utf-8')
+
+          def load(name):
+              result={}
+              for number,line in enumerate((root/name).read_text(encoding='utf-8').splitlines(),1):
+                  if not line or line.startswith('#'):
+                      continue
+                  assert '=' in line, (name,number,'missing separator')
+                  key,value=line.split('=',1)
+                  assert key not in result, (name,number,'duplicate key',key)
+                  assert key.startswith('bbsanimationeditor.ui.'), (name,number,'wrong namespace',key)
+                  assert value.strip(), (name,number,'empty text',key)
+                  result[key]=value
+              return result
+
+          en=load('en_us.lang')
+          ru=load('ru_ru.lang')
+          assert set(en)==set(ru), ('language key mismatch',sorted(set(en)^set(ru)))
+          aliases=re.findall(r'add\("([^"]+)",\s*"[^"]*"\);',java)
+          missing=['bbsanimationeditor.ui.'+x for x in aliases
+                   if 'bbsanimationeditor.ui.'+x not in en]
+          assert not missing, ('missing aliases',missing)
+          assert len(en)>=420, ('unexpectedly short localization',len(en))
+          print('BBS editor languages: {} matching keys, {} alias entries'.format(
+              len(en),len(aliases)))
+          PY
