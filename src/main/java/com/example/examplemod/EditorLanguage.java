@@ -383,6 +383,98 @@ public final class EditorLanguage
         PREFIXES.add("Delete keyframe at frame ");
         PREFIXES.add("Alpha ");
         PREFIXES.add("Light value: ");
+        add("mode.character", "Character");
+        add("mode.camera", "Camera");
+        add("mode.pose", "Pose");
+        add("mode.bodyparts", "Body Parts");
+        add("theme.emerald", "Emerald");
+        add("theme.ocean", "Ocean");
+        add("theme.ruby", "Ruby");
+        add("theme.amethyst", "Amethyst");
+        add("output.format", "OUTPUT FORMAT");
+        add("output.custom_resolution", "Custom resolution...");
+        add("output.custom_size", "Custom output size");
+        add("output.apply", "Apply");
+        add("output.even", "Even dimensions; 128-8192 px");
+        add("output.frame_preview", "FRAME PREVIEW");
+        add("output.bad_size", "Use even dimensions (128-8192)");
+        add("output.bad_number", "Enter numeric dimensions.");
+        add("camera.shake", "SHAKE");
+        add("camera.shake_amount", "Shake amount");
+        add("camera.noise", "Noise");
+        add("camera.look_block", "LOOK AT BLOCK");
+        add("camera.atblock", "At block");
+        add("camera.block", "BLOCK");
+        add("camera.forward", "Forward");
+        add("camera.orbit", "ORBIT");
+        add("camera.absolute", "Absolute");
+        add("camera.copy", "Copy");
+        add("camera.center", "CENTER");
+        add("camera.use_fixed", "Use fixed center");
+        add("camera.drag", "DRAG");
+        add("camera.deterministic", "Deterministic");
+        add("camera.factor", "Factor");
+        add("camera.rate", "Rate");
+        add("camera.dollyzoom", "DOLLY ZOOM");
+        add("camera.focus", "Focus distance");
+        add("camera.startfov", "Start FOV");
+        add("camera.endfov", "End FOV");
+        add("camera.expression", "EXPRESSION");
+        add("camera.expression_value", "Expression");
+        add("camera.remap", "REMAP TIME");
+        add("camera.time_remapping", "TIME REMAPPING");
+        add("camera.source_start", "Source start tick");
+        add("camera.source_end", "Source end tick");
+        add("camera.curve_channel", "CURVE CHANNEL");
+        add("camera.curve_keys", "CURVE KEYS");
+        add("camera.shader_value", "Shader option value");
+        add("camera.film_delta", "Film delta (-1..1)");
+        add("camera.texture", "Texture");
+        add("camera.browse_images", "Browse images");
+        add("camera.fullscreen", "Fullscreen");
+        add("camera.mirror_x", "Mirror horizontally");
+        add("camera.mirror_y", "Mirror vertically");
+        add("camera.smooth", "Smooth");
+        add("camera.tint", "Tint");
+        add("camera.audio_file", "Audio file");
+        add("camera.browse_audio", "Browse audio");
+        add("camera.offset", "Offset");
+        add("camera.volume", "Volume");
+        add("camera.extend_audio", "Extend to audio length");
+        add("camera.video_file", "Video file");
+        add("camera.browse_video", "Browse videos");
+        add("camera.audio_track", "Audio track");
+        add("camera.extend_video", "Extend to video length");
+        add("camera.loop", "Loop");
+        add("camera.text", "Text");
+        add("camera.color", "Color");
+        add("camera.text_shadow", "Text shadow");
+        add("camera.background", "Background");
+        add("camera.background_offset", "Background offset");
+        add("camera.shadow", "Shadow");
+        add("camera.opaque_shadow", "Opaque shadow");
+        add("camera.font_heading", "FONT");
+        add("camera.font_file", "Font file");
+        add("camera.browse_fonts", "Browse fonts");
+        add("camera.font_size", "Font size");
+        add("camera.line_height", "Line height");
+        add("camera.max_width", "Max width");
+        add("camera.image_file", "Image file");
+        add("camera.image_right", "Image right");
+        add("camera.image_scale", "Image scale");
+        add("camera.general", "GENERAL");
+        add("camera.title", "Title");
+        add("camera.duration", "Duration");
+        add("camera.layer", "Layer");
+        add("camera.start", "Start");
+        add("camera.end", "End");
+        add("camera.fov", "FOV delta");
+        add("camera.key.label", "KEYFRAME");
+        add("camera.spline.label", "SPLINE");
+        add("camera.translate.label", "TRANSLATE");
+        add("video.crf_high", "High (CRF 18)");
+        add("video.crf_balanced", "Balanced (22)");
+        add("video.crf_smaller", "Smaller (26)");
         Collections.sort(PREFIXES,new Comparator<String>()
         {
             @Override public int compare(String a,String b)
@@ -426,7 +518,10 @@ public final class EditorLanguage
             {
                 String translated=lookup(prefix);
                 if(!prefix.equals(translated))
-                    return translated+english.substring(prefix.length());
+                    return translated+
+                            (prefix.endsWith(" ")&&!translated.endsWith(" ")?
+                                    " ":"")+
+                            english.substring(prefix.length());
             }
         return english;
     }
