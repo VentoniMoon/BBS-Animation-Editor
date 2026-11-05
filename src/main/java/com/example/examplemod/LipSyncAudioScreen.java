@@ -12,6 +12,7 @@ import org.lwjgl.input.Keyboard;
 public class LipSyncAudioScreen extends GuiScreen
 {
     private final AnimationEditorScreen parent;
+    private net.minecraft.client.gui.FontRenderer previousFont;
     private final BodyPartModelData model;
     private final EditorWavAudioController audio;
     private final int initialFrame;
@@ -33,6 +34,11 @@ public class LipSyncAudioScreen extends GuiScreen
     @Override
     public void initGui()
     {
+        // Child dialogs are separate GuiScreens, so use the same scoped
+        // English/Cyrillic font as the main editor.
+        previousFont=mc.fontRenderer;
+        mc.fontRenderer=new EditorLocalizedFontRenderer(mc);
+        this.fontRenderer=mc.fontRenderer;
         Keyboard.enableRepeatEvents(true);
         int x = width / 2 - 155, y = height / 2 - 100;
         frame = new GuiTextField(301, fontRenderer, x, y + 51, 90, 20);
@@ -196,5 +202,12 @@ public class LipSyncAudioScreen extends GuiScreen
     }
 
     @Override
-    public void onGuiClosed() { Keyboard.enableRepeatEvents(false); }
+    public void onGuiClosed()
+    {
+        Keyboard.enableRepeatEvents(false);
+        if(previousFont!=null && mc.fontRenderer instanceof EditorLocalizedFontRenderer)
+            mc.fontRenderer=previousFont;
+        previousFont=null;
+        super.onGuiClosed();
+    }
 }
