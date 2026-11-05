@@ -322,6 +322,10 @@ public final class CameraSceneMirrorsPanel
         if(my>=257&&my<275)
         {
             m.enabled=!m.enabled;
+            // Re-enabling a mirror is an explicit retry request. Without a
+            // resource reset, a previous failed auxiliary capture remains
+            // latched and the surface stays blue even with shaders off.
+            if(m.enabled)CameraSceneMirrorRenderer.reset();
             screen.getCameraWorkspace().saveScene();
             return true;
         }

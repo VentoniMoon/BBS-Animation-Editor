@@ -602,8 +602,26 @@ public final class CameraWorkspace
     private final java.util.LinkedHashSet<CameraClipDocument.Clip> groupSelection=
             new java.util.LinkedHashSet<CameraClipDocument.Clip>();
 
+    /**
+     * Keep the CAMERA ruler scrollable even when its clips extend beyond the
+     * scene's actor-record length. Key timestamps can also outlive a clip.
+     */
+    private int maxClipTimelineFrame()
+    {
+        int last=0;
+        for(CameraClipDocument.Clip clip:document.clips())
+        {
+            if(clip==null)continue;
+            last=Math.max(last,clip.tick+Math.max(1,clip.duration)-1);
+            for(CameraClipDocument.Key key:clip.keys)
+                if(key!=null)last=Math.max(last,clip.tick+key.tick);
+        }
+        return last;
+    }
+
     public boolean mouseScrolled(int mouseX,int mouseY,int direction)
     {
+        if(direction==0)return false;
         Minecraft currentMinecraft=Minecraft.getMinecraft();
         if(currentMinecraft!=null&&currentMinecraft.currentScreen
                 instanceof AnimationEditorScreen&&
@@ -635,33 +653,38 @@ public final class CameraWorkspace
                     inspectorScroll+(direction>0?-44:44)));
             return true;
         }
+        // The layer-name gutter is part of the CAMERA timeline too. The
+        // old handler only accepted x >= timelineX, so wheel events over
+        // 'Layer N' fell through to unrelated editor/viewport handlers.
+        if(mouseX>=0&&mouseX<timelineX&&mouseY>=rowBase&&mouseY<bottom)
+        {
+            scrollLayers(direction);
+            return true;
+        }
         if(mouseX>=timelineX&&mouseY>=top&&mouseY<bottom)
         {
             if(GuiScreen.isCtrlKeyDown())
             {
+                // Zoom around the frame under the pointer, not frame zero.
                 int anchor=cameraTimeline.getFrameFromMouseX(mouseX,timelineX);
                 int oldX=cameraTimeline.getFrameX(anchor,timelineX);
                 cameraTimeline.changeZoom(direction>0?0.25F:-0.25F);
                 cameraTimeline.addOffset(
                         cameraTimeline.getFrameX(anchor,timelineX)-oldX);
-                cameraTimeline.clampOffset(Math.max(0,cameraTimeline.getLength()-1),
-                        Math.max(1,timelineW));
             }
             else if(GuiScreen.isShiftKeyDown())
             {
-                cameraTimeline.addOffset(direction>0?-60:60);
-                cameraTimeline.clampOffset(Math.max(0,cameraTimeline.getLength()-1),
-                        Math.max(1,timelineW));
+                // Shift+wheel navigates vertical clip layers.
+                scrollLayers(direction);
             }
             else
             {
-                int highest=5;
-                for(CameraClipDocument.Clip clip:document.clips())
-                    highest=Math.max(highest,clip.layer);
-                int visible=Math.max(1,(bottom-rowBase)/rowHeight);
-                layerScroll=Math.max(0,Math.min(Math.max(0,highest-visible+1),
-                        layerScroll+(direction>0?-1:1)));
+                // Match POSE / BODY PARTS: plain wheel pans in time.
+                cameraTimeline.addOffset(direction>0?-40:40);
             }
+            cameraTimeline.clampOffset(
+                    Math.max(0,cameraTimeline.getLength()-1),
+                    Math.max(1,timelineW));
             return true;
         }
         if(mouseX<timelineX&&mouseY>=90&&mouseY<top)
@@ -672,6 +695,16 @@ public final class CameraWorkspace
             return true;
         }
         return false;
+    }
+
+    private void scrollLayers(int direction)
+    {
+        int highest=5;
+        for(CameraClipDocument.Clip clip:document.clips())
+            highest=Math.max(highest,clip.layer);
+        int visible=Math.max(1,(bottom-rowBase)/rowHeight);
+        layerScroll=Math.max(0,Math.min(Math.max(0,highest-visible+1),
+                layerScroll+(direction>0?-1:1)));
     }
 
     private static File sceneDocument(File scene)
@@ -936,7 +969,7 @@ public final class CameraWorkspace
         right=width-185;
         timelineW=Math.max(1,width-timelineX-8);
         rowBase=top+35;
-        cameraTimeline.setLength(Math.max(1,length));
+        cameraTimeline.setLength(Math.max(1,Math.max(length,maxClipTimelineFrame()+1)));
         cameraTimeline.clampOffset(Math.max(0,length-1),timelineW);
         // Camera viewer and clip authoring buttons are drawn beside Play.
         // Preset library occupies a framed inspector rather than loose text.

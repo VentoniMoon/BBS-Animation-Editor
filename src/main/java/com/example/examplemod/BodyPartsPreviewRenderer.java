@@ -7,6 +7,9 @@ import java.util.WeakHashMap;
 import java.util.ArrayList;
 
 import mchorse.blockbuster.api.Model;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedPose;
+import mchorse.emoticons.skin_n_bones.api.animation.model.AnimatorPoseTransform;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
 import mchorse.metamorph.api.MorphManager;
 import mchorse.metamorph.api.morphs.AbstractMorph;
@@ -2721,153 +2724,80 @@ public class BodyPartsPreviewRenderer
     }
 
     /**
-     * Apply internal-bone keys to Emoticons' AnimatedMorph pose.
+     * Apply BODY PARTS keyframes directly to the real native Emoticons pose.
      *
-     * Emoticons does not read ModelBone fields for this morph. Its renderer
-     * reads AnimatedMorph.pose (or the result of PoseAnimation.calculatePose)
-     * and applies AnimatorPoseTransform values to the BOBJ armature. Therefore
-     * editing only the editor-side AnimationBone never changes the rendered
-     * model; update a cloned pose on the morph that will actually be rendered.
+     * The child morph is already a private per-frame copy (getMorphAt()).
+     * Editing BOBJBone matrices or only the editor's AnimationBone does not
+     * survive AnimatorMorphController.setupBoneTransformations().
+     *
+     * Important: a BodyPart has animate=false and therefore does not tick
+     * the child morph's native PoseAnimation. A copied, in-progress native
+     * Transition can otherwise keep blending from an old pose forever and
+     * hide position/scale/rotation edits. In live editor preview, disable
+     * only that stale child transition; retain the underlying Emoticons
+     * skeleton/locomotion animation and leave export timing unchanged.
      */
     private void applyEmoticonsInternalBonePose(
             AbstractMorph child,
             BodyPartModelData data,
             int frame)
     {
-        if (child == null || data == null)
+        if(!(child instanceof AnimatedMorph)||data==null)return;
+
+        AnimatedMorph morph=(AnimatedMorph)child;
+        AnimatedPose pose=morph.pose==null?
+                new AnimatedPose():morph.pose.clone();
+        int matchedBones=0;
+        for(AnimationBone bone:data.getBones())
         {
-            return;
-        }
+            if(bone==null||bone.getName()==null||
+                    bone.getKeyframes().isEmpty())continue;
+            AnimationTransform transform=
+                    bone.getTransformAt(CameraVisualFrameClock.animationFrame(frame));
+            if(transform==null)continue;
 
-        try
-        {
-            Class<?> morphClass = Class.forName(
-                    "mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph"
-            );
-
-            if (!morphClass.isInstance(child))
+            String name=bone.getName();
+            AnimatorPoseTransform nativeBone=pose.bones.get(name);
+            if(nativeBone==null)
             {
-                return;
-            }
-
-            java.lang.reflect.Field poseField = morphClass.getField("pose");
-            Object pose = poseField.get(child);
-            Class<?> poseClass = Class.forName(
-                    "mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedPose"
-            );
-
-            if (pose != null)
-            {
-                pose = poseClass.getMethod("clone").invoke(pose);
-            }
-            else
-            {
-                pose = poseClass.newInstance();
-            }
-
-            java.lang.reflect.Field bonesField = poseClass.getField("bones");
-            Object bonesObject = bonesField.get(pose);
-
-            if (!(bonesObject instanceof java.util.Map))
-            {
-                return;
-            }
-
-            java.util.Map<Object, Object> poseBones =
-                    (java.util.Map<Object, Object>) bonesObject;
-            Class<?> transformClass = Class.forName(
-                    "mchorse.emoticons.skin_n_bones.api.animation.model.AnimatorPoseTransform"
-            );
-
-            int matchedBones = 0;
-
-            for (AnimationBone bone : data.getBones())
-            {
-                if (bone == null || bone.getName() == null
-                        || bone.getKeyframes().isEmpty())
-                {
-                    continue;
-                }
-
-                AnimationTransform transform = bone.getTransformAt(CameraVisualFrameClock.animationFrame(frame));
-
-                if (transform == null)
-                {
-                    continue;
-                }
-
-                Object poseTransform = poseBones.get(bone.getName());
-
-                if (poseTransform == null)
-                {
-                    for (java.util.Map.Entry<Object, Object> entry : poseBones.entrySet())
+                // Third-party armatures sometimes differ in case from
+                // saved BBS bone names; preserve the native map key.
+                for(Map.Entry<String,AnimatorPoseTransform> entry:
+                        pose.bones.entrySet())
+                    if(entry.getKey().equalsIgnoreCase(name))
                     {
-                        if (entry.getKey() != null
-                                && String.valueOf(entry.getKey())
-                                        .equalsIgnoreCase(bone.getName()))
-                        {
-                            poseTransform = entry.getValue();
-                            break;
-                        }
+                        nativeBone=entry.getValue();
+                        break;
                     }
-                }
-
-                if (poseTransform == null)
-                {
-                    poseTransform = transformClass
-                            .getConstructor(String.class)
-                            .newInstance(bone.getName());
-                    poseBones.put(bone.getName(), poseTransform);
-                }
-
-                addPoseFloat(poseTransform, "x", transform.getPositionX());
-                addPoseFloat(poseTransform, "y", transform.getPositionY());
-                addPoseFloat(poseTransform, "z", transform.getPositionZ());
-
-                /* BOBJ bone rotations are radians. Editor values are degrees. */
-                addPoseFloat(poseTransform, "rotateX",
-                        (float) Math.toRadians(transform.getRotationX()));
-                addPoseFloat(poseTransform, "rotateY",
-                        (float) Math.toRadians(transform.getRotationY()));
-                addPoseFloat(poseTransform, "rotateZ",
-                        (float) Math.toRadians(transform.getRotationZ()));
-
-                /*
-                 * Emoticons multiplies the source bone scale by this pose
-                 * scale. Treat the editor scale as a multiplier, not as an
-                 * additive delta like Chameleon's pose representation.
-                 */
-                multiplyPoseFloat(poseTransform, "scaleX", transform.getScaleX());
-                multiplyPoseFloat(poseTransform, "scaleY", transform.getScaleY());
-                multiplyPoseFloat(poseTransform, "scaleZ", transform.getScaleZ());
-
-                matchedBones++;
+            }
+            if(nativeBone==null)
+            {
+                nativeBone=new AnimatorPoseTransform(name);
+                pose.bones.put(name,nativeBone);
             }
 
-            poseField.set(child, pose);
-
-            /* Pose is refreshed every Preview frame; do not flood the client log. */
+            // Exact native Emoticons conventions: position offsets in BOBJ
+            // model units; rotation in radians; scale as a multiplier.
+            nativeBone.x+=transform.getPositionX();
+            nativeBone.y+=transform.getPositionY();
+            nativeBone.z+=transform.getPositionZ();
+            nativeBone.rotateX+=(float)Math.toRadians(transform.getRotationX());
+            nativeBone.rotateY+=(float)Math.toRadians(transform.getRotationY());
+            nativeBone.rotateZ+=(float)Math.toRadians(transform.getRotationZ());
+            nativeBone.scaleX*=transform.getScaleX();
+            nativeBone.scaleY*=transform.getScaleY();
+            nativeBone.scaleZ*=transform.getScaleZ();
+            matchedBones++;
         }
-        catch (ClassNotFoundException ignored)
+        if(matchedBones==0)return;
+        morph.pose=pose;
+        if(this.preparingPreview&&morph.animation!=null)
         {
-            /* Emoticons isn't installed; this adapter is optional. */
+            morph.animation.last=null;
+            morph.animation.duration=0;
+            morph.animation.animates=false;
+            morph.animation.ignored=true;
         }
-        catch (Throwable error)
-        {
-            System.err.println(
-                    "[BBS Animation Editor][BodyParts] Could not apply Emoticons internal pose"
-            );
-            error.printStackTrace();
-        }
-    }
-
-    private void multiplyPoseFloat(
-            Object target,
-            String fieldName,
-            float multiplier) throws Exception
-    {
-        java.lang.reflect.Field field = target.getClass().getField(fieldName);
-        field.setFloat(target, field.getFloat(target) * multiplier);
     }
 
     /**
