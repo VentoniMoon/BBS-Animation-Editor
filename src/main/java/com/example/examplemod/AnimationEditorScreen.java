@@ -408,10 +408,36 @@ public class AnimationEditorScreen extends GuiScreen
                         minecraft.displayHeight));
     }
 
+    /** Original Minecraft font, restored when leaving the editor. */
+    private net.minecraft.client.gui.FontRenderer preEditorFont;
+
+    private void installLocalizedFont()
+    {
+        if(this.mc==null)return;
+        if(!(this.mc.fontRenderer instanceof EditorLocalizedFontRenderer))
+        {
+            preEditorFont=this.mc.fontRenderer;
+            this.mc.fontRenderer=new EditorLocalizedFontRenderer(this.mc);
+        }
+        this.fontRenderer=this.mc.fontRenderer;
+    }
+
+    private void restoreLocalizedFont()
+    {
+        if(this.mc!=null&&preEditorFont!=null &&
+                this.mc.fontRenderer instanceof EditorLocalizedFontRenderer)
+            this.mc.fontRenderer=preEditorFont;
+        preEditorFont=null;
+    }
+
     @Override
     public void initGui()
     {
         super.initGui();
+        // Minecraft's ru_ru forces its small Unicode font on Latin text too.
+        // The editor uses its own font instance; all other GUI screens keep
+        // their original font after onGuiClosed().
+        installLocalizedFont();
         // Persist the selected UI theme between Minecraft launches.
         // This is client-local, independent of scenes and world saves.
         EditorThemeManager.initialize(this.mc.mcDataDir);
@@ -4722,6 +4748,7 @@ public class AnimationEditorScreen extends GuiScreen
         BlockbusterPreviewAnimationState.clear();
         EmoticonsPreviewAnimationState.clear();
 
+        restoreLocalizedFont();
         super.onGuiClosed();
     }
 }

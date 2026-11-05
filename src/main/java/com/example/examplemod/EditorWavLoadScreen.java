@@ -19,6 +19,7 @@ public class EditorWavLoadScreen extends GuiScreen
     private static final int ROW_HEIGHT = 21;
 
     private final AnimationEditorScreen parent;
+    private net.minecraft.client.gui.FontRenderer previousFont;
     private final EditorWavAudioController audio;
     private final File audioFolder;
     private File[] files = new File[0];
@@ -39,6 +40,11 @@ public class EditorWavLoadScreen extends GuiScreen
     @Override
     public void initGui()
     {
+        // Child dialogs are separate GuiScreens, so use the same scoped
+        // English/Cyrillic font as the main editor.
+        previousFont=mc.fontRenderer;
+        mc.fontRenderer=new EditorLocalizedFontRenderer(mc);
+        this.fontRenderer=mc.fontRenderer;
         Keyboard.enableRepeatEvents(true);
         int left = width / 2 - 165;
         int top = height / 2 - 125;
@@ -224,5 +230,9 @@ public class EditorWavLoadScreen extends GuiScreen
     public void onGuiClosed()
     {
         Keyboard.enableRepeatEvents(false);
+        if(previousFont!=null && mc.fontRenderer instanceof EditorLocalizedFontRenderer)
+            mc.fontRenderer=previousFont;
+        previousFont=null;
+        super.onGuiClosed();
     }
 }
