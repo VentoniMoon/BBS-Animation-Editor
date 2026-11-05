@@ -169,9 +169,17 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
         updateFogColor=method(cls,
                 new String[]{"updateFogColor","func_78466_h","h"},
                 float.class);
-        fogRed=field(cls,new String[]{"fogColorRed","field_78518_n","n"});
-        fogGreen=field(cls,new String[]{"fogColorGreen","field_78519_o","o"});
-        fogBlue=field(cls,new String[]{"fogColorBlue","field_78533_p","p"});
+        // Minecraft 1.12.2 field mappings (MCP / SRG / Notch):
+        // fogColorRed   / field_175080_Q / R
+        // fogColorGreen / field_175082_R / S
+        // fogColorBlue  / field_175081_S / T
+        //
+        // The old field_78518_n/field_78519_o/field_78533_p and
+        // n/o/p aliases did not exist on release EntityRenderer. The
+        // BSL compositor therefore threw before drawing any reflection.
+        fogRed=field(cls,new String[]{"fogColorRed","field_175080_Q","R"});
+        fogGreen=field(cls,new String[]{"fogColorGreen","field_175082_R","S"});
+        fogBlue=field(cls,new String[]{"fogColorBlue","field_175081_S","T"});
         if(setupFog==null||updateFogColor==null||
                 fogRed==null||fogGreen==null||fogBlue==null)
             System.err.println("[BBS Editor][Mirror][Native Fog] "+
