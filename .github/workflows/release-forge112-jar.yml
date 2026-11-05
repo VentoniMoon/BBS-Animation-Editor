@@ -142,6 +142,9 @@ jobs:
                   "windows/x86-64/com/github/stephengold/joltjni.dll",
                   "linux/x86-64/com/github/stephengold/libjoltjni.so",
                   "assets/bbsanimationeditor/vosk_recognize.py",
+                  "assets/bbsanimationeditor/lang/en_us.lang",
+                  "assets/bbsanimationeditor/lang/ru_ru.lang",
+                  "com/example/examplemod/EditorLanguageCatalog.class",
               ]
               missing = [name for name in required if name not in names]
               assert not missing, "Required release files missing: " + repr(missing)
