@@ -46,8 +46,15 @@ public final class EditorVisualStyle
                     active?themedSurface(0.24F):themedSurface(0.10F));
             if(active)
                 Gui.drawRect(x1+2,50,x2-2,53,getAccent());
-            int textW=mc.fontRenderer.getStringWidth(labels[i]);
-            mc.fontRenderer.drawString(labels[i],
+            // Fixed-width hit regions must stay unchanged. Cyrillic labels
+            // can be wider than their English equivalents, especially with
+            // the editor's pixel-matched Unicode glyph scale. Measure and
+            // clip with the SAME font renderer used for drawing, so a long
+            // translation never overpaints the adjacent CAMERA tab.
+            String label=mc.fontRenderer.trimStringToWidth(
+                    labels[i],Math.max(1,x2-x1-6));
+            int textW=mc.fontRenderer.getStringWidth(label);
+            mc.fontRenderer.drawString(label,
                     x1+(x2-x1-textW)/2,36,
                     active?getAccentBright():TEXT_SECONDARY);
         }

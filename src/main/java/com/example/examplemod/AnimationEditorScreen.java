@@ -1971,6 +1971,18 @@ public class AnimationEditorScreen extends GuiScreen
             float partialTicks)
     {
         /*
+         * Minecraft rebuilds mc.fontRenderer when the player changes the
+         * language or resource packs. This can happen while our GuiScreen
+         * remains open: initGui() isn't guaranteed to run again. The new
+         * vanilla renderer uses the small forced-Unicode font for ru_ru,
+         * shrinking even unchanged English titles. Re-install the editor
+         * font BEFORE all widgets measure/draw their text each frame.
+         *
+         * A no-op in the normal case. The original Minecraft renderer is
+         * restored on exit so no other GUI is affected.
+         */
+        installLocalizedFont();
+        /*
          * BBS FS native capture MUST happen before drawing any GUI pixel.
          * Otherwise the world texture would contain our dark editor panels.
          */
