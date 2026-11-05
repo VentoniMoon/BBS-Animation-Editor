@@ -123,16 +123,20 @@ public final class EditorLocalizedFontRenderer extends FontRenderer
             return super.trimStringToWidth(localized,width,reverse);
         if(getStringWidth(localized)<=width)return localized;
         if(width<=0)return "";
-        int start=reverse?localized.length():0;
-        for(int n=1;n<=localized.length();n++)
+        // Linear scan: Lip Sync may have 1,024-character typed text.
+        // Re-measuring every prefix was quadratic and could stall the GUI.
+        float advance=0F;
+        for(int n=0;n<localized.length();n++)
         {
-            String part=reverse?
-                    localized.substring(localized.length()-n):
-                    localized.substring(0,n);
-            if(getStringWidth(part)>width)
+            int idx=reverse?localized.length()-1-n:n;
+            char ch=localized.charAt(idx);
+            int nativeWidth=super.getCharWidth(ch);
+            advance+=isCyrillic(ch)?
+                    nativeWidth*CYRILLIC_SCALE:nativeWidth;
+            if(Math.ceil(advance)>width)
                 return reverse?
-                        localized.substring(localized.length()-n+1):
-                        localized.substring(0,n-1);
+                        localized.substring(idx+1):
+                        localized.substring(0,idx);
         }
         return localized;
     }
