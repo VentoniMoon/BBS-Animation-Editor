@@ -156,13 +156,30 @@ public final class CameraMirrorNativeAtmosphere implements AutoCloseable
     private static void resolve(Class<?> cls)
     {
         resolved=true;
-        setupFog=method(cls,new String[]{"setupFog","func_78468_a"},
+        // The release JAR does not retain MCP private method names.
+        // Forge/OptiFine may expose either SRG or the original Notch
+        // names. In the 1.12.2 client those exact signatures are:
+        // setupFog(int,float) -> func_78468_a -> a(int,float)
+        // updateFogColor(float) -> func_78466_h -> h(float).
+        // The earlier MCP/SRG-only lookup disabled the entire mirror
+        // in the installed mod, even though the BSL renderer started.
+        setupFog=method(cls,
+                new String[]{"setupFog","func_78468_a","a"},
                 int.class,float.class);
         updateFogColor=method(cls,
-                new String[]{"updateFogColor","func_78466_h"},float.class);
+                new String[]{"updateFogColor","func_78466_h","h"},
+                float.class);
         fogRed=field(cls,new String[]{"fogColorRed","field_78518_n","n"});
         fogGreen=field(cls,new String[]{"fogColorGreen","field_78519_o","o"});
         fogBlue=field(cls,new String[]{"fogColorBlue","field_78533_p","p"});
+        if(setupFog==null||updateFogColor==null||
+                fogRed==null||fogGreen==null||fogBlue==null)
+            System.err.println("[BBS Editor][Mirror][Native Fog] "+
+                    "Unresolved EntityRenderer members in "+
+                    cls.getName()+": setupFog="+(setupFog!=null)+
+                    " updateFogColor="+(updateFogColor!=null)+
+                    " red="+(fogRed!=null)+" green="+(fogGreen!=null)+
+                    " blue="+(fogBlue!=null));
     }
 
     private static Method method(Class<?> cls,String[] names,
