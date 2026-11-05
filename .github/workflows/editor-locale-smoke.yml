@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'src/main/java/com/example/examplemod/EditorLanguage.java'
+      - 'src/main/java/com/example/examplemod/EditorLanguageCatalog.java'
+      - 'src/test/java/com/example/examplemod/EditorLanguageCatalogSmokeTest.java'
       - 'src/main/java/com/example/examplemod/EditorLocalizedFontRenderer.java'
       - 'src/main/resources/assets/bbsanimationeditor/lang/**'
       - '.github/workflows/editor-locale-smoke.yml'
@@ -11,6 +13,8 @@ on:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/EditorLanguage.java'
+      - 'src/main/java/com/example/examplemod/EditorLanguageCatalog.java'
+      - 'src/test/java/com/example/examplemod/EditorLanguageCatalogSmokeTest.java'
       - 'src/main/java/com/example/examplemod/EditorLocalizedFontRenderer.java'
       - 'src/main/resources/assets/bbsanimationeditor/lang/**'
       - '.github/workflows/editor-locale-smoke.yml'
@@ -54,3 +58,12 @@ jobs:
           print('BBS editor languages: {} matching keys, {} alias entries'.format(
               len(en),len(aliases)))
           PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Verify bundled Russian strings at runtime
+        run: |
+          mkdir -p build/locale-smoke
+          javac -source 8 -target 8 -encoding UTF-8 -d build/locale-smoke src/main/java/com/example/examplemod/EditorLanguageCatalog.java src/test/java/com/example/examplemod/EditorLanguageCatalogSmokeTest.java
+          java -ea -cp build/locale-smoke:src/main/resources com.example.examplemod.EditorLanguageCatalogSmokeTest
