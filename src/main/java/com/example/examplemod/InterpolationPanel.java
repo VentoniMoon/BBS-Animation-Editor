@@ -1291,9 +1291,13 @@ public class InterpolationPanel
                         localized.equals(key)
         )
         {
-            return makeReadableName(
-                    interpolation.name()
-            );
+            String readable=makeReadableName(interpolation.name());
+            // 'Back' is an easing curve here, not the navigation button.
+            // Keep the same English source identifier but use a contextual
+            // Russian display name instead of generic 'Назад'.
+            if(EditorLanguage.isRussian()&&"Back".equals(readable))
+                return "С возвратом";
+            return readable;
         }
 
         return localized;
