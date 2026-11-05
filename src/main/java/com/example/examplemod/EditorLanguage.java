@@ -475,6 +475,16 @@ public final class EditorLanguage
         add("video.crf_high", "High (CRF 18)");
         add("video.crf_balanced", "Balanced (22)");
         add("video.crf_smaller", "Smaller (26)");
+        // Remaining fixed UI labels found in the main editor panels.
+        // Keep filenames, morph names and shader identifiers untranslated.
+        add("ui.light_pick_key", "Select a key on Origin / Target");
+        add("ui.media_prefix", "MEDIA / ");
+        add("ui.media_location", "config/bbs-editor/media (ESC to close)");
+        add("ui.mirror_yaw", "YAW");
+        add("ui.world_coordinates", "WORLD COORDINATES / BLOCKS");
+        add("ui.no_wav_part", "NO WAV / PART");
+        add("ui.xyz_blocks", "XYZ offset / blocks");
+        PREFIXES.add("MEDIA / ");
         Collections.sort(PREFIXES,new Comparator<String>()
         {
             @Override public int compare(String a,String b)
