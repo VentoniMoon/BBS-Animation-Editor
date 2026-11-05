@@ -513,6 +513,40 @@ public final class EditorLanguage
         if(english==null||english.isEmpty()||!isRussian())return english;
         String exact=lookup(english);
         if(!english.equals(exact))return exact;
+        // A few status messages insert numbers between literal fragments.
+        // Translate their entire templates rather than rewriting filenames
+        // or inserting Russian text into arbitrary user-provided fields.
+        final String wavSuffix=" WAV file(s) found";
+        if(english.endsWith(wavSuffix))
+        {
+            String count=english.substring(0,english.length()-wavSuffix.length());
+            if(count.matches("[0-9]+"))
+                return I18n.format(
+                        "bbsanimationeditor.ui.audio.found_count",count);
+        }
+        final String generatedPrefix="Generated ";
+        final String generatedSuffix=" mouth texture keys";
+        if(english.startsWith(generatedPrefix)&&
+                english.endsWith(generatedSuffix))
+        {
+            String count=english.substring(generatedPrefix.length(),
+                    english.length()-generatedSuffix.length());
+            if(count.matches("[0-9]+"))
+                return I18n.format(
+                        "bbsanimationeditor.ui.audio.generated_count",count);
+        }
+        if(english.startsWith("Recognized ")&&
+                english.endsWith(" keys")&&
+                english.contains(" words, created "))
+        {
+            java.util.regex.Matcher parts=java.util.regex.Pattern.compile(
+                    "^Recognized ([0-9]+) words, created ([0-9]+) keys$")
+                    .matcher(english);
+            if(parts.matches())
+                return I18n.format(
+                        "bbsanimationeditor.ui.audio.recognized_count",
+                        parts.group(1),parts.group(2));
+        }
         for(String prefix:PREFIXES)
             if(english.startsWith(prefix)&&english.length()>prefix.length())
             {
