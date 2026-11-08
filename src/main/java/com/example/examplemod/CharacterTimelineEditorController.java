@@ -1296,6 +1296,13 @@ public class CharacterTimelineEditorController
             return "";
         }
 
+        // A dedicated physics key is recognizable on the CHARACTER
+        // timeline without changing the legacy serialized key Type.
+        // Composite Morph/Skin keys retain their original markers.
+        if(key.getType()==CharacterKey.Type.CUSTOM &&
+                CharacterRagdollController.keyWeight(key)>=0F)
+            return "R";
+
         switch (key.getType())
         {
             case SKIN:
