@@ -120,7 +120,10 @@ public final class RagdollEmoticonsJoltBridge
     public static boolean apply(BOBJArmature armature,
             BlockbusterSceneActorData actor,int frame)
     {
-        if(!ENABLED||armature==null||actor==null||
+        // Export must remain bit-for-bit compatible with the authored
+        // animation until fixed-step Jolt replay/baking is implemented.
+        if(!ENABLED||CameraExportRenderClock.current()!=null||
+                armature==null||actor==null||
                 frame<0||actor.getCharacterTimeline()==null)return false;
         String id=actor.getId();
         if(id==null||id.isEmpty())return false;
@@ -303,8 +306,18 @@ public final class RagdollEmoticonsJoltBridge
                     original.m03+(physicalHead.x-original.m03)*weight,
                     original.m13+(physicalHead.y-original.m13)*weight,
                     original.m23+(physicalHead.z-original.m23)*weight);
-            output.put(info.bone,
-                    new Matrix4f(blended,pivot,1F));
+            Matrix4f authoredWorld=new Matrix4f(blended,pivot,1F);
+            // BOBJ's model-space bind basis includes a reflected X axis
+            // (determinant -1 in stock default.bobj). Preserving that
+            // handedness is mandatory: quaternion rotation cannot by
+            // itself represent a reflection and would invert/skew skin.
+            if(handedness(original)<0F)
+            {
+                authoredWorld.m00=-authoredWorld.m00;
+                authoredWorld.m10=-authoredWorld.m10;
+                authoredWorld.m20=-authoredWorld.m20;
+            }
+            output.put(info.bone,authoredWorld);
         }
 
         // Compute local Rz*Ry*Rx relative to BOBJ's real parent and
@@ -391,7 +404,23 @@ public final class RagdollEmoticonsJoltBridge
                 r.setElement(2,i,z/n);
             }
         }
+        if(handedness(model)<0F)
+        {
+            r.m00=-r.m00;
+            r.m10=-r.m10;
+            r.m20=-r.m20;
+        }
         Quat4f q=new Quat4f();q.set(r);q.normalize();return q;
+    }
+
+    private static float handedness(Matrix4f matrix)
+    {
+        return matrix.m00*(matrix.m11*matrix.m22-
+                        matrix.m12*matrix.m21)-
+                matrix.m01*(matrix.m10*matrix.m22-
+                        matrix.m12*matrix.m20)+
+                matrix.m02*(matrix.m10*matrix.m21-
+                        matrix.m11*matrix.m20);
     }
 
     private static void rotate(Quat4f q,Vector3f v)
