@@ -1,0 +1,72 @@
+name: Physics 2.0 native ragdoll Java 8 smoke
+
+on:
+  pull_request:
+    paths:
+      - 'jolt-java8-port/src/main/java/com/example/examplemod/physics/JoltHumanoidRagdoll.java'
+      - 'jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHumanoidRagdollSmoke.java'
+      - '.github/workflows/ragdoll-native-java8.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'jolt-java8-port/src/main/java/com/example/examplemod/physics/JoltHumanoidRagdoll.java'
+      - 'jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHumanoidRagdollSmoke.java'
+      - '.github/workflows/ragdoll-native-java8.yml'
+  workflow_dispatch:
+
+jobs:
+  native-ragdoll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: stephengold/jolt-jni
+          ref: '6.0.0'
+          path: upstream-jolt
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile pinned Jolt JNI 6.0.0 and ragdoll at Java 8 bytecode
+        run: |
+          set -eu
+          OUT="$RUNNER_TEMP/ragdoll-native"
+          python3 jolt-java8-port/tools/prepare_sources.py \
+            --upstream upstream-jolt --output "$OUT"
+          mkdir -p "$OUT/classes"
+          find "$OUT/src" -type f -name '*.java' | sort > "$OUT/sources.txt"
+          echo jolt-java8-port/src/main/java/com/example/examplemod/physics/JoltHumanoidRagdoll.java >> "$OUT/sources.txt"
+          javac --release 8 -encoding UTF-8 \
+            -d "$OUT/classes" @"$OUT/sources.txt"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Download real native Jolt Linux x86-64 6.0.0
+        run: |
+          set -eu
+          OUT="$RUNNER_TEMP/ragdoll-native"
+          mkdir -p "$OUT/native"
+          for base in https://repo.maven.apache.org/maven2 https://repo1.maven.org/maven2; do
+            if curl --fail --location --retry 4 --retry-all-errors \
+              "$base/com/github/stephengold/jolt-jni-Linux64/6.0.0/jolt-jni-Linux64-6.0.0-ReleaseSp.jar" \
+              --output "$OUT/native-jolt.jar"; then
+              break
+            fi
+          done
+          test -s "$OUT/native-jolt.jar"
+          (cd "$OUT/native" && jar xf "$OUT/native-jolt.jar")
+      - name: Simulate all stock Emoticons rigid bodies and impact
+        run: |
+          set -eu
+          OUT="$RUNNER_TEMP/ragdoll-native"
+          javac -source 8 -target 8 -encoding UTF-8 \
+            -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHumanoidRagdollSmoke.java
+          LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
+          test -n "$LIB"
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltHumanoidRagdollSmoke
