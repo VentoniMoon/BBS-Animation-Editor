@@ -268,7 +268,7 @@ public final class EditorLanguage
         add("character.ragdoll.no_rig", "NO RAGDOLL RIG");
         add("character.ragdoll.incomplete", "RIG INCOMPLETE");
         add("character.ragdoll.check_bones", "CHECK MODEL BONES");
-        add("character.ragdoll.next_stage", "JOLT BODY SOLVER: NEXT STAGE");
+        add("character.ragdoll.next_stage", "JOLT RAGDOLL: DEV OPT-IN");
         add("character.lipsync", "LIP SYNC");
         add("character.textkeys", "TEXT TO KEYS");
         add("character.partselect", "SELECT PART");

@@ -2595,7 +2595,7 @@ public class CharacterEditorPanel
         drawButton(mc,"+10%",plusX,y+79,adjustWidth,20,
                 mouseX>=plusX&&mouseX<plusX+adjustWidth&&
                 mouseY>=y+79&&mouseY<y+99);
-        drawHint(mc,"JOLT BODY SOLVER: NEXT STAGE",left,y+108);
+        drawHint(mc,"JOLT RAGDOLL: DEV OPT-IN",left,y+108);
     }
 
     private boolean mouseClickedRagdoll(int y,int mx,int my)

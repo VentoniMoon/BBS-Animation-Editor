@@ -18,15 +18,68 @@ the shape of the next implementation so UI keys do not need migration.
   ADD KEY/UPDATE KEY, ±10%. Stage 1 is **authoring-only**; the inspector
   clearly says the Jolt solver comes next. The physical pose is not
   currently applied to the rendered actor.
-- `RagdollSkeletonDefinition` binds native bone names only. Blockbuster
-  has a six-body biped fallback: torso/root, head, arms, legs. Emoticons
-  allows a segmented pelvis/chest/arms/forearms/hands/thighs/shins/feet rig.
-  Missing optional intermediate bones connect to the nearest real ancestor,
-  but missing pelvis/root makes the rig invalid.
-- Collider sizes and masses are **initial estimates**, not mesh-fitted.
-  The Jolt stage must derive pivots, joint axes and collider lengths from
-  the real Blockbuster limb geometry / Emoticons BOBJ rest pose before
-  creating any native rigid body.
+- `RagdollSkeletonDefinition` binds **native** bone names only. Stock
+  Blockbuster has a six-body biped. Stock Emoticons has **20 BOBJ
+  bones**, but precisely **11 physical deform bodies**, not the previously
+  assumed 15. There are no separate stock hand or foot deform bones.
+  Missing bones and helpers must not create phantom rigid bodies.
+
+### Verified Emoticons bone inventory (source assets)
+
+Source: [mchorse/emoticons default.bobj](https://github.com/mchorse/emoticons/blob/master/src/main/resources/assets/emoticons/models/entity/default.bobj),
+[slim.bobj](https://github.com/mchorse/emoticons/blob/master/src/main/resources/assets/emoticons/models/entity/slim.bobj),
+[ragdoll.bobj](https://github.com/mchorse/emoticons/blob/master/src/main/resources/assets/emoticons/models/entity/ragdoll.bobj).
+The stock default/slim/3D/simple/plus variants all contain the same 20
+armature names and parent hierarchy. These are the **actual** BOBJ names:
+
+| Native bone | Native parent | Physics mapping |
+|---|---|---|
+| `anchor` | none | Coordinate root / animation only |
+| `body` | `anchor` | Pelvis / root body |
+| `low_body` | `body` | Chest / spine |
+| `head` | `low_body` | Head |
+| `left_arm` | `low_body` | Left upper arm |
+| `low_left_arm` | `left_arm` | Left forearm / elbow hinge |
+| `low_left_arm.end` | `low_left_arm` | Item attachment; not physical |
+| `right_arm` | `low_body` | Right upper arm |
+| `low_right_arm` | `right_arm` | Right forearm / elbow hinge |
+| `low_right_arm.end` | `low_right_arm` | Item attachment; not physical |
+| `right_leg` | `body` | Right thigh |
+| `low_leg_right` | `right_leg` | Right shin / knee hinge |
+| `left_leg` | `body` | Left thigh |
+| `low_left_leg` | `left_leg` | Left shin / knee hinge |
+| `misc_bone_1` | `anchor` | Emote helper; not physical |
+| `misc_bone_2` | `anchor` | Emote helper; not physical |
+| `misc_bone_3` | `anchor` | Emote helper; not physical |
+| `misc_gbone_1` | none | Global helper; not physical |
+| `misc_gbone_2` | none | Global helper; not physical |
+| `misc_gbone_3` | none | Global helper; not physical |
+
+The bundled `ragdoll.bobj` contains 22 bones: these same 20 names
+plus `low_left_arm.item` and `low_right_arm.item` (two more item
+attachment helpers). The special ragdoll animation's parent links are
+not all identical to the default bind rig; physical binding must use the
+**actual current armature** and reject/adjust incompatible topologies.
+
+### Experimental native Jolt hookup (this implementation)
+
+- `JoltHumanoidRagdoll` (Java 8 optional sidecar): 11 dynamic rigid
+  Jolt bodies with lengths and pivots from actual BOBJ head/tail,
+  SwingTwist shoulders/hips/neck/spine, Hinge elbows/knees, and local
+  flat floor proxy. Includes native `impulse(index,vec,point)` hook.
+- `RagdollEmoticonsJoltBridge`: native Emoticons animator runs first,
+  samples the clean bone matrices, calls Jolt, blends 0..100% world
+  orientation and position, then updates those same BOBJ deform bones.
+  Uses per-actor state, 20 Hz physics steps, and native cleanup.
+- Developer opt-in: `-Dbbs.editor.physics.jolt.ragdoll=true`. Requires
+  existing Java 8 Jolt sidecar and Jolt native library on the IDE
+  classpath. No physics mutation if the property is off, JNI missing
+  or the influence is 0. Not enabled in export or public JAR by default.
+- **Limitations**: only Emoticons hooked in this iteration; simple
+  local floor proxy (not real Minecraft terrain), hinge axes initially
+  X-aligned and not calibrated to each model's bind frame, seek back
+  reseeds from current pose. These remain engineering gates before
+  publishing Physics 2.0.
 
 ## First physical solver (next stage)
 
