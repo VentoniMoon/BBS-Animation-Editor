@@ -259,6 +259,16 @@ public final class EditorLanguage
         add("character.animsetup", "ANIMATION SETUP");
         add("character.overrides", "BODY PART OVERRIDES");
         add("character.animparams", "ANIMATION PARAMETERS");
+        add("character.ragdoll", "RAGDOLL");
+        add("character.ragdoll.bodies", "BOUND BODIES");
+        add("character.ragdoll.influence", "PHYSICS INFLUENCE");
+        add("character.ragdoll.key_add", "ADD KEY");
+        add("character.ragdoll.key_update", "UPDATE KEY");
+        add("character.ragdoll.select", "SELECT BB / EMOTICONS");
+        add("character.ragdoll.no_rig", "NO RAGDOLL RIG");
+        add("character.ragdoll.incomplete", "RIG INCOMPLETE");
+        add("character.ragdoll.check_bones", "CHECK MODEL BONES");
+        add("character.ragdoll.next_stage", "JOLT BODY SOLVER: NEXT STAGE");
         add("character.lipsync", "LIP SYNC");
         add("character.textkeys", "TEXT TO KEYS");
         add("character.partselect", "SELECT PART");

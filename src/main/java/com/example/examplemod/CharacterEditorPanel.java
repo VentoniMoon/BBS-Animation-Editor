@@ -5,6 +5,7 @@ import java.util.List;
 import mchorse.blockbuster.common.entity.EntityActor;
 import mchorse.metamorph.api.morphs.AbstractMorph;
 import mchorse.blockbuster_pack.morphs.CustomMorph;
+import mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
@@ -41,6 +42,7 @@ public class CharacterEditorPanel
         ANIMATION_SETUP,
         BODY_PART_OVERRIDES,
         ANIMATION_PARAMETERS,
+        RAGDOLL,
         LIP_SYNC
     }
 
@@ -117,6 +119,7 @@ public class CharacterEditorPanel
     private static final int SECTION_HEIGHT = 24;
     private static final int SECTION_CONTENT_GAP = 4;
     private static final int APPEARANCE_CONTENT_HEIGHT = 108;
+    private static final int RAGDOLL_CONTENT_HEIGHT = 120;
     private static final int BODY_PART_CONTENT_HEIGHT = 108;
     private static final int ANIMATION_PARAMETERS_CONTENT_GAP = 8;
 
@@ -464,7 +467,9 @@ public class CharacterEditorPanel
                 // into view without requiring an unrelated manual
                 // accordion click. Preserve user selection on later
                 // frame syncs when the key identity is unchanged.
-                if(key.getType()!=null)
+                if(CharacterRagdollController.keyWeight(key)>=0F)
+                    openedSection=Section.RAGDOLL;
+                else if(key.getType()!=null)
                 {
                     switch(key.getType())
                     {
@@ -892,6 +897,18 @@ public class CharacterEditorPanel
         cursorY += this.openedSection == Section.ANIMATION_PARAMETERS
                 ? ANIMATION_PARAMETERS_CONTENT_GAP + CharacterAnimationParametersPanel.HEIGHT + 4
                 : 4;
+
+        // Ragdoll is a separate CHARACTER key channel, not a Body Part
+        // attachment or a new timeline. Editing creates/reuses a main key.
+        cursorY=drawSection(mc,Section.RAGDOLL,"RAGDOLL",
+                cursorY,mouseX,mouseY);
+        if(this.openedSection==Section.RAGDOLL)
+        {
+            cursorY+=4;
+            drawRagdoll(mc,cursorY,mouseX,mouseY);
+            cursorY+=RAGDOLL_CONTENT_HEIGHT;
+        }
+        cursorY+=4;
 
         cursorY = drawSection(mc, Section.LIP_SYNC, "LIP SYNC",
                 cursorY, mouseX, mouseY);
@@ -2486,6 +2503,132 @@ public class CharacterEditorPanel
 
     /*
      * =========================================================
+     * RAGDOLL (Physics 2.0)
+     * =========================================================
+     *
+     * Stage 1 authors only the rig and the CHARACTER key channel.
+     * Until a multi-body Jolt solver is connected, the weight does not
+     * alter the rendered actor pose. Expose that limitation in the UI.
+     */
+
+    private RagdollSkeletonDefinition getRagdollSkeleton()
+    {
+        if(this.selectedActor==null||this.selectedBodyPartModel!=null)
+            return null;
+        AbstractMorph morph=getCurrentMorph();
+        if(morph==null)return null;
+        RagdollSkeletonDefinition.Preset preset=
+                morph instanceof CustomMorph?
+                RagdollSkeletonDefinition.Preset.BLOCKBUSTER:
+                morph instanceof AnimatedMorph?
+                RagdollSkeletonDefinition.Preset.EMOTICONS:null;
+        if(preset==null)return null;
+        return RagdollSkeletonDefinition.bind(preset,
+                CharacterBodyPartOverrideController.getBones(morph));
+    }
+
+    private float currentRagdollWeight()
+    {
+        return this.selectedActor==null?0F:
+                CharacterRagdollController.sampleWeight(
+                        this.selectedActor.getCharacterTimeline(),
+                        this.currentFrame);
+    }
+
+    private void authorRagdollWeight(float value)
+    {
+        if(this.selectedActor==null)return;
+        CharacterKey key=CharacterRagdollController.setWeight(
+                this.selectedActor.getCharacterTimeline(),
+                this.currentFrame,value);
+        CharacterTimelineEditorController.requestInspectorKeySelection(
+                this.selectedActor,key);
+        this.selectedKey=key;
+        this.openedSection=Section.RAGDOLL;
+    }
+
+    private void drawRagdoll(Minecraft mc,int y,int mouseX,int mouseY)
+    {
+        int left=this.x+12,right=this.x+this.width-12;
+        RagdollSkeletonDefinition rig=getRagdollSkeleton();
+        if(rig==null)
+        {
+            drawHint(mc,"SELECT BB / EMOTICONS",left,y+9);
+            drawHint(mc,"NO RAGDOLL RIG",left,y+27);
+            return;
+        }
+        drawValue(mc,rig.getPreset().name(),left,y+2);
+        drawLabel(mc,"BOUND BODIES",left,y+18);
+        drawValue(mc,rig.size()+" / "+rig.getAvailableBones(),
+                left+110,y+18);
+        if(!rig.hasPhysicalSkeleton())
+        {
+            drawHint(mc,"RIG INCOMPLETE",left,y+42);
+            drawHint(mc,"CHECK MODEL BONES",left,y+59);
+            return;
+        }
+
+        float weight=currentRagdollWeight();
+        drawLabel(mc,"PHYSICS INFLUENCE",left,y+34);
+        drawValue(mc,Math.round(weight*100F)+"%",right-33,y+34);
+        int sliderWidth=Math.max(1,right-left);
+        drawRect(left,y+51,right,y+65,COLOR_PANEL_DARK());
+        drawRect(left,y+51,left+Math.round(sliderWidth*weight),y+65,
+                getAccentColor());
+        drawRect(left,y+64,right,y+65,COLOR_BORDER());
+
+        int total=Math.max(48,right-left);
+        int keyWidth=Math.max(50,(total-8)/2);
+        int adjustWidth=Math.max(23,(total-keyWidth-8)/2);
+        int keyX=left;
+        int minusX=keyX+keyWidth+4;
+        int plusX=minusX+adjustWidth+4;
+        CharacterKey at=CharacterRagdollController.keyAtFrame(
+                this.selectedActor.getCharacterTimeline(),this.currentFrame);
+        boolean keyed=CharacterRagdollController.keyWeight(at)>=0F;
+        drawButton(mc,keyed?"UPDATE KEY":"ADD KEY",keyX,y+79,
+                keyWidth,20,mouseX>=keyX&&mouseX<keyX+keyWidth&&
+                mouseY>=y+79&&mouseY<y+99);
+        drawButton(mc,"-10%",minusX,y+79,adjustWidth,20,
+                mouseX>=minusX&&mouseX<minusX+adjustWidth&&
+                mouseY>=y+79&&mouseY<y+99);
+        drawButton(mc,"+10%",plusX,y+79,adjustWidth,20,
+                mouseX>=plusX&&mouseX<plusX+adjustWidth&&
+                mouseY>=y+79&&mouseY<y+99);
+        drawHint(mc,"JOLT BODY SOLVER: NEXT STAGE",left,y+108);
+    }
+
+    private boolean mouseClickedRagdoll(int y,int mx,int my)
+    {
+        RagdollSkeletonDefinition rig=getRagdollSkeleton();
+        if(rig==null||!rig.hasPhysicalSkeleton())return false;
+        int left=this.x+12,right=this.x+this.width-12;
+        if(mx>=left&&mx<right&&my>=y+51&&my<y+65)
+        {
+            authorRagdollWeight((mx-left)/(float)Math.max(1,right-left));
+            return true;
+        }
+        int total=Math.max(48,right-left);
+        int keyWidth=Math.max(50,(total-8)/2);
+        int adjustWidth=Math.max(23,(total-keyWidth-8)/2);
+        int keyX=left,minusX=keyX+keyWidth+4;
+        int plusX=minusX+adjustWidth+4;
+        if(my>=y+79&&my<y+99)
+        {
+            if(mx>=keyX&&mx<keyX+keyWidth)
+                authorRagdollWeight(currentRagdollWeight());
+            else if(mx>=minusX&&mx<minusX+adjustWidth)
+                authorRagdollWeight(currentRagdollWeight()-0.1F);
+            else if(mx>=plusX&&mx<plusX+adjustWidth)
+                authorRagdollWeight(currentRagdollWeight()+0.1F);
+            else return false;
+            return true;
+        }
+        return false;
+    }
+
+    /*
+     * =========================================================
      * ANIMATION PARAMETERS
      * =========================================================
      */
@@ -2874,6 +3017,20 @@ public class CharacterEditorPanel
                 ? SECTION_HEIGHT + ANIMATION_PARAMETERS_CONTENT_GAP
                   + CharacterAnimationParametersPanel.HEIGHT + 4
                 : SECTION_HEIGHT + 4;
+
+        if(isInsideSection(currentY,mouseX,mouseY))
+        {
+            toggleSection(Section.RAGDOLL);
+            return true;
+        }
+        if(this.openedSection==Section.RAGDOLL)
+        {
+            if(mouseClickedRagdoll(currentY+SECTION_HEIGHT+4,
+                    mouseX,mouseY))return true;
+            currentY+=SECTION_HEIGHT+4+RAGDOLL_CONTENT_HEIGHT;
+        }
+        else currentY+=SECTION_HEIGHT;
+        currentY+=4;
         if (isInsideSection(currentY, mouseX, mouseY))
         {
             toggleSection(Section.LIP_SYNC);

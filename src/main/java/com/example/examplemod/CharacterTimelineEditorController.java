@@ -1296,6 +1296,13 @@ public class CharacterTimelineEditorController
             return "";
         }
 
+        // A dedicated physics key is recognizable on the CHARACTER
+        // timeline without changing the legacy serialized key Type.
+        // Composite Morph/Skin keys retain their original markers.
+        if(key.getType()==CharacterKey.Type.CUSTOM &&
+                CharacterRagdollController.keyWeight(key)>=0F)
+            return "R";
+
         switch (key.getType())
         {
             case SKIN:
@@ -1443,9 +1450,58 @@ public class CharacterTimelineEditorController
         return this.selectedTrack;
     }
 
+    /*
+     * UI panel and timeline both exist on the client render thread, but
+     * the panel is created separately from this controller. Carry a one-shot
+     * selection request scoped to the actor instead of changing the editor
+     * screen's global event/render pipeline for a single inspector field.
+     * Weak actor keys also prevent scene changes retaining old selections.
+     */
+    private static final java.util.Map<BlockbusterSceneActorData,CharacterKey>
+            pendingInspectorKeys=
+            new java.util.WeakHashMap<BlockbusterSceneActorData,CharacterKey>();
+
+    public static void requestInspectorKeySelection(
+            BlockbusterSceneActorData actor,CharacterKey key)
+    {
+        if(actor!=null&&key!=null)pendingInspectorKeys.put(actor,key);
+    }
+
     public CharacterKey getSelectedKey()
     {
+        if(this.selectedActor!=null)
+        {
+            CharacterKey requested=pendingInspectorKeys.remove(
+                    this.selectedActor);
+            if(requested!=null)selectMainKey(requested);
+        }
         return this.selectedKey;
+    }
+
+    /**
+     * Select a main-track key authored by a CHARACTER inspector widget.
+     * The panel and timeline must agree on object identity, otherwise the
+     * next syncCharacterEditor() call immediately discards panel selection.
+     */
+    public void selectMainKey(CharacterKey key)
+    {
+        if(key==null||this.selectedActor==null)return;
+        CharacterTimelineController timeline=
+                this.selectedActor.getCharacterTimeline();
+        if(timeline==null)return;
+        CharacterTrack main=timeline.getTrackById("main");
+        if(main==null||!main.getKeys().contains(key))return;
+        for(int i=0;i<timeline.getTrackCount();i++)
+            if(timeline.getTrack(i)==main)
+            {
+                this.selectedTrack=i;
+                break;
+            }
+        this.selectedKey=key;
+        this.selectedBodyPartModel=null;
+        this.draggingKey=false;
+        this.dragKey=null;
+        this.draggingBodyPart=false;
     }
 
     public void clearSelection()
