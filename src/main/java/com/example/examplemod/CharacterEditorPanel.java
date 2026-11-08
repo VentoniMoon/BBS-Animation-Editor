@@ -2541,10 +2541,8 @@ public class CharacterEditorPanel
         CharacterKey key=CharacterRagdollController.setWeight(
                 this.selectedActor.getCharacterTimeline(),
                 this.currentFrame,value);
-        Minecraft mc=Minecraft.getMinecraft();
-        if(mc!=null&&mc.currentScreen instanceof AnimationEditorScreen)
-            ((AnimationEditorScreen)mc.currentScreen)
-                    .selectCharacterKeyFromInspector(key);
+        CharacterTimelineEditorController.requestInspectorKeySelection(
+                this.selectedActor,key);
         this.selectedKey=key;
         this.openedSection=Section.RAGDOLL;
     }
