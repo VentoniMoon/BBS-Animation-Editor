@@ -1165,15 +1165,6 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
-    /**
-     * Character inspector controls may author a key at the playhead.
-     * Keep the timeline's selected key in sync before the next UI refresh.
-     */
-    public void selectCharacterKeyFromInspector(CharacterKey key)
-    {
-        this.characterTimelineEditorController.selectMainKey(key);
-    }
-
     public void syncCharacterEditor()
     {
         BlockbusterSceneActorData selectedActor =
