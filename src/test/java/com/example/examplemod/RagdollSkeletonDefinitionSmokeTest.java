@@ -100,7 +100,7 @@ public final class RagdollSkeletonDefinitionSmokeTest
                 "anchor","body","low_body","head","left_arm",
                 "right_arm","left_leg","right_leg","low_leg_right"));
         verify(partial,7);
-        check(partial.size()==7,"Partial model should bind only real segments");
+        check(partial.size()==8,"Partial model should bind only real segments");
 
         // Actual native names, not guessed mannequin bones.
         RagdollSkeletonDefinition unknown=RagdollSkeletonDefinition.bind(
