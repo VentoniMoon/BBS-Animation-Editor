@@ -49,6 +49,11 @@ on:
       - 'src/main/java/com/example/examplemod/PreviewCameraProjection.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java'
       - 'build.gradle'
+  pull_request:
+    paths:
+      - 'jolt-java8-port/**'
+      - 'src/main/java/com/example/examplemod/RagdollEmoticonsJoltBridge.java'
+      - '.github/workflows/jolt-java8.yml'
   workflow_dispatch:
 
 jobs:
@@ -205,6 +210,14 @@ jobs:
           test -n "$LIB"
           java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
             com.github.stephengold.joltjni.JoltNativeSmoke
+      - name: Simulate real Emoticons humanoid Jolt constraints and impacts
+        run: |
+          OUT="${{ runner.temp }}/jolt-java8"
+          javac --release 8 -encoding UTF-8 -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltHumanoidRagdollSmoke.java
+          LIB="$(find "$OUT/native" -type f -name '*.so' -print -quit)"
+          java -ea -Djolt.native.path="$LIB" -cp "$OUT/classes" \
+            com.example.examplemod.physics.JoltHumanoidRagdollSmoke
       - name: Compile and run SwingTwist chain on Java 8
         run: |
           OUT="${{ runner.temp }}/jolt-java8"
