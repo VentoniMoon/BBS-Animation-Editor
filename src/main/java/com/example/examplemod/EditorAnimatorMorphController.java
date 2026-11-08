@@ -34,6 +34,33 @@ public class EditorAnimatorMorphController
     }
 
 
+    /**
+     * Native Emoticons constructs the clean keyframed pose first. Only then
+     * may Physics 2.0 replace the 11 real deform bones with the output of
+     * the optional Jolt multi-body simulation. At weight 0 or without JNI,
+     * this is the original unmodified renderer with no extra compute pass.
+     */
+    @Override
+    public void setupBoneMatrices(
+            EntityLivingBase entity,
+            BOBJArmature armature,
+            float yaw,
+            float partialTicks)
+    {
+        super.setupBoneMatrices(entity,armature,yaw,partialTicks);
+        if(RagdollEmoticonsJoltBridge.apply(
+                armature,
+                CharacterBodyPartPreviewState.getActorData(),
+                CharacterBodyPartPreviewState.getFrame()))
+        {
+            // Rebuild the standard BOBJ deform matrices from the Jolt
+            // local rotations, in native parent-first order.
+            for(BOBJBone bone:armature.orderedBones)
+                armature.matrices[bone.index]=bone.compute();
+        }
+    }
+
+
     @Override
     protected void setupBoneTransformations(
             EntityLivingBase entity,
