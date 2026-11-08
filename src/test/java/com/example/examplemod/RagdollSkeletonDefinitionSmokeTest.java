@@ -51,28 +51,56 @@ public final class RagdollSkeletonDefinitionSmokeTest
         check(bb.getAvailableBones()==8,"Preserve all source bone counts");
         verify(bb,6);
 
+        // Upstream stock Emoticons default.bobj / slim.bobj:
+        // 20 native armature bones, exactly 11 physically deformable
+        // canonical body segments. No invented wrist, ankle or spine.
         List<String> emoticons=Arrays.asList(
-                "low_body","upper_body","head",
-                "left_arm","right_arm","left_forearm","right_forearm",
-                "left_hand","right_hand","left_leg","right_leg",
-                "left_shin","right_shin","left_foot","right_foot");
+                "anchor","body","low_body","head","left_arm",
+                "low_left_arm","low_left_arm.end","right_arm",
+                "low_right_arm","low_right_arm.end","right_leg",
+                "low_leg_right","left_leg","low_left_leg",
+                "misc_bone_1","misc_bone_2","misc_bone_3",
+                "misc_gbone_1","misc_gbone_2","misc_gbone_3");
         RagdollSkeletonDefinition em=RagdollSkeletonDefinition.bind(
                 RagdollSkeletonDefinition.Preset.EMOTICONS,emoticons);
-        check(em.size()==15,"Complete Emoticons armature mapping");
-        verify(em,15);
+        check(em.size()==11,"Stock Emoticons must bind 11 rigid bodies");
+        check(em.getAvailableBones()==20,"All BOBJ bones remain visible");
+        verify(em,11);
+        check(em.getSegments().get(0).bone.equals("body"),
+                "Native pelvis is body, not low_body");
+        check(em.getSegments().get(1).bone.equals("low_body"),
+                "Native chest/spine is low_body, not upper_body");
+        boolean sawElbow=false,sawKnee=false;
+        for(RagdollSkeletonDefinition.Segment body:em.getSegments())
+        {
+            if(body.bone.equals("low_left_arm"))
+                sawElbow=body.parentRole.equals("left_upper_arm") &&
+                        body.joint==RagdollSkeletonDefinition.Joint.HINGE;
+            if(body.bone.equals("low_leg_right"))
+                sawKnee=body.parentRole.equals("right_thigh") &&
+                        body.joint==RagdollSkeletonDefinition.Joint.HINGE;
+            check(!body.bone.contains(".end")&&!body.bone.startsWith("misc"),
+                    "Attachment/animation helper must not be a rigid body");
+        }
+        check(sawElbow&&sawKnee,"Actual elbow/knee aliases missing");
 
-        // Partial armature: no phantom forearm, but a real hand must
-        // reparent to its existing upper arm, never float in world space.
+        // The stock ragdoll.bobj has 22 bones, including two .item
+        // attachment points. These must not become extra physics links.
+        List<String> ragdoll=new java.util.ArrayList<String>(emoticons);
+        ragdoll.add("low_left_arm.item");
+        ragdoll.add("low_right_arm.item");
+        check(RagdollSkeletonDefinition.bind(
+                RagdollSkeletonDefinition.Preset.EMOTICONS,ragdoll).size()==11,
+                "BOBJ ragdoll items are not physical joints");
+
+        // Partial but real stock hierarchy: without the lower arm,
+        // fingers/attachment markers do not generate fake wrists.
         RagdollSkeletonDefinition partial=RagdollSkeletonDefinition.bind(
                 RagdollSkeletonDefinition.Preset.EMOTICONS,Arrays.asList(
-                "low_body","head","left_arm","right_arm",
-                "left_hand","left_leg","right_leg"));
+                "anchor","body","low_body","head","left_arm",
+                "right_arm","left_leg","right_leg","low_leg_right"));
         verify(partial,7);
-        boolean handReparented=false;
-        for(RagdollSkeletonDefinition.Segment body:partial.getSegments())
-            if(body.role.equals("left_hand"))
-                handReparented=body.parentRole.equals("left_upper_arm");
-        check(handReparented,"Partial armature must reparent to nearest bone");
+        check(partial.size()==7,"Partial model should bind only real segments");
 
         // Actual native names, not guessed mannequin bones.
         RagdollSkeletonDefinition unknown=RagdollSkeletonDefinition.bind(
