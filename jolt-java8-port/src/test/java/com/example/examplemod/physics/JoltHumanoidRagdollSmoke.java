@@ -1,5 +1,7 @@
 package com.example.examplemod.physics;
 
+import com.github.stephengold.joltjni.Jolt;
+
 /**
  * Actual Jolt JNI smoke: independent pelvis/chest/head/arms/legs, native
  * hinge and swing limits, world-floor contact, one-shot body impulse.
@@ -13,6 +15,11 @@ public final class JoltHumanoidRagdollSmoke
 
     public static void main(String[] args)
     {
+        System.load(System.getProperty("jolt.native.path"));
+        Jolt.registerDefaultAllocator();
+        if(!Jolt.newFactory())throw new IllegalStateException("No Jolt factory");
+        Jolt.registerTypes();
+
         float[][] heads={
                 {0F,.75F,0F}, {0F,1.125F,0F}, {0F,1.5F,0F},
                 {.375F,1.375F,0F},{-.375F,1.375F,0F},
