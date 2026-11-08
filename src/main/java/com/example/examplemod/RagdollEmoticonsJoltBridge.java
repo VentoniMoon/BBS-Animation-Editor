@@ -117,35 +117,35 @@ public final class RagdollEmoticonsJoltBridge
         return available;
     }
 
-    public static void apply(BOBJArmature armature,
+    public static boolean apply(BOBJArmature armature,
             BlockbusterSceneActorData actor,int frame)
     {
         if(!ENABLED||armature==null||actor==null||
-                frame<0||actor.getCharacterTimeline()==null)return;
+                frame<0||actor.getCharacterTimeline()==null)return false;
         String id=actor.getId();
-        if(id==null||id.isEmpty())return;
+        if(id==null||id.isEmpty())return false;
         float weight=CharacterRagdollController.sampleWeight(
                 actor.getCharacterTimeline(),frame);
         if(weight<=0F)
         {
             dispose(id);
-            return;
+            return false;
         }
-        if(!initialize())return;
+        if(!initialize())return false;
 
         // Do not confuse model/rig swaps between multiple scene actors.
         RagdollSkeletonDefinition definition=
                 RagdollSkeletonDefinition.bind(
                         RagdollSkeletonDefinition.Preset.EMOTICONS,
                         armature.bones.keySet());
-        if(!definition.hasPhysicalSkeleton())return;
+        if(!definition.hasPhysicalSkeleton())return false;
         List<RagdollSkeletonDefinition.Segment> bones=
                 definition.getSegments();
         StringBuilder signature=new StringBuilder();
         for(RagdollSkeletonDefinition.Segment segment:bones)
         {
             BOBJBone nativeBone=armature.bones.get(segment.bone);
-            if(nativeBone==null)return;
+            if(nativeBone==null)return false;
             signature.append(segment.bone).append(':')
                     .append(nativeBone.parent).append(':')
                     .append(nativeBone.length).append(';');
@@ -160,7 +160,7 @@ public final class RagdollEmoticonsJoltBridge
                 dispose(id);
                 state=createState(armature,definition,
                         signature.toString(),frame);
-                if(state==null)return;
+                if(state==null)return false;
                 scenes.put(id,state);
                 // The editor has many actors; never leak an unlimited
                 // number of native PhysicsSystems when scenes are switched.
@@ -178,8 +178,8 @@ public final class RagdollEmoticonsJoltBridge
                 state.frame++;
             }
             float[][] physical=(float[][])poses.invoke(state.nativeRig);
-            if(physical.length!=bones.size())return;
-            blend(armature,state,physical,weight);
+            if(physical.length!=bones.size())return false;
+            return blend(armature,state,physical,weight);
         }
         catch(Throwable error)
         {
@@ -192,6 +192,7 @@ public final class RagdollEmoticonsJoltBridge
                 error.printStackTrace();
             }
         }
+        return false;
     }
 
     private static State createState(BOBJArmature armature,
@@ -259,7 +260,7 @@ public final class RagdollEmoticonsJoltBridge
      * continues to inherit its native parent's animation automatically.
      * Animated local positions/angles are preserved at 0% influence.
      */
-    private static void blend(BOBJArmature armature,State state,
+    private static boolean blend(BOBJArmature armature,State state,
             float[][] pose,float weight)
     {
         List<RagdollSkeletonDefinition.Segment> segments=
@@ -276,11 +277,11 @@ public final class RagdollEmoticonsJoltBridge
             RagdollSkeletonDefinition.Segment info=segments.get(i);
             BOBJBone bone=armature.bones.get(info.bone);
             Matrix4f original=clean.get(info.bone);
-            if(bone==null||original==null)return;
+            if(bone==null||original==null)return false;
             float[] sample=pose[i];
-            if(sample==null||sample.length!=7)return;
+            if(sample==null||sample.length!=7)return false;
             for(float value:sample)
-                if(!Float.isFinite(value))return;
+                if(!Float.isFinite(value))return false;
 
             Quat4f capsule=new Quat4f(sample[3],sample[4],
                     sample[5],sample[6]);
@@ -333,7 +334,7 @@ public final class RagdollEmoticonsJoltBridge
                     euler[0],euler[1],euler[2]};
             for(float value:row)
                 if(!Float.isFinite(value)||Math.abs(value)>20F)
-                    return;
+                    return false;
             edits.add(row);
         }
         for(int i=0;i<segments.size();i++)
@@ -345,6 +346,7 @@ public final class RagdollEmoticonsJoltBridge
             bone.rotateY=edit[4];
             bone.rotateZ=edit[5];
         }
+        return true;
     }
 
     private static float[] extractEulerZYX(Matrix4f matrix)
