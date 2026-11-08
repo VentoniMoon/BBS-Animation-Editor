@@ -39,7 +39,7 @@ public final class RagdollEmoticonsJoltBridge
             Boolean.getBoolean("bbs.editor.physics.jolt.ragdoll");
     private static final String NATIVE=
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
-    private static boolean attempted,available,logged;
+    private static boolean attempted,available,logged,reportedHierarchy;
     private static Method create,step,poses;
     private static final Map<String,State> scenes=
             new LinkedHashMap<String,State>();
@@ -144,6 +144,22 @@ public final class RagdollEmoticonsJoltBridge
         if(!definition.hasPhysicalSkeleton())return false;
         List<RagdollSkeletonDefinition.Segment> bones=
                 definition.getSegments();
+        // The Emoticons special ragdoll.bobj has many detached model
+        // bones. Never pretend they are parented like default.bobj and
+        // inject constrained physics into a different BOBJ hierarchy.
+        // Only the actual armature can establish joint ancestry.
+        if(!matchesActualHierarchy(armature,bones))
+        {
+            if(!reportedHierarchy)
+            {
+                reportedHierarchy=true;
+                System.err.println("[BBS Editor][Ragdoll] "+
+                        "This BOBJ hierarchy differs from stock Emoticons; "+
+                        "native physics skipped until a matching rig is fitted");
+            }
+            dispose(id);
+            return false;
+        }
         StringBuilder signature=new StringBuilder();
         for(RagdollSkeletonDefinition.Segment segment:bones)
         {
@@ -196,6 +212,35 @@ public final class RagdollEmoticonsJoltBridge
             }
         }
         return false;
+    }
+
+    private static boolean matchesActualHierarchy(BOBJArmature armature,
+            List<RagdollSkeletonDefinition.Segment> segments)
+    {
+        Map<String,String> nativeByRole=new HashMap<String,String>();
+        for(RagdollSkeletonDefinition.Segment seg:segments)
+            nativeByRole.put(seg.role,seg.bone);
+        for(RagdollSkeletonDefinition.Segment seg:segments)
+        {
+            if(seg.parentRole==null)continue;
+            String expected=nativeByRole.get(seg.parentRole);
+            BOBJBone child=armature.bones.get(seg.bone);
+            if(expected==null||child==null)return false;
+            // Optional intervening native control bones are harmless,
+            // but the selected rigid parent MUST be an actual ancestor.
+            String parent=child.parent;
+            boolean connected=false;
+            for(int depth=0;depth<32;depth++)
+            {
+                if(expected.equals(parent)){connected=true;break;}
+                if(parent==null||parent.isEmpty())break;
+                BOBJBone next=armature.bones.get(parent);
+                if(next==null)break;
+                parent=next.parent;
+            }
+            if(!connected)return false;
+        }
+        return true;
     }
 
     private static State createState(BOBJArmature armature,
