@@ -1443,8 +1443,31 @@ public class CharacterTimelineEditorController
         return this.selectedTrack;
     }
 
+    /*
+     * UI panel and timeline both exist on the client render thread, but
+     * the panel is created separately from this controller. Carry a one-shot
+     * selection request scoped to the actor instead of changing the editor
+     * screen's global event/render pipeline for a single inspector field.
+     * Weak actor keys also prevent scene changes retaining old selections.
+     */
+    private static final java.util.Map<BlockbusterSceneActorData,CharacterKey>
+            pendingInspectorKeys=
+            new java.util.WeakHashMap<BlockbusterSceneActorData,CharacterKey>();
+
+    public static void requestInspectorKeySelection(
+            BlockbusterSceneActorData actor,CharacterKey key)
+    {
+        if(actor!=null&&key!=null)pendingInspectorKeys.put(actor,key);
+    }
+
     public CharacterKey getSelectedKey()
     {
+        if(this.selectedActor!=null)
+        {
+            CharacterKey requested=pendingInspectorKeys.remove(
+                    this.selectedActor);
+            if(requested!=null)selectMainKey(requested);
+        }
         return this.selectedKey;
     }
 
