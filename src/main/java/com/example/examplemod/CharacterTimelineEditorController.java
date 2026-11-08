@@ -1448,6 +1448,32 @@ public class CharacterTimelineEditorController
         return this.selectedKey;
     }
 
+    /**
+     * Select a main-track key authored by a CHARACTER inspector widget.
+     * The panel and timeline must agree on object identity, otherwise the
+     * next syncCharacterEditor() call immediately discards panel selection.
+     */
+    public void selectMainKey(CharacterKey key)
+    {
+        if(key==null||this.selectedActor==null)return;
+        CharacterTimelineController timeline=
+                this.selectedActor.getCharacterTimeline();
+        if(timeline==null)return;
+        CharacterTrack main=timeline.getTrackById("main");
+        if(main==null||!main.getKeys().contains(key))return;
+        for(int i=0;i<timeline.getTrackCount();i++)
+            if(timeline.getTrack(i)==main)
+            {
+                this.selectedTrack=i;
+                break;
+            }
+        this.selectedKey=key;
+        this.selectedBodyPartModel=null;
+        this.draggingKey=false;
+        this.dragKey=null;
+        this.draggingBodyPart=false;
+    }
+
     public void clearSelection()
     {
         this.selectedTrack = -1;
