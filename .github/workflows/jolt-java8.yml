@@ -49,11 +49,6 @@ on:
       - 'src/main/java/com/example/examplemod/PreviewCameraProjection.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java'
       - 'build.gradle'
-  pull_request:
-    paths:
-      - 'jolt-java8-port/**'
-      - 'src/main/java/com/example/examplemod/RagdollEmoticonsJoltBridge.java'
-      - '.github/workflows/jolt-java8.yml'
   workflow_dispatch:
 
 jobs:
