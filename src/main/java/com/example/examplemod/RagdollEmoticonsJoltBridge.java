@@ -318,7 +318,7 @@ public final class RagdollEmoticonsJoltBridge
                 // which hyperextends the knee. Negate X for both
                 // shins so knee flexion goes backward (+Z). Elbows
                 // retain +X because they flex forward (-Z).
-                float hingeSign=info.role.endsWith("_shin")?-1F:1F;
+                float hingeSign=RagdollAnatomy.hingeAxisSign(info.role);
                 Vector3f hingeAxis=new Vector3f(hingeSign,0F,0F);
                 Vector3f hingeNormal=new Vector3f(0F,1F,0F);
                 rotate(basis,hingeAxis);
@@ -353,7 +353,8 @@ public final class RagdollEmoticonsJoltBridge
             // vector forced every standing actor to fall backward.
             // Derive the direction from the current root pose so it
             // stays correct after an authored yaw rotation.
-            Vector3f forward=new Vector3f(0F,0F,-1F);
+            Vector3f forward=new Vector3f(0F,0F,
+                    RagdollAnatomy.forwardLocalZ());
             rotate(rotation(new Matrix4f(root.mat)),forward);
             float horizontal=(float)Math.sqrt(
                     forward.x*forward.x+forward.z*forward.z);
