@@ -85,6 +85,36 @@ public final class RagdollEmoticonsJoltBridge
         scenes.clear();
     }
 
+    /**
+     * Read-only model-space rigid-body center for the PHYSICS preview
+     * impulse handle. Unlike model bind positions, this follows the
+     * actually fallen body. Never step the solver from a GUI paint pass.
+     */
+    public static float[] previewBodyCenter(BlockbusterSceneActorData actor,
+            String role)
+    {
+        if(actor==null||role==null||poses==null)return null;
+        State state=scenes.get(actor.getId());
+        if(state==null)return null;
+        try
+        {
+            List<RagdollSkeletonDefinition.Segment> segments=
+                    state.definition.getSegments();
+            int index=-1;
+            for(int i=0;i<segments.size();i++)
+                if(role.equals(segments.get(i).role)){index=i;break;}
+            if(index<0)return null;
+            float[][] samples=(float[][])poses.invoke(state.nativeRig);
+            if(samples==null||index>=samples.length||
+                    samples[index]==null||samples[index].length<3)return null;
+            float[] p=samples[index];
+            if(!Float.isFinite(p[0])||!Float.isFinite(p[1])||
+                    !Float.isFinite(p[2]))return null;
+            return new float[]{p[0],p[1],p[2]};
+        }
+        catch(Throwable unavailable){return null;}
+    }
+
     private static void dispose(String actorId)
     {
         State state=scenes.remove(actorId);
