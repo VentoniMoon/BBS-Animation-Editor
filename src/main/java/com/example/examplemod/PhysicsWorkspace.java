@@ -33,6 +33,8 @@ public final class PhysicsWorkspace
     private int selectedRow=PhysicsChannels.RAGDOLL;
     private long lastClick;
     private int lastClickRow=-1,lastClickFrame=-1;
+    private boolean draggingKey;
+    private int draggingRow=-1,draggingFrame=-1;
     private int gizmoEndX=-1000,gizmoEndY=-1000;
     private boolean draggingImpulse;
     private int dragX,dragY;
@@ -159,9 +161,21 @@ public final class PhysicsWorkspace
         int row=(my-top-HEADER)/ROW;
         if(row<0||row>=4)return true;
         selectedRow=row;
-        screen.setCameraWorkspaceFrame(f);
         CharacterTimelineController t=track(screen);
         if(t==null)return true;
+        for(CharacterKey key:PhysicsChannels.keys(t))
+            if(key!=null&&PhysicsChannels.has(key,row)&&
+                    Math.abs(timeline.getFrameX(key.getFrame(),GUTTER)-mx)<=5)
+            {
+                f=key.getFrame();break;
+            }
+        screen.setCameraWorkspaceFrame(f);
+        if(button==0&&PhysicsChannels.has(PhysicsChannels.at(t,f),row))
+        {
+            draggingKey=true;
+            draggingRow=row;
+            draggingFrame=f;
+        }
         if(button==1)
         {
             PhysicsChannels.clear(t,f,row);
@@ -177,6 +191,27 @@ public final class PhysicsWorkspace
         }
         return true;
     }
+    public boolean dragTimeline(AnimationEditorScreen screen,int mx,int my)
+    {
+        if(!draggingKey)return false;
+        if(my<screen.height-TIMELINE_HEIGHT)return false;
+        int target=Math.max(0,Math.min(Math.max(0,screen.getSceneLength()-1),
+                timeline.getFrameFromMouseX(mx,GUTTER)));
+        if(target!=draggingFrame)
+        {
+            PhysicsChannels.moveChannel(track(screen),
+                    draggingFrame,target,draggingRow);
+            draggingFrame=target;
+            screen.setCameraWorkspaceFrame(target);
+        }
+        return true;
+    }
+    public void releaseTimelineDrag()
+    {
+        draggingKey=false;
+        draggingRow=-1;
+    }
+
     public boolean mouseScrolled(AnimationEditorScreen screen,int mx,int my,
             int direction,boolean shift)
     {
