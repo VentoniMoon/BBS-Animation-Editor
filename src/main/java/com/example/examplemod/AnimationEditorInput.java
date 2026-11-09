@@ -1127,6 +1127,13 @@ public class AnimationEditorInput
                 return;
             if (this.screen.scrollCameraWorkspace(mouseX,mouseY,direction))
                 return;
+            if(this.editorModeController.getMode()==
+                    EditorModeController.EditorMode.PHYSICS &&
+                    this.screen.getPhysicsWorkspace().mouseScrolled(this.screen,
+                            mouseX,mouseY,direction,
+                            Keyboard.isKeyDown(Keyboard.KEY_LSHIFT)||
+                            Keyboard.isKeyDown(Keyboard.KEY_RSHIFT)))
+                return;
 
             /*
              * =====================================================
