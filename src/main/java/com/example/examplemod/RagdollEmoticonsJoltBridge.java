@@ -41,6 +41,8 @@ public final class RagdollEmoticonsJoltBridge
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
     private static boolean attempted,available,logged,reportedHierarchy;
     private static Method create,step,poses,startFall;
+    private static Method nativeImpulse,nativeEnvironment;
+    private static boolean reportedOldPhysicsJar;
     private static boolean fitted;
     private static final Map<String,State> scenes=
             new LinkedHashMap<String,State>();
@@ -53,6 +55,7 @@ public final class RagdollEmoticonsJoltBridge
         final Quat4f[] boneOffsets;
         final float[] lengths;
         int frame;
+        int lastImpulseFrame;
 
         State(AutoCloseable nativeRig,String signature,
                 RagdollSkeletonDefinition definition,
@@ -62,6 +65,7 @@ public final class RagdollEmoticonsJoltBridge
             this.definition=definition;
             this.boneOffsets=boneOffsets;this.lengths=lengths;
             this.frame=frame;
+            this.lastImpulseFrame=frame-1;
         }
         void close()
         {
@@ -119,6 +123,23 @@ public final class RagdollEmoticonsJoltBridge
             }
             step=clazz.getMethod("step");
             poses=clazz.getMethod("poses");
+            nativeImpulse=clazz.getMethod("impulse",int.class,float.class,
+                    float.class,float.class,float.class,float.class,float.class);
+            try
+            {
+                nativeEnvironment=clazz.getMethod("setEnvironment",
+                        float.class,float.class,float.class,float.class,float.class);
+            }
+            catch(NoSuchMethodException oldJar)
+            {
+                nativeEnvironment=null;
+                if(!reportedOldPhysicsJar)
+                {
+                    reportedOldPhysicsJar=true;
+                    System.err.println("[BBS Editor][PHYSICS] New gravity/water "+
+                            "requires updated jolt-hair-prototype-java8.jar");
+                }
+            }
             available=true;
             System.out.println("[BBS Editor][Ragdoll] Native Jolt "+
                     "multibody solver connected (experimental)");
@@ -192,7 +213,8 @@ public final class RagdollEmoticonsJoltBridge
             {
                 dispose(id);
                 state=createState(armature,definition,
-                        signature.toString(),frame);
+                        signature.toString(),frame,
+                        actor.getCharacterTimeline());
                 if(state==null)return false;
                 scenes.put(id,state);
                 // The editor has many actors; never leak an unlimited
@@ -203,12 +225,18 @@ public final class RagdollEmoticonsJoltBridge
                     dispose(eldest);
                 }
             }
-            // A paused frame or a second body-part/mirror render must not
-            // advance the simulation again. Only whole timeline ticks count.
+            // Apply exactly once at activation, not on repeated preview,
+            // mirror or screenshot passes for this same frame.
+            applyEnvironment(state,actor.getCharacterTimeline(),state.frame);
+            applyImpulse(state,actor.getCharacterTimeline(),state.frame);
+            // Fixed-step replay: impulses fire once on the frame crossing.
             while(state.frame<frame)
             {
+                int next=state.frame+1;
+                applyEnvironment(state,actor.getCharacterTimeline(),next);
+                applyImpulse(state,actor.getCharacterTimeline(),next);
                 step.invoke(state.nativeRig);
-                state.frame++;
+                state.frame=next;
             }
             float[][] physical=(float[][])poses.invoke(state.nativeRig);
             if(physical.length!=bones.size())return false;
@@ -226,6 +254,45 @@ public final class RagdollEmoticonsJoltBridge
             }
         }
         return false;
+    }
+
+    /** Independent gravity + water channels for an actor's Jolt world. */
+    private static void applyEnvironment(State state,
+            CharacterTimelineController timeline,int frame) throws Exception
+    {
+        if(nativeEnvironment==null)return;
+        PhysicsChannels.Fluid f=PhysicsChannels.waterAt(timeline,frame);
+        nativeEnvironment.invoke(state.nativeRig,
+                PhysicsChannels.gravityAt(timeline,frame),
+                f.amount,f.buoyancy,f.drag,f.angularDrag);
+    }
+
+    /** Apply a recorded impulse once, to a native rigid body and hit point. */
+    private static void applyImpulse(State state,
+            CharacterTimelineController timeline,int frame) throws Exception
+    {
+        if(frame<=state.lastImpulseFrame)return;
+        state.lastImpulseFrame=frame;
+        PhysicsChannels.Impact impact=PhysicsChannels.impulseAt(timeline,frame);
+        if(impact==null||impact.strength<=0F||nativeImpulse==null)return;
+        List<RagdollSkeletonDefinition.Segment> physical=
+                state.definition.getSegments();
+        int index=-1;
+        for(int i=0;i<physical.size();i++)
+            if(physical.get(i).role.equals(impact.target)){index=i;break;}
+        if(index<0)return;
+        float norm=(float)Math.sqrt(impact.x*impact.x+
+                impact.y*impact.y+impact.z*impact.z);
+        if(norm<.001F)return;
+        float[][] pose=(float[][])poses.invoke(state.nativeRig);
+        if(index>=pose.length)return;
+        float[] p=pose[index];
+        nativeImpulse.invoke(state.nativeRig,index,
+                impact.x/norm*impact.strength,
+                impact.y/norm*impact.strength,
+                impact.z/norm*impact.strength,
+                p[0]+impact.offsetX,p[1]+impact.offsetY,
+                p[2]+impact.offsetZ);
     }
 
     private static boolean matchesActualHierarchy(BOBJArmature armature,
@@ -258,8 +325,8 @@ public final class RagdollEmoticonsJoltBridge
     }
 
     private static State createState(BOBJArmature armature,
-            RagdollSkeletonDefinition definition,String signature,int frame)
-            throws Exception
+            RagdollSkeletonDefinition definition,String signature,int frame,
+            CharacterTimelineController timeline) throws Exception
     {
         List<RagdollSkeletonDefinition.Segment> segments=
                 definition.getSegments();
@@ -354,6 +421,7 @@ public final class RagdollEmoticonsJoltBridge
         // gravity instead of losing balance. Give it one bounded,
         // model-facing impulse at transition; never on render frames.
         if(fitted&&startFall!=null &&
+                PhysicsChannels.impulseAt(timeline,frame)==null &&
                 !"false".equalsIgnoreCase(System.getProperty(
                         "bbs.editor.physics.jolt.ragdoll.autoNudge","true")))
         {
