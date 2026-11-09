@@ -313,10 +313,25 @@ public final class RagdollEmoticonsJoltBridge
                         segments.get(parent.intValue()).bone);
                 if(source==null)return null;
                 Quat4f basis=rotation(new Matrix4f(source.mat));
+                // Keep the REAL BOBJ parent hinge plane but choose
+                // its sign from the child segment and the current
+                // actor-facing direction. A fixed +X/-X convention
+                // is wrong for mirrored or rotated skeletons.
                 Vector3f hingeAxis=new Vector3f(1F,0F,0F);
                 Vector3f hingeNormal=new Vector3f(0F,1F,0F);
                 rotate(basis,hingeAxis);
                 rotate(basis,hingeNormal);
+                BOBJBone root=armature.bones.get(segments.get(0).bone);
+                if(root==null)return null;
+                Vector3f forward=new Vector3f(0F,0F,
+                        RagdollAnatomy.forwardLocalZ());
+                rotate(rotation(new Matrix4f(root.mat)),forward);
+                float multiplier=RagdollAnatomy.hingeAxisMultiplier(
+                        info.role,
+                        new float[]{hingeAxis.x,hingeAxis.y,hingeAxis.z},
+                        new float[]{x,y,z},
+                        new float[]{forward.x,forward.y,forward.z});
+                hingeAxis.scale(multiplier);
                 hingeFrames[i]=new float[]{
                         hingeAxis.x,hingeAxis.y,hingeAxis.z,
                         hingeNormal.x,hingeNormal.y,hingeNormal.z};
@@ -343,13 +358,18 @@ public final class RagdollEmoticonsJoltBridge
                         "bbs.editor.physics.jolt.ragdoll.autoNudge","true")))
         {
             BOBJBone root=armature.bones.get(segments.get(0).bone);
-            Vector3f backward=new Vector3f(0F,0F,1F);
-            rotate(rotation(new Matrix4f(root.mat)),backward);
+            // Emoticons' model-local FRONT is -Z; the previous +Z
+            // vector forced every standing actor to fall backward.
+            // Derive the direction from the current root pose so it
+            // stays correct after an authored yaw rotation.
+            Vector3f forward=new Vector3f(0F,0F,
+                    RagdollAnatomy.forwardLocalZ());
+            rotate(rotation(new Matrix4f(root.mat)),forward);
             float horizontal=(float)Math.sqrt(
-                    backward.x*backward.x+backward.z*backward.z);
+                    forward.x*forward.x+forward.z*forward.z);
             if(horizontal>0.001F)
                 startFall.invoke(nativeObject,
-                        backward.x/horizontal,backward.z/horizontal);
+                        forward.x/horizontal,forward.z/horizontal);
         }
         return new State((AutoCloseable)nativeObject,signature,
                 definition,offsets,lengths,frame);

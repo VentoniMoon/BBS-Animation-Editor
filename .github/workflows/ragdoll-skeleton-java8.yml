@@ -5,12 +5,16 @@ on:
     paths:
       - 'src/main/java/com/example/examplemod/RagdollSkeletonDefinition.java'
       - 'src/test/java/com/example/examplemod/RagdollSkeletonDefinitionSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/RagdollAnatomy.java'
+      - 'src/test/java/com/example/examplemod/RagdollAnatomySmokeTest.java'
       - '.github/workflows/ragdoll-skeleton-java8.yml'
   push:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/RagdollSkeletonDefinition.java'
       - 'src/test/java/com/example/examplemod/RagdollSkeletonDefinitionSmokeTest.java'
+      - 'src/main/java/com/example/examplemod/RagdollAnatomy.java'
+      - 'src/test/java/com/example/examplemod/RagdollAnatomySmokeTest.java'
       - '.github/workflows/ragdoll-skeleton-java8.yml'
   workflow_dispatch:
 
@@ -31,3 +35,10 @@ jobs:
             src/main/java/com/example/examplemod/RagdollSkeletonDefinition.java \
             src/test/java/com/example/examplemod/RagdollSkeletonDefinitionSmokeTest.java
           java -cp build/ragdoll-smoke com.example.examplemod.RagdollSkeletonDefinitionSmokeTest
+      - name: Verify Emoticons forward and anatomical knee flexion
+        run: |
+          set -eu
+          javac -source 8 -target 8 -d build/ragdoll-smoke \
+            src/main/java/com/example/examplemod/RagdollAnatomy.java \
+            src/test/java/com/example/examplemod/RagdollAnatomySmokeTest.java
+          java -ea -cp build/ragdoll-smoke com.example.examplemod.RagdollAnatomySmokeTest
