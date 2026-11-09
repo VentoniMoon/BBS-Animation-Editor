@@ -313,7 +313,13 @@ public final class RagdollEmoticonsJoltBridge
                         segments.get(parent.intValue()).bone);
                 if(source==null)return null;
                 Quat4f basis=rotation(new Matrix4f(source.mat));
-                Vector3f hingeAxis=new Vector3f(1F,0F,0F);
+                // Emoticons faces model-local -Z. Positive hinge
+                // angles rotate a downward shin towards -Z for +X,
+                // which hyperextends the knee. Negate X for both
+                // shins so knee flexion goes backward (+Z). Elbows
+                // retain +X because they flex forward (-Z).
+                float hingeSign=info.role.endsWith("_shin")?-1F:1F;
+                Vector3f hingeAxis=new Vector3f(hingeSign,0F,0F);
                 Vector3f hingeNormal=new Vector3f(0F,1F,0F);
                 rotate(basis,hingeAxis);
                 rotate(basis,hingeNormal);
@@ -343,13 +349,17 @@ public final class RagdollEmoticonsJoltBridge
                         "bbs.editor.physics.jolt.ragdoll.autoNudge","true")))
         {
             BOBJBone root=armature.bones.get(segments.get(0).bone);
-            Vector3f backward=new Vector3f(0F,0F,1F);
-            rotate(rotation(new Matrix4f(root.mat)),backward);
+            // Emoticons' model-local FRONT is -Z; the previous +Z
+            // vector forced every standing actor to fall backward.
+            // Derive the direction from the current root pose so it
+            // stays correct after an authored yaw rotation.
+            Vector3f forward=new Vector3f(0F,0F,-1F);
+            rotate(rotation(new Matrix4f(root.mat)),forward);
             float horizontal=(float)Math.sqrt(
-                    backward.x*backward.x+backward.z*backward.z);
+                    forward.x*forward.x+forward.z*forward.z);
             if(horizontal>0.001F)
                 startFall.invoke(nativeObject,
-                        backward.x/horizontal,backward.z/horizontal);
+                        forward.x/horizontal,forward.z/horizontal);
         }
         return new State((AutoCloseable)nativeObject,signature,
                 definition,offsets,lengths,frame);
