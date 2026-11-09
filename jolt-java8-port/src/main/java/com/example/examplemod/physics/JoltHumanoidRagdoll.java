@@ -36,6 +36,9 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
     private final Body[] body;
     private final TwoBodyConstraint[] joint;
     private final float[][] initialHeads,initialTails;
+    private final float[] masses;
+    private float gravity=9.81F,water,buoyancy=1.05F;
+    private float fluidDrag=.8F,fluidAngularDrag=.65F;
     private Body ground;
     private boolean closed;
 
@@ -75,6 +78,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
         jobs=new JobSystemSingleThreaded(1024);
         body=new Body[count];
         joint=new TwoBodyConstraint[count];
+        masses=new float[count];
 
         try
         {
@@ -98,8 +102,9 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                         EMotionType.Dynamic,0);
                 CollisionGroup group=new CollisionGroup(selfFilter,1,i);
                 MassProperties mass=shape.getMassProperties();
-                mass.scaleToMass(count==STOCK_MASS.length?
-                        STOCK_MASS[i]:Math.max(1F,length*12F));
+                masses[i]=count==STOCK_MASS.length?
+                        STOCK_MASS[i]:Math.max(1F,length*12F);
+                mass.scaleToMass(masses[i]);
                 settings.setCollisionGroup(group);
                 settings.setOverrideMassProperties(
                         EOverrideMassProperties.MassAndInertiaProvided);
@@ -320,9 +325,55 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                 new RVec3((h[0]+t[0])*.5F,top,(h[2]+t[2])*.5F));
     }
 
+    /**
+     * Reconfigurable per-actor environment, sampled from PHYSICS timeline.
+     * Water is a whole-actor fluid volume in this first pass (not yet a
+     * Minecraft block/voxel immersion probe). 1=fully immersed.
+     */
+    public void setEnvironment(float gravityMagnitude,float waterAmount,
+            float buoyancyMultiplier,float linearDrag,float angularDrag)
+    {
+        if(closed)throw new IllegalStateException("Closed ragdoll");
+        if(!Float.isFinite(gravityMagnitude)||gravityMagnitude<0F||
+                gravityMagnitude>100F||!Float.isFinite(waterAmount)||
+                waterAmount<0F||waterAmount>1F||
+                !Float.isFinite(buoyancyMultiplier)||
+                buoyancyMultiplier<0F||buoyancyMultiplier>3F||
+                !Float.isFinite(linearDrag)||linearDrag<0F||
+                linearDrag>5F||!Float.isFinite(angularDrag)||
+                angularDrag<0F||angularDrag>5F)
+            throw new IllegalArgumentException("Invalid PHYSICS environment");
+        gravity=gravityMagnitude;
+        water=waterAmount;
+        buoyancy=buoyancyMultiplier;
+        fluidDrag=linearDrag;
+        fluidAngularDrag=angularDrag;
+        world.setGravity(0F,-gravity,0F);
+    }
+
     public void step()
     {
         if(closed)throw new IllegalStateException("Closed ragdoll");
+        if(water>0F)
+        {
+            float linearScale=Math.max(0F,1F-water*fluidDrag*TICK);
+            float angularScale=Math.max(0F,1F-water*fluidAngularDrag*TICK);
+            for(int i=0;i<body.length;i++)
+            {
+                int id=body[i].getId();
+                interfaceBodies.addForce(id,new Vec3(
+                        0F,masses[i]*gravity*buoyancy*water,0F));
+                Vec3 v=interfaceBodies.getLinearVelocity(id);
+                interfaceBodies.setLinearVelocity(id,
+                        v.getX()*linearScale,v.getY()*linearScale,
+                        v.getZ()*linearScale);
+                Vec3 omega=interfaceBodies.getAngularVelocity(id);
+                interfaceBodies.setAngularVelocity(id,new Vec3(
+                        omega.getX()*angularScale,
+                        omega.getY()*angularScale,
+                        omega.getZ()*angularScale));
+            }
+        }
         int status=world.update(TICK,SUBSTEPS,allocator,jobs);
         if(status!=0)throw new IllegalStateException(
                 "Jolt ragdoll update flags="+status);

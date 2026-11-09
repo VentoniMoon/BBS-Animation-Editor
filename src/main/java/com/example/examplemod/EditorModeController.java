@@ -23,6 +23,7 @@ public class EditorModeController
         CHARACTER,
         POSE,
         BODY_PARTS,
+        PHYSICS,
         CAMERA
     }
 
@@ -68,6 +69,7 @@ public class EditorModeController
         }
 
         if (this.mode == EditorMode.CAMERA) return "Camera";
+        if (this.mode == EditorMode.PHYSICS) return "Physics";
         if (this.mode == EditorMode.BODY_PARTS)
         {
             return "Body Parts";
@@ -173,7 +175,7 @@ public class EditorModeController
 
     public int getDropdownHeight()
     {
-        return getDropdownRowHeight() * 4;
+        return getDropdownRowHeight() * 5;
     }
 
 
@@ -194,7 +196,8 @@ public class EditorModeController
         {
             return EditorMode.BODY_PARTS;
         }
-        if (row == 3) return EditorMode.CAMERA;
+        if (row == 3) return EditorMode.PHYSICS;
+        if (row == 4) return EditorMode.CAMERA;
 
         return null;
     }
@@ -209,6 +212,7 @@ public class EditorModeController
         }
 
         if (mode == EditorMode.CAMERA) return "Camera";
+        if (mode == EditorMode.PHYSICS) return "Physics";
         if (mode == EditorMode.BODY_PARTS)
         {
             return "Body Parts";

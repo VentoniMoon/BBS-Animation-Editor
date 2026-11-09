@@ -283,6 +283,12 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorTimeline timeline =
             new EditorTimeline();
 
+    /** Separate PHYSICS panel, linked to the shared film clock. */
+    private final PhysicsWorkspace physicsWorkspace =
+            new PhysicsWorkspace(timeline);
+
+    public PhysicsWorkspace getPhysicsWorkspace(){return physicsWorkspace;}
+
     private final EditorPlaybackController playbackController =
             new EditorPlaybackController(timeline);
 
@@ -2144,7 +2150,10 @@ public class AnimationEditorScreen extends GuiScreen
             // nested Body Parts return control above the audio overlay.
             if (this.editorModeController.getMode() == EditorModeController.EditorMode.BODY_PARTS)
                 this.bodyPartsTimelineController.drawModelBackButtonOverlay(this.mc, width, height);
-            drawInterpolationPanel(mouseX, mouseY);
+            if(editorModeController.getMode()==
+                    EditorModeController.EditorMode.PHYSICS)
+                physicsWorkspace.drawLeftGuide(this);
+            else drawInterpolationPanel(mouseX,mouseY);
         }
 
         if (this.editorInput != null
@@ -2697,6 +2706,7 @@ public class AnimationEditorScreen extends GuiScreen
                         EditorModeController.EditorMode.CHARACTER,
                         EditorModeController.EditorMode.POSE,
                         EditorModeController.EditorMode.BODY_PARTS,
+                        EditorModeController.EditorMode.PHYSICS,
                         EditorModeController.EditorMode.CAMERA
                 };
 
@@ -3432,6 +3442,8 @@ public class AnimationEditorScreen extends GuiScreen
                     this.playbackController.getCurrentFrame());
         }
         this.sceneViewport.renderPreviewToScreen();
+        if(editorModeController.getMode()==EditorModeController.EditorMode.PHYSICS)
+            physicsWorkspace.drawImpulseGizmo(this,filmX,filmY,filmW,filmH);
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA)
         {
             cameraWorkspace.drawMediaSelection(
@@ -3534,6 +3546,11 @@ public class AnimationEditorScreen extends GuiScreen
         );
 
         if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.PHYSICS)
+        {
+            this.physicsWorkspace.drawInspector(this,panelX,top,bottom);
+        }
+        else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CHARACTER)
         {
             this.characterEditorPanel.setBounds(
@@ -4070,6 +4087,12 @@ public class AnimationEditorScreen extends GuiScreen
     private void drawTimeline()
     {
         if (this.editorModeController.getMode()
+                == EditorModeController.EditorMode.PHYSICS)
+        {
+            this.physicsWorkspace.drawTimeline(this,getSceneLength());
+            return;
+        }
+        if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
         {
             this.bodyPartsController.getTimeline().setTick(
@@ -4149,6 +4172,9 @@ public class AnimationEditorScreen extends GuiScreen
 
     private int getBaseTimelineHeight()
     {
+        if(this.editorModeController.getMode()==
+                EditorModeController.EditorMode.PHYSICS)
+            return PhysicsWorkspace.TIMELINE_HEIGHT;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.BODY_PARTS)
         {
@@ -4272,6 +4298,17 @@ public class AnimationEditorScreen extends GuiScreen
                     betterLightsInspector.mouseClicked(this,
                         mouseX,mouseY,mouseButton))return;
         }
+        if(editorModeController.getMode()==EditorModeController.EditorMode.PHYSICS)
+        {
+            if(physicsWorkspace.beginImpulseDrag(mouseX,mouseY,mouseButton))
+                return;
+            if(physicsWorkspace.clickInspector(this,mouseX,mouseY,mouseButton)
+                    ||physicsWorkspace.clickTimeline(this,mouseX,mouseY,mouseButton))
+            {
+                if(editorInput!=null)editorInput.markDirty();
+                return;
+            }
+        }
         if (this.editorInput != null)
         {
             this.editorInput.mouseClicked(
@@ -4295,6 +4332,20 @@ public class AnimationEditorScreen extends GuiScreen
                 &&BetterLightsActorInspector.isLightActor(getSelectedActor())
                 &&betterLightsInspector.mouseDragged(this,mouseX,mouseY))
             return;
+        if(editorModeController.getMode()==EditorModeController.EditorMode.PHYSICS
+                &&clickedMouseButton==0&&
+                physicsWorkspace.dragTimeline(this,mouseX,mouseY))
+        {
+            if(editorInput!=null)editorInput.markDirty();
+            return;
+        }
+        if(editorModeController.getMode()==EditorModeController.EditorMode.PHYSICS
+                &&clickedMouseButton==0
+                &&physicsWorkspace.dragImpulse(this,mouseX,mouseY))
+        {
+            if(editorInput!=null)editorInput.markDirty();
+            return;
+        }
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && clickedMouseButton == 0)
@@ -4324,6 +4375,8 @@ public class AnimationEditorScreen extends GuiScreen
     {
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         betterLightsInspector.mouseReleased();
+        physicsWorkspace.releaseImpulseDrag();
+        physicsWorkspace.releaseTimelineDrag();
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
         {

@@ -467,9 +467,9 @@ public class CharacterEditorPanel
                 // into view without requiring an unrelated manual
                 // accordion click. Preserve user selection on later
                 // frame syncs when the key identity is unchanged.
-                if(CharacterRagdollController.keyWeight(key)>=0F)
-                    openedSection=Section.RAGDOLL;
-                else if(key.getType()!=null)
+                // Physics keys now have their own PHYSICS workspace.
+                // Do not automatically open the retired RAGDOLL accordion.
+                if(key.getType()!=null)
                 {
                     switch(key.getType())
                     {
@@ -898,17 +898,8 @@ public class CharacterEditorPanel
                 ? ANIMATION_PARAMETERS_CONTENT_GAP + CharacterAnimationParametersPanel.HEIGHT + 4
                 : 4;
 
-        // Ragdoll is a separate CHARACTER key channel, not a Body Part
-        // attachment or a new timeline. Editing creates/reuses a main key.
-        cursorY=drawSection(mc,Section.RAGDOLL,"RAGDOLL",
-                cursorY,mouseX,mouseY);
-        if(this.openedSection==Section.RAGDOLL)
-        {
-            cursorY+=4;
-            drawRagdoll(mc,cursorY,mouseX,mouseY);
-            cursorY+=RAGDOLL_CONTENT_HEIGHT;
-        }
-        cursorY+=4;
+        // Ragdoll/impulse/gravity/fluid controls moved to PHYSICS.
+        // Leave legacy NBT keys intact for old scenes.
 
         cursorY = drawSection(mc, Section.LIP_SYNC, "LIP SYNC",
                 cursorY, mouseX, mouseY);
@@ -3018,19 +3009,7 @@ public class CharacterEditorPanel
                   + CharacterAnimationParametersPanel.HEIGHT + 4
                 : SECTION_HEIGHT + 4;
 
-        if(isInsideSection(currentY,mouseX,mouseY))
-        {
-            toggleSection(Section.RAGDOLL);
-            return true;
-        }
-        if(this.openedSection==Section.RAGDOLL)
-        {
-            if(mouseClickedRagdoll(currentY+SECTION_HEIGHT+4,
-                    mouseX,mouseY))return true;
-            currentY+=SECTION_HEIGHT+4+RAGDOLL_CONTENT_HEIGHT;
-        }
-        else currentY+=SECTION_HEIGHT;
-        currentY+=4;
+        // Ragdoll has a dedicated PHYSICS inspector; skip the old row.
         if (isInsideSection(currentY, mouseX, mouseY))
         {
             toggleSection(Section.LIP_SYNC);
