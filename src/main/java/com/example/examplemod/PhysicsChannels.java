@@ -140,6 +140,35 @@ public final class PhysicsChannels
             if(main!=null)main.removeKey(key);
         }
     }
+    /** Drag one physical channel without moving Morph/Skin/Animation keys. */
+    public static void moveChannel(CharacterTimelineController t,
+            int from,int to,int row)
+    {
+        if(t==null||from==to||to<0)return;
+        CharacterKey original=at(t,from);
+        if(!has(original,row))return;
+        switch(row)
+        {
+        case RAGDOLL:
+            setWeight(t,to,CharacterRagdollController.keyWeight(original));
+            break;
+        case IMPULSE:setImpulse(t,to,impulseAt(t,from));break;
+        case GRAVITY:setGravity(t,to,
+                data(original).getFloat("Gravity"));break;
+        case WATER:
+            NBTTagCompound w=data(original).getCompoundTag("Water");
+            Fluid f=new Fluid();
+            f.amount=w.getFloat("Amount");
+            f.buoyancy=w.getFloat("Buoyancy");
+            f.drag=w.getFloat("Drag");
+            f.angularDrag=w.getFloat("AngularDrag");
+            setWater(t,to,f);
+            break;
+        default:return;
+        }
+        clear(t,from,row);
+    }
+
     public static Impact impulseAt(CharacterTimelineController t,int frame)
     {
         CharacterKey key=at(t,frame);
