@@ -40,7 +40,8 @@ public final class RagdollEmoticonsJoltBridge
     private static final String NATIVE=
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
     private static boolean attempted,available,logged,reportedHierarchy;
-    private static Method create,step,poses;
+    private static Method create,step,poses,startFall;
+    private static boolean fitted;
     private static final Map<String,State> scenes=
             new LinkedHashMap<String,State>();
 
@@ -100,9 +101,22 @@ public final class RagdollEmoticonsJoltBridge
             Method start=bootstrap.getMethod("available",File.class);
             if(!Boolean.TRUE.equals(start.invoke(null,game)))return false;
             Class<?> clazz=Class.forName(NATIVE);
-            create=clazz.getMethod("create",float[][].class,
-                    float[][].class,float[].class,int[].class,
-                    int[].class,float[][].class,float.class);
+            try
+            {
+                create=clazz.getMethod("createFitted",float[][].class,
+                        float[][].class,float[].class,int[].class,
+                        int[].class,float[][].class,float[][].class,float.class);
+                startFall=clazz.getMethod("startFall",float.class,float.class);
+                fitted=true;
+            }
+            catch(NoSuchMethodException previousVersion)
+            {
+                create=clazz.getMethod("create",float[][].class,
+                        float[][].class,float[].class,int[].class,
+                        int[].class,float[][].class,float.class);
+                fitted=false;
+                startFall=null;
+            }
             step=clazz.getMethod("step");
             poses=clazz.getMethod("poses");
             available=true;
@@ -254,6 +268,7 @@ public final class RagdollEmoticonsJoltBridge
         float[] radii=new float[count],lengths=new float[count];
         int[] parents=new int[count],types=new int[count];
         float[][] limit=new float[count][5];
+        float[][] hingeFrames=new float[count][6];
         Quat4f[] offsets=new Quat4f[count];
         Map<String,Integer> byRole=new HashMap<String,Integer>();
         float lowest=Float.POSITIVE_INFINITY;
@@ -289,16 +304,53 @@ public final class RagdollEmoticonsJoltBridge
             parents[i]=parent==null?-1:parent.intValue();
             types[i]=info.joint==RagdollSkeletonDefinition.Joint.HINGE?
                     2:1;
+            if(types[i]==2 && parent!=null)
+            {
+                // Use the animated PARENT's real BOBJ joint basis.
+                // A fixed world X hinge becomes wrong as soon as the
+                // actor or limb is rotated by an authored animation.
+                BOBJBone source=armature.bones.get(
+                        segments.get(parent.intValue()).bone);
+                if(source==null)return null;
+                Quat4f basis=rotation(new Matrix4f(source.mat));
+                Vector3f hingeAxis=new Vector3f(1F,0F,0F);
+                Vector3f hingeNormal=new Vector3f(0F,1F,0F);
+                rotate(basis,hingeAxis);
+                rotate(basis,hingeNormal);
+                hingeFrames[i]=new float[]{
+                        hingeAxis.x,hingeAxis.y,hingeAxis.z,
+                        hingeNormal.x,hingeNormal.y,hingeNormal.z};
+            }
             limit[i]=new float[]{info.swingDegrees,
                     info.twistMinDegrees,info.twistMaxDegrees,
                     info.hingeMinDegrees,info.hingeMaxDegrees};
             byRole.put(info.role,Integer.valueOf(i));
             lowest=Math.min(lowest,Math.min(tip.y,model.m13));
         }
-        Object nativeObject=create.invoke(null,head,tail,radii,parents,
-                types,limit,lowest-0.11F);
+        Object nativeObject=fitted?
+                create.invoke(null,head,tail,radii,parents,
+                        types,limit,hingeFrames,lowest-0.03F):
+                create.invoke(null,head,tail,radii,parents,
+                        types,limit,lowest-0.03F);
         if(!(nativeObject instanceof AutoCloseable))
             throw new IllegalStateException("Jolt ragdoll not closable");
+        // The fitted solver starts from the exact animated pose. A
+        // stationary vertical biped will otherwise compress under
+        // gravity instead of losing balance. Give it one bounded,
+        // model-facing impulse at transition; never on render frames.
+        if(fitted&&startFall!=null &&
+                !"false".equalsIgnoreCase(System.getProperty(
+                        "bbs.editor.physics.jolt.ragdoll.autoNudge","true")))
+        {
+            BOBJBone root=armature.bones.get(segments.get(0).bone);
+            Vector3f backward=new Vector3f(0F,0F,1F);
+            rotate(rotation(new Matrix4f(root.mat)),backward);
+            float horizontal=(float)Math.sqrt(
+                    backward.x*backward.x+backward.z*backward.z);
+            if(horizontal>0.001F)
+                startFall.invoke(nativeObject,
+                        backward.x/horizontal,backward.z/horizontal);
+        }
         return new State((AutoCloseable)nativeObject,signature,
                 definition,offsets,lengths,frame);
     }

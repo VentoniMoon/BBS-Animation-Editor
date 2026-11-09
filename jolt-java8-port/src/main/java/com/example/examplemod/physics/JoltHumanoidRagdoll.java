@@ -3,6 +3,8 @@ package com.example.examplemod.physics;
 import com.github.stephengold.joltjni.*;
 import com.github.stephengold.joltjni.enumerate.EActivation;
 import com.github.stephengold.joltjni.enumerate.EMotionType;
+import com.github.stephengold.joltjni.enumerate.EConstraintSpace;
+import com.github.stephengold.joltjni.enumerate.EOverrideMassProperties;
 
 /**
  * Physics 2.0 experimental full-body Jolt prototype, independent of Forge.
@@ -21,37 +23,53 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
 {
     public static final float TICK=1F/20F;
     private static final int SUBSTEPS=3;
+    private static final float[] STOCK_MASS={9F,15F,5F,2.4F,2.4F,1.3F,1.3F,8F,8F,4F,4F};
 
     private final ObjectLayerPairFilterTable pairFilter;
     private final BroadPhaseLayerInterfaceTable broadLayers;
     private final ObjectVsBroadPhaseLayerFilterTable broadFilter;
+    private final GroupFilterTable selfFilter;
     private final PhysicsSystem world;
     private final BodyInterface interfaceBodies;
     private final TempAllocatorImpl allocator;
     private final JobSystemSingleThreaded jobs;
     private final Body[] body;
     private final TwoBodyConstraint[] joint;
+    private final float[][] initialHeads,initialTails;
     private Body ground;
     private boolean closed;
 
     private JoltHumanoidRagdoll(float[][] head,float[][] tail,float[] radius,
-            int[] parents,int[] kind,float[][] limits,float floorY)
+            int[] parents,int[] kind,float[][] limits,float[][] hingeFrames,float floorY)
     {
         int count=head.length;
+        initialHeads=copy(head);initialTails=copy(tail);
         pairFilter=new ObjectLayerPairFilterTable(2);
         // 0: ragdoll bodies, 1: world proxy. Adjacent segments never
         // collide against each other. Real world and per-part body contacts
         // can be added once collision geometry fitting has been tested.
+        pairFilter.enableCollision(0,0);
         pairFilter.enableCollision(0,1);
         broadLayers=new BroadPhaseLayerInterfaceTable(2,2);
         broadLayers.mapObjectToBroadPhaseLayer(0,0);
         broadLayers.mapObjectToBroadPhaseLayer(1,1);
         broadFilter=new ObjectVsBroadPhaseLayerFilterTable(
                 broadLayers,2,pairFilter,2);
+        // Enable distant-limb self contacts, but suppress directly joined
+        // pairs and siblings (their bind capsules may already overlap).
+        selfFilter=new GroupFilterTable(count);
+        for(int i=0;i<count;i++)for(int j=0;j<i;j++)
+            if(parents[i]==j||parents[j]==i||
+                    (parents[i]>=0&&parents[i]==parents[j]))
+                selfFilter.disableCollision(i,j);
         world=new PhysicsSystem();
         world.init(Math.max(128,count*4),0,512,512,
                 broadLayers,broadFilter,pairFilter);
         world.setGravity(0F,-9.81F,0F);
+        PhysicsSettings physicalSettings=world.getPhysicsSettings();
+        physicalSettings.setNumVelocitySteps(10);
+        physicalSettings.setNumPositionSteps(12);
+        world.setPhysicsSettings(physicalSettings);
         interfaceBodies=world.getBodyInterface();
         allocator=new TempAllocatorImpl(2*1024*1024);
         jobs=new JobSystemSingleThreaded(1024);
@@ -78,8 +96,19 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                                 (head[i][2]+tail[i][2])*0.5D),
                         new Quat(q[0],q[1],q[2],q[3]),
                         EMotionType.Dynamic,0);
-                settings.setLinearDamping(0.35F);
-                settings.setAngularDamping(0.55F);
+                CollisionGroup group=new CollisionGroup(selfFilter,1,i);
+                MassProperties mass=shape.getMassProperties();
+                mass.scaleToMass(count==STOCK_MASS.length?
+                        STOCK_MASS[i]:Math.max(1F,length*12F));
+                settings.setCollisionGroup(group);
+                settings.setOverrideMassProperties(
+                        EOverrideMassProperties.MassAndInertiaProvided);
+                settings.setMassPropertiesOverride(mass);
+                settings.setLinearDamping(0.24F);
+                settings.setAngularDamping(0.90F);
+                settings.setMaxAngularVelocity(12F);
+                settings.setFriction(0.72F);
+                settings.setRestitution(0.025F);
                 Body added;
                 try
                 {
@@ -91,6 +120,8 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                 finally
                 {
                     settings.close();
+                    mass.close();
+                    group.close();
                     shape.close();
                 }
                 body[i]=added;
@@ -104,19 +135,27 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                 if(kind[i]==2) // anatomical elbow or knee: one hinge axis
                 {
                     HingeConstraintSettings settings=new HingeConstraintSettings();
+                    settings.setSpace(EConstraintSpace.WorldSpace);
                     settings.setPoint1(pivot);
                     settings.setPoint2(pivot);
                     // The initial hinge frame is in MODEL REST SPACE.
                     // Exact per-armature axes will be fitted to the BOBJ
                     // bind matrices in the next constraint-calibration pass.
-                    Vec3 xAxis=new Vec3(1F,0F,0F);
-                    Vec3 normal=new Vec3(0F,1F,0F);
+                    float[] frame=hingeFrames==null?null:hingeFrames[i];
+                    float[] a=frame==null?
+                            new float[]{1F,0F,0F}:normalize(frame,0);
+                    float[] n=frame==null?
+                            new float[]{0F,1F,0F}:
+                            perpendicularInFrame(frame,a);
+                    Vec3 xAxis=new Vec3(a[0],a[1],a[2]);
+                    Vec3 normal=new Vec3(n[0],n[1],n[2]);
                     settings.setHingeAxis1(xAxis);
                     settings.setHingeAxis2(xAxis);
                     settings.setNormalAxis1(normal);
                     settings.setNormalAxis2(normal);
                     settings.setLimitsMin((float)Math.toRadians(limits[i][3]));
                     settings.setLimitsMax((float)Math.toRadians(limits[i][4]));
+                    settings.setMaxFrictionTorque(0.9F);
                     try
                     {
                         joint[i]=settings.create(body[parent],body[i]);
@@ -128,6 +167,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                 {
                     SwingTwistConstraintSettings settings=
                             new SwingTwistConstraintSettings();
+                    settings.setSpace(EConstraintSpace.WorldSpace);
                     settings.setPosition1(pivot);
                     settings.setPosition2(pivot);
                     float x=tail[i][0]-head[i][0];
@@ -150,6 +190,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                             (float)Math.toRadians(limits[i][1]));
                     settings.setTwistMaxAngle(
                             (float)Math.toRadians(limits[i][2]));
+                    settings.setMaxFrictionTorque(1.0F);
                     try
                     {
                         joint[i]=settings.create(body[parent],body[i]);
@@ -167,6 +208,8 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                     new Quat(0F,0F,0F,1F),EMotionType.Static,1);
             try
             {
+                floorSpec.setFriction(0.95F);
+                floorSpec.setRestitution(0F);
                 ground=interfaceBodies.createBody(floorSpec);
                 if(ground==null)
                     throw new IllegalStateException("Cannot allocate ragdoll floor");
@@ -184,16 +227,31 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
         }
     }
 
+    /** Legacy reflection signature; apply a one-time tip at first activation. */
     public static JoltHumanoidRagdoll create(float[][] head,float[][] tail,
             float[] radius,int[] parents,int[] kind,float[][] limits,
             float floorY)
+    {
+        JoltHumanoidRagdoll rig=createFitted(
+                head,tail,radius,parents,kind,limits,null,floorY);
+        if(!"false".equalsIgnoreCase(System.getProperty(
+                "bbs.editor.physics.jolt.ragdoll.autoNudge","true")))
+            rig.startFall(0F,1F);
+        return rig;
+    }
+
+    /** Real model-space hinge axes and normals, sampled at ragdoll onset. */
+    public static JoltHumanoidRagdoll createFitted(float[][] head,float[][] tail,
+            float[] radius,int[] parents,int[] kind,float[][] limits,
+            float[][] hingeFrames,float floorY)
     {
         if(head==null||tail==null||radius==null||parents==null||
                 kind==null||limits==null||head.length<5||
                 head.length>32||tail.length!=head.length||
                 radius.length!=head.length||parents.length!=head.length||
                 kind.length!=head.length||limits.length!=head.length||
-                !Float.isFinite(floorY))
+                !Float.isFinite(floorY)||
+                (hingeFrames!=null&&hingeFrames.length!=head.length))
             throw new IllegalArgumentException("Invalid ragdoll topology");
         for(int i=0;i<head.length;i++)
         {
@@ -224,9 +282,42 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                 throw new IllegalArgumentException("Invalid hinge");
             if(kind[i]==1&&limits[i][0]<=0F&&i>0)
                 throw new IllegalArgumentException("Invalid angular cone");
+            if(kind[i]==2&&hingeFrames!=null)
+            {
+                float[] f=hingeFrames[i];
+                if(f==null||f.length!=6)
+                    throw new IllegalArgumentException("Invalid hinge frame "+i);
+                for(float x:f)
+                    if(!Float.isFinite(x))
+                        throw new IllegalArgumentException("Nonfinite hinge frame");
+                float ax=f[0]*f[0]+f[1]*f[1]+f[2]*f[2];
+                float nx=f[3]*f[3]+f[4]*f[4]+f[5]*f[5];
+                if(ax<.25F||nx<.25F)
+                    throw new IllegalArgumentException("Zero hinge axis");
+            }
         }
         return new JoltHumanoidRagdoll(head,tail,radius,parents,kind,
-                limits,floorY);
+                limits,hingeFrames,floorY);
+    }
+
+    /**
+     * Bounded one-shot loss-of-balance impulse, applied to upper torso
+     * once when a ragdoll starts. Do not call on every render frame.
+     */
+    public void startFall(float x,float z)
+    {
+        if(closed)throw new IllegalStateException("Closed ragdoll");
+        if(!Float.isFinite(x)||!Float.isFinite(z))
+            throw new IllegalArgumentException("Invalid fall direction");
+        float n=(float)Math.sqrt(x*x+z*z);
+        if(n<0.01F)return;
+        x/=n;z/=n;
+        int index=body.length>1?1:0;
+        float[] h=initialHeads[index],t=initialTails[index];
+        float top=Math.max(h[1],t[1]);
+        interfaceBodies.addImpulse(body[index].getId(),
+                new Vec3(16F*x,0F,16F*z),
+                new RVec3((h[0]+t[0])*.5F,top,(h[2]+t[2])*.5F));
     }
 
     public void step()
@@ -279,6 +370,32 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
         return new float[]{qx/norm,0F,qz/norm,w/norm};
     }
 
+    private static float[][] copy(float[][] source)
+    {
+        float[][] result=new float[source.length][3];
+        for(int i=0;i<source.length;i++)
+            System.arraycopy(source[i],0,result[i],0,3);
+        return result;
+    }
+
+    private static float[] normalize(float[] values,int at)
+    {
+        float x=values[at],y=values[at+1],z=values[at+2];
+        float n=(float)Math.sqrt(x*x+y*y+z*z);
+        if(n<1E-6F)return new float[]{1F,0F,0F};
+        return new float[]{x/n,y/n,z/n};
+    }
+
+    private static float[] perpendicularInFrame(float[] frame,float[] axis)
+    {
+        float dot=frame[3]*axis[0]+frame[4]*axis[1]+frame[5]*axis[2];
+        float x=frame[3]-dot*axis[0],y=frame[4]-dot*axis[1];
+        float z=frame[5]-dot*axis[2];
+        float n=(float)Math.sqrt(x*x+y*y+z*z);
+        if(n<1E-5F)return perpendicular(axis[0],axis[1],axis[2]);
+        return new float[]{x/n,y/n,z/n};
+    }
+
     private static float[] perpendicular(float x,float y,float z)
     {
         float a,b,c;
@@ -306,7 +423,8 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
             interfaceBodies.destroyBody(ground.getId());
             ground=null;
         }
-        world.close();jobs.close();allocator.close();broadFilter.close();
+        world.close();jobs.close();allocator.close();selfFilter.close();
+        broadFilter.close();
         broadLayers.close();pairFilter.close();
     }
 }

@@ -80,6 +80,38 @@ public final class JoltHumanoidRagdollSmoke
                 moved+=Math.abs(before[2][k]-after[2][k]);
             check(moved>.01F,"Head did not react to applied impulse");
         }
+        // Fitted native hinge frames: keep a stationary balanced biped
+        // upright, then tip it and verify a continuous, stable fall.
+        float[][] frames=new float[11][6];
+        for(int i=0;i<frames.length;i++)
+            frames[i]=new float[]{1F,0F,0F,0F,1F,0F};
+        try(JoltHumanoidRagdoll rig=
+                JoltHumanoidRagdoll.createFitted(heads,tails,radii,
+                        parents,kind,limits,frames,-.03F))
+        {
+            for(int tick=0;tick<40;tick++)rig.step();
+            float[][] rest=rig.poses();
+            check(rest[2][1]>1.4F,
+                    "Still upright pose fell without an impact");
+        }
+        try(JoltHumanoidRagdoll rig=
+                JoltHumanoidRagdoll.createFitted(heads,tails,radii,
+                        parents,kind,limits,frames,-.03F))
+        {
+            rig.startFall(0F,1F);
+            for(int tick=0;tick<70;tick++)
+            {
+                rig.step();
+                float[][] sample=rig.poses();
+                for(int i=0;i<sample.length;i++)
+                    for(float value:sample[i])
+                        check(Float.isFinite(value)&&Math.abs(value)<10F,
+                                "Unstable impact pose at tick "+tick);
+            }
+            float[][] end=rig.poses();
+            check(end[2][1]<0.9F && end[2][2]>.15F,
+                    "Body did not tip before landing");
+        }
         System.out.println("Native Jolt Emoticons 11-body ragdoll OK");
     }
 }
