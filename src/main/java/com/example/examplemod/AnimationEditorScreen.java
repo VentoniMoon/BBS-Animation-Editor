@@ -2150,9 +2150,10 @@ public class AnimationEditorScreen extends GuiScreen
             // nested Body Parts return control above the audio overlay.
             if (this.editorModeController.getMode() == EditorModeController.EditorMode.BODY_PARTS)
                 this.bodyPartsTimelineController.drawModelBackButtonOverlay(this.mc, width, height);
-            if(editorModeController.getMode()!=
+            if(editorModeController.getMode()==
                     EditorModeController.EditorMode.PHYSICS)
-                drawInterpolationPanel(mouseX, mouseY);
+                physicsWorkspace.drawLeftGuide(this);
+            else drawInterpolationPanel(mouseX,mouseY);
         }
 
         if (this.editorInput != null
