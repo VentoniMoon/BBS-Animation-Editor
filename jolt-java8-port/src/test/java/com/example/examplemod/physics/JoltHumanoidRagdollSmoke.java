@@ -13,6 +13,52 @@ public final class JoltHumanoidRagdollSmoke
         if(!yes)throw new AssertionError(reason);
     }
 
+    /** World-space -Y limb direction, from Jolt's reported XYZW pose. */
+    private static float limbZ(float[] p)
+    {
+        return -2F*(p[3]*p[6]+p[4]*p[5]);
+    }
+
+    private static float hingeBendZ(float[][] poses,int child,int parent)
+    {
+        return limbZ(poses[child])-limbZ(poses[parent]);
+    }
+
+    /**
+     * Run the real, native Jolt hinge instead of only checking the
+     * geometric cross product in a pure Java test. +Z is backwards,
+     * -Z is forwards for stock, unrotated Emoticons.
+     */
+    private static void verifyNativeHinge(float[][] heads,float[][] tails,
+            float[] radii,int[] parents,int[] kind,float[][] limits,
+            int lower,int upper,float axisX,float impulseZ,
+            boolean shouldFlex)
+    {
+        float[][] frames=new float[heads.length][6];
+        for(int i=0;i<frames.length;i++)
+            frames[i]=new float[]{1F,0F,0F,0F,1F,0F};
+        frames[lower][0]=axisX;
+
+        try(JoltHumanoidRagdoll rig=JoltHumanoidRagdoll.createFitted(
+                heads,tails,radii,parents,kind,limits,frames,-20F))
+        {
+            rig.impulse(lower,0F,0F,impulseZ,
+                    heads[lower][0],tails[lower][1],0F);
+            rig.step();
+            rig.step();
+            float delta=hingeBendZ(rig.poses(),lower,upper);
+            float signedDelta=delta*(impulseZ<0F?-1F:1F);
+            if(shouldFlex)
+                check(signedDelta>0.22F,
+                        "Jolt blocked anatomical flex at segment "+
+                        lower+" / relZ="+delta+" / axisX="+axisX);
+            else
+                check(signedDelta<0.10F,
+                        "Jolt allowed hyperextension at segment "+
+                        lower+" / relZ="+delta+" / axisX="+axisX);
+        }
+    }
+
     public static void main(String[] args)
     {
         System.load(System.getProperty("jolt.native.path"));
@@ -111,6 +157,23 @@ public final class JoltHumanoidRagdollSmoke
             float[][] end=rig.poses();
             check(end[2][1]<0.9F && end[2][2]>.15F,
                     "Body did not tip before landing");
+        }
+        // Regression: actual Jolt 6.0.0 constrains *both* knees
+        // to bend backward (+Z), and *both* elbows forward (-Z).
+        // This caught the sign error that pure vector tests missed.
+        for(int shin:new int[]{9,10})
+        {
+            verifyNativeHinge(heads,tails,radii,parents,kind,limits,
+                    shin,parents[shin],-1F,+4F,true);
+            verifyNativeHinge(heads,tails,radii,parents,kind,limits,
+                    shin,parents[shin],-1F,-4F,false);
+        }
+        for(int forearm:new int[]{5,6})
+        {
+            verifyNativeHinge(heads,tails,radii,parents,kind,limits,
+                    forearm,parents[forearm],+1F,-4F,true);
+            verifyNativeHinge(heads,tails,radii,parents,kind,limits,
+                    forearm,parents[forearm],+1F,+4F,false);
         }
         System.out.println("Native Jolt Emoticons 11-body ragdoll OK");
     }
