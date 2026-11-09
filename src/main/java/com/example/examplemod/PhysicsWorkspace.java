@@ -494,6 +494,35 @@ public final class PhysicsWorkspace
         }
         return true;
     }
+    /** PHYSICS intentionally has no interpolation inspector. */
+    public void drawLeftGuide(AnimationEditorScreen screen)
+    {
+        Minecraft mc=Minecraft.getMinecraft();
+        int y=AnimationEditorScreen.TOP_BAR_HEIGHT+
+                AnimationEditorScreen.ACTOR_PANEL_HEIGHT;
+        int bottom=screen.height-TIMELINE_HEIGHT;
+        if(bottom-y<78)return;
+        rect(0,y,GUTTER,bottom,EditorVisualStyle.themedSurface(.07F));
+        rect(0,y,GUTTER,y+1,EditorVisualStyle.themedSurface(.27F));
+        text(mc,"PHYSICS TOOLS",10,y+11,0xFFE2CFEC);
+        text(mc,"4 independent key tracks",10,y+34,0xFF9DAFB9);
+        text(mc,"Double click: add key",10,y+52,0xFF9DAFB9);
+        text(mc,"Drag key: move frame",10,y+69,0xFF9DAFB9);
+        if(bottom-y>112)
+            text(mc,"Right click: delete key",10,y+86,0xFF9DAFB9);
+        if(bottom-y>155)
+        {
+            text(mc,"IMPULSE",10,y+119,0xFFFFBD83);
+            text(mc,"Drag orange tip: aim",10,y+136,0xFF9DAFB9);
+            text(mc,"Drag pale center: hit",10,y+151,0xFF9DAFB9);
+        }
+        if(bottom-y>216)
+        {
+            text(mc,"WATER",10,y+189,0xFF7EDFC9);
+            text(mc,"Immersion 0..100%",10,y+206,0xFF9DAFB9);
+        }
+    }
+
     /** Project an arrow anchored to the selected actor into the preview. */
     public void drawImpulseGizmo(AnimationEditorScreen screen,
             int vx,int vy,int vw,int vh)
