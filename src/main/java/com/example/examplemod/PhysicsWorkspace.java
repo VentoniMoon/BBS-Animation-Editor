@@ -543,6 +543,17 @@ public final class PhysicsWorkspace
         double bodyYaw=Math.toRadians(record.hasBodyYaw()?
                 record.getBodyYaw():record.getYaw());
         double cy=Math.cos(bodyYaw),sy=Math.sin(bodyYaw);
+        // Follow the actual dynamic segment, not just its standing
+        // pose. This keeps the hit-point handle on a fallen body.
+        float[] center=RagdollEmoticonsJoltBridge.previewBodyCenter(
+                screen.getSelectedActorForTimeline(),impact.target);
+        if(center!=null)
+        {
+            x+=cy*center[0]+sy*center[2];
+            y=record.getY()+center[1];
+            z+=-sy*center[0]+cy*center[2];
+            targetOffset=0D;
+        }
         double offX=cy*impact.offsetX+sy*impact.offsetZ;
         double offZ=-sy*impact.offsetX+cy*impact.offsetZ;
         double ox=x+offX,oy=y+targetOffset+impact.offsetY,
