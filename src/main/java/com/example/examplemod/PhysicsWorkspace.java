@@ -97,12 +97,12 @@ public final class PhysicsWorkspace
         {
             int x=timeline.getFrameX(f,GUTTER);
             if(x<GUTTER||x>=width)continue;
-            int major=f%20==0;
+            boolean major=f%20==0;
             if(f%5!=0&&timeline.getPixelsPerFrame()<4F)continue;
-            rect(x,top+22,x+1,height,major!=0?
+            rect(x,top+22,x+1,height,major?
                     EditorVisualStyle.themedSurface(.29F):
                     EditorVisualStyle.themedSurface(.17F));
-            if(major!=0)text(mc,Integer.toString(f),x+2,top+8,0xFFA9B5C2);
+            if(major)text(mc,Integer.toString(f),x+2,top+8,0xFFA9B5C2);
         }
         CharacterTimelineController t=track(screen);
         List<CharacterKey> keys=PhysicsChannels.keys(t);
