@@ -36,7 +36,8 @@ public final class PhysicsWorkspace
     private boolean draggingKey;
     private int draggingRow=-1,draggingFrame=-1;
     private int gizmoEndX=-1000,gizmoEndY=-1000;
-    private boolean draggingImpulse;
+    private int gizmoBaseX=-1000,gizmoBaseY=-1000;
+    private boolean draggingImpulse,draggingPoint;
     private int dragX,dragY;
     private PhysicsChannels.Impact displayedImpulse;
     private final int[] hitRows=new int[12];
@@ -458,7 +459,8 @@ public final class PhysicsWorkspace
     public void drawImpulseGizmo(AnimationEditorScreen screen,
             int vx,int vy,int vw,int vh)
     {
-        gizmoEndX=-1000;gizmoEndY=-1000;displayedImpulse=null;
+        gizmoEndX=-1000;gizmoEndY=-1000;
+        gizmoBaseX=-1000;gizmoBaseY=-1000;displayedImpulse=null;
         if(selectedRow!=PhysicsChannels.IMPULSE||track(screen)==null)return;
         BlockbusterRecordFrame record=screen.getCurrentRecordFrame();
         EditorCamera camera=screen.getPreviewInteractionCamera();
@@ -470,20 +472,28 @@ public final class PhysicsWorkspace
         if("pelvis".equals(impact.target))targetOffset=-.5D;
         if(impact.target.contains("leg")||impact.target.contains("shin"))
             targetOffset=-.7D;
-        double ox=x+impact.offsetX,oy=y+targetOffset+impact.offsetY,
-                oz=z+impact.offsetZ;
+        double bodyYaw=Math.toRadians(record.hasBodyYaw()?
+                record.getBodyYaw():record.getYaw());
+        double cy=Math.cos(bodyYaw),sy=Math.sin(bodyYaw);
+        double offX=cy*impact.offsetX+sy*impact.offsetZ;
+        double offZ=-sy*impact.offsetX+cy*impact.offsetZ;
+        double ox=x+offX,oy=y+targetOffset+impact.offsetY,
+                oz=z+offZ;
         float norm=(float)Math.sqrt(impact.x*impact.x+
                 impact.y*impact.y+impact.z*impact.z);
         if(norm<.001F)norm=1F;
         float[] start=PreviewCameraProjection.project(ox,oy,oz,
                 camera.sample(),vx,vy,vw,vh);
+        double directionX=cy*impact.x+sy*impact.z;
+        double directionZ=-sy*impact.x+cy*impact.z;
         float[] end=PreviewCameraProjection.project(
-                ox+impact.x/norm,oy+impact.y/norm,oz+impact.z/norm,
+                ox+directionX/norm,oy+impact.y/norm,oz+directionZ/norm,
                 camera.sample(),vx,vy,vw,vh);
         if(start==null||end==null)return;
         if(start[0]<vx||start[0]>vx+vw||start[1]<vy||
                 start[1]>vy+vh)return;
         int sx=(int)start[0],sy=(int)start[1];
+        gizmoBaseX=sx;gizmoBaseY=sy;
         gizmoEndX=(int)end[0];gizmoEndY=(int)end[1];
         displayedImpulse=impact;
         drawLine(sx,sy,gizmoEndX,gizmoEndY,0xFFF2A35D);
@@ -508,9 +518,13 @@ public final class PhysicsWorkspace
     {
         if(button!=0||selectedRow!=PhysicsChannels.IMPULSE||
                 displayedImpulse==null)return false;
-        if(Math.abs(mx-gizmoEndX)>12||Math.abs(my-gizmoEndY)>12)
-            return false;
-        draggingImpulse=true;dragX=mx;dragY=my;
+        boolean arrow=Math.abs(mx-gizmoEndX)<=12&&
+                Math.abs(my-gizmoEndY)<=12;
+        boolean base=Math.abs(mx-gizmoBaseX)<=9&&
+                Math.abs(my-gizmoBaseY)<=9;
+        if(!arrow&&!base)return false;
+        draggingImpulse=true;draggingPoint=!arrow;
+        dragX=mx;dragY=my;
         return true;
     }
     public boolean dragImpulse(AnimationEditorScreen screen,int mx,int my)
@@ -523,14 +537,38 @@ public final class PhysicsWorkspace
         if(camera==null)return false;
         double yaw=Math.toRadians(camera.sample().yaw);
         float dx=(mx-dragX)*.02F,dy=(dragY-my)*.02F;
-        impact.x+=Math.cos(yaw)*dx;
-        impact.z-=Math.sin(yaw)*dx;
-        impact.y+=dy;
+        float worldX=(float)Math.cos(yaw)*dx;
+        float worldZ=-(float)Math.sin(yaw)*dx;
+        BlockbusterRecordFrame record=screen.getCurrentRecordFrame();
+        double actorYaw=record==null?0D:Math.toRadians(
+                record.hasBodyYaw()?record.getBodyYaw():record.getYaw());
+        float localX=(float)(Math.cos(actorYaw)*worldX-
+                Math.sin(actorYaw)*worldZ);
+        float localZ=(float)(Math.sin(actorYaw)*worldX+
+                Math.cos(actorYaw)*worldZ);
+        if(draggingPoint)
+        {
+            impact.offsetX=Math.max(-1.5F,Math.min(1.5F,
+                    impact.offsetX+localX));
+            impact.offsetY=Math.max(-1.5F,Math.min(1.5F,
+                    impact.offsetY+dy));
+            impact.offsetZ=Math.max(-1.5F,Math.min(1.5F,
+                    impact.offsetZ+localZ));
+        }
+        else
+        {
+            impact.x+=localX;
+            impact.z+=localZ;
+            impact.y+=dy;
+        }
         float norm=(float)Math.sqrt(impact.x*impact.x+
                 impact.y*impact.y+impact.z*impact.z);
         if(norm>.01F)
         {
-            impact.x/=norm;impact.y/=norm;impact.z/=norm;
+            if(!draggingPoint)
+            {
+                impact.x/=norm;impact.y/=norm;impact.z/=norm;
+            }
             PhysicsChannels.setImpulse(t,frame(screen),impact);
             if(CharacterRagdollController.sampleWeight(t,frame(screen))<=0F)
                 PhysicsChannels.setWeight(t,frame(screen),1F);
@@ -541,7 +579,7 @@ public final class PhysicsWorkspace
     public boolean releaseImpulseDrag()
     {
         boolean was=draggingImpulse;
-        draggingImpulse=false;
+        draggingImpulse=false;draggingPoint=false;
         return was;
     }
 }
