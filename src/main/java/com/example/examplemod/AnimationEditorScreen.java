@@ -4332,6 +4332,13 @@ public class AnimationEditorScreen extends GuiScreen
                 &&betterLightsInspector.mouseDragged(this,mouseX,mouseY))
             return;
         if(editorModeController.getMode()==EditorModeController.EditorMode.PHYSICS
+                &&clickedMouseButton==0&&
+                physicsWorkspace.dragTimeline(this,mouseX,mouseY))
+        {
+            if(editorInput!=null)editorInput.markDirty();
+            return;
+        }
+        if(editorModeController.getMode()==EditorModeController.EditorMode.PHYSICS
                 &&clickedMouseButton==0
                 &&physicsWorkspace.dragImpulse(this,mouseX,mouseY))
         {
@@ -4368,6 +4375,7 @@ public class AnimationEditorScreen extends GuiScreen
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         betterLightsInspector.mouseReleased();
         physicsWorkspace.releaseImpulseDrag();
+        physicsWorkspace.releaseTimelineDrag();
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
         {
