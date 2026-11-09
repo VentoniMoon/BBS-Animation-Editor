@@ -21,13 +21,13 @@ public final class RagdollAnatomySmokeTest
     {
         float sign=RagdollAnatomy.hingeAxisMultiplier(
                 role,candidate,child,forward);
-        // Empirically verified with Jolt JNI 6.0.0: a positive hinge
-        // rotates the child segment in the -cross(axis,child) direction.
+        // Verified with Jolt JNI 6.0.0: a positive hinge
+        // rotates the child's direction in the cross(axis,child) direction.
         float ax=sign*candidate[0],ay=sign*candidate[1];
         float az=sign*candidate[2];
-        float flexX=-(ay*child[2]-az*child[1]);
-        float flexY=-(az*child[0]-ax*child[2]);
-        float flexZ=-(ax*child[1]-ay*child[0]);
+        float flexX=ay*child[2]-az*child[1];
+        float flexY=az*child[0]-ax*child[2];
+        float flexZ=ax*child[1]-ay*child[0];
         float wanted=knee?-1F:1F;
         float dot=wanted*(flexX*forward[0]+flexY*forward[1]+
                 flexZ*forward[2]);
