@@ -313,16 +313,25 @@ public final class RagdollEmoticonsJoltBridge
                         segments.get(parent.intValue()).bone);
                 if(source==null)return null;
                 Quat4f basis=rotation(new Matrix4f(source.mat));
-                // Emoticons faces model-local -Z. Positive hinge
-                // angles rotate a downward shin towards -Z for +X,
-                // which hyperextends the knee. Negate X for both
-                // shins so knee flexion goes backward (+Z). Elbows
-                // retain +X because they flex forward (-Z).
-                float hingeSign=RagdollAnatomy.hingeAxisSign(info.role);
-                Vector3f hingeAxis=new Vector3f(hingeSign,0F,0F);
+                // Keep the REAL BOBJ parent hinge plane but choose
+                // its sign from the child segment and the current
+                // actor-facing direction. A fixed +X/-X convention
+                // is wrong for mirrored or rotated skeletons.
+                Vector3f hingeAxis=new Vector3f(1F,0F,0F);
                 Vector3f hingeNormal=new Vector3f(0F,1F,0F);
                 rotate(basis,hingeAxis);
                 rotate(basis,hingeNormal);
+                BOBJBone root=armature.bones.get(segments.get(0).bone);
+                if(root==null)return null;
+                Vector3f forward=new Vector3f(0F,0F,
+                        RagdollAnatomy.forwardLocalZ());
+                rotate(rotation(new Matrix4f(root.mat)),forward);
+                float multiplier=RagdollAnatomy.hingeAxisMultiplier(
+                        info.role,
+                        new float[]{hingeAxis.x,hingeAxis.y,hingeAxis.z},
+                        new float[]{x,y,z},
+                        new float[]{forward.x,forward.y,forward.z});
+                hingeAxis.scale(multiplier);
                 hingeFrames[i]=new float[]{
                         hingeAxis.x,hingeAxis.y,hingeAxis.z,
                         hingeNormal.x,hingeNormal.y,hingeNormal.z};
