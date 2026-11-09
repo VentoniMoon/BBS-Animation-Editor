@@ -531,12 +531,12 @@ public final class PhysicsWorkspace
         if(start==null||end==null)return;
         if(start[0]<vx||start[0]>vx+vw||start[1]<vy||
                 start[1]>vy+vh)return;
-        int sx=(int)start[0],sy=(int)start[1];
-        gizmoBaseX=sx;gizmoBaseY=sy;
+        int sx=(int)start[0],screenY=(int)start[1];
+        gizmoBaseX=sx;gizmoBaseY=screenY;
         gizmoEndX=(int)end[0];gizmoEndY=(int)end[1];
         displayedImpulse=impact;
-        drawLine(sx,sy,gizmoEndX,gizmoEndY,0xFFF2A35D);
-        rect(sx-4,sy-4,sx+5,sy+5,0xFFEAD2AC);
+        drawLine(sx,screenY,gizmoEndX,gizmoEndY,0xFFF2A35D);
+        rect(sx-4,screenY-4,sx+5,screenY+5,0xFFEAD2AC);
         rect(gizmoEndX-6,gizmoEndY-6,
                 gizmoEndX+7,gizmoEndY+7,0xFFFF9255);
         text(Minecraft.getMinecraft(),fixed(impact.strength)+" N.s",
