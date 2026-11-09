@@ -175,6 +175,37 @@ public final class JoltHumanoidRagdollSmoke
             verifyNativeHinge(heads,tails,radii,parents,kind,limits,
                     forearm,parents[forearm],+1F,+4F,false);
         }
+        // PHYSICS environment should be per rig and adjustable every tick.
+        float zeroY,earthY,waterY;
+        try(JoltHumanoidRagdoll zero=JoltHumanoidRagdoll.createFitted(
+                    heads,tails,radii,parents,kind,limits,frames,-20F))
+        {
+            zero.setEnvironment(0F,0F,1.05F,.8F,.65F);
+            for(int tick=0;tick<8;tick++)zero.step();
+            zeroY=zero.poses()[2][1];
+        }
+        try(JoltHumanoidRagdoll earth=JoltHumanoidRagdoll.createFitted(
+                    heads,tails,radii,parents,kind,limits,frames,-20F))
+        {
+            earth.setEnvironment(9.81F,0F,1.05F,.8F,.65F);
+            for(int tick=0;tick<8;tick++)earth.step();
+            earthY=earth.poses()[2][1];
+        }
+        try(JoltHumanoidRagdoll waterRig=JoltHumanoidRagdoll.createFitted(
+                    heads,tails,radii,parents,kind,limits,frames,-20F))
+        {
+            waterRig.setEnvironment(9.81F,1F,1.25F,1.3F,.9F);
+            for(int tick=0;tick<8;tick++)waterRig.step();
+            waterY=waterRig.poses()[2][1];
+            boolean rejectedBadGravity=false;
+            try{waterRig.setEnvironment(Float.NaN,1F,1F,1F,1F);}
+            catch(IllegalArgumentException expected){rejectedBadGravity=true;}
+            check(rejectedBadGravity,"NaN gravity accepted");
+        }
+        check(zeroY>earthY+.2F,
+                "Zero gravity fell as fast as Earth: "+zeroY+"/"+earthY);
+        check(waterY>earthY+.15F,
+                "Water buoyancy did not oppose gravity: "+waterY+"/"+earthY);
         System.out.println("Native Jolt Emoticons 11-body ragdoll OK");
     }
 }
