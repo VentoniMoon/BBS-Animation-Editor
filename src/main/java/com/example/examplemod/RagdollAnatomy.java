@@ -24,7 +24,9 @@ public final class RagdollAnatomy
      * Decide whether to flip the candidate hinge axis read from the
      * real parent BOBJ transform. Knees flex toward the character's
      * BACK, elbows toward FRONT. With the Jolt hinge convention, the
-     * desired positive-angle axis is cross(desiredBend, childDirection).
+     * desired positive-angle axis is cross(childDirection, desiredBend).
+     * This sign was measured against native Jolt JNI 6.0.0 using a
+     * downward two-link limb (not inferred from abstract quaternion math).
      *
      * If the child direction nearly aligns with desired flexion,
      * keep the parent basis axis: the cross is underdetermined there.
@@ -55,9 +57,11 @@ public final class RagdollAnatomy
         float dx=direction*actorForward[0];
         float dy=direction*actorForward[1];
         float dz=direction*actorForward[2];
-        float x=dy*childDirection[2]-dz*childDirection[1];
-        float y=dz*childDirection[0]-dx*childDirection[2];
-        float z=dx*childDirection[1]-dy*childDirection[0];
+        // Jolt's observed positive hinge deflects the child in the
+        // cross(hingeAxis, childDirection) direction.
+        float x=childDirection[1]*dz-childDirection[2]*dy;
+        float y=childDirection[2]*dx-childDirection[0]*dz;
+        float z=childDirection[0]*dy-childDirection[1]*dx;
         float length2=x*x+y*y+z*z;
         if(length2<1E-6F)return 1F;
         return x*axis[0]+y*axis[1]+z*axis[2]<0F?-1F:1F;
