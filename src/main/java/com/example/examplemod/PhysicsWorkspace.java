@@ -23,9 +23,9 @@ public final class PhysicsWorkspace
         "left_shin","right_shin"
     };
     private static final String[] TARGET_DISPLAY={
-        "PELVIS","CHEST","HEAD","LEFT ARM","RIGHT ARM",
-        "LEFT FOREARM","RIGHT FOREARM","LEFT THIGH","RIGHT THIGH",
-        "LEFT SHIN","RIGHT SHIN"
+        "PELVIS","CHEST","HEAD","L ARM","R ARM",
+        "L FORE","R FORE","L THIGH","R THIGH",
+        "L SHIN","R SHIN"
     };
     private static final float[] GRAVITY_PRESETS={9.81F,1.62F,3.71F,0F};
     private static final String[] PRESET_NAMES={"EARTH","MOON","MARS","ZERO"};
@@ -295,7 +295,11 @@ public final class PhysicsWorkspace
             drawHeading(mc,"RAGDOLL WEIGHT",offset);
             float strength=CharacterRagdollController.sampleWeight(t,f);
             buttonRow(mc,0,"Weight",Math.round(strength*100F)+"%",offset+23);
-            text(mc,"Physics 0% = animation",x+10,offset+64,0xFF97AAB5);
+            rect(x+10,offset+53,x+174,offset+66,
+                    EditorVisualStyle.themedSurface(.21F));
+            rect(x+10,offset+53,x+10+Math.round(164F*strength),offset+66,
+                    accent());
+            text(mc,"Physics 0% = animation",x+10,offset+75,0xFF97AAB5);
         }
         else if(selectedRow==PhysicsChannels.IMPULSE)
         {
@@ -316,6 +320,11 @@ public final class PhysicsWorkspace
             drawHeading(mc,"GRAVITY",offset);
             buttonRow(mc,9,"Magnitude",
                     fixed(PhysicsChannels.gravityAt(t,f)),offset+23);
+            rect(x+10,offset+52,x+174,offset+64,
+                    EditorVisualStyle.themedSurface(.21F));
+            rect(x+10,offset+52,x+10+Math.round(164F*
+                    Math.min(30F,PhysicsChannels.gravityAt(t,f))/30F),
+                    offset+64,0xFF79BCF0);
             text(mc,"EARTH 9.81 | MOON 1.62",x+10,offset+70,0xFF97AAB5);
             text(mc,"MARS 3.71 | ZERO 0.00",x+10,offset+86,0xFF97AAB5);
             for(int i=0;i<4;i++)
@@ -328,6 +337,10 @@ public final class PhysicsWorkspace
             PhysicsChannels.Fluid water=PhysicsChannels.waterAt(t,f);
             buttonRow(mc,10,"Amount",fixed(water.amount),offset+23);
             buttonRow(mc,11,"Buoyancy",fixed(water.buoyancy),offset+48);
+            rect(x+10,offset+73,x+174,offset+81,
+                    EditorVisualStyle.themedSurface(.21F));
+            rect(x+10,offset+73,x+10+Math.round(164F*water.amount),
+                    offset+81,0xFF69CFC0);
             text(mc,"Viscosity = linear drag",x+10,offset+87,0xFF97AAB5);
             text(mc,"Drag: "+fixed(water.drag),x+10,offset+105,0xFFBCD1D8);
             text(mc,"Angular: "+fixed(water.angularDrag),x+10,offset+123,0xFFBCD1D8);
@@ -417,6 +430,32 @@ public final class PhysicsWorkspace
             return true;
         }
         int offset=panelY+85;
+        if(selectedRow==PhysicsChannels.RAGDOLL&&
+                my>=offset+53&&my<offset+66)
+        {
+            PhysicsChannels.setWeight(track(screen),frame(screen),
+                    Math.max(0F,Math.min(1F,
+                            (mx-panelX-10)/164F)));
+            return true;
+        }
+        if(selectedRow==PhysicsChannels.GRAVITY&&
+                my>=offset+52&&my<offset+64)
+        {
+            PhysicsChannels.setGravity(track(screen),frame(screen),
+                    Math.max(0F,Math.min(30F,
+                            (mx-panelX-10)*30F/164F)));
+            return true;
+        }
+        if(selectedRow==PhysicsChannels.WATER&&
+                my>=offset+73&&my<offset+81)
+        {
+            PhysicsChannels.Fluid water=PhysicsChannels.waterAt(
+                    track(screen),frame(screen));
+            water.amount=Math.max(0F,Math.min(1F,
+                    (mx-panelX-10)/164F));
+            PhysicsChannels.setWater(track(screen),frame(screen),water);
+            return true;
+        }
         if(selectedRow==PhysicsChannels.GRAVITY&&
                 my>=offset+110&&my<offset+158)
         {
