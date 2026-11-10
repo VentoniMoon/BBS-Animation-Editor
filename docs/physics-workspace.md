@@ -20,15 +20,17 @@
 - With the opt-in `-Dbbs.editor.physics.jolt.ragdoll=true`, the Emoticons bridge uses the existing per-actor Jolt ragdoll solver.
 - **Impulse** fires only once when its source frame is crossed. It applies linear impulse at the requested hit point and does not repeatedly push the body every preview render.
 - **Gravity and Water** are evaluated at every simulated tick. Scalars interpolate between authored keys.
+- **UI revision**: the PHYSICS inspector follows the selected timeline row (no duplicate top tabs). Numeric fields use CAMERA's left/right arrows; click the center to type a value, Enter to save, Escape to cancel, keyboard UP/DOWN to nudge the focused number. Target uses a scrollable popup. Gravity presets use independent clickable hitboxes, including Mars 3.71.
+- **Water Surface Y** is a world-coordinate horizontal plane, keyed alongside Water. Enable **USE SURFACE** to calculate immersion separately for each moving Jolt capsule; its visible fraction smoothly changes as a body crosses the waterline. With the toggle disabled, older scenes retain legacy whole-actor water behavior. The surface is a plane, not Minecraft block detection. 
 - Water is approximated as an entire fluid volume around the actor: buoyancy applies an upward force and viscous drag scales velocities. It does NOT yet detect Minecraft water blocks or submersion depth.
-- An updated **jolt-hair-prototype-java8.jar** is required for gravity/water. Its `JoltHumanoidRagdoll.setEnvironment(float,float,float,float,float)` method is missing from older sidecars; when absent the bridge warns once in the log.
+- An updated **jolt-hair-prototype-java8.jar** is required for the new water surface. It contains `JoltHumanoidRagdoll.setEnvironment(float,float,float,float,float,float,boolean)`. The bridge falls back to the five-float legacy method if the sidecar is old, so Surface Y will have no effect until you replace the JAR. The Jolt 6.0.0 native DLL is unchanged.
 - Existing Jolt native DLL **6.0.0** is unchanged.
 
 ## Intentionally not solved by this stage
 - Record movement vs. fallen-body position, and teleporting back when Weight reaches zero.
 - Collision with real Minecraft terrain (flat preview floor proxy remains).
 - Exact replay/bake across arbitrary timeline seeks and video export. Physics export is still guarded by the existing opt-in.
-- Physically derived water level, swimming, currents and actor-local gravity direction.
+- Actual Minecraft water-block immersion, swimming, currents and actor-local gravity direction. Surface Y is a manually entered horizontal plane.
 - Simultaneous multiple impulses at precisely the same frame. Use one impulse event per character main key/frame in this first pass.
 
 ## Test sequence
@@ -39,3 +41,12 @@
 - Test actor yaw 0/90/180 with arrow-tip and base dragging, check hit direction.
 - Multiple actors with independent physics keys; Morph/Skin remain unchanged; save and reopen.
 - Verify the full game still works with the Physics option disabled.
+
+## Acceptance checks — UI / water surface revision
+
+- Selecting each PHYSICS lane changes the CAMERA-style right inspector. There are no duplicate RAG/HIT/GRAV/WATER tabs.
+- Type `3.710` into Gravity Magnitude; ENTER saves. Click MARS and confirm it writes 3.71 and creates a Gravity key. Other presets must still work.
+- Change Impact Target using dropdown; test mouse arrows, manual values, keyboard UP/DOWN and cancel with Escape.
+- Enter Water Surface Y = `65`, enable USE SURFACE, Water Amount = `1`, Buoyancy = `1.05`. Above the plane, no water force should act; below the plane, limbs progressively receive drag/buoyancy.
+- Disable USE SURFACE and confirm old whole-body water behavior; save and reopen, verify both surface height and toggle survive.
+- Re-test elbows, knees and shoulders with a 100% ragdoll and strong impulse. More conservative limits reduce overbending but do not eliminate all interpenetration: adjacent capsules still overlap at joints and full mesh-aware contacts are future work.
