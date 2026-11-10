@@ -126,7 +126,7 @@ public final class PhysicsWorkspace
             String label=PhysicsChannels.LABELS[row];
             if(mc.fontRenderer.getStringWidth(label)>labelWidth)
                 label=mc.fontRenderer.trimStringToWidth(label,labelWidth);
-            text(mc,label,10,y+6,
+            screen.drawString(mc.fontRenderer,label,10,y+6,
                     selected?EditorThemeManager.get().getAccentBright():
                             0xFF9DA4A9);
         }
@@ -135,7 +135,7 @@ public final class PhysicsWorkspace
         // 15px ruler, retaining the existing WAV waveform overlay.
         rect(0,top,width,tracksTop,timelineShade(.12F));
         rect(0,top,GUTTER,tracksTop,timelineShade(.17F));
-        text(mc,"PHYSICS",10,top+11,
+        screen.drawString(mc.fontRenderer,"PHYSICS",10,top+11,
                 EditorThemeManager.get().getAccentBright());
         rect(GUTTER,top,width,top+20,timelineShade(.17F));
         rect(GUTTER,top+20,width,tracksTop,timelineShade(.09F));
@@ -172,7 +172,8 @@ public final class PhysicsWorkspace
                 {
                     String label=Integer.toString(f);
                     int textWidth=mc.fontRenderer.getStringWidth(label);
-                    text(mc,label,x-textWidth/2,top+23,0xFF9DA4A9);
+                    screen.drawString(mc.fontRenderer,label,
+                            x-textWidth/2,top+23,0xFF9DA4A9);
                 }
             }
         }
@@ -209,7 +210,7 @@ public final class PhysicsWorkspace
             int w=mc.fontRenderer.getStringWidth(label);
             int textX=Math.max(GUTTER+2,
                     Math.min(width-w-2,x-w/2));
-            text(mc,label,textX,top+7,bright);
+            screen.drawString(mc.fontRenderer,label,textX,top+7,bright);
         }
     }
 
