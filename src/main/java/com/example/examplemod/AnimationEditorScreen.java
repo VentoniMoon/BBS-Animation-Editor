@@ -4522,6 +4522,10 @@ public class AnimationEditorScreen extends GuiScreen
         if(cameraOutputPopup.keyTyped(typedChar,keyCode,
                     sceneState.getCameraOutput(),
                     () -> saveCameraOutputSettings()))return;
+        if(this.editorModeController.getMode()==
+                EditorModeController.EditorMode.PHYSICS &&
+                physicsWorkspace.keyTyped(this,typedChar,keyCode))
+            return;
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA
                 && this.cameraWorkspace.keyTyped(typedChar,keyCode))

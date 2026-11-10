@@ -83,6 +83,23 @@ public final class RagdollSkeletonDefinitionSmokeTest
                     "Attachment/animation helper must not be a rigid body");
         }
         check(sawElbow&&sawKnee,"Actual elbow/knee aliases missing");
+        // Prevent regression to loose 145-degree knee folds and
+        // shoulders swinging through the chest at extreme impulses.
+        for(RagdollSkeletonDefinition.Segment seg:em.getSegments())
+        {
+            if(seg.joint==RagdollSkeletonDefinition.Joint.HINGE)
+            {
+                check(seg.hingeMinDegrees>=0F,
+                        "Hinge permits reversed hyperextension: "+seg.role);
+                check(seg.hingeMaxDegrees<=135F,
+                        "Overextended elbow/knee: "+seg.role);
+            }
+            if(seg.role.endsWith("_upper_arm")||
+                    seg.role.endsWith("_thigh"))
+                check(seg.swingDegrees<=70F,
+                        "Shoulder/hip permits extreme penetration: "+seg.role);
+        }
+
 
         // The stock ragdoll.bobj has 22 bones, including two .item
         // attachment points. These must not become extra physics links.

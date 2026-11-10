@@ -22,7 +22,7 @@ import com.github.stephengold.joltjni.enumerate.EOverrideMassProperties;
 public final class JoltHumanoidRagdoll implements AutoCloseable
 {
     public static final float TICK=1F/20F;
-    private static final int SUBSTEPS=3;
+    private static final int SUBSTEPS=4;
     private static final float[] STOCK_MASS={9F,15F,5F,2.4F,2.4F,1.3F,1.3F,8F,8F,4F,4F};
 
     private final ObjectLayerPairFilterTable pairFilter;
@@ -36,9 +36,11 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
     private final Body[] body;
     private final TwoBodyConstraint[] joint;
     private final float[][] initialHeads,initialTails;
-    private final float[] masses;
+    private final float[] masses,capsuleRadii,cylinderHalfLengths;
     private float gravity=9.81F,water,buoyancy=1.05F;
     private float fluidDrag=.8F,fluidAngularDrag=.65F;
+    private boolean surfaceEnabled;
+    private float surfaceY=63F;
     private Body ground;
     private boolean closed;
 
@@ -70,8 +72,9 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                 broadLayers,broadFilter,pairFilter);
         world.setGravity(0F,-9.81F,0F);
         PhysicsSettings physicalSettings=world.getPhysicsSettings();
-        physicalSettings.setNumVelocitySteps(10);
-        physicalSettings.setNumPositionSteps(12);
+        // Stronger contact and joint convergence at large impulse loads.
+        physicalSettings.setNumVelocitySteps(12);
+        physicalSettings.setNumPositionSteps(16);
         world.setPhysicsSettings(physicalSettings);
         interfaceBodies=world.getBodyInterface();
         allocator=new TempAllocatorImpl(2*1024*1024);
@@ -79,6 +82,8 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
         body=new Body[count];
         joint=new TwoBodyConstraint[count];
         masses=new float[count];
+        capsuleRadii=new float[count];
+        cylinderHalfLengths=new float[count];
 
         try
         {
@@ -91,8 +96,10 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                 float[] axis={dx/length,dy/length,dz/length};
                 float[] q=axisRotation(axis);
                 float r=radius[i];
+                capsuleRadii[i]=r;
+                cylinderHalfLengths[i]=Math.max(.005F,.5F*length-r);
                 CapsuleShape shape=new CapsuleShape(
-                        Math.max(0.005F,0.5F*length-r),r);
+                        cylinderHalfLengths[i],r);
                 BodyCreationSettings settings=new BodyCreationSettings(
                         shape,new RVec3(
                                 (head[i][0]+tail[i][0])*0.5D,
@@ -351,18 +358,57 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
         world.setGravity(0F,-gravity,0F);
     }
 
+    /** Backward compatible first-pass whole-actor fluid behavior. */
+    public void setEnvironment(float gravityMagnitude,float waterAmount,
+            float buoyancyMultiplier,float linearDrag,float angularDrag,
+            float surfaceLocalY,boolean useWaterSurface)
+    {
+        setEnvironment(gravityMagnitude,waterAmount,
+                buoyancyMultiplier,linearDrag,angularDrag);
+        if(!Float.isFinite(surfaceLocalY)||surfaceLocalY< -4096F||
+                surfaceLocalY>4096F)
+            throw new IllegalArgumentException("Invalid world water surface");
+        surfaceY=surfaceLocalY;
+        surfaceEnabled=useWaterSurface;
+    }
+
+    /**
+     * Water plane intersects a capsule projected into world Y. Return 0
+     * above the plane and 1 below it, with proportional partial immersion.
+     * Handles tilted limbs as they fall by reading each body's live
+     * quaternion instead of assuming upright legs.
+     */
+    private float immersion(int index)
+    {
+        if(!surfaceEnabled)return water;
+        RVec3 center=interfaceBodies.getPosition(body[index].getId());
+        Quat rotation=interfaceBodies.getRotation(body[index].getId());
+        float qx=rotation.getX(),qz=rotation.getZ();
+        float axisY=1F-2F*(qx*qx+qz*qz);
+        float halfHeight=capsuleRadii[index]+
+                cylinderHalfLengths[index]*Math.abs(axisY);
+        if(halfHeight<.001F)halfHeight=.001F;
+        float submerged=(surfaceY-(float)center.yy()+halfHeight)/
+                (2F*halfHeight);
+        return water*Math.max(0F,Math.min(1F,submerged));
+    }
+
     public void step()
     {
         if(closed)throw new IllegalStateException("Closed ragdoll");
         if(water>0F)
         {
-            float linearScale=Math.max(0F,1F-water*fluidDrag*TICK);
-            float angularScale=Math.max(0F,1F-water*fluidAngularDrag*TICK);
             for(int i=0;i<body.length;i++)
             {
+                float submerged=immersion(i);
+                if(submerged<=0F)continue;
                 int id=body[i].getId();
+                float linearScale=Math.max(0F,
+                        1F-submerged*fluidDrag*TICK);
+                float angularScale=Math.max(0F,
+                        1F-submerged*fluidAngularDrag*TICK);
                 interfaceBodies.addForce(id,new Vec3(
-                        0F,masses[i]*gravity*buoyancy*water,0F));
+                        0F,masses[i]*gravity*buoyancy*submerged,0F));
                 Vec3 v=interfaceBodies.getLinearVelocity(id);
                 interfaceBodies.setLinearVelocity(id,
                         v.getX()*linearScale,v.getY()*linearScale,

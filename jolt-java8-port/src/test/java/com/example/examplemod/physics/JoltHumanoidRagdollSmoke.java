@@ -206,6 +206,29 @@ public final class JoltHumanoidRagdollSmoke
                 "Zero gravity fell as fast as Earth: "+zeroY+"/"+earthY);
         check(waterY>earthY+.15F,
                 "Water buoyancy did not oppose gravity: "+waterY+"/"+earthY);
+        // Surface height: a body above the authored plane must fall as in
+        // air; the same body completely submerged receives buoyancy.
+        float abovePlaneY,belowPlaneY;
+        try(JoltHumanoidRagdoll dry=JoltHumanoidRagdoll.createFitted(
+                heads,tails,radii,parents,kind,limits,frames,-20F))
+        {
+            dry.setEnvironment(9.81F,1F,1.25F,1.3F,.9F,-10F,true);
+            for(int tick=0;tick<8;tick++)dry.step();
+            abovePlaneY=dry.poses()[2][1];
+        }
+        try(JoltHumanoidRagdoll submerged=JoltHumanoidRagdoll.createFitted(
+                heads,tails,radii,parents,kind,limits,frames,-20F))
+        {
+            submerged.setEnvironment(9.81F,1F,1.25F,1.3F,.9F,10F,true);
+            for(int tick=0;tick<8;tick++)submerged.step();
+            belowPlaneY=submerged.poses()[2][1];
+        }
+        check(belowPlaneY>abovePlaneY+.12F,
+                "Water surface did not change buoyancy: "+
+                belowPlaneY+"/"+abovePlaneY);
+        check(Math.abs(abovePlaneY-earthY)<.14F,
+                "Dry actor below surface plane still receives water force");
+        System.out.println("Native water plane / buoyancy OK");
         System.out.println("Native Jolt Emoticons 11-body ragdoll OK");
     }
 }
