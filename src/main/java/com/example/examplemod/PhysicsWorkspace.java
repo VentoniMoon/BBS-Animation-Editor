@@ -45,7 +45,30 @@ public final class PhysicsWorkspace
     private int hitCount;
     private int panelX,panelY,panelBottom;
 
-    public PhysicsWorkspace(EditorTimeline timeline){this.timeline=timeline;}
+    // PHYSICS uses the same actual 3D POSITION gizmo that CAMERA's
+    // static lights use. This is a transient world-space control rig;
+    // neither its bone nor its key is stored in the actor's animation.
+    private final EditorGizmoController nativeImpulseGizmo=
+            new EditorGizmoController();
+    private final EditorCamera nativeImpulseCamera=new EditorCamera();
+    private final ActorAnimationData nativeImpulseRig=
+            new ActorAnimationData("physics-impulse-preview-gizmo");
+    private final AnimationBone nativeImpulseBone=
+            new AnimationBone(BetterLightsRig.ORIGIN);
+    private final AnimationKeyframe nativeImpulseKey=new AnimationKeyframe(0);
+    private boolean editHitPoint;
+    private boolean nativeImpulseDragging;
+    private PhysicsChannels.Impact nativeStartImpact;
+    private double nativeStartYaw;
+    private double[] nativeStartWorldPoint;
+
+    public PhysicsWorkspace(EditorTimeline timeline)
+    {
+        this.timeline=timeline;
+        nativeImpulseRig.getBones().add(nativeImpulseBone);
+        nativeImpulseGizmo.setLightRigTarget(nativeImpulseRig);
+        nativeImpulseGizmo.setMode(EditorGizmoController.Mode.POSITION);
+    }
     private static int accent(){return EditorThemeManager.get().getAccent();}
     private static void rect(int l,int t,int r,int b,int color)
     {
@@ -387,7 +410,9 @@ public final class PhysicsWorkspace
             buttonRow(mc,6,"Hit X",fixed(impact.offsetX),offset+153);
             buttonRow(mc,7,"Hit Y",fixed(impact.offsetY),offset+178);
             buttonRow(mc,8,"Hit Z",fixed(impact.offsetZ),offset+203);
-            text(mc,"Drag arrow tip in preview",x+10,offset+230,0xFF9FC7D8);
+            drawButton(mc,"DIRECTION",x+9,offset+230,81,!editHitPoint);
+            drawButton(mc,"HIT POINT",x+96,offset+230,79,editHitPoint);
+            text(mc,"Move X/Y/Z arrows in Preview",x+10,offset+254,0xFF9FC7D8);
         }
         else if(selectedRow==PhysicsChannels.GRAVITY)
         {
@@ -504,6 +529,14 @@ public final class PhysicsWorkspace
             return true;
         }
         int offset=panelY+85;
+        if(selectedRow==PhysicsChannels.IMPULSE&&
+                my>=offset+230&&my<offset+249)
+        {
+            editHitPoint=mx>=panelX+96;
+            nativeImpulseGizmo.mouseReleased();
+            nativeImpulseDragging=false;
+            return true;
+        }
         if(selectedRow==PhysicsChannels.RAGDOLL&&
                 my>=offset+53&&my<offset+66)
         {
@@ -597,28 +630,22 @@ public final class PhysicsWorkspace
         }
     }
 
-    /** Project an arrow anchored to the selected actor into the preview. */
-    public void drawImpulseGizmo(AnimationEditorScreen screen,
-            int vx,int vy,int vw,int vh)
+    /** Current world-space hit point, plus its model yaw, at the frame. */
+    private double[] impulseWorld(AnimationEditorScreen screen,
+            PhysicsChannels.Impact impact)
     {
-        gizmoEndX=-1000;gizmoEndY=-1000;
-        gizmoBaseX=-1000;gizmoBaseY=-1000;displayedImpulse=null;
-        if(selectedRow!=PhysicsChannels.IMPULSE||track(screen)==null)return;
         BlockbusterRecordFrame record=screen.getCurrentRecordFrame();
-        EditorCamera camera=screen.getPreviewInteractionCamera();
-        if(record==null||camera==null)return;
-        PhysicsChannels.Impact impact=selectedImpact(screen);
+        if(record==null||impact==null)return null;
         double x=record.getX(),y=record.getY()+1.3D,z=record.getZ();
-        double targetOffset=0D;
-        if("head".equals(impact.target))targetOffset=.4D;
-        if("pelvis".equals(impact.target))targetOffset=-.5D;
-        if(impact.target.contains("leg")||impact.target.contains("shin"))
-            targetOffset=-.7D;
-        double bodyYaw=Math.toRadians(record.hasBodyYaw()?
+        double height=0D;
+        if("head".equals(impact.target))height=.4D;
+        if("pelvis".equals(impact.target))height=-.5D;
+        if(impact.target.contains("leg")||
+                impact.target.contains("thigh")||
+                impact.target.contains("shin"))height=-.7D;
+        double yaw=Math.toRadians(record.hasBodyYaw()?
                 record.getBodyYaw():record.getYaw());
-        double cy=Math.cos(bodyYaw),sy=Math.sin(bodyYaw);
-        // Follow the actual dynamic segment, not just its standing
-        // pose. This keeps the hit-point handle on a fallen body.
+        double cy=Math.cos(yaw),sy=Math.sin(yaw);
         float[] center=RagdollEmoticonsJoltBridge.previewBodyCenter(
                 screen.getSelectedActorForTimeline(),impact.target);
         if(center!=null)
@@ -626,36 +653,100 @@ public final class PhysicsWorkspace
             x+=cy*center[0]+sy*center[2];
             y=record.getY()+center[1];
             z+=-sy*center[0]+cy*center[2];
-            targetOffset=0D;
+            height=0D;
         }
-        double offX=cy*impact.offsetX+sy*impact.offsetZ;
-        double offZ=-sy*impact.offsetX+cy*impact.offsetZ;
-        double ox=x+offX,oy=y+targetOffset+impact.offsetY,
-                oz=z+offZ;
-        float norm=(float)Math.sqrt(impact.x*impact.x+
-                impact.y*impact.y+impact.z*impact.z);
-        if(norm<.001F)norm=1F;
-        float[] start=PreviewCameraProjection.project(ox,oy,oz,
-                camera.sample(),vx,vy,vw,vh);
-        double directionX=cy*impact.x+sy*impact.z;
-        double directionZ=-sy*impact.x+cy*impact.z;
-        float[] end=PreviewCameraProjection.project(
-                ox+directionX/norm,oy+impact.y/norm,oz+directionZ/norm,
-                camera.sample(),vx,vy,vw,vh);
-        if(start==null||end==null)return;
-        if(start[0]<vx||start[0]>vx+vw||start[1]<vy||
-                start[1]>vy+vh)return;
-        int sx=(int)start[0],screenY=(int)start[1];
-        gizmoBaseX=sx;gizmoBaseY=screenY;
-        gizmoEndX=(int)end[0];gizmoEndY=(int)end[1];
+        return new double[]{
+                x+cy*impact.offsetX+sy*impact.offsetZ,
+                y+height+impact.offsetY,
+                z-sy*impact.offsetX+cy*impact.offsetZ,
+                yaw
+        };
+    }
+
+    /** Endpoint of the unit-length orange force vector in world blocks. */
+    private static double[] impulseEnd(double[] origin,
+            PhysicsChannels.Impact impact)
+    {
+        double len=Math.sqrt(impact.x*impact.x+impact.y*impact.y+
+                impact.z*impact.z);
+        if(len<.001D)len=1D;
+        double cy=Math.cos(origin[3]),sy=Math.sin(origin[3]);
+        return new double[]{
+                origin[0]+(cy*impact.x+sy*impact.z)/len,
+                origin[1]+impact.y/len,
+                origin[2]+(-sy*impact.x+cy*impact.z)/len
+        };
+    }
+
+    /** A fixed world-space anchor for the built-in native X/Y/Z handles. */
+    private BlockbusterRecordFrame nativeFrame(AnimationEditorScreen screen)
+    {
+        if(selectedRow!=PhysicsChannels.IMPULSE||
+                track(screen)==null)return null;
+        PhysicsChannels.Impact impact=selectedImpact(screen);
+        double[] point=impulseWorld(screen,impact);
+        if(point==null)return null;
+        double[] pivot=editHitPoint?point:impulseEnd(point,impact);
+        BlockbusterRecordFrame frame=new BlockbusterRecordFrame();
+        frame.setX(pivot[0]);frame.setY(pivot[1]);frame.setZ(pivot[2]);
+        return frame;
+    }
+
+    /**
+     * Actual POSE/CAMERA 3D arrows and move planes, not an image drawn
+     * over the GUI. Called inside Preview's FBO render callback.
+     */
+    public void drawNativeImpulseGizmo(AnimationEditorScreen screen,
+            Minecraft mc,int vx,int vy,int vw,int vh)
+    {
+        if(selectedRow!=PhysicsChannels.IMPULSE||
+                track(screen)==null||
+                screen.getCameraVideoExport().isExporting())return;
+        BlockbusterRecordFrame anchor=nativeFrame(screen);
+        EditorCamera view=screen.getPreviewInteractionCamera();
+        if(anchor==null||view==null)return;
+        nativeImpulseCamera.apply(view.sample());
+        nativeImpulseGizmo.draw3D(mc,vx,vy,vw,vh,nativeImpulseBone,
+                nativeImpulseKey,anchor,nativeImpulseCamera,true);
+    }
+
+    /** Readable force vector and two click targets over the 3D preview. */
+    public void drawImpulseGizmo(AnimationEditorScreen screen,
+            int vx,int vy,int vw,int vh)
+    {
+        gizmoEndX=-1000;gizmoEndY=-1000;
+        gizmoBaseX=-1000;gizmoBaseY=-1000;displayedImpulse=null;
+        if(selectedRow!=PhysicsChannels.IMPULSE||track(screen)==null)return;
+        EditorCamera camera=screen.getPreviewInteractionCamera();
+        if(camera==null)return;
+        PhysicsChannels.Impact impact=selectedImpact(screen);
+        double[] origin=impulseWorld(screen,impact);
+        if(origin==null)return;
+        double[] target=impulseEnd(origin,impact);
+        float[] a=PreviewCameraProjection.project(
+                origin[0],origin[1],origin[2],camera.sample(),vx,vy,vw,vh);
+        float[] b=PreviewCameraProjection.project(
+                target[0],target[1],target[2],camera.sample(),vx,vy,vw,vh);
+        if(a==null||b==null)return;
+        if(a[0]<vx||a[0]>=vx+vw||a[1]<vy||a[1]>=vy+vh)return;
+        gizmoBaseX=(int)a[0];gizmoBaseY=(int)a[1];
+        gizmoEndX=(int)b[0];gizmoEndY=(int)b[1];
         displayedImpulse=impact;
-        drawLine(sx,screenY,gizmoEndX,gizmoEndY,0xFFF2A35D);
-        rect(sx-4,screenY-4,sx+5,screenY+5,0xFFEAD2AC);
-        rect(gizmoEndX-6,gizmoEndY-6,
-                gizmoEndX+7,gizmoEndY+7,0xFFFF9255);
+        drawLine(gizmoBaseX,gizmoBaseY,gizmoEndX,gizmoEndY,0xFFF2A35D);
+        // Highlight the selected 3D control, but keep the other
+        // marker visible for fast switching to hit-point editing.
+        int baseSize=editHitPoint?7:4;
+        int tipSize=editHitPoint?4:7;
+        rect(gizmoBaseX-baseSize,gizmoBaseY-baseSize,
+                gizmoBaseX+baseSize+1,gizmoBaseY+baseSize+1,
+                0xFFEAD2AC);
+        rect(gizmoEndX-tipSize,gizmoEndY-tipSize,
+                gizmoEndX+tipSize+1,gizmoEndY+tipSize+1,
+                0xFFFF9255);
         text(Minecraft.getMinecraft(),fixed(impact.strength)+" N.s",
                 gizmoEndX+9,gizmoEndY-5,0xFFFFC28B);
     }
+
     private void drawLine(int x1,int y1,int x2,int y2,int color)
     {
         int dx=x2-x1,dy=y2-y1,steps=Math.max(Math.abs(dx),Math.abs(dy));
@@ -667,21 +758,92 @@ public final class PhysicsWorkspace
             rect(x-1,y-1,x+2,y+2,color);
         }
     }
-    public boolean beginImpulseDrag(int mx,int my,int button)
+    public boolean beginImpulseDrag(AnimationEditorScreen screen,
+            int mx,int my,int button,int vx,int vy,int vw,int vh)
     {
         if(button!=0||selectedRow!=PhysicsChannels.IMPULSE||
-                displayedImpulse==null)return false;
+                track(screen)==null||mx<vx||mx>=vx+vw||
+                my<vy||my>=vy+vh)return false;
+        // Native axis/plane selection first; this preserves the exact
+        // hit test and projected drag behavior from the POSE gizmo.
+        EditorCamera camera=screen.getPreviewInteractionCamera();
+        BlockbusterRecordFrame pivot=nativeFrame(screen);
+        if(camera!=null&&pivot!=null)
+        {
+            nativeImpulseCamera.apply(camera.sample());
+            nativeImpulseKey.getTransform().setPosition(0F,0F,0F);
+            if(nativeImpulseGizmo.mouseClicked(mx,my,button,
+                    vx,vy,vw,vh,nativeImpulseBone,nativeImpulseKey,
+                    pivot,nativeImpulseCamera,true))
+            {
+                if(nativeImpulseGizmo.isDragging())
+                {
+                    nativeImpulseDragging=true;
+                    nativeStartImpact=selectedImpact(screen);
+                    nativeStartWorldPoint=impulseWorld(screen,nativeStartImpact);
+                    nativeStartYaw=nativeStartWorldPoint==null?0D:
+                            nativeStartWorldPoint[3];
+                }
+                return true;
+            }
+        }
+        if(displayedImpulse==null)return false;
         boolean arrow=Math.abs(mx-gizmoEndX)<=12&&
                 Math.abs(my-gizmoEndY)<=12;
         boolean base=Math.abs(mx-gizmoBaseX)<=9&&
                 Math.abs(my-gizmoBaseY)<=9;
         if(!arrow&&!base)return false;
+        // Both original 2D markers remain draggable as a quick way to
+        // pick which native 3D control should be active next.
+        editHitPoint=!arrow;
+        nativeImpulseGizmo.mouseReleased();
         draggingImpulse=true;draggingPoint=!arrow;
         dragX=mx;dragY=my;
         return true;
     }
     public boolean dragImpulse(AnimationEditorScreen screen,int mx,int my)
     {
+        if(nativeImpulseDragging)
+        {
+            if(nativeStartImpact==null||nativeStartWorldPoint==null)
+                return true;
+            if(!nativeImpulseGizmo.mouseDragged(mx,my))return true;
+            AnimationTransform transform=nativeImpulseKey.getTransform();
+            double dx=transform.getPositionX(),dy=transform.getPositionY(),
+                    dz=transform.getPositionZ();
+            PhysicsChannels.Impact updated=copyImpact(nativeStartImpact);
+            double cy=Math.cos(nativeStartYaw),sy=Math.sin(nativeStartYaw);
+            double localX=cy*dx-sy*dz;
+            double localZ=sy*dx+cy*dz;
+            if(editHitPoint)
+            {
+                updated.offsetX=clamp((float)
+                        (updated.offsetX+localX),-1.5F,1.5F);
+                updated.offsetY=clamp((float)
+                        (updated.offsetY+dy),-1.5F,1.5F);
+                updated.offsetZ=clamp((float)
+                        (updated.offsetZ+localZ),-1.5F,1.5F);
+            }
+            else
+            {
+                // Tip drags change angle only. The stored impulse
+                // magnitude stays in the Strength field.
+                double[] initialTip=impulseEnd(nativeStartWorldPoint,
+                        nativeStartImpact);
+                double vx=initialTip[0]+dx-nativeStartWorldPoint[0];
+                double vy=initialTip[1]+dy-nativeStartWorldPoint[1];
+                double vz=initialTip[2]+dz-nativeStartWorldPoint[2];
+                double len=Math.sqrt(vx*vx+vy*vy+vz*vz);
+                if(len>.025D)
+                {
+                    updated.x=(float)((cy*vx-sy*vz)/len);
+                    updated.y=(float)(vy/len);
+                    updated.z=(float)((sy*vx+cy*vz)/len);
+                }
+            }
+            authorImpulse(screen,updated);
+            return true;
+        }
         if(!draggingImpulse)return false;
         CharacterTimelineController t=track(screen);
         if(t==null){draggingImpulse=false;return false;}
@@ -729,10 +891,39 @@ public final class PhysicsWorkspace
         dragX=mx;dragY=my;
         return true;
     }
+    private static float clamp(float x,float min,float max)
+    {
+        return Math.max(min,Math.min(max,x));
+    }
+
+    private static PhysicsChannels.Impact copyImpact(PhysicsChannels.Impact in)
+    {
+        PhysicsChannels.Impact out=new PhysicsChannels.Impact();
+        out.target=in.target;out.strength=in.strength;
+        out.x=in.x;out.y=in.y;out.z=in.z;
+        out.offsetX=in.offsetX;out.offsetY=in.offsetY;
+        out.offsetZ=in.offsetZ;
+        return out;
+    }
+
+    private void authorImpulse(AnimationEditorScreen screen,
+            PhysicsChannels.Impact impact)
+    {
+        CharacterTimelineController t=track(screen);
+        if(t==null)return;
+        PhysicsChannels.setImpulse(t,frame(screen),impact);
+        if(CharacterRagdollController.sampleWeight(t,frame(screen))<=0F)
+            PhysicsChannels.setWeight(t,frame(screen),1F);
+    }
+
     public boolean releaseImpulseDrag()
     {
-        boolean was=draggingImpulse;
+        boolean was=draggingImpulse||nativeImpulseDragging;
         draggingImpulse=false;draggingPoint=false;
+        nativeImpulseDragging=false;nativeStartImpact=null;
+        nativeStartWorldPoint=null;
+        nativeImpulseGizmo.mouseReleased();
+        nativeImpulseKey.getTransform().setPosition(0F,0F,0F);
         return was;
     }
 }
