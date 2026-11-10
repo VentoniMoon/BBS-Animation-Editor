@@ -42,6 +42,7 @@ public final class RagdollEmoticonsJoltBridge
     private static boolean attempted,available,logged,reportedHierarchy;
     private static Method create,step,poses,startFall;
     private static Method nativeImpulse,nativeEnvironment;
+    private static Method nativeEnvironmentSurface;
     private static boolean reportedOldPhysicsJar;
     private static boolean fitted;
     private static final Map<String,State> scenes=
@@ -159,6 +160,16 @@ public final class RagdollEmoticonsJoltBridge
             {
                 nativeEnvironment=clazz.getMethod("setEnvironment",
                         float.class,float.class,float.class,float.class,float.class);
+                try
+                {
+                    nativeEnvironmentSurface=clazz.getMethod("setEnvironment",
+                            float.class,float.class,float.class,float.class,
+                            float.class,float.class,boolean.class);
+                }
+                catch(NoSuchMethodException previousSidecar)
+                {
+                    nativeEnvironmentSurface=null;
+                }
             }
             catch(NoSuchMethodException oldJar)
             {
@@ -257,13 +268,13 @@ public final class RagdollEmoticonsJoltBridge
             }
             // Apply exactly once at activation, not on repeated preview,
             // mirror or screenshot passes for this same frame.
-            applyEnvironment(state,actor.getCharacterTimeline(),state.frame);
+            applyEnvironment(state,actor,state.frame);
             applyImpulse(state,actor.getCharacterTimeline(),state.frame);
             // Fixed-step replay: impulses fire once on the frame crossing.
             while(state.frame<frame)
             {
                 int next=state.frame+1;
-                applyEnvironment(state,actor.getCharacterTimeline(),next);
+                applyEnvironment(state,actor,next);
                 applyImpulse(state,actor.getCharacterTimeline(),next);
                 step.invoke(state.nativeRig);
                 state.frame=next;
@@ -288,13 +299,34 @@ public final class RagdollEmoticonsJoltBridge
 
     /** Independent gravity + water channels for an actor's Jolt world. */
     private static void applyEnvironment(State state,
-            CharacterTimelineController timeline,int frame) throws Exception
+            BlockbusterSceneActorData actor,int frame) throws Exception
     {
         if(nativeEnvironment==null)return;
+        CharacterTimelineController timeline=actor.getCharacterTimeline();
         PhysicsChannels.Fluid f=PhysicsChannels.waterAt(timeline,frame);
-        nativeEnvironment.invoke(state.nativeRig,
-                PhysicsChannels.gravityAt(timeline,frame),
-                f.amount,f.buoyancy,f.drag,f.angularDrag);
+        float gravity=PhysicsChannels.gravityAt(timeline,frame);
+        if(nativeEnvironmentSurface!=null)
+        {
+            // Native rigid bodies live in the actor's BOBJ-relative
+            // coordinate space. Surface Y is authored in WORLD blocks.
+            double actorWorldY=0D;
+            if(actor.getRecord()!=null)
+            {
+                BlockbusterRecordFrame sample=actor.getRecord().getFrame(frame);
+                if(sample!=null)actorWorldY=sample.getY();
+            }
+            float localSurface=(float)(f.surfaceY-actorWorldY);
+            nativeEnvironmentSurface.invoke(state.nativeRig,
+                    gravity,f.amount,f.buoyancy,f.drag,f.angularDrag,
+                    localSurface,f.surfaceEnabled);
+        }
+        else
+        {
+            // Old JAR can keep legacy global immersion without crashing;
+            // water-surface behavior requires the updated sidecar.
+            nativeEnvironment.invoke(state.nativeRig,
+                    gravity,f.amount,f.buoyancy,f.drag,f.angularDrag);
+        }
     }
 
     /** Apply a recorded impulse once, to a native rigid body and hit point. */
