@@ -4310,7 +4310,8 @@ public class AnimationEditorScreen extends GuiScreen
         {
             if(sceneViewport!=null&&physicsWorkspace.beginImpulseDrag(
                     this,mouseX,mouseY,mouseButton,
-                    filmX,filmY,filmW,filmH))
+                    sceneViewport.getX(),sceneViewport.getY(),
+                    sceneViewport.getWidth(),sceneViewport.getHeight()))
                 return;
             if(physicsWorkspace.clickInspector(this,mouseX,mouseY,mouseButton)
                     ||physicsWorkspace.clickTimeline(this,mouseX,mouseY,mouseButton))
