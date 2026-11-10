@@ -16,7 +16,7 @@ public final class PhysicsWorkspace
 {
     public static final int TIMELINE_HEIGHT=180;
     private static final int GUTTER=AnimationEditorScreen.LEFT_PANEL_WIDTH;
-    private static final int HEADER=35,ROW=28;
+    private static final int HEADER=35,ROW=20;
     private static final String[] TARGETS={
         "pelvis","chest","head","left_upper_arm","right_upper_arm",
         "left_forearm","right_forearm","left_thigh","right_thigh",
@@ -76,68 +76,141 @@ public final class PhysicsWorkspace
     {
         return Math.max(0,Math.min(screen.getSceneLength()-1,timeline.getTick()));
     }
-    private int keyColor(int row)
+    /**
+     * Exact CHARACTER timeline palette: both workspaces must remain
+     * visually interchangeable when the active theme changes.
+     */
+    private static int timelineShade(float strength)
     {
-        return row==PhysicsChannels.RAGDOLL?0xFFBD80F2:
-                row==PhysicsChannels.IMPULSE?0xFFFFA064:
-                row==PhysicsChannels.GRAVITY?0xFF7ECAFF:0xFF67D7CC;
+        int color=accent();
+        int r=Math.max(0,Math.min(255,Math.round(((color>>16)&255)*strength)));
+        int g=Math.max(0,Math.min(255,Math.round(((color>>8)&255)*strength)));
+        int b=Math.max(0,Math.min(255,Math.round((color&255)*strength)));
+        return 0xFF000000|(r<<16)|(g<<8)|b;
     }
+
+    /**
+     * CHARACTER's 180px film timeline, including its compact 20px rows,
+     * two-level ruler, frame ticks, grid, key handles and playhead.
+     *
+     * Draw order matters: row fills FIRST, then the full vertical grid.
+     * Otherwise an opaque selected-row fill hides the frame lines.
+     * Only the content differs: four PHYSICS channels instead of
+     * CHARACTER / Body Part tracks.
+     */
     public void drawTimeline(AnimationEditorScreen screen,int sceneLength)
     {
         Minecraft mc=Minecraft.getMinecraft();
-        int width=screen.width,height=screen.height,top=height-TIMELINE_HEIGHT;
-        int background=EditorVisualStyle.themedSurface(.08F);
+        int width=screen.width,height=screen.height;
+        int top=height-TIMELINE_HEIGHT;
+        int tracksTop=top+HEADER;
+        int background=timelineShade(.07F);
+        int labelWidth=GUTTER-14;
         rect(0,top,width,height,background);
-        rect(0,top,width,top+2,accent());
-        rect(0,top,GUTTER,height,EditorVisualStyle.themedSurface(.11F));
-        rect(GUTTER-1,top,GUTTER,height,EditorVisualStyle.themedSurface(.27F));
-        rect(0,top+HEADER-1,width,top+HEADER,
-                EditorVisualStyle.themedSurface(.28F));
-        text(mc,"PHYSICS / KEYFRAMES",9,top+10,0xFFE3D8EE);
+        rect(0,top,width,top+1,accent());
 
-        // Reuse Character's twenty-tick ruler and grid density.
-        for(int f=0;f<Math.max(1,sceneLength);f++)
+        // The CHARACTER track gutter is independent from the film grid.
+        for(int row=0;row<PhysicsChannels.LABELS.length;row++)
         {
-            int x=timeline.getFrameX(f,GUTTER);
-            if(x<GUTTER||x>=width)continue;
-            boolean major=f%20==0;
-            if(f%5!=0&&timeline.getPixelsPerFrame()<4F)continue;
-            rect(x,top+22,x+1,height,major?
-                    EditorVisualStyle.themedSurface(.29F):
-                    EditorVisualStyle.themedSurface(.17F));
-            if(major)text(mc,Integer.toString(f),x+2,top+8,0xFFA9B5C2);
+            int y=tracksTop+row*ROW;
+            int rowEnd=y+ROW;
+            boolean selected=row==selectedRow;
+            int shade=selected?timelineShade(.22F):
+                    timelineShade(row%2==0?.12F:.09F);
+            rect(GUTTER,y,width,rowEnd,shade);
+            rect(0,y,GUTTER,rowEnd,
+                    selected?timelineShade(.22F):timelineShade(.12F));
+            if(selected)rect(0,y,3,rowEnd,accent());
+            rect(0,rowEnd-1,width,rowEnd,timelineShade(.05F));
+
+            String label=PhysicsChannels.LABELS[row];
+            if(mc.fontRenderer.getStringWidth(label)>labelWidth)
+                label=mc.fontRenderer.trimStringToWidth(label,labelWidth);
+            text(mc,label,10,y+6,
+                    selected?EditorThemeManager.get().getAccentBright():
+                            0xFF9DA4A9);
         }
-        CharacterTimelineController t=track(screen);
-        List<CharacterKey> keys=PhysicsChannels.keys(t);
-        for(int row=0;row<4;row++)
+
+        // CHARACTER's 35px header: 20px blank audio strip over a
+        // 15px ruler, retaining the existing WAV waveform overlay.
+        rect(0,top,width,tracksTop,timelineShade(.12F));
+        rect(0,top,GUTTER,tracksTop,timelineShade(.17F));
+        text(mc,"PHYSICS",10,top+11,
+                EditorThemeManager.get().getAccentBright());
+        rect(GUTTER,top,width,top+20,timelineShade(.17F));
+        rect(GUTTER,top+20,width,tracksTop,timelineShade(.09F));
+        rect(GUTTER,tracksTop-1,width,tracksTop,timelineShade(.20F));
+
+        // Match CHARACTER's tick density at every zoom and honour the
+        // shared horizontal scroll. Frame labels at y=top+23 remain
+        // visible below the WAV strip.
+        float ppf=timeline.getPixelsPerFrame();
+        if(ppf>0F)
         {
-            int y=top+HEADER+row*ROW;
-            int bg=row==selectedRow?
-                    EditorVisualStyle.themedSurface(.22F):
-                    EditorVisualStyle.themedSurface(row%2==0?.13F:.10F);
-            rect(0,y,width,y+ROW,bg);
-            rect(0,y+ROW-1,width,y+ROW,
-                    EditorVisualStyle.themedSurface(.25F));
-            if(row==selectedRow)rect(0,y,3,y+ROW,accent());
-            text(mc,PhysicsChannels.LABELS[row],11,y+9,
-                    row==selectedRow?0xFFF5E8FF:0xFFB7C0C9);
+            int minorStep=timeline.getZoom()>=2F?1:
+                    timeline.getZoom()>=1F?5:
+                    timeline.getZoom()>=.5F?10:20;
+            int first=Math.max(0,(int)Math.floor(
+                    timeline.getOffset()/ppf)-2);
+            int last=Math.max(first,(int)Math.ceil(
+                    (timeline.getOffset()+width-GUTTER)/ppf)+2);
+            for(int f=first;f<=last;f++)
+            {
+                int x=timeline.getFrameX(f,GUTTER);
+                if(x<GUTTER||x>=width)continue;
+                boolean major=f%minorStep==0;
+                boolean secondary=!major&&f%5==0;
+                int shade=major?timelineShade(.20F):
+                        secondary?timelineShade(.15F):timelineShade(.10F);
+                // Grid crosses the entire film, including unused
+                // rows, exactly as it does in CHARACTER.
+                rect(x,tracksTop,x+1,height,shade);
+                int tickHeight=major?8:secondary?5:3;
+                rect(x,tracksTop-tickHeight,x+1,tracksTop,
+                        major?0xFF9DA4A9:0xFF666D72);
+                if(major)
+                {
+                    String label=Integer.toString(f);
+                    int textWidth=mc.fontRenderer.getStringWidth(label);
+                    text(mc,label,x-textWidth/2,top+23,0xFF9DA4A9);
+                }
+            }
+        }
+
+        // Render exactly the same small accent-coloured CHARACTER keys;
+        // keep physics channels independent of ordinary Morph/Skin keys.
+        CharacterTimelineController actorTimeline=track(screen);
+        List<CharacterKey> keys=PhysicsChannels.keys(actorTimeline);
+        int currentFrame=frame(screen);
+        for(int row=0;row<PhysicsChannels.LABELS.length;row++)
+        {
+            int centerY=tracksTop+row*ROW+ROW/2;
             for(CharacterKey key:keys)
             {
                 if(key==null||!PhysicsChannels.has(key,row))continue;
                 int x=timeline.getFrameX(key.getFrame(),GUTTER);
-                if(x<GUTTER-8||x>width+8)continue;
-                rect(x-4,y+7,x+5,y+19,keyColor(row));
-                rect(x-2,y+9,x+3,y+17,0xFFFFFFFF);
+                if(x<GUTTER-10||x>width+10)continue;
+                EditorTimelineSkin.key(x,centerY,
+                        row==selectedRow&&key.getFrame()==currentFrame);
             }
         }
-        int playX=timeline.getFrameX(frame(screen),GUTTER);
-        if(playX>=GUTTER&&playX<width)
+
+        // CHARACTER playhead: subtle shadow, accent line, arrowhead
+        // and current-frame number in the upper header strip.
+        int x=timeline.getFrameX(currentFrame,GUTTER);
+        if(x>=GUTTER&&x<width)
         {
-            rect(playX,top,playX+1,height,0xFFF4EEFF);
-            rect(playX-3,top,playX+4,top+5,accent());
+            int bright=EditorThemeManager.get().getAccentBright();
+            rect(x-1,top,x+2,height,0x66000000);
+            rect(x,top,x+1,height,accent());
+            rect(x-4,top,x+5,top+4,bright);
+            rect(x-2,top+4,x+3,top+6,bright);
+            String label=Integer.toString(currentFrame);
+            int w=mc.fontRenderer.getStringWidth(label);
+            int textX=Math.max(GUTTER+2,
+                    Math.min(width-w-2,x-w/2));
+            text(mc,label,textX,top+7,bright);
         }
-        text(mc,"Double-click: add key    Right-click: remove channel",
-                GUTTER+8,top+HEADER+4*ROW+5,0xFF8FA4AF);
     }
 
     public boolean clickTimeline(AnimationEditorScreen screen,
