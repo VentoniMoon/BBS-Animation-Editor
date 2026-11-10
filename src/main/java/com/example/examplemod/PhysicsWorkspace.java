@@ -30,6 +30,7 @@ public final class PhysicsWorkspace
     private static final float[] GRAVITY_PRESETS={9.81F,1.62F,3.71F,0F};
     private static final String[] PRESET_NAMES={"EARTH","MOON","MARS","ZERO"};
     private final EditorTimeline timeline;
+    private final PhysicsInspectorPanel inspector=new PhysicsInspectorPanel(this);
     private int selectedRow=PhysicsChannels.RAGDOLL;
     private long lastClick;
     private int lastClickRow=-1,lastClickFrame=-1;
@@ -246,7 +247,11 @@ public final class PhysicsWorkspace
         {
             if(my<top+HEADER)return true;
             int row=(my-top-HEADER)/ROW;
-            if(row>=0&&row<4)selectedRow=row;
+            if(row>=0&&row<4)
+            {
+                inspector.commit(screen);
+                selectedRow=row;
+            }
             return true;
         }
         int f=Math.max(0,Math.min(Math.max(0,screen.getSceneLength()-1),
@@ -258,6 +263,7 @@ public final class PhysicsWorkspace
         }
         int row=(my-top-HEADER)/ROW;
         if(row<0||row>=4)return true;
+        inspector.commit(screen);
         selectedRow=row;
         CharacterTimelineController t=track(screen);
         if(t==null)return true;
@@ -313,6 +319,7 @@ public final class PhysicsWorkspace
     public boolean mouseScrolled(AnimationEditorScreen screen,int mx,int my,
             int direction,boolean shift)
     {
+        if(inspector.scrollAt(mx,my,direction))return true;
         if(my<screen.height-TIMELINE_HEIGHT||mx<GUTTER)return false;
         if(shift)timeline.changeZoom(direction>0?.25F:-.25F);
         else timeline.addOffset(direction>0?-35:35);
@@ -320,7 +327,25 @@ public final class PhysicsWorkspace
                 Math.max(1,screen.width-GUTTER));
         return true;
     }
-    private void authorDefault(AnimationEditorScreen screen,int row)
+    /** CAMERA-style inspector, with no duplicate PHYSICS tabs/header. */
+    public void drawInspector(AnimationEditorScreen screen,int x,int y,int bottom)
+    {
+        inspector.draw(screen,selectedRow,editHitPoint,x,y,bottom);
+    }
+
+    public boolean clickInspector(AnimationEditorScreen screen,
+            int mx,int my,int button)
+    {
+        return inspector.click(screen,mx,my,button);
+    }
+
+    public boolean keyTyped(AnimationEditorScreen screen,char c,int key)
+    {
+        return inspector.keyTyped(screen,c,key);
+    }
+
+    /** The actor and event timeline share the same keyframe. */
+    void authorDefault(AnimationEditorScreen screen,int row)
     {
         CharacterTimelineController t=track(screen);
         if(t==null)return;
@@ -333,7 +358,6 @@ public final class PhysicsWorkspace
             break;
         case PhysicsChannels.IMPULSE:
             PhysicsChannels.setImpulse(t,f,selectedImpact(screen));
-            // Impact without an active ragdoll cannot affect native bodies.
             if(CharacterRagdollController.sampleWeight(t,f)<=0F)
                 PhysicsChannels.setWeight(t,f,1F);
             break;
@@ -345,262 +369,15 @@ public final class PhysicsWorkspace
             break;
         }
     }
-    private void drawButton(Minecraft mc,String value,int x,int y,int w,
-            boolean selected)
+
+    void selectHitPoint(boolean enabled)
     {
-        rect(x,y,x+w,y+19,
-                selected?EditorVisualStyle.themedSurface(.28F):
-                        EditorVisualStyle.themedSurface(.13F));
-        rect(x,y+18,x+w,y+19,selected?accent():
-                EditorVisualStyle.themedSurface(.25F));
-        text(mc,value,x+4,y+5,selected?0xFFF4E5FF:0xFFC2CED8);
+        if(editHitPoint==enabled)return;
+        editHitPoint=enabled;
+        nativeImpulseGizmo.mouseReleased();
+        nativeImpulseDragging=false;
     }
-    private void drawHeading(Minecraft mc,String title,int y)
-    {
-        text(mc,title,panelX+10,y,0xFFEED9FF);
-        rect(panelX+10,y+15,panelX+173,y+16,
-                EditorVisualStyle.themedSurface(.28F));
-    }
-    private void buttonRow(Minecraft mc,int id,String label,String value,int y)
-    {
-        if(hitCount>=hitRows.length)return;
-        hitRows[hitCount]=y;hitValues[hitCount++]=id;
-        text(mc,label,panelX+10,y+5,0xFFB1BCC8);
-        drawButton(mc,"-",panelX+117,y,19,false);
-        drawButton(mc,"+",panelX+147,y,19,false);
-        if(value!=null)text(mc,value,panelX+70,y+5,0xFFE8E4EE);
-    }
-    public void drawInspector(AnimationEditorScreen screen,int x,int y,int bottom)
-    {
-        Minecraft mc=Minecraft.getMinecraft();
-        panelX=x;panelY=y;panelBottom=bottom;hitCount=0;
-        drawHeading(mc,"PHYSICS",y+12);
-        String[] shortLabels={"RAG","HIT","GRAV","WATER"};
-        for(int i=0;i<4;i++)
-            drawButton(mc,shortLabels[i],x+7+i*44,y+33,42,selectedRow==i);
-        CharacterTimelineController t=track(screen);
-        if(t==null)
-        {
-            text(mc,"Select an actor",x+10,y+74,0xFFB0C0CB);
-            return;
-        }
-        int f=frame(screen);
-        text(mc,"FRAME "+f,x+10,y+63,0xFF91A5B3);
-        int offset=y+85;
-        if(selectedRow==PhysicsChannels.RAGDOLL)
-        {
-            drawHeading(mc,"RAGDOLL WEIGHT",offset);
-            float strength=CharacterRagdollController.sampleWeight(t,f);
-            buttonRow(mc,0,"Weight",Math.round(strength*100F)+"%",offset+23);
-            rect(x+10,offset+53,x+174,offset+66,
-                    EditorVisualStyle.themedSurface(.21F));
-            rect(x+10,offset+53,x+10+Math.round(164F*strength),offset+66,
-                    accent());
-            text(mc,"Physics 0% = animation",x+10,offset+75,0xFF97AAB5);
-        }
-        else if(selectedRow==PhysicsChannels.IMPULSE)
-        {
-            drawHeading(mc,"IMPULSE EVENT",offset);
-            PhysicsChannels.Impact impact=selectedImpact(screen);
-            buttonRow(mc,1,"Target",shortTarget(impact.target),offset+23);
-            buttonRow(mc,2,"Strength",fixed(impact.strength),offset+48);
-            buttonRow(mc,3,"Dir X",fixed(impact.x),offset+73);
-            buttonRow(mc,4,"Dir Y",fixed(impact.y),offset+98);
-            buttonRow(mc,5,"Dir Z",fixed(impact.z),offset+123);
-            buttonRow(mc,6,"Hit X",fixed(impact.offsetX),offset+153);
-            buttonRow(mc,7,"Hit Y",fixed(impact.offsetY),offset+178);
-            buttonRow(mc,8,"Hit Z",fixed(impact.offsetZ),offset+203);
-            drawButton(mc,"DIRECTION",x+9,offset+230,81,!editHitPoint);
-            drawButton(mc,"HIT POINT",x+96,offset+230,79,editHitPoint);
-            text(mc,"Move X/Y/Z arrows in Preview",x+10,offset+254,0xFF9FC7D8);
-        }
-        else if(selectedRow==PhysicsChannels.GRAVITY)
-        {
-            drawHeading(mc,"GRAVITY",offset);
-            buttonRow(mc,9,"Magnitude",
-                    fixed(PhysicsChannels.gravityAt(t,f)),offset+23);
-            rect(x+10,offset+52,x+174,offset+64,
-                    EditorVisualStyle.themedSurface(.21F));
-            rect(x+10,offset+52,x+10+Math.round(164F*
-                    Math.min(30F,PhysicsChannels.gravityAt(t,f))/30F),
-                    offset+64,0xFF79BCF0);
-            text(mc,"EARTH 9.81 | MOON 1.62",x+10,offset+70,0xFF97AAB5);
-            text(mc,"MARS 3.71 | ZERO 0.00",x+10,offset+86,0xFF97AAB5);
-            for(int i=0;i<4;i++)
-                drawButton(mc,PRESET_NAMES[i],x+5+(i%2)*90,
-                        offset+110+(i/2)*24,86,false);
-        }
-        else
-        {
-            drawHeading(mc,"WATER / IMMERSION",offset);
-            PhysicsChannels.Fluid water=PhysicsChannels.waterAt(t,f);
-            buttonRow(mc,10,"Amount",fixed(water.amount),offset+23);
-            buttonRow(mc,11,"Buoyancy",fixed(water.buoyancy),offset+48);
-            rect(x+10,offset+73,x+174,offset+81,
-                    EditorVisualStyle.themedSurface(.21F));
-            rect(x+10,offset+73,x+10+Math.round(164F*water.amount),
-                    offset+81,0xFF69CFC0);
-            text(mc,"Viscosity = linear drag",x+10,offset+87,0xFF97AAB5);
-            text(mc,"Drag: "+fixed(water.drag),x+10,offset+105,0xFFBCD1D8);
-            text(mc,"Angular: "+fixed(water.angularDrag),x+10,offset+123,0xFFBCD1D8);
-            drawButton(mc,"DRAG -",x+10,offset+151,73,false);
-            drawButton(mc,"DRAG +",x+98,offset+151,73,false);
-            drawButton(mc,"SPIN -",x+10,offset+176,73,false);
-            drawButton(mc,"SPIN +",x+98,offset+176,73,false);
-            text(mc,"Whole-actor fluid volume",x+10,offset+207,0xFF97AAB5);
-        }
-        if(offset+264<bottom)
-        {
-            drawButton(mc,"ADD / UPDATE KEY",x+10,bottom-33,163,
-                    PhysicsChannels.has(PhysicsChannels.at(t,f),selectedRow));
-        }
-    }
-    private static String shortTarget(String target)
-    {
-        for(int i=0;i<TARGETS.length;i++)
-            if(TARGETS[i].equals(target))return TARGET_DISPLAY[i];
-        return "CHEST";
-    }
-    private void edit(AnimationEditorScreen screen,int id,int sign)
-    {
-        CharacterTimelineController t=track(screen);
-        if(t==null)return;
-        int f=frame(screen);
-        if(id==0)
-        {
-            float v=CharacterRagdollController.sampleWeight(t,f);
-            PhysicsChannels.setWeight(t,f,Math.max(0F,Math.min(1F,v+sign*.1F)));
-        }
-        else if(id>=1&&id<=8)
-        {
-            PhysicsChannels.Impact impact=selectedImpact(screen);
-            if(id==1)
-            {
-                int index=1;
-                for(int i=0;i<TARGETS.length;i++)
-                    if(TARGETS[i].equals(impact.target)){index=i;break;}
-                impact.target=TARGETS[(index+sign+TARGETS.length)%TARGETS.length];
-            }
-            if(id==2)impact.strength=Math.max(0F,Math.min(200F,
-                    impact.strength+sign*2F));
-            if(id==3)impact.x=Math.max(-1F,Math.min(1F,impact.x+sign*.1F));
-            if(id==4)impact.y=Math.max(-1F,Math.min(1F,impact.y+sign*.1F));
-            if(id==5)impact.z=Math.max(-1F,Math.min(1F,impact.z+sign*.1F));
-            if(id==6)impact.offsetX=Math.max(-1.5F,Math.min(1.5F,
-                    impact.offsetX+sign*.1F));
-            if(id==7)impact.offsetY=Math.max(-1.5F,Math.min(1.5F,
-                    impact.offsetY+sign*.1F));
-            if(id==8)impact.offsetZ=Math.max(-1.5F,Math.min(1.5F,
-                    impact.offsetZ+sign*.1F));
-            PhysicsChannels.setImpulse(t,f,impact);
-            if(CharacterRagdollController.sampleWeight(t,f)<=0F)
-                PhysicsChannels.setWeight(t,f,1F);
-        }
-        else if(id==9)
-            PhysicsChannels.setGravity(t,f,
-                    PhysicsChannels.gravityAt(t,f)+sign*.5F);
-        else if(id==10||id==11)
-        {
-            PhysicsChannels.Fluid water=PhysicsChannels.waterAt(t,f);
-            if(id==10)water.amount=Math.max(0F,Math.min(1F,
-                    water.amount+sign*.1F));
-            else water.buoyancy=Math.max(0F,Math.min(3F,
-                    water.buoyancy+sign*.1F));
-            PhysicsChannels.setWater(t,f,water);
-        }
-    }
-    public boolean clickInspector(AnimationEditorScreen screen,
-            int mx,int my,int button)
-    {
-        if(mx<panelX||mx>=panelX+185||my<panelY||my>=panelBottom)
-            return false;
-        if(button!=0)return true;
-        int t=my-panelY;
-        if(t>=33&&t<53)
-        {
-            int choice=(mx-panelX-7)/44;
-            if(choice>=0&&choice<4)selectedRow=choice;
-            return true;
-        }
-        if(my>=panelBottom-33&&my<panelBottom-14&&
-                mx>=panelX+10&&mx<panelX+174)
-        {
-            authorDefault(screen,selectedRow);
-            return true;
-        }
-        int offset=panelY+85;
-        if(selectedRow==PhysicsChannels.IMPULSE&&
-                my>=offset+230&&my<offset+249)
-        {
-            editHitPoint=mx>=panelX+96;
-            nativeImpulseGizmo.mouseReleased();
-            nativeImpulseDragging=false;
-            return true;
-        }
-        if(selectedRow==PhysicsChannels.RAGDOLL&&
-                my>=offset+53&&my<offset+66)
-        {
-            PhysicsChannels.setWeight(track(screen),frame(screen),
-                    Math.max(0F,Math.min(1F,
-                            (mx-panelX-10)/164F)));
-            return true;
-        }
-        if(selectedRow==PhysicsChannels.GRAVITY&&
-                my>=offset+52&&my<offset+64)
-        {
-            PhysicsChannels.setGravity(track(screen),frame(screen),
-                    Math.max(0F,Math.min(30F,
-                            (mx-panelX-10)*30F/164F)));
-            return true;
-        }
-        if(selectedRow==PhysicsChannels.WATER&&
-                my>=offset+73&&my<offset+81)
-        {
-            PhysicsChannels.Fluid water=PhysicsChannels.waterAt(
-                    track(screen),frame(screen));
-            water.amount=Math.max(0F,Math.min(1F,
-                    (mx-panelX-10)/164F));
-            PhysicsChannels.setWater(track(screen),frame(screen),water);
-            return true;
-        }
-        if(selectedRow==PhysicsChannels.GRAVITY&&
-                my>=offset+110&&my<offset+158)
-        {
-            int index=((my-offset-110)/24)*2+
-                    ((mx-panelX)<95?0:1);
-            if(index>=0&&index<4)
-                PhysicsChannels.setGravity(track(screen),frame(screen),
-                        GRAVITY_PRESETS[index]);
-            return true;
-        }
-        if(selectedRow==PhysicsChannels.WATER&&
-                my>=offset+151&&my<offset+195)
-        {
-            PhysicsChannels.Fluid water=
-                    PhysicsChannels.waterAt(track(screen),frame(screen));
-            float sign=mx<panelX+92?-1F:1F;
-            if(my<offset+171)
-                water.drag=Math.max(0F,Math.min(5F,water.drag+sign*.1F));
-            else
-                water.angularDrag=Math.max(0F,Math.min(5F,
-                        water.angularDrag+sign*.1F));
-            PhysicsChannels.setWater(track(screen),frame(screen),water);
-            return true;
-        }
-        for(int i=0;i<hitCount;i++)
-        {
-            int y=hitRows[i];
-            if(my>=y&&my<y+19)
-            {
-                if(mx>=panelX+117&&mx<panelX+138)
-                    edit(screen,hitValues[i],-1);
-                else if(mx>=panelX+147&&mx<panelX+168)
-                    edit(screen,hitValues[i],1);
-                return true;
-            }
-        }
-        return true;
-    }
+
     /** PHYSICS intentionally has no interpolation inspector. */
     public void drawLeftGuide(AnimationEditorScreen screen)
     {
