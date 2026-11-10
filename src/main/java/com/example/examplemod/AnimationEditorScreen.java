@@ -3415,7 +3415,15 @@ public class AnimationEditorScreen extends GuiScreen
                     this.gizmoController.setPreviewActor(findRuntimeActor());
                 },
                 () -> {
-                    this.gizmoController.draw3D(
+                    if(editorModeController.getMode()==
+                            EditorModeController.EditorMode.PHYSICS)
+                    {
+                        // Draw true 3D X/Y/Z arrows directly in Preview FBO
+                        // rather than the old flat UI-only force line.
+                        physicsWorkspace.drawNativeImpulseGizmo(
+                                this,mc,filmX,filmY,filmW,filmH);
+                    }
+                    else this.gizmoController.draw3D(
                             mc, filmX, filmY, filmW, filmH,
                             getGizmoBone(), getGizmoKeyframe(),
                             getCurrentRecordFrame(),
@@ -4300,7 +4308,10 @@ public class AnimationEditorScreen extends GuiScreen
         }
         if(editorModeController.getMode()==EditorModeController.EditorMode.PHYSICS)
         {
-            if(physicsWorkspace.beginImpulseDrag(mouseX,mouseY,mouseButton))
+            if(sceneViewport!=null&&physicsWorkspace.beginImpulseDrag(
+                    this,mouseX,mouseY,mouseButton,
+                    sceneViewport.getX(),sceneViewport.getY(),
+                    sceneViewport.getWidth(),sceneViewport.getHeight()))
                 return;
             if(physicsWorkspace.clickInspector(this,mouseX,mouseY,mouseButton)
                     ||physicsWorkspace.clickTimeline(this,mouseX,mouseY,mouseButton))
