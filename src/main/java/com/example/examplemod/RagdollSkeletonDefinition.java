@@ -128,27 +128,31 @@ public final class RagdollSkeletonDefinition
      * Thus the stock biped has ELEVEN physical segments. There are no
      * independent hand or foot rigid bones in the actual stock armature.
      */
+    // Conservative first-pass anatomical limits; use the verified
+    // BOBJ hinge directions, but avoid full hyperflexion/torso clipping.
+    // Direct parent/child collision stays suppressed because bound capsule
+    // shapes intentionally overlap around real anatomical joints.
     private static final Spec[] EMO={
         root("pelvis",9F,0.36F,0.19F,"body","pelvis","hips"),
-        ball("chest","pelvis",15F,0.42F,0.20F,30F,30F,
+        ball("chest","pelvis",15F,0.42F,0.20F,25F,25F,
                 "low_body","upper_body","chest","spine","torso"),
-        ball("head","chest",5F,0.50F,0.22F,40F,40F,
+        ball("head","chest",5F,0.50F,0.22F,35F,30F,
                 "head","head_main","neck"),
-        ball("left_upper_arm","chest",2.4F,0.25F,0.105F,85F,65F,
+        ball("left_upper_arm","chest",2.4F,0.25F,0.105F,70F,45F,
                 "left_arm","left_upper_arm","arm_l","upper_arm_l"),
-        ball("right_upper_arm","chest",2.4F,0.25F,0.105F,85F,65F,
+        ball("right_upper_arm","chest",2.4F,0.25F,0.105F,70F,45F,
                 "right_arm","right_upper_arm","arm_r","upper_arm_r"),
-        hinge("left_forearm","left_upper_arm",1.3F,0.25F,0.09F,0F,145F,
+        hinge("left_forearm","left_upper_arm",1.3F,0.25F,0.09F,0F,135F,
                 "low_left_arm","left_forearm","left_lower_arm","forearm_l"),
-        hinge("right_forearm","right_upper_arm",1.3F,0.25F,0.09F,0F,145F,
+        hinge("right_forearm","right_upper_arm",1.3F,0.25F,0.09F,0F,135F,
                 "low_right_arm","right_forearm","right_lower_arm","forearm_r"),
-        ball("left_thigh","pelvis",8F,0.375F,0.15F,65F,35F,
+        ball("left_thigh","pelvis",8F,0.375F,0.15F,55F,30F,
                 "left_leg","left_upper_leg","thigh_l","upper_leg_l"),
-        ball("right_thigh","pelvis",8F,0.375F,0.15F,65F,35F,
+        ball("right_thigh","pelvis",8F,0.375F,0.15F,55F,30F,
                 "right_leg","right_upper_leg","thigh_r","upper_leg_r"),
-        hinge("left_shin","left_thigh",4F,0.375F,0.115F,0F,145F,
+        hinge("left_shin","left_thigh",4F,0.375F,0.115F,0F,130F,
                 "low_left_leg","left_shin","left_lower_leg","shin_l"),
-        hinge("right_shin","right_thigh",4F,0.375F,0.115F,0F,145F,
+        hinge("right_shin","right_thigh",4F,0.375F,0.115F,0F,130F,
                 "low_leg_right","low_right_leg","right_shin","right_lower_leg","shin_r")
     };
 
