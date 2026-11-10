@@ -32,11 +32,15 @@ public final class PhysicsChannels
     public static final class Fluid
     {
         public float amount,buoyancy=1.05F,drag=0.8F,angularDrag=0.65F;
+        /** World-space height; disabled for saved scenes from Physics 2.0. */
+        public float surfaceY=63F;
+        public boolean surfaceEnabled;
         public Fluid copy()
         {
             Fluid out=new Fluid();
             out.amount=amount;out.buoyancy=buoyancy;
             out.drag=drag;out.angularDrag=angularDrag;
+            out.surfaceY=surfaceY;out.surfaceEnabled=surfaceEnabled;
             return out;
         }
     }
@@ -101,6 +105,8 @@ public final class PhysicsChannels
         w.setFloat("Buoyancy",safe(f.buoyancy,1.05F,0F,3F));
         w.setFloat("Drag",safe(f.drag,.8F,0F,5F));
         w.setFloat("AngularDrag",safe(f.angularDrag,.65F,0F,5F));
+        w.setFloat("SurfaceY",safe(f.surfaceY,63F,-2048F,2048F));
+        w.setBoolean("SurfaceEnabled",f.surfaceEnabled);
         n.setTag("Water",w);save(key,n);
     }
     public static void setImpulse(CharacterTimelineController t,int frame,Impact impulse)
@@ -162,6 +168,8 @@ public final class PhysicsChannels
             f.buoyancy=w.getFloat("Buoyancy");
             f.drag=w.getFloat("Drag");
             f.angularDrag=w.getFloat("AngularDrag");
+            f.surfaceY=w.hasKey("SurfaceY",99)?w.getFloat("SurfaceY"):63F;
+            f.surfaceEnabled=w.getBoolean("SurfaceEnabled");
             setWater(t,to,f);
             break;
         default:return;
@@ -210,6 +218,10 @@ public final class PhysicsChannels
             if("Buoyancy".equals(field))return w.getFloat("Buoyancy");
             if("Drag".equals(field))return w.getFloat("Drag");
             if("AngularDrag".equals(field))return w.getFloat("AngularDrag");
+            if("SurfaceY".equals(field))
+                return w.hasKey("SurfaceY",99)?w.getFloat("SurfaceY"):63F;
+            if("SurfaceEnabled".equals(field))
+                return w.getBoolean("SurfaceEnabled")?1F:0F;
         }
         return 0F;
     }
@@ -247,6 +259,20 @@ public final class PhysicsChannels
         f.buoyancy=safe(sample(t,frame,WATER,"Buoyancy",1.05F),1.05F,0F,3F);
         f.drag=safe(sample(t,frame,WATER,"Drag",.8F),.8F,0F,5F);
         f.angularDrag=safe(sample(t,frame,WATER,"AngularDrag",.65F),.65F,0F,5F);
+        f.surfaceY=safe(sample(t,frame,WATER,"SurfaceY",63F),
+                63F,-2048F,2048F);
+        // Enable is a step parameter, never linearly interpolated.
+        CharacterKey previous=null;
+        CharacterTrack main=t==null?null:t.getTrackById("main");
+        if(main!=null)
+            for(CharacterKey key:main.getKeys())
+                if(key!=null&&key.getFrame()<=frame&&
+                        has(key,WATER)&&
+                        (previous==null||key.getFrame()>previous.getFrame()))
+                    previous=key;
+        f.surfaceEnabled=previous!=null&&
+                data(previous).getCompoundTag("Water")
+                        .getBoolean("SurfaceEnabled");
         return f;
     }
     public static List<CharacterKey> keys(CharacterTimelineController t)
