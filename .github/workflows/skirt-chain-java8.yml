@@ -4,16 +4,20 @@ on:
   pull_request:
     paths:
       - 'src/main/java/com/example/examplemod/SkirtChainTopology.java'
+      - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/BodyPartSkirtPreset.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsPanel.java'
       - 'src/main/java/com/example/examplemod/BodyPartsEditorPanel.java'
       - 'src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
       - '.github/workflows/skirt-chain-java8.yml'
   push:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/SkirtChainTopology.java'
+      - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
   workflow_dispatch:
 
 jobs:
@@ -33,6 +37,10 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 \
             -d "$RUNNER_TEMP/skirt-test" \
             src/main/java/com/example/examplemod/SkirtChainTopology.java \
-            src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java
+            src/main/java/com/example/examplemod/SkirtGeoProfile.java \
+            src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java \
+            src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtChainTopologySmokeTest
+          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtGeoProfileSmokeTest
