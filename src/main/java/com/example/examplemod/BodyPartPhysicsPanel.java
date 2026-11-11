@@ -14,6 +14,10 @@ public final class BodyPartPhysicsPanel
     private boolean colliderTab;
     private int chainBones;
     private int activeNumericProperty = -1;
+    private BodyPartModelData skirtModel;
+    private AnimationBone skirtWaist;
+    private int skirtFrame;
+    private String skirtStatus = "";
     private static final float CLICK_STEP = 0.0625F;
     private static final float KEY_STEP = 0.03125F;
 
@@ -31,6 +35,17 @@ public final class BodyPartPhysicsPanel
         this.chainBones = chainBones;
     }
 
+    /** The selected Chameleon attachment and its actual internal bone. */
+    public void setSkirtTarget(BodyPartModelData model,
+            AnimationBone selectedBone,int frame)
+    {
+        if(skirtModel!=model||skirtWaist!=selectedBone)
+            skirtStatus="";
+        skirtModel=model;
+        skirtWaist=selectedBone;
+        skirtFrame=frame;
+    }
+
     /** Older caller compatibility; authored colliders remain unchanged. */
     public void setTarget(int x, int y, String boneName,
             BodyPartPhysicsSettings settings,int chainBones)
@@ -42,7 +57,7 @@ public final class BodyPartPhysicsPanel
     {
         if(this.settings==null)return;
         int accent=EditorThemeManager.get().getAccent();
-        Gui.drawRect(x,y,x+175,y+235,EditorVisualStyle.themedSurface(0.080F));
+        Gui.drawRect(x,y,x+175,y+285,EditorVisualStyle.themedSurface(0.080F));
         Gui.drawRect(x,y,x+175,y+22,EditorVisualStyle.themedSurface(0.170F));
         Gui.drawRect(x,y,x+3,y+22,accent);
         Gui.drawRect(x+5,y+2,x+87,y+21,
@@ -80,6 +95,29 @@ public final class BodyPartPhysicsPanel
         else
             mc.fontRenderer.drawString("Solver: Jolt disabled",
                     x+9,y+209,0xFF999999);
+        if(!colliderTab&&skirtModel!=null&&skirtWaist!=null&&
+                ("ALL".equals(skirtWaist.getName())||
+                 skirtWaist.getChildren().size()==7))
+        {
+            boolean full="ALL".equals(skirtWaist.getName());
+            boolean active=full?
+                    BodyPartSkirtPreset.isFullEnabled(skirtModel,skirtWaist):
+                    settings.isEnabled();
+            Gui.drawRect(x+8,y+237,x+167,y+258,
+                    EditorVisualStyle.themedSurface(active?.32F:.20F));
+            Gui.drawRect(x+8,y+256,x+167,y+258,
+                    active?0xFF74C1AD:EditorThemeManager.get().getAccent());
+            mc.fontRenderer.drawString(
+                    (full?"SKIRT 20 STRIPS":"SKIRT 7 STRIPS")+
+                    "  "+(active?"ON":"SET"),
+                    x+14,y+244,0xFFE7F1F5);
+            String msg=skirtStatus;
+            if(msg.isEmpty())
+                msg=full?"ALL: front 7, rear 7, sides 3+3":
+                        "Seven independent strips (3+2+2)";
+            mc.fontRenderer.drawString(trim(mc,msg,158),
+                    x+9,y+267,0xFF9BAFB8);
+        }
     }
 
     private void drawValue(Minecraft mc, String title, float value, int lineY)
@@ -118,7 +156,7 @@ public final class BodyPartPhysicsPanel
     {
         if(mouseButton!=0 || settings==null ||
                 mouseX<x || mouseX>=x+175 ||
-                mouseY<y || mouseY>=y+235)return false;
+                mouseY<y || mouseY>=y+285)return false;
         int row=mouseY-y;
         if(row>=2 && row<=22)
         {
@@ -130,6 +168,50 @@ public final class BodyPartPhysicsPanel
                 BodyPartJoltPreviewAdapter.isRequested())
         {
             BodyPartJoltPreviewAdapter.toggleDrawContacts();
+            return true;
+        }
+        if(!colliderTab&&row>=237&&row<259&&
+                mouseX>=x+8&&mouseX<x+167&&
+                skirtModel!=null&&skirtWaist!=null)
+        {
+            try
+            {
+                if("ALL".equals(skirtWaist.getName()))
+                {
+                    if(BodyPartSkirtPreset.isFullEnabled(skirtModel,skirtWaist))
+                    {
+                        BodyPartSkirtPreset.disableFull(skirtModel,skirtWaist);
+                        skirtStatus="20 strips disabled";
+                    }
+                    else
+                    {
+                        SkirtGeoProfile.Plan<AnimationBone> plan=
+                                BodyPartSkirtPreset.enableFull(
+                                        skirtModel,skirtWaist,skirtFrame);
+                        skirtStatus=plan.stripCount()+" strips / "+
+                                plan.drivenBoneCount()+" driven bones";
+                    }
+                }
+                else
+                {
+                    BodyPartSkirtPreset.inspect(skirtWaist);
+                    if(settings.isEnabled())
+                    {
+                        BodyPartSkirtPreset.disable(skirtModel,skirtWaist);
+                        skirtStatus="7 strips disabled";
+                    }
+                    else
+                    {
+                        BodyPartSkirtPreset.enable(
+                                skirtModel,skirtWaist,skirtFrame);
+                        skirtStatus="7 strips active (3+2+2)";
+                    }
+                }
+            }
+            catch(IllegalArgumentException|IllegalStateException failed)
+            {
+                skirtStatus=failed.getMessage();
+            }
             return true;
         }
         if(colliderTab)
