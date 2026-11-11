@@ -30,13 +30,22 @@ public final class SkirtClothPoseCoupler
     {
         public final String upper,lower;
         public final float[] upperWorld,lowerWorld;
+        /** Clean terminal geometry position, not a guessed extra joint. */
+        public final float[] tipWorld;
 
         public Strip(String upper,String lower,float[] upperWorld,float[] lowerWorld)
+        {
+            this(upper,lower,upperWorld,lowerWorld,null);
+        }
+
+        public Strip(String upper,String lower,float[] upperWorld,
+                float[] lowerWorld,float[] tipWorld)
         {
             this.upper=upper;
             this.lower=lower;
             this.upperWorld=upperWorld;
             this.lowerWorld=lowerWorld;
+            this.tipWorld=tipWorld==null?null:tipWorld.clone();
         }
     }
 

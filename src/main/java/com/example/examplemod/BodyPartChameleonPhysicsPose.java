@@ -66,6 +66,49 @@ public final class BodyPartChameleonPhysicsPose
         }
     }
 
+    /**
+     * Render-only width multiplier for skirt panel bones. Unlike uniform
+     * scaling, this cannot elongate the cloth vertically or distort the
+     * animated waist. Chameleon AnimatedTransform exposes scaleX/scaleZ.
+     */
+    @SuppressWarnings("unchecked")
+    public static boolean multiplyLocalWidth(Object morph,String bone,
+            SkirtAdaptiveWidth.Width width)
+    {
+        if(morph==null||bone==null||width==null||
+                (width.axis!=0&&width.axis!=2)||
+                !Float.isFinite(width.multiplier)||
+                width.multiplier<1F||width.multiplier>1.28F)
+            return false;
+        if(width.multiplier<=1.0001F)return false;
+        try
+        {
+            Object pose=morph.getClass().getField("pose").get(morph);
+            if(pose==null)return false;
+            Object raw=pose.getClass().getField("bones").get(pose);
+            if(!(raw instanceof Map))return false;
+            Map<Object,Object> map=(Map<Object,Object>)raw;
+            Object transform=map.get(bone);
+            if(transform==null)
+            {
+                Class<?> clazz=Class.forName(
+                        "mchorse.chameleon.metamorph.pose.AnimatedPoseTransform");
+                transform=clazz.getConstructor(String.class).newInstance(bone);
+                map.put(bone,transform);
+            }
+            String axis=width.axis==0?"scaleX":"scaleZ";
+            float original=get(transform,axis);
+            float newScale=original*width.multiplier;
+            if(!Float.isFinite(newScale))return false;
+            set(transform,axis,newScale);
+            return true;
+        }
+        catch(Throwable error)
+        {
+            return false;
+        }
+    }
+
     private static float get(Object target, String field) throws Exception
     {
         return target.getClass().getField(field).getFloat(target);
