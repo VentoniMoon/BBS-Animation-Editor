@@ -179,8 +179,14 @@ public final class BodyPartEmoticonsFullBodyColliders {
                     continue;
                 }
                 boolean recovered=cache.pending.remove(bone.name);
-                if(cache.local.size()+candidate.size()<=
-                        BodyPartChameleonCollisionBoxes.MAX_BOXES)
+                // Do NOT discard late armature bones merely because earlier
+                // meshes filled the 32-primitive native limit. In particular,
+                // leg bones can appear after head/torso/arms in the source.
+                // A per-attachment budget below now chooses the strongest
+                // available contacts, prioritizing thighs for skirts.
+                // Keep only a generous bounded source inventory here.
+                final int maxCaptured=128;
+                if(cache.local.size()+candidate.size()<=maxCaptured)
                 {
                     cache.local.addAll(candidate);
                     cache.groups+=acceptedGroups;
@@ -190,6 +196,10 @@ public final class BodyPartEmoticonsFullBodyColliders {
                                 "[BBS Animation Editor][Jolt][ParentSkinRecover] "+
                                 "bone="+bone.name+" shapes="+candidate.size());
                 }
+                else
+                    System.err.println("[BBS Animation Editor][Jolt][ParentSkinBudget] "+
+                            "Unable to cache bone="+bone.name+
+                            " source contact pool="+cache.local.size());
             }
         }
         List<float[]> shapes=new ArrayList<float[]>();
