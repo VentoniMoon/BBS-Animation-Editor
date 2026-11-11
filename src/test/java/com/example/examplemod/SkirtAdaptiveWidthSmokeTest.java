@@ -29,6 +29,7 @@ public final class SkirtAdaptiveWidthSmokeTest
         testStaticAndSinglePanelGap();
         testMissingTipNeverStretches();
         testChameleonLocalScaleOnly();
+        testNativeCleanPoseRestoration();
         System.out.println("SkirtAdaptiveWidthSmokeTest OK");
     }
 
@@ -88,7 +89,35 @@ public final class SkirtAdaptiveWidthSmokeTest
     }
 
     public static final class FakeMorph
-    { public final FakePose pose=new FakePose(); }
+    {
+        public final FakePose pose=new FakePose();
+        public final FakeWrapper wrapper=new FakeWrapper();
+        public FakeWrapper getModel(){return wrapper;}
+    }
+    public static final class FakeWrapper
+    { public final FakeModel model=new FakeModel(); }
+    public static final class FakeModel
+    {
+        public final List<FakeBone> bones=new ArrayList<FakeBone>();
+        FakeModel(){bones.add(new FakeBone("group22"));}
+    }
+    public static final class FakeBone
+    {
+        public final String id;
+        public final List<FakeBone> children=new ArrayList<FakeBone>();
+        public final FakeCurrent current=new FakeCurrent();
+        FakeBone(String id){this.id=id;}
+    }
+    public static final class FakeCurrent
+    {
+        public final FakeVec rotation=new FakeVec(14F,0F,0F);
+        public final FakeVec scale=new FakeVec(1.5F,1.2F,.9F);
+    }
+    public static final class FakeVec
+    {
+        public float x,y,z;
+        FakeVec(float x,float y,float z){this.x=x;this.y=y;this.z=z;}
+    }
     public static final class FakePose
     { public final Map<String,FakeTransform> bones=new HashMap<String,FakeTransform>(); }
     public static final class FakeTransform
@@ -118,6 +147,31 @@ public final class SkirtAdaptiveWidthSmokeTest
         expect(!BodyPartChameleonPhysicsPose.multiplyLocalWidth(morph,
                 "group22",new SkirtAdaptiveWidth.Width(1,1.1F)),
                 "vertical axis must be rejected");
+    }
+
+    private static void testNativeCleanPoseRestoration()
+    {
+        FakeMorph morph=new FakeMorph();
+        FakeBone bone=morph.wrapper.model.bones.get(0);
+        Map<String,float[]> euler=new HashMap<String,float[]>();
+        euler.put("group22",new float[] {(float)Math.toRadians(9),0F,0F});
+        Map<String,SkirtAdaptiveWidth.Width> widths=new HashMap<
+                String,SkirtAdaptiveWidth.Width>();
+        widths.put("group22",new SkirtAdaptiveWidth.Width(0,1.2F));
+        try(BodyPartChameleonCleanPose clean=
+                BodyPartChameleonCleanPose.begin(morph,euler,widths))
+        {
+            near(bone.current.rotation.x,5F,.0001F,
+                    "subtract render-only rotation from Jolt input");
+            near(bone.current.scale.x,1.25F,.0001F,
+                    "subtract render-only width from Jolt input");
+            near(bone.current.scale.y,1.2F,.00001F,
+                    "preserve authored height");
+        }
+        near(bone.current.rotation.x,14F,.00001F,
+                "restore full preview rotation");
+        near(bone.current.scale.x,1.5F,.00001F,
+                "restore full preview stretch");
     }
 
     private static final class Fixture
