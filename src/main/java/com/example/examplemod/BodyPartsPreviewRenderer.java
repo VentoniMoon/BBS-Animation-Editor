@@ -148,6 +148,10 @@ public class BodyPartsPreviewRenderer
      * This stays separate from the modified preview morph. */
     private final Map<BodyPartModelData, Map<String, float[]>> previewEulerDeltas =
             new IdentityHashMap<BodyPartModelData, Map<String, float[]>>();
+    /** Only preview stretch ratios, paired with the same clean-pose scope. */
+    private final Map<BodyPartModelData, Map<String,SkirtAdaptiveWidth.Width>>
+            previewWidthFactors=new IdentityHashMap<
+                    BodyPartModelData,Map<String,SkirtAdaptiveWidth.Width>>();
 
     /** Compare Jolt's intended direction with Chameleon's ACTUAL rendered pivots. */
     private static final boolean JOLT_DIRECTION_DIAGNOSTIC =
@@ -532,7 +536,8 @@ public class BodyPartsPreviewRenderer
             }
             try(BodyPartChameleonCleanPose clean=
                     BodyPartChameleonCleanPose.begin(
-                            child,previewEulerDeltas.get(data)))
+                            child,previewEulerDeltas.get(data),
+                            previewWidthFactors.get(data)))
             {
                 float[] attached=worldFromRenderedChameleonChild(parent,part);
                 float[] actorFrame=actorFrameFor(frame);
@@ -1649,6 +1654,10 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_PANEL_COUPLING =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.coupling","true"));
+    /** Opt-out for A/B of the new width-only panel compensation. */
+    private static final boolean SKIRT_ADAPTIVE_WIDTH =
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.adaptiveWidth","true"));
 
     private boolean shouldCoupleSkirt(BodyPartModelData data,
             List<BodyPartPhysicsChains.Chain> chains)
@@ -1682,7 +1691,8 @@ public class BodyPartsPreviewRenderer
         try
         {
             cleanScope = BodyPartChameleonCleanPose.begin(
-                    part.morph.get(), previewEulerDeltas.get(data));
+                    part.morph.get(), previewEulerDeltas.get(data),
+                    previewWidthFactors.get(data));
         }
         catch (RuntimeException error)
         {
@@ -2023,7 +2033,7 @@ public class BodyPartsPreviewRenderer
                                     {
                                         skirtStrips.add(new SkirtClothPoseCoupler.Strip(
                                                 names[0],names[1],
-                                                nativeWorld[0],nativeWorld[1]));
+                                                nativeWorld[0],nativeWorld[1],terminal));
                                         skirtRaw.putAll(physical);
                                     }
                                 }
@@ -2056,6 +2066,14 @@ public class BodyPartsPreviewRenderer
                 for(Map.Entry<String,float[]> swing:stitched.entrySet())
                     physicsFrames.accept(data,frame,swing.getKey(),
                             swing.getValue(),true);
+                if(SKIRT_ADAPTIVE_WIDTH)
+                {
+                    Map<String,SkirtAdaptiveWidth.Width> widths=
+                            SkirtAdaptiveWidth.measure(skirtStrips,stitched);
+                    for(Map.Entry<String,SkirtAdaptiveWidth.Width> width:widths.entrySet())
+                        physicsFrames.acceptWidth(data,frame,
+                                width.getKey(),width.getValue());
+                }
             }
             else if(coupledSkirt)
                 reportPhysicsBoneProbe(data,
@@ -2248,6 +2266,7 @@ public class BodyPartsPreviewRenderer
         manager.parts.clear();
         this.preparedMorphs.clear();
         this.previewEulerDeltas.clear();
+        this.previewWidthFactors.clear();
         this.joltAppliedDirections.clear();
         this.joltAppliedFrames.clear();
         this.joltAppliedNativeDirections.clear();
@@ -2654,6 +2673,33 @@ public class BodyPartsPreviewRenderer
                                     net.minecraft.client.Minecraft.getMinecraft()
                                             .getRenderPartialTicks()))
                         : physicsFrames.forRender(data,frame);
+            // Width changes use the exact same frozen/render-interpolated
+            // sample as Jolt rotations, so playback and export stay in sync.
+            Map<String,SkirtAdaptiveWidth.Width> renderedWidths=
+                    bakeController.isRecording()?
+                            physicsFrames.forRenderWidths(data,frame):
+                    JOLT_VISUAL_INTERPOLATION &&
+                    BodyPartJoltPreviewAdapter.isRequested() &&
+                    (BlockbusterPreviewAnimationState.isPlaying()||
+                     CameraExportRenderClock.current()!=null)?
+                            physicsFrames.forRenderWidthsInterpolated(data,frame,
+                                CameraVisualFrameClock.partialTick(frame,
+                                    net.minecraft.client.Minecraft.getMinecraft()
+                                            .getRenderPartialTicks())):
+                            physicsFrames.forRenderWidths(data,frame);
+            if(SKIRT_PANEL_COUPLING&&SKIRT_ADAPTIVE_WIDTH &&
+                    renderedWidths!=null&&!renderedWidths.isEmpty())
+            {
+                Map<String,SkirtAdaptiveWidth.Width> appliedWidths=
+                        new java.util.HashMap<String,SkirtAdaptiveWidth.Width>();
+                for(Map.Entry<String,SkirtAdaptiveWidth.Width> e:
+                        renderedWidths.entrySet())
+                    if(BodyPartChameleonPhysicsPose.multiplyLocalWidth(
+                            child,e.getKey(),e.getValue()))
+                        appliedWidths.put(e.getKey(),e.getValue());
+                if(!appliedWidths.isEmpty())
+                    previewWidthFactors.put(data,appliedWidths);
+            }
             if (swings != null)
             {
                 int appliedCount = 0;
