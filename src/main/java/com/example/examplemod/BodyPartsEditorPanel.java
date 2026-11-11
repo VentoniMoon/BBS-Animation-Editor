@@ -63,6 +63,10 @@ public class BodyPartsEditorPanel
                     bone.getName(), model.getPhysicsSettings(bone.getName()),
                     model.getCollisionSettings(bone.getName()),
                     countChainBones(bone));
+            // The cloth preset uses the REAL selected Chameleon bone
+            // hierarchy, never guesses bone names from the screenshot.
+            physicsPanel.setSkirtTarget(model,bone,
+                    controller.getTimeline().getTick());
         }
     }
 
