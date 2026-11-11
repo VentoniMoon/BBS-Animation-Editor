@@ -7,6 +7,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java'
       - 'src/main/java/com/example/examplemod/SkirtAdaptiveWidth.java'
+      - 'src/main/java/com/example/examplemod/SkirtVisibleThighContacts.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltContactBudget.java'
       - 'src/main/java/com/example/examplemod/BodyPartEmoticonsFullBodyColliders.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java'
@@ -20,6 +21,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
       - 'src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java'
       - '.github/workflows/skirt-chain-java8.yml'
   push:
@@ -29,6 +31,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java'
       - 'src/main/java/com/example/examplemod/SkirtAdaptiveWidth.java'
+      - 'src/main/java/com/example/examplemod/SkirtVisibleThighContacts.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltContactBudget.java'
       - 'src/main/java/com/example/examplemod/BodyPartEmoticonsFullBodyColliders.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsFrameState.java'
@@ -39,6 +42,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
       - 'src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java'
   workflow_dispatch:
 
@@ -62,6 +66,8 @@ jobs:
             src/main/java/com/example/examplemod/SkirtGeoProfile.java \
             src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java \
             src/main/java/com/example/examplemod/SkirtAdaptiveWidth.java \
+            src/main/java/com/example/examplemod/SkirtVisibleThighContacts.java \
+            src/main/java/com/example/examplemod/JoltColliderPrimitives.java \
             src/main/java/com/example/examplemod/BodyPartJoltContactBudget.java \
             src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
             src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
@@ -70,6 +76,7 @@ jobs:
             src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java \
+            src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java \
             src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtChainTopologySmokeTest
@@ -79,5 +86,7 @@ jobs:
             com.example.examplemod.SkirtClothPoseCouplerSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtAdaptiveWidthSmokeTest
+          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtVisibleThighContactsSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.BodyPartJoltContactBudgetSmokeTest
