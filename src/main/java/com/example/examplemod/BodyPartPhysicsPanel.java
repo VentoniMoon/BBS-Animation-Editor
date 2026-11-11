@@ -95,18 +95,26 @@ public final class BodyPartPhysicsPanel
         else
             mc.fontRenderer.drawString("Solver: Jolt disabled",
                     x+9,y+209,0xFF999999);
-        if(!colliderTab&&skirtModel!=null&&skirtWaist!=null)
+        if(!colliderTab&&skirtModel!=null&&skirtWaist!=null&&
+                ("ALL".equals(skirtWaist.getName())||
+                 skirtWaist.getChildren().size()==7))
         {
-            boolean active=settings.isEnabled();
+            boolean full="ALL".equals(skirtWaist.getName());
+            boolean active=full?
+                    BodyPartSkirtPreset.isFullEnabled(skirtModel,skirtWaist):
+                    settings.isEnabled();
             Gui.drawRect(x+8,y+237,x+167,y+258,
                     EditorVisualStyle.themedSurface(active?.32F:.20F));
             Gui.drawRect(x+8,y+256,x+167,y+258,
                     active?0xFF74C1AD:EditorThemeManager.get().getAccent());
-            mc.fontRenderer.drawString("SKIRT 3+2+2  "+(active?"ON":"SET"),
+            mc.fontRenderer.drawString(
+                    (full?"SKIRT 20 STRIPS":"SKIRT 7 STRIPS")+
+                    "  "+(active?"ON":"SET"),
                     x+14,y+244,0xFFE7F1F5);
             String msg=skirtStatus;
             if(msg.isEmpty())
-                msg="Select waist with 7 strip roots";
+                msg=full?"ALL: front 7, rear 7, sides 3+3":
+                        "Seven independent strips (3+2+2)";
             mc.fontRenderer.drawString(trim(mc,msg,158),
                     x+9,y+267,0xFF9BAFB8);
         }
@@ -168,17 +176,36 @@ public final class BodyPartPhysicsPanel
         {
             try
             {
-                SkirtChainTopology.Plan<AnimationBone> plan=
-                        BodyPartSkirtPreset.inspect(skirtWaist);
-                if(settings.isEnabled())
+                if("ALL".equals(skirtWaist.getName()))
                 {
-                    BodyPartSkirtPreset.disable(skirtModel,skirtWaist);
-                    skirtStatus="Skirt disabled";
+                    if(BodyPartSkirtPreset.isFullEnabled(skirtModel,skirtWaist))
+                    {
+                        BodyPartSkirtPreset.disableFull(skirtModel,skirtWaist);
+                        skirtStatus="20 strips disabled";
+                    }
+                    else
+                    {
+                        SkirtGeoProfile.Plan<AnimationBone> plan=
+                                BodyPartSkirtPreset.enableFull(
+                                        skirtModel,skirtWaist,skirtFrame);
+                        skirtStatus=plan.stripCount()+" strips / "+
+                                plan.drivenBoneCount()+" driven bones";
+                    }
                 }
                 else
                 {
-                    BodyPartSkirtPreset.enable(skirtModel,skirtWaist,skirtFrame);
-                    skirtStatus="7 strips active (3+2+2)";
+                    BodyPartSkirtPreset.inspect(skirtWaist);
+                    if(settings.isEnabled())
+                    {
+                        BodyPartSkirtPreset.disable(skirtModel,skirtWaist);
+                        skirtStatus="7 strips disabled";
+                    }
+                    else
+                    {
+                        BodyPartSkirtPreset.enable(
+                                skirtModel,skirtWaist,skirtFrame);
+                        skirtStatus="7 strips active (3+2+2)";
+                    }
                 }
             }
             catch(IllegalArgumentException|IllegalStateException failed)
