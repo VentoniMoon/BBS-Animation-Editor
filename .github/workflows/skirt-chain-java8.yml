@@ -58,6 +58,7 @@ jobs:
             src/main/java/com/example/examplemod/SkirtAdaptiveWidth.java \
             src/main/java/com/example/examplemod/BodyPartPhysicsRotation.java \
             src/main/java/com/example/examplemod/BodyPartChameleonPhysicsPose.java \
+            src/main/java/com/example/examplemod/BodyPartChameleonCleanPose.java \
             src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java \
             src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java \
