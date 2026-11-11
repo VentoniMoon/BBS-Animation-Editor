@@ -218,6 +218,11 @@ public class BodyPartsPreviewRenderer
     private final Map<BodyPartModelData, java.util.List<float[]>> attachedCollisionShapes =
             new IdentityHashMap<BodyPartModelData, java.util.List<float[]>>();
     private int attachedCollisionFrame = -1;
+    /** Reuse one identical 32-shape selection across all 20 skirt Jolt worlds. */
+    private final Map<BodyPartModelData,BodyPartJoltContactBudget.Selection>
+            contactSelections=new IdentityHashMap<
+                    BodyPartModelData,BodyPartJoltContactBudget.Selection>();
+    private int contactSelectionFrame=-1;
     /** Full animated PARENT Emoticons skin colliders: captured once per actor
      * render, never once per hair attachment. Same native world frame and
      * source ordering as the additional Chameleon BodyPart colliders. */
@@ -511,6 +516,8 @@ public class BodyPartsPreviewRenderer
         attachedCollisionBoxes.clear();
         attachedCollisionShapes.clear();
         attachedCollisionFrame=frame;
+        contactSelections.clear();
+        contactSelectionFrame=-1;
         if(!BodyPartJoltPreviewAdapter.torsoContactsRequested())return;
         for(BodyPartModelData data:collisionPartOrder)
         {
@@ -606,6 +613,16 @@ public class BodyPartsPreviewRenderer
     private BodyPartJoltContactBudget.Selection passiveCollisionSelection(
             BodyPartModelData owner,int frame)
     {
+        if(contactSelectionFrame!=frame)
+        {
+            contactSelectionFrame=frame;
+            contactSelections.clear();
+        }
+        if(owner!=null)
+        {
+            BodyPartJoltContactBudget.Selection cached=contactSelections.get(owner);
+            if(cached!=null)return cached;
+        }
         BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
         if(frame==attachedCollisionFrame)
         {
@@ -655,6 +672,7 @@ public class BodyPartsPreviewRenderer
                 else System.out.println(report);
             }
         }
+        if(owner!=null)contactSelections.put(owner,selected);
         return selected;
     }
 
@@ -2286,6 +2304,8 @@ public class BodyPartsPreviewRenderer
         this.attachedCollisionBoxes.clear();
         this.attachedCollisionShapes.clear();
         this.attachedCollisionFrame=-1;
+        this.contactSelections.clear();
+        this.contactSelectionFrame=-1;
         this.parentEmoticonsColliders=null;
         this.parentEmoticonsColliderFrame=-1;
 
