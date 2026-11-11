@@ -68,10 +68,32 @@ rear group, very high-speed movement, and actual CAMERA export. These
 results are **not** inferred merely from successful Java compilation.
 Twenty separate Jolt worlds can also have a measurable performance cost.
 
-Future **Skirt B** is a coupled cloth model with lateral constraints
-between neighboring strips, avoiding large visible gaps. This is not
-yet implemented; a group of independent hanging chains cannot be
-claimed to act like a single stitched cloth surface.
+## Visual panel coupling (November 12, 2026)
+
+After the first in-game skirt test showed detached panel motion, the
+renderer gained `SkirtClothPoseCoupler`. Only the verified 20-strip preset
+uses it; unrelated Chameleon hair, ragdolls and physics configurations are
+unchanged.
+
+* Collect all 20 native Jolt results before publishing one frame.
+* Convert the 40 local axis-angle swings to a **shared world basis**,
+  respecting the back anchor's authored 180-degree yaw.
+* Sort the source panels around the waist, smooth adjacent motion and
+  limit violent individual bending (upper 0.40 rad, lower 0.30 rad),
+  with neighboring deviation bounds (0.12/0.16 rad).
+* Convert back to local Chameleon swing and apply with the existing
+  renderer. If some native samples are absent, no partial skirt pose is
+  published.
+* Default ON. For A/B testing add
+  `-Dbbs.editor.physics.skirt.coupling=false`.
+* No replacement Jolt DLL/JAR is needed.
+
+**Limit:** This is conservative **visual coupling** on top of the
+existing 20 Jolt worlds, NOT real native cross-strip cloth constraints.
+It prevents severe individual-panel divergence but does not guarantee
+perfect seam stitching or correct cloth-vs-leg collision under every
+pose. Real lateral native constraints and edge-aware cloth geometry
+remain future Skirt B work and need in-game validation.
 
 `Bake Physics` into Blockbuster `.dat` is **not a requirement**:
 the intended output is direct physics rendering in BBS Animation Editor.
