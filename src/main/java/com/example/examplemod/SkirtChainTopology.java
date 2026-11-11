@@ -3,6 +3,8 @@ package com.example.examplemod;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -58,6 +60,11 @@ public final class SkirtChainTopology
             throw new IllegalArgumentException(
                     "Skirt waist must have exactly seven direct branches (3+2+2)");
         Map<T,Boolean> visited=new IdentityHashMap<T,Boolean>();
+        Set<String> names=new HashSet<String>();
+        String waistName=name.apply(waist);
+        if(waistName==null||waistName.trim().isEmpty())
+            throw new IllegalArgumentException("Unnamed skirt waist");
+        names.add(waistName);
         visited.put(waist,true);
         List<List<T>> output=new ArrayList<List<T>>();
         for(T first:roots)
@@ -73,6 +80,11 @@ public final class SkirtChainTopology
                 String id=name.apply(node);
                 if(id==null||id.trim().isEmpty())
                     throw new IllegalArgumentException("Unnamed cloth bone");
+                // Physics settings persist by name, not bone identity.
+                // Duplicate names would alias two strands to one key.
+                if(!names.add(id))
+                    throw new IllegalArgumentException(
+                            "Duplicate skirt bone name: "+id);
                 nodes.add(node);
                 if(nodes.size()>MAX_DEPTH)
                     throw new IllegalArgumentException("Skirt strand too deep");
