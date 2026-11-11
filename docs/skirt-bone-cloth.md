@@ -130,3 +130,36 @@ continuously stitched 3D cloth mesh.  Some gaps remain when the required
 expansion exceeds 28%, panels rotate off their intended width axis, or
 native contacts miss a leg. Real in-game testing (step, twist, paused
 seek, export) is still required.
+
+## Emoticons leg contacts (November 12, 2026)
+
+The skirt attaches to the Emoticons `body` bone, but the **passive Jolt
+collision hull is captured from the full parent actor**. Its leg/hip
+proxies follow animated Emoticons bone matrices and do not need to be
+children of the skirt's `ALL` bone.
+
+The previous implementation had a contact-cap hazard: it gathered
+parent geometry in source-armature order and permanently stopped fitting
+late bones at the 32-shape Jolt budget; when attachments consumed the
+same global 32 slots, lower-priority objects could further hide thighs.
+
+The new skirt-specific pipeline:
+* Preserve up to 128 real parent bone geometry candidates in a bounded
+  cache (the **native** budget remains 32).
+* Assemble matching box fallback, typed primitive and owner names once,
+  so collider metadata cannot drift across paths.
+* **Only when the total exceeds 32**, select actual left/right upper-leg
+  colliders first, then pelvis, knees/lower legs, torso, other attachments.
+  Skirt detection does not depend on the lateral-coupling A/B flag.
+* Hair and non-skirt attachments retain the old selection order.
+* Every 20 animation frames, log
+  `[Jolt][SkirtLegContacts] leftThigh=true rightThigh=true installed=...`
+  when both captured thigh proxies reach the native Jolt request. If
+  either is false, emit a warning. No fake colliders are invented.
+
+The display of `true` proves selection/forwarding, **not** actual
+collision impulses or a triangle-perfect garment. For a first in-game
+test, enable `Show Jolt Colliders` and capture a wide walking stride
+with/without body collisions. Older Jolt JARs may use boxes instead
+of the newer capsule primitive API. Missing thigh source geometry still
+requires investigation of the actual Emoticons rig/skin.
