@@ -24,7 +24,7 @@ public final class SkirtClothPoseCouplerSmokeTest
         for(int i=0;i<N;i++)
         {
             boolean rear=i>=N/2;
-            f.put(i,rear?-1F:1F,.30F,.16F);
+            f.put(i,rear,rear?-1F:1F,.30F,.16F);
         }
         Map<String,float[]> result=SkirtClothPoseCoupler.couple(f.strips,f.raw);
         for(int i=0;i<N;i++)
