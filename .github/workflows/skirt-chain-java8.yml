@@ -5,19 +5,25 @@ on:
     paths:
       - 'src/main/java/com/example/examplemod/SkirtChainTopology.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
+      - 'src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
       - 'src/main/java/com/example/examplemod/BodyPartSkirtPreset.java'
       - 'src/main/java/com/example/examplemod/BodyPartPhysicsPanel.java'
       - 'src/main/java/com/example/examplemod/BodyPartsEditorPanel.java'
       - 'src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java'
       - '.github/workflows/skirt-chain-java8.yml'
   push:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/SkirtChainTopology.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
+      - 'src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java'
+      - 'src/main/java/com/example/examplemod/BodyPartsPreviewRenderer.java'
       - 'src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java'
   workflow_dispatch:
 
 jobs:
@@ -38,9 +44,13 @@ jobs:
             -d "$RUNNER_TEMP/skirt-test" \
             src/main/java/com/example/examplemod/SkirtChainTopology.java \
             src/main/java/com/example/examplemod/SkirtGeoProfile.java \
+            src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java \
             src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java \
-            src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java
+            src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java \
+            src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtChainTopologySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtGeoProfileSmokeTest
+          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtClothPoseCouplerSmokeTest
