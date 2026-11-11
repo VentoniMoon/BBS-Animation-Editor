@@ -598,87 +598,87 @@ public class BodyPartsPreviewRenderer
      * inside that specific owning body shape; external chest and parent
      * limb contacts remain active.
      */
+    /**
+     * Paired selection guarantees that GUI/debug owners, box fallback and
+     * native typed primitives refer to EXACTLY the same collider.
+     * Non-skirt strands retain their historic shape order.
+     */
+    private BodyPartJoltContactBudget.Selection passiveCollisionSelection(
+            BodyPartModelData owner,int frame)
+    {
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        if(frame==attachedCollisionFrame)
+        {
+            for(BodyPartModelData data:collisionPartOrder)
+            {
+                java.util.List<float[]> boxes=attachedCollisionBoxes.get(data);
+                java.util.List<float[]> shapes=attachedCollisionShapes.get(data);
+                if(boxes==null||shapes==null)continue;
+                String name=data.getModelNameAt(frame);
+                if(name==null||name.isEmpty())name=data.getModelName();
+                if(name==null||name.isEmpty())name="unknown";
+                for(int i=0;i<Math.min(boxes.size(),shapes.size());i++)
+                    budget.add(boxes.get(i),shapes.get(i),name);
+            }
+            if(frame==parentEmoticonsColliderFrame &&
+                    parentEmoticonsColliders!=null)
+            {
+                int count=Math.min(parentEmoticonsColliders.boxes.size(),
+                        Math.min(parentEmoticonsColliders.shapes.size(),
+                                parentEmoticonsColliders.owners.size()));
+                for(int i=0;i<count;i++)
+                    budget.add(parentEmoticonsColliders.boxes.get(i),
+                            parentEmoticonsColliders.shapes.get(i),
+                            parentEmoticonsColliders.owners.get(i));
+            }
+        }
+        boolean skirt=owner!=null &&
+                shouldCoupleSkirt(owner,getPreviewPhysicsChains(owner));
+        BodyPartJoltContactBudget.Selection selected=budget.select(skirt);
+        if(skirt && frame%20==0 && owner!=null)
+        {
+            String id=owner.getTimelineId();
+            Integer last=skirtColliderReports.get(id);
+            if(last==null||last.intValue()!=frame)
+            {
+                skirtColliderReports.put(id,Integer.valueOf(frame));
+                String report="[BBS Animation Editor][Jolt][SkirtLegContacts] "+
+                        "frame="+frame+" model="+id+
+                        " leftThigh="+selected.leftUpperLeg+
+                        " rightThigh="+selected.rightUpperLeg+
+                        " installed="+selected.boxes.length+
+                        " candidates="+selected.total+
+                        " omitted="+selected.skipped;
+                if(!selected.leftUpperLeg||!selected.rightUpperLeg)
+                    System.err.println(report+" (missing thigh collider; "+
+                            "check parent skin fit / Jolt availability)");
+                else System.out.println(report);
+            }
+        }
+        return selected;
+    }
+
+    private final Map<String,Integer> skirtColliderReports=
+            new java.util.HashMap<String,Integer>();
+
     private float[][] passiveCollisionBoxes(BodyPartModelData owner,int frame)
     {
-        if(frame!=attachedCollisionFrame)return null;
-        java.util.List<float[]> combined=new java.util.ArrayList<float[]>();
-        // User-authored Chameleon colliders have priority when the 32-form
-        // budget is full. Parent geometry fills the remaining slots.
-        for(BodyPartModelData data:collisionPartOrder)
-        {
-            java.util.List<float[]> source=attachedCollisionBoxes.get(data);
-            if(source==null)continue;
-            for(float[] box:source)
-            {
-                if(combined.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)
-                    break;
-                combined.add(box.clone());
-            }
-        }
-        if(frame==parentEmoticonsColliderFrame &&
-                parentEmoticonsColliders!=null)
-            for(float[] box:parentEmoticonsColliders.boxes)
-            {
-                if(combined.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
-                combined.add(box.clone());
-            }
-        return combined.isEmpty()?null:
-                combined.toArray(new float[combined.size()][]);
+        BodyPartJoltContactBudget.Selection selected=
+                passiveCollisionSelection(owner,frame);
+        return selected.boxes.length==0?null:selected.boxes;
     }
 
-    /** Corresponding native Jolt primitive rows in exactly the same order
-     *  as passiveCollisionBoxes(), for World-space kinematic contacts. */
-    private float[][] passiveCollisionShapes(int frame)
+    private float[][] passiveCollisionShapes(BodyPartModelData owner,int frame)
     {
-        if(frame!=attachedCollisionFrame)return null;
-        java.util.List<float[]> result=new java.util.ArrayList<float[]>();
-        for(BodyPartModelData data:collisionPartOrder)
-        {
-            java.util.List<float[]> shapes=attachedCollisionShapes.get(data);
-            if(shapes==null)continue;
-            for(float[] shape:shapes)
-            {
-                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
-                result.add(shape.clone());
-            }
-        }
-        if(frame==parentEmoticonsColliderFrame &&
-                parentEmoticonsColliders!=null)
-            for(float[] shape:parentEmoticonsColliders.shapes)
-            {
-                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
-                result.add(shape.clone());
-            }
-        return result.isEmpty()?null:result.toArray(new float[result.size()][]);
+        BodyPartJoltContactBudget.Selection selected=
+                passiveCollisionSelection(owner,frame);
+        return selected.shapes.length==0?null:selected.shapes;
     }
 
-    /** Stable per-box provenance for exactly the same ordering as
-     *  passiveCollisionBoxes() forwards to Jolt. This is debug metadata
-     *  only and never changes native collision groups or dynamics.
-     */
-    private java.util.List<String> passiveCollisionSources(int frame)
+    private java.util.List<String> passiveCollisionSources(
+            BodyPartModelData owner,int frame)
     {
-        java.util.List<String> result=new java.util.ArrayList<String>();
-        if(frame!=attachedCollisionFrame)return result;
-        for(BodyPartModelData data:collisionPartOrder)
-        {
-            java.util.List<float[]> forms=attachedCollisionBoxes.get(data);
-            if(forms==null)continue;
-            String model=data.getModelNameAt(frame);
-            if(model==null || model.isEmpty())model=data.getModelName();
-            if(model==null || model.isEmpty())model="unknown";
-            for(int i=0;i<forms.size() &&
-                    result.size()<BodyPartChameleonCollisionBoxes.MAX_BOXES;i++)
-                result.add(model);
-        }
-        if(frame==parentEmoticonsColliderFrame &&
-                parentEmoticonsColliders!=null)
-            for(String name:parentEmoticonsColliders.owners)
-            {
-                if(result.size()>=BodyPartChameleonCollisionBoxes.MAX_BOXES)break;
-                result.add(name);
-            }
-        return result;
+        return passiveCollisionSelection(owner,frame).owners;
     }
 
     /**
@@ -695,7 +695,7 @@ public class BodyPartsPreviewRenderer
                 new java.util.ArrayList<JoltContactOverlaySnapshot.Box>();
         int activeScenes=0;
         boolean anyBoxesAdded=false;
-        java.util.List<String> boxOwners=passiveCollisionSources(frame);
+        java.util.List<String> boxOwners=java.util.Collections.emptyList();
         if(!BodyPartJoltPreviewAdapter.drawContactsRequested())
             return new JoltContactOverlaySnapshot(frame,0,shapes);
 
@@ -716,6 +716,7 @@ public class BodyPartsPreviewRenderer
                 activeScenes++;
                 if(!anyBoxesAdded)
                 {
+                    boxOwners=passiveCollisionSources(data,frame);
                     float[][] installed=joltPreview.additionalBoxesFor(id,frame);
                     float[][] primitiveRows=joltPreview.additionalShapesFor(id,frame);
                     if(installed!=null)
@@ -1824,7 +1825,7 @@ public class BodyPartsPreviewRenderer
                                     BodyPartJoltContactProbe.nearest(center,contacts);
                             BodyPartJoltContactProbe.Nearest tailGap=
                                     BodyPartJoltContactProbe.nearest(tail,contacts);
-                            java.util.List<String> owners=passiveCollisionSources(frame);
+                            java.util.List<String> owners=passiveCollisionSources(data,frame);
                             String closest=linkGap.index<0 ||
                                     linkGap.index>=owners.size()?"unknown":
                                     owners.get(linkGap.index);
@@ -1924,7 +1925,7 @@ public class BodyPartsPreviewRenderer
                                     chain.settings.hasBodyCollisions()
                                             ?passiveCollisionBoxes(data,frame):null,
                                     chain.settings.hasBodyCollisions()
-                                            ?passiveCollisionShapes(frame):null);
+                                            ?passiveCollisionShapes(data,frame):null);
                             if (physical != null)
                             {
                                 // Compare REAL physical links from the native
@@ -1943,7 +1944,7 @@ public class BodyPartsPreviewRenderer
                                             nativeBoxes.length>0)
                                     {
                                         java.util.List<String> sources=
-                                                passiveCollisionSources(frame);
+                                                passiveCollisionSources(data,frame);
                                         for(int linkIndex=0;
                                                 linkIndex<nativeLinks.length;
                                                 linkIndex++)
