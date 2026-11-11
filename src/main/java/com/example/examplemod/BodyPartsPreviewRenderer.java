@@ -633,7 +633,7 @@ public class BodyPartsPreviewRenderer
             }
         }
         boolean skirt=owner!=null &&
-                shouldCoupleSkirt(owner,getPreviewPhysicsChains(owner));
+                isSkirtAttachment(owner,getPreviewPhysicsChains(owner));
         BodyPartJoltContactBudget.Selection selected=budget.select(skirt);
         if(skirt && frame%20==0 && owner!=null)
         {
@@ -1660,16 +1660,22 @@ public class BodyPartsPreviewRenderer
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.adaptiveWidth","true"));
 
-    private boolean shouldCoupleSkirt(BodyPartModelData data,
+    private boolean isSkirtAttachment(BodyPartModelData data,
             List<BodyPartPhysicsChains.Chain> chains)
     {
-        if(!SKIRT_PANEL_COUPLING || data==null ||
-                data.getBones()==null || chains.size()!=20)return false;
+        if(data==null || data.getBones()==null || chains==null ||
+                chains.size()!=20)return false;
         for(AnimationBone bone:data.getBones())
             if(bone!=null && "ALL".equals(bone.getName()) &&
                     BodyPartSkirtPreset.isFullEnabled(data,bone))
                 return true;
         return false;
+    }
+
+    private boolean shouldCoupleSkirt(BodyPartModelData data,
+            List<BodyPartPhysicsChains.Chain> chains)
+    {
+        return SKIRT_PANEL_COUPLING && isSkirtAttachment(data,chains);
     }
 
     private void probePhysicsBoneMatrices(BodyPartModelData data, BodyPart part,
