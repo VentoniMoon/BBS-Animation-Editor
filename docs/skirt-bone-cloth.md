@@ -97,3 +97,36 @@ remain future Skirt B work and need in-game validation.
 
 `Bake Physics` into Blockbuster `.dat` is **not a requirement**:
 the intended output is direct physics rendering in BBS Animation Editor.
+
+## Adaptive panel width (experimental)
+
+The first walking test showed the skirt strips deflect correctly but
+wide strides can still expose gaps at the hem. The optional
+`SkirtAdaptiveWidth` visual pass addresses this without changing the
+existing Jolt JNI artifact or the character's stride.
+
+* The supplied `skirt.geo.json` has 14 X-wide front/back panels and
+  6 Z-wide side panels. Only these 40 proven panel bones are eligible.
+* After world-space lateral coupling, measure horizontal distance between
+  neighboring **simulated hem tips** and the same clean authored hem tips.
+  Width only increases if the simulated gap grows; static seams get no
+  compensation.
+* The top bone gains at most 7% width; the bottom gains at most 28%.
+  Chameleon's `scaleX` or `scaleZ` is multiplied, keeping user-authored
+  scale and the vertical `scaleY` intact.
+* Width changes share Jolt's frame sampling, time interpolation and
+  20-strip atomic publish. Consecutive frames smoothly approach their
+  targets (maximum 7% scale change per tick).
+* `ALL`, `group42`, `group`, `group43`, other attachments,
+  and saved animation keys remain unchanged.
+* A/B flag: `-Dbbs.editor.physics.skirt.adaptiveWidth=false`.
+  Existing `-Dbbs.editor.physics.skirt.coupling=false` disables the
+  whole coupling path. Both default to true.
+* Existing body/leg contacts are retained and visual width does **not**
+  replace native cloth-vs-thigh collisions.
+
+**Limitations:** This is a bounded visual width correction, not a
+continuously stitched 3D cloth mesh.  Some gaps remain when the required
+expansion exceeds 28%, panels rotate off their intended width axis, or
+native contacts miss a leg. Real in-game testing (step, twist, paused
+seek, export) is still required.
