@@ -17,6 +17,8 @@ public final class BodyPartPhysicsFrameState
     {
         int frame;
         Map<String, float[]> swings = new HashMap<String, float[]>();
+        Map<String, SkirtAdaptiveWidth.Width> widths =
+                new HashMap<String, SkirtAdaptiveWidth.Width>();
         java.util.Set<String> joltBones = new java.util.HashSet<String>();
 
         Sample(int frame)
@@ -84,6 +86,67 @@ public final class BodyPartPhysicsFrameState
         existing.swings.put(bone, localSwing.clone());
         if (fromJolt) existing.joltBones.add(bone);
         else existing.joltBones.remove(bone);
+    }
+
+    /**
+     * Publish a bounded skirt panel WIDTH (not length). Smooth only across
+     * truly consecutive frames; a seek/rewind starts with fresh pose.
+     * The same snapshot clock as native Jolt swings keeps FBO passes stable.
+     */
+    public void acceptWidth(BodyPartModelData part,int frame,String bone,
+            SkirtAdaptiveWidth.Width width)
+    {
+        if(part==null||bone==null||width==null||
+                (width.axis!=0&&width.axis!=2)||
+                !Float.isFinite(width.multiplier)||
+                width.multiplier<1F||width.multiplier>1.28F)return;
+        Sample sample=samples.get(part);
+        if(sample==null||sample.frame!=frame)return;
+        float target=width.multiplier;
+        Sample previous=visible.get(part);
+        if(previous!=null&&previous.frame==frame-1)
+        {
+            SkirtAdaptiveWidth.Width prior=previous.widths.get(bone);
+            if(prior!=null&&prior.axis==width.axis)
+            {
+                float delta=(target-prior.multiplier)*.55F;
+                target=prior.multiplier+
+                        Math.max(-.07F,Math.min(.07F,delta));
+            }
+        }
+        sample.widths.put(bone,new SkirtAdaptiveWidth.Width(width.axis,target));
+    }
+
+    public Map<String,SkirtAdaptiveWidth.Width> forRenderWidths(
+            BodyPartModelData part,int frame)
+    {
+        if(frame!=lastTimelineFrame)return java.util.Collections.emptyMap();
+        Sample sample=visible.get(part);
+        if(sample==null)return java.util.Collections.emptyMap();
+        return new HashMap<String,SkirtAdaptiveWidth.Width>(sample.widths);
+    }
+
+    /** Exactly matches the regular Jolt swing subframe interpolation window. */
+    public Map<String,SkirtAdaptiveWidth.Width> forRenderWidthsInterpolated(
+            BodyPartModelData part,int frame,float fraction)
+    {
+        Map<String,SkirtAdaptiveWidth.Width> fallback=forRenderWidths(part,frame);
+        Sample previous=visible.get(part),current=samples.get(part);
+        if(previous==null||current==null||previous.frame!=frame-1||
+                current.frame!=frame||!Float.isFinite(fraction)||
+                !previous.widths.keySet().equals(current.widths.keySet()))
+            return fallback;
+        float t=Math.max(0F,Math.min(1F,fraction));
+        Map<String,SkirtAdaptiveWidth.Width> result=new HashMap<
+                String,SkirtAdaptiveWidth.Width>();
+        for(Map.Entry<String,SkirtAdaptiveWidth.Width> e:previous.widths.entrySet())
+        {
+            SkirtAdaptiveWidth.Width a=e.getValue(),b=current.widths.get(e.getKey());
+            if(b==null||b.axis!=a.axis)return fallback;
+            result.put(e.getKey(),new SkirtAdaptiveWidth.Width(a.axis,
+                    a.multiplier+(b.multiplier-a.multiplier)*t));
+        }
+        return result;
     }
 
     /**
@@ -173,6 +236,7 @@ public final class BodyPartPhysicsFrameState
         for(Map.Entry<String,float[]> entry:sample.swings.entrySet())
             snapshot.swings.put(entry.getKey(),entry.getValue().clone());
         snapshot.joltBones.addAll(sample.joltBones);
+        snapshot.widths.putAll(sample.widths);
         visible.put(part,snapshot);
     }
 
