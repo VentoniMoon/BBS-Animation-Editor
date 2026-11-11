@@ -1,90 +1,77 @@
-# Physics 2.0 — Chameleon Bone Cloth / Skirt A
+# Physics 2.0 — Chameleon skirt, source-authored Bone Cloth
 
-**Baseline:** `milestone/physics-2-ragdoll-stable-20261111`, commit `ed3be3e316cb59d8bdbd11d7d9ae1a7a044a1eb1`.
+**Baseline:** `milestone/physics-2-ragdoll-stable-20261111`
+(`ed3be3e316cb59d8bdbd11d7d9ae1a7a044a1eb1`). Active development
+is on PR #166, not on `main`.
 
-This branch deliberately does **not** modify the working Ragdoll, Impulse,
-Gravity or Water solvers. We render physics directly inside the editor;
-Blockbuster animation bake is not a prerequisite.
+## Ground truth: uploaded skirt.geo.json
 
-## Authoring contract: seven independent strips (3+2+2)
+The user-provided Bedrock geometry (`format_version: 1.12.0`,
+`identifier: geometry.unknown`) contains **44 named bones and 43
+cubes**. There are **20 independent panels with two driven bones each**.
 
-A Chameleon skirt attached as a Body Part needs one explicitly animated
-waistband bone with **exactly seven direct child chains**. Each strip may
-contain one or several real, linearly parented Chameleon bones. The groups
-`3 + 2 + 2` reflect the agreed seven-strip construction and strip order;
-we cannot infer which are front/side/rear without the actual model.
+* **ALL**: visible waist belt (3 cubes), and the master animated skirt root.
+* **Front anchor `group42`**: seven chains, grouped 3+2+2 for centre,
+  outer and angled corners:
+  * centre `group2→group22`, `group6→group24`,
+    `group3→group25`
+  * outer `group4→group23`, `group5→group26`
+  * angled `group18→group29`, `group17→group27`
+* **Rear anchor `group → group43`**: note `group` has a **180°
+  authored Y rotation**. The rear panels are:
+  * centre `group7→group38`, `group16→group39`,
+    `group8→group40`
+  * outer `group9→group37`, `group10→group41`
+  * angled `group20→group35`, `group19→group36`
+* **Left side**: `group14→group31`, `group15→group32`,
+  `group21→group30`
+* **Right side**: `group13→group34`, `group12→group28`,
+  `group11→group33`.
 
-```text
-waist (follows pelvis / animated, NOT a dynamic link)
- ├─ skirt_0 -> skirt_0_1 -> ...             group 3
- ├─ skirt_1 -> skirt_1_1 -> ...
- ├─ skirt_2 -> skirt_2_1 -> ...
- ├─ skirt_3 -> skirt_3_1 -> ...             group 2
- ├─ skirt_4 -> skirt_4_1 -> ...
- ├─ skirt_5 -> skirt_5_1 -> ...             group 2
- └─ skirt_6 -> skirt_6_1 -> ...
-```
+The earlier assumed one-waist/seven-strip topology was **not** sufficient
+for this file. That earlier generic preset remains available for other
+models, but is not used for activating the whole submitted skirt.
 
-The illustrative names above are NOT mandated. The engine reads the real
-`AnimationBone` hierarchy, checks for exactly seven distinct linear
-branches, and rejects cycles, repeated bone names, reused bones and
-unexpected branch forks rather than silently attaching the wrong geometry.
+## Activation
 
-## Enable prototype
+1. Import the skirt as a **Chameleon Body Part**, attached to the
+   character waist or pelvis. Its model hierarchy must expose `ALL`.
+2. Open **BODY PARTS → internal bone editor**, select exactly `ALL`,
+   then **PHYSICS → CHAINS**.
+3. Use **SKIRT 20 STRIPS SET**. The preset validates all 44 bone
+   names **and parent links before writing any physics settings**.
+4. It enables eight physics roots: `group42`, `group43`, the three
+   left and three right side strip roots. Jolt then expands these
+   eight configured roots into **20 independent two-link simulations**,
+   following `BodyPartPhysicsChains.collect()`.
+5. `ALL`, `group`, `group42` and `group43` stay animated;
+   `group42` and `group43` are enabled **as shared anchor settings**,
+   not as dynamic bodies. The authored rear Y=180° orientation is retained.
+6. Preset defaults: Gravity 1, Stiffness 0.70, Damping 0.40,
+   Body Collisions ON. The same per-bone settings serialize to scene NBT.
+7. Clicking again disables **only those eight roots**. Older
+   seven-strip panel presets are retained for other geometry.
 
-1. Add the **Chameleon skirt morph** as a BODY PART attachment to the actor's
-   waist / pelvis.
-2. Enter the attached model's internal bone editor and select the shared
-   **waistband** bone (the one directly parenting seven strips).
-3. Open **BODY PARTS → PHYSICS → CHAINS** and click **SKIRT 3+2+2 SET**.
-   If the bone hierarchy is incompatible the inspector shows the reason.
-4. On success, the selected waist's existing `BodyPartPhysicsSettings` is
-   activated with Gravity = 1, Stiffness = 0.7, Damping = 0.4 and Body
-   Collisions = ON. The seven child strips are automatically handled as
-   independent chains by `BodyPartPhysicsChains`; the waist remains animated.
-5. Save the scene as normal. This configuration uses the already existing
-   per-bone NBT field and remains compatible with older scenes.
-6. A second click disables the skirt preset on that waist. Other physics
-   settings outside this waist are untouched.
+## What is implemented and what still needs to be tested
 
-## Native physics and renderer
+The prototype reuses the Chameleon Jolt hair-chain backend instead of
+adding a new native binary. Each of the 20 independent panels is an
+existing two-link Jolt chain with the normal preview pose application and
+parent Emoticons body collision sources.
 
-The first stage deliberately **reuses** `BodyPartJoltPreviewAdapter`,
-`JoltChameleonPreviewRig` and `JoltHairChain`, which already support
-animated root motion, bone-local rotations and parent actor collision
-primitives, including Emoticons torso, arms and legs. No second Jolt native
-library is added.
-
-For this prototype, the existing opt-in system property is still required:
+Requires the usual experimental opt-in:
 `-Dbbs.editor.physics.jolt.preview=true`.
 
-Seven independent Jolt chains are initially appropriate for verifying
-correct physical rotations, collisions and damping. **Skirt B** will add
-neighbor-to-neighbor lateral constraints and better shape preservation
-once a real skirt asset confirms the native bone layout. Skirt B is not
-faked by drawing extra overlay geometry.
+**In-game validation still required** for real attachments, pelvis/thigh
+collision coverage, rotation at 0/90/180 degrees, preserving the Y=180
+rear group, very high-speed movement, and actual CAMERA export. These
+results are **not** inferred merely from successful Java compilation.
+Twenty separate Jolt worlds can also have a measurable performance cost.
 
-## Practical acceptance tests
+Future **Skirt B** is a coupled cloth model with lateral constraints
+between neighboring strips, avoiding large visible gaps. This is not
+yet implemented; a group of independent hanging chains cannot be
+claimed to act like a single stitched cloth surface.
 
-- Selecting an invalid bone doesn't modify any physics settings.
-- Activating a genuine 7-strip waist makes seven independent Jolt
-  chains appear in the log, all parented to the moving waistband.
-- Rotate the actor at 0/90/180 degrees; strips move by inertia without
-  flipping their local bone axes.
-- Walk, run, crouch and turn: cloth follows the waist, doesn't jitter
-  under repeated Preview draws or get stuck to a previous actor.
-- With body collisions ON, check hip/leg contacts for both sides
-  and inspect overlap using the existing Jolt collider debug.
-- Save/reopen and confirm enabled physics settings survive.
-- Verify no side effects in PHYSICS ragdoll, water or CAMERA preview.
-- **Direct video export** needs to be checked separately using the native
-  editor export renderer: a preview-only sample is not proof of export.
-  Do not introduce Blockbuster `.dat` baking as a workaround.
-
-## What remains before calling skirt finished
-
-The real Chameleon skirt model/geometry has not been committed to this
-repository, so the final waist bone mapping cannot yet be verified.
-Further work on Skirt B requires the native seven-strip model and a
-visual test of pelvis/thigh contacts, frame timing and direct CAMERA
-export. Nothing here claims a tested final cloth simulation.
+`Bake Physics` into Blockbuster `.dat` is **not a requirement**:
+the intended output is direct physics rendering in BBS Animation Editor.
