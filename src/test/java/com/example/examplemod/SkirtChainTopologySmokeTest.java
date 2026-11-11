@@ -63,6 +63,10 @@ public final class SkirtChainTopologySmokeTest
         Bone duplicate=shared.child("x");
         for(int i=1;i<7;i++)shared.kids.add(duplicate);
         invalid(shared,"reused cloth bone");
+        Bone sameNames=new Bone("waist");
+        for(int i=0;i<7;i++)
+            sameNames.child(i==6?"s0":"s"+i);
+        invalid(sameNames,"different bones with duplicate persistent name");
         Bone cycle=new Bone("waist");
         for(int i=0;i<7;i++)cycle.child("s"+i);
         cycle.kids.get(0).kids.add(cycle);
