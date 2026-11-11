@@ -7,8 +7,9 @@ import java.util.List;
  * The existing Jolt Chameleon preview adapter supplies the simulation,
  * bone-local writeback and parent actor body/leg contacts.
  *
- * No guessed bone names: select the actual waistband anchor in BODY PARTS.
- * The bone must have seven direct, independent linear strips (3+2+2).
+ * A generic seven-way panel preset is kept for other skirt geometries.
+ * The supplied skirt.geo.json uses the separate validated 20-panel profile
+ * rooted at ALL (front/back 7+7, sides 3+3).
  * The animated waistband remains kinematic and stays attached to the actor.
  */
 public final class BodyPartSkirtPreset
@@ -67,6 +68,91 @@ public final class BodyPartSkirtPreset
         cloth.setDamping(.40F);
         cloth.setBodyCollisions(true);
         return plan;
+    }
+
+    /** Map the actual user-authored 44-bone, 20-panel skirt. */
+    public static SkirtGeoProfile.Plan<AnimationBone> inspectFull(
+            AnimationBone root)
+    {
+        return SkirtGeoProfile.inspect(root,
+                AnimationBone::getChildren,AnimationBone::getName);
+    }
+
+    /**
+     * Enable eight existing Jolt chain roots: two seven-way anchors and
+     * six two-link side strips. Does NOT simulate ALL, group or either
+     * group42/group43 anchor; those follow the authored Chameleon pose.
+     * All validation happens before changing a single enabled flag.
+     */
+    public static SkirtGeoProfile.Plan<AnimationBone> enableFull(
+            BodyPartModelData model,AnimationBone root,int frame)
+    {
+        if(model==null||root==null||model.getBones()==null||
+                !model.getBones().contains(root))
+            throw new IllegalArgumentException(
+                    "Select the ALL bone of the attached skirt model");
+        mchorse.metamorph.api.morphs.AbstractMorph morph=
+                model.getMorphAt(frame);
+        if(morph==null||!morph.getClass().getName()
+                .endsWith(".ChameleonMorph"))
+            throw new IllegalArgumentException(
+                    "The supplied skirt requires a Chameleon attachment");
+
+        SkirtGeoProfile.Plan<AnimationBone> plan=inspectFull(root);
+        for(AnimationBone bone:plan.allBones)
+            if(!model.getBones().contains(bone))
+                throw new IllegalArgumentException(
+                        "Skirt hierarchy missing model bone "+bone.getName());
+
+        // Only this attachment's 44 recognized bones are changed.
+        // Other attachments and their physics settings stay untouched.
+        for(AnimationBone bone:plan.allBones)
+        {
+            BodyPartPhysicsSettings settings=
+                    model.getPhysicsSettings(bone.getName());
+            settings.setEnabled(false);
+        }
+        for(AnimationBone anchor:plan.physicsRoots)
+        {
+            BodyPartPhysicsSettings cloth=
+                    model.getPhysicsSettings(anchor.getName());
+            cloth.setEnabled(true);
+            cloth.setGravity(1.0F);
+            cloth.setStiffness(.70F);
+            cloth.setDamping(.40F);
+            cloth.setBodyCollisions(true);
+        }
+        return plan;
+    }
+
+    public static boolean isFullEnabled(BodyPartModelData model,
+            AnimationBone root)
+    {
+        if(model==null||root==null)return false;
+        SkirtGeoProfile.Plan<AnimationBone> plan;
+        try{plan=inspectFull(root);}
+        catch(IllegalArgumentException invalid){return false;}
+        for(AnimationBone anchor:plan.physicsRoots)
+        {
+            BodyPartPhysicsSettings cfg=
+                    model.getPhysicsSettings(anchor.getName());
+            if(cfg==null||!cfg.isEnabled())return false;
+        }
+        return true;
+    }
+
+    /** Disable only the eight physical roots of this skirt profile. */
+    public static void disableFull(BodyPartModelData model,
+            AnimationBone root)
+    {
+        if(model==null||root==null)return;
+        SkirtGeoProfile.Plan<AnimationBone> plan=inspectFull(root);
+        for(AnimationBone anchor:plan.physicsRoots)
+        {
+            BodyPartPhysicsSettings cfg=
+                    model.getPhysicsSettings(anchor.getName());
+            if(cfg!=null)cfg.setEnabled(false);
+        }
     }
 
     public static void disable(BodyPartModelData model,AnimationBone waist)
