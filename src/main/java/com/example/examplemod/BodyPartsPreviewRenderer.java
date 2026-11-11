@@ -1645,6 +1645,23 @@ public class BodyPartsPreviewRenderer
         }
     }
 
+    /** Only the exact validated 20-strip skirt receives lateral coupling. */
+    private static final boolean SKIRT_PANEL_COUPLING =
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.coupling","true"));
+
+    private boolean shouldCoupleSkirt(BodyPartModelData data,
+            List<BodyPartPhysicsChains.Chain> chains)
+    {
+        if(!SKIRT_PANEL_COUPLING || data==null ||
+                data.getBones()==null || chains.size()!=20)return false;
+        for(AnimationBone bone:data.getBones())
+            if(bone!=null && "ALL".equals(bone.getName()) &&
+                    BodyPartSkirtPreset.isFullEnabled(data,bone))
+                return true;
+        return false;
+    }
+
     private void probePhysicsBoneMatrices(BodyPartModelData data, BodyPart part,
             float[] parentMatrix, float[] torsoMatrix, int frame)
     {
@@ -1684,6 +1701,13 @@ public class BodyPartsPreviewRenderer
                     BodyPartPhysicsWorldPose.worldSource(attached, local);
             boolean advanced = false;
             boolean initializedJolt = false;
+            // Publish the entire skirt as ONE pose, only after every strip
+            // has produced a valid Jolt sample. Hair remains independent.
+            boolean coupledSkirt=shouldCoupleSkirt(data,chains);
+            List<SkirtClothPoseCoupler.Strip> skirtStrips=coupledSkirt
+                    ?new ArrayList<SkirtClothPoseCoupler.Strip>():null;
+            Map<String,float[]> skirtRaw=coupledSkirt
+                    ?new java.util.LinkedHashMap<String,float[]>():null;
             for (BodyPartPhysicsChains.Chain chain : chains)
             {
                 AnimationBone finalBone = chain.bones.get(chain.bones.size()-1);
@@ -1990,12 +2014,26 @@ public class BodyPartsPreviewRenderer
                                             + ", requestedBodyCollisions="+chain.settings.hasBodyCollisions()
                                             + ", nativeContacts="+BodyPartJoltPreviewAdapter.torsoContactsRequested()
                                             + ", export not enabled)");
-                                for (Map.Entry<String, float[]> swing : physical.entrySet())
+                                if(coupledSkirt)
                                 {
-                                    physicsFrames.accept(data, frame,
-                                            swing.getKey(), swing.getValue(), true);
-                                    advanced = true;
+                                    // Native worlds remain independent, but
+                                    // visual pose is coupled in shared world
+                                    // space (rear skirt has authored Y=180).
+                                    if(boneCount==2)
+                                    {
+                                        skirtStrips.add(new SkirtClothPoseCoupler.Strip(
+                                                names[0],names[1],
+                                                nativeWorld[0],nativeWorld[1]));
+                                        skirtRaw.putAll(physical);
+                                    }
                                 }
+                                else
+                                {
+                                    for (Map.Entry<String, float[]> swing : physical.entrySet())
+                                        physicsFrames.accept(data, frame,
+                                                swing.getKey(), swing.getValue(), true);
+                                }
+                                advanced = true;
                                 // Never combine two competing solvers for one hair strand.
                                 continue;
                             }
@@ -2011,6 +2049,18 @@ public class BodyPartsPreviewRenderer
                             + " (legacy solver disabled)");
 
             }
+            if(coupledSkirt && skirtStrips.size()==20 && skirtRaw.size()==40)
+            {
+                Map<String,float[]> stitched=
+                        SkirtClothPoseCoupler.couple(skirtStrips,skirtRaw);
+                for(Map.Entry<String,float[]> swing:stitched.entrySet())
+                    physicsFrames.accept(data,frame,swing.getKey(),
+                            swing.getValue(),true);
+            }
+            else if(coupledSkirt)
+                reportPhysicsBoneProbe(data,
+                        "Skirt Jolt incomplete: waiting for all 20 strips; partial pose not applied");
+
             // Physics writes happen AFTER normal rendering. On a paused
             // frame, an actual bone edit may publish the completed result
             // for the NEXT draw without waiting for the timeline to advance.
