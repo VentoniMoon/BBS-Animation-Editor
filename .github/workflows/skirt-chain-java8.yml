@@ -6,6 +6,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtChainTopology.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java'
+      - 'src/main/java/com/example/examplemod/SkirtConnectedClothSolver.java'
       - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
       - 'src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java'
       - 'src/main/java/com/example/examplemod/SkirtAdaptiveWidth.java'
@@ -24,6 +25,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtConnectedClothSolverSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtRingSeamGeometrySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
@@ -35,6 +37,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtChainTopology.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java'
+      - 'src/main/java/com/example/examplemod/SkirtConnectedClothSolver.java'
       - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
       - 'src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java'
       - 'src/main/java/com/example/examplemod/SkirtAdaptiveWidth.java'
@@ -50,6 +53,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtConnectedClothSolverSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtRingSeamGeometrySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
@@ -75,6 +79,7 @@ jobs:
             src/main/java/com/example/examplemod/SkirtChainTopology.java \
             src/main/java/com/example/examplemod/SkirtGeoProfile.java \
             src/main/java/com/example/examplemod/SkirtClothPoseCoupler.java \
+            src/main/java/com/example/examplemod/SkirtConnectedClothSolver.java \
             src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java \
             src/main/java/com/example/examplemod/ChameleonWeldGeometry.java \
             src/main/java/com/example/examplemod/SkirtAdaptiveWidth.java \
@@ -88,6 +93,7 @@ jobs:
             src/test/java/com/example/examplemod/SkirtChainTopologySmokeTest.java \
             src/test/java/com/example/examplemod/SkirtGeoProfileSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtClothPoseCouplerSmokeTest.java \
+            src/test/java/com/example/examplemod/SkirtConnectedClothSolverSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtRingSeamGeometrySmokeTest.java \
             src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java \
@@ -98,6 +104,8 @@ jobs:
             com.example.examplemod.SkirtGeoProfileSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtClothPoseCouplerSmokeTest
+          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtConnectedClothSolverSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtRingSeamGeometrySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
