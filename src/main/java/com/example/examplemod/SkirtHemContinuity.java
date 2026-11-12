@@ -59,6 +59,10 @@ public final class SkirtHemContinuity
     public static boolean improvesNeighbors(float left,float before,
             float after,float right)
     {
+        if(!Float.isFinite(left)||!Float.isFinite(before)||
+                !Float.isFinite(after)||!Float.isFinite(right)||
+                left<0F||before<0F||after<0F||right<0F)
+            return false;
         return after<=before+.0001F &&
                 roughness(left,after,right)<=roughness(left,before,right)+
                 .0005F;
