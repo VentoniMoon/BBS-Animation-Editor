@@ -139,7 +139,22 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         for(Bone bone:bones)
             if(bone.parent!=null)
                 weldJoint(bone.parent,bone);
-        if(SKIRT_RING_WELD)weldSkirtRing(bones);
+        if(SKIRT_RING_WELD)
+        {
+            try{weldSkirtRing(bones);}
+            catch(Exception ignored)
+            {
+                // A missing optional cube/pivot must never disable ordinary
+                // parent-child Weld or the actor's native Chameleon render.
+                if(!reportedFailure)
+                {
+                    reportedFailure=true;
+                    System.err.println("[BBS Editor][Weld][SkirtRing] "
+                            +"Skipped unsupported ring geometry: "+
+                            ignored.getClass().getSimpleName());
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
