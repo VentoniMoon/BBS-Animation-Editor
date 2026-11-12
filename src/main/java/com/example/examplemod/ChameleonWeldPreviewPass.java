@@ -44,7 +44,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             {"group20","group35"},{"group19","group36"},
             {"group14","group31"},{"group15","group32"},
             {"group21","group30"},{"group13","group34"},
-            {"group12","group28"},{"group11","group33"};
+            {"group12","group28"},{"group11","group33"}};
     private static boolean reportedFailure;
     private static boolean reportedSuccess;
 
