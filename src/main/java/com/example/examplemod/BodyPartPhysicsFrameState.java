@@ -34,6 +34,9 @@ public final class BodyPartPhysicsFrameState
             new IdentityHashMap<BodyPartModelData, Sample>();
     private final Map<BodyPartModelData, Sample> visible =
             new IdentityHashMap<BodyPartModelData, Sample>();
+    /** N-2, used ONLY to predict the N frame skirt from frozen N-1. */
+    private final Map<BodyPartModelData, Sample> older =
+            new IdentityHashMap<BodyPartModelData, Sample>();
     private int lastTimelineFrame = Integer.MIN_VALUE;
 
     public void beginFrame(int frame)
@@ -42,6 +45,9 @@ public final class BodyPartPhysicsFrameState
 
         boolean contiguous = lastTimelineFrame != Integer.MIN_VALUE &&
                 frame == lastTimelineFrame + 1;
+        Map<BodyPartModelData,Sample> beforeVisible =
+                new IdentityHashMap<BodyPartModelData,Sample>(visible);
+        older.clear();
         visible.clear();
         if (contiguous)
         {
@@ -49,7 +55,12 @@ public final class BodyPartPhysicsFrameState
             {
                 Sample previous = entry.getValue();
                 if (previous.frame == lastTimelineFrame)
+                {
                     visible.put(entry.getKey(), previous);
+                    Sample prior=beforeVisible.get(entry.getKey());
+                    if(prior!=null && prior.frame==frame-2)
+                        older.put(entry.getKey(),prior);
+                }
             }
         }
         else
@@ -124,6 +135,45 @@ public final class BodyPartPhysicsFrameState
         Sample sample=visible.get(part);
         if(sample==null)return java.util.Collections.emptyMap();
         return new HashMap<String,SkirtAdaptiveWidth.Width>(sample.widths);
+    }
+
+    /** Optional conservative one-tick phase lead for the exact 40-bone
+     * skirt. Reads ONLY the two completed/frozen Jolt samples; it cannot
+     * advance physics or expose a mid-render draw from the current tick. */
+    public Map<String,float[]> forRenderSkirtLead(BodyPartModelData part,int frame)
+    {
+        Map<String,float[]> fallback=forRender(part,frame);
+        if(fallback==null)return null;
+        Sample recent=visible.get(part),prior=older.get(part);
+        if(recent==null||prior==null||recent.frame!=frame-1 ||
+                prior.frame!=frame-2 ||
+                recent.joltBones.size()!=40 ||
+                !recent.joltBones.equals(prior.joltBones))return fallback;
+        Map<String,float[]> predicted=SkirtPoseVisualLead.swings(
+                prior.swings,recent.swings);
+        return predicted==null?fallback:predicted;
+    }
+
+    public Map<String,SkirtAdaptiveWidth.Width> forRenderSkirtWidthLead(
+            BodyPartModelData part,int frame)
+    {
+        Map<String,SkirtAdaptiveWidth.Width> fallback=
+                forRenderWidths(part,frame);
+        Sample recent=visible.get(part),prior=older.get(part);
+        if(recent==null||prior==null||recent.frame!=frame-1 ||
+                prior.frame!=frame-2 ||
+                recent.joltBones.size()!=40 ||
+                !recent.joltBones.equals(prior.joltBones))return fallback;
+        Map<String,SkirtAdaptiveWidth.Width> predicted=
+                SkirtPoseVisualLead.widths(prior.widths,recent.widths);
+        return predicted==null?fallback:predicted;
+    }
+
+    /** Frame shown in the visible snapshot, for Jolt/skirt debugging. */
+    public int visibleSourceFrame(BodyPartModelData part,int frame)
+    {
+        Sample sample=frame==lastTimelineFrame?visible.get(part):null;
+        return sample==null?Integer.MIN_VALUE:sample.frame;
     }
 
     /** Exactly matches the regular Jolt swing subframe interpolation window. */
@@ -244,6 +294,7 @@ public final class BodyPartPhysicsFrameState
     {
         samples.clear();
         visible.clear();
+        older.clear();
         lastTimelineFrame = Integer.MIN_VALUE;
     }
 }
