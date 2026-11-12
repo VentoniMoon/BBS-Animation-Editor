@@ -57,6 +57,12 @@ public final class SkirtVisibleThighContacts
      * actually reaches BEYOND the rest waist radius, not just into the
      * naturally tight inner fabric at scale 0.85. */
     private static final float RESCUE_OUTER_SURPLUS=.027F;
+    /** Perimeter continuity, NOT a global connected-cloth lattice.
+     * Reconcile neighboring contact-driven hem excursions against this
+     * frame's same native Jolt pose. Reversible A/B experiment. */
+    private static final boolean HEM_CONTINUITY=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.hemContinuity","true"));
     private static final float NEIGHBOR_RESPONSE=.16F;
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
@@ -121,6 +127,9 @@ public final class SkirtVisibleThighContacts
          * existing correction passes: clipped or retained on collision. */
         public final int silhouetteLimitedPanels,silhouetteBlockedPanels;
         public final float silhouetteRemovedOutward;
+        /** Ring-local shape regularization, after existing silhouette. */
+        public final int continuityLimitedPanels,continuityBlockedPanels;
+        public final float continuityRoughnessBefore,continuityRoughnessAfter;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -192,6 +201,30 @@ public final class SkirtVisibleThighContacts
                 int rejectedLegBoxes,int silhouetteLimitedPanels,
                 int silhouetteBlockedPanels,float silhouetteRemovedOutward)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,liftedHemPanels,liftOverlapReduction,
+                    midCandidatePanels,jointLiftPanels,midOverlapReduction,
+                    rescuedLegBoxes,rejectedLegBoxes,
+                    silhouetteLimitedPanels,silhouetteBlockedPanels,
+                    silhouetteRemovedOutward,0,0,0F,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction,int rescuedLegBoxes,
+                int rejectedLegBoxes,int silhouetteLimitedPanels,
+                int silhouetteBlockedPanels,float silhouetteRemovedOutward,
+                int continuityLimitedPanels,int continuityBlockedPanels,
+                float continuityRoughnessBefore,float continuityRoughnessAfter)
+        {
+            this.continuityLimitedPanels=continuityLimitedPanels;
+            this.continuityBlockedPanels=continuityBlockedPanels;
+            this.continuityRoughnessBefore=continuityRoughnessBefore;
+            this.continuityRoughnessAfter=continuityRoughnessAfter;
             this.silhouetteLimitedPanels=silhouetteLimitedPanels;
             this.silhouetteBlockedPanels=silhouetteBlockedPanels;
             this.silhouetteRemovedOutward=silhouetteRemovedOutward;
@@ -260,7 +293,8 @@ public final class SkirtVisibleThighContacts
     {
         return correct(strips,starting,selected,visualScale,
                 ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
-                SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION);
+                SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION,
+                HEM_CONTINUITY);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -303,6 +337,19 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
             boolean silhouette)
+    {
+        // Retain PR #189 A/B semantics for all prior regression tests.
+        return correct(strips,starting,selected,visualScale,
+                adaptiveLift,adaptiveMid,surfaceGate,silhouette,false);
+    }
+
+    /** Exact same input, enable/disable independent post-silhouette
+     * continuity without class-loading or global properties. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
+            boolean silhouette,boolean continuity)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
