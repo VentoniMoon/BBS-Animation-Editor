@@ -593,11 +593,140 @@ public final class SkirtVisibleThighContacts
                 }
             }
         }
+        int midCandidates=0,jointPanels=0;
+        float midReduction=0F;
+        if(adaptiveMid && visualScale<.995F &&
+                !directContacts.isEmpty())
+        {
+            // Stage 2 addresses the real hinge-area surface that was
+            // deliberately excluded from the hem-only contact solver.
+            // Keep it strictly adjacent to an already accepted hem
+            // contact: one stray waist/upper-thigh OBB cannot invent
+            // a new full-ring selection.
+            boolean[] nearDirect=new boolean[PANELS];
+            for(int ring=0;ring<PANELS;ring++)
+            {
+                int panel=angular.get(ring).intValue();
+                if(directDepth[panel]<=.001F)continue;
+                for(int step=-2;step<=2;step++)
+                    nearDirect[angular.get(
+                            (ring+PANELS+step)%PANELS).intValue()]=true;
+            }
+            String[] ids=new String[PANELS];
+            float[][] roots=new float[PANELS][];
+            float[][] midPressure=
+                    new float[SkirtHemContactIslands.GROUPS][PANELS];
+            float[][] midDepth=
+                    new float[SkirtHemContactIslands.GROUPS][PANELS];
+            boolean[] midContact=new boolean[PANELS];
+            for(int i=0;i<PANELS;i++)
+            {
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                ids[i]=strip.upper;
+                roots[i]=origin(strip.upperWorld);
+                if(!nearDirect[i])continue;
+                float rx=roots[i][0]-cx,rz=roots[i][2]-cz;
+                float rr=(float)Math.sqrt(rx*rx+rz*rz);
+                if(rr<.02F)continue;
+                float[] outward={rx/rr,0F,rz/rr};
+                for(int g=0;g<SkirtHemContactIslands.GROUPS;g++)
+                {
+                    float pressure=middleResidualScore(strip,copy,active,
+                            outward,surfaceMargin,g);
+                    if(pressure>.015F)
+                    {
+                        midContact[i]=true;
+                        midPressure[g][i]=Math.min(.35F,pressure);
+                        midDepth[g][i]=Math.min(.25F,pressure);
+                    }
+                }
+                if(midContact[i])midCandidates++;
+            }
+            // Both legs may contact the same seam. Preserve one
+            // three-panel angular corner per leg, not 20 unrelated
+            // root rotations. This selection uses the SAME accepted
+            // active colliders as the subsequent trial/validation.
+            float[] jointWeights=SkirtAdaptiveHemLift.weights(
+                    ids,roots,midContact,midPressure,midDepth);
+            for(int i=0;i<PANELS;i++)
+            {
+                float weight=jointWeights[i];
+                if(weight<.01F)continue;
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                float rx=roots[i][0]-cx,rz=roots[i][2]-cz;
+                float rr=(float)Math.sqrt(rx*rx+rz*rz);
+                if(rr<.02F)continue;
+                float[] tangent={-rz/rr,0F,rx/rr};
+                float[] outward={rx/rr,0F,rz/rr};
+                float startMiddle=middleResidualScore(strip,copy,active,
+                        outward,surfaceMargin,-1);
+                if(startMiddle<=.015F)continue;
+                float startHem=hemResidualScore(strip,copy,active,
+                        outward,surfaceMargin);
+                float[] upperOriginal=copy.get(strip.upper);
+                float[] lowerOriginal=copy.get(strip.lower);
+                float upperCap=Math.min(MAX_MID_ROOT_CAP,
+                        MAX_FINAL_ROOT+MAX_EXTRA_MID_ROOT*weight);
+                float lowerCap=SkirtAdaptiveHemLift.collisionCap(
+                        SkirtScaleContactResponse.hemAngleCap(visualScale),
+                        weight);
+                float bestMiddle=startMiddle;
+                float bestCombined=startMiddle+startHem;
+                float[] bestUpper=null,bestLower=null;
+                // A joint rather than a lower-only search. Preserve the
+                // waist anchor: both rotations are around existing bone
+                // pivots, never a translation or morph scale change.
+                for(int up=1;up<=4;up++)
+                {
+                    float upperStep=MAX_EXTRA_MID_ROOT*weight*up/4F;
+                    for(int down=0;down<=2;down++)
+                    {
+                        Map<String,float[]> trial=
+                                new LinkedHashMap<String,float[]>();
+                        trial.put(strip.upper,upperOriginal.clone());
+                        trial.put(strip.lower,lowerOriginal.clone());
+                        if(!bend(trial,strip.upper,strip.upperWorld,tangent,
+                                upperStep,upperCap))continue;
+                        if(down>0)
+                        {
+                            float lowerStep=.05F*down*weight;
+                            if(!bend(trial,strip.lower,strip.lowerWorld,tangent,
+                                    lowerStep,lowerCap))continue;
+                        }
+                        float mid=middleResidualScore(strip,trial,active,
+                                outward,surfaceMargin,-1);
+                        if(mid>=bestMiddle-.002F)continue;
+                        float hem=hemResidualScore(strip,trial,active,
+                                outward,surfaceMargin);
+                        // Correcting the hinge is not allowed to move
+                        // a thigh THROUGH the lower hem: at most a
+                        // tiny numerical increase in the hem residual.
+                        if(hem>startHem+Math.max(.01F,startHem*.025F))
+                            continue;
+                        float combined=mid+hem;
+                        if(combined>=bestCombined-.003F)continue;
+                        bestCombined=combined;
+                        bestMiddle=mid;
+                        bestUpper=trial.get(strip.upper);
+                        bestLower=trial.get(strip.lower);
+                    }
+                }
+                if(bestUpper!=null)
+                {
+                    copy.put(strip.upper,bestUpper);
+                    copy.put(strip.lower,bestLower);
+                    touched[i]=true;
+                    jointPanels++;
+                    midReduction+=startMiddle-bestMiddle;
+                }
+            }
+        }
         int total=0;
         for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
                 directContacts,candidatePanels,directContacts.size(),limited,
-                additionalLifts,overlapReduction);
+                additionalLifts,overlapReduction,
+                midCandidates,jointPanels,midReduction);
     }
 
     /**
