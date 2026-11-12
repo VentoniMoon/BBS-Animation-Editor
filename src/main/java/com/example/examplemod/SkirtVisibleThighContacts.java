@@ -33,7 +33,9 @@ public final class SkirtVisibleThighContacts
     private static final float MAX_FINAL_ROOT=.52F;
     private static final float MAX_FINAL_HEM=.60F;
     private static final float NEIGHBOR_RESPONSE=.16F;
-    private static final float LEG_OUTWARD_THRESHOLD=.68F;
+    /* Skip neutral hips only if the entire oriented leg volume sits
+     * well inside the waist, never based on the bone CENTER alone. */
+    private static final float LEG_OUTWARD_THRESHOLD=.82F;
 
     public static final class Result
     {
@@ -102,8 +104,10 @@ public final class SkirtVisibleThighContacts
 
         // A stationary thigh lives UNDER the waist. Its approximate hull
         // can intersect the inner cloth surface even in a neutral stance.
-        // Only a thigh swung beyond the inner waist radius is allowed to
-        // deflect the hanging fabric. This is a relative model-space test.
+        // A lifted thigh can extend THROUGH the skirt while its BONE CENTER
+        // remains near the pelvis: use the entire fitted collider envelope
+        // rather than the center-only test. Only then run actual OBB overlap
+        // against the lower hem sample points.
         float waistRadius=0F;
         for(SkirtClothPoseCoupler.Strip strip:strips)
         {
@@ -116,8 +120,32 @@ public final class SkirtVisibleThighContacts
         for(Leg leg:legs)
         {
             float x=leg.p[0]-cx,z=leg.p[2]-cz;
-            if((float)Math.sqrt(x*x+z*z)>=
-                    Math.max(.09F,waistRadius*LEG_OUTWARD_THRESHOLD))
+            float distance=(float)Math.sqrt(x*x+z*z);
+            // Project all three oriented half-extents onto the outward
+            // horizontal direction, not only the collider center. This
+            // handles rotated thighs whose broad corner reaches the skirt.
+            float[] radial=distance>.0001F?
+                    new float[]{x/distance,0F,z/distance}:
+                    new float[]{1F,0F,0F};
+            float support=0F;
+            for(int axis=0;axis<3;axis++)
+                support+=Math.abs(dot(radial,leg.basis[axis]))*
+                        leg.p[7+axis];
+            // A broad but VERTICAL neutral thigh can graze the short
+            // skirt edge. Do not apply a resting outward force all around
+            // the waist; require either outward-moving center or a thigh
+            // whose longest fitted axis visibly tilts off vertical.
+            int longest=0;
+            if(leg.p[8]>leg.p[7])longest=1;
+            if(leg.p[9]>leg.p[7+longest])longest=2;
+            float tilted=(float)Math.sqrt(
+                    leg.basis[longest][0]*leg.basis[longest][0]+
+                    leg.basis[longest][2]*leg.basis[longest][2]);
+            boolean raised=tilted>=.30F;
+            boolean movedOut=distance>=waistRadius*.68F;
+            if(distance+support>=
+                    Math.max(.09F,waistRadius*LEG_OUTWARD_THRESHOLD) &&
+                    (raised||movedOut))
                 active.add(leg);
         }
         if(active.isEmpty())return new Result(copy,0,0F);

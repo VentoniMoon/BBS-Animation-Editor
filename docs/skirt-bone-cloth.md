@@ -231,3 +231,29 @@ strides may still expose local intersections that need actual native
 cloth-body constraints; do not solve those by restoring unlimited
 outward rotation. The in-game neutral standing and walking poses both
 need validation.
+
+## Contact envelope correction after latest walk screenshots
+
+The November 12 front-view photos show that the skirt has regained its
+neutral bell shape, yet a raised leg still emerges through the front
+panels. Investigation found the new conservative contact pass rejects
+leg colliders solely because their **center** stays close to the waist
+center. A high-step thigh can reach a panel with its far corner while
+its center remains inward. Therefore the hem never gets an outward
+correction even though the body collider exists.
+
+The filter now considers the **whole oriented collider envelope**
+(center radius + radial projection of its 3 rotated half-extents).
+To avoid restoring the old umbrella/neutral-pose blowout, an envelope
+that reaches the skirt only counts when its bone is moved outward from
+the waist or its longest fitted axis is tilted by at least ~17°.
+The following geometric surface overlap checks and tight per-panel
+angular caps are unchanged. No synthetic thigh collider is created.
+
+Standalone regressions cover: raised thigh edge reaching cloth with
+the bone center still inside the waist, broad vertical neutral thigh
+not expanding the skirt, and original wide-step/mirrored cases.
+
+This repairs the **rejection gate**, not the full cloth simulation.
+Minecraft gameplay testing is required to confirm whether the real
+Emoticons pose uses the expected mesh-fitted bounds/axes. `[Jolt][SkirtSurface]` logs remain available every 20 frames.
