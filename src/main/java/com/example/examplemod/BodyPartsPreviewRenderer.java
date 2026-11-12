@@ -2215,9 +2215,11 @@ public class BodyPartsPreviewRenderer
                                     SkirtVisibleThighContacts.auditHemBonePose(
                                             skirtStrips,stitched,
                                             contacts,skirtVisualScale);
-                            String limiting=before.hitPanels>12&&
-                                    clearance.contactDepths.isEmpty()?
-                                    "possible-all-ring-guard":
+                            String limiting=clearance.locallyLimited?
+                                    "per-leg-contact-islands":
+                                    clearance.candidatePanels>12 &&
+                                    clearance.selectedPanels==0?
+                                    "full-ring-guard":
                                     before.uniqueHits>0&&
                                     clearance.touchedPanels==0?
                                     "filtered-or-angle-cap":
@@ -2250,6 +2252,9 @@ public class BodyPartsPreviewRenderer
                                     " hemBeforePanels="+hemBefore.hitPanels+
                                     " hemAfterPanels="+hemAfter.hitPanels+
                                     " correctedPanels="+clearance.touchedPanels+
+                                    " directCandidates="+clearance.candidatePanels+
+                                    " directSelected="+clearance.selectedPanels+
+                                    " islandsLimited="+clearance.locallyLimited+
                                     " hemStrongestLeg="+hemAfter.dominantOwner+
                                     " hemBoxes="+hemBefore.perLegCoverage);
                             System.out.println(
@@ -2269,6 +2274,9 @@ public class BodyPartsPreviewRenderer
                                 " exactHits="+clearance.exactSurfaceHits+
                                 " scale="+skirtVisualScale+
                                 " localContactPanels="+thighContactDepths.size()+
+                                " contactCandidates="+clearance.candidatePanels+
+                                " contactSelected="+clearance.selectedPanels+
+                                " islandsLimited="+clearance.locallyLimited+
                                 " weld="+data.isWeldEnabled()+
                                 " thighLeft="+contacts.leftUpperLeg+
                                 " thighRight="+contacts.rightUpperLeg);
