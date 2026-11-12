@@ -296,3 +296,39 @@ surface. No vertex sample fix alone can guarantee complete elimination of
 severe leg clipping; for that, a genuinely coupled cloth rig/solver with
 surface contacts is needed. Compare Weld ON/OFF and a high step after the
 three CI checks, before merging.
+
+## Circumferential ring seam Weld (experimental, 2026-11-12)
+
+A new under-the-skirt screenshot shows abrupt, disconnected geometry at
+the visible lower hem, especially around individual tilted front panels.
+This is **not** just missing Jolt leg collisions: the older Chameleon
+Weld only joins parent-to-child cube ends (vertical seams), never the
+neighboring physical strips around the skirt circumference.
+
+`ChameleonWeldPreviewPass` now recognizes only the exact 44-bone
+`SkirtGeoProfile`, and when that Chameleon morph has **WELD GEOMETRY
+ON**, it processes both the upper and lower levels of the twenty-panel
+ring. The algorithm:
+
+* Sorts adjacent source cubes by their true authored REST centers,
+  without assuming that front/rear/side bone names are in angular order.
+* Finds genuine vertical edge pairs of decoded Chameleon cube quads,
+  incorporating cube rotation/pivot and animated bone matrices.
+* Validates nearby source edges (max rest mismatch 0.115 blocks); joins
+  corresponding top and bottom edge vertices in animated world space.
+* Bounds each visual vertex motion to 0.11 blocks so a large leg lunge
+  cannot turn the skirt into a rubber sheet or reopen the umbrella bug.
+* Works only inside the scoped Chameleon render and restores every
+  edited shared ModelVertex at the end. No .dat keys, actual geometry
+  file or Jolt solver state is modified.
+* Keeps original hair/other-model Weld behavior; supports an A/B flag
+  `-Dbbs.editor.physics.skirt.ringWeld=false` (default true) while
+  retaining ordinary Weld if enabled.
+
+**Limit:** This is a render-time **surface seam** correction, not a
+native linked cloth solver. If strips are too separated in rest or
+animation space, or the one-cube-per-bone test fails, it safely skips
+that seam instead of creating distorted stretched geometry. It can
+reduce geometric breaks, but does not guarantee perfect collision with
+thighs or a truly unified mesh at large angles. Test normal standing,
+side views, lifted thighs and Weld ON/OFF.

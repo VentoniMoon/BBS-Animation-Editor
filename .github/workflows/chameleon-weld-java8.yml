@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'src/main/java/com/example/examplemod/ChameleonWeld*.java'
+      - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
+      - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/BBSAnimationEditor.java'
       - 'src/test/java/com/example/examplemod/ChameleonWeldGeometrySmokeTest.java'
       - 'src/test/weld-stubs/**'
@@ -12,6 +14,8 @@ on:
   pull_request:
     paths:
       - 'src/main/java/com/example/examplemod/ChameleonWeld*.java'
+      - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
+      - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/BBSAnimationEditor.java'
       - 'src/test/java/com/example/examplemod/ChameleonWeldGeometrySmokeTest.java'
       - 'src/test/weld-stubs/**'
@@ -61,6 +65,8 @@ jobs:
             src/test/weld-stubs/mchorse/chameleon/ClientProxy.java \
             src/test/weld-stubs/mchorse/chameleon/lib/data/model/*.java \
             src/main/java/com/example/examplemod/ChameleonWeldGeometry.java \
+            src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java \
+            src/main/java/com/example/examplemod/SkirtGeoProfile.java \
             src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java \
             src/main/java/com/example/examplemod/ChameleonWeldRuntime.java \
             src/main/java/com/example/examplemod/ChameleonWeldMorphTransformer.java \

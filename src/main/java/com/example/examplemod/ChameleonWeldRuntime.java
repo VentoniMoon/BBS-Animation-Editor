@@ -97,7 +97,8 @@ public final class ChameleonWeldRuntime
                 {
                     reportedSuccess=true;
                     System.out.println("[BBS Editor][Weld][Runtime] Per-morph Weld active: "+
-                            scope.getSeamCount()+" matching joints");
+                            scope.getSeamCount()+" matching joints"+
+                            " (skirt ring="+scope.getSkirtRingSeamCount()+")");
                 }
             }
         }
