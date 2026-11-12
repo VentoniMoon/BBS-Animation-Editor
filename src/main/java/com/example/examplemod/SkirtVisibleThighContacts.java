@@ -48,6 +48,15 @@ public final class SkirtVisibleThighContacts
     private static final float MID_CONTACT_END=.70F;
     private static final float MAX_EXTRA_MID_ROOT=.13F;
     private static final float MAX_MID_ROOT_CAP=.65F;
+    /** Experimental contact-weighted envelope relative to native Jolt.
+     * Set false to reproduce the exact pre-silhouette #188 behaviour. */
+    private static final boolean SILHOUETTE_PRESERVATION=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.silhouettePreservation","true"));
+    /** Only rescue an otherwise rejected thigh when its oriented hull
+     * actually reaches BEYOND the rest waist radius, not just into the
+     * naturally tight inner fabric at scale 0.85. */
+    private static final float RESCUE_OUTER_SURPLUS=.027F;
     private static final float NEIGHBOR_RESPONSE=.16F;
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
@@ -108,6 +117,10 @@ public final class SkirtVisibleThighContacts
         /** The old tilt/center gate rejected these boxes; strong
          * outer-surface penetration rescued only some of them. */
         public final int rescuedLegBoxes,rejectedLegBoxes;
+        /** Contact-weighted outward shape regularization after the three
+         * existing correction passes: clipped or retained on collision. */
+        public final int silhouetteLimitedPanels,silhouetteBlockedPanels;
+        public final float silhouetteRemovedOutward;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -163,6 +176,25 @@ public final class SkirtVisibleThighContacts
                 float midOverlapReduction,
                 int rescuedLegBoxes,int rejectedLegBoxes)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,liftedHemPanels,liftOverlapReduction,
+                    midCandidatePanels,jointLiftPanels,midOverlapReduction,
+                    rescuedLegBoxes,rejectedLegBoxes,0,0,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction,int rescuedLegBoxes,
+                int rejectedLegBoxes,int silhouetteLimitedPanels,
+                int silhouetteBlockedPanels,float silhouetteRemovedOutward)
+        {
+            this.silhouetteLimitedPanels=silhouetteLimitedPanels;
+            this.silhouetteBlockedPanels=silhouetteBlockedPanels;
+            this.silhouetteRemovedOutward=silhouetteRemovedOutward;
             this.rescuedLegBoxes=rescuedLegBoxes;
             this.rejectedLegBoxes=rejectedLegBoxes;
             this.midCandidatePanels=midCandidatePanels;
@@ -228,7 +260,7 @@ public final class SkirtVisibleThighContacts
     {
         return correct(strips,starting,selected,visualScale,
                 ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
-                SURFACE_EVIDENCE_LEG_GATE);
+                SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -258,6 +290,19 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate)
+    {
+        // Keep existing 7-argument collision regression mode unchanged.
+        return correct(strips,starting,selected,visualScale,adaptiveLift,
+                adaptiveMid,surfaceGate,false);
+    }
+
+    /** Pure A/B mode comparing the same Jolt sample to the silhouette
+     * envelope without changing process-wide Java system properties. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
+            boolean silhouette)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
