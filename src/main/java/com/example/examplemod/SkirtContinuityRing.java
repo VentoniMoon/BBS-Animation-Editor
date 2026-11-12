@@ -199,27 +199,70 @@ public final class SkirtContinuityRing
     private static boolean joinLateral(Cube a,Cube b,
             Map<String,Integer> ids,int[] union)
     {
-        // Four vertical edges per cube. Match complete upright sides at
-        // BOTH ends so there are no discontinuous rectangular "tabs".
+        // Two upright edges bound the neighboring face: its inner AND
+        // outer corners must both be shared. Joining just the nearest
+        // edge produced the user's original disconnected tab silhouette.
         List<Edge> ea=uprightEdges(a),eb=uprightEdges(b);
-        float best=Float.POSITIVE_INFINITY;
-        Edge left=null,right=null;
-        for(Edge x:ea)for(Edge y:eb)
+        if(ea.size()<2||eb.size()<2)return false;
+        final float[] ac=centroid(a.rest),bc=centroid(b.rest);
+        final float[] towardB=sub(bc,ac),towardA=sub(ac,bc);
+        Collections.sort(ea,new Comparator<Edge>()
         {
-            float low=distance(a.rest[x.low],b.rest[y.low]);
-            float high=distance(a.rest[x.high],b.rest[y.high]);
-            float gap=Math.max(low,high);
-            if(gap<=MAX_REST_SEAM && gap<best)
+            @Override public int compare(Edge left,Edge right)
             {
-                best=gap;left=x;right=y;
+                return Float.compare(faceScore(a,left,towardB,ac),
+                        faceScore(a,right,towardB,ac))*-1;
             }
+        });
+        Collections.sort(eb,new Comparator<Edge>()
+        {
+            @Override public int compare(Edge left,Edge right)
+            {
+                return Float.compare(faceScore(b,left,towardA,bc),
+                        faceScore(b,right,towardA,bc))*-1;
+            }
+        });
+        Edge[] sidesA={ea.get(0),ea.get(1)};
+        Edge[] sidesB={eb.get(0),eb.get(1)};
+        float direct=Math.max(restGap(a,sidesA[0],b,sidesB[0]),
+                restGap(a,sidesA[1],b,sidesB[1]));
+        float crossed=Math.max(restGap(a,sidesA[0],b,sidesB[1]),
+                restGap(a,sidesA[1],b,sidesB[0]));
+        if(crossed<direct)
+        {
+            Edge tmp=sidesB[0];sidesB[0]=sidesB[1];sidesB[1]=tmp;
+            direct=crossed;
         }
-        if(left==null)return false;
-        link(union,ids.get(a.name)*CORNERS+left.low,
-                ids.get(b.name)*CORNERS+right.low);
-        link(union,ids.get(a.name)*CORNERS+left.high,
-                ids.get(b.name)*CORNERS+right.high);
+        if(direct>MAX_REST_SEAM)return false;
+        for(int e=0;e<2;e++)
+        {
+            Edge x=sidesA[e],y=sidesB[e];
+            link(union,ids.get(a.name)*CORNERS+x.low,
+                    ids.get(b.name)*CORNERS+y.low);
+            link(union,ids.get(a.name)*CORNERS+x.high,
+                    ids.get(b.name)*CORNERS+y.high);
+        }
         return true;
+    }
+
+    private static float faceScore(Cube cube,Edge edge,
+            float[] direction,float[] center)
+    {
+        float[] a=cube.rest[edge.low],b=cube.rest[edge.high];
+        return ((a[0]+b[0])*.5F-center[0])*direction[0]+
+                ((a[1]+b[1])*.5F-center[1])*direction[1]+
+                ((a[2]+b[2])*.5F-center[2])*direction[2];
+    }
+
+    private static float restGap(Cube a,Edge x,Cube b,Edge y)
+    {
+        return Math.max(distance(a.rest[x.low],b.rest[y.low]),
+                distance(a.rest[x.high],b.rest[y.high]));
+    }
+
+    private static float[] sub(float[] a,float[] b)
+    {
+        return new float[]{a[0]-b[0],a[1]-b[1],a[2]-b[2]};
     }
 
     private static List<Edge> uprightEdges(Cube cube)
