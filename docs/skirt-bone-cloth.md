@@ -854,3 +854,69 @@ umbrella protection and spatially limited per-leg contact islands
 remain unchanged. Compare identical gait frames around 118, 127,
 and the subsequent stride, with Weld enabled; in-game clipping,
 number of rescued boxes, and `hemAfterUnique` must all be inspected.
+
+## Physics 2.0 — Skirt Silhouette Preservation (PR #189)
+
+After PR #188, the short Chameleon skirt at authored visual scale
+**0.85** clips less through the raised thighs, but the sides sometimes
+open into rigid wings. The last in-game `[SkirtHemAudit]` covers
+frames 20–32 (remove repeated log entries during timeline scrubbing):
+about **2,298** hem source-point intersections before correction and
+**1,186** after it (48.4% reduction). On 11/13 frames all **six**
+allowed mid-fabric panels receive joint corrections, and at frames
+24–25 `gateRescuedBoxes=6` refers to three nearly identical fitted
+Emoticons boxes per thigh, not six independent legs. Reducing *all*
+collision strength would restore the earlier visible leg penetration;
+we need a silhouette constraint in the pose selection itself.
+
+The new deterministic post-correction envelope:
+
+* Runs only on the compact 20-strip Chameleon skirt when actual leg
+  collisions were detected, after Jolt, seam coupling, hem lift and
+  two-bone mid collision. No background state, friction or animation
+  key changes. Disable via
+  `-Dbbs.editor.physics.skirt.silhouettePreservation=false` for
+  the exact PR #188 A/B behavior.
+* Uses the original **Jolt-coupled** bone swings on the *same frame*
+  as the natural pose. Compare the transformed tip and hinge positions,
+  not raw Euler/axis-angle magnitudes, so the authored scale and
+  directional changes are respected.
+* Retains a larger **0.105-block** outward/lift envelope for the
+  strongest direct contact per named thigh. Its two physical
+  angular neighbors get **0.052 blocks** each; other incidental
+  contact strips get only **0.025 blocks** of extra outward motion.
+  This controls wing-like spreading without clamping legitimate native
+  Jolt flutter. It does not hardcode character left/right panel IDs.
+* Nlerp world-equivalent local unit quaternions between the natural
+  and corrected swings; binary search for the strongest correction
+  fitting the silhouette limit.
+* Evaluate the middle and hem cube contact before accepting: each
+  constrained panel must keep at least **68% of the collision benefit**
+  of the current solver relative to its natural frame pose, allowing
+  only a tiny numerical tolerance. If preserving silhouette would
+  return a deep leg penetration, the corrected pose wins and the
+  blocked attempt is counted, not silently undone.
+* To stop new false spreading in a stationary compact skirt, the
+  fallback for a previously tilt/center-rejected thigh additionally
+  requires that its oriented OBB hull reach at least **0.027 blocks
+  beyond the natural waist-root radius**. At most **one rescued OBB
+  per named leg side** is retained: the three differently sized fit
+  boxes of one Emoticons thigh are not three separate signals.
+  Normal accepted Jolt boxes, native physics, and the existing safety
+  islands are unchanged.
+* New per-frame log fields on `[SkirtHemAudit]` and
+  `[SkirtContactAudit]`: `silhouetteLimitedPanels`,
+  `silhouetteBlockedPanels`, `silhouetteRemovedOutward`. Compare
+  these with `hemAfterUnique`, `jointLiftPanels`,
+  `gateRescuedBoxes` during the same walking frame range. A blocked
+  limit means the geometric collision benefit would have been lost.
+* Java 8 smoke tests cover per-contact envelope ordering, 68%
+  collision-benefit retention, full-size scale 1 untouched,
+  neutral/remote thigh safety, one rescued box per leg side,
+  deterministic seeking and no mutation of native pose.
+
+The reported collisions concern decoded source Chameleon cube samples,
+not the final Weld GPU triangles. A negative numeric result can
+still be worth retaining if visually more natural, but the final
+decision must compare the same walk sequence **in game**. No
+merge to `main` before user review.
