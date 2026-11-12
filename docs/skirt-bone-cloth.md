@@ -368,3 +368,49 @@ It does not know future leg positions or guarantee no body penetration.
 At sudden gait reversals, the estimate may overshoot. Evaluate the
 same five frames with this flag ON/OFF and compare shape and clipping
 before merging.
+
+## Connected skirt grid experiment (November 12)
+
+The latest six-frame walk still shows a thigh passing through the skirt
+despite Weld, real Chameleon surface probes and one-tick pose lead.
+These fixes improve appearance, but **20 separately simulated Jolt
+hair-like strips do not form a shared physical cloth**.
+
+`SkirtConnectedClothSolver` is an experimental post-Jolt, pure-Java-8
+position-based constraint stage. It works on the validated 20-strip,
+two-link Chameleon skirt only:
+
+* Uses real world-space native rest joints, terminal tips and the Jolt
+  swings to build 20 belt anchors, 20 midpoints and 20 hem endpoints.
+* Pins all belt anchors to the animated actor. Projects vertical segment
+  lengths, neighboring mid/hem ring links and cross-panel diagonal links
+  together for nine iterations, so no strip can move entirely separately.
+* Projects the shared nodes and link centers outward from the **actual
+  fitted Emoticons leg OBBs**, with a small surface thickness. Badly
+  oversized/overlapping leg boxes are ignored rather than inflating
+  the entire skirt.
+* Restricts midpoint/hem translation and subsequent bone rotations, so
+  a bad collider cannot turn the skirt into a rigid umbrella. Converts
+  corrected world links back to native Chameleon local axis-angle,
+  including the rear Y=180 rest basis.
+* Jolt is still responsible for time evolution; this grid is the shared
+  constraint/contact solve applied to its pose before the existing
+  adaptive-width and visual Weld stages. Old independent
+  `SkirtVisibleThighContacts` is bypassed only while the unified
+  grid is enabled.
+* A/B flag:
+  `-Dbbs.editor.physics.skirt.connectedCloth=false`
+  restores the previous behavior.
+* Log `[Jolt][SkirtClothGrid] frame=... panels=...
+  colliders=... ignored=... contactBefore=... contactAfter=...
+  seamStretch=...` every 20 ticks.
+
+**Limitations:** This is a connected **bone rig**, not a complete
+triangle-mesh cloth solver. Source cuboids remain rigid between the
+two physical joints, and a rapid high-step can still cross cube
+surfaces even if the joint endpoints are outside the leg. Contact
+projection is intentionally bounded and may not resolve very deep
+penetrations in one frame. In-game checks on neutral standing,
+five-tick walking sequence, underside, and Weld ON/OFF must precede a
+claim that clipping is fixed. This experimental change is not for
+production release until validated.
