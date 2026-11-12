@@ -21,8 +21,19 @@ public final class SkirtVisibleThighContacts
     private static final int PANELS=20;
     private static final float WIDTH=.0625F; // actual 2px wide panels / 16
     private static final float SURFACE_MARGIN=.023F;
-    private static final float MAX_EXTRA_SWING=.95F;
-    private static final float MAX_FINAL_SWING=1.3F;
+    /*
+     * Previous correction repeatedly rotated ROOTS by up to 0.95 rad
+     * and propagated to neighbors. Both legs near the standing waist
+     * could open all 20 panels into an inverted umbrella.
+     *
+     * Keep the waist nearly fixed; allow the hem to give locally.
+     */
+    private static final float MAX_EXTRA_ROOT=.095F;
+    private static final float MAX_EXTRA_HEM=.28F;
+    private static final float MAX_FINAL_ROOT=.52F;
+    private static final float MAX_FINAL_HEM=.60F;
+    private static final float NEIGHBOR_RESPONSE=.16F;
+    private static final float LEG_OUTWARD_THRESHOLD=.68F;
 
     public static final class Result
     {
@@ -89,96 +100,136 @@ public final class SkirtVisibleThighContacts
         }
         cx/=PANELS;cz/=PANELS;
 
+        // A stationary thigh lives UNDER the waist. Its approximate hull
+        // can intersect the inner cloth surface even in a neutral stance.
+        // Only a thigh swung beyond the inner waist radius is allowed to
+        // deflect the hanging fabric. This is a relative model-space test.
+        float waistRadius=0F;
+        for(SkirtClothPoseCoupler.Strip strip:strips)
+        {
+            float[] root=origin(strip.upperWorld);
+            float x=root[0]-cx,z=root[2]-cz;
+            waistRadius+=(float)Math.sqrt(x*x+z*z);
+        }
+        waistRadius/=PANELS;
+        List<Leg> active=new ArrayList<Leg>();
+        for(Leg leg:legs)
+        {
+            float x=leg.p[0]-cx,z=leg.p[2]-cz;
+            if((float)Math.sqrt(x*x+z*z)>=
+                    Math.max(.09F,waistRadius*LEG_OUTWARD_THRESHOLD))
+                active.add(leg);
+        }
+        if(active.isEmpty())return new Result(copy,0,0F);
+
         boolean[] touched=new boolean[PANELS];
         float peak=0F;
-        // Multiple small projected steps avoid abrupt rotations from deep
-        // penetration. A late/frame-skipped native solver remains bounded.
-        float[] added=new float[PANELS];
-        for(int iteration=0;iteration<3;iteration++)
+        float[] need=new float[PANELS];
+        // Evaluate ONLY lower-fabric contact. Upper samples near the waist
+        // used to treat the resting hips as a penetration and push outward
+        // the entire skirt. A single pass prevents repeated amplifying
+        // corrections from the same stationary overlapping collider.
+        for(int i=0;i<PANELS;i++)
         {
-            float[] need=new float[PANELS];
-            float currentPeak=0F;
-            for(int i=0;i<PANELS;i++)
+            SkirtClothPoseCoupler.Strip strip=strips.get(i);
+            float[] root=origin(strip.upperWorld);
+            float rx=root[0]-cx,rz=root[2]-cz;
+            float rr=(float)Math.sqrt(rx*rx+rz*rz);
+            if(rr<.02F)continue;
+            float[] outward={rx/rr,0F,rz/rr};
+            float[] hinge=origin(strip.lowerWorld);
+            float[] upperSwing=worldSwing(strip.upperWorld,
+                    copy.get(strip.upper));
+            float[] lowerSwing=worldSwing(strip.lowerWorld,
+                    copy.get(strip.lower));
+            float[] upper=rotate(sub(hinge,root),upperSwing);
+            float[] lower=rotate(rotate(sub(strip.tipWorld,hinge),
+                    lowerSwing),upperSwing);
+            float[] pivot=add(root,upper);
+            float[] hemAxis=rotate(rotate(
+                    widthAxisWorld(strip.lowerWorld,strip.lower),
+                    lowerSwing),upperSwing);
+            Point[] samples={
+                    new Point(add(pivot,mul(lower,.55F)),hemAxis),
+                    new Point(add(pivot,mul(lower,.80F)),hemAxis),
+                    new Point(add(pivot,lower),hemAxis)};
+            float desired=0F;
+            for(Point sample:samples)
             {
-                SkirtClothPoseCoupler.Strip s=strips.get(i);
-                float[] root=origin(s.upperWorld);
-                float rx=root[0]-cx,rz=root[2]-cz;
-                float rr=(float)Math.sqrt(rx*rx+rz*rz);
-                if(rr<.02F)continue;
-                float[] outward={rx/rr,0F,rz/rr};
-                float[] hinge=origin(s.lowerWorld);
-                float[] r1=worldSwing(s.upperWorld,copy.get(s.upper));
-                float[] r2=worldSwing(s.lowerWorld,copy.get(s.lower));
-                float[] upper=rotate(sub(hinge,root),r1);
-                float[] lower=rotate(rotate(sub(s.tipWorld,hinge),r2),r1);
-                float[] pivot=add(root,upper);
-                float[] topAxis=rotate(widthAxisWorld(s.upperWorld,s.upper),r1);
-                float[] hemAxis=rotate(rotate(widthAxisWorld(s.lowerWorld,s.lower),r2),r1);
-                Point[] samples={
-                        new Point(lerp(root,pivot,.65F),topAxis),
-                        new Point(lerp(root,pivot,.92F),topAxis),
-                        new Point(add(pivot,mul(lower,.25F)),hemAxis),
-                        new Point(add(pivot,mul(lower,.50F)),hemAxis),
-                        new Point(add(pivot,mul(lower,.80F)),hemAxis),
-                        new Point(add(pivot,lower),hemAxis)};
-                float deepest=0F, angle=0F;
-                for(Point sample:samples)
+                float[] side=mul(normalize(sample.axis),WIDTH);
+                for(int edge=-1;edge<=1;edge++)
                 {
-                    float[] side=mul(normalize(sample.axis),WIDTH);
-                    for(int edge=-1;edge<=1;edge++)
+                    float[] point=add(sample.p,mul(side,edge));
+                    for(Leg leg:active)
                     {
-                        float[] p=add(sample.p,mul(side,edge));
-                        for(Leg leg:legs)
+                        float overlap=outwardPenetration(point,leg,outward);
+                        if(overlap>0F)
                         {
-                            float overlap=outwardPenetration(p,leg,outward);
-                            if(overlap>deepest)
-                            {
-                                deepest=overlap;
-                                float distance=Math.max(.16F,length(sub(sample.p,root)));
-                                angle=(float)Math.atan(overlap/distance);
-                            }
+                            peak=Math.max(peak,overlap);
+                            float distance=Math.max(.14F,
+                                    length(sub(sample.p,pivot)));
+                            desired=Math.max(desired,
+                                    (float)Math.atan(overlap/distance));
                         }
                     }
                 }
-                if(deepest>0F)
-                {
-                    need[i]=Math.min(.55F,angle);
-                    peak=Math.max(peak,deepest);
-                    currentPeak=Math.max(currentPeak,deepest);
-                }
             }
-            if(currentPeak<=.0001F)break;
-            for(int i=0;i<PANELS;i++)
-            {
-                // Limited lateral propagation keeps neighboring cloth strips
-                // aligned without the legacy ring coupler undoing the contact.
-                float target=Math.max(need[i],Math.max(
-                        need[(i+1)%PANELS]*.38F,
-                        need[(i+PANELS-1)%PANELS]*.38F));
-                if(target<.002F)continue;
-                float step=Math.min(Math.min(.43F,target),
-                        MAX_EXTRA_SWING-added[i]);
-                if(step<=.001F)continue;
-                SkirtClothPoseCoupler.Strip s=strips.get(i);
-                float[] root=origin(s.upperWorld);
-                float rx=root[0]-cx,rz=root[2]-cz;
-                float rr=(float)Math.sqrt(rx*rx+rz*rz);
-                if(rr<.02F)continue;
-                // Down cross outward: rotating a downward hanging panel by
-                // positive angle about this tangent moves the cloth outward.
-                float[] tangent={-rz/rr,0F,rx/rr};
-                float[] before=worldSwing(s.upperWorld,copy.get(s.upper));
-                float[] after=compose(new float[]{tangent[0],tangent[1],tangent[2],step},before);
-                if(after[3]>MAX_FINAL_SWING)continue;
-                float[] local=localSwing(s.upperWorld,after);
-                if(!valid(local,4))continue;
-                copy.put(s.upper,local);
-                touched[i]=true;
-                added[i]+=step;
-            }
+            need[i]=Math.min(.34F,desired);
         }
-        int total=0;for(boolean b:touched)if(b)total++;
+
+        for(int i=0;i<PANELS;i++)
+        {
+            // A subtle neighboring response avoids disconnected cardboard
+            // panels but does not transmit thigh impact around the waist.
+            float contact=Math.max(need[i],Math.max(
+                    need[(i+1)%PANELS]*NEIGHBOR_RESPONSE,
+                    need[(i+PANELS-1)%PANELS]*NEIGHBOR_RESPONSE));
+            if(contact<.012F)continue;
+            SkirtClothPoseCoupler.Strip strip=strips.get(i);
+            float[] root=origin(strip.upperWorld);
+            float rx=root[0]-cx,rz=root[2]-cz;
+            float rr=(float)Math.sqrt(rx*rx+rz*rz);
+            if(rr<.02F)continue;
+            float[] tangent={-rz/rr,0F,rx/rr};
+
+            // Preserve the natural waist silhouette: <6 degrees extra at
+            // the root; the lower link bends by up to 16 degrees instead.
+            float upperStep=Math.min(MAX_EXTRA_ROOT,contact*.28F);
+            float lowerStep=Math.min(MAX_EXTRA_HEM,contact*.85F);
+            boolean changed=false;
+            changed|=bend(copy,strip.upper,strip.upperWorld,tangent,
+                    upperStep,MAX_FINAL_ROOT);
+            changed|=bend(copy,strip.lower,strip.lowerWorld,tangent,
+                    lowerStep,MAX_FINAL_HEM);
+            touched[i]=changed;
+        }
+        int total=0;
+        for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak);
+    }
+
+    private static boolean bend(Map<String,float[]> swings,String id,
+            float[] matrix,float[] tangent,float amount,float maximum)
+    {
+        if(amount<.003F)return false;
+        float[] current=worldSwing(matrix,swings.get(id));
+        float[] after=compose(new float[]{
+                tangent[0],tangent[1],tangent[2],amount},current);
+        if(after[3]>maximum)
+        {
+            // Use the remaining safe outward bend, not a full skip that
+            // would leave an apparently random isolated unresponsive panel.
+            float available=Math.max(0F,maximum-current[3]);
+            if(available<.003F)return false;
+            after=compose(new float[]{
+                    tangent[0],tangent[1],tangent[2],
+                    Math.min(available,amount)},current);
+            if(after[3]>maximum+.0001F)return false;
+        }
+        float[] local=localSwing(matrix,after);
+        if(!valid(local,4))return false;
+        swings.put(id,local);
+        return true;
     }
 
     /** A point must actually overlap the leg's FULL box. If it does,
