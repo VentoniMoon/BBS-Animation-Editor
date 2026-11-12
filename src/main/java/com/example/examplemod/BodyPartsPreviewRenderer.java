@@ -2236,6 +2236,9 @@ public class BodyPartsPreviewRenderer
                                     " correctedPanels="+clearance.touchedPanels+
                                     " gateRescuedBoxes="+clearance.rescuedLegBoxes+
                                     " gateRejectedBoxes="+clearance.rejectedLegBoxes+
+                                    " silhouetteLimitedPanels="+clearance.silhouetteLimitedPanels+
+                                    " silhouetteBlockedPanels="+clearance.silhouetteBlockedPanels+
+                                    " silhouetteRemovedOutward="+clearance.silhouetteRemovedOutward+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " midCandidates="+clearance.midCandidatePanels+
@@ -2261,6 +2264,9 @@ public class BodyPartsPreviewRenderer
                                     " correctedPanels="+clearance.touchedPanels+
                                     " gateRescuedBoxes="+clearance.rescuedLegBoxes+
                                     " gateRejectedBoxes="+clearance.rejectedLegBoxes+
+                                    " silhouetteLimitedPanels="+clearance.silhouetteLimitedPanels+
+                                    " silhouetteBlockedPanels="+clearance.silhouetteBlockedPanels+
+                                    " silhouetteRemovedOutward="+clearance.silhouetteRemovedOutward+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " midCandidates="+clearance.midCandidatePanels+
@@ -2285,6 +2291,7 @@ public class BodyPartsPreviewRenderer
                                 " activePanels="+clearance.touchedPanels+
                                 " liftedHemPanels="+clearance.liftedHemPanels+
                                 " jointLiftPanels="+clearance.jointLiftPanels+
+                                " silhouetteLimitedPanels="+clearance.silhouetteLimitedPanels+
                                 " maxPenetration="+clearance.peakOverlap+
                                 " exactSamples="+clearance.exactSurfaceSamples+
                                 " exactHits="+clearance.exactSurfaceHits+
