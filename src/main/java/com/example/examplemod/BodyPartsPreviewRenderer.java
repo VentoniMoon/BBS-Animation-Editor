@@ -2125,6 +2125,9 @@ public class BodyPartsPreviewRenderer
                                 +"frame="+frame+
                                 " activePanels="+clearance.touchedPanels+
                                 " maxPenetration="+clearance.peakOverlap+
+                                " exactSamples="+clearance.exactSurfaceSamples+
+                                " exactHits="+clearance.exactSurfaceHits+
+                                " weld="+data.isWeldEnabled()+
                                 " thighLeft="+contacts.leftUpperLeg+
                                 " thighRight="+contacts.rightUpperLeg);
                 }
