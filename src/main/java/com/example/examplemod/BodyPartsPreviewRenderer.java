@@ -1682,6 +1682,10 @@ public class BodyPartsPreviewRenderer
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.visibleThighContacts","true"));
 
+    /** One diagnostic snapshot per timeline frame, not per GL render pass. */
+    private final Map<String,Integer> skirtSurfaceReportedFrames=
+            new java.util.HashMap<String,Integer>();
+
     private boolean isSkirtAttachment(BodyPartModelData data,
             List<BodyPartPhysicsChains.Chain> chains)
     {
@@ -2120,16 +2124,30 @@ public class BodyPartsPreviewRenderer
                             SkirtVisibleThighContacts.correct(
                                     skirtStrips,stitched,contacts);
                     stitched=clearance.swings;
-                    if(frame%20==0)
+                    String diagKey=data.getTimelineId();
+                    Integer previouslyReported=skirtSurfaceReportedFrames.get(diagKey);
+                    if(frame%20==0 &&
+                            (previouslyReported==null ||
+                             previouslyReported.intValue()!=frame))
+                    {
+                        skirtSurfaceReportedFrames.put(diagKey,frame);
                         System.out.println("[BBS Animation Editor][Jolt][SkirtSurface] "
                                 +"frame="+frame+
                                 " activePanels="+clearance.touchedPanels+
                                 " maxPenetration="+clearance.peakOverlap+
                                 " exactSamples="+clearance.exactSurfaceSamples+
                                 " exactHits="+clearance.exactSurfaceHits+
+                                " uniqueHits="+clearance.uniqueSurfaceHits+
+                                " legBoxes="+clearance.availableLegBoxes+
+                                " activeLegBoxes="+clearance.activeLegBoxes+
+                                " hitPanels="+clearance.hitPanelNames+
                                 " weld="+data.isWeldEnabled()+
                                 " thighLeft="+contacts.leftUpperLeg+
                                 " thighRight="+contacts.rightUpperLeg);
+                        System.out.println("[BBS Animation Editor][Jolt][SkirtColliders] "+
+                                "frame="+frame+" model="+diagKey+
+                                " owners="+clearance.colliderSummary);
+                    }
                 }
                 for(Map.Entry<String,float[]> swing:stitched.entrySet())
                     physicsFrames.accept(data,frame,swing.getKey(),

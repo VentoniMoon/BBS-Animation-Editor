@@ -30,6 +30,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
         actualDiagonalCubeSurfaceDetectsMissedLeg();
+        repeatedLegOverlapDoesNotDoubleCountSurfaceVertices();
         decodedQuadRotationIsPreserved();
         broadVerticalNeutralThighDoesNotFlare();
         bothLegsOnlyDeflectLocalPanels();
@@ -158,6 +159,38 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "real geometry collision must stay localized");
         require(corrected.swings.get(BONES[0][0])[3]<=.1001F,
                 "cube collision must not balloon waist");
+    }
+
+    /** Two leg contacts can overlap the SAME visible cube point.
+     * The raw hit count can exceed the number of source vertices; the
+     * unique count must never do so. This was observed in frame 40 logs. */
+    private static void repeatedLegOverlapDoesNotDoubleCountSurfaceVertices()
+    {
+        Fixture f=new Fixture(false);
+        SkirtClothPoseCoupler.Strip original=f.strips.get(0);
+        f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                original.upper,original.lower,
+                original.upperWorld,original.lowerWorld,original.tipWorld,
+                null,new float[][]{{.42F,-.30F,0F}}));
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.right_leg");
+        SkirtVisibleThighContacts.Result result=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,budget.select(true));
+        require(result.exactSurfaceSamples==1,
+                "test must contain exactly one decoded surface point");
+        require(result.exactSurfaceHits==2,
+                "both overlapping thigh boxes should be counted as contacts");
+        require(result.uniqueSurfaceHits==1,
+                "one cloth vertex must not be counted twice");
+        require(result.colliderSummary.contains("emoticons.left_leg") &&
+                result.colliderSummary.contains("emoticons.right_leg"),
+                "real leg ownership must survive diagnostic grouping");
+        require(result.hitPanelNames.contains("group2"),
+                "diagnostic must identify affected panel");
     }
 
     private static void decodedQuadRotationIsPreserved()
