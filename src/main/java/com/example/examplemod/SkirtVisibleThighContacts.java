@@ -972,6 +972,15 @@ public final class SkirtVisibleThighContacts
             float[] upperSwing,float[] lowerSwing,boolean lower,
             float minFraction)
     {
+        return addExactSurface(out,source,root,hinge,tip,upperSwing,
+                lowerSwing,lower,minFraction,1.45F);
+    }
+
+    private static int addExactSurface(List<Point> out,float[][] source,
+            float[] root,float[] hinge,float[] tip,
+            float[] upperSwing,float[] lowerSwing,boolean lower,
+            float minFraction,float maxFraction)
+    {
         if(source==null||source.length==0||source.length>128)return 0;
         float[] down=sub(tip,root);
         float length=length(down);
@@ -982,7 +991,7 @@ public final class SkirtVisibleThighContacts
         {
             if(!valid(p,3))continue;
             float fraction=dot(sub(p,root),direction)/length;
-            if(fraction<minFraction || fraction>1.45F)continue;
+            if(fraction<minFraction || fraction>maxFraction)continue;
             float[] world;
             if(lower)
             {
@@ -996,6 +1005,72 @@ public final class SkirtVisibleThighContacts
             n++;
         }
         return n;
+    }
+
+    /**
+     * Collision between the thigh and the middle of a two-link panel,
+     * 40–70% of the full belt-to-hem length. The zone deliberately
+     * excludes the upper resting waist: broad standing thigh boxes
+     * naturally sit behind the top of the garment.
+     *
+     * Reads only the same accepted native-fitted Emoticons leg OBBs
+     * used by the regular corrective pass. A given sampled surface point
+     * contributes its deepest overlap just once, not three times for the
+     * three near-identical fitted OBBs from one Emoticons thigh.
+     * No results from the unfiltered, diagnostic-only audit are fed back
+     * into the solver, so discovery and validation share one geometry set.
+     */
+    private static float middleResidualScore(
+            SkirtClothPoseCoupler.Strip strip,
+            Map<String,float[]> swings,List<Leg> legs,
+            float[] outward,float margin,int side)
+    {
+        float[] root=origin(strip.upperWorld);
+        float[] hinge=origin(strip.lowerWorld);
+        float[] upper=worldSwing(strip.upperWorld,
+                swings.get(strip.upper));
+        float[] lower=worldSwing(strip.lowerWorld,
+                swings.get(strip.lower));
+        List<Point> samples=new ArrayList<Point>();
+        int exact=addExactSurface(samples,strip.upperSurfaceWorld,
+                root,hinge,strip.tipWorld,upper,lower,false,
+                MID_CONTACT_START,MID_CONTACT_END);
+        exact+=addExactSurface(samples,strip.lowerSurfaceWorld,
+                root,hinge,strip.tipWorld,upper,lower,true,
+                MID_CONTACT_START,MID_CONTACT_END);
+        // In a normal Chameleon model these exact points are present.
+        // Only a wholly missing source gets the centerline fallback.
+        // If real source geometry exists but is ABOVE the middle zone,
+        // do not replace it with imaginary collider points.
+        boolean hasUpper=strip.upperSurfaceWorld!=null &&
+                strip.upperSurfaceWorld.length>0;
+        boolean hasLower=strip.lowerSurfaceWorld!=null &&
+                strip.lowerSurfaceWorld.length>0;
+        if(exact==0&&!hasUpper&&!hasLower)
+        {
+            float[] upperLink=rotate(sub(hinge,root),upper);
+            float[] lowerLink=rotate(rotate(sub(strip.tipWorld,hinge),
+                    lower),upper);
+            samples.add(new Point(add(root,mul(upperLink,.95F)),null));
+            samples.add(new Point(add(add(root,upperLink),
+                    mul(lowerLink,.27F)),null));
+        }
+        float score=0F;
+        for(Point sample:samples)
+        {
+            float deepest=0F;
+            for(Leg leg:legs)
+            {
+                if(side>=0 &&
+                        SkirtHemContactIslands.sideOf(leg.owner)!=side)
+                    continue;
+                deepest=Math.max(deepest,unclampedPenetration(
+                        sample.p,leg,outward,margin));
+            }
+            if(deepest>.0001F)
+                score+=deepest+.006F;
+        }
+        return score;
     }
 
     /**
