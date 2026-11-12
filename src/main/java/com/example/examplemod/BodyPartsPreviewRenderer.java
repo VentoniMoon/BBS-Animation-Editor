@@ -1681,12 +1681,12 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_VISIBLE_THIGH_CONTACTS =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.visibleThighContacts","true"));
-    /** Experimental shared 20x2 cloth grid: pinned waist, connected
-     * neighbors, and leg volume projection. The old independent-strand
-     * collision response is disabled while this stage owns the grid. */
+    /** Experimental shared 20x2 cloth grid. Disabled by default after
+     * the in-game rigid-tube regression: enable explicitly for A/B testing
+     * once a local-contact test is needed. Normal Jolt + Weld remain on. */
     private static final boolean SKIRT_CONNECTED_CLOTH =
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.connectedCloth","true"));
+                    "bbs.editor.physics.skirt.connectedCloth","false"));
     /** Jolt sample is computed AFTER the Emoticons actor draw. This bounded
      * skirt-only pose prediction reduces the 1-tick actor/cloth mismatch. */
     private static final boolean SKIRT_VISUAL_PHASE_LEAD =
