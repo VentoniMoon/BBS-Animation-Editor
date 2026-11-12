@@ -2236,6 +2236,9 @@ public class BodyPartsPreviewRenderer
                                     " correctedPanels="+clearance.touchedPanels+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
+                                    " midCandidates="+clearance.midCandidatePanels+
+                                    " jointLiftPanels="+clearance.jointLiftPanels+
+                                    " midOverlapReduction="+clearance.midOverlapReduction+
                                     " postUnique="+after.uniqueHits+
                                     " postRaw="+after.rawHits+
                                     " postPanels="+after.hitPanels+
@@ -2256,6 +2259,9 @@ public class BodyPartsPreviewRenderer
                                     " correctedPanels="+clearance.touchedPanels+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
+                                    " midCandidates="+clearance.midCandidatePanels+
+                                    " jointLiftPanels="+clearance.jointLiftPanels+
+                                    " midOverlapReduction="+clearance.midOverlapReduction+
                                     " directCandidates="+clearance.candidatePanels+
                                     " directSelected="+clearance.selectedPanels+
                                     " islandsLimited="+clearance.locallyLimited+
@@ -2274,6 +2280,7 @@ public class BodyPartsPreviewRenderer
                                 +"frame="+frame+
                                 " activePanels="+clearance.touchedPanels+
                                 " liftedHemPanels="+clearance.liftedHemPanels+
+                                " jointLiftPanels="+clearance.jointLiftPanels+
                                 " maxPenetration="+clearance.peakOverlap+
                                 " exactSamples="+clearance.exactSurfaceSamples+
                                 " exactHits="+clearance.exactSurfaceHits+
