@@ -35,6 +35,8 @@ public final class SkirtVisibleThighContactsSmokeTest
         adaptiveLiftMustOnlyImproveRealCompactThighContact();
         jointMidCorrectionImprovesFrontCornerWithoutFlaredWaist();
         jointMidCorrectionRejectsRestingThighAndFullScale();
+        outerSurfaceRescuesCenterGateMissWithoutFlare();
+        innerWaistAndSinglePointCannotRescue();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
@@ -505,6 +507,111 @@ public final class SkirtVisibleThighContactsSmokeTest
                     near(fullA.swings.get(name)[k],
                             fullB.swings.get(name)[k],
                             .00001F,"full-size skirt changed by compact solver");
+    }
+
+    /**
+     * Reproduce the frame-118/127 failure mechanism: center still inside
+     * the waist and vertical hull, so the original center/tilt heuristic
+     * vetoes ALL correction even while actual outer mid+hem vertices are
+     * deeply inside a valid, animated Emoticons thigh collider.
+     */
+    private static void outerSurfaceRescuesCenterGateMissWithoutFlare()
+    {
+        Fixture f=new Fixture(false);
+        SkirtClothPoseCoupler.Strip original=f.strips.get(0);
+        f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                original.upper,original.lower,original.upperWorld,
+                original.lowerWorld,original.tipWorld,
+                new float[][]{
+                    {.40F,-.19F,-.015F},{.42F,-.21F,0F},
+                    {.43F,-.24F,.015F},{.40F,-.25F,.015F}},
+                new float[][]{
+                    {.40F,-.31F,-.015F},{.42F,-.32F,0F},
+                    {.43F,-.33F,.015F},{.40F,-.35F,.015F}}));
+
+        BodyPartJoltContactBudget input=new BodyPartJoltContactBudget();
+        float[] central={.12F,-.25F,0F,0F,0F,0F,1F,
+                .36F,.40F,.13F};
+        input.add(central,typed(.12F,-.25F,0F),
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection contact=input.select(true);
+        SkirtVisibleThighContacts.Result old=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,contact,.85F,true,true,false);
+        SkirtVisibleThighContacts.Result corrected=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,contact,.85F,true,true,true);
+        require(old.rescuedLegBoxes==0 && old.touchedPanels==0,
+                "old inward center/vertical gate should reject contact");
+        require(corrected.rescuedLegBoxes==1 &&
+                corrected.rejectedLegBoxes==0,
+                "deep real outer surface should rescue one genuine thigh");
+        require(corrected.candidatePanels>0 &&
+                corrected.touchedPanels>0 &&
+                corrected.touchedPanels<=7,
+                "surface recovery must be bounded to a small thigh arc");
+        SkirtVisibleThighContacts.Audit before=
+                SkirtVisibleThighContacts.auditHemBonePose(
+                        f.strips,f.swings,contact,.85F);
+        SkirtVisibleThighContacts.Audit after=
+                SkirtVisibleThighContacts.auditHemBonePose(
+                        f.strips,corrected.swings,contact,.85F);
+        require(after.uniqueHits<=before.uniqueHits,
+                "fallback must not increase total hem intersections");
+        require(f.swings.get(BONES[0][0])[3]==0F,
+                "source Jolt pose must never be mutated");
+        require(corrected.swings.get(BONES[10][0])[3]==0F,
+                "opposite waist panel must remain at rest");
+        SkirtVisibleThighContacts.Result repeated=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,contact,.85F,true,true,true);
+        for(String[] names:BONES)
+            for(String name:names)
+                for(int k=0;k<4;k++)
+                    near(corrected.swings.get(name)[k],
+                            repeated.swings.get(name)[k],.00001F,
+                            "rescue must not accumulate across repeated frames");
+    }
+
+    private static void innerWaistAndSinglePointCannotRescue()
+    {
+        Fixture f=new Fixture(false);
+        SkirtClothPoseCoupler.Strip original=f.strips.get(0);
+        // One strong isolated point is NOT proof of an exposed outward
+        // surface. The real cube needs at least two deep vertices.
+        f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                original.upper,original.lower,original.upperWorld,
+                original.lowerWorld,original.tipWorld,
+                new float[][]{{.42F,-.21F,0F}},null));
+        BodyPartJoltContactBudget input=new BodyPartJoltContactBudget();
+        input.add(new float[]{.12F,-.25F,0F,0F,0F,0F,1F,
+                    .36F,.40F,.13F},
+                typed(.12F,-.25F,0F),"emoticons.left_leg");
+        SkirtVisibleThighContacts.Result single=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        input.select(true),.85F,true,true,true);
+        require(single.rescuedLegBoxes==0 && single.touchedPanels==0,
+                "one isolated inner or missing face must not activate skirt");
+
+        Fixture neutral=new Fixture(false);
+        SkirtClothPoseCoupler.Strip panel=neutral.strips.get(0);
+        neutral.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                panel.upper,panel.lower,panel.upperWorld,
+                panel.lowerWorld,panel.tipWorld,
+                new float[][]{
+                    {.42F,-.19F,-.015F},{.43F,-.21F,.015F}},
+                new float[][]{
+                    {.42F,-.31F,-.015F},{.43F,-.33F,.015F}}));
+        BodyPartJoltContactBudget atRest=new BodyPartJoltContactBudget();
+        atRest.add(new float[]{.18F,-.27F,0F,0F,0F,0F,1F,
+                    .23F,.32F,.14F},
+                typed(.18F,-.27F,0F),"emoticons.left_leg");
+        SkirtVisibleThighContacts.Result still=
+                SkirtVisibleThighContacts.correct(
+                        neutral.strips,neutral.swings,
+                        atRest.select(true),.85F,true,true,true);
+        require(still.rescuedLegBoxes==0 && still.touchedPanels==0,
+                "broad upright neutral hip touching the inner edge must not flare");
     }
 
     private static void shuffledBoneEnumerationKeepsSamePhysicalNeighbors()
