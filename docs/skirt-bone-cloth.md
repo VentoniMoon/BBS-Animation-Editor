@@ -296,3 +296,36 @@ surface. No vertex sample fix alone can guarantee complete elimination of
 severe leg clipping; for that, a genuinely coupled cloth rig/solver with
 surface contacts is needed. Compare Weld ON/OFF and a high step after the
 three CI checks, before merging.
+
+## Reading the November 12 full in-game diagnostic
+
+In the provided `latest.log`, both Emoticons thigh colliders are selected
+(`leftThigh=true rightThigh=true`) and all 20 strips initialize with
+32 passive contact shapes. At frames 0 and 20:
+`exactSamples=860 exactHits=0 activePanels=0`.
+At the user's frame 40:
+`exactSamples=860 exactHits=1606 activePanels=20 maxPenetration=0.25`.
+
+These numbers are **not** 1606 distinct intersections: one surface
+sample can be inside several overlapping body collision boxes. The prior
+diagnostic had no way to identify which owner/shape generated each hit.
+The fact that every panel was touched is suspicious, but does not
+alone tell whether the fitted thigh boxes are too large, in a wrong
+world frame, or merely multiple overlapping correct boxes.
+
+The new **read-only** diagnostic adds:
+* `uniqueHits` = distinct source surface points that entered any fitted
+  leg box (never more than `exactSamples`);
+* `legBoxes` and `activeLegBoxes` = real available and filtered source
+  leg OBB counts;
+* `hitPanels` = names of panels with observed surface contacts;
+* `[Jolt][SkirtColliders]` = leg owner, relative X/Z center, local OBB
+  half extents X/Y/Z, and owner-specific overlap counts (first 8 active
+  OBBs, overflow count if needed).
+
+Diagnostics appear only once per timeline frame at 0/20/40 etc.
+The Jolt and Weld physics behavior is unchanged in this branch. The
+next in-game capture is intended to determine whether the problem is a
+misfitted collider, wrong pose alignment, or insufficient physical
+constraints. Do not increase collision impulses or relaxation yet:
+frame 40 already saturates the overlap measure.
