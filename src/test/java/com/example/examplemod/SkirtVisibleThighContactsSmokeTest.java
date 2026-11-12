@@ -27,6 +27,8 @@ public final class SkirtVisibleThighContactsSmokeTest
     public static void main(String[] args)
     {
         wideStridePushesClothOutward();
+        standingThighsMustNotInflateHem();
+        bothLegsOnlyDeflectLocalPanels();
         absentLegDoesNotInventContact();
         mirroredRearKeepsCorrectWorldPush();
         skirtUsesFullThighBoxWhileHairKeepsCapsule();
@@ -44,11 +46,59 @@ public final class SkirtVisibleThighContactsSmokeTest
         require(result.touchedPanels>0,"leg must deflect skirt surfaces");
         require(result.peakOverlap>.02F,"penetration must be detected");
         float angle=result.swings.get(BONES[0][0])[3];
-        require(angle>.10F && angle<=1.301F,"unexpected native correction "+angle);
+        float hem=result.swings.get(BONES[0][1])[3];
+        require(angle>.02F && angle<=.1001F,
+                "upper skirt root over-deflected "+angle);
+        require(hem>.10F && hem<=.281F,
+                "lower skirt panel did not flex locally "+hem);
+        require(result.touchedPanels<=7,
+                "a single thigh flared too many panels: "+result.touchedPanels);
         near(f.swings.get(BONES[0][0])[3],0F,.00001F,
                 "physics input must not be mutated");
         near(result.swings.get(BONES[10][0])[3],0F,.00001F,
                 "opposite skirt panel must not flare");
+    }
+
+    private static void standingThighsMustNotInflateHem()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        // Neutral hips: real thigh hulls near the middle of the waist.
+        // Their broad fitted boxes must not form an inflated umbrella.
+        budget.add(box(.12F,-.23F,0F),typed(.12F,-.23F,0F),
+                "emoticons.left_leg");
+        budget.add(box(-.12F,-.23F,0F),typed(-.12F,-.23F,0F),
+                "emoticons.right_leg");
+        SkirtVisibleThighContacts.Result result=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,budget.select(true));
+        require(result.touchedPanels==0,
+                "resting hip colliders should not inflate entire skirt");
+        for(String[] names:BONES)
+            for(String name:names)
+                near(result.swings.get(name)[3],0F,.00001F,
+                        "neutral frame changed "+name);
+    }
+
+    private static void bothLegsOnlyDeflectLocalPanels()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        budget.add(box(-.42F,-.27F,0F),typed(-.42F,-.27F,0F),
+                "emoticons.right_leg");
+        SkirtVisibleThighContacts.Result result=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,budget.select(true));
+        require(result.touchedPanels>0 && result.touchedPanels<15,
+                "two leg contacts must not cause whole-ring flare: "+
+                result.touchedPanels);
+        for(String[] names:BONES)
+        {
+            require(result.swings.get(names[0])[3]<=.1001F,
+                    "the waist-side upper panel flared");
+            require(result.swings.get(names[1])[3]<=.281F,
+                    "the hem exceeded the bounded outward deflection");
+        }
     }
 
     private static void absentLegDoesNotInventContact()
@@ -75,7 +125,10 @@ public final class SkirtVisibleThighContactsSmokeTest
                 SkirtVisibleThighContacts.correct(f.strips,f.swings,budget.select(true));
         require(result.touchedPanels>0,"rear thigh contact missing");
         float[] local=result.swings.get(BONES[10][0]);
-        require(local[3]>.10F,"rear panel does not rotate");
+        require(local[3]>.02F && local[3]<=.1001F,
+                "rear panel root flared beyond safe limit");
+        require(result.swings.get(BONES[10][1])[3]>.10F,
+                "rear hem must flex at the lower joint");
         // Model's local Y=180 reverses Z. The world-space correction must
         // still point the rear panel OUTWARD (negative world X).
         float worldZ=-local[2];
