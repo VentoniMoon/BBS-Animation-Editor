@@ -593,6 +593,20 @@ public final class SkirtVisibleThighContactsSmokeTest
         require(single.rescuedLegBoxes==0 && single.touchedPanels==0,
                 "one isolated inner or missing face must not activate skirt");
 
+        // Duplicate corner vertices on separate Chameleon faces are one
+        // physical location, not two independent deep contacts.
+        f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                original.upper,original.lower,original.upperWorld,
+                original.lowerWorld,original.tipWorld,
+                new float[][]{{.42F,-.21F,0F},{.42F,-.21F,0F},
+                        {.42F,-.21F,0F}},null));
+        SkirtVisibleThighContacts.Result duplicated=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        input.select(true),.85F,true,true,true);
+        require(duplicated.rescuedLegBoxes==0 &&
+                duplicated.touchedPanels==0,
+                "repeated face vertex cannot unlock the entire skirt");
+
         Fixture neutral=new Fixture(false);
         SkirtClothPoseCoupler.Strip panel=neutral.strips.get(0);
         neutral.strips.set(0,new SkirtClothPoseCoupler.Strip(
