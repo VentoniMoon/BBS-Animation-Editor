@@ -27,6 +27,7 @@ public final class SkirtVisibleThighContactsSmokeTest
     public static void main(String[] args)
     {
         wideStridePushesClothOutward();
+        auditMeasuresResidualEvenWhenNoVisualCorrectionIsAvailable();
         compact085RespondsLocallyWithoutChangingNormalScale();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
@@ -63,6 +64,51 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "physics input must not be mutated");
         near(result.swings.get(BONES[10][0])[3],0F,.00001F,
                 "opposite skirt panel must not flare");
+    }
+
+    /** A Java 8 proof that audit counts distinct geometry intersections,
+     * and that the diagnostic does not edit any input or Jolt key. */
+    private static void auditMeasuresResidualEvenWhenNoVisualCorrectionIsAvailable()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection leg=budget.select(true);
+        SkirtVisibleThighContacts.Audit prior=
+                SkirtVisibleThighContacts.auditBonePose(
+                        f.strips,f.swings,leg,.85F);
+        require(prior.legBoxes==1,"must count actual fitted thigh OBB");
+        require(prior.sourcePoints>0&&prior.uniqueHits>0,
+                "visible source skirt must overlap modeled thigh");
+        require(prior.uniqueHits<=prior.sourcePoints,
+                "raw collider hits are not unique mesh points");
+        require(prior.hitPanels>0&&prior.hitPanels<=20,
+                "audit incorrectly reports panel count");
+        require(prior.dominantOwner.contains("emoticons.left_leg"),
+                "collider identity was lost");
+        SkirtVisibleThighContacts.Result corrected=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,leg,.85F);
+        SkirtVisibleThighContacts.Audit after=
+                SkirtVisibleThighContacts.auditBonePose(
+                        f.strips,corrected.swings,leg,.85F);
+        require(after.sourcePoints==prior.sourcePoints,
+                "contact correction changed source cube topology");
+        require(after.legBoxes==prior.legBoxes,
+                "contact correction changed physics collider topology");
+        require(Float.isFinite(after.maxOverlap) &&
+                after.uniqueHits<=after.sourcePoints,
+                "invalid post-correction overlap diagnostic");
+        SkirtVisibleThighContacts.Audit repeated=
+                SkirtVisibleThighContacts.auditBonePose(
+                        f.strips,corrected.swings,leg,.85F);
+        require(after.uniqueHits==repeated.uniqueHits &&
+                after.rawHits==repeated.rawHits &&
+                after.hitPanels==repeated.hitPanels,
+                "repeat draw changes diagnostic results");
+        require(f.swings.get(BONES[0][0])[3]==0F,
+                "read-back mutated original Jolt pose");
     }
 
     private static void compact085RespondsLocallyWithoutChangingNormalScale()
