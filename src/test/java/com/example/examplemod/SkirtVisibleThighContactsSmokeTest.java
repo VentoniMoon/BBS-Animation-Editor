@@ -28,6 +28,7 @@ public final class SkirtVisibleThighContactsSmokeTest
     {
         wideStridePushesClothOutward();
         compact085RespondsLocallyWithoutChangingNormalScale();
+        shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
         actualDiagonalCubeSurfaceDetectsMissedLeg();
@@ -93,6 +94,39 @@ public final class SkirtVisibleThighContactsSmokeTest
                         new BodyPartJoltContactBudget().select(true),.85F);
         require(noBody.contactDepths.isEmpty()&&noBody.touchedPanels==0,
                 "small visual scale alone must NOT expand the skirt");
+    }
+
+    /** The geo file's bone order is not a reliable angular ring order.
+     * A different enumeration of the SAME 20 physical strips must not
+     * change which neighboring panels receive the local contact response. */
+    private static void shuffledBoneEnumerationKeepsSamePhysicalNeighbors()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection legs=budget.select(true);
+        SkirtVisibleThighContacts.Result original=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,legs,.85F);
+        java.util.List<SkirtClothPoseCoupler.Strip> reordered=
+                new java.util.ArrayList<SkirtClothPoseCoupler.Strip>(f.strips);
+        java.util.Collections.rotate(reordered,7);
+        java.util.Collections.swap(reordered,0,11);
+        java.util.Collections.swap(reordered,3,16);
+        SkirtVisibleThighContacts.Result shuffled=
+                SkirtVisibleThighContacts.correct(
+                        reordered,f.swings,legs,.85F);
+        for(String[] names:BONES)
+            for(String bone:names)
+            {
+                float[] a=original.swings.get(bone);
+                float[] b=shuffled.swings.get(bone);
+                require(a!=null&&b!=null,"missing changed panel "+bone);
+                for(int axis=0;axis<4;axis++)
+                    near(a[axis],b[axis],.00002F,
+                            "contact neighbor order changed "+bone);
+            }
     }
 
     private static void standingThighsMustNotInflateHem()
