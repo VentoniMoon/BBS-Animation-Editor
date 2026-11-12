@@ -2228,6 +2228,12 @@ public class BodyPartsPreviewRenderer
                                     " coupledSwingAbove0.3="+coupledHigh+
                                     " suspected="+limiting+
                                     " strongestLeg="+after.dominantOwner);
+                            System.out.println(
+                                    "[BBS Animation Editor][Jolt][SkirtContactShapes] "+
+                                    "frame="+frame+
+                                    " scale="+skirtVisualScale+
+                                    " maxLegPanels=12"+
+                                    " boxes="+before.perLegCoverage);
                         }
                     }
                     if(frame%20==0)
