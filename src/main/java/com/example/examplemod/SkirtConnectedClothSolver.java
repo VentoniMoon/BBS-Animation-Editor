@@ -26,13 +26,18 @@ import java.util.Map;
 public final class SkirtConnectedClothSolver
 {
     private static final int COUNT=20;
-    private static final int STEPS=9;
-    private static final float SEAM_STIFFNESS=.72F;
-    private static final float LENGTH_STIFFNESS=.88F;
-    private static final float MAX_MID_SHIFT=.24F;
-    private static final float MAX_HEM_SHIFT=.34F;
-    private static final float MAX_UPPER_ROT=.50F;
-    private static final float MAX_LOWER_ROT=.78F;
+    // The source Jolt pose is the shape reference. Connected constraints
+    // must ONLY correct a local confirmed thigh contact, never overwrite
+    // ordinary gravity and walking motion around the whole ring.
+    private static final int STEPS=5;
+    private static final float SEAM_STIFFNESS=.28F;
+    private static final float LENGTH_STIFFNESS=.50F;
+    private static final float MAX_MID_SHIFT=.075F;
+    private static final float MAX_HEM_SHIFT=.13F;
+    private static final float MAX_UPPER_ROT=.105F;
+    private static final float MAX_LOWER_ROT=.24F;
+    private static final float MIN_CONTACT=.008F;
+    private static final float NEIGHBOR_ACTIVITY=.22F;
     private static final float CLOTH_MARGIN=.042F;
     private static final float MIN_LEG_HALF=.018F;
     private static final float MAX_LEG_HALF=.48F;
@@ -166,65 +171,120 @@ public final class SkirtConnectedClothSolver
             }
 
         float before=maxOverlap(ring,legs,cx,cz);
-        float[] initialSeams=new float[COUNT];
+        // The prior implementation processed nine full-ring constraint
+        // iterations even when NOTHING intersected a thigh. That forced
+        // the reference skirt into a nearly rigid tube in ordinary poses.
+        // In the absence of a real overlap, return EXACT native pose.
+        float[] activity=new float[COUNT];
+        boolean anyContact=false;
         for(int i=0;i<COUNT;i++)
-            initialSeams[i]=distance(ring.get(i).baseHem,
-                    ring.get((i+1)%COUNT).baseHem);
+        {
+            Panel p=ring.get(i);
+            float[] outward=radial(p.root,cx,cz);
+            float overlap=0F;
+            for(BodyBox leg:legs)
+            {
+                overlap=Math.max(overlap,contactShift(p.mid,leg,outward));
+                overlap=Math.max(overlap,contactShift(p.hem,leg,outward));
+                overlap=Math.max(overlap,contactShift(
+                        lerp(p.mid,p.hem,.5F),leg,outward));
+            }
+            if(overlap>MIN_CONTACT)
+            {
+                activity[i]=1F;
+                anyContact=true;
+            }
+        }
+        if(!anyContact)
+            return new Result(fallback,0,legs.size(),ignored,
+                    before,before,0F);
 
-        // One common cloth grid: belt roots remain pinned, middle and
-        // hem particles share vertical, ring and diagonal constraints.
+        // Spread a small part of the response to immediate neighbours,
+        // but keep every other panel pinned to its existing Jolt pose.
+        float[] localActivity=activity.clone();
+        for(int i=0;i<COUNT;i++)
+            if(activity[i]>=1F)
+            {
+                localActivity[(i+1)%COUNT]=Math.max(
+                        localActivity[(i+1)%COUNT],NEIGHBOR_ACTIVITY);
+                localActivity[(i+COUNT-1)%COUNT]=Math.max(
+                        localActivity[(i+COUNT-1)%COUNT],NEIGHBOR_ACTIVITY);
+            }
+
+        // Local connected cloth projection ONLY near actual contacts.
+        // Global ring constraints remain represented by the separate
+        // visual Weld and native skirt coupler on the original Jolt pose.
         for(int step=0;step<STEPS;step++)
         {
             for(int i=0;i<COUNT;i++)
             {
                 Panel p=ring.get(i),n=ring.get((i+1)%COUNT);
-                project(p.root,p.mid,
-                        distance(p.root,p.restMid),0F,1F,LENGTH_STIFFNESS);
-                project(p.mid,p.hem,
-                        distance(p.restMid,p.restHem),1F,1.3F,LENGTH_STIFFNESS);
-                project(p.mid,n.mid,
-                        distance(p.restMid,n.restMid),1F,1F,SEAM_STIFFNESS);
-                project(p.hem,n.hem,
-                        distance(p.restHem,n.restHem),1.3F,1.3F,SEAM_STIFFNESS);
-                project(p.mid,n.hem,
-                        distance(p.restMid,n.restHem),1F,1.3F,
-                        SEAM_STIFFNESS*.34F);
-                project(n.mid,p.hem,
-                        distance(n.restMid,p.restHem),1F,1.3F,
-                        SEAM_STIFFNESS*.34F);
-            }
-            for(Panel p:ring)
-            {
-                float[] direction=radial(p.root,cx,cz);
-                for(BodyBox leg:legs)
+                float w=localActivity[i],wn=localActivity[(i+1)%COUNT];
+                if(w>0F)
                 {
-                    // Broad cloth contact: check segment centers and
-                    // outward-facing panel-edge proxies, not just Jolt's
-                    // narrow physical bone capsule.
-                    pushNode(p.mid,leg,direction,.72F);
-                    pushNode(p.hem,leg,direction,1F);
-                    pushLink(p.mid,p.hem,leg,direction);
-                    pushLink(p.root,p.mid,leg,direction);
+                    project(p.root,p.mid,
+                            distance(p.root,p.restMid),0F,w,
+                            LENGTH_STIFFNESS*w);
+                    project(p.mid,p.hem,
+                            distance(p.restMid,p.restHem),w,w,
+                            LENGTH_STIFFNESS*w);
                 }
-                limit(p.mid,p.baseMid,MAX_MID_SHIFT);
-                limit(p.hem,p.baseHem,MAX_HEM_SHIFT);
+                if(w>0F||wn>0F)
+                {
+                    project(p.mid,n.mid,
+                            distance(p.restMid,n.restMid),w,wn,
+                            SEAM_STIFFNESS*Math.max(w,wn));
+                    project(p.hem,n.hem,
+                            distance(p.restHem,n.restHem),w,wn,
+                            SEAM_STIFFNESS*Math.max(w,wn));
+                    project(p.mid,n.hem,
+                            distance(p.restMid,n.restHem),w,wn,
+                            SEAM_STIFFNESS*.25F*Math.max(w,wn));
+                    project(n.mid,p.hem,
+                            distance(n.restMid,p.restHem),wn,w,
+                            SEAM_STIFFNESS*.25F*Math.max(w,wn));
+                }
+            }
+            for(int i=0;i<COUNT;i++)
+            {
+                Panel p=ring.get(i);
+                float weight=localActivity[i];
+                if(weight<=0F)continue;
+                if(activity[i]>=1F)
+                {
+                    float[] direction=radial(p.root,cx,cz);
+                    for(BodyBox leg:legs)
+                    {
+                        pushNode(p.mid,leg,direction,.55F);
+                        pushNode(p.hem,leg,direction,.85F);
+                        pushLink(p.mid,p.hem,leg,direction);
+                        pushLink(p.root,p.mid,leg,direction);
+                    }
+                }
+                limit(p.mid,p.baseMid,MAX_MID_SHIFT*weight);
+                limit(p.hem,p.baseHem,MAX_HEM_SHIFT*weight);
             }
         }
 
         int adjusted=0;
         Map<String,float[]> out=copy(physical);
-        for(Panel p:ring)
+        for(int panelIndex=0;panelIndex<COUNT;panelIndex++)
         {
+            Panel p=ring.get(panelIndex);
+            float weight=localActivity[panelIndex];
+            if(weight<=0F)continue;
+            if(distance(p.mid,p.baseMid)<.003F &&
+                    distance(p.hem,p.baseHem)<.003F)continue;
             float[] desiredUpper=sub(p.mid,p.root);
             float[] currentUpper=rotate(p.upperQ,sub(p.restMid,p.root));
             float[] correction=limitAngle(arc(currentUpper,desiredUpper),
-                    MAX_UPPER_ROT);
+                    MAX_UPPER_ROT*weight);
             float[] upperNew=unitQ(multiply(correction,p.upperQ));
             float[] desiredLower=sub(p.hem,p.mid);
             float[] currentLower=rotate(upperNew,
                     rotate(p.lowerQ,sub(p.restHem,p.restMid)));
             float[] lowerCorrection=limitAngle(arc(currentLower,desiredLower),
-                    MAX_LOWER_ROT);
+                    MAX_LOWER_ROT*weight);
             float[] lowerNew=unitQ(multiply(multiply(
                     multiply(conjugate(upperNew),lowerCorrection),upperNew),
                     p.lowerQ));
