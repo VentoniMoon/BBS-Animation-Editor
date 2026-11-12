@@ -227,7 +227,8 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,float visualScale)
     {
         return correct(strips,starting,selected,visualScale,
-                ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION);
+                ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
+                SURFACE_EVIDENCE_LEG_GATE);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -247,6 +248,16 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid)
+    {
+        return correct(strips,starting,selected,visualScale,
+                adaptiveLift,adaptiveMid,SURFACE_EVIDENCE_LEG_GATE);
+    }
+
+    /** Pure Java regression switch; does not mutate process-wide flags. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
@@ -348,7 +359,7 @@ public final class SkirtVisibleThighContacts
                     (raised||movedOut);
             if(oldGate)
                 active.add(leg);
-            else if(SURFACE_EVIDENCE_LEG_GATE &&
+            else if(surfaceGate &&
                     visualScale<.995F &&
                     deepOuterFabricContact(strips,copy,leg,cx,cz,
                             evidenceMargin))
