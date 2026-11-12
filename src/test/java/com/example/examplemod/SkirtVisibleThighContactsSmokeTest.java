@@ -29,6 +29,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         wideStridePushesClothOutward();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
+        broadVerticalNeutralThighDoesNotFlare();
         bothLegsOnlyDeflectLocalPanels();
         absentLegDoesNotInventContact();
         mirroredRearKeepsCorrectWorldPush();
@@ -102,6 +103,24 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "waist root must not open into umbrella");
         require(out.swings.get(BONES[0][1])[3]<=.281F,
                 "lower flap must remain bounded");
+    }
+
+    /** A wide but still vertical neutral leg is not a raised thigh.
+     * It must not react like a horizontal protruding knee at the waist. */
+    private static void broadVerticalNeutralThighDoesNotFlare()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        float[] obb={.18F,-.27F,0F,0F,0F,0F,1F,
+                .23F,.32F,.14F};
+        float[] capsule={.18F,-.27F,0F,0F,0F,0F,1F,
+                .12F,.32F,.12F,2F};
+        budget.add(obb,capsule,"emoticons.left_leg");
+        SkirtVisibleThighContacts.Result result=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,budget.select(true));
+        require(result.touchedPanels==0,
+                "vertical resting thigh must not re-inflate the skirt");
     }
 
     private static void bothLegsOnlyDeflectLocalPanels()
