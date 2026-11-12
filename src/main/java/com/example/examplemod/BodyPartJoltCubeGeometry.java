@@ -168,6 +168,60 @@ public final class BodyPartJoltCubeGeometry
                 minWorldY,maxWorldY,bottom[1]-pivot[1]);
     }
 
+    /**
+     * Read the EXACT Chameleon decoded quad surface, including cube-local
+     * 3-axis rotation, renderer cube pivot and the already-animated bone.
+     * The 4 corners and center of each quad are contact samples. This
+     * preserves diagonal/side skirt geometry that cannot be approximated
+     * with a fixed 2px-width bone-centered strip.
+     *
+     * Data is read-only; temporary Weld vertex edits are never persisted.
+     * A null return means malformed topology and callers must use the
+     * existing conservative centerline fallback.
+     */
+    public static float[][] surfaceSamplesRenderedVertices(
+            float[] boneWorld,float[] boneInitialPivotPx,
+            float[] cubePivotPx,float[] cubeRotationDegrees,
+            float[][] quadVertexBlocks)
+    {
+        check(boneWorld,16,"world 4x4");
+        check(boneInitialPivotPx,3,"bone pivot");
+        check(cubePivotPx,3,"cube pivot");
+        check(cubeRotationDegrees,3,"cube rotation");
+        if(quadVertexBlocks==null||quadVertexBlocks.length==0 ||
+                quadVertexBlocks.length%4!=0 ||
+                quadVertexBlocks.length>96)
+            throw new IllegalArgumentException("Invalid decoded quad topology");
+
+        float[] r=BodyPartPhysicsRotation.eulerXYZ(
+                (float)Math.toRadians(cubeRotationDegrees[0]),
+                (float)Math.toRadians(cubeRotationDegrees[1]),
+                (float)Math.toRadians(cubeRotationDegrees[2]));
+        float px=cubePivotPx[0]/16F,py=cubePivotPx[1]/16F,
+                pz=cubePivotPx[2]/16F;
+        float[][] out=new float[(quadVertexBlocks.length/4)*5][3];
+        int target=0;
+        for(int quad=0;quad<quadVertexBlocks.length;quad+=4)
+        {
+            float[] center=new float[3];
+            for(int corner=0;corner<4;corner++)
+            {
+                float[] point=quadVertexBlocks[quad+corner];
+                check(point,3,"decoded quad corner");
+                float x=point[0]-px,y=point[1]-py,z=point[2]-pz;
+                float bx=px+r[0]*x+r[3]*y+r[6]*z;
+                float by=py+r[1]*x+r[4]*y+r[7]*z;
+                float bz=pz+r[2]*x+r[5]*y+r[8]*z;
+                float[] world=worldPoint(boneWorld,boneInitialPivotPx,
+                        bx*16F,by*16F,bz*16F);
+                out[target++]=world;
+                for(int axis=0;axis<3;axis++)center[axis]+=world[axis]*.25F;
+            }
+            out[target++]=center;
+        }
+        return out;
+    }
+
     public static float alignmentDegrees(float[] a, float[] b)
     {
         float[] p=unit(a),q=unit(b);
