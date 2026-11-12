@@ -32,6 +32,8 @@ public final class SkirtClothPoseCoupler
         public final float[] upperWorld,lowerWorld;
         /** Clean terminal geometry position, not a guessed extra joint. */
         public final float[] tipWorld;
+        /** Raw Chameleon decoded world surface, before preview Jolt swings. */
+        public final float[][] upperSurfaceWorld,lowerSurfaceWorld;
 
         public Strip(String upper,String lower,float[] upperWorld,float[] lowerWorld)
         {
@@ -41,11 +43,29 @@ public final class SkirtClothPoseCoupler
         public Strip(String upper,String lower,float[] upperWorld,
                 float[] lowerWorld,float[] tipWorld)
         {
+            this(upper,lower,upperWorld,lowerWorld,tipWorld,null,null);
+        }
+
+        public Strip(String upper,String lower,float[] upperWorld,
+                float[] lowerWorld,float[] tipWorld,
+                float[][] upperSurfaceWorld,float[][] lowerSurfaceWorld)
+        {
             this.upper=upper;
             this.lower=lower;
             this.upperWorld=upperWorld;
             this.lowerWorld=lowerWorld;
             this.tipWorld=tipWorld==null?null:tipWorld.clone();
+            this.upperSurfaceWorld=cloneSurface(upperSurfaceWorld);
+            this.lowerSurfaceWorld=cloneSurface(lowerSurfaceWorld);
+        }
+
+        private static float[][] cloneSurface(float[][] surface)
+        {
+            if(surface==null)return null;
+            float[][] result=new float[surface.length][];
+            for(int i=0;i<surface.length;i++)
+                result[i]=surface[i]==null?null:surface[i].clone();
+            return result;
         }
     }
 
