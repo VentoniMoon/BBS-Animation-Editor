@@ -82,11 +82,14 @@ public final class SkirtVisibleThighContacts
     {
         final float[] p;
         final String owner;
+        final int sourceIndex;
+        int exactHits;
         final float[][] basis=new float[3][];
-        Leg(float[] p,String owner)
+        Leg(float[] p,String owner,int sourceIndex)
         {
             this.p=p;
             this.owner=owner;
+            this.sourceIndex=sourceIndex;
             float[] q={p[3],p[4],p[5],p[6]};
             basis[0]=rotateQuaternion(new float[]{1,0,0},q);
             basis[1]=rotateQuaternion(new float[]{0,1,0},q);
@@ -116,10 +119,10 @@ public final class SkirtVisibleThighContacts
             if(!BodyPartJoltContactBudget.isLeg(selected.owners.get(i)))continue;
             float[] box=selected.boxes[i];
             if(valid(box,10) && box[7]>.01F && box[8]>.01F && box[9]>.01F)
-                legs.add(new Leg(box,selected.owners.get(i)));
+                legs.add(new Leg(box,selected.owners.get(i),i));
         }
         if(legs.isEmpty())return new Result(copy,0,0F);
-        float cx=0F,cz=0F;
+        float cx=0F,cy=0F,cz=0F;
         for(SkirtClothPoseCoupler.Strip s:strips)
         {
             if(s==null||s.tipWorld==null||!valid(s.tipWorld,3)||
@@ -128,9 +131,10 @@ public final class SkirtVisibleThighContacts
                     SkirtAdaptiveWidth.widthAxis(s.lower)<0)
                 return new Result(copy,0,0F);
             cx+=s.upperWorld[12];
+            cy+=s.upperWorld[13];
             cz+=s.upperWorld[14];
         }
-        cx/=PANELS;cz/=PANELS;
+        cx/=PANELS;cy/=PANELS;cz/=PANELS;
 
         // A stationary thigh lives UNDER the waist. Its approximate hull
         // can intersect the inner cloth surface even in a neutral stance.
@@ -184,8 +188,6 @@ public final class SkirtVisibleThighContacts
         float peak=0F;
         int exactSampleCount=0,exactHitCount=0,uniqueExactHitCount=0;
         float[] need=new float[PANELS];
-        java.util.Map<String,Integer> legHits=
-                new LinkedHashMap<String,Integer>();
         StringBuilder panelHits=new StringBuilder();
         // Evaluate ONLY lower-fabric contact. Upper samples near the waist
         // used to treat the resting hips as a penetration and push outward
@@ -249,8 +251,7 @@ public final class SkirtVisibleThighContacts
                                 exactHitCount++;
                                 uniqueHit=true;
                                 exactHitPanel=true;
-                                Integer prev=legHits.get(leg.owner);
-                                legHits.put(leg.owner,prev==null?1:prev+1);
+                                leg.exactHits++;
                             }
                             peak=Math.max(peak,overlap);
                             float distance=Math.max(.14F,
@@ -300,7 +301,7 @@ public final class SkirtVisibleThighContacts
         for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
                 uniqueExactHitCount,legs.size(),active.size(),
-                contactSummary(active,cx,cz,legHits),panelHits.toString());
+                contactSummary(active,cx,cy,cz),panelHits.toString());
     }
 
     /**
@@ -344,8 +345,8 @@ public final class SkirtVisibleThighContacts
      * leg contact is implausibly large or intersects most skirt panels.
      * Only up to 8 actual active hulls are printed; no new colliders.
      */
-    private static String contactSummary(List<Leg> legs,float cx,float cz,
-            java.util.Map<String,Integer> hits)
+    private static String contactSummary(List<Leg> legs,float cx,float cy,
+            float cz)
     {
         StringBuilder builder=new StringBuilder();
         int count=Math.min(8,legs.size());
@@ -354,13 +355,15 @@ public final class SkirtVisibleThighContacts
             Leg leg=legs.get(i);
             if(i>0)builder.append(';');
             builder.append(leg.owner)
+                    .append('#').append(leg.sourceIndex)
                     .append("(dx=").append(round(leg.p[0]-cx))
+                    .append(",dy=").append(round(leg.p[1]-cy))
                     .append(",dz=").append(round(leg.p[2]-cz))
                     .append(",half=").append(round(leg.p[7]))
                     .append('/').append(round(leg.p[8]))
                     .append('/').append(round(leg.p[9]))
-                    .append(",hits=").append(
-                            hits.containsKey(leg.owner)?hits.get(leg.owner):0)
+                    .append(",upY=").append(round(leg.basis[1][1]))
+                    .append(",hits=").append(leg.exactHits)
                     .append(')');
         }
         if(legs.size()>count)
