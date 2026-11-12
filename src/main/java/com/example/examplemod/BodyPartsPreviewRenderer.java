@@ -1681,6 +1681,12 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_VISIBLE_THIGH_CONTACTS =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.visibleThighContacts","true"));
+    /** Experimental shared 20x2 cloth grid: pinned waist, connected
+     * neighbors, and leg volume projection. The old independent-strand
+     * collision response is disabled while this stage owns the grid. */
+    private static final boolean SKIRT_CONNECTED_CLOTH =
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.connectedCloth","true"));
     /** Jolt sample is computed AFTER the Emoticons actor draw. This bounded
      * skirt-only pose prediction reduces the 1-tick actor/cloth mismatch. */
     private static final boolean SKIRT_VISUAL_PHASE_LEAD =
@@ -2113,7 +2119,27 @@ public class BodyPartsPreviewRenderer
             {
                 Map<String,float[]> stitched=
                         SkirtClothPoseCoupler.couple(skirtStrips,skirtRaw);
-                if(SKIRT_VISIBLE_THIGH_CONTACTS &&
+                if(SKIRT_CONNECTED_CLOTH)
+                {
+                    boolean collision=BodyPartJoltPreviewAdapter.torsoContactsRequested() &&
+                            chains.get(0).settings.hasBodyCollisions();
+                    BodyPartJoltContactBudget.Selection bodies=collision?
+                            passiveCollisionSelection(data,frame):null;
+                    SkirtConnectedClothSolver.Result cloth=
+                            SkirtConnectedClothSolver.solve(
+                                    skirtStrips,stitched,bodies);
+                    stitched=cloth.swings;
+                    if(frame%20==0)
+                        System.out.println("[BBS Animation Editor][Jolt][SkirtClothGrid] "+
+                                "frame="+frame+
+                                " panels="+cloth.adjustedPanels+
+                                " colliders="+cloth.colliderCount+
+                                " ignored="+cloth.ignoredColliders+
+                                " contactBefore="+cloth.maxContactBefore+
+                                " contactAfter="+cloth.maxContactAfter+
+                                " seamStretch="+cloth.largestSeamStretch);
+                }
+                else if(SKIRT_VISIBLE_THIGH_CONTACTS &&
                         BodyPartJoltPreviewAdapter.torsoContactsRequested() &&
                         chains.get(0).settings.hasBodyCollisions())
                 {
