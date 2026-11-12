@@ -6,6 +6,9 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Collections;
+import java.util.Comparator;
 
 import javax.vecmath.Vector3f;
 
@@ -34,6 +37,10 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     private final IdentityHashMap<Vector3f,float[]> originals=
             new IdentityHashMap<Vector3f,float[]>();
     private int seams;
+    private int ringSeams;
+
+    private static final boolean SKIRT_RING_WELD=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.ringWeld","true"));
 
     private ChameleonWeldPreviewPass() {}
 
@@ -62,6 +69,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     {
         return seams;
     }
+    public int getSkirtRingSeamCount(){return ringSeams;}
 
     public static ChameleonWeldPreviewPass begin(
             Iterable<? extends AbstractMorph> childMorphs,float partialTicks)
@@ -131,6 +139,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         for(Bone bone:bones)
             if(bone.parent!=null)
                 weldJoint(bone.parent,bone);
+        if(SKIRT_RING_WELD)weldSkirtRing(bones);
     }
 
     @SuppressWarnings("unchecked")
@@ -169,6 +178,207 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         patchFace(topCube,upper,seam.sourceLocal);
         patchFace(bottomCube,lower,seam.targetLocal);
         seams++;
+    }
+
+    /**
+     * Stitch the 20 neighboring skirt strips around the entire waist, at
+     * BOTH the upper and lower cube level. The hair Weld pass above only
+     * joins parent/child bones and cannot repair circumferential gaps.
+     *
+     * This strictly matches the exact 44-bone user skirt topology; other
+     * Chameleon attachments, hair, and arbitrary cube names are excluded.
+     * No physics keys or model vertex resources survive close().
+     */
+    private void weldSkirtRing(List<Bone> all)throws Exception
+    {
+        if(all.size()!=44)return;
+        final Map<String,Bone> names=new HashMap<String,Bone>();
+        Object waist=null;
+        for(Bone b:all)
+        {
+            String id=(String)field(b.value,"id");
+            if(id==null||names.put(id,b)!=null)return;
+            if("ALL".equals(id))waist=b.value;
+        }
+        if(waist==null)return;
+        SkirtGeoProfile.Plan<Object> profile;
+        try
+        {
+            profile=SkirtGeoProfile.inspect(waist,
+                    value->childrenOf(value),value->idOf(value));
+        }
+        catch(IllegalArgumentException invalid){return;}
+        for(int layer=0;layer<2;layer++)
+        {
+            List<RingCube> ring=new ArrayList<RingCube>();
+            float cx=0F,cz=0F;
+            for(List<Object> strip:profile.strips)
+            {
+                Bone b=names.get(idOf(strip.get(layer)));
+                if(b==null)return;
+                RingCube cube=ringCube(b);
+                if(cube==null)return;
+                ring.add(cube);
+                cx+=cube.restCenter[0];
+                cz+=cube.restCenter[2];
+            }
+            cx/=ring.size();cz/=ring.size();
+            final float x=cx,z=cz;
+            Collections.sort(ring,new Comparator<RingCube>()
+            {
+                @Override public int compare(RingCube a,RingCube b)
+                {
+                    double aa=Math.atan2(a.restCenter[2]-z,
+                            a.restCenter[0]-x);
+                    double bb=Math.atan2(b.restCenter[2]-z,
+                            b.restCenter[0]-x);
+                    return Double.compare(aa,bb);
+                }
+            });
+            for(int i=0;i<ring.size();i++)
+                weldRingNeighbors(ring.get(i),
+                        ring.get((i+1)%ring.size()));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> childrenOf(Object bone)
+    {
+        try{return (List<Object>)field(bone,"children");}
+        catch(Exception e){throw new IllegalArgumentException(e);}
+    }
+    private static String idOf(Object bone)
+    {
+        try{return (String)field(bone,"id");}
+        catch(Exception e){throw new IllegalArgumentException(e);}
+    }
+
+    private static final class RingEdge
+    {
+        float[] top,bottom;
+        RingEdge(float[] top,float[] bottom)
+        {this.top=top;this.bottom=bottom;}
+        SkirtRingSeamGeometry.Edge asGeometry()
+        {return new SkirtRingSeamGeometry.Edge(top,bottom);}
+    }
+    private static final class RingCube
+    {
+        Object cube;
+        float[] rest,posed,restCenter;
+        List<RingEdge> edges;
+    }
+
+    @SuppressWarnings("unchecked")
+    private RingCube ringCube(Bone bone)throws Exception
+    {
+        List<Object> cubes=(List<Object>)field(bone.value,"cubes");
+        if(cubes.size()!=1)return null;
+        Object cube=cubes.get(0);
+        List<Object> quads=(List<Object>)field(cube,"quads");
+        if(quads.size()<2)return null;
+        Vector3f pivot=vec(cube,"pivot");
+        Vector3f rot=vec(cube,"rotation");
+        float[] move=translate(pivot.x/16F,pivot.y/16F,pivot.z/16F);
+        move=mul(move,rotationZ(rot.z));
+        move=mul(move,rotationY(rot.y));
+        move=mul(move,rotationX(rot.x));
+        move=mul(move,translate(-pivot.x/16F,-pivot.y/16F,
+                -pivot.z/16F));
+        RingCube rc=new RingCube();
+        rc.cube=cube;
+        rc.rest=mul(bone.rest,move);
+        rc.posed=mul(bone.posed,move);
+
+        List<float[]> points=new ArrayList<float[]>();
+        for(Object quad:quads)
+            for(Object vertex:(List<Object>)field(quad,"vertices"))
+            {
+                Vector3f v=vec(vertex,"position");
+                float[] original=originals.get(v);
+                float[] raw=original!=null?original:
+                        new float[]{v.x,v.y,v.z};
+                boolean seen=false;
+                for(float[] known:points)
+                    if(close(known,raw)){seen=true;break;}
+                if(!seen)points.add(raw.clone());
+            }
+        if(points.size()<6||points.size()>24)return null;
+        float minY=Float.POSITIVE_INFINITY,maxY=Float.NEGATIVE_INFINITY;
+        float[] sum={0F,0F,0F};
+        for(float[] p:points)
+        {
+            minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);
+            float[] w=ChameleonWeldGeometry.transform(rc.rest,p);
+            sum[0]+=w[0];sum[1]+=w[1];sum[2]+=w[2];
+        }
+        if(maxY-minY<.03F)return null;
+        for(int i=0;i<3;i++)sum[i]/=points.size();
+        rc.restCenter=sum;
+        rc.edges=new ArrayList<RingEdge>();
+        for(float[] low:points)
+        {
+            if(Math.abs(low[1]-minY)>.0001F)continue;
+            for(float[] high:points)
+                if(Math.abs(high[1]-maxY)<.0001F &&
+                        Math.abs(low[0]-high[0])<.0001F &&
+                        Math.abs(low[2]-high[2])<.0001F)
+                    rc.edges.add(new RingEdge(high,low));
+        }
+        return rc.edges.size()>=2&&rc.edges.size()<=8?rc:null;
+    }
+
+    private void weldRingNeighbors(RingCube a,RingCube b)throws Exception
+    {
+        SkirtRingSeamGeometry.Plan best=null;
+        RingEdge bestA=null,bestB=null;
+        for(RingEdge ea:a.edges)
+            for(RingEdge eb:b.edges)
+            {
+                SkirtRingSeamGeometry.Plan p=SkirtRingSeamGeometry.plan(
+                        a.rest,b.rest,a.posed,b.posed,
+                        ea.asGeometry(),eb.asGeometry());
+                if(p!=null&&(best==null||p.restGap<best.restGap))
+                {
+                    best=p;bestA=ea;bestB=eb;
+                }
+            }
+        if(best==null)return;
+        patchRingEdge(a.cube,bestA,best.sourceLocal);
+        // targetLocal is already indexed in the TARGET's own edge order.
+        patchRingEdge(b.cube,bestB,best.targetLocal);
+        ringSeams++;seams++;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void patchRingEdge(Object cube,RingEdge edge,
+            float[][] newPoints)throws Exception
+    {
+        for(Object quad:(List<Object>)field(cube,"quads"))
+            for(Object vertex:(List<Object>)field(quad,"vertices"))
+            {
+                Vector3f v=vec(vertex,"position");
+                float[] src=originals.get(v);
+                if(src==null)src=new float[]{v.x,v.y,v.z};
+                int which=close(src,edge.top)?0:
+                        close(src,edge.bottom)?1:-1;
+                if(which<0)continue;
+                // Mesh may already have parent/child Weld displacement.
+                // Add a bounded side-seam delta rather than overwriting it.
+                if(!originals.containsKey(v))
+                    originals.put(v,src.clone());
+                float[] target=newPoints[which];
+                float[] origin=which==0?edge.top:edge.bottom;
+                v.set(v.x+(target[0]-origin[0]),
+                        v.y+(target[1]-origin[1]),
+                        v.z+(target[2]-origin[2]));
+            }
+    }
+
+    private static boolean close(float[] a,float[] b)
+    {
+        return Math.abs(a[0]-b[0])<1E-5F &&
+                Math.abs(a[1]-b[1])<1E-5F &&
+                Math.abs(a[2]-b[2])<1E-5F;
     }
 
     private static final class Bone
