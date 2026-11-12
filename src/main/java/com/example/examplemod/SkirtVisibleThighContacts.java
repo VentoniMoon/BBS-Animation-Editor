@@ -32,6 +32,12 @@ public final class SkirtVisibleThighContacts
     private static final float MAX_EXTRA_HEM=.28F;
     private static final float MAX_FINAL_ROOT=.52F;
     private static final float MAX_FINAL_HEM=.60F;
+    /** Experimental lift for compact (.85) skirts: trial rotations
+     * only at genuine selected thigh-to-hem contacts. Off restores
+     * the exact pre-existing visual correction. */
+    private static final boolean ADAPTIVE_HEM_LIFT=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.adaptiveHemLift","true"));
     private static final float NEIGHBOR_RESPONSE=.16F;
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
@@ -72,6 +78,10 @@ public final class SkirtVisibleThighContacts
         public final Map<String,Float> contactDepths;
         public final int candidatePanels,selectedPanels;
         public final boolean locallyLimited;
+        /** Number of lower bones granted additional collision-only swing. */
+        public final int liftedHemPanels;
+        /** Sum of local uncapped overlap depths removed by trial rotations. */
+        public final float liftOverlapReduction;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -89,6 +99,18 @@ public final class SkirtVisibleThighContacts
                 Map<String,Float> contactDepths,
                 int candidatePanels,int selectedPanels,boolean locallyLimited)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,0,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction)
+        {
+            this.liftedHemPanels=liftedHemPanels;
+            this.liftOverlapReduction=liftOverlapReduction;
             this.candidatePanels=candidatePanels;
             this.selectedPanels=selectedPanels;
             this.locallyLimited=locallyLimited;
@@ -429,10 +451,102 @@ public final class SkirtVisibleThighContacts
                     lowerStep,SkirtScaleContactResponse.hemAngleCap(visualScale));
             touched[i]=changed;
         }
+        int additionalLifts=0;
+        float overlapReduction=0F;
+        // Local post-Jolt relief: only on a compact skirt, after the
+        // normal two-leg safety selection AND the normal bounded bend.
+        // Never raise the whole ring merely because a thigh is nearby.
+        if(ADAPTIVE_HEM_LIFT && visualScale<.995F &&
+                !directContacts.isEmpty())
+        {
+            String[] ids=new String[PANELS];
+            float[][] roots=new float[PANELS][];
+            boolean[] selectedPanel=new boolean[PANELS];
+            for(int i=0;i<PANELS;i++)
+            {
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                ids[i]=strip.upper;
+                roots[i]=origin(strip.upperWorld);
+                selectedPanel[i]=directDepth[i]>.001F;
+            }
+            float[] extra=SkirtAdaptiveHemLift.weights(
+                    ids,roots,selectedPanel,sideNeed,sideDepth);
+            for(int i=0;i<PANELS;i++)
+            {
+                if(extra[i]<=.01F)continue;
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                float[] root=roots[i];
+                float rx=root[0]-cx,rz=root[2]-cz;
+                float rr=(float)Math.sqrt(rx*rx+rz*rz);
+                if(rr<.02F)continue;
+                float[] tangent={-rz/rr,0F,rx/rr};
+                float[] outward={rx/rr,0F,rz/rr};
+                float baseline=hemResidualScore(strip,copy,active,
+                        outward,surfaceMargin);
+                if(baseline<=.001F)continue;
+
+                float[] original=copy.get(strip.lower);
+                float[] best=null;
+                float bestScore=baseline;
+                float cap=SkirtAdaptiveHemLift.collisionCap(
+                        SkirtScaleContactResponse.hemAngleCap(visualScale),
+                        extra[i]);
+                float budget=SkirtAdaptiveHemLift.extraBudget(extra[i]);
+                // Search for the LEAST aggressive trial that actually
+                // reduces remaining geometric penetration. A flat/deep
+                // overlap may not improve at the first few increments,
+                // so inspect the full safe budget before deciding.
+                for(float step=SkirtAdaptiveHemLift.STEP;
+                        step<=budget+.0001F;
+                        step+=SkirtAdaptiveHemLift.STEP)
+                {
+                    Map<String,float[]> trial=new LinkedHashMap<String,float[]>();
+                    trial.put(strip.upper,copy.get(strip.upper));
+                    trial.put(strip.lower,original.clone());
+                    if(!bend(trial,strip.lower,strip.lowerWorld,tangent,
+                            Math.min(step,budget),cap))continue;
+                    float score=hemResidualScore(strip,trial,active,
+                            outward,surfaceMargin);
+                    if(score<bestScore-.0002F)
+                    {
+                        bestScore=score;
+                        best=trial.get(strip.lower);
+                        if(score<.002F)break;
+                    }
+                }
+                // The cap's final fractional step must also be tested,
+                // even when the 0.04 rad grid stops just below it.
+                if(budget>0F)
+                {
+                    Map<String,float[]> trial=new LinkedHashMap<String,float[]>();
+                    trial.put(strip.upper,copy.get(strip.upper));
+                    trial.put(strip.lower,original.clone());
+                    if(bend(trial,strip.lower,strip.lowerWorld,tangent,
+                            budget,cap))
+                    {
+                        float score=hemResidualScore(strip,trial,active,
+                                outward,surfaceMargin);
+                        if(score<bestScore-.0002F)
+                        {
+                            bestScore=score;
+                            best=trial.get(strip.lower);
+                        }
+                    }
+                }
+                if(best!=null)
+                {
+                    copy.put(strip.lower,best);
+                    touched[i]=true;
+                    additionalLifts++;
+                    overlapReduction+=baseline-bestScore;
+                }
+            }
+        }
         int total=0;
         for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
-                directContacts,candidatePanels,directContacts.size(),limited);
+                directContacts,candidatePanels,directContacts.size(),limited,
+                additionalLifts,overlapReduction);
     }
 
     /**
@@ -702,6 +816,75 @@ public final class SkirtVisibleThighContacts
             n++;
         }
         return n;
+    }
+
+    /**
+     * Read-back of the actual lower Chameleon cube after current bone
+     * swings (not the Jolt central capsule). The objective includes an
+     * uncapped radial clearance depth; the regular solver's 0.25-block
+     * capped measurement can be flat during deep thigh penetration.
+     * Only the previously accepted active leg OBBs contribute.
+     */
+    private static float hemResidualScore(SkirtClothPoseCoupler.Strip strip,
+            Map<String,float[]> swings,List<Leg> legs,
+            float[] outward,float surfaceMargin)
+    {
+        float[] root=origin(strip.upperWorld);
+        float[] hinge=origin(strip.lowerWorld);
+        float[] upper=worldSwing(strip.upperWorld,
+                swings.get(strip.upper));
+        float[] lower=worldSwing(strip.lowerWorld,
+                swings.get(strip.lower));
+        float[] first=rotate(sub(hinge,root),upper);
+        float[] second=rotate(rotate(sub(strip.tipWorld,hinge),
+                lower),upper);
+        float[] pivot=add(root,first);
+        float[] hemAxis=rotate(rotate(
+                widthAxisWorld(strip.lowerWorld,strip.lower),
+                lower),upper);
+        List<Point> samples=new ArrayList<Point>();
+        int exact=addExactSurface(samples,strip.lowerSurfaceWorld,
+                root,hinge,strip.tipWorld,upper,lower,true,
+                HEM_ONLY_CONTACT?HEM_CONTACT_FROM:.28F);
+        if(exact==0)
+        {
+            samples.add(new Point(add(pivot,mul(second,.80F)),hemAxis));
+            samples.add(new Point(add(pivot,second),hemAxis));
+        }
+        float score=0F;
+        for(Point point:samples)
+        {
+            boolean exactPoint=point.axis==null;
+            float[] side=exactPoint?new float[]{0F,0F,0F}:
+                    mul(normalize(point.axis),WIDTH);
+            int limit=exactPoint?0:1;
+            for(int edge=-limit;edge<=limit;edge++)
+            {
+                float[] at=add(point.p,mul(side,edge));
+                for(Leg leg:legs)
+                {
+                    float depth=unclampedPenetration(
+                            at,leg,outward,surfaceMargin);
+                    if(depth>.0001F)
+                        score+=depth+.006F;
+                }
+            }
+        }
+        return score;
+    }
+
+    private static float unclampedPenetration(float[] point,Leg leg,
+            float[] radial,float margin)
+    {
+        float[] d=sub(point,new float[]{leg.p[0],leg.p[1],leg.p[2]});
+        for(int axis=0;axis<3;axis++)
+            if(Math.abs(dot(d,leg.basis[axis]))>leg.p[7+axis]+margin)
+                return 0F;
+        float support=margin;
+        for(int axis=0;axis<3;axis++)
+            support+=Math.abs(dot(radial,leg.basis[axis]))*
+                    leg.p[7+axis];
+        return Math.max(0F,support-dot(d,radial));
     }
 
     private static boolean bend(Map<String,float[]> swings,String id,
