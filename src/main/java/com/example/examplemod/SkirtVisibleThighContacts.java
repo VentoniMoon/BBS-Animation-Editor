@@ -42,11 +42,20 @@ public final class SkirtVisibleThighContacts
         public final Map<String,float[]> swings;
         public final int touchedPanels;
         public final float peakOverlap;
+        /** Actual decoded Chameleon cube surface samples vs contact hits. */
+        public final int exactSurfaceSamples,exactSurfaceHits;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
+        {
+            this(swings,touchedPanels,peakOverlap,0,0);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits)
         {
             this.swings=swings;
             this.touchedPanels=touchedPanels;
             this.peakOverlap=peakOverlap;
+            exactSurfaceSamples=exactSamples;
+            exactSurfaceHits=exactHits;
         }
     }
 
@@ -152,6 +161,7 @@ public final class SkirtVisibleThighContacts
 
         boolean[] touched=new boolean[PANELS];
         float peak=0F;
+        int exactSampleCount=0,exactHitCount=0;
         float[] need=new float[PANELS];
         // Evaluate ONLY lower-fabric contact. Upper samples near the waist
         // used to treat the resting hips as a penetration and push outward
@@ -177,15 +187,30 @@ public final class SkirtVisibleThighContacts
             float[] hemAxis=rotate(rotate(
                     widthAxisWorld(strip.lowerWorld,strip.lower),
                     lowerSwing),upperSwing);
-            Point[] samples={
-                    new Point(add(pivot,mul(lower,.55F)),hemAxis),
-                    new Point(add(pivot,mul(lower,.80F)),hemAxis),
-                    new Point(add(pivot,lower),hemAxis)};
+            // Contact the actual rotated front/side/diagonal cube surfaces.
+            // A hardcoded 2px bone-centered strip misses 45-degree corner
+            // cuboids and their face centers (including under Weld). Ignore
+            // the top 28% around the fitted waist, which must stay pinned.
+            List<Point> samples=new ArrayList<Point>();
+            exactSampleCount+=addExactSurface(samples,
+                    strip.upperSurfaceWorld,root,hinge,
+                    strip.tipWorld,upperSwing,lowerSwing,false);
+            exactSampleCount+=addExactSurface(samples,
+                    strip.lowerSurfaceWorld,root,hinge,
+                    strip.tipWorld,upperSwing,lowerSwing,true);
+            // Keep the original thin centerline fallback for cubes without
+            // a readable Chameleon surface or missing/hidden face quads.
+            samples.add(new Point(add(pivot,mul(lower,.55F)),hemAxis));
+            samples.add(new Point(add(pivot,mul(lower,.80F)),hemAxis));
+            samples.add(new Point(add(pivot,lower),hemAxis));
             float desired=0F;
             for(Point sample:samples)
             {
-                float[] side=mul(normalize(sample.axis),WIDTH);
-                for(int edge=-1;edge<=1;edge++)
+                boolean exact=sample.axis==null;
+                float[] side=exact?new float[]{0F,0F,0F}:
+                        mul(normalize(sample.axis),WIDTH);
+                int edgeLimit=exact?0:1;
+                for(int edge=-edgeLimit;edge<=edgeLimit;edge++)
                 {
                     float[] point=add(sample.p,mul(side,edge));
                     for(Leg leg:active)
@@ -193,6 +218,7 @@ public final class SkirtVisibleThighContacts
                         float overlap=outwardPenetration(point,leg,outward);
                         if(overlap>0F)
                         {
+                            if(exact)exactHitCount++;
                             peak=Math.max(peak,overlap);
                             float distance=Math.max(.14F,
                                     length(sub(sample.p,pivot)));
@@ -233,7 +259,44 @@ public final class SkirtVisibleThighContacts
         }
         int total=0;
         for(boolean value:touched)if(value)total++;
-        return new Result(copy,total,peak);
+        return new Result(copy,total,peak,exactSampleCount,exactHitCount);
+    }
+
+    /**
+     * Transform decoded CLEAN quad surface vertices by the same two
+     * world-space native bone swings as the Chameleon panel. Upper bone
+     * surfaces follow its root swing; lower bone surfaces additionally
+     * follow the lower swing around the animated hinge. This avoids
+     * treating cube geometry as if it were aligned to the bone axis.
+     */
+    private static int addExactSurface(List<Point> out,float[][] source,
+            float[] root,float[] hinge,float[] tip,
+            float[] upperSwing,float[] lowerSwing,boolean lower)
+    {
+        if(source==null||source.length==0||source.length>128)return 0;
+        float[] down=sub(tip,root);
+        float length=length(down);
+        if(length<.05F)return 0;
+        float[] direction=mul(down,1F/length);
+        int n=0;
+        for(float[] p:source)
+        {
+            if(!valid(p,3))continue;
+            float fraction=dot(sub(p,root),direction)/length;
+            if(fraction<.28F || fraction>1.45F)continue;
+            float[] world;
+            if(lower)
+            {
+                float[] inner=rotate(sub(p,hinge),lowerSwing);
+                world=add(root,rotate(add(sub(hinge,root),inner),
+                        upperSwing));
+            }
+            else world=add(root,rotate(sub(p,root),upperSwing));
+            if(!valid(world,3))continue;
+            out.add(new Point(world,null));
+            n++;
+        }
+        return n;
     }
 
     private static boolean bend(Map<String,float[]> swings,String id,

@@ -2060,9 +2060,23 @@ public class BodyPartsPreviewRenderer
                                     // space (rear skirt has authored Y=180).
                                     if(boneCount==2)
                                     {
+                                        // Visual collision requires the ACTUAL
+                                        // Chameleon decoded cube faces. Side
+                                        // and angled skirt panels have rotated
+                                        // geometry, not a common thin axis.
+                                        BodyPartChameleonRenderedCubeProbe.Result upperCube=
+                                                SKIRT_VISIBLE_THIGH_CONTACTS ?
+                                                BodyPartChameleonRenderedCubeProbe.inspect(
+                                                        part.morph.get(),names[0],
+                                                        nativeWorld[0]) : null;
+                                        float[][] upperFace=upperCube==null?
+                                                null:upperCube.surfaceWorld;
+                                        float[][] lowerFace=tipGeometry==null?
+                                                null:tipGeometry.surfaceWorld;
                                         skirtStrips.add(new SkirtClothPoseCoupler.Strip(
                                                 names[0],names[1],
-                                                nativeWorld[0],nativeWorld[1],terminal));
+                                                nativeWorld[0],nativeWorld[1],
+                                                terminal,upperFace,lowerFace));
                                         skirtRaw.putAll(physical);
                                     }
                                 }
@@ -2111,6 +2125,9 @@ public class BodyPartsPreviewRenderer
                                 +"frame="+frame+
                                 " activePanels="+clearance.touchedPanels+
                                 " maxPenetration="+clearance.peakOverlap+
+                                " exactSamples="+clearance.exactSurfaceSamples+
+                                " exactHits="+clearance.exactSurfaceHits+
+                                " weld="+data.isWeldEnabled()+
                                 " thighLeft="+contacts.leftUpperLeg+
                                 " thighRight="+contacts.rightUpperLeg);
                 }

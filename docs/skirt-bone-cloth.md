@@ -257,3 +257,42 @@ not expanding the skirt, and original wide-step/mirrored cases.
 This repairs the **rejection gate**, not the full cloth simulation.
 Minecraft gameplay testing is required to confirm whether the real
 Emoticons pose uses the expected mesh-fitted bounds/axes. `[Jolt][SkirtSurface]` logs remain available every 20 frames.
+
+## Collision contact and Weld Geometry observation
+
+The latest user comparison showed that **WELD GEOMETRY ON** reduces
+visible thigh penetration, but does not eliminate it. This is expected:
+`ChameleonWeldPreviewPass` joins matching **parent-child cube faces for
+rendering only**; it restores the vertices after each render. It does not
+supply Jolt with new collider shapes or stitch adjacent skirt strips.
+
+The original `SkirtVisibleThighContacts` collision pass sampled three
+centerline points with a fixed +/-1px width. The actual `skirt.geo.json`
+has 20 skirt panels, with **45-degree angled corner cubes**, individually
+rotated cube geometry, and 1x2-pixel side panels. Centerline width samples
+do not cover those real visible shapes.
+
+The staged correction (on top of the raised thigh envelope PR) now:
+
+* Reads real **decoded Chameleon quad vertices and quad face centers**
+  from the parent/child selected cubes; respects cube rotation and bone
+  initial pivot in the current attached actor world transform.
+* Projects upper/lower source points through the same Jolt upper/lower
+  world-space swings used by the visible skirt, and tests those surface
+  points against the fitted Emoticons leg OBBs. The upper waistmost
+  28% is excluded to avoid the old umbrella-style flare.
+* Retains the previous centerline fallback if a Chameleon cube face is
+  unavailable/hidden, and retains tight root/hem response limits.
+  Source bones/animations/skin/physics JAR and weld implementation remain
+  unchanged.
+* Every 20 ticks adds `exactSamples=N exactHits=N weld=true/false` to
+  `[Jolt][SkirtSurface]` diagnostics. A positive exact hit proves
+  the real decoded skirt surface overlapped a fitted thigh OBB **at the
+  same sample**; it does not prove perfect collision clearance.
+
+The remaining limitation is fundamentally structural: twenty independent
+Jolt chains with visual welding are still not a continuous constrained cloth
+surface. No vertex sample fix alone can guarantee complete elimination of
+severe leg clipping; for that, a genuinely coupled cloth rig/solver with
+surface contacts is needed. Compare Weld ON/OFF and a high step after the
+three CI checks, before merging.

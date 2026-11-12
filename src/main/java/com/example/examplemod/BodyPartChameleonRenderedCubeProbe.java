@@ -28,13 +28,16 @@ public final class BodyPartChameleonRenderedCubeProbe
         public final int cubeCount;
         /** Number of decoded quad vertices used on the selected cube. */
         public final int vertexCount;
+        /** Exact source cube surface (corners + face centers), world space. */
+        public final float[][] surfaceWorld;
 
         private Result(BodyPartJoltCubeGeometry.Measurement measurement,
-                int cubeCount,int vertexCount)
+                int cubeCount,int vertexCount,float[][] surfaceWorld)
         {
             this.measurement=measurement;
             this.cubeCount=cubeCount;
             this.vertexCount=vertexCount;
+            this.surfaceWorld=surfaceWorld;
         }
     }
 
@@ -64,6 +67,7 @@ public final class BodyPartChameleonRenderedCubeProbe
             float[] bonePivot=readXYZ(publicField(initial,"translate"));
             BodyPartJoltCubeGeometry.Measurement best=null;
             int bestVertices=0;
+            float[][] bestSamples=null;
             float bestExtent=0F;
             for(Object cube:cubes)
             {
@@ -98,9 +102,24 @@ public final class BodyPartChameleonRenderedCubeProbe
                     best=candidate;
                     bestExtent=hi-lo;
                     bestVertices=vertexData.size();
+                    // Same decoded vertices and cube rotation as the measured
+                    // native terminal tip, not guessed Blockbench X/Z axes.
+                    try
+                    {
+                        bestSamples=BodyPartJoltCubeGeometry
+                                .surfaceSamplesRenderedVertices(worldBone,
+                                        bonePivot,pivot,rotation,
+                                        vertexData.toArray(
+                                                new float[vertexData.size()][]));
+                    }
+                    catch(IllegalArgumentException invalid)
+                    {
+                        bestSamples=null;
+                    }
                 }
             }
-            return best==null?null:new Result(best,cubes.size(),bestVertices);
+            return best==null?null:new Result(best,cubes.size(),
+                    bestVertices,bestSamples);
         }
         catch(ReflectiveOperationException error)
         {

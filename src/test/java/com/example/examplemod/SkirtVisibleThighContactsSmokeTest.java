@@ -29,6 +29,8 @@ public final class SkirtVisibleThighContactsSmokeTest
         wideStridePushesClothOutward();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
+        actualDiagonalCubeSurfaceDetectsMissedLeg();
+        decodedQuadRotationIsPreserved();
         broadVerticalNeutralThighDoesNotFlare();
         bothLegsOnlyDeflectLocalPanels();
         absentLegDoesNotInventContact();
@@ -121,6 +123,60 @@ public final class SkirtVisibleThighContactsSmokeTest
                         f.strips,f.swings,budget.select(true));
         require(result.touchedPanels==0,
                 "vertical resting thigh must not re-inflate the skirt");
+    }
+
+    private static void actualDiagonalCubeSurfaceDetectsMissedLeg()
+    {
+        // A diagonal side cube extends ~3px beyond its central Jolt
+        // strip. The old fixed +/-1px contact probes MISS a narrow leg
+        // intersecting the *actual* rendered panel corner.
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        float[] actualBox={.42F,-.30F,.18F,0F,0F,0F,1F,
+                .055F,.07F,.025F};
+        float[] capsule={.42F,-.30F,.18F,0F,0F,0F,1F,
+                .04F,.07F,.04F,2F};
+        budget.add(actualBox,capsule,"emoticons.left_leg");
+        SkirtVisibleThighContacts.Result old=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,budget.select(true));
+        require(old.swings.get(BONES[0][0])[3]<.001F,
+                "old bone-centered strip should miss the protruding cube corner");
+        SkirtClothPoseCoupler.Strip oldStrip=f.strips.get(0);
+        f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                oldStrip.upper,oldStrip.lower,oldStrip.upperWorld,
+                oldStrip.lowerWorld,oldStrip.tipWorld,null,
+                new float[][] {{.42F,-.30F,.18F}}));
+        SkirtVisibleThighContacts.Result corrected=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,budget.select(true));
+        require(corrected.exactSurfaceSamples>0 &&
+                corrected.exactSurfaceHits>0,
+                "real rendered cube surface must find the contact");
+        require(corrected.swings.get(BONES[0][0])[3]>.01F &&
+                corrected.touchedPanels<7,
+                "real geometry collision must stay localized");
+        require(corrected.swings.get(BONES[0][0])[3]<=.1001F,
+                "cube collision must not balloon waist");
+    }
+
+    private static void decodedQuadRotationIsPreserved()
+    {
+        float[] m=matrix(0F,0F,0F,false);
+        float[][] quads={{1F,0F,0F},{0F,0F,0F},
+                {0F,1F,0F},{1F,1F,0F}};
+        float[][] surface=BodyPartJoltCubeGeometry
+                .surfaceSamplesRenderedVertices(m,new float[]{0,0,0},
+                        new float[]{0,0,0},new float[]{0,0,90F},quads);
+        require(surface.length==5,"missing quad center sample");
+        near(surface[0][0],0F,.0001F,
+                "rotated cube world X incorrect");
+        near(surface[0][1],1F,.0001F,
+                "rotated cube world Y incorrect");
+        near(surface[4][0],-.5F,.0001F,
+                "rotated quad center wrong X");
+        near(surface[4][1],.5F,.0001F,
+                "rotated quad center wrong Y");
     }
 
     private static void bothLegsOnlyDeflectLocalPanels()
