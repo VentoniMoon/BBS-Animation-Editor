@@ -36,6 +36,13 @@ public final class SkirtVisibleThighContacts
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
     private static final float LEG_OUTWARD_THRESHOLD=.82F;
+    /** Experimental broad-hull rejection, preserving the previous global
+     * guard as an absolute fallback when smaller local boxes cannot isolate
+     * a useful response. Does not remove the collider from native Jolt. */
+    private static final boolean REJECT_BROAD_LEG_BOXES=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.rejectBroadLegBoxes","true"));
+    private static final int MAX_SINGLE_LEG_PANELS=12;
 
     public static final class Result
     {
@@ -69,10 +76,15 @@ public final class SkirtVisibleThighContacts
     private static final class Leg
     {
         final float[] p;
+        final int sourceIndex;
+        final String owner;
         final float[][] basis=new float[3][];
-        Leg(float[] p)
+        Leg(float[] p){this(p,-1,"unknown");}
+        Leg(float[] p,int sourceIndex,String owner)
         {
             this.p=p;
+            this.sourceIndex=sourceIndex;
+            this.owner=owner;
             float[] q={p[3],p[4],p[5],p[6]};
             basis[0]=rotateQuaternion(new float[]{1,0,0},q);
             basis[1]=rotateQuaternion(new float[]{0,1,0},q);
@@ -114,9 +126,28 @@ public final class SkirtVisibleThighContacts
             if(!BodyPartJoltContactBudget.isLeg(selected.owners.get(i)))continue;
             float[] box=selected.boxes[i];
             if(valid(box,10) && box[7]>.01F && box[8]>.01F && box[9]>.01F)
-                legs.add(new Leg(box));
+                legs.add(new Leg(box,i,selected.owners.get(i)));
         }
         if(legs.isEmpty())return new Result(copy,0,0F);
+        if(REJECT_BROAD_LEG_BOXES)
+        {
+            // Filter ONLY shapes which individually cover most of the
+            // skirt. Unlike the previous all-or-nothing guard, a local
+            // genuine thigh box may still correct the front hem when
+            // another incorrect/oversized OBB overlaps the entire ring.
+            Audit coverage=auditBonePose(strips,copy,selected,visualScale);
+            if(coverage.legBoxes==legs.size() &&
+                    coverage.perLegPanels.length==legs.size())
+            {
+                List<Leg> local=new ArrayList<Leg>();
+                for(int index=0;index<legs.size();index++)
+                    if(coverage.perLegPanels[index]<=MAX_SINGLE_LEG_PANELS)
+                        local.add(legs.get(index));
+                if(!local.isEmpty())legs=local;
+                // If all fitted boxes cover most of the skirt, keep the
+                // original all-ring guard: do not invent an outward push.
+            }
+        }
         float cx=0F,cz=0F;
         for(SkirtClothPoseCoupler.Strip s:strips)
         {
@@ -344,8 +375,21 @@ public final class SkirtVisibleThighContacts
         public final int sourcePoints,uniqueHits,rawHits,hitPanels,legBoxes;
         public final float maxOverlap;
         public final String dominantOwner;
+        /** Number of distinct panels overlapped by each captured leg OBB,
+         * in the same order as the accepted selected leg boxes. */
+        public final int[] perLegPanels;
+        /** Source fit of each leg OBB, sorted by the number of touched
+         * panels. Outputs are diagnostics only; never alter Jolt contacts. */
+        public final String perLegCoverage;
         Audit(int sourcePoints,int uniqueHits,int rawHits,int hitPanels,
                 int legBoxes,float maxOverlap,String dominantOwner)
+        {
+            this(sourcePoints,uniqueHits,rawHits,hitPanels,legBoxes,
+                    maxOverlap,dominantOwner,new int[0],"");
+        }
+        Audit(int sourcePoints,int uniqueHits,int rawHits,int hitPanels,
+                int legBoxes,float maxOverlap,String dominantOwner,
+                int[] perLegPanels,String perLegCoverage)
         {
             this.sourcePoints=sourcePoints;
             this.uniqueHits=uniqueHits;
@@ -354,6 +398,8 @@ public final class SkirtVisibleThighContacts
             this.legBoxes=legBoxes;
             this.maxOverlap=maxOverlap;
             this.dominantOwner=dominantOwner;
+            this.perLegPanels=perLegPanels.clone();
+            this.perLegCoverage=perLegCoverage;
         }
     }
 
@@ -377,7 +423,7 @@ public final class SkirtVisibleThighContacts
             if(BodyPartJoltContactBudget.isLeg(owner)&&valid(box,10)&&
                     box[7]>.01F&&box[8]>.01F&&box[9]>.01F)
             {
-                legs.add(new Leg(box));
+                legs.add(new Leg(box,index,owner));
                 ownerNames.add(owner+"#"+index);
             }
         }
@@ -397,6 +443,7 @@ public final class SkirtVisibleThighContacts
         cx/=PANELS;cz/=PANELS;
         int sources=0,unique=0,raw=0,affected=0;
         int[] hitsByLeg=new int[legs.size()];
+        int[] panelsByLeg=new int[legs.size()];
         float maxOverlap=0F;
         for(SkirtClothPoseCoupler.Strip strip:strips)
         {
@@ -426,6 +473,7 @@ public final class SkirtVisibleThighContacts
                 points.add(new Point(add(joint,second),null));
             }
             boolean panelContact=false;
+            boolean[] shapeTouchesPanel=new boolean[legs.size()];
             for(Point p:points)
             {
                 sources++;
@@ -439,6 +487,7 @@ public final class SkirtVisibleThighContacts
                     {
                         raw++;
                         hitsByLeg[i]++;
+                        shapeTouchesPanel[i]=true;
                         sampleContact=true;
                         panelContact=true;
                         maxOverlap=Math.max(maxOverlap,overlap);
@@ -447,6 +496,8 @@ public final class SkirtVisibleThighContacts
                 if(sampleContact)unique++;
             }
             if(panelContact)affected++;
+            for(int boxIndex=0;boxIndex<legs.size();boxIndex++)
+                if(shapeTouchesPanel[boxIndex])panelsByLeg[boxIndex]++;
         }
         int primary=-1;
         for(int i=0;i<hitsByLeg.length;i++)
@@ -454,8 +505,55 @@ public final class SkirtVisibleThighContacts
         String source=primary<0?"none":
                 ownerNames.get(primary)+"("+hitsByLeg[primary]+")";
         return new Audit(sources,unique,raw,affected,legs.size(),
-                maxOverlap,source);
+                maxOverlap,source,panelsByLeg,
+                describeLegCoverage(legs,hitsByLeg,panelsByLeg,cx,cz,strips));
     }
+
+    /**
+     * Compact shape-level coverage to identify malformed or misaligned
+     * Emoticons parent hulls. One badly fitted leg OBB can otherwise mark
+     * the whole 20-panel skirt as inside the body.
+     */
+    private static String describeLegCoverage(List<Leg> legs,int[] hits,
+            int[] panels,float cx,float cz,
+            List<SkirtClothPoseCoupler.Strip> strips)
+    {
+        float cy=0F;
+        for(SkirtClothPoseCoupler.Strip strip:strips)
+            cy+=strip.upperWorld[13];
+        cy/=PANELS;
+        List<Integer> order=new ArrayList<Integer>();
+        for(int i=0;i<legs.size();i++)order.add(Integer.valueOf(i));
+        Collections.sort(order,new java.util.Comparator<Integer>()
+        {
+            @Override public int compare(Integer a,Integer b)
+            {
+                int panelsDiff=panels[b.intValue()]-panels[a.intValue()];
+                return panelsDiff!=0?panelsDiff:hits[b.intValue()]-hits[a.intValue()];
+            }
+        });
+        StringBuilder summary=new StringBuilder();
+        for(int k=0;k<order.size();k++)
+        {
+            int i=order.get(k).intValue();
+            Leg leg=legs.get(i);
+            if(k>0)summary.append(';');
+            summary.append(leg.owner).append('#').append(leg.sourceIndex)
+                    .append("(panels=").append(panels[i])
+                    .append(",hits=").append(hits[i])
+                    .append(",dxyz=").append(round(leg.p[0]-cx))
+                    .append('/').append(round(leg.p[1]-cy))
+                    .append('/').append(round(leg.p[2]-cz))
+                    .append(",half=").append(round(leg.p[7]))
+                    .append('/').append(round(leg.p[8]))
+                    .append('/').append(round(leg.p[9]))
+                    .append(')');
+        }
+        return summary.toString();
+    }
+
+    private static float round(float value)
+    {return Math.round(value*1000F)/1000F;}
 
     /**
      * Transform decoded CLEAN quad surface vertices by the same two

@@ -29,6 +29,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         wideStridePushesClothOutward();
         auditMeasuresResidualEvenWhenNoVisualCorrectionIsAvailable();
         wholeRingGuardLeavesAuditableResidual();
+        badBroadShapeDoesNotSuppressValidLocalThigh();
         compact085RespondsLocallyWithoutChangingNormalScale();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
@@ -143,6 +144,44 @@ public final class SkirtVisibleThighContactsSmokeTest
                         f.strips,correction.swings,selected,.85F);
         require(post.uniqueHits==pre.uniqueHits && post.hitPanels==20,
                 "audit must expose unchanged penetration after safety abort");
+    }
+
+    /** A real observed pattern: aggregate 20-panel contact aborts the
+     * whole skirt because ONE incorrect giant leg shape overlaps every
+     * strip. It must not suppress a second correctly fitted local thigh
+     * box. Do not disable the global umbrella guard for the bad box. */
+    private static void badBroadShapeDoesNotSuppressValidLocalThigh()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(new float[]{0F,-.2F,0F,0F,0F,0F,1F,
+                    .60F,.40F,.60F},
+                new float[]{0F,-.2F,0F,0F,0F,0F,1F,
+                    .20F,.40F,.20F,2F},
+                "emoticons.right_leg");
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection selected=budget.select(true);
+        SkirtVisibleThighContacts.Audit pre=
+                SkirtVisibleThighContacts.auditBonePose(
+                        f.strips,f.swings,selected,.85F);
+        require(pre.hitPanels==20&&pre.perLegPanels.length==2,
+                "synthetic oversized OBB must create full-ring false contact");
+        require(pre.perLegPanels[0]==20&&pre.perLegPanels[1]<=12,
+                "only giant collider must exceed spatial coverage cap");
+        require(pre.perLegCoverage.contains("panels=20"),
+                "diagnostic must identify oversized collider panel coverage");
+        SkirtVisibleThighContacts.Result result=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,selected,.85F);
+        require(result.touchedPanels>0&&result.touchedPanels<=7,
+                "valid local box was incorrectly silenced by giant collider");
+        require(result.contactDepths.containsKey(BONES[0][0]),
+                "local front thigh should still produce adaptive response");
+        near(result.swings.get(BONES[10][0])[3],0F,.00001F,
+                "giant false collider must not create rear umbrella flare");
+        near(f.swings.get(BONES[0][0])[3],0F,.00001F,
+                "source Jolt pose must remain untouched");
     }
 
     private static void compact085RespondsLocallyWithoutChangingNormalScale()

@@ -540,3 +540,60 @@ No physics parameters, Jolt core, loaded DLL, or saved animation are
 changed in this diagnostic PR. Use the same compact 0.85 skirt, known
 walking animation, Weld ON, native contacts ON, and record all
 `[SkirtContactAudit]` lines for five consecutive frames.
+
+## Emoticons leg hull coverage recovery from actual in-game log
+
+The user's `[Jolt][SkirtContactAudit]` capture at scale **0.85**,
+frames 27–46, proves this was not a spring-parameter problem:
+* `legBoxes=12` from the real Emoticons skin-parent capture;
+  `preSources=860` throughout.
+* All **20/20** skirt panels appear in contact throughout the entire
+  20-frame interval. 621–736 of 860 source points are flagged as
+  penetrating leg proxies (many repeated across multiple leg boxes).
+* **18 out of 20** frames have `correctedPanels=0`; their
+  `postUnique` is exactly equal to `preUnique`. The corresponding
+  `suspected=possible-all-ring-guard` is consistent with the guard in
+  `SkirtVisibleThighContacts` that ABORTS all local correction after
+  more than 12 panels are touched.
+* Only frames 33 and 42 adjusted 3 panels each, and the total
+  intersection count dropped only a little. Existing
+  `preDepth=postDepth=.25` is the numerical **cap** imposed by
+  `outwardPenetration`, not a precise measured penetration depth.
+* The original Jolt chain swing count over 0.3 rad (31–38 bones)
+  drops to roughly 10–11 after `SkirtClothPoseCoupler` smoothing.
+  This could be a secondary reason for insufficient movement, but
+  raising spring stiffness/gravity/damping did not help the real gait.
+
+The immediate repair isolates **each** parent Emoticons leg OBB:
+it counts how many of the real 20 Chameleon skirt strips its predicted
+surface points actually overlap in world space. An individual OBB that
+covers **more than 12 of 20** strips is implausibly broad for one
+human-like limb in this skirt and is skipped ONLY by the final
+skirt-specific VISUAL body-contact solver, leaving all normal native
+Jolt contacts untouched. If other local boxes remain, they still
+generate actual correction and local adaptive width; no blanket
+abort is necessary. If all fitted boxes are implausible, the old
+global safety guard remains: there is no invented substitute contact.
+
+The source box breakdown is logged per frame while
+`-Dbbs.editor.physics.skirt.contactAudit=true`:
+
+`[Jolt][SkirtContactShapes] frame=N scale=.85 maxLegPanels=12
+ boxes=emoticons.right_leg#1(panels=20,hits=...,dxyz=...,
+ half=...);...`
+
+Where `dxyz` is the colliding OBB center relative to the mean
+waist-anchor location; `half` is its REAL fitted OBB half-extents
+in blocks. This is what can identify a bad skin fit or coordinate
+transform. One additional A/B property
+`-Dbbs.editor.physics.skirt.rejectBroadLegBoxes=false`
+restores exactly the previous all-or-nothing visual response.
+
+**Safety/limits:** This approach is deliberately conservative.
+If several individually plausible boxes collectively cover all
+20 strips, the existing final whole-ring guard still cancels the
+correction. Native Jolt may still have badly fitted boxes; this
+stage cannot repair the skinned-mesh extraction or guarantee
+triangle-accurate contact. Do not claim complete elimination
+of clipping until in-game `SkirtContactAudit` confirms
+`postUnique` significantly decreases without a silhouette regression.
