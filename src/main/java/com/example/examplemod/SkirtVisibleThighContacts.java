@@ -131,8 +131,21 @@ public final class SkirtVisibleThighContacts
             for(int axis=0;axis<3;axis++)
                 support+=Math.abs(dot(radial,leg.basis[axis]))*
                         leg.p[7+axis];
+            // A broad but VERTICAL neutral thigh can graze the short
+            // skirt edge. Do not apply a resting outward force all around
+            // the waist; require either outward-moving center or a thigh
+            // whose longest fitted axis visibly tilts off vertical.
+            int longest=0;
+            if(leg.p[8]>leg.p[7])longest=1;
+            if(leg.p[9]>leg.p[7+longest])longest=2;
+            float tilted=(float)Math.sqrt(
+                    leg.basis[longest][0]*leg.basis[longest][0]+
+                    leg.basis[longest][2]*leg.basis[longest][2]);
+            boolean raised=tilted>=.30F;
+            boolean movedOut=distance>=waistRadius*.68F;
             if(distance+support>=
-                    Math.max(.09F,waistRadius*LEG_OUTWARD_THRESHOLD))
+                    Math.max(.09F,waistRadius*LEG_OUTWARD_THRESHOLD) &&
+                    (raised||movedOut))
                 active.add(leg);
         }
         if(active.isEmpty())return new Result(copy,0,0F);
