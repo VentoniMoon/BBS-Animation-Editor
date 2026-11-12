@@ -167,6 +167,16 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale)
     {
+        return correct(strips,starting,selected,visualScale,ADAPTIVE_HEM_LIFT);
+    }
+
+    /** Package-private deterministic A/B seam test, without mutating
+     * system properties or changing the class-loading order. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift)
+    {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
                 selected.boxes==null||selected.owners==null)
@@ -456,7 +466,7 @@ public final class SkirtVisibleThighContacts
         // Local post-Jolt relief: only on a compact skirt, after the
         // normal two-leg safety selection AND the normal bounded bend.
         // Never raise the whole ring merely because a thigh is nearby.
-        if(ADAPTIVE_HEM_LIFT && visualScale<.995F &&
+        if(adaptiveLift && visualScale<.995F &&
                 !directContacts.isEmpty())
         {
             String[] ids=new String[PANELS];
