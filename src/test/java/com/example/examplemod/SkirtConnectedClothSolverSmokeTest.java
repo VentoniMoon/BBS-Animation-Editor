@@ -28,7 +28,8 @@ public final class SkirtConnectedClothSolverSmokeTest
         raisedLegMovesOnlyNearbyFabric();
         unrelatedBodyGeometryDoesNotMakeFakeContact();
         brokenGiantHullIsIgnoredInsteadOfInflatingRing();
-        extremeIndependentStripGetsNeighborConstraints();
+        walkingPhysicsWithoutCollisionIsUnchanged();
+        farLegWithoutCollisionIsUnchanged();
         mirroredRearBoneBasisRemainsValid();
         System.out.println("SkirtConnectedClothSolverSmokeTest OK");
     }
@@ -61,6 +62,8 @@ public final class SkirtConnectedClothSolverSmokeTest
                 r.maxContactBefore+" -> "+r.maxContactAfter);
         check(r.adjustedPanels>0,"front skirt did not react");
         check(r.adjustedPanels<N,"contact inflated entire ring");
+        check(r.swings.get(BONES[10][0])[3]==f.raw.get(BONES[10][0])[3],
+                "remote rear panel was changed by local front thigh");
         check(r.largestSeamStretch<.16F,"connected hem seam diverged");
         check(r.swings.get(BONES[0][0])[3]>.01F||
                 r.swings.get(BONES[0][1])[3]>.01F,
@@ -99,15 +102,47 @@ public final class SkirtConnectedClothSolverSmokeTest
                 "inaccurate full-ring collider caused umbrella flare");
     }
 
-    private static void extremeIndependentStripGetsNeighborConstraints()
+    /**
+     * Regression from in-game 2026-11-12 screenshot: the first connected
+     * solver imposed a 20-panel ring on every neutral/walking frame and
+     * rendered a rigid cylindrical skirt. Without a detected thigh
+     * collision, preserve EVERY original Jolt swing bit-for-bit.
+     */
+    private static void walkingPhysicsWithoutCollisionIsUnchanged()
     {
         Fixture f=new Fixture(false);
         f.raw.put(BONES[0][0],new float[]{0F,0F,1F,.75F});
+        f.raw.put(BONES[0][1],new float[]{1F,0F,0F,.20F});
+        f.raw.put(BONES[5][0],new float[]{1F,0F,0F,.18F});
+        f.raw.put(BONES[12][1],new float[]{0F,0F,1F,.25F});
         SkirtConnectedClothSolver.Result r=
                 SkirtConnectedClothSolver.solve(f.strips,f.raw,null);
-        check(r.adjustedPanels>0,"detached independent Jolt strip unchanged");
-        check(r.largestSeamStretch<.25F,
-                "cross-strip grid did not preserve the ring");
+        check(r.adjustedPanels==0,"no-collision walk deformed the skirt");
+        for(String key:f.raw.keySet())
+            for(int i=0;i<4;i++)
+                check(Float.floatToIntBits(r.swings.get(key)[i])==
+                        Float.floatToIntBits(f.raw.get(key)[i]),
+                        "changed source animated swing "+key+" index "+i);
+    }
+
+    private static void farLegWithoutCollisionIsUnchanged()
+    {
+        Fixture f=new Fixture(false);
+        f.raw.put(BONES[0][0],new float[]{0F,0F,1F,.5F});
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(box(3F,-.31F,3F,.11F,.16F,.105F),
+                primitive(3F,-.31F,3F),"emoticons.left_leg");
+        SkirtConnectedClothSolver.Result r=
+                SkirtConnectedClothSolver.solve(
+                        f.strips,f.raw,budget.select(true));
+        check(r.adjustedPanels==0,"far leg altered walking skirt pose");
+        check(r.maxContactBefore==0F&&r.maxContactAfter==0F,
+                "false positive remote leg collision");
+        for(String key:f.raw.keySet())
+            for(int i=0;i<4;i++)
+                check(Float.floatToIntBits(r.swings.get(key)[i])==
+                        Float.floatToIntBits(f.raw.get(key)[i]),
+                        "remote leg disturbed source swing "+key);
     }
 
     private static void mirroredRearBoneBasisRemainsValid()
