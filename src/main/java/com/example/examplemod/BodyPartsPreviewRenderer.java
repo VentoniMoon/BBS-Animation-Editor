@@ -1682,6 +1682,14 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_SCALE_CONTACT_COMPENSATION =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.scaleContactCompensation","true"));
+    /** Zero changes to physical poses. For 5-tick gait diagnostics compare
+     * the actual Jolt-coupled source and corrected bone/mesh surfaces
+     * against the selected Emoticons thigh OBBs every timeline tick. */
+    private static final boolean SKIRT_CONTACT_AUDIT =
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.contactAudit","false"));
+    private final Map<BodyPartModelData,Integer> lastSkirtContactAuditFrame=
+            new IdentityHashMap<BodyPartModelData,Integer>();
     /** Visible panel surfaces (not just centerline Jolt links) clear thighs. */
     private static final boolean SKIRT_VISIBLE_THIGH_CONTACTS =
             Boolean.parseBoolean(System.getProperty(
@@ -2163,11 +2171,65 @@ public class BodyPartsPreviewRenderer
                     // Emoticons thigh boxes forwarded to native Jolt.
                     BodyPartJoltContactBudget.Selection contacts=
                             passiveCollisionSelection(data,frame);
+                    Map<String,float[]> beforeClearance=stitched;
                     SkirtVisibleThighContacts.Result clearance=
                             SkirtVisibleThighContacts.correct(
                                     skirtStrips,stitched,contacts,skirtVisualScale);
                     stitched=clearance.swings;
                     thighContactDepths=clearance.contactDepths;
+                    if(SKIRT_CONTACT_AUDIT)
+                    {
+                        Integer last=lastSkirtContactAuditFrame.get(data);
+                        if(last==null||last.intValue()!=frame)
+                        {
+                            lastSkirtContactAuditFrame.put(data,Integer.valueOf(frame));
+                            SkirtVisibleThighContacts.Audit before=
+                                    SkirtVisibleThighContacts.auditBonePose(
+                                            skirtStrips,
+                                            beforeClearance,
+                                            contacts,skirtVisualScale);
+                            SkirtVisibleThighContacts.Audit after=
+                                    SkirtVisibleThighContacts.auditBonePose(
+                                            skirtStrips,stitched,
+                                            contacts,skirtVisualScale);
+                            int rawHigh=0,coupledHigh=0;
+                            for(Map.Entry<String,float[]> raw:skirtRaw.entrySet())
+                            {
+                                float[] original=raw.getValue();
+                                float[] smoothed=beforeClearance.get(raw.getKey());
+                                if(original!=null&&original.length==4&&
+                                        Math.abs(original[3])>.30F)rawHigh++;
+                                if(smoothed!=null&&smoothed.length==4&&
+                                        Math.abs(smoothed[3])>.30F)coupledHigh++;
+                            }
+                            String limiting=before.hitPanels>12&&
+                                    clearance.contactDepths.isEmpty()?
+                                    "possible-all-ring-guard":
+                                    before.uniqueHits>0&&
+                                    clearance.touchedPanels==0?
+                                    "filtered-or-angle-cap":
+                                    "normal";
+                            System.out.println("[BBS Animation Editor][Jolt][SkirtContactAudit] "+
+                                    "frame="+frame+" model="+data.getTimelineId()+
+                                    " scale="+skirtVisualScale+
+                                    " legBoxes="+before.legBoxes+
+                                    " preSources="+before.sourcePoints+
+                                    " preUnique="+before.uniqueHits+
+                                    " preRaw="+before.rawHits+
+                                    " prePanels="+before.hitPanels+
+                                    " preDepth="+before.maxOverlap+
+                                    " correctedPanels="+clearance.touchedPanels+
+                                    " postUnique="+after.uniqueHits+
+                                    " postRaw="+after.rawHits+
+                                    " postPanels="+after.hitPanels+
+                                    " postDepth="+after.maxOverlap+
+                                    " peakFromSolver="+clearance.peakOverlap+
+                                    " originalSwingAbove0.3="+rawHigh+
+                                    " coupledSwingAbove0.3="+coupledHigh+
+                                    " suspected="+limiting+
+                                    " strongestLeg="+after.dominantOwner);
+                        }
+                    }
                     if(frame%20==0)
                         System.out.println("[BBS Animation Editor][Jolt][SkirtSurface] "
                                 +"frame="+frame+
