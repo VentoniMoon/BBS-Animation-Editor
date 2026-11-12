@@ -1119,15 +1119,21 @@ public final class SkirtVisibleThighContacts
         float largest=-Float.MAX_VALUE;
         for(Point point:points)
             largest=Math.max(largest,dot(point.p,outward));
-        int validHits=0;
+        float[] firstDeep=null;
         for(Point point:points)
         {
             if(dot(point.p,outward)<largest-OUTER_SURFACE_BAND)
                 continue;
             float depth=unclampedPenetration(
                     point.p,leg,outward,margin);
-            if(depth>=SURFACE_EVIDENCE_DEPTH &&
-                    ++validHits>=2)return true;
+            if(depth<SURFACE_EVIDENCE_DEPTH)continue;
+            if(firstDeep==null)
+                firstDeep=point.p;
+            else if(length(sub(point.p,firstDeep))>.012F)
+                return true;
+            // Chameleon stores vertices shared by multiple cuboid faces.
+            // Two copies of the SAME vertex must not masquerade as two
+            // distinct contact witnesses and reopen the umbrella failure.
         }
         return false;
     }
