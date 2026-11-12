@@ -163,3 +163,39 @@ test, enable `Show Jolt Colliders` and capture a wide walking stride
 with/without body collisions. Older Jolt JARs may use boxes instead
 of the newer capsule primitive API. Missing thigh source geometry still
 requires investigation of the actual Emoticons rig/skin.
+
+## Skirt surface vs moving thighs (experimental)
+
+The November 12 wide-step screenshot still shows the **visible Chameleon
+panel** intersecting the character's thigh. This is possible even with
+`leftThigh=true rightThigh=true`: the old native limb capsules and Jolt's
+central 2-link chain capsules are much thinner than the actual visual
+cubes, and the ring smoothing limits bone deflection.
+
+The correction is limited to the validated 20-panel skirt:
+
+* For the skirt only, use each real skinned Emoticons **leg box** as a
+  typed BOX collider instead of an inscribed capsule. Hair keeps the
+  original capsule primitives.
+* After native Jolt and lateral coupling, `SkirtVisibleThighContacts`
+  checks sampled **panel surfaces** (left/center/right edges on upper and
+  lower sections) against the same selected thigh/lower-leg world OBBs.
+* When a panel intersects an actual leg collider, rotate its upper bone
+  outward around the animated waist. Include a small response from
+  neighboring panels, limit extra swing and clamp the maximum result.
+  The panel's original bone animation, native physics/Jolt scene and
+  unmodified waist are not touched.
+* The adaptive width pass runs afterward, so it can cover seams caused
+  by the outward panel deflection. The routine never makes up missing
+  Emoticons collision geometry.
+* Log every 20 timeline frames:
+  `[BBS Animation Editor][Jolt][SkirtSurface] activePanels=...
+  maxPenetration=... thighLeft=... thighRight=...`.
+* A/B flag `-Dbbs.editor.physics.skirt.visibleThighContacts=false`
+  disables only this visual clearance and preserves existing Jolt.
+
+This is a bounded visual/contact correction, **not** a replacement for
+native woven cloth or polygon-perfect collisions; extreme leg poses,
+wide cubes and unusually rotated garment segments may still intersect.
+In-game inspection of the collider overlay and an animated walking test
+are required before declaring the bug solved.

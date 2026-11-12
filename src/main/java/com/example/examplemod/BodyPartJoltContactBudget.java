@@ -39,7 +39,7 @@ public final class BodyPartJoltContactBudget
         public final int total,skipped;
         public final boolean leftUpperLeg,rightUpperLeg;
 
-        Selection(List<Contact> list,int total)
+        Selection(List<Contact> list,int total,boolean skirt)
         {
             boxes=new float[list.size()][];
             shapes=new float[list.size()][];
@@ -50,6 +50,15 @@ public final class BodyPartJoltContactBudget
                 Contact c=list.get(i);
                 boxes[i]=c.box.clone();
                 shapes[i]=c.shape.clone();
+                // Emoticons legs have broad, mostly rectangular geometry.
+                // The native capsule uses the MINIMUM leg cross-section as
+                // its radius, leaving corners of the rendered thigh without
+                // contact. Preserve the full fitted cuboid for skirt cloth.
+                if(skirt && isLeg(c.owner))
+                {
+                    System.arraycopy(c.box,0,shapes[i],0,10);
+                    shapes[i][10]=JoltColliderPrimitives.BOX;
+                }
                 labels.add(c.owner);
                 String n=normalize(c.owner);
                 if(upperLeg(n,true))left=true;
@@ -90,7 +99,7 @@ public final class BodyPartJoltContactBudget
             });
         if(sorted.size()>LIMIT)
             sorted=new ArrayList<Contact>(sorted.subList(0,LIMIT));
-        return new Selection(sorted,candidates.size());
+        return new Selection(sorted,candidates.size(),skirt);
     }
 
     private static int priority(String owner)
@@ -114,6 +123,11 @@ public final class BodyPartJoltContactBudget
                         n.contains(side+"_thigh") || n.contains("thigh_"+side)) &&
                 !n.contains("lower") && !n.contains("knee") &&
                 !n.contains("foot") && !n.contains("ankle"));
+    }
+
+    public static boolean isLeg(String owner)
+    {
+        return leg(normalize(owner));
     }
 
     private static boolean leg(String n)

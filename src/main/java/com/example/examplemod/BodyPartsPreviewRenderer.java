@@ -1677,6 +1677,10 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_ADAPTIVE_WIDTH =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.adaptiveWidth","true"));
+    /** Visible panel surfaces (not just centerline Jolt links) clear thighs. */
+    private static final boolean SKIRT_VISIBLE_THIGH_CONTACTS =
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.visibleThighContacts","true"));
 
     private boolean isSkirtAttachment(BodyPartModelData data,
             List<BodyPartPhysicsChains.Chain> chains)
@@ -2088,6 +2092,28 @@ public class BodyPartsPreviewRenderer
             {
                 Map<String,float[]> stitched=
                         SkirtClothPoseCoupler.couple(skirtStrips,skirtRaw);
+                if(SKIRT_VISIBLE_THIGH_CONTACTS &&
+                        BodyPartJoltPreviewAdapter.torsoContactsRequested() &&
+                        chains.get(0).settings.hasBodyCollisions())
+                {
+                    // Native Jolt collides its narrow chain centerline.
+                    // This bounded visual stage clears the full 2px-wide
+                    // visible Chameleon plates against the SAME animated
+                    // Emoticons thigh boxes forwarded to native Jolt.
+                    BodyPartJoltContactBudget.Selection contacts=
+                            passiveCollisionSelection(data,frame);
+                    SkirtVisibleThighContacts.Result clearance=
+                            SkirtVisibleThighContacts.correct(
+                                    skirtStrips,stitched,contacts);
+                    stitched=clearance.swings;
+                    if(frame%20==0)
+                        System.out.println("[BBS Animation Editor][Jolt][SkirtSurface] "
+                                +"frame="+frame+
+                                " activePanels="+clearance.touchedPanels+
+                                " maxPenetration="+clearance.peakOverlap+
+                                " thighLeft="+contacts.leftUpperLeg+
+                                " thighRight="+contacts.rightUpperLeg);
+                }
                 for(Map.Entry<String,float[]> swing:stitched.entrySet())
                     physicsFrames.accept(data,frame,swing.getKey(),
                             swing.getValue(),true);
