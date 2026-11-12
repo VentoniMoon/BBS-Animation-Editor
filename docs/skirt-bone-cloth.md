@@ -830,11 +830,13 @@ the old center/tilt check:
   of these real vertices. Only points in the outer 0.03-block band
   of that panel/region are possible evidence, not innermost faces,
   unknown fake fallback probes or top/waist contact.
-* Require **at least two** real outer surface sample points inside
-  the fitted, same-frame Emoticons thigh OBB by at least 0.038 blocks
-  of radial penetration (including the existing scale-aware surface
-  allowance). Benign resting thigh grazing at the inner hem is not
-  enough to activate a previously rejected leg.
+* Require **at least two spatially distinct** (over 0.012 blocks
+  apart) real outer surface sample points inside the fitted,
+  same-frame Emoticons thigh OBB by at least 0.038 blocks of radial
+  penetration (including the existing scale-aware surface allowance).
+  Repeated copies of a shared cube-face vertex do not count twice.
+  Benign resting thigh grazing at the inner hem is not enough to
+  activate a previously rejected leg.
 * Once accepted, use the *exact same OBB* for normal hem contacts,
   contact islands, Adaptive Hem Lift, and upper+lower mid correction.
   No changes to native Jolt bodies, stiffness/gravity/damping, authored
