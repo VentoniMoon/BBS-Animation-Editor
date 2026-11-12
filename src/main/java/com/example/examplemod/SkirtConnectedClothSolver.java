@@ -245,6 +245,20 @@ public final class SkirtConnectedClothSolver
             float rest=distance(p.restHem,n.restHem);
             largest=Math.max(largest,Math.abs(distance(p.hem,n.hem)-rest));
         }
+        // Measure the ACTUAL returned Chameleon rotations, not the
+        // temporary particle positions before angular correction limits.
+        // A correct constraint pose may still leave visual penetration
+        // when the 2-bone rig cannot reach the projected cloth nodes.
+        for(Panel p:ring)
+        {
+            float[] upper=worldQ(p.strip.upperWorld,
+                    out.get(p.strip.upper));
+            float[] lower=worldQ(p.strip.lowerWorld,
+                    out.get(p.strip.lower));
+            p.mid=add(p.root,rotate(upper,sub(p.restMid,p.root)));
+            p.hem=add(p.mid,rotate(upper,rotate(lower,
+                    sub(p.restHem,p.restMid))));
+        }
         return new Result(out,adjusted,legs.size(),ignored,
                 before,maxOverlap(ring,legs,cx,cz),largest);
     }
