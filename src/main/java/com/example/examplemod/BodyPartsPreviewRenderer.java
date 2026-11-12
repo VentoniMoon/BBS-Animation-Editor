@@ -2202,6 +2202,19 @@ public class BodyPartsPreviewRenderer
                                 if(smoothed!=null&&smoothed.length==4&&
                                         Math.abs(smoothed[3])>.30F)coupledHigh++;
                             }
+                            // The legacy audit covers upper skirt
+                            // surfaces near the pelvis as well as the hem.
+                            // This second readout measures only real lower
+                            // hem points to distinguish benign inner-waist
+                            // contacts from genuine thigh/hem penetration.
+                            SkirtVisibleThighContacts.Audit hemBefore=
+                                    SkirtVisibleThighContacts.auditHemBonePose(
+                                            skirtStrips,beforeClearance,
+                                            contacts,skirtVisualScale);
+                            SkirtVisibleThighContacts.Audit hemAfter=
+                                    SkirtVisibleThighContacts.auditHemBonePose(
+                                            skirtStrips,stitched,
+                                            contacts,skirtVisualScale);
                             String limiting=before.hitPanels>12&&
                                     clearance.contactDepths.isEmpty()?
                                     "possible-all-ring-guard":
@@ -2228,6 +2241,17 @@ public class BodyPartsPreviewRenderer
                                     " coupledSwingAbove0.3="+coupledHigh+
                                     " suspected="+limiting+
                                     " strongestLeg="+after.dominantOwner);
+                            System.out.println(
+                                    "[BBS Animation Editor][Jolt][SkirtHemAudit] "+
+                                    "frame="+frame+
+                                    " hemSources="+hemBefore.sourcePoints+
+                                    " hemBeforeUnique="+hemBefore.uniqueHits+
+                                    " hemAfterUnique="+hemAfter.uniqueHits+
+                                    " hemBeforePanels="+hemBefore.hitPanels+
+                                    " hemAfterPanels="+hemAfter.hitPanels+
+                                    " correctedPanels="+clearance.touchedPanels+
+                                    " hemStrongestLeg="+hemAfter.dominantOwner+
+                                    " hemBoxes="+hemBefore.perLegCoverage);
                             System.out.println(
                                     "[BBS Animation Editor][Jolt][SkirtContactShapes] "+
                                     "frame="+frame+
