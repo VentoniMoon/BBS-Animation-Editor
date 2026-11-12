@@ -44,28 +44,49 @@ public final class SkirtVisibleThighContacts
         public final float peakOverlap;
         /** Actual decoded Chameleon cube surface samples vs contact hits. */
         public final int exactSurfaceSamples,exactSurfaceHits;
+        /** Unlike exactSurfaceHits, each source vertex contributes once. */
+        public final int uniqueSurfaceHits;
+        public final int availableLegBoxes,activeLegBoxes;
+        /** Real matched collider identities and actor-relative geometry. */
+        public final String colliderSummary;
+        public final String hitPanelNames;
+
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
-            this(swings,touchedPanels,peakOverlap,0,0);
+            this(swings,touchedPanels,peakOverlap,0,0,0,0,0,"","");
         }
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
                 int exactSamples,int exactHits)
+        {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    0,0,0,"","");
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,int uniqueHits,
+                int availableLegs,int activeLegs,String summary,String hitPanels)
         {
             this.swings=swings;
             this.touchedPanels=touchedPanels;
             this.peakOverlap=peakOverlap;
             exactSurfaceSamples=exactSamples;
             exactSurfaceHits=exactHits;
+            uniqueSurfaceHits=uniqueHits;
+            availableLegBoxes=availableLegs;
+            activeLegBoxes=activeLegs;
+            colliderSummary=summary;
+            hitPanelNames=hitPanels;
         }
     }
 
     private static final class Leg
     {
         final float[] p;
+        final String owner;
         final float[][] basis=new float[3][];
-        Leg(float[] p)
+        Leg(float[] p,String owner)
         {
             this.p=p;
+            this.owner=owner;
             float[] q={p[3],p[4],p[5],p[6]};
             basis[0]=rotateQuaternion(new float[]{1,0,0},q);
             basis[1]=rotateQuaternion(new float[]{0,1,0},q);
@@ -95,7 +116,7 @@ public final class SkirtVisibleThighContacts
             if(!BodyPartJoltContactBudget.isLeg(selected.owners.get(i)))continue;
             float[] box=selected.boxes[i];
             if(valid(box,10) && box[7]>.01F && box[8]>.01F && box[9]>.01F)
-                legs.add(new Leg(box));
+                legs.add(new Leg(box,selected.owners.get(i)));
         }
         if(legs.isEmpty())return new Result(copy,0,0F);
         float cx=0F,cz=0F;
@@ -161,8 +182,11 @@ public final class SkirtVisibleThighContacts
 
         boolean[] touched=new boolean[PANELS];
         float peak=0F;
-        int exactSampleCount=0,exactHitCount=0;
+        int exactSampleCount=0,exactHitCount=0,uniqueExactHitCount=0;
         float[] need=new float[PANELS];
+        java.util.Map<String,Integer> legHits=
+                new LinkedHashMap<String,Integer>();
+        StringBuilder panelHits=new StringBuilder();
         // Evaluate ONLY lower-fabric contact. Upper samples near the waist
         // used to treat the resting hips as a penetration and push outward
         // the entire skirt. A single pass prevents repeated amplifying
@@ -204,9 +228,11 @@ public final class SkirtVisibleThighContacts
             samples.add(new Point(add(pivot,mul(lower,.80F)),hemAxis));
             samples.add(new Point(add(pivot,lower),hemAxis));
             float desired=0F;
+            boolean exactHitPanel=false;
             for(Point sample:samples)
             {
                 boolean exact=sample.axis==null;
+                boolean uniqueHit=false;
                 float[] side=exact?new float[]{0F,0F,0F}:
                         mul(normalize(sample.axis),WIDTH);
                 int edgeLimit=exact?0:1;
@@ -218,7 +244,14 @@ public final class SkirtVisibleThighContacts
                         float overlap=outwardPenetration(point,leg,outward);
                         if(overlap>0F)
                         {
-                            if(exact)exactHitCount++;
+                            if(exact)
+                            {
+                                exactHitCount++;
+                                uniqueHit=true;
+                                exactHitPanel=true;
+                                Integer prev=legHits.get(leg.owner);
+                                legHits.put(leg.owner,prev==null?1:prev+1);
+                            }
                             peak=Math.max(peak,overlap);
                             float distance=Math.max(.14F,
                                     length(sub(sample.p,pivot)));
@@ -227,6 +260,12 @@ public final class SkirtVisibleThighContacts
                         }
                     }
                 }
+                if(exact && uniqueHit)uniqueExactHitCount++;
+            }
+            if(exactHitPanel)
+            {
+                if(panelHits.length()>0)panelHits.append(',');
+                panelHits.append(strip.upper);
             }
             need[i]=Math.min(.34F,desired);
         }
@@ -259,7 +298,9 @@ public final class SkirtVisibleThighContacts
         }
         int total=0;
         for(boolean value:touched)if(value)total++;
-        return new Result(copy,total,peak,exactSampleCount,exactHitCount);
+        return new Result(copy,total,peak,exactSampleCount,exactHitCount,
+                uniqueExactHitCount,legs.size(),active.size(),
+                contactSummary(active,cx,cz,legHits),panelHits.toString());
     }
 
     /**
@@ -297,6 +338,39 @@ public final class SkirtVisibleThighContacts
             n++;
         }
         return n;
+    }
+
+    /** Compact, actor-relative diagnostic for deciding whether the fitted
+     * leg contact is implausibly large or intersects most skirt panels.
+     * Only up to 8 actual active hulls are printed; no new colliders.
+     */
+    private static String contactSummary(List<Leg> legs,float cx,float cz,
+            java.util.Map<String,Integer> hits)
+    {
+        StringBuilder builder=new StringBuilder();
+        int count=Math.min(8,legs.size());
+        for(int i=0;i<count;i++)
+        {
+            Leg leg=legs.get(i);
+            if(i>0)builder.append(';');
+            builder.append(leg.owner)
+                    .append("(dx=").append(round(leg.p[0]-cx))
+                    .append(",dz=").append(round(leg.p[2]-cz))
+                    .append(",half=").append(round(leg.p[7]))
+                    .append('/').append(round(leg.p[8]))
+                    .append('/').append(round(leg.p[9]))
+                    .append(",hits=").append(
+                            hits.containsKey(leg.owner)?hits.get(leg.owner):0)
+                    .append(')');
+        }
+        if(legs.size()>count)
+            builder.append(";plus=").append(legs.size()-count);
+        return builder.toString();
+    }
+
+    private static float round(float x)
+    {
+        return Math.round(x*1000F)/1000F;
     }
 
     private static boolean bend(Map<String,float[]> swings,String id,
