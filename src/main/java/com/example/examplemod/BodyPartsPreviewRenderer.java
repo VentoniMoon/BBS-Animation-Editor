@@ -2234,6 +2234,8 @@ public class BodyPartsPreviewRenderer
                                     " prePanels="+before.hitPanels+
                                     " preDepth="+before.maxOverlap+
                                     " correctedPanels="+clearance.touchedPanels+
+                                    " gateRescuedBoxes="+clearance.rescuedLegBoxes+
+                                    " gateRejectedBoxes="+clearance.rejectedLegBoxes+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " midCandidates="+clearance.midCandidatePanels+
@@ -2257,6 +2259,8 @@ public class BodyPartsPreviewRenderer
                                     " hemBeforePanels="+hemBefore.hitPanels+
                                     " hemAfterPanels="+hemAfter.hitPanels+
                                     " correctedPanels="+clearance.touchedPanels+
+                                    " gateRescuedBoxes="+clearance.rescuedLegBoxes+
+                                    " gateRejectedBoxes="+clearance.rejectedLegBoxes+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " midCandidates="+clearance.midCandidatePanels+
