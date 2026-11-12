@@ -267,13 +267,39 @@ public final class SkirtVisibleThighContacts
             return new Result(copy,0,peak,exactSampleCount,exactHitCount,
                     Collections.<String,Float>emptyMap());
 
+        // The geometry profile's bone enumeration is NOT guaranteed to
+        // run in angular order. Spread pressure to true physical neighbors
+        // around the waist rather than the next entries in the bone list.
+        java.util.List<Integer> angular=new java.util.ArrayList<Integer>();
+        for(int i=0;i<PANELS;i++)angular.add(Integer.valueOf(i));
+        final float centerX=cx,centerZ=cz;
+        java.util.Collections.sort(angular,new java.util.Comparator<Integer>()
+        {
+            @Override public int compare(Integer ai,Integer bi)
+            {
+                SkirtClothPoseCoupler.Strip a=strips.get(ai.intValue());
+                SkirtClothPoseCoupler.Strip b=strips.get(bi.intValue());
+                double angleA=Math.atan2(a.upperWorld[14]-centerZ,
+                        a.upperWorld[12]-centerX);
+                double angleB=Math.atan2(b.upperWorld[14]-centerZ,
+                        b.upperWorld[12]-centerX);
+                int cmp=Double.compare(angleA,angleB);
+                return cmp!=0?cmp:a.upper.compareTo(b.upper);
+            }
+        });
+        float[] neighborhood=new float[PANELS];
+        for(int ringIndex=0;ringIndex<PANELS;ringIndex++)
+        {
+            int panel=angular.get(ringIndex).intValue();
+            int prev=angular.get((ringIndex+PANELS-1)%PANELS).intValue();
+            int next=angular.get((ringIndex+1)%PANELS).intValue();
+            neighborhood[panel]=Math.max(need[panel],Math.max(
+                    need[prev]*NEIGHBOR_RESPONSE,
+                    need[next]*NEIGHBOR_RESPONSE));
+        }
         for(int i=0;i<PANELS;i++)
         {
-            // A subtle neighboring response avoids disconnected cardboard
-            // panels but does not transmit thigh impact around the waist.
-            float contact=Math.max(need[i],Math.max(
-                    need[(i+1)%PANELS]*NEIGHBOR_RESPONSE,
-                    need[(i+PANELS-1)%PANELS]*NEIGHBOR_RESPONSE));
+            float contact=neighborhood[i];
             if(contact<.012F)continue;
             SkirtClothPoseCoupler.Strip strip=strips.get(i);
             float[] root=origin(strip.upperWorld);
