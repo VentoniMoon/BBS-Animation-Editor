@@ -414,3 +414,36 @@ penetrations in one frame. In-game checks on neutral standing,
 five-tick walking sequence, underside, and Weld ON/OFF must precede a
 claim that clipping is fixed. This experimental change is not for
 production release until validated.
+
+## Regression guard: connected-grid cloth vs original skirt shape
+
+The in-game screenshots following PR #179 show a stiff, vertical,
+boxy hem instead of the previously rounded skirt, **without solving
+thigh penetration**. The cause is that the experimental solver executed
+multiple full-ring rest-length/shear constraints on every frame, even
+when there was **no leg contact**. This overwrote the existing Jolt
+pose rather than merely correcting a local overlap.
+
+This patch explicitly preserves the old appearance:
+* `bbs.editor.physics.skirt.connectedCloth` is now **false by default**.
+  Original Jolt chain motion, skirt panel smoothing, adaptive width,
+  visual Weld and all earlier changes remain available. To run a
+  controlled A/B test of the grid, set
+  `-Dbbs.editor.physics.skirt.connectedCloth=true`.
+* In the opt-in grid, zero confirmed OBB overlap now returns the
+  complete original 40-bone Jolt pose **without any modification**.
+* A genuine thigh contact activates only the impacted panels and
+  their immediately adjacent neighbors. Unaffected panel coordinates
+  stay pinned to their original Jolt targets.
+* Reduced angular bounds and positional corrections prevent global
+  rigidization; waist roots remain pinned. A per-leg OBB that overlaps
+  nearly all panels continues to be rejected.
+* Pure Java 8 tests now assert **bitwise-identical native pose** for a
+  normal walking frame with no leg contact, plus no response to a
+  distant leg.
+
+The grid remains a prototype, not true triangle-cloth contact.
+Even if these invariants pass, the remaining high-step leg clipping
+is unsolved and must be investigated separately. Do not re-enable
+the opt-in solver as a production default until a neutral stance and
+all six walking frames have been visually tested.
