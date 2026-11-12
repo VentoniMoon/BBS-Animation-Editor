@@ -59,8 +59,12 @@ public final class SkirtPoseVisualLead
             float delta=Math.max(-MAX_WIDTH_CHANGE,Math.min(
                     MAX_WIDTH_CHANGE,after.multiplier-before.multiplier));
             float cap=after.multiplier+delta;
-            cap=Math.max(1F,Math.min(after.axis==0 || after.axis==2?
-                    SkirtAdaptiveWidth.MAX_LOWER:1.28F,cap));
+            // The upper row is limited to 7% by the source preset; never
+            // extrapolate a small upper width into the hem's 28% range.
+            float upperLimit=1.07F;
+            float limit=after.multiplier<=upperLimit+.0001F?
+                    upperLimit:SkirtAdaptiveWidth.MAX_LOWER;
+            cap=Math.max(1F,Math.min(limit,cap));
             output.put(e.getKey(),new SkirtAdaptiveWidth.Width(
                     after.axis,cap));
         }
