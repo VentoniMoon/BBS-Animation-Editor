@@ -32,6 +32,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         badBroadShapeDoesNotSuppressValidLocalThigh();
         waistTierOverlapMustNotBlockHemCollisionResponse();
         compact085RespondsLocallyWithoutChangingNormalScale();
+        adaptiveLiftMustOnlyImproveRealCompactThighContact();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
@@ -254,8 +255,8 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "compact skirt contact must remain local");
         require(compact.swings.get(BONES[0][0])[3]<=.1001F,
                 "compact waistband must not flare");
-        require(compact.swings.get(BONES[0][1])[3]<=.681F,
-                "compact hem angular safety cap");
+        require(compact.swings.get(BONES[0][1])[3]<=.956F,
+                "compact dynamic hem angular safety cap");
         SkirtVisibleThighContacts.Result noBody=
                 SkirtVisibleThighContacts.correct(f.strips,f.swings,
                         new BodyPartJoltContactBudget().select(true),.85F);
@@ -266,6 +267,116 @@ public final class SkirtVisibleThighContactsSmokeTest
     /** The geo file's bone order is not a reliable angular ring order.
      * A different enumeration of the SAME 20 physical strips must not
      * change which neighboring panels receive the local contact response. */
+    /**
+     * Local iterative lift must reduce actual lower-cube/leg intersections,
+     * not just increase an angular number. Compare the same frame against
+     * the old cap, with an explicit A/B argument to avoid JVM order effects.
+     */
+    private static void adaptiveLiftMustOnlyImproveRealCompactThighContact()
+    {
+        boolean found=false;
+        float[] xPositions={.42F,.46F,.50F,.54F,.58F};
+        float[] heights={-.24F,-.28F,-.32F};
+        float[] poses={0F,.18F,.32F,.50F,.62F};
+        for(float x:xPositions)
+        {
+            if(found)break;
+            for(float y:heights)
+            {
+                if(found)break;
+                for(float pose:poses)
+                {
+                    Fixture f=new Fixture(false);
+                    f.swings.put(BONES[0][1],new float[]{0F,0F,1F,pose});
+                    BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+                    budget.add(box(x,y,0F),typed(x,y,0F),
+                            "emoticons.left_leg");
+                    BodyPartJoltContactBudget.Selection leg=budget.select(true);
+                    SkirtVisibleThighContacts.Result normal=
+                            SkirtVisibleThighContacts.correct(
+                                    f.strips,f.swings,leg,.85F,false);
+                    SkirtVisibleThighContacts.Result lifted=
+                            SkirtVisibleThighContacts.correct(
+                                    f.strips,f.swings,leg,.85F,true);
+                    if(lifted.liftedHemPanels>0)
+                    {
+                        SkirtVisibleThighContacts.Audit baseline=
+                                SkirtVisibleThighContacts.auditHemBonePose(
+                                        f.strips,normal.swings,leg,.85F);
+                        SkirtVisibleThighContacts.Audit improved=
+                                SkirtVisibleThighContacts.auditHemBonePose(
+                                        f.strips,lifted.swings,leg,.85F);
+                        if(improved.uniqueHits<baseline.uniqueHits)
+                        {
+                            found=true;
+                            require(lifted.liftedHemPanels<=3,
+                                    "one thigh must move at most three extra lower bones");
+                            require(lifted.liftOverlapReduction>0F,
+                                    "trial lift must reduce geometric penetration");
+                            require(lifted.swings.get(BONES[0][1])[3]<=.956F,
+                                    "collision-only swing passed dynamic safety cap");
+                            for(int i=0;i<BONES.length;i++)
+                            {
+                                // No additional upper-bone/waist motion is
+                                // permitted by the adaptive lift stage.
+                                float[] a=normal.swings.get(BONES[i][0]);
+                                float[] b=lifted.swings.get(BONES[i][0]);
+                                for(int axis=0;axis<4;axis++)
+                                    near(a[axis],b[axis],.00001F,
+                                            "upper waistband altered by lift");
+                            }
+                            float[] original=f.swings.get(BONES[0][1]);
+                            near(original[3],pose,.00001F,
+                                    "adaptive lift changed original Jolt sample");
+                            SkirtVisibleThighContacts.Result replay=
+                                    SkirtVisibleThighContacts.correct(
+                                            f.strips,f.swings,leg,.85F,true);
+                            for(String[] names:BONES)
+                            {
+                                float[] a=lifted.swings.get(names[1]);
+                                float[] b=replay.swings.get(names[1]);
+                                for(int component=0;component<4;component++)
+                                    near(a[component],b[component],.00001F,
+                                            "lift accumulated between render passes");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        require(found,
+                "no legitimate raised thigh geometry produced lower hem "+
+                "collision reduction beyond old hard cap");
+
+        Fixture noContact=new Fixture(false);
+        BodyPartJoltContactBudget none=new BodyPartJoltContactBudget();
+        SkirtVisibleThighContacts.Result idle=
+                SkirtVisibleThighContacts.correct(
+                        noContact.strips,noContact.swings,
+                        none.select(true),.85F,true);
+        require(idle.liftedHemPanels==0 && idle.touchedPanels==0,
+                "standing with no leg OBB must never raise the skirt");
+        BodyPartJoltContactBudget leg=new BodyPartJoltContactBudget();
+        leg.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        SkirtVisibleThighContacts.Result fullScaleA=
+                SkirtVisibleThighContacts.correct(
+                        noContact.strips,noContact.swings,
+                        leg.select(true),1F,false);
+        SkirtVisibleThighContacts.Result fullScaleB=
+                SkirtVisibleThighContacts.correct(
+                        noContact.strips,noContact.swings,
+                        leg.select(true),1F,true);
+        require(fullScaleB.liftedHemPanels==0,
+                "the full-sized skirt must retain old swing limits");
+        for(String[] names:BONES)
+            for(String name:names)
+                for(int component=0;component<4;component++)
+                    near(fullScaleA.swings.get(name)[component],
+                            fullScaleB.swings.get(name)[component],
+                            .00001F,"scale one should be exact legacy behavior");
+    }
+
     private static void shuffledBoneEnumerationKeepsSamePhysicalNeighbors()
     {
         Fixture f=new Fixture(false);
