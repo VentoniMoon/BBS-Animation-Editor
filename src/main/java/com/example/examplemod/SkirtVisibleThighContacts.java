@@ -372,6 +372,13 @@ public final class SkirtVisibleThighContacts
         waistRadius/=PANELS;
         List<Leg> active=new ArrayList<Leg>();
         int rescuedLegBoxes=0,rejectedLegBoxes=0;
+        // Several OBBs are fitted to the SAME Emoticons thigh (three
+        // near-identical proxies per leg in the user's gait log). Only
+        // one previously rejected representative per leg side can be
+        // rescued. Existing old-gate pass-throughs remain unchanged.
+        Leg[] fallbackBest=new Leg[SkirtHemContactIslands.GROUPS];
+        float[] fallbackReach=new float[SkirtHemContactIslands.GROUPS];
+        java.util.Arrays.fill(fallbackReach,-Float.MAX_VALUE);
         float evidenceMargin=SkirtScaleContactResponse.surfaceMargin(visualScale);
         for(Leg leg:legs)
         {
@@ -404,16 +411,34 @@ public final class SkirtVisibleThighContacts
                     (raised||movedOut);
             if(oldGate)
                 active.add(leg);
-            else if(surfaceGate &&
-                    visualScale<.995F &&
+            else if(surfaceGate && visualScale<.995F &&
+                    // Merely sitting under the tight .85 skirt is not
+                    // evidence of visible breakthrough. The fitted
+                    // oriented leg must cross the natural waist envelope.
+                    distance+support>=waistRadius+RESCUE_OUTER_SURPLUS &&
                     deepOuterFabricContact(strips,copy,leg,cx,cz,
                             evidenceMargin))
             {
-                active.add(leg);
-                rescuedLegBoxes++;
+                int side=SkirtHemContactIslands.sideOf(leg.owner);
+                float reach=distance+support;
+                if(fallbackBest[side]==null ||
+                        reach>fallbackReach[side]+.0001F ||
+                        (Math.abs(reach-fallbackReach[side])<=.0001F &&
+                         leg.owner.compareTo(fallbackBest[side].owner)<0))
+                {
+                    fallbackBest[side]=leg;
+                    fallbackReach[side]=reach;
+                }
+                else rejectedLegBoxes++;
             }
             else rejectedLegBoxes++;
         }
+        for(Leg best:fallbackBest)
+            if(best!=null)
+            {
+                active.add(best);
+                rescuedLegBoxes++;
+            }
         if(active.isEmpty())
             return new Result(copy,0,0F,0,0,
                     Collections.<String,Float>emptyMap(),0,0,false,
