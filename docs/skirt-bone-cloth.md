@@ -492,3 +492,51 @@ continue unchanged. `connectedCloth=false` remains the default.
 not triangle-level continuous cloth collision. Large steps can still
 penetrate rigid Chameleon cubes. Compare standing and 5–10 frame
 walking tests at 0.85 before treating the penetration issue as fixed.
+
+## Unresolved 0.85 skirt thigh intersections: inspect correction *results*
+
+Changing gravity 1.0 / stiffness 0.55 / damping 0.25 to several
+reasonable alternatives did not eliminate thigh penetration. The
+current issue is **not primarily spring tuning**.
+
+Code inspection shows two concrete constraints:
+* `SkirtClothPoseCoupler` limits Jolt swings to 0.40 rad upper /
+  0.30 rad lower before 4 smoothing passes and 10 neighbor clamps.
+  That can significantly attenuate a collision reaction.
+* `SkirtVisibleThighContacts.correct` also caps local correction and
+  **discards all of it** when its direct contact filter reports more
+  than 12 out of 20 skirt panels. An earlier in-game log captured
+  1606 raw surface/body hits for 860 surface samples at frame 40 and
+  all 20 panels changing. These raw hits can include multiple body
+  boxes per source point; they do not prove 1606 distinct penetrations.
+  The newer whole-ring guard may skip that frame entirely.
+
+To distinguish these cases *before* changing collision impulses again,
+add diagnostic JVM flag:
+`-Dbbs.editor.physics.skirt.contactAudit=true`.
+
+At each timeline tick, the compact `[Jolt][SkirtContactAudit]` line
+includes the **actual input/current-frame selected leg OBBs** and the
+predicted **clean decoded Chameleon bone pose** BEFORE and AFTER local
+collision correction:
+`preSources/preUnique/preRaw/prePanels/preDepth`;
+`postUnique/postRaw/postPanels/postDepth`;
+`correctedPanels`, `originalSwingAbove0.3`,
+`coupledSwingAbove0.3`, `suspected` and `strongestLeg`.
+`preUnique` counts an actual source point just once, even if multiple
+leg OBBs penetrate it. `suspected=possible-all-ring-guard`
+identifies a suspected whole-ring early abort; `filtered-or-angle-cap`
+means there was a source intersection but no panel was changed.
+
+**Important limitation:** the audit uses the clean decoded skirt cube
+surface transformed with the requested *current-frame* Jolt pose. It
+does **not** measure final GPU vertices after Weld and width, nor does
+it correct the visual one-tick preview lag. A nonzero post count proves
+the computed bone correction left penetration; a zero post count with
+visible thigh poking through points toward a renderer/mesh-frame-space
+disagreement. Compare it with the existing `[Jolt][SkirtPhase]` log.
+
+No physics parameters, Jolt core, loaded DLL, or saved animation are
+changed in this diagnostic PR. Use the same compact 0.85 skirt, known
+walking animation, Weld ON, native contacts ON, and record all
+`[SkirtContactAudit]` lines for five consecutive frames.
