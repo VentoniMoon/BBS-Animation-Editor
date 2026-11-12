@@ -28,6 +28,7 @@ public final class SkirtVisibleThighContactsSmokeTest
     {
         wideStridePushesClothOutward();
         auditMeasuresResidualEvenWhenNoVisualCorrectionIsAvailable();
+        wholeRingGuardLeavesAuditableResidual();
         compact085RespondsLocallyWithoutChangingNormalScale();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
@@ -109,6 +110,39 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "repeat draw changes diagnostic results");
         require(f.swings.get(BONES[0][0])[3]==0F,
                 "read-back mutated original Jolt pose");
+    }
+
+    /**
+     * A historically observed failure: one oversized/offset contact proxy
+     * marks every panel as penetrating. The protective >12/20 guard MUST
+     * still avoid the umbrella flare, but the new audit MUST disclose the
+     * untouched residual rather than implying the collision was fixed.
+     */
+    private static void wholeRingGuardLeavesAuditableResidual()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(new float[]{0F,-.2F,0F,0F,0F,0F,1F,
+                    .60F,.40F,.60F},
+                new float[]{0F,-.2F,0F,0F,0F,0F,1F,
+                    .20F,.40F,.20F,2F},
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection selected=budget.select(true);
+        SkirtVisibleThighContacts.Audit pre=
+                SkirtVisibleThighContacts.auditBonePose(
+                        f.strips,f.swings,selected,.85F);
+        require(pre.hitPanels==20,
+                "synthetic oversized leg should overlap entire skirt ring");
+        SkirtVisibleThighContacts.Result correction=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,selected,.85F);
+        require(correction.touchedPanels==0,
+                "20-panel guard must avoid expanding the whole ring");
+        SkirtVisibleThighContacts.Audit post=
+                SkirtVisibleThighContacts.auditBonePose(
+                        f.strips,correction.swings,selected,.85F);
+        require(post.uniqueHits==pre.uniqueHits && post.hitPanels==20,
+                "audit must expose unchanged penetration after safety abort");
     }
 
     private static void compact085RespondsLocallyWithoutChangingNormalScale()
