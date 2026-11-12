@@ -48,6 +48,15 @@ public final class SkirtVisibleThighContacts
     private static final float MID_CONTACT_END=.70F;
     private static final float MAX_EXTRA_MID_ROOT=.13F;
     private static final float MAX_MID_ROOT_CAP=.65F;
+    /** Experimental contact-weighted envelope relative to native Jolt.
+     * Set false to reproduce the exact pre-silhouette #188 behaviour. */
+    private static final boolean SILHOUETTE_PRESERVATION=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.silhouettePreservation","true"));
+    /** Only rescue an otherwise rejected thigh when its oriented hull
+     * actually reaches BEYOND the rest waist radius, not just into the
+     * naturally tight inner fabric at scale 0.85. */
+    private static final float RESCUE_OUTER_SURPLUS=.027F;
     private static final float NEIGHBOR_RESPONSE=.16F;
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
@@ -108,6 +117,10 @@ public final class SkirtVisibleThighContacts
         /** The old tilt/center gate rejected these boxes; strong
          * outer-surface penetration rescued only some of them. */
         public final int rescuedLegBoxes,rejectedLegBoxes;
+        /** Contact-weighted outward shape regularization after the three
+         * existing correction passes: clipped or retained on collision. */
+        public final int silhouetteLimitedPanels,silhouetteBlockedPanels;
+        public final float silhouetteRemovedOutward;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -163,6 +176,25 @@ public final class SkirtVisibleThighContacts
                 float midOverlapReduction,
                 int rescuedLegBoxes,int rejectedLegBoxes)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,liftedHemPanels,liftOverlapReduction,
+                    midCandidatePanels,jointLiftPanels,midOverlapReduction,
+                    rescuedLegBoxes,rejectedLegBoxes,0,0,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction,int rescuedLegBoxes,
+                int rejectedLegBoxes,int silhouetteLimitedPanels,
+                int silhouetteBlockedPanels,float silhouetteRemovedOutward)
+        {
+            this.silhouetteLimitedPanels=silhouetteLimitedPanels;
+            this.silhouetteBlockedPanels=silhouetteBlockedPanels;
+            this.silhouetteRemovedOutward=silhouetteRemovedOutward;
             this.rescuedLegBoxes=rescuedLegBoxes;
             this.rejectedLegBoxes=rejectedLegBoxes;
             this.midCandidatePanels=midCandidatePanels;
@@ -228,7 +260,7 @@ public final class SkirtVisibleThighContacts
     {
         return correct(strips,starting,selected,visualScale,
                 ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
-                SURFACE_EVIDENCE_LEG_GATE);
+                SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -258,6 +290,19 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate)
+    {
+        // Keep existing 7-argument collision regression mode unchanged.
+        return correct(strips,starting,selected,visualScale,adaptiveLift,
+                adaptiveMid,surfaceGate,false);
+    }
+
+    /** Pure A/B mode comparing the same Jolt sample to the silhouette
+     * envelope without changing process-wide Java system properties. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
+            boolean silhouette)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
@@ -327,6 +372,13 @@ public final class SkirtVisibleThighContacts
         waistRadius/=PANELS;
         List<Leg> active=new ArrayList<Leg>();
         int rescuedLegBoxes=0,rejectedLegBoxes=0;
+        // Several OBBs are fitted to the SAME Emoticons thigh (three
+        // near-identical proxies per leg in the user's gait log). Only
+        // one previously rejected representative per leg side can be
+        // rescued. Existing old-gate pass-throughs remain unchanged.
+        Leg[] fallbackBest=new Leg[SkirtHemContactIslands.GROUPS];
+        float[] fallbackReach=new float[SkirtHemContactIslands.GROUPS];
+        java.util.Arrays.fill(fallbackReach,-Float.MAX_VALUE);
         float evidenceMargin=SkirtScaleContactResponse.surfaceMargin(visualScale);
         for(Leg leg:legs)
         {
@@ -359,16 +411,47 @@ public final class SkirtVisibleThighContacts
                     (raised||movedOut);
             if(oldGate)
                 active.add(leg);
-            else if(surfaceGate &&
-                    visualScale<.995F &&
+            else if(surfaceGate && visualScale<.995F &&
+                    // The extra guard belongs to silhouette preservation:
+                    // A/B silhouette=false MUST recover exact #188
+                    // selection, not just the final-shape operation.
+                    (!silhouette ||
+                     distance+support>=waistRadius+RESCUE_OUTER_SURPLUS) &&
                     deepOuterFabricContact(strips,copy,leg,cx,cz,
                             evidenceMargin))
             {
-                active.add(leg);
-                rescuedLegBoxes++;
+                if(!silhouette)
+                {
+                    // Original PR #188 accepts every independently fitted
+                    // deep outer contact OBB. Keep that behavior available
+                    // for a genuine old-versus-new visual comparison.
+                    active.add(leg);
+                    rescuedLegBoxes++;
+                }
+                else
+                {
+                    int side=SkirtHemContactIslands.sideOf(leg.owner);
+                    float reach=distance+support;
+                    if(fallbackBest[side]==null ||
+                            reach>fallbackReach[side]+.0001F ||
+                            (Math.abs(reach-fallbackReach[side])<=.0001F &&
+                             leg.owner.compareTo(fallbackBest[side].owner)<0))
+                    {
+                        fallbackBest[side]=leg;
+                        fallbackReach[side]=reach;
+                    }
+                    else rejectedLegBoxes++;
+                }
             }
             else rejectedLegBoxes++;
         }
+        if(silhouette)
+            for(Leg best:fallbackBest)
+                if(best!=null)
+                {
+                    active.add(best);
+                    rescuedLegBoxes++;
+                }
         if(active.isEmpty())
             return new Result(copy,0,0F,0,0,
                     Collections.<String,Float>emptyMap(),0,0,false,
@@ -777,13 +860,97 @@ public final class SkirtVisibleThighContacts
                 }
             }
         }
+        int silhouetteLimited=0,silhouetteBlocked=0;
+        float silhouetteRemoved=0F;
+        if(silhouette && visualScale<.995F &&
+                !directContacts.isEmpty())
+        {
+            // Unlike merely capping all bone angles, this measures how
+            // far the CORRECTED rendered skirt hem actually opens relative
+            // to the natural, Jolt-coupled pose of this exact frame.
+            // Native motion may already flare for physical reasons and
+            // must not be "fixed" by a visual-only contact stage.
+            String[] ids=new String[PANELS];
+            float[][] roots=new float[PANELS][];
+            boolean[] selectedPanel=new boolean[PANELS];
+            for(int i=0;i<PANELS;i++)
+            {
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                ids[i]=strip.upper;
+                roots[i]=origin(strip.upperWorld);
+                selectedPanel[i]=directDepth[i]>.001F;
+            }
+            float[] importance=SkirtAdaptiveHemLift.weights(
+                    ids,roots,selectedPanel,sideNeed,sideDepth);
+            for(int i=0;i<PANELS;i++)
+            {
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                float rx=roots[i][0]-cx,rz=roots[i][2]-cz;
+                float rr=(float)Math.sqrt(rx*rx+rz*rz);
+                if(rr<.02F)continue;
+                float[] outward={rx/rr,0F,rz/rr};
+                float displacement=skirtShapeExcursion(
+                        strip,starting,copy,outward);
+                float maxAllowed=
+                        SkirtSilhouettePreservation.maxAdditionalOutward(
+                                importance[i]);
+                if(displacement<=maxAllowed+.0005F)continue;
+                float low=0F,high=1F;
+                Map<String,float[]> trial=
+                        new LinkedHashMap<String,float[]>();
+                for(int step=0;step<11;step++)
+                {
+                    float alpha=(low+high)*.5F;
+                    trial.put(strip.upper,blendSwing(
+                            starting.get(strip.upper),
+                            copy.get(strip.upper),alpha));
+                    trial.put(strip.lower,blendSwing(
+                            starting.get(strip.lower),
+                            copy.get(strip.lower),alpha));
+                    float candidate=skirtShapeExcursion(
+                            strip,starting,trial,outward);
+                    if(candidate<=maxAllowed)low=alpha;
+                    else high=alpha;
+                }
+                trial.put(strip.upper,blendSwing(
+                        starting.get(strip.upper),
+                        copy.get(strip.upper),low));
+                trial.put(strip.lower,blendSwing(
+                        starting.get(strip.lower),
+                        copy.get(strip.lower),low));
+                float naturalCollision=panelCollisionScore(
+                        strip,starting,active,outward,surfaceMargin);
+                float finalCollision=panelCollisionScore(
+                        strip,copy,active,outward,surfaceMargin);
+                float trialCollision=panelCollisionScore(
+                        strip,trial,active,outward,surfaceMargin);
+                // Retain at least 68% of the clearance already achieved
+                // by the hem+middle collision correction on this panel.
+                // If no feasible beautiful pose can do so, keep the
+                // collision-safe pose and explicitly count the overrun.
+                if(!SkirtSilhouettePreservation.keepsClearance(
+                        naturalCollision,finalCollision,trialCollision))
+                {
+                    silhouetteBlocked++;
+                    continue;
+                }
+                float afterDistance=skirtShapeExcursion(
+                        strip,starting,trial,outward);
+                if(afterDistance>=displacement-.0005F)continue;
+                copy.put(strip.upper,trial.get(strip.upper));
+                copy.put(strip.lower,trial.get(strip.lower));
+                silhouetteLimited++;
+                silhouetteRemoved+=displacement-afterDistance;
+            }
+        }
         int total=0;
         for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
                 directContacts,candidatePanels,directContacts.size(),limited,
                 additionalLifts,overlapReduction,
                 midCandidates,jointPanels,midReduction,
-                rescuedLegBoxes,rejectedLegBoxes);
+                rescuedLegBoxes,rejectedLegBoxes,
+                silhouetteLimited,silhouetteBlocked,silhouetteRemoved);
     }
 
     /**
@@ -1271,6 +1438,93 @@ public final class SkirtVisibleThighContacts
             support+=Math.abs(dot(radial,leg.basis[axis]))*
                     leg.p[7+axis];
         return Math.max(0F,support-dot(d,radial));
+    }
+
+    /** Penetration scored against the SAME accepted fitted body boxes
+     * used by the two contact solvers; never use global unfiltered audit
+     * hits as an objective for a silhouette change. */
+    private static float panelCollisionScore(
+            SkirtClothPoseCoupler.Strip strip,Map<String,float[]> pose,
+            List<Leg> active,float[] outward,float margin)
+    {
+        return hemResidualScore(strip,pose,active,outward,margin)+
+                middleResidualScore(strip,pose,active,outward,margin,-1);
+    }
+
+    /** Visible displacement of the lower panel, relative to this
+     * frame's naturally coupled Jolt pose. A radial push and an upward
+     * lift can both produce the undesirable umbrella shape. */
+    private static float skirtShapeExcursion(
+            SkirtClothPoseCoupler.Strip strip,
+            Map<String,float[]> natural,Map<String,float[]> corrected,
+            float[] outward)
+    {
+        float[] naturalTip=transformedSkirtTip(strip,natural);
+        float[] correctedTip=transformedSkirtTip(strip,corrected);
+        float[] naturalHinge=transformedSkirtHinge(strip,natural);
+        float[] correctedHinge=transformedSkirtHinge(strip,corrected);
+        float hemOut=Math.max(0F,dot(
+                sub(correctedTip,naturalTip),outward));
+        float hingeOut=Math.max(0F,dot(
+                sub(correctedHinge,naturalHinge),outward));
+        float hemRise=Math.max(0F,correctedTip[1]-naturalTip[1]);
+        return hemOut+.32F*hingeOut+.6F*hemRise;
+    }
+
+    private static float[] transformedSkirtHinge(
+            SkirtClothPoseCoupler.Strip strip,Map<String,float[]> pose)
+    {
+        float[] root=origin(strip.upperWorld);
+        float[] hinge=origin(strip.lowerWorld);
+        float[] upper=worldSwing(strip.upperWorld,pose.get(strip.upper));
+        return add(root,rotate(sub(hinge,root),upper));
+    }
+
+    private static float[] transformedSkirtTip(
+            SkirtClothPoseCoupler.Strip strip,Map<String,float[]> pose)
+    {
+        float[] root=origin(strip.upperWorld);
+        float[] hinge=origin(strip.lowerWorld);
+        float[] upper=worldSwing(strip.upperWorld,pose.get(strip.upper));
+        float[] lower=worldSwing(strip.lowerWorld,pose.get(strip.lower));
+        float[] up=rotate(sub(hinge,root),upper);
+        float[] down=rotate(rotate(sub(strip.tipWorld,hinge),
+                lower),upper);
+        return add(root,add(up,down));
+    }
+
+    /** Quaternion nlerp on LOCAL axis-angle swings avoids interpolating
+     * unrelated rotation axes and remains deterministic on timeline
+     * scrubbing. Exact endpoints preserve authored pose data. */
+    private static float[] blendSwing(float[] natural,float[] corrected,
+            float alpha)
+    {
+        if(alpha<=0F)return natural.clone();
+        if(alpha>=1F)return corrected.clone();
+        float[] a=quaternion(natural);
+        float[] b=quaternion(corrected);
+        float similarity=0F;
+        for(int i=0;i<4;i++)similarity+=a[i]*b[i];
+        if(similarity<0F)
+            for(int i=0;i<4;i++)b[i]=-b[i];
+        float[] q=new float[4];
+        float norm=0F;
+        for(int i=0;i<4;i++)
+        {
+            q[i]=a[i]*(1F-alpha)+b[i]*alpha;
+            norm+=q[i]*q[i];
+        }
+        if(norm<1E-12F)return natural.clone();
+        norm=(float)Math.sqrt(norm);
+        for(int i=0;i<4;i++)q[i]/=norm;
+        if(q[3]<0F)
+            for(int i=0;i<4;i++)q[i]=-q[i];
+        float axisLength=(float)Math.sqrt(q[0]*q[0]+
+                q[1]*q[1]+q[2]*q[2]);
+        if(axisLength<1E-7F)return new float[]{1F,0F,0F,0F};
+        return new float[]{q[0]/axisLength,q[1]/axisLength,
+                q[2]/axisLength,
+                2F*(float)Math.atan2(axisLength,q[3])};
     }
 
     private static boolean bend(Map<String,float[]> swings,String id,
