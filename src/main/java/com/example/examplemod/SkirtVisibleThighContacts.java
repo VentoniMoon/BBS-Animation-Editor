@@ -412,33 +412,46 @@ public final class SkirtVisibleThighContacts
             if(oldGate)
                 active.add(leg);
             else if(surfaceGate && visualScale<.995F &&
-                    // Merely sitting under the tight .85 skirt is not
-                    // evidence of visible breakthrough. The fitted
-                    // oriented leg must cross the natural waist envelope.
-                    distance+support>=waistRadius+RESCUE_OUTER_SURPLUS &&
+                    // The extra guard belongs to silhouette preservation:
+                    // A/B silhouette=false MUST recover exact #188
+                    // selection, not just the final-shape operation.
+                    (!silhouette ||
+                     distance+support>=waistRadius+RESCUE_OUTER_SURPLUS) &&
                     deepOuterFabricContact(strips,copy,leg,cx,cz,
                             evidenceMargin))
             {
-                int side=SkirtHemContactIslands.sideOf(leg.owner);
-                float reach=distance+support;
-                if(fallbackBest[side]==null ||
-                        reach>fallbackReach[side]+.0001F ||
-                        (Math.abs(reach-fallbackReach[side])<=.0001F &&
-                         leg.owner.compareTo(fallbackBest[side].owner)<0))
+                if(!silhouette)
                 {
-                    fallbackBest[side]=leg;
-                    fallbackReach[side]=reach;
+                    // Original PR #188 accepts every independently fitted
+                    // deep outer contact OBB. Keep that behavior available
+                    // for a genuine old-versus-new visual comparison.
+                    active.add(leg);
+                    rescuedLegBoxes++;
                 }
-                else rejectedLegBoxes++;
+                else
+                {
+                    int side=SkirtHemContactIslands.sideOf(leg.owner);
+                    float reach=distance+support;
+                    if(fallbackBest[side]==null ||
+                            reach>fallbackReach[side]+.0001F ||
+                            (Math.abs(reach-fallbackReach[side])<=.0001F &&
+                             leg.owner.compareTo(fallbackBest[side].owner)<0))
+                    {
+                        fallbackBest[side]=leg;
+                        fallbackReach[side]=reach;
+                    }
+                    else rejectedLegBoxes++;
+                }
             }
             else rejectedLegBoxes++;
         }
-        for(Leg best:fallbackBest)
-            if(best!=null)
-            {
-                active.add(best);
-                rescuedLegBoxes++;
-            }
+        if(silhouette)
+            for(Leg best:fallbackBest)
+                if(best!=null)
+                {
+                    active.add(best);
+                    rescuedLegBoxes++;
+                }
         if(active.isEmpty())
             return new Result(copy,0,0F,0,0,
                     Collections.<String,Float>emptyMap(),0,0,false,
