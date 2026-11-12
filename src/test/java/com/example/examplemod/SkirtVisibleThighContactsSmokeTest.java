@@ -37,6 +37,8 @@ public final class SkirtVisibleThighContactsSmokeTest
         jointMidCorrectionRejectsRestingThighAndFullScale();
         outerSurfaceRescuesCenterGateMissWithoutFlare();
         innerWaistAndSinglePointCannotRescue();
+        silhouetteKeepsCompactHemCloseToNativeWhileRetainingCollision();
+        multipleProxiesOfSameThighCannotMultiplyRescue();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
@@ -626,6 +628,137 @@ public final class SkirtVisibleThighContactsSmokeTest
                         atRest.select(true),.85F,true,true,true);
         require(still.rescuedLegBoxes==0 && still.touchedPanels==0,
                 "broad upright neutral hip touching the inner edge must not flare");
+    }
+
+    /**
+     * Multiple broad thigh contacts can open an entire 20-panel hem.
+     * The silhouette stage must reduce excessive outward motion on
+     * some non-central panels while preserving a useful fraction of
+     * the measured clearance relative to the unchanged Jolt pose.
+     */
+    private static void silhouetteKeepsCompactHemCloseToNativeWhileRetainingCollision()
+    {
+        Fixture f=new Fixture(false);
+        boolean found=false;
+        for(float center:new float[]{.25F,.28F,.32F,.36F,.40F})
+        {
+            if(found)break;
+            for(float half:new float[]{.19F,.22F,.25F,.28F,.31F})
+            {
+                BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+                budget.add(new float[]{center,-.29F,0F,0F,0F,0F,1F,
+                            half,.22F,half},
+                        typed(center,-.29F,0F),"emoticons.left_leg");
+                budget.add(new float[]{-center,-.29F,0F,0F,0F,0F,1F,
+                            half,.22F,half},
+                        typed(-center,-.29F,0F),"emoticons.right_leg");
+                BodyPartJoltContactBudget.Selection legs=budget.select(true);
+                SkirtVisibleThighContacts.Result legacy=
+                        SkirtVisibleThighContacts.correct(
+                                f.strips,f.swings,legs,.85F,
+                                true,true,true,false);
+                SkirtVisibleThighContacts.Result shaped=
+                        SkirtVisibleThighContacts.correct(
+                                f.strips,f.swings,legs,.85F,
+                                true,true,true,true);
+                if(shaped.silhouetteLimitedPanels<=0)continue;
+                found=true;
+                require(shaped.silhouetteRemovedOutward>.0001F,
+                        "silhouette limiter must remove actual outward movement");
+                require(shaped.silhouetteLimitedPanels<=20 &&
+                        shaped.silhouetteBlockedPanels<=20,
+                        "safety diagnostics must count actual panels");
+                SkirtVisibleThighContacts.Audit natural=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,f.swings,legs,.85F);
+                SkirtVisibleThighContacts.Audit before=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,legacy.swings,legs,.85F);
+                SkirtVisibleThighContacts.Audit after=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,shaped.swings,legs,.85F);
+                require(after.uniqueHits<=natural.uniqueHits,
+                        "silhouette may not make the original leg penetration worse");
+                require(after.uniqueHits<=before.uniqueHits+
+                        Math.max(8,natural.uniqueHits/3),
+                        "clipped silhouette abandoned most previous clearance");
+                for(String[] names:BONES)
+                {
+                    require(shaped.swings.containsKey(names[0]) &&
+                            shaped.swings.containsKey(names[1]),
+                            "silhouette lost a two-bone skirt link");
+                }
+                SkirtVisibleThighContacts.Result replay=
+                        SkirtVisibleThighContacts.correct(
+                                f.strips,f.swings,legs,.85F,
+                                true,true,true,true);
+                for(String[] names:BONES)
+                    for(String name:names)
+                        for(int component=0;component<4;component++)
+                            near(shaped.swings.get(name)[component],
+                                    replay.swings.get(name)[component],
+                                    .00001F,"silhouette repeated-frame drift");
+                require(f.swings.get(BONES[0][0])[3]==0F,
+                        "silhouette changed Jolt input bone angles");
+                break;
+            }
+        }
+        require(found,"no broad thigh fixture exercised silhouette constraint");
+
+        BodyPartJoltContactBudget oneLeg=new BodyPartJoltContactBudget();
+        oneLeg.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        SkirtVisibleThighContacts.Result standard=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        oneLeg.select(true),1F,true,true,true,false);
+        SkirtVisibleThighContacts.Result fullscale=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        oneLeg.select(true),1F,true,true,true,true);
+        require(fullscale.silhouetteLimitedPanels==0,
+                "full scale must retain legacy clothing behavior");
+        for(String[] names:BONES)
+            for(String name:names)
+                for(int component=0;component<4;component++)
+                    near(standard.swings.get(name)[component],
+                            fullscale.swings.get(name)[component],
+                            .00001F,"scale 1 pose changed by compact silhouette");
+    }
+
+    private static void multipleProxiesOfSameThighCannotMultiplyRescue()
+    {
+        Fixture f=new Fixture(false);
+        for(int index:new int[]{0,10})
+        {
+            SkirtClothPoseCoupler.Strip strip=f.strips.get(index);
+            float x=strip.upperWorld[12];
+            f.strips.set(index,new SkirtClothPoseCoupler.Strip(
+                    strip.upper,strip.lower,
+                    strip.upperWorld,strip.lowerWorld,strip.tipWorld,
+                    new float[][]{{x,-.19F,-.012F},
+                            {x,-.21F,.016F}},
+                    new float[][]{{x,-.31F,-.012F},
+                            {x,-.33F,.016F}}));
+        }
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        for(float x:new float[]{.12F,-.12F})
+        {
+            String owner=x>0F?"emoticons.left_leg":
+                    "emoticons.right_leg";
+            for(float half:new float[]{.36F,.34F,.32F})
+            {
+                budget.add(new float[]{x,-.25F,0F,0F,0F,0F,1F,
+                            half,.40F,.13F},
+                        typed(x,-.25F,0F),owner);
+            }
+        }
+        SkirtVisibleThighContacts.Result result=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,budget.select(true),
+                        .85F,true,true,true,true);
+        require(result.rescuedLegBoxes<=2,
+                "three near-identical fitted OBBs per thigh doubled response");
+        require(result.silhouetteLimitedPanels<=20,
+                "silhouette panel count exceeded physical ring");
     }
 
     private static void shuffledBoneEnumerationKeepsSamePhysicalNeighbors()
