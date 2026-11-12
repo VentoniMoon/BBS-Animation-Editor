@@ -328,6 +328,136 @@ public final class SkirtVisibleThighContacts
     }
 
     /**
+     * Diagnostic read-back of the POST-correction bone pose against the same
+     * captured Emoticons leg OBBs. This deliberately does NOT use the
+     * raised-leg prefilter or 12-panel rejection guard. Comparing a
+     * pre-correction and post-correction Audit exposes false OBBs, clipped
+     * angular response, and the old all-panels safety abort.
+     *
+     * Samples use clean decoded Chameleon surface geometry transformed
+     * by the requested 40-bone pose. They are NOT the final rasterized
+     * Weld/width-modified GPU vertices; the printed metric is labeled
+     * 'bonePose' to avoid confusing it with a solved cloth mesh.
+     */
+    public static final class Audit
+    {
+        public final int sourcePoints,uniqueHits,rawHits,hitPanels,legBoxes;
+        public final float maxOverlap;
+        public final String dominantOwner;
+        Audit(int sourcePoints,int uniqueHits,int rawHits,int hitPanels,
+                int legBoxes,float maxOverlap,String dominantOwner)
+        {
+            this.sourcePoints=sourcePoints;
+            this.uniqueHits=uniqueHits;
+            this.rawHits=rawHits;
+            this.hitPanels=hitPanels;
+            this.legBoxes=legBoxes;
+            this.maxOverlap=maxOverlap;
+            this.dominantOwner=dominantOwner;
+        }
+    }
+
+    public static Audit auditBonePose(
+            List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> swings,
+            BodyPartJoltContactBudget.Selection selected,
+            float visualScale)
+    {
+        Audit invalid=new Audit(0,0,0,0,0,0F,"none");
+        if(strips==null||strips.size()!=PANELS||swings==null ||
+                selected==null||selected.boxes==null ||
+                selected.owners==null)return invalid;
+        List<Leg> legs=new ArrayList<Leg>();
+        List<String> ownerNames=new ArrayList<String>();
+        for(int index=0;index<Math.min(selected.boxes.length,
+                selected.owners.size());index++)
+        {
+            String owner=selected.owners.get(index);
+            float[] box=selected.boxes[index];
+            if(BodyPartJoltContactBudget.isLeg(owner)&&valid(box,10)&&
+                    box[7]>.01F&&box[8]>.01F&&box[9]>.01F)
+            {
+                legs.add(new Leg(box));
+                ownerNames.add(owner+"#"+index);
+            }
+        }
+        if(legs.isEmpty())
+            return new Audit(0,0,0,0,0,0F,"none");
+        float cx=0F,cz=0F;
+        for(SkirtClothPoseCoupler.Strip strip:strips)
+        {
+            if(strip==null||!valid(strip.upperWorld,16)||
+                    !valid(strip.lowerWorld,16)||
+                    !valid(strip.tipWorld,3)||
+                    !valid(swings.get(strip.upper),4)||
+                    !valid(swings.get(strip.lower),4))return invalid;
+            cx+=strip.upperWorld[12];
+            cz+=strip.upperWorld[14];
+        }
+        cx/=PANELS;cz/=PANELS;
+        int sources=0,unique=0,raw=0,affected=0;
+        int[] hitsByLeg=new int[legs.size()];
+        float maxOverlap=0F;
+        for(SkirtClothPoseCoupler.Strip strip:strips)
+        {
+            float[] root=origin(strip.upperWorld);
+            float[] hinge=origin(strip.lowerWorld);
+            float[] upper=worldSwing(strip.upperWorld,
+                    swings.get(strip.upper));
+            float[] lower=worldSwing(strip.lowerWorld,
+                    swings.get(strip.lower));
+            float dx=root[0]-cx,dz=root[2]-cz;
+            float rr=(float)Math.sqrt(dx*dx+dz*dz);
+            if(rr<.02F)continue;
+            float[] outward={dx/rr,0F,dz/rr};
+            List<Point> points=new ArrayList<Point>();
+            int exact=addExactSurface(points,strip.upperSurfaceWorld,
+                    root,hinge,strip.tipWorld,upper,lower,false);
+            exact+=addExactSurface(points,strip.lowerSurfaceWorld,
+                    root,hinge,strip.tipWorld,upper,lower,true);
+            // Diagnostic remains meaningful for missing decoded cuboids.
+            if(exact==0)
+            {
+                float[] first=rotate(sub(hinge,root),upper);
+                float[] second=rotate(rotate(sub(strip.tipWorld,hinge),
+                        lower),upper);
+                float[] joint=add(root,first);
+                points.add(new Point(add(joint,mul(second,.5F)),null));
+                points.add(new Point(add(joint,second),null));
+            }
+            boolean panelContact=false;
+            for(Point p:points)
+            {
+                sources++;
+                boolean sampleContact=false;
+                for(int i=0;i<legs.size();i++)
+                {
+                    float overlap=outwardPenetration(p.p,legs.get(i),
+                            outward,SkirtScaleContactResponse.surfaceMargin(
+                                    visualScale));
+                    if(overlap>0F)
+                    {
+                        raw++;
+                        hitsByLeg[i]++;
+                        sampleContact=true;
+                        panelContact=true;
+                        maxOverlap=Math.max(maxOverlap,overlap);
+                    }
+                }
+                if(sampleContact)unique++;
+            }
+            if(panelContact)affected++;
+        }
+        int primary=-1;
+        for(int i=0;i<hitsByLeg.length;i++)
+            if(primary<0 || hitsByLeg[i]>hitsByLeg[primary])primary=i;
+        String source=primary<0?"none":
+                ownerNames.get(primary)+"("+hitsByLeg[primary]+")";
+        return new Audit(sources,unique,raw,affected,legs.size(),
+                maxOverlap,source);
+    }
+
+    /**
      * Transform decoded CLEAN quad surface vertices by the same two
      * world-space native bone swings as the Chameleon panel. Upper bone
      * surfaces follow its root swing; lower bone surfaces additionally
