@@ -332,3 +332,39 @@ that seam instead of creating distorted stretched geometry. It can
 reduce geometric breaks, but does not guarantee perfect collision with
 thighs or a truly unified mesh at large angles. Test normal standing,
 side views, lifted thighs and Weld ON/OFF.
+
+## Phase alignment experiment for five-tick walks
+
+The user supplied five successive walking frames: the raised leg passes
+through the front skirt on three of them. This may be partly a **timing
+problem** rather than merely missing body hulls. Native Jolt solves a
+frame **after** the Emoticons parent actor is drawn, so
+`BodyPartPhysicsFrameState` deliberately shows the preceding completed
+physics frame. During playback, the parent leg can therefore already
+be in tick N while the skirt is still showing tick N-1.
+
+The experimental `SkirtPoseVisualLead` is enabled only for the
+validated, complete **40-bone skirt**, only during normal timeline
+playback. It estimates the missing tick N from the two completed
+physics poses N-2 and N-1 using shortest-arc quaternion extrapolation.
+Every bone's estimated extra swing is strictly capped at 0.12 radians.
+Width extrapolation is bounded to 0.035 units per tick and never grows
+past its normal upper/hem cap. Missing frames, altered topology,
+paused frames, or timeline seeks use the original unpredicted pose.
+The Jolt simulation, actor gait, colliders, and export bake remain
+unchanged; no additional native stepping or extra actor render occurs.
+
+* Toggle comparison: `-Dbbs.editor.physics.skirt.visualPhaseLead=false`
+  to disable the experiment and return to the exact previous behavior.
+* Every five frames while enabled, preview logs
+  `[Jolt][SkirtPhase] actorFrame=... frozenPhysicsFrame=...
+  offsetTicks=1 leadEnabled=true`, making the phase lag visible.
+* Java 8 smoke verifies a complete 40-bone, five-tick motion, all
+  angular correction bounds, deterministic repeated display,
+  and that seeks/rewinds cannot resurrect stale prediction.
+
+**Important:** This is an approximation, not true collision prediction.
+It does not know future leg positions or guarantee no body penetration.
+At sudden gait reversals, the estimate may overshoot. Evaluate the
+same five frames with this flag ON/OFF and compare shape and clipping
+before merging.
