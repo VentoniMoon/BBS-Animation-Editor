@@ -132,28 +132,28 @@ public final class SkirtVisibleThighContactsSmokeTest
         // intersecting the *actual* rendered panel corner.
         Fixture f=new Fixture(false);
         BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
-        float[] actualBox={.42F,-.30F,.21F,0F,0F,0F,1F,
-                .065F,.07F,.045F};
-        float[] capsule={.42F,-.30F,.21F,0F,0F,0F,1F,
-                .05F,.07F,.05F,2F};
+        float[] actualBox={.42F,-.30F,.18F,0F,0F,0F,1F,
+                .055F,.07F,.025F};
+        float[] capsule={.42F,-.30F,.18F,0F,0F,0F,1F,
+                .04F,.07F,.04F,2F};
         budget.add(actualBox,capsule,"emoticons.left_leg");
         SkirtVisibleThighContacts.Result old=
                 SkirtVisibleThighContacts.correct(
                         f.strips,f.swings,budget.select(true));
-        require(old.touchedPanels==0,
-                "old bone-center-only probe should miss side cube corner");
+        require(old.swings.get(BONES[0][0])[3]<.001F,
+                "old bone-centered strip should miss the protruding cube corner");
         SkirtClothPoseCoupler.Strip oldStrip=f.strips.get(0);
         f.strips.set(0,new SkirtClothPoseCoupler.Strip(
                 oldStrip.upper,oldStrip.lower,oldStrip.upperWorld,
                 oldStrip.lowerWorld,oldStrip.tipWorld,null,
-                new float[][] {{.42F,-.30F,.21F}}));
+                new float[][] {{.42F,-.30F,.18F}}));
         SkirtVisibleThighContacts.Result corrected=
                 SkirtVisibleThighContacts.correct(
                         f.strips,f.swings,budget.select(true));
         require(corrected.exactSurfaceSamples>0 &&
                 corrected.exactSurfaceHits>0,
                 "real rendered cube surface must find the contact");
-        require(corrected.touchedPanels>0 &&
+        require(corrected.swings.get(BONES[0][0])[3]>.01F &&
                 corrected.touchedPanels<7,
                 "real geometry collision must stay localized");
         require(corrected.swings.get(BONES[0][0])[3]<=.1001F,
