@@ -1681,6 +1681,13 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_VISIBLE_THIGH_CONTACTS =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.visibleThighContacts","true"));
+    /** Jolt sample is computed AFTER the Emoticons actor draw. This bounded
+     * skirt-only pose prediction reduces the 1-tick actor/cloth mismatch. */
+    private static final boolean SKIRT_VISUAL_PHASE_LEAD =
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.visualPhaseLead","true"));
+    private final Map<BodyPartModelData,Integer> skirtPhaseLogFrame=
+            new IdentityHashMap<BodyPartModelData,Integer>();
 
     private boolean isSkirtAttachment(BodyPartModelData data,
             List<BodyPartPhysicsChains.Chain> chains)
@@ -2732,8 +2739,14 @@ public class BodyPartsPreviewRenderer
              * Reverse the test swing only on the left root, pending a full
              * handedness/basis correction across all chains.
              */
+            boolean phaseLead=SKIRT_VISUAL_PHASE_LEAD &&
+                    !bakeController.isRecording() &&
+                    BodyPartJoltPreviewAdapter.isRequested() &&
+                    BlockbusterPreviewAnimationState.isPlaying() &&
+                    isSkirtAttachment(data,getPreviewPhysicsChains(data));
             Map<String, float[]> swings = bakeController.isRecording()
                     ? physicsFrames.forBakeRender(data,frame)
+                    : phaseLead ? physicsFrames.forRenderSkirtLead(data,frame)
                     : JOLT_VISUAL_INTERPOLATION &&
                     BodyPartJoltPreviewAdapter.isRequested() &&
                     (BlockbusterPreviewAnimationState.isPlaying()||
@@ -2748,6 +2761,7 @@ public class BodyPartsPreviewRenderer
             Map<String,SkirtAdaptiveWidth.Width> renderedWidths=
                     bakeController.isRecording()?
                             physicsFrames.forRenderWidths(data,frame):
+                    phaseLead ? physicsFrames.forRenderSkirtWidthLead(data,frame):
                     JOLT_VISUAL_INTERPOLATION &&
                     BodyPartJoltPreviewAdapter.isRequested() &&
                     (BlockbusterPreviewAnimationState.isPlaying()||
@@ -2844,6 +2858,22 @@ public class BodyPartsPreviewRenderer
                             if (rotation != null)
                                 leftRootAppliedRotation.put(data, rotation);
                         }
+                    }
+                }
+                if(phaseLead && appliedCount>0 && frame%5==0)
+                {
+                    Integer logged=skirtPhaseLogFrame.get(data);
+                    if(logged==null||logged.intValue()!=frame)
+                    {
+                        skirtPhaseLogFrame.put(data,frame);
+                        int source=physicsFrames.visibleSourceFrame(data,frame);
+                        System.out.println("[BBS Animation Editor][Jolt][SkirtPhase] "+
+                                "actorFrame="+frame+
+                                " frozenPhysicsFrame="+source+
+                                " offsetTicks="+(source==Integer.MIN_VALUE?
+                                    -1:frame-source)+
+                                " leadEnabled=true"+
+                                " bones="+appliedCount);
                     }
                 }
                 if (appliedCount > 0 && !visualProbeReported.containsKey(data))
