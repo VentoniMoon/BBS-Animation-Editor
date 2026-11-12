@@ -27,6 +27,7 @@ public final class SkirtVisibleThighContactsSmokeTest
     public static void main(String[] args)
     {
         wideStridePushesClothOutward();
+        compact085RespondsLocallyWithoutChangingNormalScale();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
         actualDiagonalCubeSurfaceDetectsMissedLeg();
@@ -61,6 +62,37 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "physics input must not be mutated");
         near(result.swings.get(BONES[10][0])[3],0F,.00001F,
                 "opposite skirt panel must not flare");
+    }
+
+    private static void compact085RespondsLocallyWithoutChangingNormalScale()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection geometry=budget.select(true);
+        SkirtVisibleThighContacts.Result standard=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,geometry,1F);
+        SkirtVisibleThighContacts.Result compact=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,geometry,.85F);
+        require(standard.touchedPanels>0&&compact.touchedPanels>0,
+                "real thigh must affect both sizes");
+        require(compact.peakOverlap>=standard.peakOverlap,
+                "0.85 should receive larger local clearance");
+        require(!compact.contactDepths.isEmpty() &&
+                compact.contactDepths.containsKey(BONES[0][0]),
+                "must expose measured direct contact for adaptive width");
+        require(compact.contactDepths.size()<=7,
+                "compact skirt contact must remain local");
+        require(compact.swings.get(BONES[0][0])[3]<=.1001F,
+                "compact waistband must not flare");
+        require(compact.swings.get(BONES[0][1])[3]<=.681F,
+                "compact hem angular safety cap");
+        SkirtVisibleThighContacts.Result noBody=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        new BodyPartJoltContactBudget().select(true),.85F);
+        require(noBody.contactDepths.isEmpty()&&noBody.touchedPanels==0,
+                "small visual scale alone must NOT expand the skirt");
     }
 
     private static void standingThighsMustNotInflateHem()
