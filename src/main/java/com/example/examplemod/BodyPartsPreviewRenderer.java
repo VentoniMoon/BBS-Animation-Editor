@@ -1677,6 +1677,11 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_ADAPTIVE_WIDTH =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.adaptiveWidth","true"));
+    /** Compact (0.85) visual skirt, unchanged body size: compensate ONLY
+     * at actual thigh contacts, never by globally changing its scale. */
+    private static final boolean SKIRT_SCALE_CONTACT_COMPENSATION =
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.scaleContactCompensation","true"));
     /** Visible panel surfaces (not just centerline Jolt links) clear thighs. */
     private static final boolean SKIRT_VISIBLE_THIGH_CONTACTS =
             Boolean.parseBoolean(System.getProperty(
@@ -2117,6 +2122,15 @@ public class BodyPartsPreviewRenderer
             }
             if(coupledSkirt && skirtStrips.size()==20 && skirtRaw.size()==40)
             {
+                AnimationTransform skirtTransform=data.getGlobalTransform();
+                float skirtVisualScale=skirtTransform==null?1F:
+                        SkirtScaleContactResponse.horizontalScale(
+                                skirtTransform.getScaleX(),
+                                skirtTransform.getScaleZ());
+                if(!SKIRT_SCALE_CONTACT_COMPENSATION)
+                    skirtVisualScale=1F;
+                Map<String,Float> thighContactDepths=
+                        java.util.Collections.<String,Float>emptyMap();
                 Map<String,float[]> stitched=
                         SkirtClothPoseCoupler.couple(skirtStrips,skirtRaw);
                 if(SKIRT_CONNECTED_CLOTH)
@@ -2151,8 +2165,9 @@ public class BodyPartsPreviewRenderer
                             passiveCollisionSelection(data,frame);
                     SkirtVisibleThighContacts.Result clearance=
                             SkirtVisibleThighContacts.correct(
-                                    skirtStrips,stitched,contacts);
+                                    skirtStrips,stitched,contacts,skirtVisualScale);
                     stitched=clearance.swings;
+                    thighContactDepths=clearance.contactDepths;
                     if(frame%20==0)
                         System.out.println("[BBS Animation Editor][Jolt][SkirtSurface] "
                                 +"frame="+frame+
@@ -2160,6 +2175,8 @@ public class BodyPartsPreviewRenderer
                                 " maxPenetration="+clearance.peakOverlap+
                                 " exactSamples="+clearance.exactSurfaceSamples+
                                 " exactHits="+clearance.exactSurfaceHits+
+                                " scale="+skirtVisualScale+
+                                " localContactPanels="+thighContactDepths.size()+
                                 " weld="+data.isWeldEnabled()+
                                 " thighLeft="+contacts.leftUpperLeg+
                                 " thighRight="+contacts.rightUpperLeg);
@@ -2171,6 +2188,11 @@ public class BodyPartsPreviewRenderer
                 {
                     Map<String,SkirtAdaptiveWidth.Width> widths=
                             SkirtAdaptiveWidth.measure(skirtStrips,stitched);
+                    if(SKIRT_SCALE_CONTACT_COMPENSATION &&
+                            !thighContactDepths.isEmpty())
+                        widths=SkirtScaleContactResponse.widen(
+                                skirtStrips,widths,thighContactDepths,
+                                skirtVisualScale);
                     for(Map.Entry<String,SkirtAdaptiveWidth.Width> width:widths.entrySet())
                         physicsFrames.acceptWidth(data,frame,
                                 width.getKey(),width.getValue());
