@@ -640,3 +640,54 @@ the current skirt topology. The test suite verifies that a hip-level
 upper-cube overlap is ignored while a genuine lower-hem overlap still
 drives a bounded local correction. In-game comparison of the same
 five-frame raised-thigh gait is needed before merging.
+
+## Multi-leg union overflow at frame 67–81: localized contact islands (experiment)
+
+The uploaded `[SkirtHemAudit]` rows for 15 consecutive frames at
+scale **0.85** prove that lower-hem sampling alone does **not** fix the
+whole-ring guard issue. Exact lower-hem source samples: 331 per frame.
+Between 174 and 236 unique points remain inside one or more fitted
+Emoticons thigh OBBs. Each thigh box individually covers only about
+5–11 panels, but the union of left and right legs covers **14–19**
+panels. On 8 of these 15 frames, `correctedPanels=0` and
+`hemAfterUnique=hemBeforeUnique`.
+
+The old `SkirtVisibleThighContacts.correct` logic hard-aborted whenever
+**more than 12 panels** had any contact, even if *all individual leg
+boxes passed the 12-panel broad-hull filter*. This conflated the
+union of two plausible separate legs with one impossible huge OBB.
+
+Experimental remedy:
+* Preserve per-side measured overlap and angular demand separately
+  for Emoticons LEFT/RIGHT legs, plus a tightly bounded UNKNOWN
+  owner group. Only applies when the direct union exceeds 12 panels.
+* Sort the *actual authored waist anchors* by polar angle (never
+  trust Chameleon group enumeration as circle order).
+* Preserve the five most strongly overlapping **contiguous angular
+  panels per leg**, and at most two for unlabeled bones. This caps
+  the direct corrective footprint to 12/20 and keeps any single leg's
+  correction local. One gentle neighboring response remains as before.
+* Keep the previous response entirely untouched when the union has
+  <=12 direct panels; explicitly reject the entire response if all
+  individual colliders are impossibly overbroad. This protects the
+  previously reported cylindrical umbrella regression.
+* The contact width expansion now receives **only** selected direct
+  bone depths; no phantom all-ring width increase. The original
+  Jolt simulation, native body collision boxes, Weld, skirt 0.85
+  scale, chain smoothing and angular limits are unchanged.
+* Reversible A/B:
+  `-Dbbs.editor.physics.skirt.localContactIslands=false`
+  restores the exact earlier full-ring abort.
+* With `-Dbbs.editor.physics.skirt.contactAudit=true`, the
+  per-frame `[SkirtHemAudit]` also reports
+  `directCandidates`, `directSelected`, and `islandsLimited`.
+  The old `[SkirtContactAudit] suspected` distinguishes the
+  per-leg-islands response from a true whole-ring abort.
+
+This is **not** a final collision solver: a maximum of 12 rigid
+two-bone panel strips cannot conform exactly to every thigh surface.
+It repairs the inappropriate zero-response branch without making
+the previous unsafe assumption that *all 14–19* contacting panels
+should immediately swing outward. Compare *the exact same* five-frame
+walking step before/after with Weld ON. Only an in-game decrease in
+`hemAfterUnique` without a flared silhouette validates this path.

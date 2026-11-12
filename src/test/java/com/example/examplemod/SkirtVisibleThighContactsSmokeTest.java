@@ -39,6 +39,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         decodedQuadRotationIsPreserved();
         broadVerticalNeutralThighDoesNotFlare();
         bothLegsOnlyDeflectLocalPanels();
+        twoPlausibleThighsCannotSilenceAllVisibleHemCorrection();
         absentLegDoesNotInventContact();
         mirroredRearKeepsCorrectWorldPush();
         skirtUsesFullThighBoxWhileHairKeepsCapsule();
@@ -431,6 +432,80 @@ public final class SkirtVisibleThighContactsSmokeTest
             require(result.swings.get(names[1])[3]<=.281F,
                     "the hem exceeded the bounded outward deflection");
         }
+    }
+
+    /**
+     * The supplied in-game 0.85 walk log showed 14-19 hem panels
+     * affected by two separately fitted thigh sets, but many frames
+     * had correctedPanels=0. Find an equivalent synthetic geometry
+     * with two individually local OBBs whose UNION crosses the old
+     * hard >12 limit, then verify the solver no longer cancels both.
+     */
+    private static void twoPlausibleThighsCannotSilenceAllVisibleHemCorrection()
+    {
+        Fixture f=new Fixture(false);
+        boolean found=false;
+        float[] distances={.28F,.32F,.36F,.40F};
+        float[] halfSizes={.22F,.25F,.28F,.31F};
+        for(float center:distances)
+        {
+            if(found)break;
+            for(float half:halfSizes)
+            {
+                if(found)break;
+                BodyPartJoltContactBudget left=new BodyPartJoltContactBudget();
+                BodyPartJoltContactBudget right=new BodyPartJoltContactBudget();
+                float[] front={center,-.29F,0F,0F,0F,0F,1F,
+                        half,.20F,half};
+                float[] rear={-center,-.29F,0F,0F,0F,0F,1F,
+                        half,.20F,half};
+                left.add(front,typed(center,-.29F,0F),
+                        "emoticons.left_leg");
+                right.add(rear,typed(-center,-.29F,0F),
+                        "emoticons.right_leg");
+                SkirtVisibleThighContacts.Audit a=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,f.swings,left.select(true),.85F);
+                SkirtVisibleThighContacts.Audit b=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,f.swings,right.select(true),.85F);
+                BodyPartJoltContactBudget union=
+                        new BodyPartJoltContactBudget();
+                union.add(front,typed(center,-.29F,0F),
+                        "emoticons.left_leg");
+                union.add(rear,typed(-center,-.29F,0F),
+                        "emoticons.right_leg");
+                SkirtVisibleThighContacts.Audit both=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,f.swings,union.select(true),.85F);
+                if(a.hitPanels>=5&&a.hitPanels<=12 &&
+                        b.hitPanels>=5&&b.hitPanels<=12 &&
+                        both.hitPanels>=14)
+                {
+                    found=true;
+                    SkirtVisibleThighContacts.Result solved=
+                            SkirtVisibleThighContacts.correct(
+                                    f.strips,f.swings,
+                                    union.select(true),.85F);
+                    require(solved.locallyLimited,
+                            "two local thighs must invoke bounded islands");
+                    require(solved.candidatePanels>12 &&
+                            solved.selectedPanels<=12 &&
+                            solved.selectedPanels>0,
+                            "still aborted all contacts for two thighs: "+
+                            solved.candidatePanels+"->"+solved.selectedPanels);
+                    require(solved.touchedPanels>0 &&
+                            solved.touchedPanels<18,
+                            "limited correction must preserve a natural skirt "+
+                            solved.touchedPanels);
+                    require(f.swings.get(BONES[0][0])[3]==0F,
+                            "source Jolt pose unexpectedly mutated");
+                }
+            }
+        }
+        require(found,
+                "test fixture lacks two plausible thigh OBBs spanning "+
+                "14+ distinct hem panels");
     }
 
     private static void absentLegDoesNotInventContact()

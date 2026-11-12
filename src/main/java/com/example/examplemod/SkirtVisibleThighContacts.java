@@ -43,6 +43,13 @@ public final class SkirtVisibleThighContacts
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.rejectBroadLegBoxes","true"));
     private static final int MAX_SINGLE_LEG_PANELS=12;
+    /** Restrict only genuine two-leg aggregate >12/20 contacts to
+     * two short angular contact islands, instead of cancelling ALL
+     * correction for the user's wide step. Local and neutral input
+     * remains exactly as before. Reversible A/B test flag. */
+    private static final boolean LOCAL_CONTACT_ISLANDS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.localContactIslands","true"));
     /** The upper tier sits naturally alongside the upper thighs inside
      * the waist. Treating its INNER cube faces as hem contacts caused
      * 20/20-panel false alarms and repeatedly aborted all correction.
@@ -63,6 +70,8 @@ public final class SkirtVisibleThighContacts
         /** Real direct surface-to-thigh penetration, keyed by upper bone.
          * A neighbor's visual movement is NOT a new collision contact. */
         public final Map<String,Float> contactDepths;
+        public final int candidatePanels,selectedPanels;
+        public final boolean locallyLimited;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -72,6 +81,17 @@ public final class SkirtVisibleThighContacts
                 int exactSamples,int exactHits,
                 Map<String,Float> contactDepths)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,0,0,false);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited)
+        {
+            this.candidatePanels=candidatePanels;
+            this.selectedPanels=selectedPanels;
+            this.locallyLimited=locallyLimited;
             this.swings=swings;
             this.touchedPanels=touchedPanels;
             this.peakOverlap=peakOverlap;
@@ -155,8 +175,13 @@ public final class SkirtVisibleThighContacts
                     if(coverage.perLegPanels[index]<=MAX_SINGLE_LEG_PANELS)
                         local.add(legs.get(index));
                 if(!local.isEmpty())legs=local;
-                // If all fitted boxes cover most of the skirt, keep the
-                // original all-ring guard: do not invent an outward push.
+                else
+                {
+                    // Every actual collider is implausibly broad. We
+                    // cannot choose a meaningful LOCAL leg contact: retain
+                    // the original umbrella safety and unchanged pose.
+                    return new Result(copy,0,0F);
+                }
             }
         }
         float cx=0F,cz=0F;
@@ -225,6 +250,8 @@ public final class SkirtVisibleThighContacts
         int exactSampleCount=0,exactHitCount=0;
         float[] need=new float[PANELS];
         float[] directDepth=new float[PANELS];
+        float[][] sideNeed=new float[SkirtHemContactIslands.GROUPS][PANELS];
+        float[][] sideDepth=new float[SkirtHemContactIslands.GROUPS][PANELS];
         float surfaceMargin=SkirtScaleContactResponse.surfaceMargin(visualScale);
         float angleGain=SkirtScaleContactResponse.angleGain(visualScale);
         // Evaluate ONLY lower-fabric contact. Upper samples near the waist
@@ -287,12 +314,17 @@ public final class SkirtVisibleThighContacts
                         if(overlap>0F)
                         {
                             if(exact)exactHitCount++;
+                            int legSide=SkirtHemContactIslands.sideOf(leg.owner);
                             directDepth[i]=Math.max(directDepth[i],overlap);
+                            sideDepth[legSide][i]=Math.max(
+                                    sideDepth[legSide][i],overlap);
                             peak=Math.max(peak,overlap);
                             float distance=Math.max(.14F,
                                     length(sub(sample.p,pivot)));
-                            desired=Math.max(desired,
-                                    (float)Math.atan(overlap/distance));
+                            float demand=(float)Math.atan(overlap/distance);
+                            desired=Math.max(desired,demand);
+                            sideNeed[legSide][i]=Math.max(
+                                    sideNeed[legSide][i],Math.min(.34F,demand));
                         }
                     }
                 }
@@ -300,17 +332,48 @@ public final class SkirtVisibleThighContacts
             need[i]=Math.min(.34F,desired);
         }
 
+        int candidatePanels=0;
+        for(float depth:directDepth)if(depth>.001F)candidatePanels++;
+        boolean limited=false;
+        if(candidatePanels>12)
+        {
+            if(!LOCAL_CONTACT_ISLANDS)
+                return new Result(copy,0,peak,exactSampleCount,exactHitCount,
+                        Collections.<String,Float>emptyMap(),
+                        candidatePanels,0,false);
+            // The two legitimate thighs can each overlap 8-10 panels:
+            // together they cross the old 12/20 guard. Keep up to five
+            // adjacent REAL contact strips per thigh, instead of
+            // treating the union as one malformed 20-panel collider.
+            String[] ids=new String[PANELS];
+            float[][] roots=new float[PANELS][];
+            for(int i=0;i<PANELS;i++)
+            {
+                ids[i]=strips.get(i).upper;
+                roots[i]=origin(strips.get(i).upperWorld);
+            }
+            SkirtHemContactIslands.Decision islands=
+                    SkirtHemContactIslands.choose(ids,roots,
+                            sideNeed,sideDepth,12);
+            if(islands==null||islands.keptPanels==0 ||
+                    islands.keptPanels>12)
+                return new Result(copy,0,peak,exactSampleCount,exactHitCount,
+                        Collections.<String,Float>emptyMap(),
+                        candidatePanels,0,false);
+            for(int i=0;i<PANELS;i++)
+                if(!islands.keep[i])
+                {
+                    need[i]=0F;
+                    directDepth[i]=0F;
+                }
+            limited=true;
+        }
         Map<String,Float> directContacts=
                 new LinkedHashMap<String,Float>();
         for(int i=0;i<PANELS;i++)
             if(directDepth[i]>.001F)
                 directContacts.put(strips.get(i).upper,
                         Float.valueOf(directDepth[i]));
-        // An implausible actor OBB can intersect almost every strip. Keep
-        // its diagnostics but reject the radial "umbrella" correction.
-        if(directContacts.size()>12)
-            return new Result(copy,0,peak,exactSampleCount,exactHitCount,
-                    Collections.<String,Float>emptyMap());
 
         // The geometry profile's bone enumeration is NOT guaranteed to
         // run in angular order. Spread pressure to true physical neighbors
@@ -369,7 +432,7 @@ public final class SkirtVisibleThighContacts
         int total=0;
         for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
-                directContacts);
+                directContacts,candidatePanels,directContacts.size(),limited);
     }
 
     /**
