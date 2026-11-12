@@ -90,7 +90,9 @@ public final class SkirtAdaptiveHemLift
             for(int i=0;i<PANELS;i++)
             {
                 float candidate=sideDemand[g][i]*sideDepth[g][i];
-                if(selected[i] && candidate>score)
+                if(selected[i] && (candidate>score+1E-7F ||
+                        (candidate>0F && Math.abs(candidate-score)<=1E-7F &&
+                        best>=0 && ids[i].compareTo(ids[best])<0)))
                 {
                     best=i;
                     score=candidate;
@@ -110,7 +112,9 @@ public final class SkirtAdaptiveHemLift
             for(int i=0;i<PANELS;i++)
             {
                 float candidate=sideDemand[g][i]*sideDepth[g][i];
-                if(selected[i]&&candidate>score)
+                if(selected[i] && (candidate>score+1E-7F ||
+                        (candidate>0F && Math.abs(candidate-score)<=1E-7F &&
+                        best>=0 && ids[i].compareTo(ids[best])<0)))
                 {
                     best=i;score=candidate;
                 }
