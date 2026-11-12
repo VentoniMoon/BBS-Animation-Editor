@@ -3,6 +3,8 @@ import java.util.ArrayList;
 import java.util.List;
 public class ModelBone
 {
+    public String id="stub";
+    public boolean visible=true;
     public final List<ModelBone> children=new ArrayList<ModelBone>();
     public final List<ModelCube> cubes=new ArrayList<ModelCube>();
     public final ModelTransform initial=new ModelTransform();
