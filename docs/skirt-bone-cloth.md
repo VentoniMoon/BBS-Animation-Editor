@@ -447,3 +447,48 @@ Even if these invariants pass, the remaining high-step leg clipping
 is unsolved and must be investigated separately. Do not re-enable
 the opt-in solver as a production default until a neutral stance and
 all six walking frames have been visually tested.
+
+## Scale-aware local thigh clearance (0.85 skirt, November 2026)
+
+The user's new visual A/B showed that Chameleon skirt **Global Transform
+0.85** fits the character's silhouette much better, but the unchanged
+Emoticons legs penetrate it more frequently than with scale 1.0.
+The world-space physics capture already includes the attached morph
+scale. **Do not multiply the model or the leg Jolt colliders again.**
+
+A stateless contact-only correction keeps the authored 0.85:
+
+* `SkirtScaleContactResponse.horizontalScale` derives the smaller valid
+  horizontal scale from `Global Transform scaleX/scaleZ` (0.6–1 range).
+  No scale changes are written to the morph, animation keys, NBT or Jolt.
+* For the validated 20-strip skirt only, `SkirtVisibleThighContacts`
+  examines the same **already-scaled real Chameleon cube surfaces** and
+  parent Emoticons thigh OBBs. A reduced visual scale gets a small
+  extra clearance margin (0.023 to at most 0.044 blocks) and a slightly
+  stronger local hem angle response. Upper/root angular limits remain
+  unchanged; hem swing remains capped at 0.68 rad.
+* Return **direct** measured penetration depth per impacted upper bone.
+  Neighbor movement is not misreported as actual collider contact.
+  Implausible OBB hits on more than 12 of 20 panels cannot drive a new
+  whole-ring expansion (previous "umbrella" failure).
+* After existing `SkirtAdaptiveWidth.measure`, apply a maximum local
+  lower width bump of about 0.10 at 0.85 (fading with smoothstep based
+  on depth). One angular neighbor on either side receives only 20% of
+  the contact intensity. The original 1.28 lower / 1.07 upper local
+  width caps remain; the waist and unaffected panels never expand.
+* A zero-contact/neutral pose and global scale >=1 keep the previous
+  width results bitwise unmodified. Every timeline frame is
+  deterministic, with no hidden accumulation during scrub or replay.
+  No extra native Jolt steps, new Jolt JAR or connectedCloth enabled.
+* `[Jolt][SkirtSurface]` logs `scale=` and `localContactPanels=`
+  alongside contact counts so normal-vs-0.85 comparisons can be made.
+
+A/B disable with
+`-Dbbs.editor.physics.skirt.scaleContactCompensation=false`;
+ordinary Jolt, Weld and the independent visual collision response
+continue unchanged. `connectedCloth=false` remains the default.
+
+**Important:** This is a conservative, panel-local visual contact response,
+not triangle-level continuous cloth collision. Large steps can still
+penetrate rigid Chameleon cubes. Compare standing and 5–10 frame
+walking tests at 0.85 before treating the penetration issue as fixed.
