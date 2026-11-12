@@ -741,3 +741,58 @@ the same cuboid, and the source audit does not include the final GPU
 Weld/width modifications. The extra lift is therefore bounded,
 conditioned on actual improvement, and must be validated on the
 same in-game wide-stride frames before merging to main.
+
+## Adaptive Skirt Collision 2.0 — supported hinge-area two-bone correction
+
+After PR #186, in-game frames 99–108 at authored `Global Transform
+0.85` show that Adaptive Hem Lift really operates:
+9/10 frames have additional lower lifts, and the measured full lower
+hem source-point collisions fall by 31.6% in aggregate. Still,
+1,382 hem source-point crossings remain across ten ticks. The
+remaining front/corner hole is often ABOVE the final bottom 32% of
+the skirt, around the upper/lower cuboid hinge. For example at frame
+101, the full leg audit sees 14 contacted panels yet only one direct
+lower hem candidate is selected; no additional hem lift occurs.
+
+New independent collision-only second stage, reversible via
+`-Dbbs.editor.physics.skirt.adaptiveMidCollision=false`:
+
+* Keep original native Jolt, `SkirtClothPoseCoupler`, native Emoticons
+  leg OBBs, 20x2 bone chains, `0.85` authored scale, Weld and existing
+  `AdaptiveHemLift` unchanged. This code runs only AFTER those stages.
+* Evaluate real decoded **upper and lower Chameleon cube vertices from
+  40–70% of waist-to-tip length**, excluding 0–40% near the resting
+  waist. No global cloth-ring constraints or speculative widening.
+  Only the active/accepted OBBs from the existing outer-leg gating
+  are eligible; discovery and evaluation use this SAME collider set.
+  Each source point contributes at most its deepest OBB overlap so
+  the three overlapping Emoticons-fit boxes do not triple-count it.
+* A middle candidate must be within two actual angular neighbors of
+  an already accepted lower-hem contact (and report nontrivial
+  middle-fabric penetration). This prevents reactivating rejected
+  broad colliders or using unrelated waist-grazing geometry.
+* Select one true angular contact center and up to two neighbors PER
+  named left/right leg, using the existing deterministic contact-ring
+  selection; no more than six mid-correction panels per frame.
+* Trial rotations pivot around the existing upper and lower bones.
+  A root section can receive up to **0.13 rad** extra (absolute cap
+  0.65 rad); the lower section is tested from its current adaptive
+  hem angle, within that method's existing collision-only cap.
+* Commit a trial only when real mid-fabric penetration DECREASES,
+  the combined mid+hem residual decreases, and the lower hem
+  residual does not worsen by more than a tiny numeric tolerance.
+  Reject all unhelpful trials and retain the exact pre-stage pose.
+  All operations are deterministic and stateless for timeline scrub
+  and direct video rendering.
+* `[Jolt][SkirtHemAudit]` and `[Jolt][SkirtContactAudit]` now include
+  `midCandidates`, `jointLiftPanels`, `midOverlapReduction`.
+  These reflect collision improvement in the accepted fitted
+  source-point geometry, **not** a full GPU Weld mesh guarantee.
+
+Standalone Java 8 smoke tests compare the same contact with the new
+stage disabled/enabled; verify a real beneficial middle-joint motion,
+no model-scale-one change, no waist-only false alarm, no far panel
+flare, no native source-pose mutation, and deterministic rerender.
+The final proof still requires identical in-game walking frames
+with Weld enabled: compare appearance and the logged metrics before
+treating raised thigh clipping as solved.
