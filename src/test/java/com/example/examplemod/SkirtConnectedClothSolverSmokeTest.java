@@ -56,6 +56,9 @@ public final class SkirtConnectedClothSolverSmokeTest
                         f.strips,f.raw,budget.select(true));
         check(r.colliderCount==1,"real thigh OBB not used");
         check(r.maxContactBefore>.005F,"thigh overlap not found");
+        check(r.maxContactAfter<r.maxContactBefore-.001F,
+                "actual rendered bone pose did not reduce thigh penetration: "+
+                r.maxContactBefore+" -> "+r.maxContactAfter);
         check(r.adjustedPanels>0,"front skirt did not react");
         check(r.adjustedPanels<N,"contact inflated entire ring");
         check(r.largestSeamStretch<.16F,"connected hem seam diverged");
