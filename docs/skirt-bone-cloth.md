@@ -199,3 +199,35 @@ native woven cloth or polygon-perfect collisions; extreme leg poses,
 wide cubes and unusually rotated garment segments may still intersect.
 In-game inspection of the collider overlay and an animated walking test
 are required before declaring the bug solved.
+
+## Correction to over-flared skirt after PR #171
+
+The next in-game screenshot showed **umbrella-shaped overextension**
+around the waist, despite the leg colliders being present. The
+surface-clearance pass was too aggressive: it sampled high near the
+waist, rotated each entire upper chain by as much as 0.95 radians,
+propagated contact to neighbors, and repeated the entire operation
+three times. Both ordinary resting thighs could therefore generate
+continuous outward pressure all around the skirt.
+
+The new conservative clearance policy:
+
+* First ignore thigh box centers sitting within the inner 68% of the
+  skirt waist radius. Resting hips can touch a contact proxy without
+  inflating the garment.
+* Test collisions on the **lower hanging fabric only**, never on
+  the upper waist section. Do a single controlled projection instead
+  of repeatedly accumulating three sweeps.
+* Add at most 0.095 rad (5.4 degrees) to a directly contacted **upper**
+  bone and 0.28 rad (16 degrees) to its **lower** bone; only 16% of the
+  neighboring impact is carried sideways. The clean `ALL` waistband
+  remains unchanged.
+* Respect maximum final upper/lower angles and keep source Jolt physics,
+  adaptive width, parent collider selection and hair/ragdoll unchanged.
+* Test two thighs simultaneously: the entire ring must not inflate.
+
+This is intentionally a **safe, lower-amplitude response**. Very wide
+strides may still expose local intersections that need actual native
+cloth-body constraints; do not solve those by restoring unlimited
+outward rotation. The in-game neutral standing and walking poses both
+need validation.
