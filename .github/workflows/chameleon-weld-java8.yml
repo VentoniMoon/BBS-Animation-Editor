@@ -76,6 +76,7 @@ jobs:
             src/main/java/com/example/examplemod/ChameleonWeldRendererTransformer.java \
             src/main/java/com/example/examplemod/ChameleonWeldMorphTransformer.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldPreviewCompileSmoke.java \
+            src/test/weld-stubs/com/example/examplemod/ChameleonSkirtRingNativeSmoke.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldNativeHookSmoke.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldMorphHookSmoke.java
 
@@ -84,6 +85,8 @@ jobs:
           CP="build/weld-java8:build/weld-java8/libs/asm-5.2.jar:build/weld-java8/libs/asm-tree-5.2.jar"
           java -ea -cp "$CP" \
             com.example.examplemod.ChameleonWeldPreviewCompileSmoke
+          java -ea -cp "$CP" \
+            com.example.examplemod.ChameleonSkirtRingNativeSmoke
           java -ea -cp "$CP" \
             com.example.examplemod.ChameleonWeldNativeHookSmoke
           java -ea -cp "$CP" \
