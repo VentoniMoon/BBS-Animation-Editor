@@ -52,6 +52,16 @@ public final class SkirtVisibleThighContacts
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
     private static final float LEG_OUTWARD_THRESHOLD=.82F;
+    /** A center/tilt gate can miss raised thighs while they are crossing
+     * the compact skirt near the pelvis. Rescue ONLY a thigh with clear
+     * penetration of its actual, exposed middle/hem Chameleon vertices.
+     * This does not reinterpret mere inner-waist contact as a collision.
+     * A/B flag disables only this fallback, not existing protection. */
+    private static final boolean SURFACE_EVIDENCE_LEG_GATE=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.surfaceEvidenceLegGate","true"));
+    private static final float SURFACE_EVIDENCE_DEPTH=.038F;
+    private static final float OUTER_SURFACE_BAND=.030F;
     /** Experimental broad-hull rejection, preserving the previous global
      * guard as an absolute fallback when smaller local boxes cannot isolate
      * a useful response. Does not remove the collider from native Jolt. */
@@ -95,6 +105,9 @@ public final class SkirtVisibleThighContacts
         /** Corrected middle-tier contact, independently of the hem lift. */
         public final int midCandidatePanels,jointLiftPanels;
         public final float midOverlapReduction;
+        /** The old tilt/center gate rejected these boxes; strong
+         * outer-surface penetration rescued only some of them. */
+        public final int rescuedLegBoxes,rejectedLegBoxes;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -135,6 +148,23 @@ public final class SkirtVisibleThighContacts
                 int midCandidatePanels,int jointLiftPanels,
                 float midOverlapReduction)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,liftedHemPanels,liftOverlapReduction,
+                    midCandidatePanels,jointLiftPanels,midOverlapReduction,
+                    0,0);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction,
+                int rescuedLegBoxes,int rejectedLegBoxes)
+        {
+            this.rescuedLegBoxes=rescuedLegBoxes;
+            this.rejectedLegBoxes=rejectedLegBoxes;
             this.midCandidatePanels=midCandidatePanels;
             this.jointLiftPanels=jointLiftPanels;
             this.midOverlapReduction=midOverlapReduction;
@@ -285,6 +315,8 @@ public final class SkirtVisibleThighContacts
         }
         waistRadius/=PANELS;
         List<Leg> active=new ArrayList<Leg>();
+        int rescuedLegBoxes=0,rejectedLegBoxes=0;
+        float evidenceMargin=SkirtScaleContactResponse.surfaceMargin(visualScale);
         for(Leg leg:legs)
         {
             float x=leg.p[0]-cx,z=leg.p[2]-cz;
@@ -311,12 +343,25 @@ public final class SkirtVisibleThighContacts
                     leg.basis[longest][2]*leg.basis[longest][2]);
             boolean raised=tilted>=.30F;
             boolean movedOut=distance>=waistRadius*.68F;
-            if(distance+support>=
+            boolean oldGate=distance+support>=
                     Math.max(.09F,waistRadius*LEG_OUTWARD_THRESHOLD) &&
-                    (raised||movedOut))
+                    (raised||movedOut);
+            if(oldGate)
                 active.add(leg);
+            else if(SURFACE_EVIDENCE_LEG_GATE &&
+                    visualScale<.995F &&
+                    deepOuterFabricContact(strips,copy,leg,cx,cz,
+                            evidenceMargin))
+            {
+                active.add(leg);
+                rescuedLegBoxes++;
+            }
+            else rejectedLegBoxes++;
         }
-        if(active.isEmpty())return new Result(copy,0,0F);
+        if(active.isEmpty())
+            return new Result(copy,0,0F,0,0,
+                    Collections.<String,Float>emptyMap(),0,0,false,
+                    0,0F,0,0,0F,0,rejectedLegBoxes);
 
         boolean[] touched=new boolean[PANELS];
         float peak=0F;
@@ -726,7 +771,8 @@ public final class SkirtVisibleThighContacts
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
                 directContacts,candidatePanels,directContacts.size(),limited,
                 additionalLifts,overlapReduction,
-                midCandidates,jointPanels,midReduction);
+                midCandidates,jointPanels,midReduction,
+                rescuedLegBoxes,rejectedLegBoxes);
     }
 
     /**
@@ -1005,6 +1051,74 @@ public final class SkirtVisibleThighContacts
             n++;
         }
         return n;
+    }
+
+    /**
+     * Conservative proof that an old center/tilt-rejected leg truly
+     * penetrates the OUTWARD-facing visible skirt, not just inner
+     * surfaces beside the pelvis. Only transformed, decoded Chameleon
+     * cuboid points from the middle (40-70%) or hem (68%+) count;
+     * fallback centerline probes and upper waist samples DO NOT count.
+     *
+     * Require two sufficiently deep surface points in one skirt panel.
+     * The outer 0.03-block radial band is computed PER region and
+     * PER panel so back-facing inner cuboid faces are not evidence.
+     * All coordinates and OBBs already share the captured world space.
+     */
+    private static boolean deepOuterFabricContact(
+            List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> swings,Leg leg,float cx,float cz,
+            float margin)
+    {
+        for(SkirtClothPoseCoupler.Strip strip:strips)
+        {
+            float[] root=origin(strip.upperWorld);
+            float rx=root[0]-cx,rz=root[2]-cz;
+            float radius=(float)Math.sqrt(rx*rx+rz*rz);
+            if(radius<.02F)continue;
+            float[] outward={rx/radius,0F,rz/radius};
+            float[] hinge=origin(strip.lowerWorld);
+            float[] upper=worldSwing(strip.upperWorld,
+                    swings.get(strip.upper));
+            float[] lower=worldSwing(strip.lowerWorld,
+                    swings.get(strip.lower));
+            List<Point> middle=new ArrayList<Point>();
+            addExactSurface(middle,strip.upperSurfaceWorld,
+                    root,hinge,strip.tipWorld,upper,lower,
+                    false,MID_CONTACT_START,MID_CONTACT_END);
+            addExactSurface(middle,strip.lowerSurfaceWorld,
+                    root,hinge,strip.tipWorld,upper,lower,
+                    true,MID_CONTACT_START,MID_CONTACT_END);
+            if(hasDeepOuterSurfacePoint(middle,leg,outward,margin))
+                return true;
+            List<Point> hem=new ArrayList<Point>();
+            addExactSurface(hem,strip.lowerSurfaceWorld,
+                    root,hinge,strip.tipWorld,upper,lower,
+                    true,HEM_CONTACT_FROM);
+            if(hasDeepOuterSurfacePoint(hem,leg,outward,margin))
+                return true;
+        }
+        return false;
+    }
+
+    private static boolean hasDeepOuterSurfacePoint(
+            List<Point> points,Leg leg,float[] outward,float margin)
+    {
+        if(points.size()<2)return false;
+        float largest=-Float.MAX_VALUE;
+        for(Point point:points)
+            largest=Math.max(largest,dot(point.p,outward));
+        int validHits=0;
+        for(Point point:points)
+        {
+            if(dot(point.p,outward)<largest-OUTER_SURFACE_BAND)
+                continue;
+            float depth=unclampedPenetration(
+                    point.p,leg,outward,margin);
+            if(depth>=SURFACE_EVIDENCE_DEPTH &&
+                    ++validHits>=2)return true;
+        }
+        return false;
     }
 
     /**
