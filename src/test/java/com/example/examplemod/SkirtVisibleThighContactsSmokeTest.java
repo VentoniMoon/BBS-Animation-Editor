@@ -30,6 +30,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         auditMeasuresResidualEvenWhenNoVisualCorrectionIsAvailable();
         wholeRingGuardLeavesAuditableResidual();
         badBroadShapeDoesNotSuppressValidLocalThigh();
+        waistTierOverlapMustNotBlockHemCollisionResponse();
         compact085RespondsLocallyWithoutChangingNormalScale();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
@@ -182,6 +183,52 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "giant false collider must not create rear umbrella flare");
         near(f.swings.get(BONES[0][0])[3],0F,.00001F,
                 "source Jolt pose must remain untouched");
+    }
+
+    /**
+     * The real compact 0.85 garment's UPPER tier naturally runs close
+     * to the actor's thigh. In the old solver an upper-tier overlap was
+     * counted as a hem collision and could trigger the 20/20 abort.
+     * Its inner upper quad must NOT move the lower cloth, whereas a real
+     * overlap at the lower hem must still produce a local correction.
+     */
+    private static void waistTierOverlapMustNotBlockHemCollisionResponse()
+    {
+        Fixture f=new Fixture(false);
+        SkirtClothPoseCoupler.Strip source=f.strips.get(0);
+        f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                source.upper,source.lower,source.upperWorld,
+                source.lowerWorld,source.tipWorld,
+                new float[][]{{.42F,-.12F,0F}},null));
+        BodyPartJoltContactBudget high=new BodyPartJoltContactBudget();
+        high.add(box(.42F,-.12F,0F),typed(.42F,-.12F,0F),
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection selected=high.select(true);
+        SkirtVisibleThighContacts.Audit full=
+                SkirtVisibleThighContacts.auditBonePose(
+                        f.strips,f.swings,selected,.85F);
+        SkirtVisibleThighContacts.Audit hem=
+                SkirtVisibleThighContacts.auditHemBonePose(
+                        f.strips,f.swings,selected,.85F);
+        require(full.uniqueHits>0,
+                "whole-garment audit must still see upper thigh overlap");
+        require(hem.uniqueHits==0 && hem.hitPanels==0,
+                "upper waist proximity is not a lower-hem collision");
+        SkirtVisibleThighContacts.Result response=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,selected,.85F);
+        require(response.touchedPanels==0 &&
+                response.contactDepths.isEmpty(),
+                "upper garment tier alone must not flare the hem");
+
+        BodyPartJoltContactBudget low=new BodyPartJoltContactBudget();
+        low.add(box(.42F,-.30F,0F),typed(.42F,-.30F,0F),
+                "emoticons.left_leg");
+        SkirtVisibleThighContacts.Result real=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,low.select(true),.85F);
+        require(real.touchedPanels>0 && real.touchedPanels<=7,
+                "real lower hem contact should still deflect locally");
     }
 
     private static void compact085RespondsLocallyWithoutChangingNormalScale()

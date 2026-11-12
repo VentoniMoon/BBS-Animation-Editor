@@ -597,3 +597,46 @@ stage cannot repair the skinned-mesh extraction or guarantee
 triangle-accurate contact. Do not claim complete elimination
 of clipping until in-game `SkirtContactAudit` confirms
 `postUnique` significantly decreases without a silhouette regression.
+
+## 2026-11-12: separate upper skirt/hip proximity from true lower-hem contact
+
+The follow-up real gait screenshots still show the lifted thigh poking through
+the front of the compact **0.85** skirt, but the new
+`[Jolt][SkirtContactShapes]` log exposed the root of a false positive:
+three nested/overlapping fitted OBBs per upper thigh, each contacting
+9–14 panels near the waist. The *union* of the left and right upper thigh
+OBBs frequently marks all 20 panels as colliding.
+
+Previously `SkirtVisibleThighContacts.correct()` claimed to inspect
+"ONLY lower-fabric contact", but actually appended exact samples from
+BOTH the upper cube tier and the lower cube tier. A contact point near
+the natural waist–upper-thigh interface was then counted as a hem
+collision. It could trip the 12/20 global anti-umbrella guard and abort
+all visual thigh correction. Merely increasing stiffness or contact
+force cannot repair this classification mistake.
+
+This change (experimental and isolated):
+* The corrective solver examines lower-tier decoded cube vertices only
+  **below 68%** of the source root-to-tip length; it retains lower hem
+  centerline probes at 80% and 100% when exact samples are missing.
+* Per-leg broad-hull rejection now counts collisions against this
+  same LOWER-hem contact region instead of upper+lower geometry.
+* The existing `auditBonePose` retains its original full source
+  sample coverage for historical log comparisons. The new
+  `auditHemBonePose` independently counts exact lower-hem intersections.
+  With `-Dbbs.editor.physics.skirt.contactAudit=true`, one extra
+  `[Jolt][SkirtHemAudit]` line per frame shows
+  `hemSources / hemBeforeUnique / hemAfterUnique /
+  hemBeforePanels / hemAfterPanels / hemBoxes`.
+* Opt out: `-Dbbs.editor.physics.skirt.hemOnlyContact=false`
+  restores the previous all-tier corrective sampling and broad-box gate.
+* Jolt native collision geometry and time stepping are **unchanged**.
+  The 0.85 visual scale, Weld, bone keys, original panel rotation caps,
+  and global 12-panel anti-umbrella fallback are unchanged.
+
+This does not create a full deformable cloth surface, and the new
+0.68 fraction is an intentionally conservative starting point for
+the current skirt topology. The test suite verifies that a hip-level
+upper-cube overlap is ignored while a genuine lower-hem overlap still
+drives a bounded local correction. In-game comparison of the same
+five-frame raised-thigh gait is needed before merging.

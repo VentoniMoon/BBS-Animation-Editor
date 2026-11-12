@@ -43,6 +43,15 @@ public final class SkirtVisibleThighContacts
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.rejectBroadLegBoxes","true"));
     private static final int MAX_SINGLE_LEG_PANELS=12;
+    /** The upper tier sits naturally alongside the upper thighs inside
+     * the waist. Treating its INNER cube faces as hem contacts caused
+     * 20/20-panel false alarms and repeatedly aborted all correction.
+     * Only use the lower 32% of the authored skirt length as actual
+     * hem/leg contact for this conservative test. */
+    private static final float HEM_CONTACT_FROM=.68F;
+    private static final boolean HEM_ONLY_CONTACT=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.hemOnlyContact","true"));
 
     public static final class Result
     {
@@ -135,7 +144,9 @@ public final class SkirtVisibleThighContacts
             // skirt. Unlike the previous all-or-nothing guard, a local
             // genuine thigh box may still correct the front hem when
             // another incorrect/oversized OBB overlaps the entire ring.
-            Audit coverage=auditBonePose(strips,copy,selected,visualScale);
+            Audit coverage=HEM_ONLY_CONTACT?
+                    auditHemBonePose(strips,copy,selected,visualScale):
+                    auditBonePose(strips,copy,selected,visualScale);
             if(coverage.legBoxes==legs.size() &&
                     coverage.perLegPanels.length==legs.size())
             {
@@ -245,15 +256,18 @@ public final class SkirtVisibleThighContacts
             // cuboids and their face centers (including under Weld). Ignore
             // the top 28% around the fitted waist, which must stay pinned.
             List<Point> samples=new ArrayList<Point>();
-            exactSampleCount+=addExactSurface(samples,
-                    strip.upperSurfaceWorld,root,hinge,
-                    strip.tipWorld,upperSwing,lowerSwing,false);
+            if(!HEM_ONLY_CONTACT)
+                exactSampleCount+=addExactSurface(samples,
+                        strip.upperSurfaceWorld,root,hinge,
+                        strip.tipWorld,upperSwing,lowerSwing,false);
             exactSampleCount+=addExactSurface(samples,
                     strip.lowerSurfaceWorld,root,hinge,
-                    strip.tipWorld,upperSwing,lowerSwing,true);
+                    strip.tipWorld,upperSwing,lowerSwing,true,
+                    HEM_ONLY_CONTACT?HEM_CONTACT_FROM:.28F);
             // Keep the original thin centerline fallback for cubes without
             // a readable Chameleon surface or missing/hidden face quads.
-            samples.add(new Point(add(pivot,mul(lower,.55F)),hemAxis));
+            if(!HEM_ONLY_CONTACT)
+                samples.add(new Point(add(pivot,mul(lower,.55F)),hemAxis));
             samples.add(new Point(add(pivot,mul(lower,.80F)),hemAxis));
             samples.add(new Point(add(pivot,lower),hemAxis));
             float desired=0F;
@@ -409,6 +423,27 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,
             float visualScale)
     {
+        return auditPose(strips,swings,selected,visualScale,false);
+    }
+
+    /** Contact-only readback excludes the waist/upper skirt surfaces,
+     * while auditBonePose retains its original full 860-point semantics
+     * for backwards-compatible diagnostics. */
+    public static Audit auditHemBonePose(
+            List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> swings,
+            BodyPartJoltContactBudget.Selection selected,
+            float visualScale)
+    {
+        return auditPose(strips,swings,selected,visualScale,true);
+    }
+
+    private static Audit auditPose(
+            List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> swings,
+            BodyPartJoltContactBudget.Selection selected,
+            float visualScale,boolean hemOnly)
+    {
         Audit invalid=new Audit(0,0,0,0,0,0F,"none");
         if(strips==null||strips.size()!=PANELS||swings==null ||
                 selected==null||selected.boxes==null ||
@@ -458,10 +493,13 @@ public final class SkirtVisibleThighContacts
             if(rr<.02F)continue;
             float[] outward={dx/rr,0F,dz/rr};
             List<Point> points=new ArrayList<Point>();
-            int exact=addExactSurface(points,strip.upperSurfaceWorld,
-                    root,hinge,strip.tipWorld,upper,lower,false);
+            int exact=0;
+            if(!hemOnly)
+                exact+=addExactSurface(points,strip.upperSurfaceWorld,
+                        root,hinge,strip.tipWorld,upper,lower,false);
             exact+=addExactSurface(points,strip.lowerSurfaceWorld,
-                    root,hinge,strip.tipWorld,upper,lower,true);
+                    root,hinge,strip.tipWorld,upper,lower,true,
+                    hemOnly?HEM_CONTACT_FROM:.28F);
             // Diagnostic remains meaningful for missing decoded cuboids.
             if(exact==0)
             {
@@ -469,7 +507,9 @@ public final class SkirtVisibleThighContacts
                 float[] second=rotate(rotate(sub(strip.tipWorld,hinge),
                         lower),upper);
                 float[] joint=add(root,first);
-                points.add(new Point(add(joint,mul(second,.5F)),null));
+                if(!hemOnly)
+                    points.add(new Point(add(joint,mul(second,.5F)),null));
+                points.add(new Point(add(joint,mul(second,.8F)),null));
                 points.add(new Point(add(joint,second),null));
             }
             boolean panelContact=false;
@@ -566,6 +606,15 @@ public final class SkirtVisibleThighContacts
             float[] root,float[] hinge,float[] tip,
             float[] upperSwing,float[] lowerSwing,boolean lower)
     {
+        return addExactSurface(out,source,root,hinge,tip,
+                upperSwing,lowerSwing,lower,.28F);
+    }
+
+    private static int addExactSurface(List<Point> out,float[][] source,
+            float[] root,float[] hinge,float[] tip,
+            float[] upperSwing,float[] lowerSwing,boolean lower,
+            float minFraction)
+    {
         if(source==null||source.length==0||source.length>128)return 0;
         float[] down=sub(tip,root);
         float length=length(down);
@@ -576,7 +625,7 @@ public final class SkirtVisibleThighContacts
         {
             if(!valid(p,3))continue;
             float fraction=dot(sub(p,root),direction)/length;
-            if(fraction<.28F || fraction>1.45F)continue;
+            if(fraction<minFraction || fraction>1.45F)continue;
             float[] world;
             if(lower)
             {
