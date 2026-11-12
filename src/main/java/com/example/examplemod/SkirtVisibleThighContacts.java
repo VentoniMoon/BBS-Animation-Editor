@@ -1,6 +1,7 @@
 package com.example.examplemod;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +21,6 @@ public final class SkirtVisibleThighContacts
 {
     private static final int PANELS=20;
     private static final float WIDTH=.0625F; // actual 2px wide panels / 16
-    private static final float SURFACE_MARGIN=.023F;
     /*
      * Previous correction repeatedly rotated ROOTS by up to 0.95 rad
      * and propagated to neighbors. Both legs near the standing waist
@@ -44,18 +44,25 @@ public final class SkirtVisibleThighContacts
         public final float peakOverlap;
         /** Actual decoded Chameleon cube surface samples vs contact hits. */
         public final int exactSurfaceSamples,exactSurfaceHits;
+        /** Real direct surface-to-thigh penetration, keyed by upper bone.
+         * A neighbor's visual movement is NOT a new collision contact. */
+        public final Map<String,Float> contactDepths;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
-            this(swings,touchedPanels,peakOverlap,0,0);
+            this(swings,touchedPanels,peakOverlap,0,0,
+                    Collections.<String,Float>emptyMap());
         }
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
-                int exactSamples,int exactHits)
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths)
         {
             this.swings=swings;
             this.touchedPanels=touchedPanels;
             this.peakOverlap=peakOverlap;
             exactSurfaceSamples=exactSamples;
             exactSurfaceHits=exactHits;
+            this.contactDepths=Collections.unmodifiableMap(
+                    new LinkedHashMap<String,Float>(contactDepths));
         }
     }
 
@@ -84,6 +91,18 @@ public final class SkirtVisibleThighContacts
     public static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected)
+    {
+        return correct(strips,starting,selected,1F);
+    }
+
+    /**
+     * The input matrices already include Global Transform scale. Do not
+     * rescale leg boxes or skirt geometry: a compact garment instead needs
+     * a slightly earlier LOCAL response against the unchanged body.
+     */
+    public static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
@@ -163,6 +182,9 @@ public final class SkirtVisibleThighContacts
         float peak=0F;
         int exactSampleCount=0,exactHitCount=0;
         float[] need=new float[PANELS];
+        float[] directDepth=new float[PANELS];
+        float surfaceMargin=SkirtScaleContactResponse.surfaceMargin(visualScale);
+        float angleGain=SkirtScaleContactResponse.angleGain(visualScale);
         // Evaluate ONLY lower-fabric contact. Upper samples near the waist
         // used to treat the resting hips as a penetration and push outward
         // the entire skirt. A single pass prevents repeated amplifying
@@ -215,10 +237,12 @@ public final class SkirtVisibleThighContacts
                     float[] point=add(sample.p,mul(side,edge));
                     for(Leg leg:active)
                     {
-                        float overlap=outwardPenetration(point,leg,outward);
+                        float overlap=outwardPenetration(
+                                point,leg,outward,surfaceMargin);
                         if(overlap>0F)
                         {
                             if(exact)exactHitCount++;
+                            directDepth[i]=Math.max(directDepth[i],overlap);
                             peak=Math.max(peak,overlap);
                             float distance=Math.max(.14F,
                                     length(sub(sample.p,pivot)));
@@ -230,6 +254,18 @@ public final class SkirtVisibleThighContacts
             }
             need[i]=Math.min(.34F,desired);
         }
+
+        Map<String,Float> directContacts=
+                new LinkedHashMap<String,Float>();
+        for(int i=0;i<PANELS;i++)
+            if(directDepth[i]>.001F)
+                directContacts.put(strips.get(i).upper,
+                        Float.valueOf(directDepth[i]));
+        // An implausible actor OBB can intersect almost every strip. Keep
+        // its diagnostics but reject the radial "umbrella" correction.
+        if(directContacts.size()>12)
+            return new Result(copy,0,peak,exactSampleCount,exactHitCount,
+                    Collections.<String,Float>emptyMap());
 
         for(int i=0;i<PANELS;i++)
         {
@@ -248,18 +284,21 @@ public final class SkirtVisibleThighContacts
 
             // Preserve the natural waist silhouette: <6 degrees extra at
             // the root; the lower link bends by up to 16 degrees instead.
-            float upperStep=Math.min(MAX_EXTRA_ROOT,contact*.28F);
-            float lowerStep=Math.min(MAX_EXTRA_HEM,contact*.85F);
+            float upperStep=Math.min(MAX_EXTRA_ROOT,
+                    contact*.28F*angleGain);
+            float lowerStep=Math.min(MAX_EXTRA_HEM,
+                    contact*.85F*angleGain);
             boolean changed=false;
             changed|=bend(copy,strip.upper,strip.upperWorld,tangent,
                     upperStep,MAX_FINAL_ROOT);
             changed|=bend(copy,strip.lower,strip.lowerWorld,tangent,
-                    lowerStep,MAX_FINAL_HEM);
+                    lowerStep,SkirtScaleContactResponse.hemAngleCap(visualScale));
             touched[i]=changed;
         }
         int total=0;
         for(boolean value:touched)if(value)total++;
-        return new Result(copy,total,peak,exactSampleCount,exactHitCount);
+        return new Result(copy,total,peak,exactSampleCount,exactHitCount,
+                directContacts);
     }
 
     /**
@@ -325,13 +364,14 @@ public final class SkirtVisibleThighContacts
 
     /** A point must actually overlap the leg's FULL box. If it does,
      * request just enough *outward* motion to clear the far radial face. */
-    private static float outwardPenetration(float[] point,Leg leg,float[] radial)
+    private static float outwardPenetration(float[] point,Leg leg,
+            float[] radial,float surfaceMargin)
     {
         float[] d=sub(point,new float[]{leg.p[0],leg.p[1],leg.p[2]});
         for(int k=0;k<3;k++)
-            if(Math.abs(dot(d,leg.basis[k]))>leg.p[7+k]+SURFACE_MARGIN)
+            if(Math.abs(dot(d,leg.basis[k]))>leg.p[7+k]+surfaceMargin)
                 return 0F;
-        float support=SURFACE_MARGIN;
+        float support=surfaceMargin;
         for(int k=0;k<3;k++)
             support+=Math.abs(dot(radial,leg.basis[k]))*leg.p[7+k];
         return Math.max(0F,Math.min(.25F,support-dot(d,radial)));
