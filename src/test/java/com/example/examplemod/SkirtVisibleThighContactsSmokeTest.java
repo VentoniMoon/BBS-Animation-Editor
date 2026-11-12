@@ -28,6 +28,7 @@ public final class SkirtVisibleThighContactsSmokeTest
     {
         wideStridePushesClothOutward();
         standingThighsMustNotInflateHem();
+        raisedThighEdgeCrossesWithCenterUnderWaist();
         bothLegsOnlyDeflectLocalPanels();
         absentLegDoesNotInventContact();
         mirroredRearKeepsCorrectWorldPush();
@@ -77,6 +78,30 @@ public final class SkirtVisibleThighContactsSmokeTest
             for(String name:names)
                 near(result.swings.get(name)[3],0F,.00001F,
                         "neutral frame changed "+name);
+    }
+
+    /**
+     * Regression: the knee/thigh moves forward far enough that its CORNER
+     * penetrates the hem, although the BONE CENTER remains at 0.18 blocks.
+     * The former center-distance gate rejected this valid contact entirely.
+     */
+    private static void raisedThighEdgeCrossesWithCenterUnderWaist()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(wideBox(.18F,-.27F,0F),wideTyped(.18F,-.27F,0F),
+                "emoticons.left_leg");
+        SkirtVisibleThighContacts.Result out=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,budget.select(true));
+        require(out.touchedPanels>0,
+                "raised thigh corner penetrated, but center-only gate missed it");
+        require(out.peakOverlap>.01F,"thigh outer face did not trigger contact");
+        require(out.touchedPanels<=7,"single thigh spread around skirt");
+        require(out.swings.get(BONES[0][0])[3]<=.1001F,
+                "waist root must not open into umbrella");
+        require(out.swings.get(BONES[0][1])[3]<=.281F,
+                "lower flap must remain bounded");
     }
 
     private static void bothLegsOnlyDeflectLocalPanels()
@@ -188,6 +213,10 @@ public final class SkirtVisibleThighContactsSmokeTest
     }
     private static float[] box(float x,float y,float z)
     {return new float[]{x,y,z,0,0,0,1,.11F,.17F,.13F};}
+    private static float[] wideBox(float x,float y,float z)
+    {return new float[]{x,y,z,0,0,0,1,.28F,.17F,.13F};}
+    private static float[] wideTyped(float x,float y,float z)
+    {return new float[]{x,y,z,0,0,0,1,.12F,.17F,.12F,2F};}
     private static float[] typed(float x,float y,float z)
     {return new float[]{x,y,z,0,0,0,1,.085F,.17F,.085F,2F};}
     private static void require(boolean b,String reason)
