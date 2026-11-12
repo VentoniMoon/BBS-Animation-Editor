@@ -207,8 +207,9 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift)
     {
+        // Preserve the exact PR #186 isolated hem-lift A/B test.
         return correct(strips,starting,selected,visualScale,
-                adaptiveLift,ADAPTIVE_MID_COLLISION);
+                adaptiveLift,false);
     }
 
     /** Explicit pure Java A/B test without class-load system flags. */
