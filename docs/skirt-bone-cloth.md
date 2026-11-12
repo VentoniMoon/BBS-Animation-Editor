@@ -796,3 +796,59 @@ flare, no native source-pose mutation, and deterministic rerender.
 The final proof still requires identical in-game walking frames
 with Weld enabled: compare appearance and the logged metrics before
 treating raised thigh clipping as solved.
+
+## 2026-11-12: recover thigh contact from actual outer skirt surface (PR #188)
+
+The 20-frame `[Jolt][SkirtHemAudit]` capture from the 0.85 garment
+(frames 115–134) contains 4,077 source-point overlaps before correction
+and 2,837 after it, a 30.4% aggregate reduction. Joint mid-fabric
+correction operates on 17 of 20 ticks. Frames **118** and **127**
+are conspicuous: `hemBeforeUnique=197/195`, respectively,
+but `directCandidates=0`, `correctedPanels=0`,
+`midCandidates=0`, `jointLiftPanels=0`, and there is no improvement.
+This establishes a **detection/correction mismatch**, not that the new
+two-bone solver has insufficient angular range on those ticks.
+
+Before checking decoded garment surfaces, the visual solver used a
+pure heuristic based on thigh OBB horizontal center/radius support
+and the tilt of its longest axis. On a compact skirt, a crossed leg
+can intersect exposed cloth while its fit still has an inboard center,
+so the heuristic rejects a truly relevant shape. Conversely, simply
+removing the heuristic reintroduces the already observed inverted
+"umbrella" on standing and weak hip-grazing contact.
+
+The new fallback, controlled by
+`-Dbbs.editor.physics.skirt.surfaceEvidenceLegGate=true` by default,
+works **only after** the existing per-OBB broad-hull guard, **only**
+on compact visual scale (<0.995) and **only** for a shape rejected by
+the old center/tilt check:
+
+* Transform actual decoded Chameleon upper/lower cube vertices from
+  40–70% of skirt length and lower hem vertices from 68% to tip using
+  the current native-coupled two-bone pose.
+* For each individual bone strip, take the maximum radial projection
+  of these real vertices. Only points in the outer 0.03-block band
+  of that panel/region are possible evidence, not innermost faces,
+  unknown fake fallback probes or top/waist contact.
+* Require **at least two** real outer surface sample points inside
+  the fitted, same-frame Emoticons thigh OBB by at least 0.038 blocks
+  of radial penetration (including the existing scale-aware surface
+  allowance). Benign resting thigh grazing at the inner hem is not
+  enough to activate a previously rejected leg.
+* Once accepted, use the *exact same OBB* for normal hem contacts,
+  contact islands, Adaptive Hem Lift, and upper+lower mid correction.
+  No changes to native Jolt bodies, stiffness/gravity/damping, authored
+  scale 0.85, Weld, or the original normal center/tilt acceptance path.
+* Result adds `gateRescuedBoxes` and `gateRejectedBoxes`,
+  logged per-frame in both `[SkirtContactAudit]` and
+  `[SkirtHemAudit]`. With the A/B flag set to **false** the
+  original preliminary-gate behavior is preserved.
+
+This is a conservative **surface evidence** fallback, not a promise
+that every source-point intersection is a visible penetration:
+full/hem audit also includes broad inner/back surfaces and colliders
+the corrective stage intentionally rejects. Existing global anti-
+umbrella protection and spatially limited per-leg contact islands
+remain unchanged. Compare identical gait frames around 118, 127,
+and the subsequent stride, with Weld enabled; in-game clipping,
+number of rescued boxes, and `hemAfterUnique` must all be inspected.
