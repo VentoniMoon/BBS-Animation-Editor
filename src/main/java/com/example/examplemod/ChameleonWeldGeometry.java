@@ -143,7 +143,7 @@ public final class ChameleonWeldGeometry
     }
 
     /** Complete 3x3 inverse including non-uniform scale, plus translation. */
-    private static float[] inverseAffine(float[] m)
+    public static float[] inverseAffine(float[] m)
     {
         float a=m[0], b=m[4], c=m[8],
               d=m[1], e=m[5], f=m[9],

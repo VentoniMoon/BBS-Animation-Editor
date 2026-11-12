@@ -296,3 +296,42 @@ surface. No vertex sample fix alone can guarantee complete elimination of
 severe leg clipping; for that, a genuinely coupled cloth rig/solver with
 surface contacts is needed. Compare Weld ON/OFF and a high step after the
 three CI checks, before merging.
+
+## Continuous visual skirt ring (20 x 2 panel seams)
+
+A low camera screenshot exposes the residual problem: each 3D cube
+ends abruptly, and the upper/lower strip joints leave visible open
+faces. Existing Weld joins selected unrotated vertical parent-child
+pairs, but **not the 20 lateral strip boundaries** and not their
+rotated 45-degree corner cubes.
+
+When a skirt morph has **Weld Geometry enabled**, the renderer now
+builds a specialized, render-only continuity pass:
+
+* Recognize the exact `skirt.geo.json` 20 upper bones + 20 lower bones,
+  each with one Chameleon cube, including the mirrored rear, side and
+  45-degree corner pieces. All other models keep their old Weld behavior.
+* Derive the actual rest/posed 8 cube corners from the Chameleon
+  bone hierarchy and cube pivot/rotation, and sort strips around the
+  waist using rest-world centroids (not authored bone order).
+* Join matching vertical side edges between neighboring strips at
+  **both upper and lower levels**, and join upper-row bottom edges to
+  the lower-row top edges in the SAME constraint graph.
+* All corners in one seam group share the same final rendered position,
+  so there are no order-dependent cracks at three-way joints.
+* Do not join unrelated distant faces (>0.26 blocks at rest). Reject
+  an extreme pose group if any point would need moving >0.28 blocks;
+  this avoids teleporting huge model parts across legs.
+* Patch only the current render's `ModelVertex.position` values, then
+  restore them after drawing; UVs, original cubes, animation keys,
+  native Jolt 6.0 and physics output are unchanged.
+* Opt-out: `-Dbbs.editor.weld.skirtRing=false`. This is nested under
+  the morph's ordinary Weld Geometry switch.
+
+This makes the **visible panel network** more continuous, but is not a
+true soft-body cloth mesh or a Jolt cross-body constraint. Very large
+strides can exceed safety caps; flat shaded cube faces can still form
+polygonal creases. Weld also cannot fix a physically incorrect leg OBB
+or render through a leg. See the separate SkirtSurface diagnostics for
+collision misalignment. Test from below, front and side with Weld
+ON/OFF before merging into main.

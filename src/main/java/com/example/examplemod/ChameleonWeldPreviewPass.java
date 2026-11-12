@@ -3,9 +3,12 @@ package com.example.examplemod;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.vecmath.Vector3f;
 
@@ -28,6 +31,20 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
 {
     private static final float FACE_EPS=1E-5F;
     private static final float MAX_REST_GAP=0.003F;
+    private static final boolean SKIRT_RING=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.weld.skirtRing","true"));
+    /** The verified 20x2 source skirt.geo.json, in any runtime bone order. */
+    private static final String[][] SKIRT_BONES={
+            {"group2","group22"},{"group6","group24"},
+            {"group3","group25"},{"group4","group23"},
+            {"group5","group26"},{"group18","group29"},
+            {"group17","group27"},{"group7","group38"},
+            {"group16","group39"},{"group8","group40"},
+            {"group9","group37"},{"group10","group41"},
+            {"group20","group35"},{"group19","group36"},
+            {"group14","group31"},{"group15","group32"},
+            {"group21","group30"},{"group13","group34"},
+            {"group12","group28"},{"group11","group33"}};
     private static boolean reportedFailure;
     private static boolean reportedSuccess;
 
@@ -128,8 +145,10 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         List<Bone> bones=new ArrayList<Bone>();
         for(Object root:roots)
             collectBone(root,null,identity(),identity(),bones);
+        Set<String> ringMembers=SKIRT_RING ?
+                weldSkirtRing(bones):java.util.Collections.<String>emptySet();
         for(Bone bone:bones)
-            if(bone.parent!=null)
+            if(bone.parent!=null && !ringMembers.contains(bone.name))
                 weldJoint(bone.parent,bone);
     }
 
@@ -140,6 +159,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     {
         Bone b=new Bone();
         b.value=nativeBone;
+        b.name=(String)field(nativeBone,"id");
         b.parent=parent;
         b.rest=mul(restParent,boneMatrix(nativeBone,true));
         b.posed=mul(poseParent,boneMatrix(nativeBone,false));
@@ -171,9 +191,152 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         seams++;
     }
 
+    private static final class SkirtCubeBinding
+    {
+        final Object cube;
+        final float[][] local;
+        final float[] posed;
+        final SkirtContinuityRing.Cube sample;
+        SkirtCubeBinding(Object cube,float[][] local,float[] posed,
+                SkirtContinuityRing.Cube sample)
+        {
+            this.cube=cube;this.local=local;
+            this.posed=posed;this.sample=sample;
+        }
+    }
+
+    /**
+     * The original Weld only joined parent/child DOWN/UP faces. For the
+     * 20x2 skirt we also link the two sideways edges of every neighboring
+     * strip, closing the ring *before* Chameleon submits any triangles.
+     * Topology is inferred from rest-world positions, not a hardcoded
+     * front/back cube rotation or the model's authoring order.
+     *
+     * All edits are temporary ModelVertex position patches, restored on
+     * close(). No Jolt/animation/bone/NBT source data is changed.
+     */
+    @SuppressWarnings("unchecked")
+    private Set<String> weldSkirtRing(List<Bone> bones)throws Exception
+    {
+        if(!SKIRT_RING)return java.util.Collections.emptySet();
+        Map<String,Bone> byName=new HashMap<String,Bone>();
+        for(Bone bone:bones)
+            if(bone.name!=null)byName.put(bone.name,bone);
+        if(!byName.containsKey("ALL")||!byName.containsKey("group42")||
+                !byName.containsKey("group43"))
+            return java.util.Collections.emptySet();
+
+        Map<String,SkirtCubeBinding> bindings=
+                new HashMap<String,SkirtCubeBinding>();
+        List<SkirtContinuityRing.Strip> strips=
+                new ArrayList<SkirtContinuityRing.Strip>();
+        for(String[] names:SKIRT_BONES)
+        {
+            Bone upper=byName.get(names[0]),lower=byName.get(names[1]);
+            if(upper==null||lower==null||lower.parent!=upper)
+                return java.util.Collections.emptySet();
+            if(!Boolean.TRUE.equals(field(upper.value,"visible"))||
+                    !Boolean.TRUE.equals(field(lower.value,"visible")))
+                return java.util.Collections.emptySet();
+            SkirtCubeBinding top=binding(upper),bottom=binding(lower);
+            if(top==null||bottom==null)
+                return java.util.Collections.emptySet();
+            bindings.put(names[0],top);
+            bindings.put(names[1],bottom);
+            strips.add(new SkirtContinuityRing.Strip(
+                    top.sample,bottom.sample));
+        }
+
+        SkirtContinuityRing.Result ring=SkirtContinuityRing.stitch(strips);
+        if(ring.joinedVertices==0)return java.util.Collections.emptySet();
+
+        for(Map.Entry<String,SkirtCubeBinding> entry:bindings.entrySet())
+        {
+            float[][] world=ring.targets.get(entry.getKey());
+            if(world==null)continue;
+            SkirtCubeBinding binding=entry.getValue();
+            float[] inverse=ChameleonWeldGeometry.inverseAffine(
+                    binding.posed);
+            float[][] localResult=new float[8][3];
+            for(int corner=0;corner<8;corner++)
+                localResult[corner]=ChameleonWeldGeometry.transform(
+                        inverse,world[corner]);
+            patchSkirtCube(binding.cube,binding.local,localResult);
+        }
+        seams+=ring.lateralSeams+ring.verticalSeams;
+        return new HashSet<String>(bindings.keySet());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static SkirtCubeBinding binding(Bone bone)throws Exception
+    {
+        List<Object> cubes=(List<Object>)field(bone.value,"cubes");
+        if(cubes==null||cubes.size()!=1)return null;
+        Object cube=cubes.get(0);
+        List<Object> quads=(List<Object>)field(cube,"quads");
+        if(quads==null||quads.isEmpty())return null;
+        Vector3f o=vec(cube,"origin"),size=vec(cube,"size"),
+                pivot=vec(cube,"pivot"),rot=vec(cube,"rotation");
+        float inflate=((Number)field(cube,"inflate")).floatValue();
+        float[] min={(o.x-size.x-inflate)/16F,
+                (o.y-inflate)/16F,(o.z-inflate)/16F};
+        float[] max={(o.x+inflate)/16F,
+                (o.y+size.y+inflate)/16F,(o.z+size.z+inflate)/16F};
+        float[][] original=new float[8][3];
+        for(int x=0;x<2;x++)for(int y=0;y<2;y++)for(int z=0;z<2;z++)
+            original[x*4+y*2+z]=new float[]{
+                    x==0?min[0]:max[0],
+                    y==0?min[1]:max[1],
+                    z==0?min[2]:max[2]};
+
+        float[] cubeRotation=mul(
+                translate(pivot.x/16F,pivot.y/16F,pivot.z/16F),
+                mul(rotationZ(rot.z),
+                mul(rotationY(rot.y),mul(rotationX(rot.x),
+                translate(-pivot.x/16F,-pivot.y/16F,-pivot.z/16F)))));
+        float[] rest=mul(bone.rest,cubeRotation);
+        float[] posed=mul(bone.posed,cubeRotation);
+        float[][] restCorners=new float[8][3],posedCorners=new float[8][3];
+        for(int i=0;i<8;i++)
+        {
+            restCorners[i]=ChameleonWeldGeometry.transform(rest,original[i]);
+            posedCorners[i]=ChameleonWeldGeometry.transform(posed,original[i]);
+        }
+        return new SkirtCubeBinding(cube,original,posed,
+                new SkirtContinuityRing.Cube(bone.name,restCorners,
+                        posedCorners));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void patchSkirtCube(Object cube,float[][] source,
+            float[][] adjusted)throws Exception
+    {
+        for(Object quad:(List<Object>)field(cube,"quads"))
+            for(Object vertex:(List<Object>)field(quad,"vertices"))
+            {
+                Vector3f p=vec(vertex,"position");
+                float[] original=originals.get(p);
+                if(original==null)
+                {
+                    original=new float[]{p.x,p.y,p.z};
+                    originals.put(p,original);
+                }
+                for(int i=0;i<8;i++)
+                    if(Math.abs(original[0]-source[i][0])<FACE_EPS &&
+                            Math.abs(original[1]-source[i][1])<FACE_EPS &&
+                            Math.abs(original[2]-source[i][2])<FACE_EPS)
+                    {
+                        float[] next=adjusted[i];
+                        p.set(next[0],next[1],next[2]);
+                        break;
+                    }
+            }
+    }
+
     private static final class Bone
     {
         Object value;
+        String name;
         Bone parent;
         float[] rest,posed;
     }

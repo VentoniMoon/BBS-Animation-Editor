@@ -7,6 +7,7 @@ public class ModelCube
     public final Vector3f origin=new Vector3f();
     public final Vector3f size=new Vector3f();
     public final Vector3f rotation=new Vector3f();
+    public final Vector3f pivot=new Vector3f();
     public float inflate;
     public final List<ModelQuad> quads=new ArrayList<ModelQuad>();
 }
