@@ -88,9 +88,10 @@ public final class SkirtPoseVisualLeadSmokeTest
                 new LinkedHashMap<String,SkirtAdaptiveWidth.Width>();
         for(int i=0;i<40;i++)
         {
-            float a=i<20?1.02F:1.12F;
+            float a=i<20?1.00F:1.12F;
             old.put("bone"+i,new SkirtAdaptiveWidth.Width(0,a));
-            latest.put("bone"+i,new SkirtAdaptiveWidth.Width(0,a+.06F));
+            latest.put("bone"+i,new SkirtAdaptiveWidth.Width(
+                    0,a+(i<20?.04F:.06F)));
         }
         Map<String,SkirtAdaptiveWidth.Width> pred=
                 SkirtPoseVisualLead.widths(old,latest);
