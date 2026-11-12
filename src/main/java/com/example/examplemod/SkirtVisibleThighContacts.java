@@ -38,6 +38,16 @@ public final class SkirtVisibleThighContacts
     private static final boolean ADAPTIVE_HEM_LIFT=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.adaptiveHemLift","true"));
+    /** Contact-only secondary solve of the mid-section of a compact
+     * two-bone skirt. It operates after Adaptive Hem Lift and commits a
+     * joint upper/lower trial ONLY when real geometry penetrates less. */
+    private static final boolean ADAPTIVE_MID_COLLISION=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.adaptiveMidCollision","true"));
+    private static final float MID_CONTACT_START=.40F;
+    private static final float MID_CONTACT_END=.70F;
+    private static final float MAX_EXTRA_MID_ROOT=.13F;
+    private static final float MAX_MID_ROOT_CAP=.65F;
     private static final float NEIGHBOR_RESPONSE=.16F;
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
@@ -82,6 +92,9 @@ public final class SkirtVisibleThighContacts
         public final int liftedHemPanels;
         /** Sum of local uncapped overlap depths removed by trial rotations. */
         public final float liftOverlapReduction;
+        /** Corrected middle-tier contact, independently of the hem lift. */
+        public final int midCandidatePanels,jointLiftPanels;
+        public final float midOverlapReduction;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -109,6 +122,22 @@ public final class SkirtVisibleThighContacts
                 int candidatePanels,int selectedPanels,boolean locallyLimited,
                 int liftedHemPanels,float liftOverlapReduction)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,liftedHemPanels,liftOverlapReduction,
+                    0,0,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction)
+        {
+            this.midCandidatePanels=midCandidatePanels;
+            this.jointLiftPanels=jointLiftPanels;
+            this.midOverlapReduction=midOverlapReduction;
             this.liftedHemPanels=liftedHemPanels;
             this.liftOverlapReduction=liftOverlapReduction;
             this.candidatePanels=candidatePanels;
@@ -167,7 +196,8 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale)
     {
-        return correct(strips,starting,selected,visualScale,ADAPTIVE_HEM_LIFT);
+        return correct(strips,starting,selected,visualScale,
+                ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -176,6 +206,17 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift)
+    {
+        // Preserve the exact PR #186 isolated hem-lift A/B test.
+        return correct(strips,starting,selected,visualScale,
+                adaptiveLift,false);
+    }
+
+    /** Explicit pure Java A/B test without class-load system flags. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
@@ -552,11 +593,140 @@ public final class SkirtVisibleThighContacts
                 }
             }
         }
+        int midCandidates=0,jointPanels=0;
+        float midReduction=0F;
+        if(adaptiveMid && visualScale<.995F &&
+                !directContacts.isEmpty())
+        {
+            // Stage 2 addresses the real hinge-area surface that was
+            // deliberately excluded from the hem-only contact solver.
+            // Keep it strictly adjacent to an already accepted hem
+            // contact: one stray waist/upper-thigh OBB cannot invent
+            // a new full-ring selection.
+            boolean[] nearDirect=new boolean[PANELS];
+            for(int ring=0;ring<PANELS;ring++)
+            {
+                int panel=angular.get(ring).intValue();
+                if(directDepth[panel]<=.001F)continue;
+                for(int step=-2;step<=2;step++)
+                    nearDirect[angular.get(
+                            (ring+PANELS+step)%PANELS).intValue()]=true;
+            }
+            String[] ids=new String[PANELS];
+            float[][] roots=new float[PANELS][];
+            float[][] midPressure=
+                    new float[SkirtHemContactIslands.GROUPS][PANELS];
+            float[][] midDepth=
+                    new float[SkirtHemContactIslands.GROUPS][PANELS];
+            boolean[] midContact=new boolean[PANELS];
+            for(int i=0;i<PANELS;i++)
+            {
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                ids[i]=strip.upper;
+                roots[i]=origin(strip.upperWorld);
+                if(!nearDirect[i])continue;
+                float rx=roots[i][0]-cx,rz=roots[i][2]-cz;
+                float rr=(float)Math.sqrt(rx*rx+rz*rz);
+                if(rr<.02F)continue;
+                float[] outward={rx/rr,0F,rz/rr};
+                for(int g=0;g<SkirtHemContactIslands.GROUPS;g++)
+                {
+                    float pressure=middleResidualScore(strip,copy,active,
+                            outward,surfaceMargin,g);
+                    if(pressure>.015F)
+                    {
+                        midContact[i]=true;
+                        midPressure[g][i]=Math.min(.35F,pressure);
+                        midDepth[g][i]=Math.min(.25F,pressure);
+                    }
+                }
+                if(midContact[i])midCandidates++;
+            }
+            // Both legs may contact the same seam. Preserve one
+            // three-panel angular corner per leg, not 20 unrelated
+            // root rotations. This selection uses the SAME accepted
+            // active colliders as the subsequent trial/validation.
+            float[] jointWeights=SkirtAdaptiveHemLift.weights(
+                    ids,roots,midContact,midPressure,midDepth);
+            for(int i=0;i<PANELS;i++)
+            {
+                float weight=jointWeights[i];
+                if(weight<.01F)continue;
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                float rx=roots[i][0]-cx,rz=roots[i][2]-cz;
+                float rr=(float)Math.sqrt(rx*rx+rz*rz);
+                if(rr<.02F)continue;
+                float[] tangent={-rz/rr,0F,rx/rr};
+                float[] outward={rx/rr,0F,rz/rr};
+                float startMiddle=middleResidualScore(strip,copy,active,
+                        outward,surfaceMargin,-1);
+                if(startMiddle<=.015F)continue;
+                float startHem=hemResidualScore(strip,copy,active,
+                        outward,surfaceMargin);
+                float[] upperOriginal=copy.get(strip.upper);
+                float[] lowerOriginal=copy.get(strip.lower);
+                float upperCap=Math.min(MAX_MID_ROOT_CAP,
+                        MAX_FINAL_ROOT+MAX_EXTRA_MID_ROOT*weight);
+                float lowerCap=SkirtAdaptiveHemLift.collisionCap(
+                        SkirtScaleContactResponse.hemAngleCap(visualScale),
+                        weight);
+                float bestMiddle=startMiddle;
+                float bestCombined=startMiddle+startHem;
+                float[] bestUpper=null,bestLower=null;
+                // A joint rather than a lower-only search. Preserve the
+                // waist anchor: both rotations are around existing bone
+                // pivots, never a translation or morph scale change.
+                for(int up=1;up<=4;up++)
+                {
+                    float upperStep=MAX_EXTRA_MID_ROOT*weight*up/4F;
+                    for(int down=0;down<=2;down++)
+                    {
+                        Map<String,float[]> trial=
+                                new LinkedHashMap<String,float[]>();
+                        trial.put(strip.upper,upperOriginal.clone());
+                        trial.put(strip.lower,lowerOriginal.clone());
+                        if(!bend(trial,strip.upper,strip.upperWorld,tangent,
+                                upperStep,upperCap))continue;
+                        if(down>0)
+                        {
+                            float lowerStep=.05F*down*weight;
+                            if(!bend(trial,strip.lower,strip.lowerWorld,tangent,
+                                    lowerStep,lowerCap))continue;
+                        }
+                        float mid=middleResidualScore(strip,trial,active,
+                                outward,surfaceMargin,-1);
+                        if(mid>=bestMiddle-.002F)continue;
+                        float hem=hemResidualScore(strip,trial,active,
+                                outward,surfaceMargin);
+                        // Correcting the hinge is not allowed to move
+                        // a thigh THROUGH the lower hem: at most a
+                        // tiny numerical increase in the hem residual.
+                        if(hem>startHem+Math.max(.01F,startHem*.025F))
+                            continue;
+                        float combined=mid+hem;
+                        if(combined>=bestCombined-.003F)continue;
+                        bestCombined=combined;
+                        bestMiddle=mid;
+                        bestUpper=trial.get(strip.upper);
+                        bestLower=trial.get(strip.lower);
+                    }
+                }
+                if(bestUpper!=null)
+                {
+                    copy.put(strip.upper,bestUpper);
+                    copy.put(strip.lower,bestLower);
+                    touched[i]=true;
+                    jointPanels++;
+                    midReduction+=startMiddle-bestMiddle;
+                }
+            }
+        }
         int total=0;
         for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
                 directContacts,candidatePanels,directContacts.size(),limited,
-                additionalLifts,overlapReduction);
+                additionalLifts,overlapReduction,
+                midCandidates,jointPanels,midReduction);
     }
 
     /**
@@ -802,6 +972,15 @@ public final class SkirtVisibleThighContacts
             float[] upperSwing,float[] lowerSwing,boolean lower,
             float minFraction)
     {
+        return addExactSurface(out,source,root,hinge,tip,upperSwing,
+                lowerSwing,lower,minFraction,1.45F);
+    }
+
+    private static int addExactSurface(List<Point> out,float[][] source,
+            float[] root,float[] hinge,float[] tip,
+            float[] upperSwing,float[] lowerSwing,boolean lower,
+            float minFraction,float maxFraction)
+    {
         if(source==null||source.length==0||source.length>128)return 0;
         float[] down=sub(tip,root);
         float length=length(down);
@@ -812,7 +991,7 @@ public final class SkirtVisibleThighContacts
         {
             if(!valid(p,3))continue;
             float fraction=dot(sub(p,root),direction)/length;
-            if(fraction<minFraction || fraction>1.45F)continue;
+            if(fraction<minFraction || fraction>maxFraction)continue;
             float[] world;
             if(lower)
             {
@@ -826,6 +1005,72 @@ public final class SkirtVisibleThighContacts
             n++;
         }
         return n;
+    }
+
+    /**
+     * Collision between the thigh and the middle of a two-link panel,
+     * 40–70% of the full belt-to-hem length. The zone deliberately
+     * excludes the upper resting waist: broad standing thigh boxes
+     * naturally sit behind the top of the garment.
+     *
+     * Reads only the same accepted native-fitted Emoticons leg OBBs
+     * used by the regular corrective pass. A given sampled surface point
+     * contributes its deepest overlap just once, not three times for the
+     * three near-identical fitted OBBs from one Emoticons thigh.
+     * No results from the unfiltered, diagnostic-only audit are fed back
+     * into the solver, so discovery and validation share one geometry set.
+     */
+    private static float middleResidualScore(
+            SkirtClothPoseCoupler.Strip strip,
+            Map<String,float[]> swings,List<Leg> legs,
+            float[] outward,float margin,int side)
+    {
+        float[] root=origin(strip.upperWorld);
+        float[] hinge=origin(strip.lowerWorld);
+        float[] upper=worldSwing(strip.upperWorld,
+                swings.get(strip.upper));
+        float[] lower=worldSwing(strip.lowerWorld,
+                swings.get(strip.lower));
+        List<Point> samples=new ArrayList<Point>();
+        int exact=addExactSurface(samples,strip.upperSurfaceWorld,
+                root,hinge,strip.tipWorld,upper,lower,false,
+                MID_CONTACT_START,MID_CONTACT_END);
+        exact+=addExactSurface(samples,strip.lowerSurfaceWorld,
+                root,hinge,strip.tipWorld,upper,lower,true,
+                MID_CONTACT_START,MID_CONTACT_END);
+        // In a normal Chameleon model these exact points are present.
+        // Only a wholly missing source gets the centerline fallback.
+        // If real source geometry exists but is ABOVE the middle zone,
+        // do not replace it with imaginary collider points.
+        boolean hasUpper=strip.upperSurfaceWorld!=null &&
+                strip.upperSurfaceWorld.length>0;
+        boolean hasLower=strip.lowerSurfaceWorld!=null &&
+                strip.lowerSurfaceWorld.length>0;
+        if(exact==0&&!hasUpper&&!hasLower)
+        {
+            float[] upperLink=rotate(sub(hinge,root),upper);
+            float[] lowerLink=rotate(rotate(sub(strip.tipWorld,hinge),
+                    lower),upper);
+            samples.add(new Point(add(root,mul(upperLink,.95F)),null));
+            samples.add(new Point(add(add(root,upperLink),
+                    mul(lowerLink,.27F)),null));
+        }
+        float score=0F;
+        for(Point sample:samples)
+        {
+            float deepest=0F;
+            for(Leg leg:legs)
+            {
+                if(side>=0 &&
+                        SkirtHemContactIslands.sideOf(leg.owner)!=side)
+                    continue;
+                deepest=Math.max(deepest,unclampedPenetration(
+                        sample.p,leg,outward,margin));
+            }
+            if(deepest>.0001F)
+                score+=deepest+.006F;
+        }
+        return score;
     }
 
     /**

@@ -33,6 +33,8 @@ public final class SkirtVisibleThighContactsSmokeTest
         waistTierOverlapMustNotBlockHemCollisionResponse();
         compact085RespondsLocallyWithoutChangingNormalScale();
         adaptiveLiftMustOnlyImproveRealCompactThighContact();
+        jointMidCorrectionImprovesFrontCornerWithoutFlaredWaist();
+        jointMidCorrectionRejectsRestingThighAndFullScale();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
@@ -243,7 +245,8 @@ public final class SkirtVisibleThighContactsSmokeTest
         SkirtVisibleThighContacts.Result standard=
                 SkirtVisibleThighContacts.correct(f.strips,f.swings,geometry,1F);
         SkirtVisibleThighContacts.Result compact=
-                SkirtVisibleThighContacts.correct(f.strips,f.swings,geometry,.85F);
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,geometry,.85F,true,false);
         require(standard.touchedPanels>0&&compact.touchedPanels>0,
                 "real thigh must affect both sizes");
         require(compact.peakOverlap>=standard.peakOverlap,
@@ -375,6 +378,133 @@ public final class SkirtVisibleThighContactsSmokeTest
                     near(fullScaleA.swings.get(name)[component],
                             fullScaleB.swings.get(name)[component],
                             .00001F,"scale one should be exact legacy behavior");
+    }
+
+    /**
+     * A front corner's middle surface can remain IN the raised thigh even
+     * after the lower hem has already swung up. Detect and correct those
+     * real hinge-area cube vertices through the two-bone joint, without
+     * touching the original Jolt pose or far / upper resting skirt.
+     */
+    private static void jointMidCorrectionImprovesFrontCornerWithoutFlaredWaist()
+    {
+        boolean found=false;
+        for(float x:new float[]{.40F,.42F,.45F,.48F})
+        {
+            if(found)break;
+            for(float y:new float[]{-.25F,-.28F,-.31F})
+            {
+                if(found)break;
+                for(float upperY:new float[]{-.16F,-.19F,-.22F})
+                {
+                    Fixture f=new Fixture(false);
+                    SkirtClothPoseCoupler.Strip panel=f.strips.get(0);
+                    f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                            panel.upper,panel.lower,panel.upperWorld,
+                            panel.lowerWorld,panel.tipWorld,
+                            new float[][]{{.42F,upperY,0F}},
+                            new float[][]{{.42F,-.29F,0F},
+                                    {.42F,-.35F,0F}}));
+                    BodyPartJoltContactBudget budget=
+                            new BodyPartJoltContactBudget();
+                    budget.add(box(x,y,0F),typed(x,y,0F),
+                            "emoticons.left_leg");
+                    BodyPartJoltContactBudget.Selection leg=budget.select(true);
+                    SkirtVisibleThighContacts.Result prior=
+                            SkirtVisibleThighContacts.correct(
+                                    f.strips,f.swings,leg,.85F,true,false);
+                    SkirtVisibleThighContacts.Result improved=
+                            SkirtVisibleThighContacts.correct(
+                                    f.strips,f.swings,leg,.85F,true,true);
+                    if(improved.jointLiftPanels>0 &&
+                            improved.midOverlapReduction>.004F)
+                    {
+                        found=true;
+                        require(improved.jointLiftPanels<=3,
+                                "one moving thigh opened too many middle panels");
+                        require(improved.midCandidatePanels>0,
+                                "joint trial used a contact it never detected");
+                        float root=improved.swings.get(BONES[0][0])[3];
+                        require(root<.651F,
+                                "new root joint exceeded safety bound: "+root);
+                        // The belt is still pinned in the same world
+                        // position. Only swing keys are modified.
+                        for(int index=8;index<=12;index++)
+                            near(prior.swings.get(BONES[index][0])[3],
+                                    improved.swings.get(BONES[index][0])[3],
+                                    .00001F,"opposite belt panel altered");
+                        SkirtVisibleThighContacts.Audit oldHem=
+                                SkirtVisibleThighContacts.auditHemBonePose(
+                                        f.strips,prior.swings,leg,.85F);
+                        SkirtVisibleThighContacts.Audit newHem=
+                                SkirtVisibleThighContacts.auditHemBonePose(
+                                        f.strips,improved.swings,leg,.85F);
+                        require(newHem.uniqueHits<=oldHem.uniqueHits+3,
+                                "middle correction created severe hem clipping");
+                        require(f.swings.get(BONES[0][0])[3]==0F,
+                                "new joint modified Jolt starting pose");
+                        SkirtVisibleThighContacts.Result replay=
+                                SkirtVisibleThighContacts.correct(
+                                        f.strips,f.swings,leg,.85F,true,true);
+                        for(String[] names:BONES)
+                            for(String name:names)
+                                for(int k=0;k<4;k++)
+                                    near(improved.swings.get(name)[k],
+                                            replay.swings.get(name)[k],
+                                            .00001F,
+                                            "middle collision accumulated across renders");
+                        break;
+                    }
+                }
+            }
+        }
+        require(found,
+                "no synthetic raised thigh caused a beneficial two-bone "+
+                "middle joint correction");
+    }
+
+    private static void jointMidCorrectionRejectsRestingThighAndFullScale()
+    {
+        Fixture f=new Fixture(false);
+        // Waist-zone surface (31% of the belt-to-hem length) must
+        // NEVER become a middle contact even when the leg OBB contains
+        // the top of the skirt.
+        SkirtClothPoseCoupler.Strip panel=f.strips.get(0);
+        f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                panel.upper,panel.lower,panel.upperWorld,
+                panel.lowerWorld,panel.tipWorld,
+                new float[][]{{.42F,-.12F,0F}},null));
+        BodyPartJoltContactBudget waist=new BodyPartJoltContactBudget();
+        waist.add(box(.42F,-.12F,0F),typed(.42F,-.12F,0F),
+                "emoticons.left_leg");
+        SkirtVisibleThighContacts.Result idle=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,waist.select(true),.85F,true,true);
+        require(idle.jointLiftPanels==0,
+                "upper resting waist contact raised skirt middle");
+        BodyPartJoltContactBudget empty=new BodyPartJoltContactBudget();
+        SkirtVisibleThighContacts.Result absent=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,empty.select(true),.85F,true,true);
+        require(absent.jointLiftPanels==0,
+                "missing leg collider activated joint solver");
+        BodyPartJoltContactBudget moving=new BodyPartJoltContactBudget();
+        moving.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        SkirtVisibleThighContacts.Result fullA=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,moving.select(true),1F,true,false);
+        SkirtVisibleThighContacts.Result fullB=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,moving.select(true),1F,true,true);
+        require(fullB.jointLiftPanels==0,
+                "scale 1 must retain legacy 2-bone pose exactly");
+        for(String[] names:BONES)
+            for(String name:names)
+                for(int k=0;k<4;k++)
+                    near(fullA.swings.get(name)[k],
+                            fullB.swings.get(name)[k],
+                            .00001F,"full-size skirt changed by compact solver");
     }
 
     private static void shuffledBoneEnumerationKeepsSamePhysicalNeighbors()
