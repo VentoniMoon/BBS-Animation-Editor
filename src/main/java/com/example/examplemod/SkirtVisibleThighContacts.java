@@ -38,6 +38,16 @@ public final class SkirtVisibleThighContacts
     private static final boolean ADAPTIVE_HEM_LIFT=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.adaptiveHemLift","true"));
+    /** Contact-only secondary solve of the mid-section of a compact
+     * two-bone skirt. It operates after Adaptive Hem Lift and commits a
+     * joint upper/lower trial ONLY when real geometry penetrates less. */
+    private static final boolean ADAPTIVE_MID_COLLISION=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.adaptiveMidCollision","true"));
+    private static final float MID_CONTACT_START=.40F;
+    private static final float MID_CONTACT_END=.70F;
+    private static final float MAX_EXTRA_MID_ROOT=.13F;
+    private static final float MAX_MID_ROOT_CAP=.65F;
     private static final float NEIGHBOR_RESPONSE=.16F;
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
@@ -82,6 +92,9 @@ public final class SkirtVisibleThighContacts
         public final int liftedHemPanels;
         /** Sum of local uncapped overlap depths removed by trial rotations. */
         public final float liftOverlapReduction;
+        /** Corrected middle-tier contact, independently of the hem lift. */
+        public final int midCandidatePanels,jointLiftPanels;
+        public final float midOverlapReduction;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -109,6 +122,22 @@ public final class SkirtVisibleThighContacts
                 int candidatePanels,int selectedPanels,boolean locallyLimited,
                 int liftedHemPanels,float liftOverlapReduction)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,liftedHemPanels,liftOverlapReduction,
+                    0,0,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction)
+        {
+            this.midCandidatePanels=midCandidatePanels;
+            this.jointLiftPanels=jointLiftPanels;
+            this.midOverlapReduction=midOverlapReduction;
             this.liftedHemPanels=liftedHemPanels;
             this.liftOverlapReduction=liftOverlapReduction;
             this.candidatePanels=candidatePanels;
@@ -167,7 +196,8 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale)
     {
-        return correct(strips,starting,selected,visualScale,ADAPTIVE_HEM_LIFT);
+        return correct(strips,starting,selected,visualScale,
+                ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -176,6 +206,16 @@ public final class SkirtVisibleThighContacts
             Map<String,float[]> starting,
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift)
+    {
+        return correct(strips,starting,selected,visualScale,
+                adaptiveLift,ADAPTIVE_MID_COLLISION);
+    }
+
+    /** Explicit pure Java A/B test without class-load system flags. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
