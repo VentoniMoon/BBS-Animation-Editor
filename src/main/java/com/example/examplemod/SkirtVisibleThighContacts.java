@@ -314,17 +314,17 @@ public final class SkirtVisibleThighContacts
                         if(overlap>0F)
                         {
                             if(exact)exactHitCount++;
-                            int side=SkirtHemContactIslands.sideOf(leg.owner);
+                            int legSide=SkirtHemContactIslands.sideOf(leg.owner);
                             directDepth[i]=Math.max(directDepth[i],overlap);
-                            sideDepth[side][i]=Math.max(
-                                    sideDepth[side][i],overlap);
+                            sideDepth[legSide][i]=Math.max(
+                                    sideDepth[legSide][i],overlap);
                             peak=Math.max(peak,overlap);
                             float distance=Math.max(.14F,
                                     length(sub(sample.p,pivot)));
                             float demand=(float)Math.atan(overlap/distance);
                             desired=Math.max(desired,demand);
-                            sideNeed[side][i]=Math.max(
-                                    sideNeed[side][i],Math.min(.34F,demand));
+                            sideNeed[legSide][i]=Math.max(
+                                    sideNeed[legSide][i],Math.min(.34F,demand));
                         }
                     }
                 }
