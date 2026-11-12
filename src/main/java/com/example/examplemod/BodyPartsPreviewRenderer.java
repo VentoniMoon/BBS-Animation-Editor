@@ -2234,6 +2234,8 @@ public class BodyPartsPreviewRenderer
                                     " prePanels="+before.hitPanels+
                                     " preDepth="+before.maxOverlap+
                                     " correctedPanels="+clearance.touchedPanels+
+                                    " liftedHemPanels="+clearance.liftedHemPanels+
+                                    " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " postUnique="+after.uniqueHits+
                                     " postRaw="+after.rawHits+
                                     " postPanels="+after.hitPanels+
@@ -2252,6 +2254,8 @@ public class BodyPartsPreviewRenderer
                                     " hemBeforePanels="+hemBefore.hitPanels+
                                     " hemAfterPanels="+hemAfter.hitPanels+
                                     " correctedPanels="+clearance.touchedPanels+
+                                    " liftedHemPanels="+clearance.liftedHemPanels+
+                                    " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " directCandidates="+clearance.candidatePanels+
                                     " directSelected="+clearance.selectedPanels+
                                     " islandsLimited="+clearance.locallyLimited+
@@ -2269,6 +2273,7 @@ public class BodyPartsPreviewRenderer
                         System.out.println("[BBS Animation Editor][Jolt][SkirtSurface] "
                                 +"frame="+frame+
                                 " activePanels="+clearance.touchedPanels+
+                                " liftedHemPanels="+clearance.liftedHemPanels+
                                 " maxPenetration="+clearance.peakOverlap+
                                 " exactSamples="+clearance.exactSurfaceSamples+
                                 " exactHits="+clearance.exactSurfaceHits+

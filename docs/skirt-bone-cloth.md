@@ -691,3 +691,53 @@ the previous unsafe assumption that *all 14–19* contacting panels
 should immediately swing outward. Compare *the exact same* five-frame
 walking step before/after with Weld ON. Only an in-game decrease in
 `hemAfterUnique` without a flared silhouette validates this path.
+
+## Adaptive Hem Lift – limited collision-only extra swing at the skirt corner
+
+At compact scale **0.85**, the user observes one skirt corner and two
+front-adjacent panels still allowing the raised thigh to pass through.
+Latest `[SkirtHemAudit]` frame 42–56 confirms that the existing
+per-leg islands now operate (e.g. frame 46: 199 -> 144 remaining
+hem-point intersections; frame 50: 186 -> 183), but repeated contact
+points survive the normal bounded lower-bone bend.
+
+This PR adds the opt-in-reversible **Adaptive Hem Lift** *after*
+the existing Jolt → `SkirtClothPoseCoupler` → leg contact/island solver.
+It is not another unconditional global stiffness or gravity change.
+
+* Only the recognized 20-strip / 40-bone skirt on a valid compact
+  `Global Transform` (horizontal visual scale < 0.995) can use it.
+* Choose at most **one direct contact center plus two true angular
+  neighbors per named left/right thigh** (maximum six lower bones
+  overall). Respect the selected contact-island mask: never react to
+  rejected broad OBBs or a fabricated contact.
+* The previous normal hem limit is approx **0.675 rad** at scale 0.85.
+  In a proven collision, allow up to **+0.28 rad** for the contact center
+  (approx **0.955 rad / 55 degrees total**). Neighbors receive just
+  38% of that extra budget (approx 0.781 rad total).
+  Upper waist bones and unaffected skirt sections are never modified
+  by this additional stage.
+* Rebuild the **real decoded lower Chameleon cube points** after
+  each trial rotation; measure uncapped radial depth inside the same
+  accepted active animated Emoticons OBBs, not just a Jolt bone capsule.
+  Inspect increasing swing trials through the safe budget, and commit
+  only the best pose if it actually reduces residual geometric overlap.
+  No imaginary outward force is applied when nothing intersects.
+* Everything is stateless per completed physics frame. The same
+  frame / same input produces the same corrections on replay, manual
+  scrubbing or video export; no hidden cumulative panel stretching.
+  `connectedCloth` stays off by default and standard Weld remains on.
+* Debug on `-Dbbs.editor.physics.skirt.contactAudit=true`:
+  `[SkirtHemAudit]` reports `liftedHemPanels` and
+  `liftOverlapReduction` in addition to `hemBeforeUnique`,
+  `hemAfterUnique`, `directCandidates`, `directSelected`.
+* Disable only the new feature for A/B:
+  `-Dbbs.editor.physics.skirt.adaptiveHemLift=false`.
+
+**Known limitations:** These are 2-bone rigid Chameleon panels, not a
+fully deformable continuous cloth mesh. In particular, moving the lower
+joint may not fully clear a raised thigh underneath the UPPER part of
+the same cuboid, and the source audit does not include the final GPU
+Weld/width modifications. The extra lift is therefore bounded,
+conditioned on actual improvement, and must be validated on the
+same in-game wide-stride frames before merging to main.
