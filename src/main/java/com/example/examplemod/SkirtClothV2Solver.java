@@ -750,7 +750,11 @@ public final class SkirtClothV2Solver
     private static float dot(float[] a,float[] b)
     {return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
     private static float norm(float[] a)
-    {return (float)Math.sqrt(dot(a,a));}
+    {
+        float value=0F;
+        for(float component:a)value+=component*component;
+        return (float)Math.sqrt(value);
+    }
     private static float dist(float[] a,float[] b)
     {return norm(sub(a,b));}
     private static float clamp(float v,float a,float b)
