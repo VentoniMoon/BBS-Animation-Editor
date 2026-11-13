@@ -1745,6 +1745,10 @@ public class BodyPartsPreviewRenderer
                     "bbs.editor.physics.skirt.visualPhaseLead","true"));
     private final Map<BodyPartModelData,Integer> skirtPhaseLogFrame=
             new IdentityHashMap<BodyPartModelData,Integer>();
+    /** Incomplete Jolt skirt ring: report missing chain IDs once per frame,
+     * not on every render pass (which previously flooded the game log). */
+    private final Map<BodyPartModelData,Integer> skirtV2IncompleteLogFrame=
+            new IdentityHashMap<BodyPartModelData,Integer>();
 
     private boolean isSkirtAttachment(BodyPartModelData data,
             List<BodyPartPhysicsChains.Chain> chains)
@@ -2166,7 +2170,21 @@ public class BodyPartsPreviewRenderer
                             + " (legacy solver disabled)");
 
             }
-            if(coupledSkirt && skirtStrips.size()==20 && skirtRaw.size()==40)
+            SkirtV2JoltFrameGate.Decision v2Gate=null;
+            if(coupledSkirt && SKIRT_CLOTH_V2)
+            {
+                List<String[]> expectedPairs=new ArrayList<String[]>();
+                for(BodyPartPhysicsChains.Chain chain:chains)
+                    if(chain.bones.size()==2)
+                        expectedPairs.add(new String[]{
+                                chain.bones.get(0).getName(),
+                                chain.bones.get(1).getName()});
+                v2Gate=SkirtV2JoltFrameGate.assess(
+                        expectedPairs,skirtRaw,skirtStrips.size());
+            }
+            if(coupledSkirt && (SKIRT_CLOTH_V2?
+                    v2Gate!=null&&v2Gate.fullRing:
+                    skirtStrips.size()==20&&skirtRaw.size()==40))
             {
                 AnimationTransform skirtTransform=data.getGlobalTransform();
                 float skirtVisualScale=skirtTransform==null?1F:
@@ -2456,8 +2474,43 @@ public class BodyPartsPreviewRenderer
                             width.getKey(),width.getValue());
             }
             else if(coupledSkirt)
-                reportPhysicsBoneProbe(data,
-                        "Skirt Jolt incomplete: waiting for all 20 strips; partial pose not applied");
+            {
+                if(SKIRT_CLOTH_V2 && v2Gate!=null)
+                {
+                    // One invalid Chameleon tip or one failed native Jolt
+                    // chain must NOT freeze the other 19 strands. Connected
+                    // cloth is skipped for this frame (never solve a torn
+                    // ring), but valid *whole* native Jolt pairs remain
+                    // animated in a transparent degraded mode.
+                    for(Map.Entry<String,float[]> swing:
+                            v2Gate.recoveredSwings.entrySet())
+                        physicsFrames.accept(data,frame,swing.getKey(),
+                                swing.getValue(),true);
+                    Integer previous=skirtV2IncompleteLogFrame.get(data);
+                    if(previous==null||previous.intValue()!=frame)
+                    {
+                        skirtV2IncompleteLogFrame.put(data,
+                                Integer.valueOf(frame));
+                        System.out.println(
+                                "[BBS Animation Editor][Jolt][SkirtV2Incomplete] "+
+                                "frame="+frame+
+                                " model="+data.getTimelineId()+
+                                " expectedPairs="+v2Gate.expectedPairs+
+                                " capturedStrips="+v2Gate.measuredStrips+
+                                " sampledPairs="+v2Gate.validPairs+
+                                " sampledBones="+v2Gate.receivedBones+
+                                " recoveredBones="+v2Gate.recoveredBones+
+                                " missing="+v2Gate.missingPairs+
+                                " fallback="+
+                                (v2Gate.validPairs>0?
+                                        "per-strand-Jolt":"no-valid-Jolt-samples")+
+                                " (connected solver skipped; no synthetic poses)");
+                    }
+                }
+                else
+                    reportPhysicsBoneProbe(data,
+                            "Skirt Jolt incomplete: waiting for all 20 strips; partial pose not applied");
+            }
 
             // Physics writes happen AFTER normal rendering. On a paused
             // frame, an actual bone edit may publish the completed result
