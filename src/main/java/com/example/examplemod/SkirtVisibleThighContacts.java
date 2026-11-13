@@ -1030,6 +1030,10 @@ public final class SkirtVisibleThighContacts
             {
                 if(directDepth[i]<.025F)continue;
                 SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                // Sideways escape must use real decoded Chameleon
+                // geometry, never imaginary fallback centerlines.
+                if(strip.lowerSurfaceWorld==null ||
+                        strip.lowerSurfaceWorld.length<2)continue;
                 float[] root=origin(strip.upperWorld);
                 float rx=root[0]-cx,rz=root[2]-cz;
                 float radius=(float)Math.sqrt(rx*rx+rz*rz);

@@ -2275,6 +2275,8 @@ public class BodyPartsPreviewRenderer
                                     " midCandidates="+clearance.midCandidatePanels+
                                     " jointLiftPanels="+clearance.jointLiftPanels+
                                     " midOverlapReduction="+clearance.midOverlapReduction+
+                                    " lateralPanels="+clearance.lateralPanels+
+                                    " lateralExitGain="+clearance.lateralEscapeGain+
                                     " postUnique="+after.uniqueHits+
                                     " postRaw="+after.rawHits+
                                     " postPanels="+after.hitPanels+
@@ -2309,6 +2311,8 @@ public class BodyPartsPreviewRenderer
                                     " midCandidates="+clearance.midCandidatePanels+
                                     " jointLiftPanels="+clearance.jointLiftPanels+
                                     " midOverlapReduction="+clearance.midOverlapReduction+
+                                    " lateralPanels="+clearance.lateralPanels+
+                                    " lateralExitGain="+clearance.lateralEscapeGain+
                                     " directCandidates="+clearance.candidatePanels+
                                     " directSelected="+clearance.selectedPanels+
                                     " islandsLimited="+clearance.locallyLimited+
@@ -2328,6 +2332,8 @@ public class BodyPartsPreviewRenderer
                                 " activePanels="+clearance.touchedPanels+
                                 " liftedHemPanels="+clearance.liftedHemPanels+
                                 " jointLiftPanels="+clearance.jointLiftPanels+
+                                " lateralPanels="+clearance.lateralPanels+
+                                " lateralExitGain="+clearance.lateralEscapeGain+
                                 " silhouetteLimitedPanels="+clearance.silhouetteLimitedPanels+
                                 " continuityLimitedPanels="+clearance.continuityLimitedPanels+
                                 " maxPenetration="+clearance.peakOverlap+
