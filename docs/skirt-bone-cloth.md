@@ -1099,50 +1099,105 @@ Compare identical walking frames at 0.85 scale and inspect both the
 leg-through-skirt failure and the short-lived section snaps. Passing
 Java 8 smoke tests does not substitute for an in-game visual check.
 
-## Radial-axis lateral thigh escape for 20-strip skirt (2026-11-13)
+## Regression rollback: uncoupled lateral roll (2026-11-14)
 
-The 0.85-scale Chameleon skirt still clips during walking because the
-existing `SkirtVisibleThighContacts` correction pushes each hanging strip
-outward about a world-space **tangent** axis, but cannot bend the hanging
-lower link sideways around the skirt's circumference. Rotating a vertical
-hanging link about world **Y** only twists the plate; its hem position
-remains nearly unchanged. The correct additional clearance degree of
-freedom is roll about the horizontal **radial** axis from the waist center
-through the strip root. That rotation moves the hanging link tangentially
-(left/right) with the belt/waist pivot stationary.
+The trial lateral thigh-escape in PR #195 applied independent radial-axis
+rolls to selected skirt bones *after* `SkirtClothPoseCoupler.couple` had
+already enforced neighboring angle differences. `ChameleonWeldPreviewPass`
+then patched quad seams only at draw time, after the independent rotations.
+This changed connected cloth into 20 separately posed plates that could
+spread apart, overlap and flicker as the nearest side-exit direction varied
+by gait frame. In-game screenshots showed substantial holes, folding and
+remaining leg-through-fabric clipping.
 
-New default `-Dbbs.editor.physics.skirt.lateralThighEscape=true` adds
-this one optional DOF **inside the current contact solver, before Hem
-Continuity**. It reads the exact decoded Chameleon upper/lower surface
-samples and only processes panels already confirmed and selected by the
-original three-zone thigh collision solver. For each contacting point it
-measures remaining distance to either lateral exit face of the closest
-penetrating OBB; a small symmetric deadband rejects ambiguous direction
-changes near the center of a stride. Signed roll is tested on the upper
-and lower links at the *same* fixed pivots. An improvement is accepted
-only if it decreases distance to the chosen thigh side exit and does
-not meaningfully increase the original radial collision score or
-introduce more penetrating points. Full ring expansion, body collider
-changes, global model scaling, and source animation modifications are
-forbidden.
+The default on-release #195 experiment is therefore reverted completely,
+not merely hidden behind a flag, restoring the exact Java behavior from
+PR #194. The old contact solver remains collision-first with the
+post-width second trial pass disabled by default. No change to Jolt
+native bodies, body colliders, hair, actor poses or animation keys.
 
-Safety bounds (world/axis-angle): extra upper rotation 0.20 rad,
-extra lower 0.22 rad, total upper 0.78 rad, total lower 0.90 rad,
-additional tip displacement <=0.085 blocks. Decoded surface evidence
-is required; a missing surface can **never** generate a fictitious
-sideways escape. The old anti-umbrella selection/validity gates and the
-clearance-first/no-silhouette-pullback mode remain enabled. The extra
-post-width discrete correction remains OFF by default.
+**Next design requirement**: Sideways displacement must be solved as
+**one constrained connected ring**, not independent per-panel roll.
+Candidate positions must maintain shared seam continuity and the pinned
+waist *while* satisfying thigh clearance; inspect final Weld surface
+and adjacent rendered faces, not only isolated per-panel penetration
+scores. Add an across-frame sign/velocity constraint to avoid alternating
+between opposite lateral escapes. A new experiment should be opt-in and
+must pass paired gait frames (including 27–30), no visible holes,
+no transient one-frame reversals and lower leg-cloth intersection counts
+before it can replace the stable default.
 
-For A/B: `-Dbbs.editor.physics.skirt.lateralThighEscape=false` restores
-exactly the prior contact mechanism while preserving all other flags.
-With `-Dbbs.editor.physics.skirt.contactAudit=true`, inspect new
-`lateralPanels` and `lateralExitGain` next to `directSelected`,
-`hemAfterUnique` and `continuityLimitedPanels`.
+## Physics 2.0 — connected light skirt V2 (initial experimental implementation)
 
-**Not a final proof of zero clipping:** the side-exit score is an
-approximation on decoded cube samples before final Weld and visual
-phase lead; it is not a true cloth self-collision solver. The full
-width/hem visual rendering must be checked at the exact gait frames
-(especially 27–30), including side and front camera views and quick
-1–2-frame snaps.
+This replaces the *mechanism*, not just a contact-escape angle. Its input
+is the original **twenty Jolt physical strands**, giving real inertial
+motion. It reconstructs **one ordered ring** of 20 pinned waist anchors,
+20 hinge nodes and 20 hem nodes, and runs eight combined projection passes
+for link lengths, neighboring hem/hinge seams, two cross diagonals and
+collisions with fitted Emoticons thigh OBBs. The solver then maps the
+*connected* positions into Chameleon upper/lower bone axis-angle swings,
+validates **the mapped result** against body and seam constraints, and
+computes width factors to help adjacent plate edges meet before native
+Weld. This avoids the independent late rotations from PR #195 which tore
+the connected skirt apart and produced frame-to-frame jumps.
+
+**Activation (initially OFF until an in-game 0.85 scale walking test passes):**
+
+`-Dbbs.editor.physics.skirt.clothV2=true`
+
+The V2 branch completely replaces old `SkirtClothPoseCoupler`,
+`SkirtVisibleThighContacts`/Silhouette Preservation/Adaptive Hem Lift/
+Contact Islands and the discrete PostWidth correction during this frame.
+The previous feature and last stable shape are intact with
+`clothV2=false`. This branch also disables visual one-frame prediction,
+preferring the same Jolt pose on which the connected cloth solved its
+contacts. It still respects normal editor preview and native Jolt. It
+never changes source animation keys, ragdoll, hair or actor collider rigs.
+
+**Three independent tuning controls (all bounded and safe on input):**
+
+* `-Dbbs.editor.physics.skirt.v2.penetrationRatio=0.14`:
+  fraction of the **whole horizontal thigh thickness** that may overlap
+  the skirt before the cloth receives corrective pressure. Default 14%,
+  configurable 0–35%, not a percentage of world space. There is no
+  binary collider-on/off threshold or hard prohibition of all ingress.
+* `-Dbbs.editor.physics.skirt.v2.airiness=0.82`: 0–1. Higher values
+  weaken seam stiffness and emphasize freely moving Jolt strands. No
+  contact means an exactly preserved Jolt pose, not a rigid cylinder.
+* `-Dbbs.editor.physics.skirt.v2.shapeElasticity=0.24`: 0–1. Soft
+  spring back toward Jolt's same-frame pose, with a progressively stronger
+  outward-rest penalty after ~0.048 blocks. This *replaces* the old
+  silhouette clamp; it cannot discard already-won contact clearance at
+  the end of the pipeline.
+
+**Stability and seam constraints:** each panel remains fixed to the
+authored waistband pivot. The skirt's 20 hinge/hem rows cannot separate
+without a connected stretch response. Two diagonal constraints reduce
+shearing. Neighboring widths scale to bridge small gaps, capped at 1.07
+on upper and 1.28 on lower sections; native Chameleon Weld then joins
+the nearest *real decoded* edge vertices at render time. Directly
+modifying source cube geometry is forbidden. Body boxes that would
+touch virtually the entire ring are discarded individually, not used
+as an excuse to cancel every other correct thigh contact.
+
+**Diagnostics:** with
+`-Dbbs.editor.physics.skirt.contactAudit=true`, read
+`[SkirtClothV2]` fields `active`, `moved`, `boxes`,
+`ignoredBoxes`, `penetrationRatio`, `depthBefore`, `depthAfter`,
+`seamBefore`, `seamAfter`, `outwardExtra`, `accepted`.
+They measure the constrained **bone-rig** geometry after mapped
+rotations, not the fully rasterized cloth after Weld.
+
+**Test gate:** inspect identical walking poses (including frames 27–30)
+at 0.85 scale from front and side, plus very slow single-frame stepping.
+Acceptance requires no new gaps, severe umbrella flare, or 1–2-frame
+flickering; decreased *visible* thigh clipping and improved seam
+continuity, not just positive numerical audit metrics. An experimental
+solver with valid CI but no visual test must not replace the stable
+default in `main`.
+
+The 20x2 Chameleon rig is not a deformable high-resolution triangulated
+cloth mesh: Weld is a visual seam operator after bone mapping, and
+fine-scale contact against *final Weld vertices* still requires a
+renderer-aware mesh collision pass. The new solver reduces contradictory
+subsystems, but this limitation remains explicit.

@@ -32,20 +32,6 @@ public final class SkirtVisibleThighContacts
     private static final float MAX_EXTRA_HEM=.28F;
     private static final float MAX_FINAL_ROOT=.52F;
     private static final float MAX_FINAL_HEM=.60F;
-    /**
-     * Additional lateral DOF: rolling the hanging links about the waist's
-     * HORIZONTAL radial axis moves the hem around the skirt perimeter.
-     * A pure world-Y twist would not displace a vertical hanging hem.
-     * Reversible without changing native Jolt or the pinned waist pivots.
-     */
-    private static final boolean LATERAL_THIGH_ESCAPE=
-            Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.lateralThighEscape","true"));
-    private static final float LATERAL_MAX_ROOT_STEP=.20F;
-    private static final float LATERAL_MAX_LOWER_STEP=.22F;
-    private static final float LATERAL_ROOT_CAP=.78F;
-    private static final float LATERAL_LOWER_CAP=.90F;
-    private static final float LATERAL_MAX_TIP_SHIFT=.085F;
     /** Experimental lift for compact (.85) skirts: trial rotations
      * only at genuine selected thigh-to-hem contacts. Off restores
      * the exact pre-existing visual correction. */
@@ -146,12 +132,6 @@ public final class SkirtVisibleThighContacts
         /** Corrected middle-tier contact, independently of the hem lift. */
         public final int midCandidatePanels,jointLiftPanels;
         public final float midOverlapReduction;
-        /** Lateral (perimeter-direction) thigh escape: selected strips
-         * moved by a geometry-improving radial-axis roll, never Y-only yaw. */
-        public final int lateralPanels;
-        /** Improvement in remaining distance to the tangential exit of
-         * active thigh boxes, not a count of rasterized GPU collisions. */
-        public final float lateralEscapeGain;
         /** The old tilt/center gate rejected these boxes; strong
          * outer-surface penetration rescued only some of them. */
         public final int rescuedLegBoxes,rejectedLegBoxes;
@@ -253,30 +233,6 @@ public final class SkirtVisibleThighContacts
                 int continuityLimitedPanels,int continuityBlockedPanels,
                 float continuityRoughnessBefore,float continuityRoughnessAfter)
         {
-            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
-                    contactDepths,candidatePanels,selectedPanels,locallyLimited,
-                    liftedHemPanels,liftOverlapReduction,
-                    midCandidatePanels,jointLiftPanels,midOverlapReduction,
-                    rescuedLegBoxes,rejectedLegBoxes,silhouetteLimitedPanels,
-                    silhouetteBlockedPanels,silhouetteRemovedOutward,
-                    continuityLimitedPanels,continuityBlockedPanels,
-                    continuityRoughnessBefore,continuityRoughnessAfter,0,0F);
-        }
-        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
-                int exactSamples,int exactHits,
-                Map<String,Float> contactDepths,
-                int candidatePanels,int selectedPanels,boolean locallyLimited,
-                int liftedHemPanels,float liftOverlapReduction,
-                int midCandidatePanels,int jointLiftPanels,
-                float midOverlapReduction,int rescuedLegBoxes,
-                int rejectedLegBoxes,int silhouetteLimitedPanels,
-                int silhouetteBlockedPanels,float silhouetteRemovedOutward,
-                int continuityLimitedPanels,int continuityBlockedPanels,
-                float continuityRoughnessBefore,float continuityRoughnessAfter,
-                int lateralPanels,float lateralEscapeGain)
-        {
-            this.lateralPanels=lateralPanels;
-            this.lateralEscapeGain=lateralEscapeGain;
             this.continuityLimitedPanels=continuityLimitedPanels;
             this.continuityBlockedPanels=continuityBlockedPanels;
             this.continuityRoughnessBefore=continuityRoughnessBefore;
@@ -329,16 +285,6 @@ public final class SkirtVisibleThighContacts
         Point(float[] p,float[] axis){this.p=p;this.axis=axis;}
     }
 
-    private static final class LateralScore
-    {
-        int hits;
-        float radial,gapPlus,gapMinus;
-        float exitGap(int sign)
-        {
-            return sign>0?gapPlus:gapMinus;
-        }
-    }
-
     private SkirtVisibleThighContacts(){}
 
     public static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
@@ -360,7 +306,7 @@ public final class SkirtVisibleThighContacts
         return correct(strips,starting,selected,visualScale,
                 ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
                 SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION,
-                HEM_CONTINUITY,CLEARANCE_FIRST,LATERAL_THIGH_ESCAPE);
+                HEM_CONTINUITY,CLEARANCE_FIRST);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -427,19 +373,6 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
             boolean silhouette,boolean continuity,boolean clearanceFirst)
-    {
-        return correct(strips,starting,selected,visualScale,
-                adaptiveLift,adaptiveMid,surfaceGate,silhouette,continuity,
-                clearanceFirst,false);
-    }
-
-    /** Pure Java A/B: all existing tests retain the old 10-argument path. */
-    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
-            Map<String,float[]> starting,
-            BodyPartJoltContactBudget.Selection selected,float visualScale,
-            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
-            boolean silhouette,boolean continuity,boolean clearanceFirst,
-            boolean lateralEscape)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
@@ -1014,103 +947,6 @@ public final class SkirtVisibleThighContacts
                 }
             }
         }
-        int lateralPanels=0;
-        float lateralGain=0F;
-        if(lateralEscape && visualScale<.995F && !directContacts.isEmpty())
-        {
-            // Move the hanging links SIDEWAYS about the horizontal radial
-            // axis. Yaw around Y changes plate orientation but would leave
-            // a vertical hem's center almost in place. Only the existing
-            // contact-island-selected bones can participate.
-            //
-            // No temporal cache: same pose/leg geometry => same direction.
-            // Ambiguous near-center evidence uses a deadband instead of
-            // flipping the signed roll across consecutive gait frames.
-            for(int i=0;i<PANELS;i++)
-            {
-                if(directDepth[i]<.025F)continue;
-                SkirtClothPoseCoupler.Strip strip=strips.get(i);
-                // Sideways escape must use real decoded Chameleon
-                // geometry, never imaginary fallback centerlines.
-                if(strip.lowerSurfaceWorld==null ||
-                        strip.lowerSurfaceWorld.length<2)continue;
-                float[] root=origin(strip.upperWorld);
-                float rx=root[0]-cx,rz=root[2]-cz;
-                float radius=(float)Math.sqrt(rx*rx+rz*rz);
-                if(radius<.02F)continue;
-                float[] outward={rx/radius,0F,rz/radius};
-                float[] tangent={-outward[2],0F,outward[0]};
-                LateralScore baseline=lateralScore(
-                        strip,copy,active,outward,tangent,surfaceMargin);
-                if(baseline.hits<2)continue;
-                float bias=baseline.gapPlus-baseline.gapMinus;
-                float deadband=.015F*baseline.hits;
-                if(Math.abs(bias)<=deadband)continue;
-                // The smaller exit distance tells us which side of the
-                // moving leg the visible fabric is already closest to.
-                int chosenDirection=bias<0F?1:-1;
-                float[] axis=mul(outward,-chosenDirection);
-                float beforeGap=baseline.exitGap(chosenDirection);
-                float bestMerit=0F;
-                float bestGain=0F;
-                float[] bestUpper=null,bestLower=null;
-                float[] currentTip=transformedSkirtTip(strip,copy);
-                float[] first=copy.get(strip.upper);
-                float[] second=copy.get(strip.lower);
-                for(int up=0;up<=4;up++)
-                {
-                    float rootStep=LATERAL_MAX_ROOT_STEP*up/4F;
-                    for(int down=0;down<=4;down++)
-                    {
-                        if(up==0&&down==0)continue;
-                        float lowerStep=LATERAL_MAX_LOWER_STEP*down/4F;
-                        Map<String,float[]> trial=
-                                new LinkedHashMap<String,float[]>();
-                        trial.put(strip.upper,first.clone());
-                        trial.put(strip.lower,second.clone());
-                        if(up>0&&!bend(trial,strip.upper,
-                                strip.upperWorld,axis,rootStep,
-                                LATERAL_ROOT_CAP))continue;
-                        if(down>0&&!bend(trial,strip.lower,
-                                strip.lowerWorld,axis,lowerStep,
-                                LATERAL_LOWER_CAP))continue;
-                        float tipMovement=length(sub(
-                                transformedSkirtTip(strip,trial),
-                                currentTip));
-                        if(tipMovement>LATERAL_MAX_TIP_SHIFT)continue;
-                        LateralScore candidate=lateralScore(
-                                strip,trial,active,outward,tangent,
-                                surfaceMargin);
-                        // A cheaper side-exit path must not be bought
-                        // with more leg penetration somewhere else.
-                        if(candidate.hits>baseline.hits+1 ||
-                                candidate.radial>baseline.radial+.004F)
-                            continue;
-                        float gain=beforeGap-
-                                candidate.exitGap(chosenDirection);
-                        if(gain<Math.max(.012F,.008F*baseline.hits))
-                            continue;
-                        float merit=gain-
-                                .025F*(rootStep+lowerStep);
-                        if(merit>bestMerit+.001F)
-                        {
-                            bestMerit=merit;
-                            bestGain=gain;
-                            bestUpper=trial.get(strip.upper);
-                            bestLower=trial.get(strip.lower);
-                        }
-                    }
-                }
-                if(bestUpper!=null)
-                {
-                    copy.put(strip.upper,bestUpper);
-                    copy.put(strip.lower,bestLower);
-                    touched[i]=true;
-                    lateralPanels++;
-                    lateralGain+=bestGain;
-                }
-            }
-        }
         int silhouetteLimited=0,silhouetteBlocked=0;
         float silhouetteRemoved=0F;
         if(silhouette && !clearanceFirst && visualScale<.995F &&
@@ -1310,8 +1146,7 @@ public final class SkirtVisibleThighContacts
                 rescuedLegBoxes,rejectedLegBoxes,
                 silhouetteLimited,silhouetteBlocked,silhouetteRemoved,
                 continuityLimited,continuityBlocked,
-                roughnessBefore,roughnessAfter,
-                lateralPanels,lateralGain);
+                roughnessBefore,roughnessAfter);
     }
 
     /**
@@ -1785,83 +1620,6 @@ public final class SkirtVisibleThighContacts
             }
         }
         return score;
-    }
-
-    /**
-     * Sideways distance-to-exit for the ACTUAL decoded Chameleon quad
-     * surface, transformed by the current upper/lower world swings.
-     * For each surface point INSIDE one or more accepted 3-zone thigh
-     * OBBs, use the deepest containing OBB once: counting all three
-     * overlapping thigh zones would triple both pressure and gain.
-     *
-     * A tangential shift can reduce distance to a thigh's SIDE face
-     * even while the point remains inside its radial face. The old
-     * radial-only score therefore could not see this improvement.
-     * Every caller also verifies that the original radial score is
-     * not made worse before accepting a new pose.
-     */
-    private static LateralScore lateralScore(
-            SkirtClothPoseCoupler.Strip strip,
-            Map<String,float[]> swings,List<Leg> legs,
-            float[] outward,float[] tangent,float margin)
-    {
-        LateralScore result=new LateralScore();
-        float[] root=origin(strip.upperWorld);
-        float[] hinge=origin(strip.lowerWorld);
-        float[] upper=worldSwing(strip.upperWorld,
-                swings.get(strip.upper));
-        float[] lower=worldSwing(strip.lowerWorld,
-                swings.get(strip.lower));
-        List<Point> samples=new ArrayList<Point>();
-        int upperPoints=addExactSurface(samples,strip.upperSurfaceWorld,
-                root,hinge,strip.tipWorld,upper,lower,false,
-                MID_CONTACT_START,MID_CONTACT_END);
-        int lowerPoints=addExactSurface(samples,strip.lowerSurfaceWorld,
-                root,hinge,strip.tipWorld,upper,lower,true,
-                MID_CONTACT_START,1.45F);
-        if(upperPoints+lowerPoints==0 &&
-                (strip.upperSurfaceWorld==null ||
-                 strip.upperSurfaceWorld.length==0) &&
-                (strip.lowerSurfaceWorld==null ||
-                 strip.lowerSurfaceWorld.length==0))
-        {
-            // Identical clean centerline fallback to older contact
-            // stages when the optional Chameleon geometry is absent.
-            float[] up=rotate(sub(hinge,root),upper);
-            float[] low=rotate(rotate(sub(strip.tipWorld,hinge),
-                    lower),upper);
-            float[] joint=add(root,up);
-            samples.add(new Point(add(root,mul(up,.90F)),null));
-            samples.add(new Point(add(joint,mul(low,.60F)),null));
-            samples.add(new Point(add(joint,mul(low,.85F)),null));
-        }
-        for(Point sample:samples)
-        {
-            Leg nearest=null;
-            float depth=0F;
-            for(Leg leg:legs)
-            {
-                float d=unclampedPenetration(sample.p,leg,outward,margin);
-                if(d>depth+.00001F)
-                {
-                    nearest=leg;
-                    depth=d;
-                }
-            }
-            if(nearest==null||depth<=.001F)continue;
-            float[] delta=sub(sample.p,new float[]{
-                    nearest.p[0],nearest.p[1],nearest.p[2]});
-            float along=dot(delta,tangent);
-            float sideReach=margin;
-            for(int axis=0;axis<3;axis++)
-                sideReach+=Math.abs(dot(tangent,nearest.basis[axis]))*
-                        nearest.p[7+axis];
-            result.hits++;
-            result.radial+=depth;
-            result.gapPlus+=Math.max(0F,sideReach-along);
-            result.gapMinus+=Math.max(0F,sideReach+along);
-        }
-        return result;
     }
 
     private static float unclampedPenetration(float[] point,Leg leg,
