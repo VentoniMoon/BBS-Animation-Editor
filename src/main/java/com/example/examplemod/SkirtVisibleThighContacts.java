@@ -32,6 +32,20 @@ public final class SkirtVisibleThighContacts
     private static final float MAX_EXTRA_HEM=.28F;
     private static final float MAX_FINAL_ROOT=.52F;
     private static final float MAX_FINAL_HEM=.60F;
+    /**
+     * Additional lateral DOF: rolling the hanging links about the waist's
+     * HORIZONTAL radial axis moves the hem around the skirt perimeter.
+     * A pure world-Y twist would not displace a vertical hanging hem.
+     * Reversible without changing native Jolt or the pinned waist pivots.
+     */
+    private static final boolean LATERAL_THIGH_ESCAPE=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.lateralThighEscape","true"));
+    private static final float LATERAL_MAX_ROOT_STEP=.20F;
+    private static final float LATERAL_MAX_LOWER_STEP=.22F;
+    private static final float LATERAL_ROOT_CAP=.78F;
+    private static final float LATERAL_LOWER_CAP=.90F;
+    private static final float LATERAL_MAX_TIP_SHIFT=.085F;
     /** Experimental lift for compact (.85) skirts: trial rotations
      * only at genuine selected thigh-to-hem contacts. Off restores
      * the exact pre-existing visual correction. */
@@ -132,6 +146,12 @@ public final class SkirtVisibleThighContacts
         /** Corrected middle-tier contact, independently of the hem lift. */
         public final int midCandidatePanels,jointLiftPanels;
         public final float midOverlapReduction;
+        /** Lateral (perimeter-direction) thigh escape: selected strips
+         * moved by a geometry-improving radial-axis roll, never Y-only yaw. */
+        public final int lateralPanels;
+        /** Improvement in remaining distance to the tangential exit of
+         * active thigh boxes, not a count of rasterized GPU collisions. */
+        public final float lateralEscapeGain;
         /** The old tilt/center gate rejected these boxes; strong
          * outer-surface penetration rescued only some of them. */
         public final int rescuedLegBoxes,rejectedLegBoxes;
@@ -233,6 +253,30 @@ public final class SkirtVisibleThighContacts
                 int continuityLimitedPanels,int continuityBlockedPanels,
                 float continuityRoughnessBefore,float continuityRoughnessAfter)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,locallyLimited,
+                    liftedHemPanels,liftOverlapReduction,
+                    midCandidatePanels,jointLiftPanels,midOverlapReduction,
+                    rescuedLegBoxes,rejectedLegBoxes,silhouetteLimitedPanels,
+                    silhouetteBlockedPanels,silhouetteRemovedOutward,
+                    continuityLimitedPanels,continuityBlockedPanels,
+                    continuityRoughnessBefore,continuityRoughnessAfter,0,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction,int rescuedLegBoxes,
+                int rejectedLegBoxes,int silhouetteLimitedPanels,
+                int silhouetteBlockedPanels,float silhouetteRemovedOutward,
+                int continuityLimitedPanels,int continuityBlockedPanels,
+                float continuityRoughnessBefore,float continuityRoughnessAfter,
+                int lateralPanels,float lateralEscapeGain)
+        {
+            this.lateralPanels=lateralPanels;
+            this.lateralEscapeGain=lateralEscapeGain;
             this.continuityLimitedPanels=continuityLimitedPanels;
             this.continuityBlockedPanels=continuityBlockedPanels;
             this.continuityRoughnessBefore=continuityRoughnessBefore;
@@ -306,7 +350,7 @@ public final class SkirtVisibleThighContacts
         return correct(strips,starting,selected,visualScale,
                 ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
                 SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION,
-                HEM_CONTINUITY,CLEARANCE_FIRST);
+                HEM_CONTINUITY,CLEARANCE_FIRST,LATERAL_THIGH_ESCAPE);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -373,6 +417,19 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
             boolean silhouette,boolean continuity,boolean clearanceFirst)
+    {
+        return correct(strips,starting,selected,visualScale,
+                adaptiveLift,adaptiveMid,surfaceGate,silhouette,continuity,
+                clearanceFirst,false);
+    }
+
+    /** Pure Java A/B: all existing tests retain the old 10-argument path. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
+            boolean silhouette,boolean continuity,boolean clearanceFirst,
+            boolean lateralEscape)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
