@@ -329,6 +329,16 @@ public final class SkirtVisibleThighContacts
         Point(float[] p,float[] axis){this.p=p;this.axis=axis;}
     }
 
+    private static final class LateralScore
+    {
+        int hits;
+        float radial,gapPlus,gapMinus;
+        float exitGap(int sign)
+        {
+            return sign>0?gapPlus:gapMinus;
+        }
+    }
+
     private SkirtVisibleThighContacts(){}
 
     public static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
@@ -1771,6 +1781,83 @@ public final class SkirtVisibleThighContacts
             }
         }
         return score;
+    }
+
+    /**
+     * Sideways distance-to-exit for the ACTUAL decoded Chameleon quad
+     * surface, transformed by the current upper/lower world swings.
+     * For each surface point INSIDE one or more accepted 3-zone thigh
+     * OBBs, use the deepest containing OBB once: counting all three
+     * overlapping thigh zones would triple both pressure and gain.
+     *
+     * A tangential shift can reduce distance to a thigh's SIDE face
+     * even while the point remains inside its radial face. The old
+     * radial-only score therefore could not see this improvement.
+     * Every caller also verifies that the original radial score is
+     * not made worse before accepting a new pose.
+     */
+    private static LateralScore lateralScore(
+            SkirtClothPoseCoupler.Strip strip,
+            Map<String,float[]> swings,List<Leg> legs,
+            float[] outward,float[] tangent,float margin)
+    {
+        LateralScore result=new LateralScore();
+        float[] root=origin(strip.upperWorld);
+        float[] hinge=origin(strip.lowerWorld);
+        float[] upper=worldSwing(strip.upperWorld,
+                swings.get(strip.upper));
+        float[] lower=worldSwing(strip.lowerWorld,
+                swings.get(strip.lower));
+        List<Point> samples=new ArrayList<Point>();
+        int upperPoints=addExactSurface(samples,strip.upperSurfaceWorld,
+                root,hinge,strip.tipWorld,upper,lower,false,
+                MID_CONTACT_START,MID_CONTACT_END);
+        int lowerPoints=addExactSurface(samples,strip.lowerSurfaceWorld,
+                root,hinge,strip.tipWorld,upper,lower,true,
+                MID_CONTACT_START,1.45F);
+        if(upperPoints+lowerPoints==0 &&
+                (strip.upperSurfaceWorld==null ||
+                 strip.upperSurfaceWorld.length==0) &&
+                (strip.lowerSurfaceWorld==null ||
+                 strip.lowerSurfaceWorld.length==0))
+        {
+            // Identical clean centerline fallback to older contact
+            // stages when the optional Chameleon geometry is absent.
+            float[] up=rotate(sub(hinge,root),upper);
+            float[] low=rotate(rotate(sub(strip.tipWorld,hinge),
+                    lower),upper);
+            float[] joint=add(root,up);
+            samples.add(new Point(add(root,mul(up,.90F)),null));
+            samples.add(new Point(add(joint,mul(low,.60F)),null));
+            samples.add(new Point(add(joint,mul(low,.85F)),null));
+        }
+        for(Point sample:samples)
+        {
+            Leg nearest=null;
+            float depth=0F;
+            for(Leg leg:legs)
+            {
+                float d=unclampedPenetration(sample.p,leg,outward,margin);
+                if(d>depth+.00001F)
+                {
+                    nearest=leg;
+                    depth=d;
+                }
+            }
+            if(nearest==null||depth<=.001F)continue;
+            float[] delta=sub(sample.p,new float[]{
+                    nearest.p[0],nearest.p[1],nearest.p[2]});
+            float along=dot(delta,tangent);
+            float sideReach=margin;
+            for(int axis=0;axis<3;axis++)
+                sideReach+=Math.abs(dot(tangent,nearest.basis[axis]))*
+                        nearest.p[7+axis];
+            result.hits++;
+            result.radial+=depth;
+            result.gapPlus+=Math.max(0F,sideReach-along);
+            result.gapMinus+=Math.max(0F,sideReach+along);
+        }
+        return result;
     }
 
     private static float unclampedPenetration(float[] point,Leg leg,
