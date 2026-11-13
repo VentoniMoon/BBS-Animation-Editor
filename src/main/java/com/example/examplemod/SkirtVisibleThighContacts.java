@@ -1851,4 +1851,285 @@ public final class SkirtVisibleThighContacts
                     output.put(e.getKey(),e.getValue().clone());
         return output;
     }
+
+    /**
+     * A second, bounded clearance pass AFTER AdaptiveWidth has chosen the
+     * rendered Chameleon scaleX/scaleZ for each strip. Previous hem audits
+     * transform clean quad vertices with just two bone swings: this pass
+     * also expands those vertices around the lower bone's LOCAL width axis
+     * before applying the two swings. It is a post-width model-space
+     * estimate; temporary Weld quad edits happen later in the render hook
+     * and are deliberately NOT claimed to be sampled here.
+     *
+     * Only previously selected, measured real-leg contact bones may move.
+     * The belt and upper links remain unchanged, no input maps are edited,
+     * and accepted trials must REDUCE penetrated rendered-quad samples.
+     */
+    public static final class PostWidthResult
+    {
+        public final Map<String,float[]> swings;
+        public final Map<String,SkirtAdaptiveWidth.Width> widths;
+        public final int sourcePoints,beforeHits,afterHits,selectedPanels;
+        public final int changedPanels,expandedWidths,limitedTrials;
+        public final float overlapBefore,overlapAfter,maxDepthBefore,maxDepthAfter;
+
+        PostWidthResult(Map<String,float[]> swings,
+                Map<String,SkirtAdaptiveWidth.Width> widths,int sources,
+                int hitsBefore,int hitsAfter,int selectedPanels,int changed,
+                int wider,int limited,float before,float after,
+                float depthBefore,float depthAfter)
+        {
+            this.swings=swings;
+            this.widths=widths;
+            this.sourcePoints=sources;
+            this.beforeHits=hitsBefore;
+            this.afterHits=hitsAfter;
+            this.selectedPanels=selectedPanels;
+            this.changedPanels=changed;
+            this.expandedWidths=wider;
+            this.limitedTrials=limited;
+            this.overlapBefore=before;
+            this.overlapAfter=after;
+            this.maxDepthBefore=depthBefore;
+            this.maxDepthAfter=depthAfter;
+        }
+    }
+
+    private static final class PostWidthScore
+    {
+        int sources,hits;
+        float score,maxDepth;
+        void add(float depth)
+        {
+            sources++;
+            if(depth>.0001F)
+            {
+                hits++;
+                score+=depth+.006F;
+                maxDepth=Math.max(maxDepth,depth);
+            }
+        }
+        void plus(PostWidthScore other)
+        {
+            sources+=other.sources;
+            hits+=other.hits;
+            score+=other.score;
+            maxDepth=Math.max(maxDepth,other.maxDepth);
+        }
+    }
+
+    public static PostWidthResult correctPostWidth(
+            List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> pose,
+            Map<String,SkirtAdaptiveWidth.Width> widths,
+            BodyPartJoltContactBudget.Selection selected,
+            Map<String,Float> measuredContacts,float visualScale)
+    {
+        return correctPostWidth(strips,pose,widths,selected,measuredContacts,
+                visualScale,true);
+    }
+
+    /** Package-visible A/B entry; false is a completely read-only audit. */
+    static PostWidthResult correctPostWidth(
+            List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> pose,
+            Map<String,SkirtAdaptiveWidth.Width> widths,
+            BodyPartJoltContactBudget.Selection selected,
+            Map<String,Float> measuredContacts,float visualScale,
+            boolean correct)
+    {
+        Map<String,float[]> updated=cloneSwings(pose);
+        Map<String,SkirtAdaptiveWidth.Width> adjusted=
+                new LinkedHashMap<String,SkirtAdaptiveWidth.Width>();
+        if(widths!=null)adjusted.putAll(widths);
+        PostWidthResult empty=new PostWidthResult(updated,adjusted,
+                0,0,0,0,0,0,0,0F,0F,0F,0F);
+        if(strips==null||strips.size()!=PANELS || pose==null ||
+                widths==null||selected==null||selected.boxes==null ||
+                selected.owners==null)return empty;
+
+        List<Leg> legs=new ArrayList<Leg>();
+        for(int j=0;j<Math.min(selected.boxes.length,
+                selected.owners.size());j++)
+        {
+            float[] box=selected.boxes[j];
+            String owner=selected.owners.get(j);
+            if(BodyPartJoltContactBudget.isLeg(owner)&&valid(box,10) &&
+                    box[7]>.01F&&box[8]>.01F&&box[9]>.01F &&
+                    box[7]<.50F&&box[8]<.60F&&box[9]<.50F)
+                legs.add(new Leg(box,j,owner));
+        }
+        if(legs.isEmpty())return empty;
+
+        float cx=0F,cz=0F;
+        for(SkirtClothPoseCoupler.Strip s:strips)
+        {
+            if(s==null||!valid(s.upperWorld,16)||
+                    !valid(s.lowerWorld,16)||!valid(s.tipWorld,3)||
+                    !valid(pose.get(s.upper),4)||
+                    !valid(pose.get(s.lower),4))return empty;
+            cx+=s.upperWorld[12];cz+=s.upperWorld[14];
+        }
+        cx/=PANELS;cz/=PANELS;
+
+        int selectedPanels=0,changed=0,wider=0,limited=0;
+        for(SkirtClothPoseCoupler.Strip s:strips)
+        {
+            Float evidence=measuredContacts==null?null:
+                    measuredContacts.get(s.upper);
+            if(evidence==null||!Float.isFinite(evidence.floatValue())||
+                    evidence.floatValue()<=.001F)continue;
+            selectedPanels++;
+            if(!correct||visualScale>=.995F||
+                    s.lowerSurfaceWorld==null||
+                    s.lowerSurfaceWorld.length==0)continue;
+
+            float[] root=origin(s.upperWorld);
+            float[] diff={root[0]-cx,0F,root[2]-cz};
+            float radius=length(diff);
+            if(radius<.02F)continue;
+            float[] outward=mul(diff,1F/radius);
+            float[] tangent={-outward[2],0F,outward[0]};
+            PostWidthScore baseline=postWidthPanel(
+                    s,updated,adjusted,legs,outward,visualScale);
+            if(baseline.hits==0||baseline.score<.01F)continue;
+
+            float best=baseline.score;
+            float bestDepth=baseline.maxDepth;
+            float[] bestSwing=null;
+            SkirtAdaptiveWidth.Width bestWidth=null;
+            float cap=Math.min(.80F,
+                    SkirtScaleContactResponse.hemAngleCap(visualScale)+.11F);
+            SkirtAdaptiveWidth.Width currentWidth=adjusted.get(s.lower);
+            float current=currentWidth==null?1F:currentWidth.multiplier;
+            if(currentWidth!=null &&
+                    (!Float.isFinite(current)||current<1F||
+                    current>SkirtAdaptiveWidth.MAX_LOWER))continue;
+
+            // Search both bent and gently expanded configurations. A width
+            // change alone can help an edge, but is NEVER accepted unless
+            // actual decoded quad contacts decrease at this very frame.
+            for(int step=0;step<=4;step++)
+            {
+                float angle=.035F*step;
+                for(int grow=0;grow<=2;grow++)
+                {
+                    if(step==0&&grow==0)continue;
+                    float width=Math.min(SkirtAdaptiveWidth.MAX_LOWER,
+                            current+grow*.025F);
+                    if(step==0&&width<=current+.0001F)continue;
+                    Map<String,float[]> trial=cloneSwings(updated);
+                    if(step>0&&!bend(trial,s.lower,s.lowerWorld,
+                            tangent,angle,cap))continue;
+                    Map<String,SkirtAdaptiveWidth.Width> trialWidths=
+                            new LinkedHashMap<String,SkirtAdaptiveWidth.Width>(
+                                    adjusted);
+                    if(currentWidth!=null && width>current+.0001F)
+                        trialWidths.put(s.lower,
+                                new SkirtAdaptiveWidth.Width(
+                                        currentWidth.axis,width));
+                    float excursion=skirtShapeExcursion(
+                            s,updated,trial,outward);
+                    if(excursion>.052F) {limited++;continue;}
+                    PostWidthScore sample=postWidthPanel(
+                            s,trial,trialWidths,legs,outward,visualScale);
+                    if(sample.sources!=baseline.sources ||
+                            sample.maxDepth>baseline.maxDepth+.012F)
+                        continue;
+                    if(sample.score<best-.002F ||
+                            (Math.abs(sample.score-best)<=.0001F &&
+                                    bestSwing!=null &&
+                                    sample.maxDepth<bestDepth-.002F))
+                    {
+                        best=sample.score;
+                        bestDepth=sample.maxDepth;
+                        bestSwing=trial.get(s.lower);
+                        bestWidth=trialWidths.get(s.lower);
+                    }
+                }
+            }
+            if(bestSwing!=null)
+            {
+                updated.put(s.lower,bestSwing);
+                if(bestWidth!=null&&currentWidth!=null &&
+                        bestWidth.multiplier>current+.0001F)
+                {
+                    adjusted.put(s.lower,bestWidth);
+                    wider++;
+                }
+                changed++;
+            }
+        }
+
+        PostWidthScore before=new PostWidthScore();
+        PostWidthScore after=new PostWidthScore();
+        for(SkirtClothPoseCoupler.Strip s:strips)
+        {
+            float[] root=origin(s.upperWorld);
+            float[] diff={root[0]-cx,0F,root[2]-cz};
+            float radius=length(diff);
+            if(radius<.02F)continue;
+            float[] outward=mul(diff,1F/radius);
+            before.plus(postWidthPanel(s,pose,widths,legs,
+                    outward,visualScale));
+            after.plus(postWidthPanel(s,updated,adjusted,legs,
+                    outward,visualScale));
+        }
+        return new PostWidthResult(updated,adjusted,before.sources,
+                before.hits,after.hits,selectedPanels,changed,wider,limited,
+                before.score,after.score,before.maxDepth,after.maxDepth);
+    }
+
+    /** Decoded quad points after the proposed Chameleon local width scale
+     * and the actual upper/lower swings. Both originate from the same
+     * clean post-render matrices; pivot positions are never extrapolated. */
+    private static PostWidthScore postWidthPanel(
+            SkirtClothPoseCoupler.Strip s,Map<String,float[]> pose,
+            Map<String,SkirtAdaptiveWidth.Width> widths,List<Leg> legs,
+            float[] outward,float visualScale)
+    {
+        PostWidthScore result=new PostWidthScore();
+        if(!valid(pose.get(s.upper),4)||
+                !valid(pose.get(s.lower),4))return result;
+        float[] root=origin(s.upperWorld),hinge=origin(s.lowerWorld);
+        float[] upper=worldSwing(s.upperWorld,pose.get(s.upper));
+        float[] lower=worldSwing(s.lowerWorld,pose.get(s.lower));
+        float[] down=sub(s.tipWorld,root);
+        float length=length(down);
+        if(length<.05F)return result;
+        float[] normalized=mul(down,1F/length);
+        SkirtAdaptiveWidth.Width w=widths.get(s.lower);
+        float multiplier=w==null?1F:w.multiplier;
+        if(!Float.isFinite(multiplier)||multiplier<1F||
+                multiplier>SkirtAdaptiveWidth.MAX_LOWER)return result;
+        int widthAxis=w==null?SkirtAdaptiveWidth.widthAxis(s.lower):w.axis;
+        if(widthAxis!=0&&widthAxis!=2)return result;
+        float[] basis=normalize(new float[]{
+                s.lowerWorld[widthAxis*4],
+                s.lowerWorld[widthAxis*4+1],
+                s.lowerWorld[widthAxis*4+2]});
+        float[][] surface=s.lowerSurfaceWorld;
+        if(surface==null||surface.length==0||surface.length>128)
+            return result;
+        float margin=SkirtScaleContactResponse.surfaceMargin(visualScale);
+        for(float[] vertex:surface)
+        {
+            if(!valid(vertex,3))continue;
+            float fraction=dot(sub(vertex,root),normalized)/length;
+            if(fraction<.40F || fraction>1.45F)continue;
+            // Chameleon scaleX/Z multiplies around the CURRENT lower bone
+            // pivot, not about the geometrical center of its cube.
+            float[] fromHinge=sub(vertex,hinge);
+            float[] widened=add(fromHinge,mul(
+                    basis,dot(fromHinge,basis)*(multiplier-1F)));
+            float[] world=add(root,rotate(
+                    add(sub(hinge,root),rotate(widened,lower)),upper));
+            float deepest=0F;
+            for(Leg leg:legs)
+                deepest=Math.max(deepest,unclampedPenetration(
+                        world,leg,outward,margin));
+            result.add(deepest);
+        }
+        return result;
+    }
 }

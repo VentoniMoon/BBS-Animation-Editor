@@ -1696,6 +1696,14 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_ADAPTIVE_WIDTH =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.adaptiveWidth","true"));
+    /** Final pose refinement AFTER Chameleon's planned scaleX/scaleZ
+     * is known; native Jolt and the fixed skirt belt remain untouched.
+     * A/B: -Dbbs.editor.physics.skirt.postWidthSurface=false */
+    private static final boolean SKIRT_POST_WIDTH_SURFACE=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.postWidthSurface","true"));
+    private final Map<BodyPartModelData,Integer> lastSkirtPostWidthAudit=
+            new IdentityHashMap<BodyPartModelData,Integer>();
     /** Compact (0.85) visual skirt, unchanged body size: compensate ONLY
      * at actual thigh contacts, never by globally changing its scale. */
     private static final boolean SKIRT_SCALE_CONTACT_COMPENSATION =
@@ -2334,22 +2342,68 @@ public class BodyPartsPreviewRenderer
                                 " thighLeft="+contacts.leftUpperLeg+
                                 " thighRight="+contacts.rightUpperLeg);
                 }
+                Map<String,SkirtAdaptiveWidth.Width> skirtWidths=
+                        java.util.Collections.emptyMap();
+                if(SKIRT_ADAPTIVE_WIDTH)
+                {
+                    skirtWidths=SkirtAdaptiveWidth.measure(
+                            skirtStrips,stitched);
+                    if(SKIRT_SCALE_CONTACT_COMPENSATION &&
+                            !thighContactDepths.isEmpty())
+                        skirtWidths=SkirtScaleContactResponse.widen(
+                                skirtStrips,skirtWidths,thighContactDepths,
+                                skirtVisualScale);
+                }
+                if(SKIRT_POST_WIDTH_SURFACE &&
+                        SKIRT_ADAPTIVE_WIDTH &&
+                        SKIRT_VISIBLE_THIGH_CONTACTS &&
+                        !thighContactDepths.isEmpty() &&
+                        !skirtWidths.isEmpty())
+                {
+                    BodyPartJoltContactBudget.Selection bodies=
+                            passiveCollisionSelection(data,frame);
+                    SkirtVisibleThighContacts.PostWidthResult refined=
+                            SkirtVisibleThighContacts.correctPostWidth(
+                                    skirtStrips,stitched,skirtWidths,bodies,
+                                    thighContactDepths,skirtVisualScale);
+                    stitched=refined.swings;
+                    skirtWidths=refined.widths;
+                    if(SKIRT_CONTACT_AUDIT)
+                    {
+                        Integer logged=lastSkirtPostWidthAudit.get(data);
+                        if(logged==null||logged.intValue()!=frame)
+                        {
+                            lastSkirtPostWidthAudit.put(data,
+                                    Integer.valueOf(frame));
+                            System.out.println(
+                                    "[BBS Animation Editor][Jolt][SkirtPostWidthAudit] "+
+                                    "frame="+frame+
+                                    " model="+data.getTimelineId()+
+                                    " scale="+skirtVisualScale+
+                                    " sampledVertices="+refined.sourcePoints+
+                                    " beforeHits="+refined.beforeHits+
+                                    " afterHits="+refined.afterHits+
+                                    " overlapBefore="+refined.overlapBefore+
+                                    " overlapAfter="+refined.overlapAfter+
+                                    " maxDepthBefore="+refined.maxDepthBefore+
+                                    " maxDepthAfter="+refined.maxDepthAfter+
+                                    " contactPanels="+refined.selectedPanels+
+                                    " improvedPanels="+refined.changedPanels+
+                                    " widenedPanels="+refined.expandedWidths+
+                                    " shapeLimitedTrials="+refined.limitedTrials+
+                                    " weld="+data.isWeldEnabled()+
+                                    " visualPhaseLead="+SKIRT_VISUAL_PHASE_LEAD+
+                                    " (post-width quad estimate, pre-Weld)");
+                        }
+                    }
+                }
                 for(Map.Entry<String,float[]> swing:stitched.entrySet())
                     physicsFrames.accept(data,frame,swing.getKey(),
                             swing.getValue(),true);
-                if(SKIRT_ADAPTIVE_WIDTH)
-                {
-                    Map<String,SkirtAdaptiveWidth.Width> widths=
-                            SkirtAdaptiveWidth.measure(skirtStrips,stitched);
-                    if(SKIRT_SCALE_CONTACT_COMPENSATION &&
-                            !thighContactDepths.isEmpty())
-                        widths=SkirtScaleContactResponse.widen(
-                                skirtStrips,widths,thighContactDepths,
-                                skirtVisualScale);
-                    for(Map.Entry<String,SkirtAdaptiveWidth.Width> width:widths.entrySet())
-                        physicsFrames.acceptWidth(data,frame,
-                                width.getKey(),width.getValue());
-                }
+                for(Map.Entry<String,SkirtAdaptiveWidth.Width> width:
+                        skirtWidths.entrySet())
+                    physicsFrames.acceptWidth(data,frame,
+                            width.getKey(),width.getValue());
             }
             else if(coupledSkirt)
                 reportPhysicsBoneProbe(data,

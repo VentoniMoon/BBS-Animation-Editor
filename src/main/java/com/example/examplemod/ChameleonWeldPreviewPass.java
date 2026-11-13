@@ -41,6 +41,14 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
 
     private static final boolean SKIRT_RING_WELD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.ringWeld","true"));
+    /**
+     * Read-only snapshot of the ACTUAL Chameleon quad position changes
+     * after per-morph Weld, immediately before the library draws them.
+     * This reports model-space vertex deltas, NOT world-space leg hits.
+     */
+    private static final boolean SKIRT_RENDER_VERTEX_AUDIT=
+            Boolean.getBoolean("bbs.editor.physics.skirt.renderVertexAudit");
+    private static int skirtVertexAuditPasses;
 
     private ChameleonWeldPreviewPass() {}
 
@@ -155,6 +163,35 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                 }
             }
         }
+        if(SKIRT_RENDER_VERTEX_AUDIT && ringSeams>0 &&
+                ++skirtVertexAuditPasses%20==0)
+            reportRenderedVertexDisplacements();
+    }
+
+    private void reportRenderedVertexDisplacements()
+    {
+        int moved=0;
+        float max=0F,total=0F;
+        for(Map.Entry<Vector3f,float[]> entry:originals.entrySet())
+        {
+            Vector3f vertex=entry.getKey();
+            float[] previous=entry.getValue();
+            float x=vertex.x-previous[0],y=vertex.y-previous[1],
+                    z=vertex.z-previous[2];
+            float distance=(float)Math.sqrt(x*x+y*y+z*z);
+            if(distance<=.000001F)continue;
+            moved++;
+            max=Math.max(max,distance);
+            total+=distance;
+        }
+        System.out.println(
+                "[BBS Animation Editor][Jolt][SkirtRenderVertexAudit] "+
+                "weldRingSeams="+ringSeams+
+                " changedQuadVertices="+moved+
+                " maxModelDelta="+max+
+                " totalModelDelta="+total+
+                " (measured in native posed Chameleon quads AFTER Weld; "+
+                "before original vertex restoration; no leg-space audit)");
     }
 
     @SuppressWarnings("unchecked")

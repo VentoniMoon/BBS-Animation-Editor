@@ -40,6 +40,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtSilhouettePreservationSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtHemContinuitySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtPostWidthSurfaceSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtLegCollisionProxySmokeTest.java'
       - 'src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java'
       - '.github/workflows/skirt-chain-java8.yml'
@@ -80,6 +81,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtSilhouettePreservationSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtHemContinuitySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtPostWidthSurfaceSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtLegCollisionProxySmokeTest.java'
       - 'src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java'
   workflow_dispatch:
@@ -132,6 +134,7 @@ jobs:
             src/test/java/com/example/examplemod/SkirtSilhouettePreservationSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtHemContinuitySmokeTest.java \
             src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java \
+            src/test/java/com/example/examplemod/SkirtPostWidthSurfaceSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtLegCollisionProxySmokeTest.java \
             src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
@@ -158,6 +161,8 @@ jobs:
             com.example.examplemod.SkirtHemContinuitySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtVisibleThighContactsSmokeTest
+          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtPostWidthSurfaceSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtLegCollisionProxySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
