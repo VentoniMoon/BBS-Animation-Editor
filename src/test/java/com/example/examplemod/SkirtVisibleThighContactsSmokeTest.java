@@ -51,6 +51,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         absentLegDoesNotInventContact();
         mirroredRearKeepsCorrectWorldPush();
         skirtUsesFullThighBoxWhileHairKeepsCapsule();
+        clearanceFirstDoesNotPullCollisionBack();
         System.out.println("SkirtVisibleThighContactsSmokeTest OK");
     }
 
@@ -1156,6 +1157,42 @@ public final class SkirtVisibleThighContactsSmokeTest
         for(int i=7;i<10;i++)
             near(cloth.shapes[0][i],cloth.boxes[0][i],.00001F,
                     "physical thigh width must match fitted skin box");
+    }
+
+    private static void clearanceFirstDoesNotPullCollisionBack()
+    {
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection bodies=budget.select(true);
+        SkirtVisibleThighContacts.Result old=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        bodies,.85F,true,true,true,true,true,false);
+        SkirtVisibleThighContacts.Result newMode=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        bodies,.85F,true,true,true,true,true,true);
+        require(newMode.touchedPanels>0,
+                "collision-first must not remove the actual contact solver");
+        require(newMode.silhouetteLimitedPanels==0 &&
+                        newMode.silhouetteRemovedOutward==0F,
+                "collision-first must not blend panels back into the leg");
+        require(newMode.continuityRoughnessAfter<=
+                        newMode.continuityRoughnessBefore+.001F,
+                "seam processing may not increase ring roughness");
+        require(old!=null && newMode.selectedPanels==old.selectedPanels,
+                "policy change must not alter selected leg contacts");
+        SkirtVisibleThighContacts.Result again=
+                SkirtVisibleThighContacts.correct(f.strips,f.swings,
+                        bodies,.85F,true,true,true,true,true,true);
+        for(String[] pair:BONES)
+            for(String bone:pair)
+                for(int i=0;i<4;i++)
+                    near(newMode.swings.get(bone)[i],
+                            again.swings.get(bone)[i],.00001F,
+                            "same frame must produce stable output");
+        require(f.swings.get(BONES[0][0])[3]==0F,
+                "do not modify original Jolt swing or waist");
     }
 
     private static final class Fixture

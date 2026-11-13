@@ -1055,3 +1055,46 @@ side views remain essential, and direct pre/post-Weld surface collision
 measurements would need a verified native model-to-world transform at the
 Chameleon hook. The separate Weld diagnostic makes this limitation visible
 rather than mislabeling a bone audit as final rendered geometry.
+
+## Collision-first silhouette simplification (2026-11-13)
+
+After PR #193, the in-game walking test still had leg-through-skirt
+clipping, plus one/two-frame section twitching. Previously the main
+`Silhouette Preservation` pass could sacrifice **32%** of collision
+improvement to reduce a panel's outward silhouette excursion. The later
+`Hem Continuity` also used this same permissive clearance rule while
+pulling selected sections toward their native Jolt pose. The additional
+post-width trial search selected discrete rotations independently at each
+animation frame, potentially amplifying pops as selected contacts changed.
+
+The new default `clearanceFirst=true` mode removes the post-collision
+**silhouette pullback** entirely. It retains the body-box validity gate,
+three-zone thigh proxies, contact islands, original lower-link angle caps,
+waist pin and the existing collision solver. `Hem Continuity` remains
+active: its local neighbor smoothing target no longer inherits the old
+0.105/0.052/0.025 block silhouette envelope, it cannot increase the
+measured per-panel collision score by more than 0.0005 numerical allowance,
+and its incremental radial/vertical return is capped at 0.028 blocks.
+
+The second discrete `PostWidth` correction is **off by default** to
+isolate the reported short-lived section twitching; it remains opt-in
+for future debugging. The standard width measurement/scale compensation
+and Weld are NOT disabled.
+
+A/B flags:
+
+* `-Dbbs.editor.physics.skirt.clearanceFirst=false` restores legacy
+  Silhouette Preservation + Hem Continuity, including the old clearance
+  tolerance; normal default is `true`.
+* `-Dbbs.editor.physics.skirt.postWidthSurface=true` restores the extra
+  post-width trial search from PR #193; normal default is now `false`.
+* Keep `-Dbbs.editor.physics.skirt.hemContinuity=true` for both tests.
+* `-Dbbs.editor.physics.skirt.contactAudit=true` prints which mode was
+  chosen in `[SkirtSurface]` together with the previous contact counts.
+
+This is a collision-priority test, NOT a claim of a fully solved cloth
+mesh: Jolt still owns two links per skirt strip, and clearance uses
+Chameleon cube samples rather than the final Weld rasterized triangles.
+Compare identical walking frames at 0.85 scale and inspect both the
+leg-through-skirt failure and the short-lived section snaps. Passing
+Java 8 smoke tests does not substitute for an in-game visual check.

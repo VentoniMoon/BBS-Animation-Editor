@@ -53,6 +53,9 @@ public final class SkirtVisibleThighContacts
     private static final boolean SILHOUETTE_PRESERVATION=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.silhouettePreservation","true"));
+    private static final boolean CLEARANCE_FIRST=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.clearanceFirst","true"));
     /** Only rescue an otherwise rejected thigh when its oriented hull
      * actually reaches BEYOND the rest waist radius, not just into the
      * naturally tight inner fabric at scale 0.85. */
@@ -303,7 +306,7 @@ public final class SkirtVisibleThighContacts
         return correct(strips,starting,selected,visualScale,
                 ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
                 SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION,
-                HEM_CONTINUITY);
+                HEM_CONTINUITY,CLEARANCE_FIRST);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -359,6 +362,17 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
             boolean silhouette,boolean continuity)
+    {
+        return correct(strips,starting,selected,visualScale,
+                adaptiveLift,adaptiveMid,surfaceGate,silhouette,
+                continuity,false);
+    }
+
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
+            boolean silhouette,boolean continuity,boolean clearanceFirst)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
@@ -935,7 +949,7 @@ public final class SkirtVisibleThighContacts
         }
         int silhouetteLimited=0,silhouetteBlocked=0;
         float silhouetteRemoved=0F;
-        if(silhouette && visualScale<.995F &&
+        if(silhouette && !clearanceFirst && visualScale<.995F &&
                 !directContacts.isEmpty())
         {
             // Unlike merely capping all bone angles, this measures how
@@ -1057,9 +1071,13 @@ public final class SkirtVisibleThighContacts
                 int left=angular.get((ring+PANELS-1)%PANELS).intValue();
                 int right=angular.get((ring+1)%PANELS).intValue();
                 float before=shape[i];
-                float target=SkirtHemContinuity.target(
-                        originalShape[i],originalShape[left],
-                        originalShape[right],importance[i]);
+                float target=clearanceFirst?
+                        SkirtHemContinuity.targetClearanceFirst(
+                                originalShape[i],originalShape[left],
+                                originalShape[right],importance[i]):
+                        SkirtHemContinuity.target(
+                                originalShape[i],originalShape[left],
+                                originalShape[right],importance[i]);
                 if(before<=target+.002F)continue;
                 SkirtClothPoseCoupler.Strip strip=strips.get(i);
                 float dx=roots[i][0]-cx,dz=roots[i][2]-cz;
@@ -1091,14 +1109,18 @@ public final class SkirtVisibleThighContacts
                             strip,starting,trial,outward);
                     if(candidateShape>=bestShape-.0015F ||
                             candidateShape<target-.012F)continue;
+                    if(clearanceFirst && before-candidateShape>.028F)continue;
                     if(!SkirtHemContinuity.improvesNeighbors(
                             shape[left],before,candidateShape,shape[right]))
                         continue;
                     float candidateOverlap=panelCollisionScore(
                             strip,trial,active,outward,surfaceMargin);
-                    if(!SkirtSilhouettePreservation.keepsClearance(
-                            naturalOverlap,finalOverlap,candidateOverlap))
-                        continue;
+                    boolean safe=clearanceFirst?
+                            SkirtSilhouettePreservation.keepsClearanceStrict(
+                                    finalOverlap,candidateOverlap):
+                            SkirtSilhouettePreservation.keepsClearance(
+                                    naturalOverlap,finalOverlap,candidateOverlap);
+                    if(!safe)continue;
                     bestShape=candidateShape;
                     bestUpper=trial.get(strip.upper);
                     bestLower=trial.get(strip.lower);

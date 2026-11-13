@@ -47,6 +47,23 @@ public final class SkirtHemContinuity
         return Math.max(0F,Math.min(current,Math.min(profile,envelope)));
     }
 
+    /**
+     * Clearance-first seam target. Only a neighborhood-relative peak
+     * suggests a smaller excursion; it has NO separate silhouette cap.
+     * The caller verifies any trial against the actual same-frame leg
+     * intersections before accepting it.
+     */
+    public static float targetClearanceFirst(float current,float prev,
+            float next,float contactWeight)
+    {
+        if(!Float.isFinite(current)||!Float.isFinite(prev)||
+                !Float.isFinite(next)||current<0F||prev<0F||next<0F)
+            return current;
+        float neighbors=.5F*(prev+next);
+        return Math.max(0F,Math.min(current,
+                neighbors+transitionAllowance(contactWeight)));
+    }
+
     /** Local seam variation measured over the current cyclic ring. */
     public static float roughness(float left,float center,float right)
     {
