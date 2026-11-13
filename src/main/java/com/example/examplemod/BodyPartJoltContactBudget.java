@@ -161,7 +161,8 @@ public final class BodyPartJoltContactBudget
                 expanded.add(c);
                 continue;
             }
-            float[][] zones=SkirtLegCollisionProxy.split(c.box);
+            float[][] zones=SkirtLegCollisionProxy.split(
+                    c.box,pelvisAnchor(source,c.box));
             if(zones==null)
             {
                 expanded.add(c);
@@ -179,6 +180,38 @@ public final class BodyPartJoltContactBudget
             }
         }
         return expanded;
+    }
+
+    /**
+     * Use the nearest captured Emoticons pelvis/torso center to identify
+     * the proximal end of a rotated thigh. This works across horizontal
+     * leg poses, unlike sorting zones by their current world Y coordinate.
+     */
+    private static float[] pelvisAnchor(List<Contact> source,float[] thigh)
+    {
+        float closest=Float.POSITIVE_INFINITY;
+        float[] result=null;
+        for(Contact c:source)
+        {
+            String owner=normalize(c.owner);
+            if(!owner.equals("emoticons.low_body") &&
+                    !owner.equals("emoticons.body") &&
+                    !owner.equals("emoticons.pelvis") &&
+                    !owner.equals("emoticons.hip") &&
+                    !owner.equals("emoticons.hips"))continue;
+            float distance2=0F;
+            for(int i=0;i<3;i++)
+            {
+                float delta=c.box[i]-thigh[i];
+                distance2+=delta*delta;
+            }
+            if(distance2<closest)
+            {
+                closest=distance2;
+                result=new float[]{c.box[0],c.box[1],c.box[2]};
+            }
+        }
+        return result;
     }
 
     private static int priority(String owner)

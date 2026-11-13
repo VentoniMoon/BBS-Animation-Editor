@@ -38,14 +38,19 @@ public final class SkirtLegCollisionProxy
     }
 
     /**
-     * The +Y end of the source bone frame is proximal (toward the belt).
-     * We never determine this using world-space height: a raised thigh
-     * must not flip its tapered profile as it rotates through horizontal.
+     * The optional pelvis point determines which bone-local end is closest
+     * to the fixed belt. If absent, retain +Y as a deterministic fallback.
+     * Never flip the profile just because the leg crosses world-horizontal.
      *
      * Boxes have [world xyz, quaternion xyzw, half XYZ] layout.
      * Returns null for invalid shape rather than inventing a leg volume.
      */
     public static float[][] split(float[] source)
+    {
+        return split(source,null);
+    }
+
+    public static float[][] split(float[] source,float[] pelvis)
     {
         if(source==null||source.length!=10)return null;
         for(float value:source)if(!Float.isFinite(value))return null;
@@ -59,11 +64,22 @@ public final class SkirtLegCollisionProxy
         float axisX=2F*(x*y-z*w);
         float axisY=1F-2F*(x*x+z*z);
         float axisZ=2F*(y*z+x*w);
+        float proximal=1F;
+        if(pelvis!=null && pelvis.length==3 &&
+                Float.isFinite(pelvis[0])&&
+                Float.isFinite(pelvis[1])&&Float.isFinite(pelvis[2]))
+        {
+            float dot=axisX*(pelvis[0]-source[0])+
+                    axisY*(pelvis[1]-source[1])+
+                    axisZ*(pelvis[2]-source[2]);
+            if(dot>.015F)proximal=1F;
+            else if(dot<-.015F)proximal=-1F;
+        }
         float[][] parts=new float[ZONES][];
         for(int zone=0;zone<ZONES;zone++)
         {
             float[] b=source.clone();
-            float offset=halfY*(2F-2F*zone)/3F;
+            float offset=proximal*halfY*(2F-2F*zone)/3F;
             b[0]+=axisX*offset;
             b[1]+=axisY*offset;
             b[2]+=axisZ*offset;

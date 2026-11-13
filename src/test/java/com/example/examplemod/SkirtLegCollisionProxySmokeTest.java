@@ -9,6 +9,7 @@ public final class SkirtLegCollisionProxySmokeTest
     {
         threeZonesAreProximalToDistal();
         tiltFollowsBoneInsteadOfWorldAxis();
+        pelvisAnchorIdentifiesUpperEvenWhenLocalYIsInverted();
         onlySkirtSelectionChanges();
         duplicateFittedBoxesDoNotTriplePressure();
         shapeBudgetPreservesBothThighs();
@@ -47,6 +48,25 @@ public final class SkirtLegCollisionProxySmokeTest
         near(p[2][0],2F+.16F,"distal follows rotated local -Y");
         near(p[0][1],5F,"raised thigh must not use world Y slices");
         near(p[2][1],5F,"raised thigh must not flip contact profile");
+    }
+
+    private static void pelvisAnchorIdentifiesUpperEvenWhenLocalYIsInverted()
+    {
+        float[] inverted=box(0F,-.2F,0F,.19F,.22F,.19F);
+        inverted[3]=1F;inverted[6]=0F; // 180 deg around X: local +Y points down
+        float[] pelvis=new float[]{0F,0F,0F};
+        float[][] corrected=SkirtLegCollisionProxy.split(inverted,pelvis);
+        require(corrected[0][1]>corrected[2][1],
+                "upper narrow zone must be closer to pelvis, not local +Y");
+
+        BodyPartJoltContactBudget b=new BodyPartJoltContactBudget();
+        b.add(inverted,typed(inverted),"emoticons.left_leg");
+        float[] hip=box(0F,0F,0F,.18F,.12F,.18F);
+        b.add(hip,typed(hip),"emoticons.low_body");
+        BodyPartJoltContactBudget.Selection selection=b.select(true,true);
+        require(selection.boxes.length==4,"pelvis must remain its own shape");
+        require(selection.boxes[0][1]>selection.boxes[2][1],
+                "skirt selection must use the captured pelvis center");
     }
 
     private static void onlySkirtSelectionChanges()
