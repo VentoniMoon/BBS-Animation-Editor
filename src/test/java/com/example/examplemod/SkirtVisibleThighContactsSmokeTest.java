@@ -1089,7 +1089,8 @@ public final class SkirtVisibleThighContactsSmokeTest
                     require(solved.locallyLimited,
                             "two local thighs must invoke bounded islands");
                     require(solved.candidatePanels>12 &&
-                            solved.selectedPanels<=12 &&
+                            solved.selectedPanels<=
+                                    SkirtHemContactIslands.MAX_SELECTED_PANELS &&
                             solved.selectedPanels>0,
                             "still aborted all contacts for two thighs: "+
                             solved.candidatePanels+"->"+solved.selectedPanels);

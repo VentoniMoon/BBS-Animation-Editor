@@ -91,6 +91,15 @@ public final class SkirtVisibleThighContacts
     private static final boolean LOCAL_CONTACT_ISLANDS=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.localContactIslands","true"));
+    /**
+     * Expand confirmed deep thigh-contact islands beyond the old rigid
+     * five-panel windows while preserving an anti-umbrella ring budget.
+     * A/B: -Dbbs.editor.physics.skirt.adaptiveContactIslands=false
+     * retains the exact old two 5-panel windows (Hem Continuity stays on).
+     */
+    private static final boolean ADAPTIVE_CONTACT_ISLANDS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.adaptiveContactIslands","true"));
     /** The upper tier sits naturally alongside the upper thighs inside
      * the waist. Treating its INNER cube faces as hem contacts caused
      * 20/20-panel false alarms and repeatedly aborted all correction.
@@ -601,9 +610,9 @@ public final class SkirtVisibleThighContacts
                         Collections.<String,Float>emptyMap(),
                         candidatePanels,0,false);
             // The two legitimate thighs can each overlap 8-10 panels:
-            // together they cross the old 12/20 guard. Keep up to five
-            // adjacent REAL contact strips per thigh, instead of
-            // treating the union as one malformed 20-panel collider.
+            // together they cross the old 12/20 guard. Grow bounded
+            // angular islands ONLY through strongly confirmed contacts,
+            // never treating the union as one malformed 20-panel collider.
             String[] ids=new String[PANELS];
             float[][] roots=new float[PANELS][];
             for(int i=0;i<PANELS;i++)
@@ -613,9 +622,10 @@ public final class SkirtVisibleThighContacts
             }
             SkirtHemContactIslands.Decision islands=
                     SkirtHemContactIslands.choose(ids,roots,
-                            sideNeed,sideDepth,12);
+                            sideNeed,sideDepth,12,ADAPTIVE_CONTACT_ISLANDS);
             if(islands==null||islands.keptPanels==0 ||
-                    islands.keptPanels>12)
+                    islands.keptPanels>
+                            SkirtHemContactIslands.MAX_SELECTED_PANELS)
                 return new Result(copy,0,peak,exactSampleCount,exactHitCount,
                         Collections.<String,Float>emptyMap(),
                         candidatePanels,0,false);
@@ -660,6 +670,17 @@ public final class SkirtVisibleThighContacts
             int panel=angular.get(ringIndex).intValue();
             int prev=angular.get((ringIndex+PANELS-1)%PANELS).intValue();
             int next=angular.get((ringIndex+1)%PANELS).intValue();
+            // With adaptive overflow selection the 15-panel budget is a
+            // hard contact footprint, not just a direct-need budget.
+            // Do not quietly resurrect rejected panels via the normal
+            // neighboring response; Hem Continuity still smooths the
+            // SELECTED ring after collision.
+            if(limited && ADAPTIVE_CONTACT_ISLANDS &&
+                    directDepth[panel]<=.001F)
+            {
+                neighborhood[panel]=0F;
+                continue;
+            }
             neighborhood[panel]=Math.max(need[panel],Math.max(
                     need[prev]*NEIGHBOR_RESPONSE,
                     need[next]*NEIGHBOR_RESPONSE));
@@ -795,8 +816,13 @@ public final class SkirtVisibleThighContacts
                 int panel=angular.get(ring).intValue();
                 if(directDepth[panel]<=.001F)continue;
                 for(int step=-2;step<=2;step++)
-                    nearDirect[angular.get(
-                            (ring+PANELS+step)%PANELS).intValue()]=true;
+                {
+                    int neighbor=angular.get(
+                            (ring+PANELS+step)%PANELS).intValue();
+                    if(!limited || !ADAPTIVE_CONTACT_ISLANDS ||
+                            directDepth[neighbor]>.001F)
+                        nearDirect[neighbor]=true;
+                }
             }
             String[] ids=new String[PANELS];
             float[][] roots=new float[PANELS][];

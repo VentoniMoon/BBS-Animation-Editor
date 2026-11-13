@@ -692,6 +692,49 @@ should immediately swing outward. Compare *the exact same* five-frame
 walking step before/after with Weld ON. Only an in-game decrease in
 `hemAfterUnique` without a flared silhouette validates this path.
 
+## Adaptive contact-island selection after three-zone thigh proxies (2026-11-13)
+
+The three-zone skirt-only thigh proxy in PR #191 made the belt area less
+aggressive but the 0.85-scale in-game walking test still showed clipping.
+The following `[SkirtHemAudit]` sample found `directCandidates` frequently
+between 13 and 18, while the fixed five-panel per-thigh islands selected
+only 8–10. This is an exclusion by policy, not proof that the excluded
+rendered surfaces were collision-free.
+
+The new `SkirtHemContactIslands` variant retains unchanged behavior when
+the union has <=12 contacts. For larger unions it:
+
+* Finds the highest pressure x actual surface penetration for each named
+  thigh, ordered by the **physical angle** of its waist attachment.
+* Expands only across *adjacent* panels whose penetration AND contact
+  score remain strong relative to that thigh's measured peak. It never
+  interpolates a nonexistent collision or changes Jolt contact bodies.
+* Uses a bounded per-thigh expansion (at most nine) and global limit of
+  **15 of 20** direct contact panels. Five panels always remain unselected
+  by this special overflow response; each panel's existing angular limit
+  and silhouette envelope are untouched.
+* Rejects large expansions caused by diffuse near-uniform contact across
+  >=15 panels. Unknown-owner contacts retain their conservative two-panel
+  fallback and cannot broaden an already identified named leg.
+* Preserves Hem Continuity, Silhouette Preservation, adaptive lift, mid
+  collision, original waist pinning, the three-zone body proxies, Weld,
+  animation keys and native Jolt physics.
+
+Reversible A/B flags:
+
+* `-Dbbs.editor.physics.skirt.adaptiveContactIslands=false` retains the
+  *previous five-panel per-leg* island algorithm.
+* `-Dbbs.editor.physics.skirt.localContactIslands=false` retains the much
+  older all-or-nothing >12-panel abort. It is not the preferred comparator.
+* Keep `hemContinuity=true` for the comparison; its disable test
+  previously increased **visible** leg penetration.
+
+Use exactly the same walking frame in both runs and inspect
+`directCandidates`, `directSelected`, `hemBeforeUnique`,
+`hemAfterUnique`, and the *rendered* skirt silhouette. The point-cloud
+audit samples clean bone-transformed Chameleon cubes, not the final Weld
+mesh, so the visible result in-game remains the acceptance criterion.
+
 ## Adaptive Hem Lift – limited collision-only extra swing at the skirt corner
 
 At compact scale **0.85**, the user observes one skirt corner and two
