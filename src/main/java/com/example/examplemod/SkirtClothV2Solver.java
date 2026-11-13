@@ -244,7 +244,12 @@ public final class SkirtClothV2Solver
                 pressure=Math.max(pressure,depth(p,box,params));
             if(pressure>ENTRY_EPS)
             {
-                p.activity=1F;active++;
+                // Smooth activation as the leg approaches the permitted
+                // ingress depth. A binary 0->1 contact on one gait frame
+                // was one source of 1-2-frame section popping.
+                float t=clamp((pressure-ENTRY_EPS)/.038F,0F,1F);
+                p.activity=t*t*(3F-2F*t);
+                active++;
             }
         }
         if(active==0)
@@ -294,13 +299,16 @@ public final class SkirtClothV2Solver
                 float[] tangent=p.tangent;
                 for(Box leg:legs)
                 {
-                    pushSurface(p.mid,p.halfWidth,tangent,leg,params,.52F);
-                    pushSurface(p.hem,p.halfWidth,tangent,leg,params,.78F);
+                    pushSurface(p.mid,p.halfWidth,tangent,leg,params,
+                            .52F*p.activity);
+                    pushSurface(p.hem,p.halfWidth,tangent,leg,params,
+                            .78F*p.activity);
                     float[] halfway=lerp(p.mid,p.hem,.5F);
                     Contact midway=contact(halfway,leg,params);
                     if(midway!=null)
                     {
-                        float dx=Math.min(.026F,midway.depth)*.22F;
+                        float dx=Math.min(.026F,midway.depth)*
+                                .22F*p.activity;
                         addInPlace(p.mid,mul(midway.normal,dx));
                         addInPlace(p.hem,mul(midway.normal,dx));
                     }
