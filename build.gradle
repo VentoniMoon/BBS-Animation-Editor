@@ -55,6 +55,45 @@ minecraft {
             workingDirectory project.file(
                     project.hasProperty('stressTest') ? 'run-stress' : 'run')
 
+            // IntelliJ Gradle run configurations do not reliably pass a
+            // separately configured JAVA_TOOL_OPTIONS to the forked Minecraft
+            // JVM. Send opt-in Jolt switches to runClient itself instead.
+            //
+            // -PenableJoltExperimental already requires the Java8 JNI and
+            // hair-prototype JARs under libs/. Enabling that dependency is
+            // an explicit request to run the native preview, not merely to
+            // put the classes on Gradle's build classpath.
+            if (project.hasProperty('enableJoltExperimental')) {
+                jvmArg '-Dbbs.editor.physics.jolt.preview=true'
+            }
+
+            // Connected cloth V2 is still OFF by default. Use a separate
+            // Gradle switch so enabling native Jolt for hair/other physics
+            // does not silently opt every skirt into the experimental rig.
+            if (project.hasProperty('enableSkirtClothV2')) {
+                if (!project.hasProperty('enableJoltExperimental')) {
+                    throw new GradleException(
+                            'Skirt Cloth V2 requires -PenableJoltExperimental')
+                }
+                jvmArg '-Dbbs.editor.physics.skirt.clothV2=true'
+            }
+
+            if (project.hasProperty('enableJoltRagdoll')) {
+                if (!project.hasProperty('enableJoltExperimental')) {
+                    throw new GradleException(
+                            'Jolt Ragdoll requires -PenableJoltExperimental')
+                }
+                jvmArg '-Dbbs.editor.physics.jolt.ragdoll=true'
+            }
+
+            // A single opt-in flag for debugging both Jolt and connected
+            // skirt; no environment variables are necessary in IntelliJ.
+            if (project.hasProperty('diagnoseSkirtV2')) {
+                jvmArg '-Dbbs.editor.physics.jolt.diagnostic=true'
+                jvmArg '-Dbbs.editor.physics.skirt.contactAudit=true'
+                jvmArg '-Dbbs.editor.physics.skirt.renderVertexAudit=true'
+            }
+
             // Opt-in classloader diagnostic for old Forge/Mixin/ASM conflicts.
             // Capture the runClient console to locate the *actual* ASM JAR
             // supplying org.objectweb.asm.ClassReader (rather than guessing
