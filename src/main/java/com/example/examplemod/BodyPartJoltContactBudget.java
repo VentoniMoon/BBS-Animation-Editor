@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Locale;
 
 /**
@@ -39,7 +41,7 @@ public final class BodyPartJoltContactBudget
         public final int total,skipped;
         public final boolean leftUpperLeg,rightUpperLeg;
 
-        Selection(List<Contact> list,int total,boolean skirt)
+        Selection(List<Contact> list,int total,boolean skirt,int omitted)
         {
             boxes=new float[list.size()][];
             shapes=new float[list.size()][];
@@ -66,7 +68,7 @@ public final class BodyPartJoltContactBudget
             }
             owners=Collections.unmodifiableList(labels);
             this.total=total;
-            this.skipped=Math.max(0,total-list.size());
+            this.skipped=omitted;
             leftUpperLeg=left;rightUpperLeg=right;
         }
     }
@@ -82,9 +84,21 @@ public final class BodyPartJoltContactBudget
         candidates.add(new Contact(box,shape,owner,candidates.size()));
     }
 
+    /** Retain all historical callers' exact source OBBs. */
     public Selection select(boolean skirt)
     {
+        return select(skirt,false);
+    }
+
+    /**
+     * Experimental skirt-only tapered thigh contacts. The same selection is
+     * used by native Jolt and preview's visual-cube correction; hair and
+     * ragdoll paths never request the modified hull.
+     */
+    public Selection select(boolean skirt,boolean tapered)
+    {
         List<Contact> sorted=new ArrayList<Contact>(candidates);
+        if(skirt && tapered)sorted=taperedContacts(sorted);
         // Preserve old shape identity/order for all non-skirt models.
         // When the skirt would overflow, promote verified leg bones
         // before low-priority attached cubes / arms / head.
@@ -99,7 +113,105 @@ public final class BodyPartJoltContactBudget
             });
         if(sorted.size()>LIMIT)
             sorted=new ArrayList<Contact>(sorted.subList(0,LIMIT));
-        return new Selection(sorted,candidates.size(),skirt);
+        int omitted=Math.max(0,candidates.size()-sorted.size());
+        if(skirt && tapered)
+        {
+            Set<Integer> retainedSources=new HashSet<Integer>();
+            for(Contact c:sorted)retainedSources.add(Integer.valueOf(c.ordinal));
+            omitted=Math.max(0,candidates.size()-retainedSources.size());
+        }
+        return new Selection(sorted,candidates.size(),skirt,omitted);
+    }
+
+    private static List<Contact> taperedContacts(List<Contact> source)
+    {
+        // Co-centered fitted OBBs of one thigh are alternative envelopes,
+        // NOT three different positions along the leg. Expanding all of
+        // them would multiply overlapping contacts and exhaust 32 slots.
+        List<Contact> unique=new ArrayList<Contact>();
+        for(Contact c:source)
+        {
+            if(!SkirtLegCollisionProxy.eligible(c.owner,c.box))
+            {
+                unique.add(c);
+                continue;
+            }
+            boolean duplicate=false;
+            for(int index=0;index<unique.size();index++)
+            {
+                Contact old=unique.get(index);
+                if(!old.owner.equals(c.owner) ||
+                        !SkirtLegCollisionProxy.eligible(old.owner,old.box) ||
+                        !SkirtLegCollisionProxy.duplicate(old.box,c.box))
+                    continue;
+                if(SkirtLegCollisionProxy.volume(c.box)>
+                        SkirtLegCollisionProxy.volume(old.box))
+                    unique.set(index,c);
+                duplicate=true;
+                break;
+            }
+            if(!duplicate)unique.add(c);
+        }
+
+        List<Contact> expanded=new ArrayList<Contact>();
+        for(Contact c:unique)
+        {
+            if(!SkirtLegCollisionProxy.eligible(c.owner,c.box))
+            {
+                expanded.add(c);
+                continue;
+            }
+            float[][] zones=SkirtLegCollisionProxy.split(
+                    c.box,pelvisAnchor(source,c.box));
+            if(zones==null)
+            {
+                expanded.add(c);
+                continue;
+            }
+            String[] names={"upper","middle","lower"};
+            for(int zone=0;zone<SkirtLegCollisionProxy.ZONES;zone++)
+            {
+                float[] box=zones[zone];
+                float[] shape=new float[11];
+                System.arraycopy(box,0,shape,0,10);
+                shape[10]=JoltColliderPrimitives.BOX;
+                expanded.add(new Contact(box,shape,
+                        c.owner+"@skirt-"+names[zone],c.ordinal));
+            }
+        }
+        return expanded;
+    }
+
+    /**
+     * Use the nearest captured Emoticons pelvis/torso center to identify
+     * the proximal end of a rotated thigh. This works across horizontal
+     * leg poses, unlike sorting zones by their current world Y coordinate.
+     */
+    private static float[] pelvisAnchor(List<Contact> source,float[] thigh)
+    {
+        float closest=Float.POSITIVE_INFINITY;
+        float[] result=null;
+        for(Contact c:source)
+        {
+            String owner=normalize(c.owner);
+            if(!owner.equals("emoticons.low_body") &&
+                    !owner.equals("emoticons.body") &&
+                    !owner.equals("emoticons.pelvis") &&
+                    !owner.equals("emoticons.hip") &&
+                    !owner.equals("emoticons.hips"))continue;
+            float distance2=0F;
+            for(int i=0;i<3;i++)
+            {
+                float delta=c.box[i]-thigh[i];
+                distance2+=delta*delta;
+            }
+            if(distance2<closest)
+            {
+                closest=distance2;
+                result=new float[]{c.box[0],c.box[1],c.box[2]};
+            }
+        }
+        return result;
     }
 
     private static int priority(String owner)
@@ -123,6 +235,15 @@ public final class BodyPartJoltContactBudget
                         n.contains(side+"_thigh") || n.contains("thigh_"+side)) &&
                 !n.contains("lower") && !n.contains("knee") &&
                 !n.contains("foot") && !n.contains("ankle"));
+    }
+
+    /** The lower leg aliases also contain "leg": never taper the shin. */
+    public static boolean isUpperThigh(String owner)
+    {
+        String n=normalize(owner);
+        return !n.startsWith("emoticons.low_") &&
+                !n.contains("lower") && !n.contains("low_leg") &&
+                (upperLeg(n,true)||upperLeg(n,false));
     }
 
     public static boolean isLeg(String owner)

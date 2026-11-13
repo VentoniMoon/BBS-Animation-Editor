@@ -236,6 +236,14 @@ public class BodyPartsPreviewRenderer
     private static final boolean FULL_PARENT_COLLIDERS=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.jolt.fullParentColliders","true"));
+    /**
+     * Three-zone, bone-aligned upper-thigh hull used ONLY by skirt chains.
+     * Its source OBB remains intact for every other physics consumer.
+     * A/B: -Dbbs.editor.physics.skirt.taperedLegProxy=false
+     */
+    private static final boolean SKIRT_TAPERED_LEG_PROXY=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.taperedLegProxy","true"));
     private int parentEmoticonsColliderFrame=-1;
     private String reportedParentColliderState="";
 
@@ -651,7 +659,8 @@ public class BodyPartsPreviewRenderer
         }
         boolean skirt=owner!=null &&
                 isSkirtAttachment(owner,getPreviewPhysicsChains(owner));
-        BodyPartJoltContactBudget.Selection selected=budget.select(skirt);
+        BodyPartJoltContactBudget.Selection selected=
+                budget.select(skirt,skirt && SKIRT_TAPERED_LEG_PROXY);
         if(skirt && frame%20==0 && owner!=null)
         {
             String id=owner.getTimelineId();
@@ -665,7 +674,9 @@ public class BodyPartsPreviewRenderer
                         " rightThigh="+selected.rightUpperLeg+
                         " installed="+selected.boxes.length+
                         " candidates="+selected.total+
-                        " omitted="+selected.skipped;
+                        " omitted="+selected.skipped+
+                        " taperedLegProxy="+SKIRT_TAPERED_LEG_PROXY+
+                        " skirtZones="+countSkirtZones(selected.owners);
                 if(!selected.leftUpperLeg||!selected.rightUpperLeg)
                     System.err.println(report+" (missing thigh collider; "+
                             "check parent skin fit / Jolt availability)");
@@ -678,6 +689,14 @@ public class BodyPartsPreviewRenderer
 
     private final Map<String,Integer> skirtColliderReports=
             new java.util.HashMap<String,Integer>();
+
+    private static int countSkirtZones(java.util.List<String> names)
+    {
+        int count=0;
+        if(names!=null)for(String name:names)
+            if(name!=null&&name.contains("@skirt-"))count++;
+        return count;
+    }
 
     private float[][] passiveCollisionBoxes(BodyPartModelData owner,int frame)
     {
@@ -2260,6 +2279,8 @@ public class BodyPartsPreviewRenderer
                             System.out.println(
                                     "[BBS Animation Editor][Jolt][SkirtHemAudit] "+
                                     "frame="+frame+
+                                    " taperedLegProxy="+SKIRT_TAPERED_LEG_PROXY+
+                                    " skirtZones="+countSkirtZones(contacts.owners)+
                                     " hemSources="+hemBefore.sourcePoints+
                                     " hemBeforeUnique="+hemBefore.uniqueHits+
                                     " hemAfterUnique="+hemAfter.uniqueHits+

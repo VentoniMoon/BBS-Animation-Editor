@@ -16,6 +16,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtSilhouettePreservation.java'
       - 'src/main/java/com/example/examplemod/SkirtHemContinuity.java'
       - 'src/main/java/com/example/examplemod/SkirtVisibleThighContacts.java'
+      - 'src/main/java/com/example/examplemod/SkirtLegCollisionProxy.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java'
       - 'src/main/java/com/example/examplemod/BodyPartChameleonRenderedCubeProbe.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltContactBudget.java'
@@ -39,6 +40,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtSilhouettePreservationSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtHemContinuitySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtLegCollisionProxySmokeTest.java'
       - 'src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java'
       - '.github/workflows/skirt-chain-java8.yml'
   push:
@@ -57,6 +59,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtSilhouettePreservation.java'
       - 'src/main/java/com/example/examplemod/SkirtHemContinuity.java'
       - 'src/main/java/com/example/examplemod/SkirtVisibleThighContacts.java'
+      - 'src/main/java/com/example/examplemod/SkirtLegCollisionProxy.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java'
       - 'src/main/java/com/example/examplemod/BodyPartChameleonRenderedCubeProbe.java'
       - 'src/main/java/com/example/examplemod/BodyPartJoltContactBudget.java'
@@ -77,6 +80,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtSilhouettePreservationSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtHemContinuitySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtLegCollisionProxySmokeTest.java'
       - 'src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java'
   workflow_dispatch:
 
@@ -109,6 +113,7 @@ jobs:
             src/main/java/com/example/examplemod/SkirtSilhouettePreservation.java \
             src/main/java/com/example/examplemod/SkirtHemContinuity.java \
             src/main/java/com/example/examplemod/SkirtVisibleThighContacts.java \
+            src/main/java/com/example/examplemod/SkirtLegCollisionProxy.java \
             src/main/java/com/example/examplemod/BodyPartJoltCubeGeometry.java \
             src/main/java/com/example/examplemod/JoltColliderPrimitives.java \
             src/main/java/com/example/examplemod/BodyPartJoltContactBudget.java \
@@ -127,6 +132,7 @@ jobs:
             src/test/java/com/example/examplemod/SkirtSilhouettePreservationSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtHemContinuitySmokeTest.java \
             src/test/java/com/example/examplemod/SkirtVisibleThighContactsSmokeTest.java \
+            src/test/java/com/example/examplemod/SkirtLegCollisionProxySmokeTest.java \
             src/test/java/com/example/examplemod/BodyPartJoltContactBudgetSmokeTest.java
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtChainTopologySmokeTest
@@ -152,5 +158,7 @@ jobs:
             com.example.examplemod.SkirtHemContinuitySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtVisibleThighContactsSmokeTest
+          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtLegCollisionProxySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.BodyPartJoltContactBudgetSmokeTest
