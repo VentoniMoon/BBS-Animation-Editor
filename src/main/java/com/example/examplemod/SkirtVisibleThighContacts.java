@@ -1004,6 +1004,99 @@ public final class SkirtVisibleThighContacts
                 }
             }
         }
+        int lateralPanels=0;
+        float lateralGain=0F;
+        if(lateralEscape && visualScale<.995F && !directContacts.isEmpty())
+        {
+            // Move the hanging links SIDEWAYS about the horizontal radial
+            // axis. Yaw around Y changes plate orientation but would leave
+            // a vertical hem's center almost in place. Only the existing
+            // contact-island-selected bones can participate.
+            //
+            // No temporal cache: same pose/leg geometry => same direction.
+            // Ambiguous near-center evidence uses a deadband instead of
+            // flipping the signed roll across consecutive gait frames.
+            for(int i=0;i<PANELS;i++)
+            {
+                if(directDepth[i]<.025F)continue;
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                float[] root=origin(strip.upperWorld);
+                float rx=root[0]-cx,rz=root[2]-cz;
+                float radius=(float)Math.sqrt(rx*rx+rz*rz);
+                if(radius<.02F)continue;
+                float[] outward={rx/radius,0F,rz/radius};
+                float[] tangent={-outward[2],0F,outward[0]};
+                LateralScore baseline=lateralScore(
+                        strip,copy,active,outward,tangent,surfaceMargin);
+                if(baseline.hits<2)continue;
+                float bias=baseline.gapPlus-baseline.gapMinus;
+                float deadband=.015F*baseline.hits;
+                if(Math.abs(bias)<=deadband)continue;
+                // The smaller exit distance tells us which side of the
+                // moving leg the visible fabric is already closest to.
+                int chosenDirection=bias<0F?1:-1;
+                float[] axis=mul(outward,-chosenDirection);
+                float beforeGap=baseline.exitGap(chosenDirection);
+                float bestMerit=0F;
+                float bestGain=0F;
+                float[] bestUpper=null,bestLower=null;
+                float[] currentTip=transformedSkirtTip(strip,copy);
+                float[] first=copy.get(strip.upper);
+                float[] second=copy.get(strip.lower);
+                for(int up=0;up<=4;up++)
+                {
+                    float rootStep=LATERAL_MAX_ROOT_STEP*up/4F;
+                    for(int down=0;down<=4;down++)
+                    {
+                        if(up==0&&down==0)continue;
+                        float lowerStep=LATERAL_MAX_LOWER_STEP*down/4F;
+                        Map<String,float[]> trial=
+                                new LinkedHashMap<String,float[]>();
+                        trial.put(strip.upper,first.clone());
+                        trial.put(strip.lower,second.clone());
+                        if(up>0&&!bend(trial,strip.upper,
+                                strip.upperWorld,axis,rootStep,
+                                LATERAL_ROOT_CAP))continue;
+                        if(down>0&&!bend(trial,strip.lower,
+                                strip.lowerWorld,axis,lowerStep,
+                                LATERAL_LOWER_CAP))continue;
+                        float tipMovement=length(sub(
+                                transformedSkirtTip(strip,trial),
+                                currentTip));
+                        if(tipMovement>LATERAL_MAX_TIP_SHIFT)continue;
+                        LateralScore candidate=lateralScore(
+                                strip,trial,active,outward,tangent,
+                                surfaceMargin);
+                        // A cheaper side-exit path must not be bought
+                        // with more leg penetration somewhere else.
+                        if(candidate.hits>baseline.hits+1 ||
+                                candidate.radial>baseline.radial+.004F)
+                            continue;
+                        float gain=beforeGap-
+                                candidate.exitGap(chosenDirection);
+                        if(gain<Math.max(.012F,.008F*baseline.hits))
+                            continue;
+                        float merit=gain-
+                                .025F*(rootStep+lowerStep);
+                        if(merit>bestMerit+.001F)
+                        {
+                            bestMerit=merit;
+                            bestGain=gain;
+                            bestUpper=trial.get(strip.upper);
+                            bestLower=trial.get(strip.lower);
+                        }
+                    }
+                }
+                if(bestUpper!=null)
+                {
+                    copy.put(strip.upper,bestUpper);
+                    copy.put(strip.lower,bestLower);
+                    touched[i]=true;
+                    lateralPanels++;
+                    lateralGain+=bestGain;
+                }
+            }
+        }
         int silhouetteLimited=0,silhouetteBlocked=0;
         float silhouetteRemoved=0F;
         if(silhouette && !clearanceFirst && visualScale<.995F &&
@@ -1203,7 +1296,8 @@ public final class SkirtVisibleThighContacts
                 rescuedLegBoxes,rejectedLegBoxes,
                 silhouetteLimited,silhouetteBlocked,silhouetteRemoved,
                 continuityLimited,continuityBlocked,
-                roughnessBefore,roughnessAfter);
+                roughnessBefore,roughnessAfter,
+                lateralPanels,lateralGain);
     }
 
     /**
