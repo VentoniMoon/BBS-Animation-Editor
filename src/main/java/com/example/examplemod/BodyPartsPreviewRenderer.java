@@ -1727,6 +1727,17 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_CONNECTED_CLOTH =
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.connectedCloth","false"));
+    /**
+     * New connected garment pipeline. Disabled by default until verified
+     * against in-game skirt geometry; opt in with
+     * -Dbbs.editor.physics.skirt.clothV2=true.
+     * This branch REPLACES the old coupler + radial contact + silhouette
+     * + adaptive post-width stages, never running them together.
+     */
+    private static final boolean SKIRT_CLOTH_V2=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.clothV2","false"));
+
     /** Jolt sample is computed AFTER the Emoticons actor draw. This bounded
      * skirt-only pose prediction reduces the 1-tick actor/cloth mismatch. */
     private static final boolean SKIRT_VISUAL_PHASE_LEAD =
@@ -2118,7 +2129,7 @@ public class BodyPartsPreviewRenderer
                                         // and angled skirt panels have rotated
                                         // geometry, not a common thin axis.
                                         BodyPartChameleonRenderedCubeProbe.Result upperCube=
-                                                SKIRT_VISIBLE_THIGH_CONTACTS ?
+                                                (SKIRT_VISIBLE_THIGH_CONTACTS || SKIRT_CLOTH_V2) ?
                                                 BodyPartChameleonRenderedCubeProbe.inspect(
                                                         part.morph.get(),names[0],
                                                         nativeWorld[0]) : null;
@@ -2166,9 +2177,42 @@ public class BodyPartsPreviewRenderer
                     skirtVisualScale=1F;
                 Map<String,Float> thighContactDepths=
                         java.util.Collections.<String,Float>emptyMap();
-                Map<String,float[]> stitched=
+                Map<String,float[]> stitched=SKIRT_CLOTH_V2?
+                        new java.util.LinkedHashMap<String,float[]>(skirtRaw):
                         SkirtClothPoseCoupler.couple(skirtStrips,skirtRaw);
-                if(SKIRT_CONNECTED_CLOTH)
+                Map<String,SkirtAdaptiveWidth.Width> v2Widths=
+                        java.util.Collections.emptyMap();
+                if(SKIRT_CLOTH_V2)
+                {
+                    boolean collision=
+                            BodyPartJoltPreviewAdapter.torsoContactsRequested() &&
+                            chains.get(0).settings.hasBodyCollisions();
+                    BodyPartJoltContactBudget.Selection bodies=collision?
+                            passiveCollisionSelection(data,frame):null;
+                    SkirtClothV2Solver.Result cloth=
+                            SkirtClothV2Solver.solve(skirtStrips,skirtRaw,bodies,
+                                    SkirtClothV2Solver.Parameters.defaults());
+                    stitched=cloth.swings;
+                    v2Widths=cloth.widths;
+                    if(SKIRT_CONTACT_AUDIT||frame%20==0)
+                        System.out.println(
+                                "[BBS Animation Editor][Jolt][SkirtClothV2] "+
+                                "frame="+frame+
+                                " model="+data.getTimelineId()+
+                                " active="+cloth.activePanels+
+                                " moved="+cloth.movedPanels+
+                                " boxes="+cloth.validLegBoxes+
+                                " ignoredBoxes="+cloth.ignoredLegBoxes+
+                                " penetrationRatio="+cloth.allowedPenetration+
+                                " depthBefore="+cloth.maxPenetrationBefore+
+                                " depthAfter="+cloth.maxPenetrationAfter+
+                                " seamBefore="+cloth.seamErrorBefore+
+                                " seamAfter="+cloth.seamErrorAfter+
+                                " outwardExtra="+cloth.peakExtraOutward+
+                                " accepted="+cloth.accepted+
+                                " weld="+data.isWeldEnabled());
+                }
+                else if(SKIRT_CONNECTED_CLOTH)
                 {
                     boolean collision=BodyPartJoltPreviewAdapter.torsoContactsRequested() &&
                             chains.get(0).settings.hasBodyCollisions();
@@ -2348,8 +2392,9 @@ public class BodyPartsPreviewRenderer
                                 " thighRight="+contacts.rightUpperLeg);
                 }
                 Map<String,SkirtAdaptiveWidth.Width> skirtWidths=
-                        java.util.Collections.emptyMap();
-                if(SKIRT_ADAPTIVE_WIDTH)
+                        SKIRT_CLOTH_V2?v2Widths:
+                        java.util.Collections.<String,SkirtAdaptiveWidth.Width>emptyMap();
+                if(SKIRT_ADAPTIVE_WIDTH && !SKIRT_CLOTH_V2)
                 {
                     skirtWidths=SkirtAdaptiveWidth.measure(
                             skirtStrips,stitched);
@@ -2359,7 +2404,7 @@ public class BodyPartsPreviewRenderer
                                 skirtStrips,skirtWidths,thighContactDepths,
                                 skirtVisualScale);
                 }
-                if(SKIRT_POST_WIDTH_SURFACE &&
+                if(!SKIRT_CLOTH_V2 && SKIRT_POST_WIDTH_SURFACE &&
                         SKIRT_ADAPTIVE_WIDTH &&
                         SKIRT_VISIBLE_THIGH_CONTACTS &&
                         !thighContactDepths.isEmpty() &&

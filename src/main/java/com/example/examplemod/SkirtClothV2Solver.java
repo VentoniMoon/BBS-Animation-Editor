@@ -109,6 +109,7 @@ public final class SkirtClothV2Solver
         float[] mid,hem,baseMid,baseHem;
         float[] initialUpper,initialLower;
         float halfWidth;
+        float[] outward,tangent;
         double angle;
         float activity;
     }
@@ -186,7 +187,11 @@ public final class SkirtClothV2Solver
         cx/=N;cz/=N;
         final float x=cx,z=cz;
         for(Panel p:ring)
+        {
             p.angle=Math.atan2(p.root[2]-z,p.root[0]-x);
+            p.outward=radial(p.root,x,z);
+            p.tangent=new float[]{-p.outward[2],0F,p.outward[0]};
+        }
         Collections.sort(ring,new Comparator<Panel>()
         {
             @Override public int compare(Panel a,Panel b)
@@ -274,9 +279,9 @@ public final class SkirtClothV2Solver
                 toward(p.hem,p.baseHem,pull*w);
                 // Replace hard anti-flare silhouette truncation with a
                 // gradually increasing elastic REST SHAPE energy.
-                softenOutward(p.mid,p.baseMid,radial(p.root,x,z),
+                softenOutward(p.mid,p.baseMid,p.outward,
                         SOFT_FLARE_DISTANCE,pull*.65F*w);
-                softenOutward(p.hem,p.baseHem,radial(p.root,x,z),
+                softenOutward(p.hem,p.baseHem,p.outward,
                         SOFT_FLARE_DISTANCE,pull*.45F*w);
             }
             // Contact and adjacent seam/length constraints operate in
@@ -286,8 +291,7 @@ public final class SkirtClothV2Solver
             {
                 Panel p=ring.get(i);
                 if(p.activity<=0F)continue;
-                float[] outward=radial(p.root,x,z);
-                float[] tangent={-outward[2],0F,outward[0]};
+                float[] tangent=p.tangent;
                 for(Box leg:legs)
                 {
                     pushSurface(p.mid,p.halfWidth,tangent,leg,params,.52F);
@@ -387,10 +391,9 @@ public final class SkirtClothV2Solver
             {
                 float[] mid=poseMid(p,mapped);
                 float[] hem=poseHem(p,mapped);
-                float[] radial=radial(p.root,x,z);
                 extraOut=Math.max(extraOut,Math.max(
-                        dot(sub(mid,p.baseMid),radial),
-                        dot(sub(hem,p.baseHem),radial)));
+                        dot(sub(mid,p.baseMid),p.outward),
+                        dot(sub(hem,p.baseHem),p.outward)));
             }
         return new Result(mapped,widths,active,moved,legs.size(),ignored,
                 before,after,seamBefore,seamAfter,extraOut,
@@ -440,7 +443,6 @@ public final class SkirtClothV2Solver
     private static float measureHalfWidth(SkirtClothPoseCoupler.Strip s,
             Panel p)
     {
-        float[] t=radial(p.root,0F,0F);
         // The decoded vertices can be rotated or mirrored in the
         // authored model; an isotropic estimate is safer than a wrong
         // hardcoded global X/Z width axis.
@@ -471,8 +473,7 @@ public final class SkirtClothV2Solver
 
     private static float depth(Panel p,Box leg,Parameters params)
     {
-        float[] t=radial(p.root,0F,0F);
-        t=new float[]{-t[2],0F,t[0]};
+        float[] t=p.tangent;
         float maximum=0F;
         for(float[] node:new float[][]{p.baseMid,p.baseHem,
                 lerp(p.baseMid,p.baseHem,.5F)})
@@ -511,20 +512,19 @@ public final class SkirtClothV2Solver
             if(horizontal<.17F)continue;
             float face=(box.p[7+k]+BODY_MARGIN-Math.abs(local[k]))/
                     horizontal;
-            float ingress=face-tolerance;
-            if(ingress<=ENTRY_EPS)continue;
-            float sign=local[k]>=0F?1F:-1F;
-            float[] normal={axis[0]*sign/horizontal,0F,
-                    axis[2]*sign/horizontal};
-            // Near-equal solutions use a deterministic axis tie-break
-            // instead of toggling independently between +/- flaps.
-            float cost=ingress;
-            if(cost<best-.0001F)
+            if(face<best-.0001F)
             {
-                best=cost;bestNormal=normal;
+                best=face;
+                float sign=local[k]>=0F?1F:-1F;
+                bestNormal=new float[]{axis[0]*sign/horizontal,0F,
+                        axis[2]*sign/horizontal};
             }
         }
-        return bestNormal==null?null:new Contact(bestNormal,best);
+        // The closest side is already within the permitted ingress.
+        // Never project away from a more distant side instead.
+        float excess=best-tolerance;
+        return bestNormal==null||excess<=ENTRY_EPS?
+                null:new Contact(bestNormal,excess);
     }
 
     private static float worst(List<Panel> ring,List<Box> legs,Parameters c)
@@ -542,8 +542,7 @@ public final class SkirtClothV2Solver
         for(Panel p:ring)
         {
             float[] mid=poseMid(p,pose),hem=poseHem(p,pose);
-            float[] tangent=radial(p.root,0F,0F);
-            tangent=new float[]{-tangent[2],0F,tangent[0]};
+            float[] tangent=p.tangent;
             for(Box box:legs)
                 for(float[] node:new float[][]{mid,hem,
                         lerp(mid,hem,.5F)})
