@@ -1201,3 +1201,56 @@ cloth mesh: Weld is a visual seam operator after bone mapping, and
 fine-scale contact against *final Weld vertices* still requires a
 renderer-aware mesh collision pass. The new solver reduces contradictory
 subsystems, but this limitation remains explicit.
+
+## Skirt V2 freeze / partial native Jolt publication (2026-11-14)
+
+The first 0.85-scale Minecraft test of Connected Skirt V2 appeared
+completely motionless. The user's `skirt-v2-freeze.txt` log contained
+only repeated `Skirt Jolt incomplete: waiting for all 20 strips;
+partial pose not applied` lines. The failure happened **before**
+`SkirtClothV2Solver.solve`: `BodyPartsPreviewRenderer` required
+`skirtStrips.size()==20 && skirtRaw.size()==40` and, when even one
+native sample was missing, deliberately published **no** skirt physics
+at all. The repeated line was also printed across many render passes.
+
+The new `SkirtV2JoltFrameGate` checks the expected **two-bone pairs**
+against the Jolt samples actually captured for that frame.
+
+* With all 20 complete pairs, the connected cloth V2 is still invoked
+  normally. No solver thresholds, penetration ratio or physics springs
+  are changed by this fix.
+* With a partial ring, **do not run** a connected solver over broken
+  topology. Instead, publish only pairs for which **both** Jolt angles
+  are valid; a bad/missing second link cannot drive half a chain.
+  Missing bones are NOT invented, extrapolated, or copied from another
+  frame. This is a temporary, explicit degraded Jolt preview, so some
+  panel seams may still be incomplete until the native sampling issue
+  is resolved.
+* A single `[SkirtV2Incomplete]` event per timeline frame reports
+  `expectedPairs`, `capturedStrips`, `sampledPairs`,
+  `sampledBones`, `recoveredBones`, `missing` and
+  `fallback`. This replaces the previous repeatedly alternating
+  generic probe message for V2.
+* Old physics, ragdoll and hair, and the legacy skirt mode when
+  `clothV2=false`, retain their original behavior.
+
+For the next in-game test, retain:
+`-Dbbs.editor.physics.skirt.clothV2=true` and
+`-Dbbs.editor.physics.skirt.contactAudit=true`.
+
+PowerShell (from the repository root):
+
+```powershell
+Select-String -Path '.\\run\\logs\\latest.log' \`
+  -SimpleMatch '[SkirtV2Incomplete]', '[SkirtClothV2]', \`
+               'No valid Chameleon rendered-cube tip', \`
+               'Jolt sample unavailable', '[Jolt][Recreate]' |
+  Select-Object -Last 100 | ForEach-Object { $_.Line }
+```
+
+A stream of `[SkirtV2Incomplete]` means the connected solver has
+**not** been exercised, even if one or more independent panels are
+moving again. The exact `missing` pair list and other log context
+are needed to repair the underlying Chameleon/Jolt chain capture.
+Do not interpret restored partial motion as proof that connected cloth
+collision or final Weld seam geometry is fixed.
