@@ -1014,3 +1014,44 @@ cyclic local seam metrics, A/B two-leg OBB collision reduction,
 deterministic timeline seeking, full scale 1 and absent-leg invariance.
 The final judgement still requires the user's identical in-game
 animation, including front/side camera angles and Weld Geometry ON.
+
+## Post-width decoded-surface clearance (2026-11-13)
+
+A remaining failure in the 0.85-scale walking scene occurs even after
+three-zone thigh proxies and adaptive contact islands. The existing
+`SkirtHemAudit` measures clean Chameleon cube surfaces transformed only by
+the chosen bone swings. The actual preview **then** changes the lower bone's
+scaleX/scaleZ through `SkirtAdaptiveWidth` and optional
+`SkirtScaleContactResponse`. Finally, the Chameleon render hook Welds
+quad vertices before drawing and restores the shared model afterward.
+
+The additional `SkirtPostWidthAudit` samples the **decoded quad surface
+including the proposed final width multipliers** in world coordinates, before
+Weld or phase-lead extrapolation. It measures penetration against captured
+actual leg OBBs using the same animated body frame. When a direct contact
+has already been accepted by the regular solver, a small lower-link rotation
+(up to 0.14 rad) and/or up to 0.05 added lower width is tested. Only a trial
+with a genuine reduction in measured overlap, no increased worst-case depth,
+and a <=0.052-block incremental silhouette excursion is committed. It never
+moves the belt/upper link, adds contacts around the whole ring, changes Jolt
+physics, or edits animation keys. Unselected panels cannot be adjusted.
+
+* `-Dbbs.editor.physics.skirt.postWidthSurface=false` restores the previous
+  Jolt → contact → width behavior for a direct A/B comparison.
+* `-Dbbs.editor.physics.skirt.contactAudit=true` adds
+  `[SkirtPostWidthAudit]` fields: `sampledVertices`, `beforeHits`,
+  `afterHits`, `overlapBefore`, `overlapAfter`, `contactPanels`,
+  `improvedPanels`, `widenedPanels` and `shapeLimitedTrials`.
+* `-Dbbs.editor.physics.skirt.renderVertexAudit=true` separately reports
+  **actual ModelVertex edits in the native render hook after Weld** as
+  `[SkirtRenderVertexAudit]`: `weldRingSeams`,
+  `changedQuadVertices`, `maxModelDelta` and `totalModelDelta`. These are
+  model-space seam displacement readings (not world-space leg intersections).
+
+**Limit:** This still is not a complete triangle-level cloth simulation.
+The post-width world measurement does not include later Weld deformations,
+animated one-frame visual lead, or rasterized triangles. In-game front and
+side views remain essential, and direct pre/post-Weld surface collision
+measurements would need a verified native model-to-world transform at the
+Chameleon hook. The separate Weld diagnostic makes this limitation visible
+rather than mislabeling a bone audit as final rendered geometry.
