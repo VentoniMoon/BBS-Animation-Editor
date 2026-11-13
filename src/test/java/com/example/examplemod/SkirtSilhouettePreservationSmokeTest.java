@@ -9,6 +9,7 @@ public final class SkirtSilhouettePreservationSmokeTest
     {
         silhouetteBudgetIsContactWeighted();
         collisionBenefitIsNeverDiscarded();
+        strictModeDoesNotGiveAwayClearance();
         invalidValuesFailClosed();
         System.out.println("SkirtSilhouettePreservationSmokeTest OK");
     }
@@ -41,6 +42,20 @@ public final class SkirtSilhouettePreservationSmokeTest
                 "an idle skirt is always safe");
         require(!SkirtSilhouettePreservation.keepsClearance(0F,0F,1F),
                 "no collision before correction means no new collision");
+    }
+
+    private static void strictModeDoesNotGiveAwayClearance()
+    {
+        require(SkirtSilhouettePreservation.keepsClearanceStrict(2F,2F),
+                "unchanged clearance should be accepted");
+        require(SkirtSilhouettePreservation.keepsClearanceStrict(2F,1.9F),
+                "improving the leg clearance is always acceptable");
+        require(!SkirtSilhouettePreservation.keepsClearanceStrict(2F,2.01F),
+                "strict mode must reject the old 32% clearance loss");
+        require(!SkirtSilhouettePreservation.keepsClearanceStrict(0F,.01F),
+                "idle cloth cannot invent penetration");
+        require(!SkirtSilhouettePreservation.keepsClearanceStrict(Float.NaN,0F),
+                "NaN score must fail closed");
     }
 
     private static void invalidValuesFailClosed()

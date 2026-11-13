@@ -1701,7 +1701,7 @@ public class BodyPartsPreviewRenderer
      * A/B: -Dbbs.editor.physics.skirt.postWidthSurface=false */
     private static final boolean SKIRT_POST_WIDTH_SURFACE=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.postWidthSurface","true"));
+                    "bbs.editor.physics.skirt.postWidthSurface","false"));
     private final Map<BodyPartModelData,Integer> lastSkirtPostWidthAudit=
             new IdentityHashMap<BodyPartModelData,Integer>();
     /** Compact (0.85) visual skirt, unchanged body size: compensate ONLY
@@ -2338,6 +2338,11 @@ public class BodyPartsPreviewRenderer
                                 " contactCandidates="+clearance.candidatePanels+
                                 " contactSelected="+clearance.selectedPanels+
                                 " islandsLimited="+clearance.locallyLimited+
+                                " clearanceFirst="+
+                                Boolean.parseBoolean(System.getProperty(
+                                        "bbs.editor.physics.skirt.clearanceFirst",
+                                        "true"))+
+                                " postWidthSurface="+SKIRT_POST_WIDTH_SURFACE+
                                 " weld="+data.isWeldEnabled()+
                                 " thighLeft="+contacts.leftUpperLeg+
                                 " thighRight="+contacts.rightUpperLeg);

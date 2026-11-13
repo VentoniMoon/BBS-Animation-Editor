@@ -57,6 +57,18 @@ public final class SkirtSilhouettePreservation
                 MAX_CLEARANCE_LOSS*gain+tolerance;
     }
 
+    /**
+     * Collision-first mode: smoothing may not give away already achieved
+     * overlap reduction. Tiny score noise is accepted, but not the old
+     * gain-relative 32% loss. No temporal state or hidden per-frame cache.
+     */
+    public static boolean keepsClearanceStrict(float before,float trial)
+    {
+        return Float.isFinite(before)&&Float.isFinite(trial) &&
+                before>=0F&&trial>=0F &&
+                trial<=before+.0005F;
+    }
+
     /** Used for stable 20-panel diagnostics, not a runtime cache. */
     public static boolean outsideEnvelope(float outwardDistance,float weight)
     {

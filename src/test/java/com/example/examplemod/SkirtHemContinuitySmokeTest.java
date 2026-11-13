@@ -10,6 +10,7 @@ public final class SkirtHemContinuitySmokeTest
         strongContactKeepsLocalRise();
         neighborsTaperIntoRest();
         noInventedOutwardMovement();
+        clearanceFirstHasNoIndependentEnvelope();
         seamWrapAndQualityCheck();
         invalidValuesFailClosed();
         System.out.println("SkirtHemContinuitySmokeTest OK");
@@ -43,6 +44,25 @@ public final class SkirtHemContinuitySmokeTest
                 "contact smoothing must never create new movement");
         require(SkirtHemContinuity.target(.02F,.3F,.3F,1F)<=.02F,
                 "small panel must not be pulled outward");
+    }
+
+    private static void clearanceFirstHasNoIndependentEnvelope()
+    {
+        float old=SkirtHemContinuity.target(.20F,.12F,.12F,1F);
+        float safe=SkirtHemContinuity.targetClearanceFirst(
+                .20F,.12F,.12F,1F);
+        require(safe>old+.03F,
+                "new mode must not force a leg contact under the old cap");
+        require(safe<=.20F,
+                "seam target may not expand the natural outline");
+        near(SkirtHemContinuity.targetClearanceFirst(
+                .05F,.30F,.30F,1F),.05F,
+                "a low panel must never be pushed outward");
+        require(SkirtHemContinuity.targetClearanceFirst(
+                Float.NaN,.03F,.03F,1F)!=
+                SkirtHemContinuity.targetClearanceFirst(
+                Float.NaN,.03F,.03F,1F),
+                "invalid inputs must stay invalid");
     }
 
     private static void seamWrapAndQualityCheck()
