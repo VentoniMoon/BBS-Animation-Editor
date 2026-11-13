@@ -215,6 +215,9 @@ public final class SkirtClothV2Solver
                         box[8]>MAX_BOX_VERTICAL||box[9]>MAX_BOX_HALF||
                         norm(new float[]{box[3],box[4],box[5],box[6]})<.5F)
                 {
+                    if(Boolean.getBoolean("bbs.editor.physics.skirt.v2.debug"))
+                        System.out.println("[SkirtV2 Debug] invalid box="+
+                                java.util.Arrays.toString(box));
                     ignored++;
                     continue;
                 }
@@ -225,7 +228,14 @@ public final class SkirtClothV2Solver
                         touching++;
                 // A collider intersecting nearly ALL strips is not a
                 // local thigh. Reject the shape, not every other valid leg.
-                if(touching>=16){ignored++;continue;}
+                if(touching>=16)
+                {
+                    if(Boolean.getBoolean("bbs.editor.physics.skirt.v2.debug"))
+                        System.out.println("[SkirtV2 Debug] broad box="+
+                                java.util.Arrays.toString(box)+
+                                " touchCount="+touching);
+                    ignored++;continue;
+                }
                 legs.add(candidate);
             }
 

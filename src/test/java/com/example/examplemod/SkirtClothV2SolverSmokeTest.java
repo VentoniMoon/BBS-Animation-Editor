@@ -24,6 +24,7 @@ public final class SkirtClothV2SolverSmokeTest
 
     public static void main(String[] args)
     {
+        System.setProperty("bbs.editor.physics.skirt.v2.debug","true");
         noColliderPreservesSoftJoltMotionExactly();
         thighClearancePreservesSeamsAndBelt();
         adjustablePenetrationActuallyChangesCollisionThreshold();
