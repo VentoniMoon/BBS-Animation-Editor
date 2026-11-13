@@ -24,7 +24,6 @@ public final class SkirtClothV2SolverSmokeTest
 
     public static void main(String[] args)
     {
-        System.setProperty("bbs.editor.physics.skirt.v2.debug","true");
         noColliderPreservesSoftJoltMotionExactly();
         thighClearancePreservesSeamsAndBelt();
         adjustablePenetrationActuallyChangesCollisionThreshold();
@@ -53,19 +52,15 @@ public final class SkirtClothV2SolverSmokeTest
         Fixture f=new Fixture(false);
         BodyPartJoltContactBudget b=budget(.50F,-.30F,0F,.13F,.16F,.13F);
         SkirtClothV2Solver.Result result=run(f,b,.10F);
-        System.out.println("V2 thigh fixture boxes="+result.validLegBoxes+
-                " ignored="+result.ignoredLegBoxes+
-                " active="+result.activePanels+
-                " before="+result.maxPenetrationBefore+
-                " after="+result.maxPenetrationAfter+
-                " moved="+result.movedPanels);
         check(result.validLegBoxes==1 && result.activePanels>0,
                 "real upper thigh contact not recognized");
         check(result.maxPenetrationBefore>.003F,
                 "test must create leg collision");
+        check(result.accepted&&result.movedPanels>0,
+                "confirmed thigh must actually move the connected cloth");
         check(result.maxPenetrationAfter<=
-                        result.maxPenetrationBefore+.0021F,
-                "leg penetration must never increase");
+                        result.maxPenetrationBefore-.001F,
+                "actual mapped bone pose must reduce remaining penetration");
         check(result.seamErrorAfter<=
                         Math.max(result.seamErrorBefore+.0751F,.1201F),
                 "neighbor seams must be bounded before mapping");
