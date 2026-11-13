@@ -52,6 +52,12 @@ public final class SkirtClothV2SolverSmokeTest
         Fixture f=new Fixture(false);
         BodyPartJoltContactBudget b=budget(.50F,-.30F,0F,.13F,.16F,.13F);
         SkirtClothV2Solver.Result result=run(f,b,.10F);
+        System.out.println("V2 thigh fixture boxes="+result.validLegBoxes+
+                " ignored="+result.ignoredLegBoxes+
+                " active="+result.activePanels+
+                " before="+result.maxPenetrationBefore+
+                " after="+result.maxPenetrationAfter+
+                " moved="+result.movedPanels);
         check(result.validLegBoxes==1 && result.activePanels>0,
                 "real upper thigh contact not recognized");
         check(result.maxPenetrationBefore>.003F,
