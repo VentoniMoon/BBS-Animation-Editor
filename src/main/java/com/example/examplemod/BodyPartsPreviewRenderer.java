@@ -3044,7 +3044,7 @@ public class BodyPartsPreviewRenderer
              * Reverse the test swing only on the left root, pending a full
              * handedness/basis correction across all chains.
              */
-            boolean phaseLead=SKIRT_VISUAL_PHASE_LEAD &&
+            boolean phaseLead=SKIRT_VISUAL_PHASE_LEAD && !SKIRT_CLOTH_V2 &&
                     !bakeController.isRecording() &&
                     BodyPartJoltPreviewAdapter.isRequested() &&
                     BlockbusterPreviewAnimationState.isPlaying() &&
@@ -3076,7 +3076,8 @@ public class BodyPartsPreviewRenderer
                                     net.minecraft.client.Minecraft.getMinecraft()
                                             .getRenderPartialTicks())):
                             physicsFrames.forRenderWidths(data,frame);
-            if(SKIRT_PANEL_COUPLING&&SKIRT_ADAPTIVE_WIDTH &&
+            if(SKIRT_PANEL_COUPLING &&
+                (SKIRT_ADAPTIVE_WIDTH||SKIRT_CLOTH_V2) &&
                     renderedWidths!=null&&!renderedWidths.isEmpty())
             {
                 Map<String,SkirtAdaptiveWidth.Width> appliedWidths=

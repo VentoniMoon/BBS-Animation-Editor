@@ -31,7 +31,7 @@ public final class SkirtClothV2Solver
     private static final float MAX_MID_OFFSET=.105F;
     private static final float MAX_HEM_OFFSET=.16F;
     private static final float SOFT_FLARE_DISTANCE=.048F;
-    private static final float MAX_BOX_HALF=.48F;
+    private static final float MAX_BOX_HALF=.40F;
     private static final float MAX_BOX_VERTICAL=.60F;
     private static final float WIDTH_HALF_FALLBACK=.039F;
 
