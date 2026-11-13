@@ -1098,3 +1098,51 @@ Chameleon cube samples rather than the final Weld rasterized triangles.
 Compare identical walking frames at 0.85 scale and inspect both the
 leg-through-skirt failure and the short-lived section snaps. Passing
 Java 8 smoke tests does not substitute for an in-game visual check.
+
+## Radial-axis lateral thigh escape for 20-strip skirt (2026-11-13)
+
+The 0.85-scale Chameleon skirt still clips during walking because the
+existing `SkirtVisibleThighContacts` correction pushes each hanging strip
+outward about a world-space **tangent** axis, but cannot bend the hanging
+lower link sideways around the skirt's circumference. Rotating a vertical
+hanging link about world **Y** only twists the plate; its hem position
+remains nearly unchanged. The correct additional clearance degree of
+freedom is roll about the horizontal **radial** axis from the waist center
+through the strip root. That rotation moves the hanging link tangentially
+(left/right) with the belt/waist pivot stationary.
+
+New default `-Dbbs.editor.physics.skirt.lateralThighEscape=true` adds
+this one optional DOF **inside the current contact solver, before Hem
+Continuity**. It reads the exact decoded Chameleon upper/lower surface
+samples and only processes panels already confirmed and selected by the
+original three-zone thigh collision solver. For each contacting point it
+measures remaining distance to either lateral exit face of the closest
+penetrating OBB; a small symmetric deadband rejects ambiguous direction
+changes near the center of a stride. Signed roll is tested on the upper
+and lower links at the *same* fixed pivots. An improvement is accepted
+only if it decreases distance to the chosen thigh side exit and does
+not meaningfully increase the original radial collision score or
+introduce more penetrating points. Full ring expansion, body collider
+changes, global model scaling, and source animation modifications are
+forbidden.
+
+Safety bounds (world/axis-angle): extra upper rotation 0.20 rad,
+extra lower 0.22 rad, total upper 0.78 rad, total lower 0.90 rad,
+additional tip displacement <=0.085 blocks. Decoded surface evidence
+is required; a missing surface can **never** generate a fictitious
+sideways escape. The old anti-umbrella selection/validity gates and the
+clearance-first/no-silhouette-pullback mode remain enabled. The extra
+post-width discrete correction remains OFF by default.
+
+For A/B: `-Dbbs.editor.physics.skirt.lateralThighEscape=false` restores
+exactly the prior contact mechanism while preserving all other flags.
+With `-Dbbs.editor.physics.skirt.contactAudit=true`, inspect new
+`lateralPanels` and `lateralExitGain` next to `directSelected`,
+`hemAfterUnique` and `continuityLimitedPanels`.
+
+**Not a final proof of zero clipping:** the side-exit score is an
+approximation on decoded cube samples before final Weld and visual
+phase lead; it is not a true cloth self-collision solver. The full
+width/hem visual rendering must be checked at the exact gait frames
+(especially 27–30), including side and front camera views and quick
+1–2-frame snaps.

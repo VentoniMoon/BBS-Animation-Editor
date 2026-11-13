@@ -52,6 +52,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         mirroredRearKeepsCorrectWorldPush();
         skirtUsesFullThighBoxWhileHairKeepsCapsule();
         clearanceFirstDoesNotPullCollisionBack();
+        lateralThighEscapeChoosesBothSignedDirections();
         System.out.println("SkirtVisibleThighContactsSmokeTest OK");
     }
 
@@ -1193,6 +1194,86 @@ public final class SkirtVisibleThighContactsSmokeTest
                             "same frame must produce stable output");
         require(f.swings.get(BONES[0][0])[3]==0F,
                 "do not modify original Jolt swing or waist");
+    }
+
+    /**
+     * A hanging skirt strip needs a roll about the WORLD radial axis
+     * to move around a thigh. Yaw about vertical Y would only twist
+     * this nearly vertical plate, not relocate its hem.
+     */
+    private static void lateralThighEscapeChoosesBothSignedDirections()
+    {
+        for(int sign:new int[]{1,-1})
+        {
+            Fixture f=new Fixture(false);
+            SkirtClothPoseCoupler.Strip p=f.strips.get(0);
+            float a=sign*.008F,b=sign*.055F;
+            float[][] upper={
+                    {.417F,-.18F,a},{.437F,-.20F,b},
+                    {.425F,-.22F,sign*.034F}};
+            float[][] lower={
+                    {.415F,-.29F,a},{.443F,-.31F,b},
+                    {.425F,-.33F,sign*.040F},
+                    {.417F,-.35F,sign*.025F},
+                    {.438F,-.36F,sign*.057F}};
+            f.strips.set(0,new SkirtClothPoseCoupler.Strip(
+                    p.upper,p.lower,p.upperWorld,p.lowerWorld,
+                    p.tipWorld,upper,lower));
+
+            float centerZ=sign*.105F;
+            BodyPartJoltContactBudget budget=
+                    new BodyPartJoltContactBudget();
+            float[] shape={.43F,-.29F,centerZ,
+                    0F,0F,0F,1F,.15F,.17F,.14F};
+            budget.add(shape,typed(.43F,-.29F,centerZ),
+                    "emoticons.left_leg");
+            BodyPartJoltContactBudget.Selection bodies=
+                    budget.select(true);
+            SkirtVisibleThighContacts.Result noLateral=
+                    SkirtVisibleThighContacts.correct(
+                            f.strips,f.swings,bodies,.85F,
+                            true,true,true,true,true,true,false);
+            SkirtVisibleThighContacts.Result withLateral=
+                    SkirtVisibleThighContacts.correct(
+                            f.strips,f.swings,bodies,.85F,
+                            true,true,true,true,true,true,true);
+            require(withLateral.selectedPanels>0,
+                    "must keep a real selected thigh contact");
+            require(withLateral.lateralPanels>0 &&
+                            withLateral.lateralEscapeGain>.012F,
+                    "lateral solver should follow a nearer side exit; sign="+sign);
+            require(noLateral.lateralPanels==0,
+                    "explicit A/B disable must retain the old behavior");
+
+            // Positive +Z thigh should push the front plate toward -Z,
+            // via positive rotation about +X (radial axis). Mirroring
+            // the thigh reverses the sign, not the natural Jolt pose.
+            float oldX=axisX(noLateral.swings.get(BONES[0][0]))+
+                    axisX(noLateral.swings.get(BONES[0][1]));
+            float newX=axisX(withLateral.swings.get(BONES[0][0]))+
+                    axisX(withLateral.swings.get(BONES[0][1]));
+            require(sign*(newX-oldX)>.01F,
+                    "front plate did not roll away from the moving leg: "+
+                    sign+" "+(newX-oldX));
+            near(f.swings.get(BONES[0][0])[3],0F,.00001F,
+                    "native Jolt and waist input may not be edited");
+
+            SkirtVisibleThighContacts.Result replay=
+                    SkirtVisibleThighContacts.correct(
+                            f.strips,f.swings,bodies,.85F,
+                            true,true,true,true,true,true,true);
+            for(String[] pair:BONES)
+                for(String bone:pair)
+                    for(int i=0;i<4;i++)
+                        near(withLateral.swings.get(bone)[i],
+                                replay.swings.get(bone)[i],.00001F,
+                                "lateral choice must be stable on repeated frame");
+        }
+    }
+
+    private static float axisX(float[] swing)
+    {
+        return swing[0]*swing[3];
     }
 
     private static final class Fixture
