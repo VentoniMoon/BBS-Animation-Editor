@@ -1254,3 +1254,58 @@ moving again. The exact `missing` pair list and other log context
 are needed to repair the underlying Chameleon/Jolt chain capture.
 Do not interpret restored partial motion as proof that connected cloth
 collision or final Weld seam geometry is fixed.
+
+## IntelliJ `runClient` launch fix (2026-11-14)
+
+Observed after enabling V2: the **PHYSICS > CHAINS** panel displays
+`Solver: Jolt disabled` and the output alternates between
+`Skirt Jolt incomplete: waiting for all 20 strips` and
+`Jolt preview bone matrices valid: 20 chains` thousands of times.
+This can happen even though the 20-strip preset is enabled: before any
+native Jolt sample, the skirt collection is empty and cannot feed V2.
+The UI message does **not** mean a failed DLL load: it comes directly
+from `BodyPartJoltPreviewAdapter.isRequested()==false`, which checks
+the Minecraft JVM system property
+`bbs.editor.physics.jolt.preview`.
+
+An IntelliJ **Gradle** run configuration may start Gradle and then fork
+Minecraft using generated ForgeGradle JVM arguments. To avoid having to
+pass `JAVA_TOOL_OPTIONS` through IntelliJ's environment-variable UI,
+the new `build.gradle` runClient profile sends these properties as
+direct **game JVM arguments** when the corresponding Gradle flags are
+selected.
+
+Set IntelliJ **Run (Gradle)** task arguments to:
+
+```text
+runClient -PenableJoltExperimental -PfixMixinAsm -PenableSkirtClothV2 -PenableJoltRagdoll -PdiagnoseSkirtV2
+```
+
+Remove the old `JAVA_TOOL_OPTIONS` environment variable from that run
+configuration to eliminate potential conflicts. In this profile:
+
+* `-PenableJoltExperimental` loads the **two required Java 8 Jolt JARs**
+  from `libs/` and now passes
+  `-Dbbs.editor.physics.jolt.preview=true` to **Minecraft**.
+* `-PenableSkirtClothV2` passes
+  `-Dbbs.editor.physics.skirt.clothV2=true`; V2 stays opt-in.
+* `-PenableJoltRagdoll` passes
+  `-Dbbs.editor.physics.jolt.ragdoll=true`; also opt-in.
+* `-PdiagnoseSkirtV2` passes the Jolt diagnostic, skirt contact audit,
+  and skirt render-vertex audit properties to Minecraft.
+
+Omit the last three flags when they are not needed. The final two
+experimental features require `-PenableJoltExperimental` and cannot
+accidentally start without native Jolt dependencies. `-PfixMixinAsm`
+preserves the existing optional BetterLights/Mixin dev-launch profile.
+
+After a fresh start, the **CHAINS** panel should show
+`Show Jolt colliders` instead of `Solver: Jolt disabled`.
+This verifies the JVM flag reached the running client but **does not
+prove JNI initialization succeeded**. Check `latest.log` for
+`Jolt Physics 6.0.0 loaded`,
+`Native quaternion preview active`, `[SkirtClothV2]`, or
+`[SkirtV2Incomplete]`. A missing/old JAR or JNI failure can still
+cause an unavailable native preview, in which case the actual startup
+exception must be inspected. Do not tune cloth parameters while Jolt
+is not requested or unavailable.
