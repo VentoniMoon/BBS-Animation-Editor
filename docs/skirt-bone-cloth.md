@@ -1099,50 +1099,30 @@ Compare identical walking frames at 0.85 scale and inspect both the
 leg-through-skirt failure and the short-lived section snaps. Passing
 Java 8 smoke tests does not substitute for an in-game visual check.
 
-## Radial-axis lateral thigh escape for 20-strip skirt (2026-11-13)
+## Regression rollback: uncoupled lateral roll (2026-11-14)
 
-The 0.85-scale Chameleon skirt still clips during walking because the
-existing `SkirtVisibleThighContacts` correction pushes each hanging strip
-outward about a world-space **tangent** axis, but cannot bend the hanging
-lower link sideways around the skirt's circumference. Rotating a vertical
-hanging link about world **Y** only twists the plate; its hem position
-remains nearly unchanged. The correct additional clearance degree of
-freedom is roll about the horizontal **radial** axis from the waist center
-through the strip root. That rotation moves the hanging link tangentially
-(left/right) with the belt/waist pivot stationary.
+The trial lateral thigh-escape in PR #195 applied independent radial-axis
+rolls to selected skirt bones *after* `SkirtClothPoseCoupler.couple` had
+already enforced neighboring angle differences. `ChameleonWeldPreviewPass`
+then patched quad seams only at draw time, after the independent rotations.
+This changed connected cloth into 20 separately posed plates that could
+spread apart, overlap and flicker as the nearest side-exit direction varied
+by gait frame. In-game screenshots showed substantial holes, folding and
+remaining leg-through-fabric clipping.
 
-New default `-Dbbs.editor.physics.skirt.lateralThighEscape=true` adds
-this one optional DOF **inside the current contact solver, before Hem
-Continuity**. It reads the exact decoded Chameleon upper/lower surface
-samples and only processes panels already confirmed and selected by the
-original three-zone thigh collision solver. For each contacting point it
-measures remaining distance to either lateral exit face of the closest
-penetrating OBB; a small symmetric deadband rejects ambiguous direction
-changes near the center of a stride. Signed roll is tested on the upper
-and lower links at the *same* fixed pivots. An improvement is accepted
-only if it decreases distance to the chosen thigh side exit and does
-not meaningfully increase the original radial collision score or
-introduce more penetrating points. Full ring expansion, body collider
-changes, global model scaling, and source animation modifications are
-forbidden.
+The default on-release #195 experiment is therefore reverted completely,
+not merely hidden behind a flag, restoring the exact Java behavior from
+PR #194. The old contact solver remains collision-first with the
+post-width second trial pass disabled by default. No change to Jolt
+native bodies, body colliders, hair, actor poses or animation keys.
 
-Safety bounds (world/axis-angle): extra upper rotation 0.20 rad,
-extra lower 0.22 rad, total upper 0.78 rad, total lower 0.90 rad,
-additional tip displacement <=0.085 blocks. Decoded surface evidence
-is required; a missing surface can **never** generate a fictitious
-sideways escape. The old anti-umbrella selection/validity gates and the
-clearance-first/no-silhouette-pullback mode remain enabled. The extra
-post-width discrete correction remains OFF by default.
-
-For A/B: `-Dbbs.editor.physics.skirt.lateralThighEscape=false` restores
-exactly the prior contact mechanism while preserving all other flags.
-With `-Dbbs.editor.physics.skirt.contactAudit=true`, inspect new
-`lateralPanels` and `lateralExitGain` next to `directSelected`,
-`hemAfterUnique` and `continuityLimitedPanels`.
-
-**Not a final proof of zero clipping:** the side-exit score is an
-approximation on decoded cube samples before final Weld and visual
-phase lead; it is not a true cloth self-collision solver. The full
-width/hem visual rendering must be checked at the exact gait frames
-(especially 27–30), including side and front camera views and quick
-1–2-frame snaps.
+**Next design requirement**: Sideways displacement must be solved as
+**one constrained connected ring**, not independent per-panel roll.
+Candidate positions must maintain shared seam continuity and the pinned
+waist *while* satisfying thigh clearance; inspect final Weld surface
+and adjacent rendered faces, not only isolated per-panel penetration
+scores. Add an across-frame sign/velocity constraint to avoid alternating
+between opposite lateral escapes. A new experiment should be opt-in and
+must pass paired gait frames (including 27–30), no visible holes,
+no transient one-frame reversals and lower leg-cloth intersection counts
+before it can replace the stable default.
