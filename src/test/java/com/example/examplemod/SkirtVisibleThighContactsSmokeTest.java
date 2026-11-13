@@ -39,6 +39,7 @@ public final class SkirtVisibleThighContactsSmokeTest
         innerWaistAndSinglePointCannotRescue();
         silhouetteKeepsCompactHemCloseToNativeWhileRetainingCollision();
         multipleProxiesOfSameThighCannotMultiplyRescue();
+        angularRingContinuityReducesSeamJumpsWithoutForcingLegClipping();
         shuffledBoneEnumerationKeepsSamePhysicalNeighbors();
         standingThighsMustNotInflateHem();
         raisedThighEdgeCrossesWithCenterUnderWaist();
@@ -759,6 +760,109 @@ public final class SkirtVisibleThighContactsSmokeTest
                 "three near-identical fitted OBBs per thigh doubled response");
         require(result.silhouetteLimitedPanels<=20,
                 "silhouette panel count exceeded physical ring");
+    }
+
+    /**
+     * The last Minecraft test showed good total clearance but 5–6 joint
+     * panels on almost every frame and abrupt angular hem transitions.
+     * Check an actual two-thigh frame against the exact same Jolt state,
+     * with only the cyclic ring continuity stage changed.
+     */
+    private static void angularRingContinuityReducesSeamJumpsWithoutForcingLegClipping()
+    {
+        boolean found=false;
+        for(float center:new float[]{.24F,.28F,.32F,.36F,.40F,.44F})
+        {
+            if(found)break;
+            for(float half:new float[]{.18F,.22F,.25F,.28F,.31F})
+            {
+                Fixture f=new Fixture(false);
+                BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+                budget.add(new float[]{center,-.27F,0F,0F,0F,0F,1F,
+                            half,.22F,half},
+                        typed(center,-.27F,0F),"emoticons.left_leg");
+                budget.add(new float[]{-center,-.27F,0F,0F,0F,0F,1F,
+                            half,.22F,half},
+                        typed(-center,-.27F,0F),"emoticons.right_leg");
+                BodyPartJoltContactBudget.Selection bodies=budget.select(true);
+                SkirtVisibleThighContacts.Result old=
+                        SkirtVisibleThighContacts.correct(
+                                f.strips,f.swings,bodies,.85F,
+                                true,true,true,true,false);
+                SkirtVisibleThighContacts.Result smooth=
+                        SkirtVisibleThighContacts.correct(
+                                f.strips,f.swings,bodies,.85F,
+                                true,true,true,true,true);
+                if(smooth.continuityLimitedPanels==0)continue;
+                found=true;
+                require(smooth.continuityRoughnessAfter<=
+                                smooth.continuityRoughnessBefore+.001F,
+                        "new cyclic hem correction increased neighbor jumps");
+                require(smooth.continuityRoughnessBefore>0F,
+                        "no angular profile for hem quality test");
+                require(smooth.continuityLimitedPanels<20,
+                        "local continuity unexpectedly adjusted every panel");
+                SkirtVisibleThighContacts.Audit natural=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,f.swings,bodies,.85F);
+                SkirtVisibleThighContacts.Audit previous=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,old.swings,bodies,.85F);
+                SkirtVisibleThighContacts.Audit improved=
+                        SkirtVisibleThighContacts.auditHemBonePose(
+                                f.strips,smooth.swings,bodies,.85F);
+                require(improved.uniqueHits<=natural.uniqueHits+
+                                Math.max(4,natural.uniqueHits/16),
+                        "local seam smoothing penetrated thighs worse than Jolt");
+                require(improved.uniqueHits<=previous.uniqueHits+
+                                Math.max(10,natural.uniqueHits/3),
+                        "seam smoothing lost excessive collision benefit");
+                SkirtVisibleThighContacts.Result replay=
+                        SkirtVisibleThighContacts.correct(
+                                f.strips,f.swings,bodies,.85F,
+                                true,true,true,true,true);
+                for(String[] names:BONES)
+                    for(String name:names)
+                        for(int k=0;k<4;k++)
+                            near(smooth.swings.get(name)[k],
+                                    replay.swings.get(name)[k],
+                                    .00001F,"cyclic ring drift on same frame");
+                near(f.swings.get(BONES[0][0])[3],0F,.00001F,
+                        "native Jolt input mutated by hem smoothing");
+                break;
+            }
+        }
+        require(found,
+                "no two-leg gait fixture exercised cyclic continuity");
+
+        Fixture f=new Fixture(false);
+        BodyPartJoltContactBudget empty=new BodyPartJoltContactBudget();
+        SkirtVisibleThighContacts.Result standing=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,empty.select(true),.85F,
+                        true,true,true,true,true);
+        require(standing.continuityLimitedPanels==0 &&
+                standing.touchedPanels==0,
+                "ring smoothing moved skirt in idle standing pose");
+        BodyPartJoltContactBudget leg=new BodyPartJoltContactBudget();
+        leg.add(box(.42F,-.27F,0F),typed(.42F,-.27F,0F),
+                "emoticons.left_leg");
+        SkirtVisibleThighContacts.Result before=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,leg.select(true),1F,
+                        true,true,true,true,false);
+        SkirtVisibleThighContacts.Result after=
+                SkirtVisibleThighContacts.correct(
+                        f.strips,f.swings,leg.select(true),1F,
+                        true,true,true,true,true);
+        require(after.continuityLimitedPanels==0,
+                "full-scale model must keep old native behavior");
+        for(String[] names:BONES)
+            for(String name:names)
+                for(int k=0;k<4;k++)
+                    near(before.swings.get(name)[k],
+                            after.swings.get(name)[k],.00001F,
+                            "full-scale silhouette changed");
     }
 
     private static void shuffledBoneEnumerationKeepsSamePhysicalNeighbors()

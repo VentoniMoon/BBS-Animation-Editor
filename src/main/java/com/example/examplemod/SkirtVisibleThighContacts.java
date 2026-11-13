@@ -57,6 +57,12 @@ public final class SkirtVisibleThighContacts
      * actually reaches BEYOND the rest waist radius, not just into the
      * naturally tight inner fabric at scale 0.85. */
     private static final float RESCUE_OUTER_SURPLUS=.027F;
+    /** Perimeter continuity, NOT a global connected-cloth lattice.
+     * Reconcile neighboring contact-driven hem excursions against this
+     * frame's same native Jolt pose. Reversible A/B experiment. */
+    private static final boolean HEM_CONTINUITY=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.hemContinuity","true"));
     private static final float NEIGHBOR_RESPONSE=.16F;
     /* Skip neutral hips only if the entire oriented leg volume sits
      * well inside the waist, never based on the bone CENTER alone. */
@@ -121,6 +127,9 @@ public final class SkirtVisibleThighContacts
          * existing correction passes: clipped or retained on collision. */
         public final int silhouetteLimitedPanels,silhouetteBlockedPanels;
         public final float silhouetteRemovedOutward;
+        /** Ring-local shape regularization, after existing silhouette. */
+        public final int continuityLimitedPanels,continuityBlockedPanels;
+        public final float continuityRoughnessBefore,continuityRoughnessAfter;
         Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap)
         {
             this(swings,touchedPanels,peakOverlap,0,0,
@@ -192,6 +201,30 @@ public final class SkirtVisibleThighContacts
                 int rejectedLegBoxes,int silhouetteLimitedPanels,
                 int silhouetteBlockedPanels,float silhouetteRemovedOutward)
         {
+            this(swings,touchedPanels,peakOverlap,exactSamples,exactHits,
+                    contactDepths,candidatePanels,selectedPanels,
+                    locallyLimited,liftedHemPanels,liftOverlapReduction,
+                    midCandidatePanels,jointLiftPanels,midOverlapReduction,
+                    rescuedLegBoxes,rejectedLegBoxes,
+                    silhouetteLimitedPanels,silhouetteBlockedPanels,
+                    silhouetteRemovedOutward,0,0,0F,0F);
+        }
+        Result(Map<String,float[]> swings,int touchedPanels,float peakOverlap,
+                int exactSamples,int exactHits,
+                Map<String,Float> contactDepths,
+                int candidatePanels,int selectedPanels,boolean locallyLimited,
+                int liftedHemPanels,float liftOverlapReduction,
+                int midCandidatePanels,int jointLiftPanels,
+                float midOverlapReduction,int rescuedLegBoxes,
+                int rejectedLegBoxes,int silhouetteLimitedPanels,
+                int silhouetteBlockedPanels,float silhouetteRemovedOutward,
+                int continuityLimitedPanels,int continuityBlockedPanels,
+                float continuityRoughnessBefore,float continuityRoughnessAfter)
+        {
+            this.continuityLimitedPanels=continuityLimitedPanels;
+            this.continuityBlockedPanels=continuityBlockedPanels;
+            this.continuityRoughnessBefore=continuityRoughnessBefore;
+            this.continuityRoughnessAfter=continuityRoughnessAfter;
             this.silhouetteLimitedPanels=silhouetteLimitedPanels;
             this.silhouetteBlockedPanels=silhouetteBlockedPanels;
             this.silhouetteRemovedOutward=silhouetteRemovedOutward;
@@ -260,7 +293,8 @@ public final class SkirtVisibleThighContacts
     {
         return correct(strips,starting,selected,visualScale,
                 ADAPTIVE_HEM_LIFT,ADAPTIVE_MID_COLLISION,
-                SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION);
+                SURFACE_EVIDENCE_LEG_GATE,SILHOUETTE_PRESERVATION,
+                HEM_CONTINUITY);
     }
 
     /** Package-private deterministic A/B seam test, without mutating
@@ -303,6 +337,19 @@ public final class SkirtVisibleThighContacts
             BodyPartJoltContactBudget.Selection selected,float visualScale,
             boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
             boolean silhouette)
+    {
+        // Retain PR #189 A/B semantics for all prior regression tests.
+        return correct(strips,starting,selected,visualScale,
+                adaptiveLift,adaptiveMid,surfaceGate,silhouette,false);
+    }
+
+    /** Exact same input, enable/disable independent post-silhouette
+     * continuity without class-loading or global properties. */
+    static Result correct(List<SkirtClothPoseCoupler.Strip> strips,
+            Map<String,float[]> starting,
+            BodyPartJoltContactBudget.Selection selected,float visualScale,
+            boolean adaptiveLift,boolean adaptiveMid,boolean surfaceGate,
+            boolean silhouette,boolean continuity)
     {
         Map<String,float[]> copy=cloneSwings(starting);
         if(strips==null||strips.size()!=PANELS||selected==null||
@@ -943,6 +990,105 @@ public final class SkirtVisibleThighContacts
                 silhouetteRemoved+=displacement-afterDistance;
             }
         }
+        int continuityLimited=0,continuityBlocked=0;
+        float roughnessBefore=0F,roughnessAfter=0F;
+        if(continuity && silhouette && visualScale<.995F &&
+                !directContacts.isEmpty())
+        {
+            // Angular order already sorts the authored world-space waist
+            // roots; NEVER assume the Chameleon group name enumerates the
+            // panels in a ring. Keep the normal native silhouette as the
+            // per-panel reference frame for visual contact displacement.
+            String[] ids=new String[PANELS];
+            float[][] roots=new float[PANELS][];
+            boolean[] selectedPanel=new boolean[PANELS];
+            for(int i=0;i<PANELS;i++)
+            {
+                ids[i]=strips.get(i).upper;
+                roots[i]=origin(strips.get(i).upperWorld);
+                selectedPanel[i]=directDepth[i]>.001F;
+            }
+            float[] importance=SkirtAdaptiveHemLift.weights(
+                    ids,roots,selectedPanel,sideNeed,sideDepth);
+            float[] shape=new float[PANELS];
+            for(int i=0;i<PANELS;i++)
+            {
+                float dx=roots[i][0]-cx,dz=roots[i][2]-cz;
+                float radius=(float)Math.sqrt(dx*dx+dz*dz);
+                if(radius<.02F)continue;
+                shape[i]=skirtShapeExcursion(strips.get(i),
+                        starting,copy,new float[]{
+                                dx/radius,0F,dz/radius});
+            }
+            // Snapshot neighbor values BEFORE any changes, to avoid
+            // creating a traveling relaxation wave from the first
+            // angular element across the seam and into the next frame.
+            float[] originalShape=shape.clone();
+            roughnessBefore=ringRoughness(originalShape,angular);
+            for(int ring=0;ring<PANELS;ring++)
+            {
+                int i=angular.get(ring).intValue();
+                int left=angular.get((ring+PANELS-1)%PANELS).intValue();
+                int right=angular.get((ring+1)%PANELS).intValue();
+                float before=shape[i];
+                float target=SkirtHemContinuity.target(
+                        originalShape[i],originalShape[left],
+                        originalShape[right],importance[i]);
+                if(before<=target+.002F)continue;
+                SkirtClothPoseCoupler.Strip strip=strips.get(i);
+                float dx=roots[i][0]-cx,dz=roots[i][2]-cz;
+                float radius=(float)Math.sqrt(dx*dx+dz*dz);
+                if(radius<.02F)continue;
+                float[] outward={dx/radius,0F,dz/radius};
+                float naturalOverlap=panelCollisionScore(
+                        strip,starting,active,outward,surfaceMargin);
+                float finalOverlap=panelCollisionScore(
+                        strip,copy,active,outward,surfaceMargin);
+                float[] bestUpper=null,bestLower=null;
+                float bestShape=before;
+                float[] oldUpper=copy.get(strip.upper);
+                float[] oldLower=copy.get(strip.lower);
+                Map<String,float[]> trial=new LinkedHashMap<String,float[]>();
+                // Sample towards the native pose; unlike the prior
+                // all-or-nothing silhouette limit, a PARTIAL return is
+                // useful when full return would reintroduce penetration.
+                // Exactly nine trials, bounded runtime per contacting
+                // panel, with no hidden temporal cache.
+                for(int step=9;step>=1;step--)
+                {
+                    float alpha=step*.10F;
+                    trial.put(strip.upper,blendSwing(
+                            starting.get(strip.upper),oldUpper,alpha));
+                    trial.put(strip.lower,blendSwing(
+                            starting.get(strip.lower),oldLower,alpha));
+                    float candidateShape=skirtShapeExcursion(
+                            strip,starting,trial,outward);
+                    if(candidateShape>=bestShape-.0015F ||
+                            candidateShape<target-.012F)continue;
+                    if(!SkirtHemContinuity.improvesNeighbors(
+                            shape[left],before,candidateShape,shape[right]))
+                        continue;
+                    float candidateOverlap=panelCollisionScore(
+                            strip,trial,active,outward,surfaceMargin);
+                    if(!SkirtSilhouettePreservation.keepsClearance(
+                            naturalOverlap,finalOverlap,candidateOverlap))
+                        continue;
+                    bestShape=candidateShape;
+                    bestUpper=trial.get(strip.upper);
+                    bestLower=trial.get(strip.lower);
+                }
+                if(bestUpper==null)
+                {
+                    continuityBlocked++;
+                    continue;
+                }
+                copy.put(strip.upper,bestUpper);
+                copy.put(strip.lower,bestLower);
+                shape[i]=bestShape;
+                continuityLimited++;
+            }
+            roughnessAfter=ringRoughness(shape,angular);
+        }
         int total=0;
         for(boolean value:touched)if(value)total++;
         return new Result(copy,total,peak,exactSampleCount,exactHitCount,
@@ -950,7 +1096,9 @@ public final class SkirtVisibleThighContacts
                 additionalLifts,overlapReduction,
                 midCandidates,jointPanels,midReduction,
                 rescuedLegBoxes,rejectedLegBoxes,
-                silhouetteLimited,silhouetteBlocked,silhouetteRemoved);
+                silhouetteLimited,silhouetteBlocked,silhouetteRemoved,
+                continuityLimited,continuityBlocked,
+                roughnessBefore,roughnessAfter);
     }
 
     /**
@@ -1438,6 +1586,19 @@ public final class SkirtVisibleThighContacts
             support+=Math.abs(dot(radial,leg.basis[axis]))*
                     leg.p[7+axis];
         return Math.max(0F,support-dot(d,radial));
+    }
+
+    private static float ringRoughness(float[] shape,
+            List<Integer> angular)
+    {
+        float total=0F;
+        for(int ring=0;ring<PANELS;ring++)
+        {
+            int i=angular.get(ring).intValue();
+            int next=angular.get((ring+1)%PANELS).intValue();
+            total+=Math.abs(shape[i]-shape[next]);
+        }
+        return total;
     }
 
     /** Penetration scored against the SAME accepted fitted body boxes

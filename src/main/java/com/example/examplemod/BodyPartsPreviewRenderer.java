@@ -2239,6 +2239,10 @@ public class BodyPartsPreviewRenderer
                                     " silhouetteLimitedPanels="+clearance.silhouetteLimitedPanels+
                                     " silhouetteBlockedPanels="+clearance.silhouetteBlockedPanels+
                                     " silhouetteRemovedOutward="+clearance.silhouetteRemovedOutward+
+                                    " continuityLimitedPanels="+clearance.continuityLimitedPanels+
+                                    " continuityBlockedPanels="+clearance.continuityBlockedPanels+
+                                    " continuityRoughnessBefore="+clearance.continuityRoughnessBefore+
+                                    " continuityRoughnessAfter="+clearance.continuityRoughnessAfter+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " midCandidates="+clearance.midCandidatePanels+
@@ -2267,6 +2271,10 @@ public class BodyPartsPreviewRenderer
                                     " silhouetteLimitedPanels="+clearance.silhouetteLimitedPanels+
                                     " silhouetteBlockedPanels="+clearance.silhouetteBlockedPanels+
                                     " silhouetteRemovedOutward="+clearance.silhouetteRemovedOutward+
+                                    " continuityLimitedPanels="+clearance.continuityLimitedPanels+
+                                    " continuityBlockedPanels="+clearance.continuityBlockedPanels+
+                                    " continuityRoughnessBefore="+clearance.continuityRoughnessBefore+
+                                    " continuityRoughnessAfter="+clearance.continuityRoughnessAfter+
                                     " liftedHemPanels="+clearance.liftedHemPanels+
                                     " liftOverlapReduction="+clearance.liftOverlapReduction+
                                     " midCandidates="+clearance.midCandidatePanels+
@@ -2292,6 +2300,7 @@ public class BodyPartsPreviewRenderer
                                 " liftedHemPanels="+clearance.liftedHemPanels+
                                 " jointLiftPanels="+clearance.jointLiftPanels+
                                 " silhouetteLimitedPanels="+clearance.silhouetteLimitedPanels+
+                                " continuityLimitedPanels="+clearance.continuityLimitedPanels+
                                 " maxPenetration="+clearance.peakOverlap+
                                 " exactSamples="+clearance.exactSurfaceSamples+
                                 " exactHits="+clearance.exactSurfaceHits+

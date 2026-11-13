@@ -920,3 +920,54 @@ not the final Weld GPU triangles. A negative numeric result can
 still be worth retaining if visually more natural, but the final
 decision must compare the same walk sequence **in game**. No
 merge to `main` before user review.
+
+## Physics 2.0 — angular ring continuity without connected-cloth mesh
+
+After silhouette preservation #189, the 0.85-scale user's walking
+frames 18–37 show 3,510→1,868 residual lower-fabric source-point
+contacts (46.8% reduction). The skirt is less puffy, but 158 per-panel
+silhouette limits are blocked to keep useful leg clearance; the rigid
+20-panel circumference still creates sharp angular *steps* around the
+raised thigh. The former linked cloth mesh distorted the whole skirt,
+so this experiment is **not** another spring network or ring Jolt
+constraint.
+
+New after-silhouette contact-only stage, disabled by
+`-Dbbs.editor.physics.skirt.hemContinuity=false` (default true):
+
+* Sort 20 authored waist roots in world space by angular coordinate,
+  not by Chameleon bone enumeration or `groupNN` names.
+* Compare each panel's *extra* tip/hinge outward displacement and
+  vertical tip lift to the **same-frame native Jolt-coupled pose**.
+  Freeze the entire ring's initial displacement profile before changing
+  any panel, to avoid directional, order-dependent smoothing waves.
+* A genuine strongest thigh contact may retain a sharper rise, with a
+  0.073-block local angular step; immediate neighbors are limited to a
+  0.032-block step, and incidental distant panels 0.017 blocks.
+  Targets are further bounded by the existing 0.105/0.052/0.025
+  silhouette envelopes. The algorithm never **adds** outward movement
+  or changes an uncontacted resting frame.
+* **Collision-aware partial rollback:** trial nine interpolation
+  fractions between natural and contact-corrected local bone
+  quaternions. Never force a fully flattened pose when it would
+  return thigh penetration. Accept only an individual trial that
+  reduces local angular tip excursion, does not increase angular seam
+  roughness with the two actual physical neighbors and retains at
+  least 68% of the old correction's measured combined mid+hem OBB
+  clearance. Other panels and global scale are not moved.
+* Deterministic per frame. No history, Jolt native changes, new
+  friction, gravity, springs, full-ring equalization or Weld changes.
+  The preexisting `silhouettePreservation=false` restores PR #188;
+  setting only `hemContinuity=false` restores PR #189.
+* With `-Dbbs.editor.physics.skirt.contactAudit=true`, the existing
+  `SkirtHemAudit` and `SkirtContactAudit` add
+  `continuityLimitedPanels`, `continuityBlockedPanels`,
+  `continuityRoughnessBefore`, `continuityRoughnessAfter`.
+  Roughness is the sum of absolute consecutive cyclic differences
+  in extra hem tip excursion, not a metric of final GPU seam pixels.
+
+Smoke tests exercise angular center/neighbor/noncontact priorities,
+cyclic local seam metrics, A/B two-leg OBB collision reduction,
+deterministic timeline seeking, full scale 1 and absent-leg invariance.
+The final judgement still requires the user's identical in-game
+animation, including front/side camera angles and Weld Geometry ON.
