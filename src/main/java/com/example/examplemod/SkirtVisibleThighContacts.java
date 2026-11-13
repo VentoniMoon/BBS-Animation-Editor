@@ -670,6 +670,17 @@ public final class SkirtVisibleThighContacts
             int panel=angular.get(ringIndex).intValue();
             int prev=angular.get((ringIndex+PANELS-1)%PANELS).intValue();
             int next=angular.get((ringIndex+1)%PANELS).intValue();
+            // With adaptive overflow selection the 15-panel budget is a
+            // hard contact footprint, not just a direct-need budget.
+            // Do not quietly resurrect rejected panels via the normal
+            // neighboring response; Hem Continuity still smooths the
+            // SELECTED ring after collision.
+            if(limited && ADAPTIVE_CONTACT_ISLANDS &&
+                    directDepth[panel]<=.001F)
+            {
+                neighborhood[panel]=0F;
+                continue;
+            }
             neighborhood[panel]=Math.max(need[panel],Math.max(
                     need[prev]*NEIGHBOR_RESPONSE,
                     need[next]*NEIGHBOR_RESPONSE));
@@ -805,8 +816,13 @@ public final class SkirtVisibleThighContacts
                 int panel=angular.get(ring).intValue();
                 if(directDepth[panel]<=.001F)continue;
                 for(int step=-2;step<=2;step++)
-                    nearDirect[angular.get(
-                            (ring+PANELS+step)%PANELS).intValue()]=true;
+                {
+                    int neighbor=angular.get(
+                            (ring+PANELS+step)%PANELS).intValue();
+                    if(!limited || !ADAPTIVE_CONTACT_ISLANDS ||
+                            directDepth[neighbor]>.001F)
+                        nearDirect[neighbor]=true;
+                }
             }
             String[] ids=new String[PANELS];
             float[][] roots=new float[PANELS][];
