@@ -12,6 +12,8 @@ public final class SkirtClothSurfaceMeshSmokeTest
     {
         decodedUvAndRestGeometryAreExact();
         sharedStaticSurfaceKeepsOriginalUvsAndClosesAllSeams();
+        restBindingsPreserveEverySourceCornerAndUv();
+        restBindingsFollowRigidMotionWithoutRestDistortion();
         sharedSurfaceTopologyIsDeterministic();
         bothSeamEndpointOrdersAreCompared();
         mirroredBackAndRotatedSectionsHaveStableTopology();
@@ -103,6 +105,86 @@ public final class SkirtClothSurfaceMeshSmokeTest
                             "shared seam still separates in world space");
             }
         }
+    }
+
+    /**
+     * Actual editor measured 45% shortening/stretching when rendering
+     * averaged shared nodes directly. Material offsets must reconstruct
+     * every one of the source's 160 render corners at the original rest.
+     */
+    private static void restBindingsPreserveEverySourceCornerAndUv()
+    {
+        SkirtClothSurfaceMesh.Snapshot source=
+                SkirtClothSurfaceMesh.capture(fixture());
+        SkirtClothSharedSurface.Surface shared=
+                SkirtClothSharedSurface.connect(source);
+        SkirtClothRestBinding.Binding binding=
+                SkirtClothRestBinding.bind(source,shared);
+        require(binding.nodeRest.length==60 &&
+                binding.patches.size()==40,
+                "shared physical nodes and separate source UV quads");
+        require(binding.maxRestReconstructionError<.000001F,
+                "offsets should recover exactly the source rest corners");
+        List<SkirtClothRestBinding.FramePatch> rest=binding.atRest();
+        for(int i=0;i<40;i++)
+        {
+            SkirtClothSurfaceMesh.Patch original=source.patches.get(i);
+            SkirtClothRestBinding.FramePatch actual=rest.get(i);
+            require(original.bone.equals(actual.bone),
+                    "render material order must stay the same");
+            for(int v=0;v<4;v++)
+            {
+                for(int k=0;k<3;k++)
+                    close(actual.world[v][k],original.world[v][k],.000001F,
+                            "material corner was pulled onto shared rest node");
+                for(int k=0;k<2;k++)
+                    close(actual.uv[v][k],original.uv[v][k],0F,
+                            "native UV atlas corner was changed");
+            }
+        }
+        require(binding.directProjectionUnsafe ==
+                (shared.flippedTriangles>0||
+                 shared.degenerateTriangles>0||
+                 shared.maxRelativeEdgeChange>.10F||
+                 shared.maxRestCorrection>.025F),
+                "unsafe direct rendering must be classified explicitly");
+    }
+
+    private static void restBindingsFollowRigidMotionWithoutRestDistortion()
+    {
+        SkirtClothSurfaceMesh.Snapshot source=
+                SkirtClothSurfaceMesh.capture(fixture());
+        SkirtClothRestBinding.Binding binding=
+                SkirtClothRestBinding.bind(source,
+                        SkirtClothSharedSurface.connect(source));
+        float[][] translated=new float[60][3];
+        float[] shift={.25F,-.08F,.13F};
+        for(int i=0;i<60;i++)
+            for(int k=0;k<3;k++)
+                translated[i][k]=binding.nodeRest[i][k]+shift[k];
+        List<SkirtClothRestBinding.FramePatch> moved=
+                binding.evaluate(translated);
+        for(int i=0;i<40;i++)
+            for(int v=0;v<4;v++)
+                for(int k=0;k<3;k++)
+                    close(moved.get(i).world[v][k],
+                            source.patches.get(i).world[v][k]+shift[k],
+                            .000001F,
+                            "rigid cloth root translation distorted material");
+        // Rendering a frame must not mutate the source, rest binding or
+        // subsequent frames in a different pose.
+        List<SkirtClothRestBinding.FramePatch> rest=binding.atRest();
+        for(int i=0;i<40;i++)
+            for(int v=0;v<4;v++)
+                for(int k=0;k<3;k++)
+                    close(rest.get(i).world[v][k],
+                            source.patches.get(i).world[v][k],
+                            .000001F,
+                            "binding retained previous-frame translation");
+        boolean rejected=false;
+        try{binding.evaluate(new float[59][3]);}
+        catch(IllegalArgumentException expected){rejected=true;}
+        require(rejected,"incomplete XPBD pose must fail closed");
     }
 
     private static void sharedSurfaceTopologyIsDeterministic()

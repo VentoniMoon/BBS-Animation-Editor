@@ -1612,3 +1612,64 @@ source-face/candidate-seam correspondences first, **not** enable
 automatic stitching or increase cloth stiffness. The next stage is
 opt-in static material render parity compared with the exact original
 Chameleon geometry; XPBD follows only after that.
+
+## Stage 2.1: material-vertex rest offsets (source parity, no render)
+
+Real Minecraft capture after PR #204:
+```
+[SkirtStaticSkin] particles=60 rows=[20, 20, 20]
+maxRestCorrection=0.056624245
+meanRestCorrection=0.030554777
+maxRelativeEdgeChange=0.45020545
+flippedTriangles=0 degenerateTriangles=0
+```
+
+The single-position-per-seam static candidate is mathematically
+connected, but it would change an original rendered quad edge by
+**45.02%**. The maximum displaced vertex would move about
+**0.906 Minecraft pixels** (0.056624245 blocks); average about
+**0.489 pixels**. This is NOT acceptable as a direct static
+replacement for the authored skirt, even with zero inverted triangles.
+
+**Safe architectural change:** `SkirtClothRestBinding` separates
+**60 shared PHYSICS nodes** from **160 distinct TEXTURED material
+corners**. Each original material corner stores its own immutable
+rest-space `materialOffset = sourceWorldCorner - sharedNodeRest`,
+plus its original UV and triangle winding. At rest, the reconstructed
+material position is `sharedNodeRest + materialOffset`, reproducing
+the exact original source quad (float round-off only). When all 60
+physics nodes receive the same translation, the material surface moves
+rigidly without changing any original edge lengths. Re-evaluating the
+rest after any deformed frame is deterministic and without state
+carryover.
+
+This intentionally means **visual gaps between originally separate
+outer quad edges remain** in the unchanged rest pose! It does NOT
+claim full continuous *rendered* cloth, and it does not attempt
+unvalidated UV interpolation through the apparent gap. The future
+render stage will have to handle bridging/mapping or select the proper
+original visible face topology; preserving the original first avoids
+the present 45% panel shrink/stretch. The physics node graph is still
+topologically connected.
+
+A conservative *diagnostic*, `directProjectionUnsafe`, is true if
+the old averaged-node direct projection has any flipped/degenerate
+triangles, more than 10% relative edge change, or more than 0.025
+blocks (0.4 px) maximum vertex correction. This is **not a validated
+production distortion threshold**, merely a fail-closed warning
+against blindly enabling the old static projected candidate.
+
+Enabled as part of the existing opt-in `-PcaptureSkirtMesh`,
+the read-only log prints:
+
+```text
+[BBS Animation Editor][SkirtRestBinding] physicalNodes=60 sourcePatches=40 maxMaterialOffset=... maxRestReconstructionError=... directProjectionUnsafe=true projectedRelativeEdgeChange=0.45020545 mode=READ_ONLY_REST_PARITY_NO_RENDER
+```
+
+Stage 2.1 neither edits `ModelVertex`/UV, Chameleon poses or
+Jolt/legacy skirts, nor draws this proposed material mesh yet.
+Existing `[SkirtStaticSkin]` and seam logs remain available.
+Regression tests cover original XYZ/UV preservation of all 160
+corners, rigid translations of all 60 particle inputs, repeated
+rest evaluation without mutation, incomplete poses and the
+explicit direct-projection warning.
