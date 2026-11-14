@@ -64,11 +64,24 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
      */
     public static ChameleonWeldPreviewPass beginPreparedModel(Object model)
     {
+        return beginPreparedModel(model,true);
+    }
+
+    public static boolean isSkirtMeshCaptureRequested()
+    {
+        return SKIRT_MESH_CAPTURE;
+    }
+
+    /** When weld=false, capture decoded UV/positions but NEVER modify any
+     * model vertices. This must work even with a disabled Weld checkbox. */
+    public static ChameleonWeldPreviewPass beginPreparedModel(
+            Object model,boolean weld)
+    {
         ChameleonWeldPreviewPass pass=new ChameleonWeldPreviewPass();
         if(model==null)return pass;
         try
         {
-            pass.prepareModel(model);
+            pass.prepareModel(model,weld);
         }
         catch(Exception e)
         {
@@ -145,6 +158,12 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     @SuppressWarnings("unchecked")
     private void prepareModel(Object model)throws Exception
     {
+        prepareModel(model,true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prepareModel(Object model,boolean weld)throws Exception
+    {
         List<Object> roots=(List<Object>)field(model,"bones");
         List<Bone> bones=new ArrayList<Bone>();
         for(Object root:roots)
@@ -154,6 +173,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         if(SKIRT_MESH_CAPTURE && bones.size()==44 &&
                 ++skirtMeshCapturePasses%120==1)
             inspectSkirtMesh(bones);
+        if(!weld)return;
         for(Bone bone:bones)
             if(bone.parent!=null)
                 weldJoint(bone.parent,bone);

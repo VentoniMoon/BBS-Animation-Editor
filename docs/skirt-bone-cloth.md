@@ -1482,7 +1482,11 @@ runClient -PenableJoltExperimental -PfixMixinAsm -PenableSkirtClothV2 -PenableJo
 Alternatively set JVM `-Dbbs.editor.physics.skirt.meshCapture=true`.
 The prototype stays OFF by default, keeps the old Jolt/V2 renderer
 exactly as-is, and is safe to test on the real skirt without touching
-other Chameleon models. For the **first geometry-only test**, V2 can
+other Chameleon models. It is explicitly independent of the model's
+Weld checkbox: the native renderer wrapper calls the capture-only
+`beginPreparedModel(model,false)` path when Weld is disabled, which
+returns before ANY per-vertex welding. A model with Weld enabled still
+takes the original Weld path after its read-only capture. For the **first geometry-only test**, V2 can
 be omitted entirely: the new extractor is independent of the physics
 solver. Check `maxRoundTripError` near zero and record the rest seam
 gap statistics. If `Native quad capture unavailable` appears, inspect
