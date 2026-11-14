@@ -1500,3 +1500,55 @@ and no physics; only then XPBD with shared geometric positions,
 controlled ingress into leg colliders and true mesh self-collision.
 No claims about cloth collision, skirt shape improvement or visual
 gap elimination in this Stage 1 PR.
+
+## Stage 1.5: identifying actual rest seam outliers
+
+The first *real Minecraft* `[SkirtMeshCapture]` sample repeated identically
+six times: 44 bones, 20 strips, 40 outward quads, 80 source triangles,
+160 original UV corners and 60 seam candidates. The geometric round-trip
+error was `1.3328004E-7` blocks. However the **assumed** endpoint
+pairing reported `maxRestGap=0.11324849` blocks (about 1.81 pixels)
+and mean `0.044341862` blocks (about 0.71 pixels).
+
+This **does not prove** the source cloth has a visible 1.81-pixel hole:
+the initial metric matched each upper/lower ring neighbor only in one
+fixed left/right endpoint order. Mirrored Chameleon panels can reverse
+their actual edge winding. Nor does the diagnostic yet prove that
+the one selected outward face per cube is always the desired fabric skin.
+
+The next read-only diagnostic compares **both endpoint pairings** for
+every candidate edge and chooses the smaller maximum endpoint distance
+*without moving, welding, or merging any vertex/UV*. The original
+one-order maximum is retained as `maxAssumedGap` for comparison; the
+revised `maxRestGap` measures the best of the two existing assignments.
+`reversedSeams` counts matches where reversing the endpoint order
+helped. The log now also prints separate max/mean gaps for
+`upper` (20 circumferential connections), `lower` (20) and
+`vertical` (20 upper-to-lower connections), plus a breakdown of
+reversed candidates by type.
+
+**On the first matching geometry capture in a client run** the
+`[SkirtMeshSeam]` log prints 12 largest still-unresolved candidate
+gaps, including `type`, `from` and `to` bone IDs,
+`gapBlocks`, `gapPixels`, `originalMatch`,
+`oppositeMatch` and whether matching is `flipped`.
+These are candidate seams, not automatically accepted bonds.
+Subsequent samples print only the condensed summary to avoid flooding
+`latest.log`.
+
+For IntelliJ use the **existing** `-PcaptureSkirtMesh` flag; no
+Jolt or legacy-physics setting is required to run the static capture.
+Retrieve the report with:
+
+```powershell
+Select-String -Path '.\run\logs\latest.log' \`
+  -SimpleMatch '[SkirtMeshCapture]', '[SkirtMeshSeam]' |
+  Select-Object -Last 30 | ForEach-Object { $_.Line }
+```
+
+Do **not** close the largest gaps by increasing Weld displacement or
+cloth stiffness yet. First inspect whether the outliers are
+circumferential or vertical and whether their UV-aware quad
+orientation and bone pairing are correct. A genuinely open static
+edge may require explicit seam correspondence; overlapping/open
+faces may require a new skin rather than direct cube welding.

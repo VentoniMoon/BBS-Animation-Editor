@@ -46,6 +46,8 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     private static final boolean SKIRT_MESH_CAPTURE=
             Boolean.getBoolean("bbs.editor.physics.skirt.meshCapture");
     private static int skirtMeshCapturePasses;
+    /** Print full ranked seam diagnostics only once, not every render. */
+    private static boolean skirtMeshSeamDetailsLogged;
     /**
      * Read-only snapshot of the ACTUAL Chameleon quad position changes
      * after per-morph Weld, immediately before the library draws them.
@@ -257,6 +259,54 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             }
             SkirtClothSurfaceMesh.Snapshot mesh=
                     SkirtClothSurfaceMesh.capture(strips);
+            // Candidate seam gaps are not proven holes. Separate
+            // horizontal/vertical connections and expose the actual bone
+            // pairs before drawing or welding a replacement surface.
+            float[] maxByType=new float[3],sumByType=new float[3];
+            int[] counts=new int[3],flippedByType=new int[3];
+            for(SkirtClothSurfaceMesh.Seam seam:mesh.seams)
+            {
+                int idx="upper".equals(seam.category)?0:
+                        "lower".equals(seam.category)?1:2;
+                counts[idx]++;
+                sumByType[idx]+=seam.restGap;
+                maxByType[idx]=Math.max(maxByType[idx],seam.restGap);
+                if(seam.reversed)flippedByType[idx]++;
+            }
+            if(!skirtMeshSeamDetailsLogged)
+            {
+                skirtMeshSeamDetailsLogged=true;
+                List<SkirtClothSurfaceMesh.Seam> ranked=
+                        new ArrayList<SkirtClothSurfaceMesh.Seam>(mesh.seams);
+                Collections.sort(ranked,
+                        new Comparator<SkirtClothSurfaceMesh.Seam>()
+                        {
+                            @Override
+                            public int compare(SkirtClothSurfaceMesh.Seam a,
+                                    SkirtClothSurfaceMesh.Seam b)
+                            {
+                                int c=Float.compare(b.restGap,a.restGap);
+                                if(c!=0)return c;
+                                c=a.category.compareTo(b.category);
+                                return c!=0?c:a.a.compareTo(b.a);
+                            }
+                        });
+                for(int i=0;i<Math.min(12,ranked.size());i++)
+                {
+                    SkirtClothSurfaceMesh.Seam seam=ranked.get(i);
+                    System.out.println(
+                            "[BBS Animation Editor][SkirtMeshSeam] "+
+                            "rank="+(i+1)+
+                            " type="+seam.category+
+                            " from="+seam.a+" to="+seam.b+
+                            " gapBlocks="+seam.restGap+
+                            " gapPixels="+(seam.restGap*16F)+
+                            " originalMatch="+seam.forwardGap+
+                            " oppositeMatch="+seam.reverseGap+
+                            " flipped="+seam.reversed+
+                            " classification=CANDIDATE_ONLY");
+                }
+            }
             System.out.println(
                     "[BBS Animation Editor][SkirtMeshCapture] "+
                     "bones="+profile.allBones.size()+
@@ -267,6 +317,15 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                     " seamCandidates="+mesh.seams.size()+
                     " maxRestGap="+mesh.maxRestGap+
                     " meanRestGap="+mesh.meanRestGap+
+                    " maxAssumedGap="+mesh.maxAssumedGap+
+                    " reversedSeams="+mesh.reversedSeams+
+                    " upperMaxGap="+maxByType[0]+
+                    " lowerMaxGap="+maxByType[1]+
+                    " verticalMaxGap="+maxByType[2]+
+                    " upperMeanGap="+sumByType[0]/Math.max(1,counts[0])+
+                    " lowerMeanGap="+sumByType[1]/Math.max(1,counts[1])+
+                    " verticalMeanGap="+sumByType[2]/Math.max(1,counts[2])+
+                    " reversedByType="+java.util.Arrays.toString(flippedByType)+
                     " maxRoundTripError="+mesh.maxRoundTripError+
                     " boundsMin="+java.util.Arrays.toString(mesh.min)+
                     " boundsMax="+java.util.Arrays.toString(mesh.max)+

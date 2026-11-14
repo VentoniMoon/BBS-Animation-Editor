@@ -107,15 +107,28 @@ public final class SkirtClothSurfaceMesh
         public final String a,b;
         public final int[] aEndpoints,bEndpoints;
         public final boolean horizontal;
-        /** Largest endpoint-to-endpoint gap in the ORIGINAL static model. */
+        /** Upper/lower circumferential or upper-to-lower vertical seam. */
+        public final String category;
+        /** Original assumed pairing and reverse pairing gaps, in blocks. */
+        public final float forwardGap,reverseGap;
+        /** Whether opposite source vertex order reduces the seam gap. */
+        public final boolean reversed;
+        /** Smallest gap achievable by matching the two existing edges.
+         * No vertices have been moved or welded by this comparison. */
         public final float restGap;
 
         private Seam(String a,String b,int[] ae,int[] be,
-                boolean horizontal,float gap)
+                String category,float forwardGap,float reverseGap,
+                boolean reversed)
         {
             this.a=a;this.b=b;
             this.aEndpoints=ae.clone();this.bEndpoints=be.clone();
-            this.horizontal=horizontal;this.restGap=gap;
+            this.category=category;
+            this.horizontal=!"vertical".equals(category);
+            this.forwardGap=forwardGap;
+            this.reverseGap=reverseGap;
+            this.reversed=reversed;
+            this.restGap=reversed?reverseGap:forwardGap;
         }
     }
     public static final class Snapshot
@@ -127,10 +140,14 @@ public final class SkirtClothSurfaceMesh
         /** No tessellation: each decoded quad becomes exactly 2 triangles. */
         public final int triangleCount;
         public final float maxRestGap,meanRestGap,maxRoundTripError;
+        /** Previous diagnostic was based only on assumed endpoint order. */
+        public final float maxAssumedGap;
+        public final int reversedSeams;
         public final float[] min,max;
 
         private Snapshot(List<Patch> patches,List<Seam> seams,
                 float maxRestGap,float meanRestGap,float maxRoundTripError,
+                float maxAssumedGap,int reversedSeams,
                 float[] min,float[] max)
         {
             this.patches=Collections.unmodifiableList(patches);
@@ -139,6 +156,8 @@ public final class SkirtClothSurfaceMesh
             this.maxRestGap=maxRestGap;
             this.meanRestGap=meanRestGap;
             this.maxRoundTripError=maxRoundTripError;
+            this.maxAssumedGap=maxAssumedGap;
+            this.reversedSeams=reversedSeams;
             this.min=min.clone();this.max=max.clone();
         }
     }
@@ -240,23 +259,47 @@ public final class SkirtClothSurfaceMesh
                     new int[]{current.lower.topLeft,
                             current.lower.topRight},false));
         }
-        float largest=0F,sum=0F;
+        float largest=0F,sum=0F,assumed=0F;
+        int reversedCount=0;
         for(Seam seam:seams)
         {
             largest=Math.max(largest,seam.restGap);
+            assumed=Math.max(assumed,seam.forwardGap);
             sum+=seam.restGap;
+            if(seam.reversed)reversedCount++;
         }
         return new Snapshot(faces,seams,largest,sum/seams.size(),
-                parity,min,max);
+                parity,assumed,reversedCount,min,max);
     }
 
     private static Seam seam(Patch a,Patch b,int[] ai,int[] bi,
             boolean around)
     {
-        float gap=Math.max(
+        // The original Blockbench cube + 180-degree mirrored rear branch
+        // can reverse visible edge winding. Compare BOTH endpoint matches,
+        // but never move a vertex or merge two different UV corners.
+        float forward=Math.max(
                 dist(a.world[ai[0]],b.world[bi[0]]),
                 dist(a.world[ai[1]],b.world[bi[1]]));
-        return new Seam(a.bone,b.bone,ai,bi,around,gap);
+        float reverse=Math.max(
+                dist(a.world[ai[0]],b.world[bi[1]]),
+                dist(a.world[ai[1]],b.world[bi[0]]));
+        boolean flip=reversedIsCloser(a.world[ai[0]],a.world[ai[1]],
+                b.world[bi[0]],b.world[bi[1]]);
+        int[] matched=flip?new int[]{bi[1],bi[0]}:bi;
+        String category=around?(a.lower?"lower":"upper"):"vertical";
+        return new Seam(a.bone,b.bone,ai,matched,
+                category,forward,reverse,flip);
+    }
+
+    /** Compare both endpoint correspondences; never reinterpret UVs.
+     * Package-private to regression-test the reversed rear-branch case. */
+    static boolean reversedIsCloser(float[] a0,float[] a1,
+            float[] b0,float[] b1)
+    {
+        float forward=Math.max(dist(a0,b0),dist(a1,b1));
+        float reverse=Math.max(dist(a0,b1),dist(a1,b0));
+        return reverse+1E-6F<forward;
     }
 
     private static Patch outside(Cube cube,boolean lower,float[] center)
