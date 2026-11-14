@@ -41,6 +41,17 @@ public final class SkirtClothV2Solver
     private static final float RING_EDGE_SLACK=.004F;
     private static final float RING_ORDER_MIN=.54F;
     private static final float RING_CENTER_SLACK=.095F;
+    /** Rest-bone axial twist is INVISIBLE to hinge/hem-point distances.
+     * Smooth limits keep the actual wide Chameleon panel from rotating
+     * sideways through its neighbors without making normal Jolt sway rigid. */
+    private static final float UPPER_TWIST_FREE=.16F;
+    private static final float UPPER_TWIST_MAX=.34F;
+    private static final float LOWER_TWIST_FREE=.26F;
+    private static final float LOWER_TWIST_MAX=.52F;
+    private static final float UPPER_BEND_FREE=.62F;
+    private static final float UPPER_BEND_MAX=.88F;
+    private static final float LOWER_BEND_FREE=.92F;
+    private static final float LOWER_BEND_MAX=1.18F;
 
     public static final class Parameters
     {
@@ -82,6 +93,7 @@ public final class SkirtClothV2Solver
         public final Map<String,float[]> swings;
         public final Map<String,SkirtAdaptiveWidth.Width> widths;
         public final int activePanels,movedPanels,validLegBoxes,ignoredLegBoxes;
+        public final int twistGuardedPanels,bendGuardedPanels;
         public final float maxPenetrationBefore,maxPenetrationAfter;
         public final float seamErrorBefore,seamErrorAfter;
         public final float peakExtraOutward,allowedPenetration;
@@ -93,6 +105,18 @@ public final class SkirtClothV2Solver
                 float before,float after,float seamBefore,float seamAfter,
                 float outward,float penetration,boolean accepted)
         {
+            this(swings,widths,active,moved,boxes,ignored,before,after,
+                    seamBefore,seamAfter,outward,penetration,accepted,0,0);
+        }
+        Result(Map<String,float[]> swings,
+                Map<String,SkirtAdaptiveWidth.Width> widths,
+                int active,int moved,int boxes,int ignored,
+                float before,float after,float seamBefore,float seamAfter,
+                float outward,float penetration,boolean accepted,
+                int twistGuardedPanels,int bendGuardedPanels)
+        {
+            this.twistGuardedPanels=twistGuardedPanels;
+            this.bendGuardedPanels=bendGuardedPanels;
             this.swings=Collections.unmodifiableMap(swings);
             this.widths=Collections.unmodifiableMap(widths);
             this.activePanels=active;
@@ -137,6 +161,19 @@ public final class SkirtClothV2Solver
         }
     }
 
+    private static final class Guard
+    {
+        final float[] rotation;
+        final boolean changed,twistChanged,bendChanged;
+        Guard(float[] rotation,boolean twistChanged,boolean bendChanged)
+        {
+            this.rotation=rotation;
+            this.twistChanged=twistChanged;
+            this.bendChanged=bendChanged;
+            this.changed=twistChanged||bendChanged;
+        }
+    }
+
     private static final class Contact
     {
         final float[] normal;
@@ -157,13 +194,14 @@ public final class SkirtClothV2Solver
         Map<String,float[]> source=copy(jolt);
         Map<String,SkirtAdaptiveWidth.Width> baselineWidths=
                 safeWidths(strips,source);
-        Result untouched=new Result(source,baselineWidths,
+        Result untouched=new Result(copy(source),baselineWidths,
                 0,0,0,0,0F,0F,0F,0F,0F,
                 params==null?.14F:params.allowedLegPenetration,false);
         if(params==null||strips==null||strips.size()!=N||jolt==null||
                 jolt.size()!=2*N)return untouched;
 
         List<Panel> ring=new ArrayList<Panel>();
+        int guardedTwist=0,guardedBend=0,guardedPairs=0;
         float cx=0F,cz=0F;
         java.util.HashSet<String> used=new java.util.HashSet<String>();
         for(SkirtClothPoseCoupler.Strip s:strips)
@@ -179,8 +217,38 @@ public final class SkirtClothV2Solver
             p.restHem=s.tipWorld.clone();
             if(dist(p.root,p.restMid)<.04F||
                     dist(p.restMid,p.restHem)<.04F)return untouched;
-            p.initialUpper=worldQ(s.upperWorld,jolt.get(s.upper));
-            p.initialLower=worldQ(s.lowerWorld,jolt.get(s.lower));
+            float[] rawUpper=worldQ(s.upperWorld,jolt.get(s.upper));
+            float[] rawLower=worldQ(s.lowerWorld,jolt.get(s.lower));
+            Guard upperGuard=guardRotation(rawUpper,
+                    sub(p.restMid,p.root),
+                    UPPER_TWIST_FREE,UPPER_TWIST_MAX,
+                    UPPER_BEND_FREE,UPPER_BEND_MAX);
+            Guard lowerGuard=guardRotation(rawLower,
+                    sub(p.restHem,p.restMid),
+                    LOWER_TWIST_FREE,LOWER_TWIST_MAX,
+                    LOWER_BEND_FREE,LOWER_BEND_MAX);
+            p.initialUpper=upperGuard.rotation;
+            p.initialLower=lowerGuard.rotation;
+            if(upperGuard.changed||lowerGuard.changed)
+            {
+                if(upperGuard.changed)
+                {
+                    float[] local=toLocal(s.upperWorld,p.initialUpper);
+                    if(local==null)return untouched;
+                    source.put(s.upper,local);
+                }
+                if(lowerGuard.changed)
+                {
+                    float[] local=toLocal(s.lowerWorld,p.initialLower);
+                    if(local==null)return untouched;
+                    source.put(s.lower,local);
+                }
+                guardedPairs++;
+                if(upperGuard.twistChanged||lowerGuard.twistChanged)
+                    guardedTwist++;
+                if(upperGuard.bendChanged||lowerGuard.bendChanged)
+                    guardedBend++;
+            }
             p.baseMid=add(p.root,rotate(p.initialUpper,
                     sub(p.restMid,p.root)));
             p.baseHem=add(p.baseMid,rotate(p.initialUpper,
@@ -192,6 +260,9 @@ public final class SkirtClothV2Solver
             ring.add(p);
         }
         cx/=N;cz/=N;
+        // Widths must match the guarded actual bone pose; computing them
+        // against a pre-guard twist resurrects distorted panel geometry.
+        if(guardedPairs>0)baselineWidths=safeWidths(strips,source);
         final float x=cx,z=cz;
         for(Panel p:ring)
         {
@@ -242,9 +313,10 @@ public final class SkirtClothV2Solver
         // free to enter its neighbors whenever the legs were not touching.
         float seamBefore=ringError(ring,null);
         if(before<=ENTRY_EPS && seamBefore<=ENTRY_EPS)
-            return new Result(source,baselineWidths,0,0,legs.size(),
+            return new Result(source,baselineWidths,0,guardedPairs,legs.size(),
                     ignored,before,before,seamBefore,seamBefore,0F,
-                    params.allowedLegPenetration,false);
+                    params.allowedLegPenetration,guardedPairs>0,
+                    guardedTwist,guardedBend);
 
         int active=0;
         for(Panel p:ring)
@@ -405,6 +477,15 @@ public final class SkirtClothV2Solver
                     MAX_LOWER_CORRECTION*influence[i]);
             float[] lower=multiply(multiply(multiply(
                     conjugate(upper),extraLower),upper),p.initialLower);
+            // Mapping back from position targets can introduce an axial
+            // twist again. Re-guard the final bone quaternions BEFORE
+            // evaluating the mapped rig's seam and body constraints.
+            upper=guardRotation(upper,sub(p.restMid,p.root),
+                    UPPER_TWIST_FREE,UPPER_TWIST_MAX,
+                    UPPER_BEND_FREE,UPPER_BEND_MAX).rotation;
+            lower=guardRotation(lower,sub(p.restHem,p.restMid),
+                    LOWER_TWIST_FREE,LOWER_TWIST_MAX,
+                    LOWER_BEND_FREE,LOWER_BEND_MAX).rotation;
             float[] localUpper=toLocal(p.s.upperWorld,upper);
             float[] localLower=toLocal(p.s.lowerWorld,lower);
             if(localUpper==null||localLower==null)return untouched;
@@ -412,7 +493,11 @@ public final class SkirtClothV2Solver
             mapped.put(p.s.lower,localLower);
             moved++;
         }
-        if(moved==0)return untouched;
+        if(moved==0)
+            return new Result(source,baselineWidths,active,guardedPairs,
+                    legs.size(),ignored,before,before,seamBefore,
+                    seamBefore,0F,params.allowedLegPenetration,
+                    guardedPairs>0,guardedTwist,guardedBend);
         float after=assess(ring,mapped,legs,params);
         float seamAfter=ringError(ring,mapped);
         // Validate the *mapped* Chameleon bones, not only temporary
@@ -429,9 +514,9 @@ public final class SkirtClothV2Solver
             after=before;
             seamAfter=seamBefore;
         }
-        boolean accepted=moved>0;
+        boolean accepted=moved>0||guardedPairs>0;
         Map<String,SkirtAdaptiveWidth.Width> widths=
-                accepted?smoothWidths(ring,safeWidths(strips,mapped)):
+                moved>0?smoothWidths(ring,safeWidths(strips,mapped)):
                 baselineWidths;
         float extraOut=0F;
         if(accepted)
@@ -443,9 +528,9 @@ public final class SkirtClothV2Solver
                         dot(sub(mid,p.baseMid),p.outward),
                         dot(sub(hem,p.baseHem),p.outward)));
             }
-        return new Result(mapped,widths,active,moved,legs.size(),ignored,
-                before,after,seamBefore,seamAfter,extraOut,
-                params.allowedLegPenetration,accepted);
+        return new Result(mapped,widths,active,moved+guardedPairs,
+                legs.size(),ignored,before,after,seamBefore,seamAfter,extraOut,
+                params.allowedLegPenetration,accepted,guardedTwist,guardedBend);
     }
 
     private static Map<String,SkirtAdaptiveWidth.Width> safeWidths(
@@ -769,6 +854,73 @@ public final class SkirtClothV2Solver
         float[] diff=sub(at,base);float d=norm(diff);
         if(d<=maximum||d<1E-7F)return;
         for(int i=0;i<3;i++)at[i]=base[i]+diff[i]*maximum/d;
+    }
+
+    /**
+     * Split an absolute (relative-to-rest) Chameleon bone swing into
+     * swing and twist about its authored longitudinal axis. Moving only
+     * the root/hinge/tip centers DOES NOT see this twist: rotating a wide
+     * Chameleon plate about its vertical axis can invert and stack entire
+     * visible quads while the ring's skeleton measurements stay zero.
+     *
+     * Only excess angle is softly attenuated, so small Jolt oscillations
+     * and sign-continuous walking motion survive byte-for-byte.
+     */
+    private static Guard guardRotation(float[] rotation,float[] restLink,
+            float twistFree,float twistMax,
+            float bendFree,float bendMax)
+    {
+        float distance=norm(restLink);
+        if(distance<1E-7F)
+            return new Guard(rotation,false,false);
+        float[] longitudinal=mul(restLink,1F/distance);
+        float axial=dot(new float[]{
+                rotation[0],rotation[1],rotation[2]},longitudinal);
+        float[] twist=normalizedQ(new float[]{
+                longitudinal[0]*axial,longitudinal[1]*axial,
+                longitudinal[2]*axial,rotation[3]});
+        // 180-degree bend (projection and W zero): no axial component.
+        if(twist[3]<0F)twist=mul(twist,-1F);
+        float twistAngle=2F*(float)Math.atan2(dot(
+                new float[]{twist[0],twist[1],twist[2]},
+                longitudinal),twist[3]);
+        float[] bend=multiply(rotation,conjugate(twist));
+        if(bend[3]<0F)bend=mul(bend,-1F);
+        float bendAngle=2F*(float)Math.acos(clamp(bend[3],-1F,1F));
+        float limitedTwist=softAngle(twistAngle,twistFree,twistMax);
+        float limitedBend=softAngle(bendAngle,bendFree,bendMax);
+        boolean changedTwist=Math.abs(limitedTwist-twistAngle)>1E-5F;
+        boolean changedBend=bendAngle-limitedBend>1E-5F;
+        if(!changedTwist&&!changedBend)
+            return new Guard(rotation,false,false);
+        float[] bendAxis={bend[0],bend[1],bend[2]};
+        float length=norm(bendAxis);
+        float[] limitedBendQ=length<1E-7F?
+                new float[]{0F,0F,0F,1F}:
+                axisQuaternion(mul(bendAxis,1F/length),limitedBend);
+        float[] limitedTwistQ=axisQuaternion(longitudinal,limitedTwist);
+        return new Guard(multiply(limitedBendQ,limitedTwistQ),
+                changedTwist,changedBend);
+    }
+
+    private static float[] axisQuaternion(float[] unitAxis,float angle)
+    {
+        float half=angle*.5F;
+        float sinus=(float)Math.sin(half);
+        return new float[]{unitAxis[0]*sinus,unitAxis[1]*sinus,
+                unitAxis[2]*sinus,(float)Math.cos(half)};
+    }
+
+    /** Continuously differentiable soft limit: no 1-frame hard clamp snap
+     * as the incoming physics tilt crosses the free movement band. */
+    private static float softAngle(float angle,float free,float maximum)
+    {
+        float magnitude=Math.abs(angle);
+        if(magnitude<=free)return angle;
+        float span=maximum-free;
+        float softened=free+span*(1F-(float)Math.exp(
+                -(magnitude-free)/span));
+        return Math.copySign(softened,angle);
     }
 
     private static float[] limitedArc(float[] from,float[] to,float maximum)
