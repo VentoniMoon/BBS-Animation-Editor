@@ -1309,3 +1309,59 @@ prove JNI initialization succeeded**. Check `latest.log` for
 cause an unavailable native preview, in which case the actual startup
 exception must be inspected. Do not tune cloth parameters while Jolt
 is not requested or unavailable.
+
+## Connected Skirt V2 — 360° integrity and compression repair (2026-11-14)
+
+After the V2 startup path was fixed, in-game front-view evidence showed
+a strongly one-sided hem and a ball of intersecting Chameleon panels during
+walking. The existing solver had two structural flaws:
+
+* It returned the **independent Jolt pose untouched** for every frame
+  without an active leg collision; the ring was therefore only coupled
+  when a thigh penetrated it.
+* Its `seam` method enforced a maximum gap but **no minimum distance**.
+  Neighbor joints could collapse to the same location or exchange their
+  angular order. Render-time Weld has no way to rebuild physically
+  separated or folded skeletons; it must only close small visible seams.
+
+The V2 solver now applies the same connected-ring constraints on **every**
+complete 20-strip frame when needed, regardless of leg contacts. Both
+the 20 upper hinges and 20 hems have **two-sided distance bands**
+(82–116% of the authored neighbor distance, ±0.004 block slack), a
+positive circumferential ordering constraint along their anchored
+waist tangent, and weak diagonal shear constraints. This resists both
+one-sided stretching and crushing many panels into the same location
+without forcing a rigid 20-sided tube. All deformations are still driven
+by Jolt; if no ring or collider constraint is violated, the solver
+returns the original source Jolt bone swings exactly.
+
+For large one-sided drift only, the midpoint and hem rows have a
+**soft centroid tether** to their original world-space positions relative
+to the fixed waist. It permits the first 0.095 block of shared lateral
+motion and makes only small bounded corrections outside that slack.
+This avoids strong silhouette caps and allows light inertial flutter.
+
+The connected projection applies leg constraints, two-way seam and
+ordering constraints, local link lengths, soft centroid restoring and
+the existing bounded pose limits in the same loop. The resulting
+Chameleon upper/lower angles are checked **after bone mapping** using
+a unified metric for compression, gap, inversion and center displacement,
+as well as the original thigh-contact metric. A mapped result that makes
+the ring worse is rejected. Dynamic Weld and `SkirtAdaptiveWidth`
+remain the last visual polish, not substitutes for the joint constraints.
+
+With `-Dbbs.editor.physics.skirt.contactAudit=true`,
+`[SkirtClothV2]` fields `seamBefore` and `seamAfter` now measure
+**worst bidirectional ring error**, *not merely stretching*.
+`active` still denotes real thigh contacts; `active=0` combined
+with `moved>0` is a legitimate shape-only repair, not a phantom leg
+collision. The exact swing map is deterministic for a fixed Jolt pose,
+and the full source input is left unchanged.
+
+Regression tests cover no-contact coherent cloth flutter, deliberate
+neighbor compression/inversion without colliders, a one-sided global
+lean, real thigh clearance and the existing oversize/far collider,
+mirrored-basis and deterministic-replay cases. CI does not reproduce
+the final vertex Weld and GPU: Minecraft front/side playback and slow
+frame stepping are still necessary to confirm no visible holes,
+kinks or transient collapse, especially near frames 27–30.

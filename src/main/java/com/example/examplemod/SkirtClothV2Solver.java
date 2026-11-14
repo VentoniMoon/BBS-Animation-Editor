@@ -34,6 +34,13 @@ public final class SkirtClothV2Solver
     private static final float MAX_BOX_HALF=.40F;
     private static final float MAX_BOX_VERTICAL=.60F;
     private static final float WIDTH_HALF_FALLBACK=.039F;
+    /** Cloth may form small folds, but adjacent mid/hem nodes must not
+     * collapse through each other or separate beyond the original pattern. */
+    private static final float RING_MIN_SPACING=.82F;
+    private static final float RING_MAX_SPACING=1.16F;
+    private static final float RING_EDGE_SLACK=.004F;
+    private static final float RING_ORDER_MIN=.54F;
+    private static final float RING_CENTER_SLACK=.095F;
 
     public static final class Parameters
     {
@@ -230,8 +237,11 @@ public final class SkirtClothV2Solver
             }
 
         float before=worst(ring,legs,params);
-        float seamBefore=seamError(ring);
-        if(legs.isEmpty()||before<=ENTRY_EPS)
+        // Shape constraints are independent from thigh contact. Old V2
+        // returned untouched here and effectively made each Jolt strand
+        // free to enter its neighbors whenever the legs were not touching.
+        float seamBefore=ringError(ring,null);
+        if(before<=ENTRY_EPS && seamBefore<=ENTRY_EPS)
             return new Result(source,baselineWidths,0,0,legs.size(),
                     ignored,before,before,seamBefore,seamBefore,0F,
                     params.allowedLegPenetration,false);
@@ -252,21 +262,35 @@ public final class SkirtClothV2Solver
                 active++;
             }
         }
-        if(active==0)
-            return new Result(source,baselineWidths,0,0,legs.size(),
-                    ignored,before,before,seamBefore,seamBefore,0F,
-                    params.allowedLegPenetration,false);
-
-        // Neighbors participate in seams but are NOT given fictitious
-        // leg impulses. Activation is a smooth, single-ring quantity.
+        // Detect compression, inversion and stretch on both linked rows.
+        // A problem in Jolt's free-hanging pose must be repairable without
+        // any collider being present (contact count remains truthful).
         float[] influence=new float[N];
         for(int i=0;i<N;i++)influence[i]=ring.get(i).activity;
         for(int i=0;i<N;i++)
-            if(ring.get(i).activity>0F)
+        {
+            Panel p=ring.get(i),n=ring.get((i+1)%N);
+            if(pairError(p,n,p.baseMid,n.baseMid,p.baseHem,n.baseHem)
+                    >ENTRY_EPS)
             {
-                influence[(i+1)%N]=Math.max(influence[(i+1)%N],.31F);
-                influence[(i+N-1)%N]=Math.max(influence[(i+N-1)%N],.31F);
+                influence[i]=Math.max(influence[i],.74F);
+                influence[(i+1)%N]=Math.max(influence[(i+1)%N],.74F);
             }
+        }
+        float centerBefore=centerError(ring,null);
+        if(centerBefore>ENTRY_EPS)
+            for(int i=0;i<N;i++)
+                influence[i]=Math.max(influence[i],.36F);
+        float[] neighborhood=influence.clone();
+        for(int i=0;i<N;i++)
+            if(influence[i]>0F)
+            {
+                neighborhood[(i+1)%N]=Math.max(
+                        neighborhood[(i+1)%N],influence[i]*.33F);
+                neighborhood[(i+N-1)%N]=Math.max(
+                        neighborhood[(i+N-1)%N],influence[i]*.33F);
+            }
+        influence=neighborhood;
 
         float pull=(.025F+.14F*params.restShapePull)*
                 (1F+.25F*params.airiness);
@@ -314,6 +338,9 @@ public final class SkirtClothV2Solver
                     }
                 }
             }
+            // Soft whole-ring centering opposes the observed one-sided
+            // skew, but allows modest inertial sway (<0.095 blocks).
+            centerRing(ring,influence);
             // Hard length anchors, weak cloth surface neighbors.
             for(int i=0;i<N;i++)
             {
@@ -326,17 +353,26 @@ public final class SkirtClothV2Solver
                             w,w,.51F*w);
                 }
                 if(w<=0F&&wn<=0F)continue;
-                // Stretch-only seams: preserve airy ruffles when panels
-                // approach, but refuse widening past natural panel gaps.
+                // Two-sided perimeter constraints. A stretch-only seam
+                // allowed complete compression and plate stacking.
                 float strength=seamStiffness*Math.max(w,wn);
-                seam(p.mid,n.mid,dist(p.restMid,n.restMid)+.012F,
+                seam(p.mid,n.mid,dist(p.restMid,n.restMid),
                         w,wn,strength);
-                seam(p.hem,n.hem,dist(p.restHem,n.restHem)+.017F,
-                        w,wn,strength);
-                seam(p.mid,n.hem,dist(p.restMid,n.restHem)+.027F,
-                        w,wn,strength*.18F);
-                seam(n.mid,p.hem,dist(n.restMid,p.restHem)+.027F,
-                        wn,w,strength*.18F);
+                seam(p.hem,n.hem,dist(p.restHem,n.restHem),
+                        w,wn,strength*1.08F);
+                // Explicitly preserve circumferential ordering, which
+                // ordinary pairwise distances cannot distinguish after
+                // two panels exchange places.
+                keepOrder(p.mid,n.mid,p.restMid,n.restMid,
+                        p.tangent,w,wn,strength*.80F);
+                keepOrder(p.hem,n.hem,p.restHem,n.restHem,
+                        p.tangent,w,wn,strength);
+                // Weak shear constraints prevent adjacent rows from
+                // turning into a twisted "ball" during a thigh strike.
+                seam(p.mid,n.hem,dist(p.restMid,n.restHem),
+                        w,wn,strength*.22F);
+                seam(n.mid,p.hem,dist(n.restMid,p.restHem),
+                        wn,w,strength*.22F);
             }
             for(int i=0;i<N;i++)
             {
@@ -378,11 +414,15 @@ public final class SkirtClothV2Solver
         }
         if(moved==0)return untouched;
         float after=assess(ring,mapped,legs,params);
-        float seamAfter=assessSeams(ring,mapped);
-        // Reject any solution that produces more collision OR obviously
-        // opens the seams. No beauty-over-collision fallback stage.
+        float seamAfter=ringError(ring,mapped);
+        // Validate the *mapped* Chameleon bones, not only temporary
+        // nodes. Reject if collision worsens or the ring gets more
+        // compressed, inverted or stretched. If the frame had a real
+        // ring fault, require an actual mapped improvement.
         if(after>before+.002F ||
-                seamAfter>Math.max(seamBefore+.075F,.12F))
+                seamAfter>seamBefore+.006F ||
+                (seamBefore>ENTRY_EPS && before<=ENTRY_EPS &&
+                 seamAfter>seamBefore-.0005F))
         {
             mapped=copy(source);
             moved=0;
@@ -575,34 +615,96 @@ public final class SkirtClothV2Solver
         return add(poseMid(p,pose),rotate(upper,
                 rotate(lower,sub(p.restHem,p.restMid))));
     }
-    private static float seamError(List<Panel> ring)
+    /** A zero-collision ring still has to resist collapsing or twisting.
+     * The metric is measured in model blocks, using the authored waist
+     * ring as rest geometry (not the last potentially crumpled Jolt pose). */
+    private static float ringError(List<Panel> ring,
+            Map<String,float[]> posed)
     {
-        float max=0F;
+        float worst=0F;
         for(int i=0;i<N;i++)
         {
-            Panel p=ring.get(i),q=ring.get((i+1)%N);
-            max=Math.max(max,Math.max(
-                    Math.max(0F,dist(p.mid,q.mid)-
-                            dist(p.restMid,q.restMid)),
-                    Math.max(0F,dist(p.hem,q.hem)-
-                            dist(p.restHem,q.restHem))));
+            Panel p=ring.get(i),n=ring.get((i+1)%N);
+            float[] pm=posed==null?p.baseMid:poseMid(p,posed);
+            float[] nm=posed==null?n.baseMid:poseMid(n,posed);
+            float[] ph=posed==null?p.baseHem:poseHem(p,posed);
+            float[] nh=posed==null?n.baseHem:poseHem(n,posed);
+            worst=Math.max(worst,pairError(p,n,pm,nm,ph,nh));
         }
-        return max;
+        return Math.max(worst,centerError(ring,posed));
     }
-    private static float assessSeams(List<Panel> ring,
+
+    private static float pairError(Panel p,Panel n,
+            float[] pm,float[] nm,float[] ph,float[] nh)
+    {
+        float midRest=dist(p.restMid,n.restMid);
+        float hemRest=dist(p.restHem,n.restHem);
+        float mismatch=Math.max(
+                bandError(dist(pm,nm),midRest),
+                bandError(dist(ph,nh),hemRest));
+        mismatch=Math.max(mismatch,orderError(pm,nm,
+                p.restMid,n.restMid,p.tangent));
+        mismatch=Math.max(mismatch,orderError(ph,nh,
+                p.restHem,n.restHem,p.tangent));
+        return mismatch;
+    }
+
+    private static float bandError(float current,float rest)
+    {
+        float lower=rest*RING_MIN_SPACING-RING_EDGE_SLACK;
+        float upper=rest*RING_MAX_SPACING+RING_EDGE_SLACK;
+        return Math.max(0F,Math.max(lower-current,current-upper));
+    }
+
+    private static float orderError(float[] a,float[] b,
+            float[] restA,float[] restB,float[] tangent)
+    {
+        float nominal=dot(sub(restB,restA),tangent);
+        if(nominal<=.015F)return 0F;
+        return Math.max(0F,RING_ORDER_MIN*nominal-
+                dot(sub(b,a),tangent));
+    }
+
+    private static float centerError(List<Panel> ring,
             Map<String,float[]> pose)
     {
-        float max=0F;
+        float dx=0F,dz=0F;
+        for(Panel p:ring)
+        {
+            float[] mid=pose==null?p.baseMid:poseMid(p,pose);
+            float[] hem=pose==null?p.baseHem:poseHem(p,pose);
+            dx+=mid[0]-p.restMid[0]+hem[0]-p.restHem[0];
+            dz+=mid[2]-p.restMid[2]+hem[2]-p.restHem[2];
+        }
+        float len=(float)Math.sqrt(dx*dx+dz*dz)/(2F*N);
+        return Math.max(0F,len-RING_CENTER_SLACK);
+    }
+
+    /** Gentle mean-shift constraint anchored to the fixed 20-bone waist.
+     * No correction is applied to normal cloth sway within the slack. */
+    private static void centerRing(List<Panel> ring,float[] weights)
+    {
+        float dx=0F,dz=0F;
+        for(Panel p:ring)
+        {
+            dx+=p.mid[0]-p.restMid[0]+p.hem[0]-p.restHem[0];
+            dz+=p.mid[2]-p.restMid[2]+p.hem[2]-p.restHem[2];
+        }
+        dx/=2F*N;
+        dz/=2F*N;
+        float len=(float)Math.sqrt(dx*dx+dz*dz);
+        if(len<=RING_CENTER_SLACK)return;
+        float amount=Math.min(.016F,len-RING_CENTER_SLACK)*.24F/len;
         for(int i=0;i<N;i++)
         {
-            Panel p=ring.get(i),q=ring.get((i+1)%N);
-            max=Math.max(max,Math.max(
-                    Math.max(0F,dist(poseMid(p,pose),poseMid(q,pose))-
-                            dist(p.restMid,q.restMid)),
-                    Math.max(0F,dist(poseHem(p,pose),poseHem(q,pose))-
-                            dist(p.restHem,q.restHem))));
+            float weight=weights[i];
+            if(weight<=0F)continue;
+            Panel p=ring.get(i);
+            p.mid[0]-=dx*amount*weight;
+            p.mid[2]-=dz*amount*weight;
+            p.hem[0]-=dx*amount*weight;
+            p.hem[2]-=dz*amount*weight;
         }
-        return max;
     }
 
     private static void softenOutward(float[] node,float[] base,
@@ -628,12 +730,39 @@ public final class SkirtClothV2Solver
             a[i]+=v*wa/sum;b[i]-=v*wb/sum;
         }
     }
-    private static void seam(float[] a,float[] b,float maximum,
+    /** Independent compression and stretch limits. A small distance
+     * band lets fabric wrinkle while preventing adjacent plates from
+     * coalescing into a single inverted pile. */
+    private static void seam(float[] a,float[] b,float rest,
             float wa,float wb,float strength)
     {
+        if(rest<.015F)return;
         float current=dist(a,b);
-        if(current<=maximum)return;
-        link(a,b,maximum,wa,wb,strength);
+        float min=Math.max(.010F,rest*RING_MIN_SPACING-RING_EDGE_SLACK);
+        float max=rest*RING_MAX_SPACING+RING_EDGE_SLACK;
+        if(current<min)
+            link(a,b,min,wa,wb,strength*1.18F);
+        else if(current>max)
+            link(a,b,max,wa,wb,strength);
+    }
+
+    /** Keep neighboring nodes in their original angular order around the
+     * fixed waist. Equal distances alone cannot prevent order inversion. */
+    private static void keepOrder(float[] a,float[] b,
+            float[] restA,float[] restB,float[] tangent,
+            float wa,float wb,float strength)
+    {
+        float total=wa+wb;
+        if(total<=1E-6F)return;
+        float gap=orderError(a,b,restA,restB,tangent);
+        if(gap<=1E-6F)return;
+        float push=Math.min(.024F,gap)*strength;
+        for(int j=0;j<3;j++)
+        {
+            float shift=tangent[j]*push;
+            a[j]-=shift*wa/total;
+            b[j]+=shift*wb/total;
+        }
     }
     private static void limit(float[] at,float[] base,float maximum)
     {

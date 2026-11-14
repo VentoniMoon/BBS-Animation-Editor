@@ -25,6 +25,8 @@ public final class SkirtClothV2SolverSmokeTest
     public static void main(String[] args)
     {
         noColliderPreservesSoftJoltMotionExactly();
+        squeezedNeighborRecoversWithoutBodyCollider();
+        wholeRingSidewaysSkewHasSoftCentering();
         thighClearancePreservesSeamsAndBelt();
         adjustablePenetrationActuallyChangesCollisionThreshold();
         giantInvalidHullAndFarBodyDoNotCauseUmbrella();
@@ -35,8 +37,13 @@ public final class SkirtClothV2SolverSmokeTest
     private static void noColliderPreservesSoftJoltMotionExactly()
     {
         Fixture f=new Fixture(false);
-        f.pose.put(BONES[0][0],new float[]{0,0,1,.21F});
-        f.pose.put(BONES[5][1],new float[]{1,0,0,.24F});
+        // Coherent light waves are a valid cloth pose; absent a seam
+        // violation the connected solver must preserve all Jolt angles.
+        for(String[] pair:BONES)
+        {
+            f.pose.put(pair[0],new float[]{0,0,1,.025F});
+            f.pose.put(pair[1],new float[]{1,0,0,.018F});
+        }
         SkirtClothV2Solver.Result result=run(f,null,.14F);
         check(result.movedPanels==0 && !result.accepted,
                 "free-flowing Jolt pose must not become a rigid tube");
@@ -45,6 +52,49 @@ public final class SkirtClothV2SolverSmokeTest
                 check(Float.floatToIntBits(f.pose.get(name)[k])==
                         Float.floatToIntBits(result.swings.get(name)[k]),
                         "neutral cloth changed Jolt pose "+name);
+    }
+
+    /**
+     * A 20x2 rig with NO thigh contact is still connected. The old
+     * early-return allowed two neighbor plates to occupy the same area.
+     */
+    private static void squeezedNeighborRecoversWithoutBodyCollider()
+    {
+        Fixture f=new Fixture(false);
+        // Upper and lower links at the front swing toward the next
+        // panel along +Z, collapsing and even reversing its seam.
+        f.pose.put(BONES[0][0],new float[]{1F,0F,0F,-.85F});
+        f.pose.put(BONES[0][1],new float[]{1F,0F,0F,-.32F});
+        SkirtClothV2Solver.Result out=run(f,null,.14F);
+        check(out.activePanels==0 && out.validLegBoxes==0,
+                "ring repair must not invent a thigh collision");
+        check(out.seamErrorBefore>.01F,
+                "fixture must produce a real collapsed or inverted seam");
+        check(out.accepted && out.movedPanels>0,
+                "crumpled ring must be repaired with no thigh contact");
+        check(out.seamErrorAfter<out.seamErrorBefore-.001F,
+                "mapped Chameleon bone result must improve ring integrity");
+        check(out.movedPanels<20,
+                "local crumple must not harden every skirt section");
+        check(f.pose.get(BONES[0][0])[3]==-.85F,
+                "raw Jolt input must not be changed by ring correction");
+    }
+
+    /** A substantial one-sided lean should soften toward the belt
+     * without freezing a smaller, natural shared cloth sway. */
+    private static void wholeRingSidewaysSkewHasSoftCentering()
+    {
+        Fixture f=new Fixture(false);
+        for(String[] pair:BONES)
+            f.pose.put(pair[0],new float[]{1F,0F,0F,-.55F});
+        SkirtClothV2Solver.Result out=run(f,null,.14F);
+        check(out.seamErrorBefore>.006F,
+                "fixture must show a global center displacement");
+        check(out.seamErrorAfter<out.seamErrorBefore-.0005F,
+                "skirt ring must oppose substantial lateral skew");
+        check(out.maxPenetrationBefore==0F &&
+                out.maxPenetrationAfter==0F,
+                "mean-shift repair cannot invent leg collisions");
     }
 
     private static void thighClearancePreservesSeamsAndBelt()
@@ -61,9 +111,8 @@ public final class SkirtClothV2SolverSmokeTest
         check(result.maxPenetrationAfter<=
                         result.maxPenetrationBefore-.001F,
                 "actual mapped bone pose must reduce remaining penetration");
-        check(result.seamErrorAfter<=
-                        Math.max(result.seamErrorBefore+.0751F,.1201F),
-                "neighbor seams must be bounded before mapping");
+        check(result.seamErrorAfter<=result.seamErrorBefore+.0061F,
+                "mapped neighbor seams cannot stretch OR compress more");
         check(result.movedPanels<20,
                 "nearby thigh must not spread a rigid umbrella to rear");
         for(String[] p:BONES)
