@@ -1552,3 +1552,63 @@ circumferential or vertical and whether their UV-aware quad
 orientation and bone pairing are correct. A genuinely open static
 edge may require explicit seam correspondence; overlapping/open
 faces may require a new skin rather than direct cube welding.
+
+## Stage 2: shared-vertex static candidate (read-only)
+
+Actual in-game `[SkirtMeshCapture]` and `[SkirtMeshSeam]` numbers:
+20 upper ring seams average `0.06885226` blocks (1.10
+Minecraft geometry pixels) and max `0.10382559` (1.66 pixels);
+20 lower ring seams average `0.06256543` (1.00 pixels)
+and max `0.11324849` (1.81 pixels); 20 vertical
+upper-to-lower seams average `0.0016079089` (0.026
+pixels) and max `0.0054526348` (0.087 pixels).
+`reversedSeams=0`; reversing endpoint pairs never improves a match.
+`maxRoundTripError=1.3328004E-7` blocks. These are
+**candidate edge distances, not proven visible holes** in the full
+source cuboid model, whose other faces can overlap.
+
+The new `SkirtClothSharedSurface` is a **pure Java 8** immutable
+canonical rest surface builder on top of the exact decoded 40 outward
+`ModelQuad` skin patches and 60 candidate seam pairs from Stage 1:
+
+* 40 original UV-owned quads and their 80 triangles remain separate
+  draw surfaces, with **160 original UV corners unchanged**.
+* The model-space geometric corners are unified by a union-find seam
+  graph: 20 top waist nodes, 20 middle nodes joining the existing
+  upper/lower strip pieces, 20 hem nodes — **60 positional nodes**.
+* The static rest position of each unique physical node is the average
+  of its contributing decoded world-space cube vertices. This proposes
+  **one shared geometric point** at every seam while retaining
+  potentially different UVs on each adjacent face.
+* Validation rejects wrong upper/lower chains, invalid row pairing,
+  duplicated/missing candidates, corrupted UV/XYZ values, wrong
+  resulting node count, and wrong latitude counts. Strictly no
+  per-bone positions, ModelVertex, textures, originals or Jolt data
+  are modified by constructing the immutable surface.
+* For each of the 160 input corners, report the maximum and mean
+  movement that would be needed to render this candidate as a single
+  surface, not just the distance between its two original edges.
+  Also report maximum relative patch-edge stretching, residual seam
+  gap (must be 0 for shared nodes), and **flipped/degenerate
+  triangles** (must both be zero before any visual renderer is
+  authorized).
+* Deterministic seam root order is based on the native source patch
+  order and exact source-corner indices, **never a per-frame dynamic
+  spatial sort**. Physical particles may be shared while UV corners
+  continue to use their own atlas coordinates.
+
+A successful exact-geometry capture via the existing
+`-PcaptureSkirtMesh` flag now emits an additional line:
+
+```text
+[BBS Animation Editor][SkirtStaticSkin] particles=60 rows=[20, 20, 20] texturedQuads=40 triangles=80 originalMaxGap=... residualGap=0.0 maxRestCorrection=... meanRestCorrection=... maxRelativeEdgeChange=... flippedTriangles=0 degenerateTriangles=0 mode=READ_ONLY_CANDIDATE_NO_RENDER
+```
+
+This is **not** a rendered mesh, a visually verified
+original-model match, XPBD or an export feature. It is a quantitative
+pre-render acceptance gate. If the static candidate needs excessive
+vertex displacement or inverts any triangle, we should revise the
+source-face/candidate-seam correspondences first, **not** enable
+automatic stitching or increase cloth stiffness. The next stage is
+opt-in static material render parity compared with the exact original
+Chameleon geometry; XPBD follows only after that.

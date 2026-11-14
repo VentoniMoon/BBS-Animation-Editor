@@ -259,6 +259,35 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             }
             SkirtClothSurfaceMesh.Snapshot mesh=
                     SkirtClothSurfaceMesh.capture(strips);
+            // Stage 2 constructs an immutable 20x3 canonical rest lattice.
+            // This does not render the proposed surface or move a cube:
+            // report the precise distortion required BEFORE any visual test.
+            try
+            {
+                SkirtClothSharedSurface.Surface shared=
+                        SkirtClothSharedSurface.connect(mesh);
+                System.out.println(
+                        "[BBS Animation Editor][SkirtStaticSkin] "+
+                        "particles="+shared.nodes.size()+
+                        " rows="+java.util.Arrays.toString(shared.rowCounts)+
+                        " texturedQuads="+shared.patches.size()+
+                        " triangles="+shared.triangleCount+
+                        " originalMaxGap="+shared.sourceMaxSeamGap+
+                        " residualGap="+shared.residualSeamGap+
+                        " maxRestCorrection="+shared.maxRestCorrection+
+                        " meanRestCorrection="+shared.meanRestCorrection+
+                        " maxRelativeEdgeChange="+shared.maxRelativeEdgeChange+
+                        " flippedTriangles="+shared.flippedTriangles+
+                        " degenerateTriangles="+shared.degenerateTriangles+
+                        " mode=READ_ONLY_CANDIDATE_NO_RENDER");
+            }
+            catch(IllegalArgumentException rejected)
+            {
+                System.err.println(
+                        "[BBS Animation Editor][SkirtStaticSkin] "+
+                        "Candidate rejected: "+rejected.getMessage()+
+                        " (original Chameleon mesh unchanged)");
+            }
             // Candidate seam gaps are not proven holes. Separate
             // horizontal/vertical connections and expose the actual bone
             // pairs before drawing or welding a replacement surface.

@@ -11,6 +11,8 @@ public final class SkirtClothSurfaceMeshSmokeTest
     public static void main(String[] args)
     {
         decodedUvAndRestGeometryAreExact();
+        sharedStaticSurfaceKeepsOriginalUvsAndClosesAllSeams();
+        sharedSurfaceTopologyIsDeterministic();
         bothSeamEndpointOrdersAreCompared();
         mirroredBackAndRotatedSectionsHaveStableTopology();
         missingCubeAndSingularMatrixFailClosed();
@@ -48,6 +50,86 @@ public final class SkirtClothSurfaceMeshSmokeTest
                     close(p.uv[v][k],cube.quads.get(0).vertices[v].uv[k],
                             0F,"original ModelVertex.uv changed");
         }
+    }
+
+    private static void sharedStaticSurfaceKeepsOriginalUvsAndClosesAllSeams()
+    {
+        SkirtClothSurfaceMesh.Snapshot original=
+                SkirtClothSurfaceMesh.capture(fixture());
+        SkirtClothSharedSurface.Surface united=
+                SkirtClothSharedSurface.connect(original);
+        require(united.nodes.size()==60,"20 x 3 physical rest lattice");
+        require(united.patches.size()==40&&united.triangleCount==80,
+                "surface still uses exactly the 40 original textured quads");
+        require(united.rowCounts[0]==20&&united.rowCounts[1]==20&&
+                united.rowCounts[2]==20,
+                "20 waist, 20 hinge and 20 hem rest particles");
+        require(united.residualSeamGap<1E-7F,
+                "common node must remove candidate edge discontinuity");
+        require(united.maxRestCorrection<=2F*original.maxRestGap+.001F,
+                "cannot silently drag a fabric vertex across the entire skirt");
+        require(united.flippedTriangles==0&&united.degenerateTriangles==0,
+                "rest stitch cannot reverse or collapse a textured patch");
+        java.util.Map<String,SkirtClothSharedSurface.SkinPatch> byName=
+                new java.util.HashMap<String,SkirtClothSharedSurface.SkinPatch>();
+        for(int p=0;p<original.patches.size();p++)
+        {
+            SkirtClothSurfaceMesh.Patch old=original.patches.get(p);
+            SkirtClothSharedSurface.SkinPatch mapped=united.patches.get(p);
+            require(byName.put(mapped.bone,mapped)==null,
+                    "each authored skin quad should remain separate");
+            require(mapped.bone.equals(old.bone),
+                    "original quad order must survive the seam stitching");
+            for(int v=0;v<4;v++)
+            {
+                require(mapped.nodes[v]>=0&&mapped.nodes[v]<60,
+                        "valid shared rest particle index");
+                for(int u=0;u<2;u++)
+                    close(mapped.uv[v][u],old.uv[v][u],0F,
+                            "UV seam must not be averaged");
+            }
+        }
+        for(SkirtClothSurfaceMesh.Seam seam:original.seams)
+        {
+            SkirtClothSharedSurface.SkinPatch a=byName.get(seam.a);
+            SkirtClothSharedSurface.SkinPatch b=byName.get(seam.b);
+            for(int end=0;end<2;end++)
+            {
+                int ia=seam.aEndpoints[end],ib=seam.bEndpoints[end];
+                require(a.nodes[ia]==b.nodes[ib],
+                        "claimed seam still has two physical particles");
+                for(int k=0;k<3;k++)
+                    close(a.rest[ia][k],b.rest[ib][k],0F,
+                            "shared seam still separates in world space");
+            }
+        }
+    }
+
+    private static void sharedSurfaceTopologyIsDeterministic()
+    {
+        SkirtClothSurfaceMesh.Snapshot captured=
+                SkirtClothSurfaceMesh.capture(fixture());
+        SkirtClothSharedSurface.Surface first=
+                SkirtClothSharedSurface.connect(captured);
+        SkirtClothSharedSurface.Surface second=
+                SkirtClothSharedSurface.connect(captured);
+        require(first.nodes.size()==second.nodes.size(),
+                "repeated source must preserve node count");
+        for(int n=0;n<first.nodes.size();n++)
+        {
+            SkirtClothSharedSurface.Node x=first.nodes.get(n);
+            SkirtClothSharedSurface.Node y=second.nodes.get(n);
+            require(x.row==y.row&&x.contributors==y.contributors,
+                    "node identity or contributor count changed");
+            for(int k=0;k<3;k++)
+                close(x.rest[k],y.rest[k],0F,
+                        "rest nodes must remain frame deterministic");
+        }
+        for(int p=0;p<first.patches.size();p++)
+            for(int v=0;v<4;v++)
+                require(first.patches.get(p).nodes[v]==
+                        second.patches.get(p).nodes[v],
+                        "UV-owned quad references a different particle");
     }
 
     private static void bothSeamEndpointOrdersAreCompared()
