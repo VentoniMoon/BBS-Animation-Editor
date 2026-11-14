@@ -86,6 +86,13 @@ minecraft {
                 jvmArg '-Dbbs.editor.physics.jolt.ragdoll=true'
             }
 
+            // First-phase replacement cloth pipeline: capture the actual
+            // decoded Chameleon outward surface/UV before Weld, READ-ONLY.
+            // This does not activate a second physics engine or renderer.
+            if (project.hasProperty('captureSkirtMesh')) {
+                jvmArg '-Dbbs.editor.physics.skirt.meshCapture=true'
+            }
+
             // A single opt-in flag for debugging both Jolt and connected
             // skirt; no environment variables are necessary in IntelliJ.
             if (project.hasProperty('diagnoseSkirtV2')) {

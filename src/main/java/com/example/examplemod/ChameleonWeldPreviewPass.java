@@ -41,6 +41,11 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
 
     private static final boolean SKIRT_RING_WELD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.ringWeld","true"));
+    /** Stage 1: read-only exact decoded Chameleon skin/UV extraction.
+     * OFF by default; does NOT replace native cube rendering or physics. */
+    private static final boolean SKIRT_MESH_CAPTURE=
+            Boolean.getBoolean("bbs.editor.physics.skirt.meshCapture");
+    private static int skirtMeshCapturePasses;
     /**
      * Read-only snapshot of the ACTUAL Chameleon quad position changes
      * after per-morph Weld, immediately before the library draws them.
@@ -59,11 +64,24 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
      */
     public static ChameleonWeldPreviewPass beginPreparedModel(Object model)
     {
+        return beginPreparedModel(model,true);
+    }
+
+    public static boolean isSkirtMeshCaptureRequested()
+    {
+        return SKIRT_MESH_CAPTURE;
+    }
+
+    /** When weld=false, capture decoded UV/positions but NEVER modify any
+     * model vertices. This must work even with a disabled Weld checkbox. */
+    public static ChameleonWeldPreviewPass beginPreparedModel(
+            Object model,boolean weld)
+    {
         ChameleonWeldPreviewPass pass=new ChameleonWeldPreviewPass();
         if(model==null)return pass;
         try
         {
-            pass.prepareModel(model);
+            pass.prepareModel(model,weld);
         }
         catch(Exception e)
         {
@@ -140,10 +158,22 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     @SuppressWarnings("unchecked")
     private void prepareModel(Object model)throws Exception
     {
+        prepareModel(model,true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void prepareModel(Object model,boolean weld)throws Exception
+    {
         List<Object> roots=(List<Object>)field(model,"bones");
         List<Bone> bones=new ArrayList<Bone>();
         for(Object root:roots)
             collectBone(root,null,identity(),identity(),bones);
+        // Snapshot the untouched ORIGINAL decoded geometry and UVs before
+        // hair/parent weld or circumferential weld modifies any positions.
+        if(SKIRT_MESH_CAPTURE && bones.size()==44 &&
+                ++skirtMeshCapturePasses%120==1)
+            inspectSkirtMesh(bones);
+        if(!weld)return;
         for(Bone bone:bones)
             if(bone.parent!=null)
                 weldJoint(bone.parent,bone);
@@ -192,6 +222,112 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                 " totalModelDelta="+total+
                 " (measured in native posed Chameleon quads AFTER Weld; "+
                 "before original vertex restoration; no leg-space audit)");
+    }
+
+    /**
+     * Select the exact 40 outward faces from the 44-bone Chameleon
+     * model. All ModelVertex.uv values are copied without scaling or
+     * regenerating a box UV layout. No renderer vertex is ever written.
+     */
+    private void inspectSkirtMesh(List<Bone> all)
+    {
+        try
+        {
+            Map<String,Bone> byName=new HashMap<String,Bone>();
+            Bone waist=null;
+            for(Bone b:all)
+            {
+                String id=(String)field(b.value,"id");
+                if(id==null||byName.put(id,b)!=null)return;
+                if("ALL".equals(id))waist=b;
+            }
+            if(waist==null)return;
+            SkirtGeoProfile.Plan<Object> profile=
+                    SkirtGeoProfile.inspect(waist.value,
+                            value->childrenOf(value),value->idOf(value));
+            List<SkirtClothSurfaceMesh.Strip> strips=
+                    new ArrayList<SkirtClothSurfaceMesh.Strip>();
+            for(List<Object> chain:profile.strips)
+            {
+                Bone upper=byName.get(idOf(chain.get(0)));
+                Bone lower=byName.get(idOf(chain.get(1)));
+                if(upper==null||lower==null)return;
+                strips.add(new SkirtClothSurfaceMesh.Strip(
+                        meshCube(upper),meshCube(lower)));
+            }
+            SkirtClothSurfaceMesh.Snapshot mesh=
+                    SkirtClothSurfaceMesh.capture(strips);
+            System.out.println(
+                    "[BBS Animation Editor][SkirtMeshCapture] "+
+                    "bones="+profile.allBones.size()+
+                    " strips="+profile.stripCount()+
+                    " outwardQuads="+mesh.patches.size()+
+                    " triangles="+mesh.triangleCount+
+                    " uvCorners="+(mesh.patches.size()*4)+
+                    " seamCandidates="+mesh.seams.size()+
+                    " maxRestGap="+mesh.maxRestGap+
+                    " meanRestGap="+mesh.meanRestGap+
+                    " maxRoundTripError="+mesh.maxRoundTripError+
+                    " boundsMin="+java.util.Arrays.toString(mesh.min)+
+                    " boundsMax="+java.util.Arrays.toString(mesh.max)+
+                    " mode=READ_ONLY_SOURCE_UV");
+        }
+        catch(Exception error)
+        {
+            System.err.println(
+                    "[BBS Animation Editor][SkirtMeshCapture] "+
+                    "Native quad capture unavailable: "+
+                    error.getClass().getSimpleName()+": "+
+                    error.getMessage()+
+                    " (source cubes/render/physics unchanged)");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static SkirtClothSurfaceMesh.Cube meshCube(Bone bone)
+            throws Exception
+    {
+        List<Object> cubes=(List<Object>)field(bone.value,"cubes");
+        if(cubes==null||cubes.size()!=1)
+            throw new IllegalArgumentException(
+                    "Need one decoded cube on "+idOf(bone.value));
+        Object cube=cubes.get(0);
+        Vector3f pivot=vec(cube,"pivot");
+        Vector3f r=vec(cube,"rotation");
+        float[] local=translate(pivot.x/16F,pivot.y/16F,
+                pivot.z/16F);
+        local=mul(local,rotationZ(r.z));
+        local=mul(local,rotationY(r.y));
+        local=mul(local,rotationX(r.x));
+        local=mul(local,translate(-pivot.x/16F,-pivot.y/16F,
+                -pivot.z/16F));
+        float[] cubeRest=mul(bone.rest,local);
+
+        List<SkirtClothSurfaceMesh.Quad> quads=
+                new ArrayList<SkirtClothSurfaceMesh.Quad>();
+        for(Object face:(List<Object>)field(cube,"quads"))
+        {
+            List<Object> vertices=(List<Object>)field(face,"vertices");
+            if(vertices==null||vertices.size()!=4)continue;
+            SkirtClothSurfaceMesh.Vertex[] corners=
+                    new SkirtClothSurfaceMesh.Vertex[4];
+            for(int i=0;i<4;i++)
+            {
+                Object vertex=vertices.get(i);
+                Vector3f xyz=vec(vertex,"position");
+                Object uv=field(vertex,"uv");
+                float u=((Number)field(uv,"x")).floatValue();
+                float v=((Number)field(uv,"y")).floatValue();
+                corners[i]=new SkirtClothSurfaceMesh.Vertex(
+                        new float[]{xyz.x,xyz.y,xyz.z},
+                        new float[]{u,v});
+            }
+            Vector3f normal=vec(face,"normal");
+            quads.add(new SkirtClothSurfaceMesh.Quad(corners,
+                    new float[]{normal.x,normal.y,normal.z}));
+        }
+        return new SkirtClothSurfaceMesh.Cube(
+                idOf(bone.value),cubeRest,quads);
     }
 
     @SuppressWarnings("unchecked")

@@ -90,10 +90,13 @@ public final class ChameleonWeldRuntime
                 ChameleonWeldPreviewPass.beginPreparedModel(null);
         try
         {
-            if(isEnabled() && currentMorphWeld())
+            boolean weld=isEnabled() && currentMorphWeld();
+            if(weld || ChameleonWeldPreviewPass.isSkirtMeshCaptureRequested())
             {
-                scope=ChameleonWeldPreviewPass.beginPreparedModel(model);
-                if(!reportedSuccess && scope.getSeamCount()>0)
+                // Mesh capture is independent of the Weld checkbox. The
+                // read-only path MUST NOT mutate native Chameleon vertices.
+                scope=ChameleonWeldPreviewPass.beginPreparedModel(model,weld);
+                if(weld && !reportedSuccess && scope.getSeamCount()>0)
                 {
                     reportedSuccess=true;
                     System.out.println("[BBS Editor][Weld][Runtime] Per-morph Weld active: "+
