@@ -8,6 +8,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
+      - 'src/main/java/com/example/examplemod/SkirtClothRestBinding.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/BBSAnimationEditor.java'
       - 'src/test/java/com/example/examplemod/ChameleonWeldGeometrySmokeTest.java'
@@ -19,6 +20,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
+      - 'src/main/java/com/example/examplemod/SkirtClothRestBinding.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
       - 'src/main/java/com/example/examplemod/BBSAnimationEditor.java'
       - 'src/test/java/com/example/examplemod/ChameleonWeldGeometrySmokeTest.java'
@@ -72,6 +74,7 @@ jobs:
             src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java \
             src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java \
             src/main/java/com/example/examplemod/SkirtClothSharedSurface.java \
+            src/main/java/com/example/examplemod/SkirtClothRestBinding.java \
             src/main/java/com/example/examplemod/SkirtGeoProfile.java \
             src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java \
             src/main/java/com/example/examplemod/ChameleonWeldRuntime.java \
