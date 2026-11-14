@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.Collections;
 import java.util.Comparator;
 
-import javax.vecmath.Vector2f;
 import javax.vecmath.Vector3f;
 
 import mchorse.metamorph.api.morphs.AbstractMorph;
@@ -296,10 +295,12 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             {
                 Object vertex=vertices.get(i);
                 Vector3f xyz=vec(vertex,"position");
-                Vector2f uv=(Vector2f)field(vertex,"uv");
+                Object uv=field(vertex,"uv");
+                float u=((Number)field(uv,"x")).floatValue();
+                float v=((Number)field(uv,"y")).floatValue();
                 corners[i]=new SkirtClothSurfaceMesh.Vertex(
                         new float[]{xyz.x,xyz.y,xyz.z},
-                        new float[]{uv.x,uv.y});
+                        new float[]{u,v});
             }
             Vector3f normal=vec(face,"normal");
             quads.add(new SkirtClothSurfaceMesh.Quad(corners,
