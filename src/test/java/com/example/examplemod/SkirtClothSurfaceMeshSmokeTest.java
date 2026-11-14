@@ -11,6 +11,7 @@ public final class SkirtClothSurfaceMeshSmokeTest
     public static void main(String[] args)
     {
         decodedUvAndRestGeometryAreExact();
+        bothSeamEndpointOrdersAreCompared();
         mirroredBackAndRotatedSectionsHaveStableTopology();
         missingCubeAndSingularMatrixFailClosed();
         System.out.println("SkirtClothSurfaceMeshSmokeTest OK");
@@ -47,6 +48,44 @@ public final class SkirtClothSurfaceMeshSmokeTest
                     close(p.uv[v][k],cube.quads.get(0).vertices[v].uv[k],
                             0F,"original ModelVertex.uv changed");
         }
+    }
+
+    private static void bothSeamEndpointOrdersAreCompared()
+    {
+        float[] leftTop={0,1,0},leftBottom={0,0,0};
+        float[] rightTop={.01F,1,0},rightBottom={.01F,0,0};
+        require(!SkirtClothSurfaceMesh.reversedIsCloser(
+                leftTop,leftBottom,rightTop,rightBottom),
+                "already matched endpoints must not flip");
+        require(SkirtClothSurfaceMesh.reversedIsCloser(
+                leftTop,leftBottom,rightBottom,rightTop),
+                "mirrored or reversed face must reverse its seam endpoints");
+        SkirtClothSurfaceMesh.Snapshot mesh=
+                SkirtClothSurfaceMesh.capture(fixture());
+        int[] groups=new int[3];
+        int reversed=0;
+        float assumedMax=0F;
+        for(SkirtClothSurfaceMesh.Seam seam:mesh.seams)
+        {
+            int category="upper".equals(seam.category)?0:
+                    "lower".equals(seam.category)?1:
+                    "vertical".equals(seam.category)?2:-1;
+            require(category>=0,"unknown seam category");
+            groups[category]++;
+            float selected=seam.reversed?seam.reverseGap:seam.forwardGap;
+            close(seam.restGap,selected,0F,
+                    "stored seam score must use selected pairing");
+            require(seam.restGap<=seam.forwardGap+.000001F,
+                    "orientation-aware match cannot widen an existing gap");
+            assumedMax=Math.max(assumedMax,seam.forwardGap);
+            if(seam.reversed)reversed++;
+        }
+        require(groups[0]==20&&groups[1]==20&&groups[2]==20,
+                "need exact 20 upper/lower/vertical candidates");
+        require(mesh.reversedSeams==reversed,
+                "orientation repair count must match raw seam entries");
+        close(mesh.maxAssumedGap,assumedMax,0F,
+                "legacy one-order gap metric must remain auditable");
     }
 
     private static void mirroredBackAndRotatedSectionsHaveStableTopology()
