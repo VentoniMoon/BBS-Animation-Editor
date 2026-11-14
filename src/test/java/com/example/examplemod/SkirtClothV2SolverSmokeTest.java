@@ -25,6 +25,8 @@ public final class SkirtClothV2SolverSmokeTest
     public static void main(String[] args)
     {
         noColliderPreservesSoftJoltMotionExactly();
+        severeAxialTwistIsVisibleToPoseGuard();
+        massivePanelBendRetainsSafeDrapeCone();
         squeezedNeighborRecoversWithoutBodyCollider();
         wholeRingSidewaysSkewHasSoftCentering();
         thighClearancePreservesSeamsAndBelt();
@@ -58,6 +60,51 @@ public final class SkirtClothV2SolverSmokeTest
      * A 20x2 rig with NO thigh contact is still connected. The old
      * early-return allowed two neighbor plates to occupy the same area.
      */
+    /** An axial spin can rotate a wide rendered Chameleon cube 100+
+     * degrees while its middle/hem centerline nodes do not move at all.
+     * This was invisible to all previous ring-position tests. */
+    private static void severeAxialTwistIsVisibleToPoseGuard()
+    {
+        Fixture f=new Fixture(false);
+        f.pose.put(BONES[0][0],new float[]{0F,1F,0F,2.05F});
+        f.pose.put(BONES[0][1],new float[]{0F,1F,0F,-1.70F});
+        SkirtClothV2Solver.Result out=run(f,null,.14F);
+        check(out.activePanels==0&&out.maxPenetrationBefore==0F,
+                "a bone spin must not invent a thigh collision");
+        check(out.accepted&&out.twistGuardedPanels>0,
+                "axial twist must be caught without moved centerlines");
+        check(out.swings.get(BONES[0][0])[3]<.341F,
+                "upper plate still flipped about its hanging axis");
+        check(out.swings.get(BONES[0][1])[3]<.521F,
+                "lower plate still twisted through its neighbor");
+        check(f.pose.get(BONES[0][0])[3]==2.05F &&
+                f.pose.get(BONES[0][1])[3]==-1.70F,
+                "must not overwrite the original native Jolt samples");
+        SkirtClothV2Solver.Result again=run(f,null,.14F);
+        for(String bone:f.pose.keySet())
+            for(int j=0;j<4;j++)
+                close(out.swings.get(bone)[j],again.swings.get(bone)[j],
+                        .000001F,"same frame must have no random twist");
+    }
+
+    /** A suddenly folded strand should not rotate an entire segment
+     * horizontally across the waistband. No hard global tube needed. */
+    private static void massivePanelBendRetainsSafeDrapeCone()
+    {
+        Fixture f=new Fixture(false);
+        f.pose.put(BONES[3][0],new float[]{1F,0F,0F,2.3F});
+        f.pose.put(BONES[3][1],new float[]{1F,0F,0F,2.0F});
+        SkirtClothV2Solver.Result out=run(f,null,.14F);
+        check(out.bendGuardedPanels>0 && out.accepted,
+                "catastrophic bend must trigger the drape cone guard");
+        float[] upper=out.swings.get(BONES[3][0]);
+        float[] lower=out.swings.get(BONES[3][1]);
+        check(upper[3]<.89F && lower[3]<1.19F,
+                "a panel can still fold fully over the character");
+        check(Float.isFinite(out.seamErrorAfter),
+                "guarded skirt seam must remain finite");
+    }
+
     private static void squeezedNeighborRecoversWithoutBodyCollider()
     {
         Fixture f=new Fixture(false);

@@ -2219,6 +2219,8 @@ public class BodyPartsPreviewRenderer
                                 " model="+data.getTimelineId()+
                                 " active="+cloth.activePanels+
                                 " moved="+cloth.movedPanels+
+                                " twistGuarded="+cloth.twistGuardedPanels+
+                                " bendGuarded="+cloth.bendGuardedPanels+
                                 " boxes="+cloth.validLegBoxes+
                                 " ignoredBoxes="+cloth.ignoredLegBoxes+
                                 " penetrationRatio="+cloth.allowedPenetration+

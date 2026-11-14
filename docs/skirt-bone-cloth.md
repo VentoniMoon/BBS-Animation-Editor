@@ -1365,3 +1365,58 @@ mirrored-basis and deterministic-replay cases. CI does not reproduce
 the final vertex Weld and GPU: Minecraft front/side playback and slow
 frame stepping are still necessary to confirm no visible holes,
 kinks or transient collapse, especially near frames 27–30.
+
+## Skirt V2: axial plate twist and catastrophic bend guard (2026-11-14)
+
+In-game playback after PR #200 still shows plates accumulating into a
+crumpled stack. The existing 20x2 solver measures neighboring hinge/hem
+**points**. A rendered Chameleon *wide cube* can rotate 90–180 degrees
+around the vertical axis of its hanging link with NO change to those
+points or their spacing. Therefore `ringError=0` and the entire frame
+was returned unchanged, even though the actual blue cloth panels were
+visually folded and intersecting. Very large upper/lower angular bends
+could also fold individual panels over the thigh/waist without violating
+several neighboring point-distance checks.
+
+V2 now performs an early **swing–twist decomposition per bone in the
+decoded world basis**, relative to the authored upper/lower longitudinal
+segment direction. Twist and bending are limited **smoothly**, without
+a hard threshold snap:
+
+* Upper section: free axial twist ±0.16 rad, asymptotic maximum
+  0.34 rad; free bend 0.62 rad, asymptotic maximum 0.88 rad
+* Lower section: free axial twist ±0.26 rad, asymptotic maximum
+  0.52 rad; free bend 0.92 rad, asymptotic maximum 1.18 rad
+
+Angles below those free thresholds are preserved bit-for-bit from
+native Jolt. Above them, excess rotation is gradually attenuated;
+this keeps short soft cloth flutter while guarding against a single
+Jolt section turning its broad plate sideways or upward. This is
+**skirt-only** and does not modify native Jolt, the original Jolt pose
+map, body colliders, animation keys or other Body Parts.
+
+The constrained world rotation is mapped to the local Chameleon bone
+axis-angle before any hinge/hem reconstruction. Unlike a final
+independent panel-correction pass, the SAME pose is then fed to the
+connected-ring, waist centering, neighbor-distance and leg-contact
+solver. Rig mapping rechecks the guard **before final seam/contact
+acceptance** so constrained node positions cannot reintroduce a
+large twist. A rejected ring projection still retains the safe
+pre-guarded source pose, not the visually folded original.
+
+New `[SkirtClothV2]` audit fields:
+`twistGuarded` and `bendGuarded` — number of strips whose Jolt
+upper/lower orientation was materially attenuated before the ring
+projection. `active=0`, `twistGuarded>0` with `accepted=true` is
+expected: dangerous rotations exist even without any thigh collision.
+If both counters remain zero while the rendered skirt still crumples,
+the next likely issue is the exact final Chameleon/Weld vertex geometry,
+width scaling or ring reconstruction, rather than the native source
+bone spin.
+
+Added Java 8 regressions with 2.05/−1.70 rad axial spin and 2.3/2.0
+rad catastrophic bend; neither is detectable by the old hinge/hem
+distance-only model. Also verify standard low-amplitude wave, uniform
+skew, compression, real thigh clearance and mirrored bones. This is
+a cautious geometrical safety layer, **not a claim of full cloth mesh
+self-collision**; front/side slow-motion gameplay is still necessary.
