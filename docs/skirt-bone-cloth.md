@@ -1420,3 +1420,79 @@ distance-only model. Also verify standard low-amplitude wave, uniform
 skew, compression, real thigh clearance and mirrored bones. This is
 a cautious geometrical safety layer, **not a claim of full cloth mesh
 self-collision**; front/side slow-motion gameplay is still necessary.
+
+## Next-generation skirt mesh — Stage 1: decoded skin capture (2026-11-14)
+
+After the independent-strand and Connected Skirt V2 attempts still folded
+the rendered plate geometry, the replacement starts at **the native
+Chameleon mesh and its original UVs**, not another position correction on
+40 Jolt bones. The submitted `skirt.geo(2).json` contains 44 bones, 43
+cubes (3 belt + 40 fabric) and 20 upper/lower moving strips with a
+mirrored 180° rear branch, differently placed bone/cube pivots, and
+some ±180° rotations on side-panel cubes. Treating all these as
+uniform pivot positions was incorrect.
+
+**Prototype:** `SkirtClothSurfaceMesh` (pure Java 8) is a read-only
+converter. It receives the *real decoded* `ModelCube.quads` with
+`ModelVertex.position` and `ModelVertex.uv`; each of the 40 cubes
+also carries its Chameleon rest matrix including the bone hierarchy
+and authored cube pivot/XYZ rotation. The converter finds the
+exterior-facing quad by its transformed normal and radial direction,
+copies all four original UV coordinates exactly, and retains original
+winding as two triangles. It orders 20 pairs around the rest waist
+and measures 40 circumferential and 20 vertical neighbor seam
+candidates from the real exterior edge corners. This records
+physical edge gaps **without** stretching faces or modifying the
+model. UVs intentionally remain distinct at geometric seam duplicates:
+a future shared physics particle must not collapse two unrelated
+per-face UV coordinates.
+
+The result for this 20x2 cuboid model should contain **40 outward
+quads = 80 source-skin triangles, 160 UV corners and 60 candidate
+seams**. These are not a continuous mesh yet: the source rest model
+can have nonzero gaps, an individual cube has six faces, and this first
+prototype captures only the outer fabric skin. A future 20×4 node
+XPBD surface will interpolate/subdivide *after* the native rest
+geometry and UV seam measurements are validated. The source belt's
+three cubes and inner surfaces are untouched.
+
+**Native read-only runtime integration:**
+`ChameleonWeldPreviewPass.prepareModel` now supports a guarded opt-in
+capture **before** parent-child and ring Weld, on an exact 44-bone
+`SkirtGeoProfile` match. The capture uses the existing posed/rest
+hierarchy implementation and never writes `ModelVertex.position`,
+`ModelVertex.uv`, source `.geo.json`, animation keys or any Jolt data.
+Every 120 eligible render passes it prints:
+
+```text
+[BBS Animation Editor][SkirtMeshCapture] bones=44 strips=20 outwardQuads=40 triangles=80 uvCorners=160 seamCandidates=60 maxRestGap=... meanRestGap=... maxRoundTripError=... boundsMin=... boundsMax=... mode=READ_ONLY_SOURCE_UV
+```
+
+The round-trip metric validates cube-rest model-to-world and inverse
+transforms. It does NOT claim geometric equivalence to a *separately
+rendered continuous skin*, which has not been implemented. A capture
+exception is logged without changing the normal renderer.
+
+**IntelliJ Gradle run:** append `-PcaptureSkirtMesh`:
+
+```text
+runClient -PenableJoltExperimental -PfixMixinAsm -PenableSkirtClothV2 -PenableJoltRagdoll -PdiagnoseSkirtV2 -PcaptureSkirtMesh
+```
+
+Alternatively set JVM `-Dbbs.editor.physics.skirt.meshCapture=true`.
+The prototype stays OFF by default, keeps the old Jolt/V2 renderer
+exactly as-is, and is safe to test on the real skirt without touching
+other Chameleon models. For the **first geometry-only test**, V2 can
+be omitted entirely: the new extractor is independent of the physics
+solver. Check `maxRoundTripError` near zero and record the rest seam
+gap statistics. If `Native quad capture unavailable` appears, inspect
+which authored cube/transform/face failed before adding XPBD.
+
+**Acceptance gate before Stage 2:** 40 extracted quad patches with
+correct UVs and a stable ordered seam map across identical frames;
+actual model-render comparison from front/back/side; then a
+temporary separately rendered continuous skin with matching materials
+and no physics; only then XPBD with shared geometric positions,
+controlled ingress into leg colliders and true mesh self-collision.
+No claims about cloth collision, skirt shape improvement or visual
+gap elimination in this Stage 1 PR.
