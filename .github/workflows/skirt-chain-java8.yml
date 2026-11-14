@@ -9,6 +9,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtConnectedClothSolver.java'
       - 'src/main/java/com/example/examplemod/SkirtClothV2Solver.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
+      - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
       - 'src/main/java/com/example/examplemod/SkirtV2JoltFrameGate.java'
       - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
       - 'src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java'
@@ -59,6 +60,7 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtConnectedClothSolver.java'
       - 'src/main/java/com/example/examplemod/SkirtClothV2Solver.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
+      - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
       - 'src/main/java/com/example/examplemod/SkirtV2JoltFrameGate.java'
       - 'src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java'
       - 'src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java'
@@ -120,6 +122,7 @@ jobs:
             src/main/java/com/example/examplemod/SkirtConnectedClothSolver.java \
             src/main/java/com/example/examplemod/SkirtClothV2Solver.java \
             src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java \
+            src/main/java/com/example/examplemod/SkirtClothSharedSurface.java \
             src/main/java/com/example/examplemod/SkirtV2JoltFrameGate.java \
             src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java \
             src/main/java/com/example/examplemod/ChameleonWeldGeometry.java \
