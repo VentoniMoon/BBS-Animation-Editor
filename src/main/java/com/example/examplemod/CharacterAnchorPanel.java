@@ -31,6 +31,8 @@ public final class CharacterAnchorPanel
     }
     private int selectedSource,selectedBone;
     private String preferredSourceId="";
+    private String preferredBoneName="";
+    private CharacterKey selectedKey;
     private Object inspectedMorph;
     private final List<String> cachedBoneNames=new ArrayList<String>();
     private String status="SELECT ITEM + RECEIVER BONE";
@@ -45,6 +47,23 @@ public final class CharacterAnchorPanel
         this.previewActor=actor;
     }
 
+    /** A click on an existing anchor key opens its item + target bone,
+     * rather than silently editing the first source in the scene list.
+     */
+    public void setSelectedKey(CharacterKey key)
+    {
+        if(selectedKey==key)return;
+        selectedKey=key;
+        if(key==null||!key.hasData(CharacterAnchorTransfers.KEY))return;
+        net.minecraft.nbt.NBTTagList transitions=key.getData()
+                .getTagList(CharacterAnchorTransfers.KEY,10);
+        if(transitions.tagCount()==0)return;
+        net.minecraft.nbt.NBTTagCompound transition=
+                transitions.getCompoundTagAt(0);
+        preferredSourceId=transition.getString("ItemId");
+        preferredBoneName=transition.getString("OwnerBone");
+    }
+
     private void update(AnimationEditorScreen editor,
             BlockbusterSceneActorData target,int frame)
     {
@@ -52,7 +71,12 @@ public final class CharacterAnchorPanel
         if(!id.equals(actorId))
         {
             actorId=id;selectedSource=0;selectedBone=0;
-            preferredSourceId="";
+            if(selectedKey==null||
+                    !selectedKey.hasData(CharacterAnchorTransfers.KEY))
+            {
+                preferredSourceId="";
+                preferredBoneName="";
+            }
             inspectedMorph=null;cachedBoneNames.clear();
             status="SELECT ITEM + RECEIVER BONE";
         }
@@ -125,6 +149,13 @@ public final class CharacterAnchorPanel
                             (mchorse.metamorph.api.morphs.AbstractMorph)morph));
         }
         bones.addAll(cachedBoneNames);
+        if(!preferredBoneName.isEmpty())
+            for(int i=0;i<bones.size();i++)
+                if(preferredBoneName.equals(bones.get(i)))
+                {
+                    selectedBone=i;
+                    break;
+                }
         if(selectedBone>=bones.size())selectedBone=0;
     }
 
@@ -193,8 +224,11 @@ public final class CharacterAnchorPanel
         if(my>=y+61&&my<y+84)
         {
             if(!bones.isEmpty())
+            {
                 selectedBone=(selectedBone+(mx<x+width/2?-1:1)+
                         bones.size())%bones.size();
+                preferredBoneName=bones.get(selectedBone);
+            }
             return true;
         }
         if(my>=y+89&&my<y+113)
@@ -272,7 +306,11 @@ public final class CharacterAnchorPanel
             editor.getSceneState().getSaveController().markDirty();
             CharacterTimelineEditorController
                     .requestInspectorKeySelection(target,key);
+            setSelectedKey(key);
             status="KEY @ "+frame+" / WORLD PRESERVED";
+            System.out.println("[BBS Editor][Anchors] KEY frame="+frame+
+                    " item="+item.itemId+" owner="+target.getId()+
+                    " bone="+bone+" worldRebased=true");
         }
         catch(IllegalArgumentException invalid)
         {
