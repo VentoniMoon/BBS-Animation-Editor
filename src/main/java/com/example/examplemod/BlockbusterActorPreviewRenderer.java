@@ -1060,6 +1060,17 @@ public class BlockbusterActorPreviewRenderer
             return;
         }
 
+        // A transferred standalone item has one active representation:
+        // a transient BodyPart on the recipient. Keep the source actor's
+        // saved Morph/Record untouched so seeking restores it immediately.
+        if(CharacterAnchorPreview.hidesActor(actorData.getId(),
+                CameraVisualFrameClock.sceneTime(
+                        BlockbusterPreviewAnimationState.getFrame())))
+        {
+            preparedForMirror=false;
+            return;
+        }
+
         // A BetterLights source is NOT an actor to draw in RenderWorldLast.
         // Its one persistent native LightCaster was already synchronized
         // at RenderTick.START, before OptiFine's world lighting pass.
@@ -1793,17 +1804,21 @@ public class BlockbusterActorPreviewRenderer
          */
         if (this.bodyPartsController != null)
         {
-            this.bodyPartsPreviewRenderer.prepare(
-                    this.bodyPartsController,
-                    entityActor,
-                    previewFrame
-            );
+            this.bodyPartsPreviewRenderer.prepareModels(
+                    entityActor,previewFrame,
+                    CharacterAnchorPreview.modelsFor(actorData.getId(),
+                            CameraVisualFrameClock.sceneTime(previewFrame),
+                            this.bodyPartsController.getModels()),false);
         }
         else if (this.passiveBodyPartsModels != null)
         {
+            java.util.List<BodyPartModelData> projected=
+                    CharacterAnchorPreview.modelsFor(actorData.getId(),
+                            CameraVisualFrameClock.sceneTime(previewFrame),
+                            this.passiveBodyPartsModels);
             this.bodyPartsPreviewRenderer.prepareModels(
-                    entityActor,previewFrame,this.passiveBodyPartsModels,
-                    this.restoreUneditedNativeParts);
+                    entityActor,previewFrame,projected,
+                    this.restoreUneditedNativeParts&&projected.isEmpty());
         }
 
         /*
@@ -1840,6 +1855,7 @@ public class BlockbusterActorPreviewRenderer
          */
         this.bodyPartsPreviewRenderer.captureRenderedAttachmentMatrices(
                 entityActor, previewFrame);
+        CharacterAnchorPoseCache.capture(actorData,entityActor,previewFrame);
         // From here the cached actor is ready for a second VIEW ONLY.
         // The mirror pass must never call drawActor() / prepare() again.
         preparedPartialTicks=actorPartialTicks;

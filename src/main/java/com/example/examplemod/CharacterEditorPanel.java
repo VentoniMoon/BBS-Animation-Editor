@@ -42,6 +42,7 @@ public class CharacterEditorPanel
         ANIMATION_SETUP,
         BODY_PART_OVERRIDES,
         ANIMATION_PARAMETERS,
+        ANCHORS,
         RAGDOLL,
         LIP_SYNC
     }
@@ -256,6 +257,8 @@ public class CharacterEditorPanel
 
     private final CharacterAnimationParametersPanel animationParametersPanel =
             new CharacterAnimationParametersPanel();
+    private final CharacterAnchorPanel anchorsPanel=
+            new CharacterAnchorPanel();
 
     /*
      * =========================================================
@@ -293,6 +296,7 @@ public class CharacterEditorPanel
         if (this.runtimeActor != actor)
         {
             this.runtimeActor = actor;
+            anchorsPanel.setPreviewActor(actor);
             resetBodyPartScroll();
         }
     }
@@ -346,6 +350,7 @@ public class CharacterEditorPanel
         if (this.selectedActor != actor)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
             this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
@@ -399,6 +404,7 @@ public class CharacterEditorPanel
         if (key == null)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
             this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
@@ -409,6 +415,7 @@ public class CharacterEditorPanel
         if (this.selectedActor == null)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
             this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
@@ -422,6 +429,7 @@ public class CharacterEditorPanel
         if (timeline == null)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
 
             resetBodyPartScroll();
 
@@ -469,7 +477,9 @@ public class CharacterEditorPanel
                 // frame syncs when the key identity is unchanged.
                 // Physics keys now have their own PHYSICS workspace.
                 // Do not automatically open the retired RAGDOLL accordion.
-                if(key.getType()!=null)
+                if(key.hasData(CharacterAnchorTransfers.KEY))
+                    openedSection=Section.ANCHORS;
+                else if(key.getType()!=null)
                 {
                     switch(key.getType())
                     {
@@ -491,11 +501,13 @@ public class CharacterEditorPanel
             }
 
             this.selectedKey=key;
+            anchorsPanel.setSelectedKey(key);
             this.selectedBodyPartModel=null;
         }
         else
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
 
             resetBodyPartScroll();
         }
@@ -584,7 +596,7 @@ public class CharacterEditorPanel
         if (!isSelectedKeyValid())
         {
             this.selectedKey = null;
-
+            anchorsPanel.setSelectedKey(null);
             resetBodyPartScroll();
         }
     }
@@ -592,7 +604,7 @@ public class CharacterEditorPanel
     public void clearSelectedKey()
     {
         this.selectedKey = null;
-
+        anchorsPanel.setSelectedKey(null);
         resetBodyPartScroll();
     }
 
@@ -897,6 +909,21 @@ public class CharacterEditorPanel
         cursorY += this.openedSection == Section.ANIMATION_PARAMETERS
                 ? ANIMATION_PARAMETERS_CONTENT_GAP + CharacterAnimationParametersPanel.HEIGHT + 4
                 : 4;
+
+        // Universal non-destructive ownership keys live on the main
+        // CHARACTER track, independent from Body Part frame clips.
+        cursorY = drawSection(mc,Section.ANCHORS,"ANCHORS",
+                cursorY,mouseX,mouseY);
+        if(this.openedSection==Section.ANCHORS)
+        {
+            cursorY+=4;
+            if(mc.currentScreen instanceof AnimationEditorScreen)
+                anchorsPanel.draw(mc,(AnimationEditorScreen)mc.currentScreen,
+                        this.selectedActor,this.currentFrame,
+                        this.x+8,cursorY,Math.max(90,this.width-16));
+            cursorY+=CharacterAnchorPanel.HEIGHT;
+        }
+        cursorY+=4;
 
         // Ragdoll/impulse/gravity/fluid controls moved to PHYSICS.
         // Leave legacy NBT keys intact for old scenes.
@@ -3008,6 +3035,28 @@ public class CharacterEditorPanel
                 ? SECTION_HEIGHT + ANIMATION_PARAMETERS_CONTENT_GAP
                   + CharacterAnimationParametersPanel.HEIGHT + 4
                 : SECTION_HEIGHT + 4;
+
+        if(isInsideSection(currentY,mouseX,mouseY))
+        {
+            toggleSection(Section.ANCHORS);
+            return true;
+        }
+        if(this.openedSection==Section.ANCHORS)
+        {
+            if(Minecraft.getMinecraft().currentScreen
+                    instanceof AnimationEditorScreen)
+            {
+                AnimationEditorScreen screen=(AnimationEditorScreen)
+                        Minecraft.getMinecraft().currentScreen;
+                if(anchorsPanel.click(screen,this.selectedActor,
+                        this.currentFrame,mouseX,mouseY))
+                    return true;
+            }
+            currentY+=SECTION_HEIGHT+SECTION_CONTENT_GAP+
+                    CharacterAnchorPanel.HEIGHT;
+        }
+        else currentY+=SECTION_HEIGHT;
+        currentY+=4;
 
         // Ragdoll has a dedicated PHYSICS inspector; skip the old row.
         if (isInsideSection(currentY, mouseX, mouseY))

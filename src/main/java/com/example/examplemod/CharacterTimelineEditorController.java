@@ -1296,6 +1296,11 @@ public class CharacterTimelineEditorController
             return "";
         }
 
+        // Anchor events use the familiar @ pin marker. They remain
+        // normal CharacterKey NBT and can share a frame with other state.
+        if(key.hasData(CharacterAnchorTransfers.KEY))
+            return "@";
+
         // A dedicated physics key is recognizable on the CHARACTER
         // timeline without changing the legacy serialized key Type.
         // Composite Morph/Skin keys retain their original markers.

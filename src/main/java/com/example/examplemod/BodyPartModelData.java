@@ -12,6 +12,16 @@ public class BodyPartModelData
 {
     private static int NEXT_TIMELINE_ID = 1;
     private final String timelineId;
+    /** Persistent identity for transfer events; timelineId is editor-local
+     * and historically changed after scene load, so NEVER key anchors by it.
+     */
+    private String anchorId=java.util.UUID.randomUUID().toString();
+    public String getAnchorId(){return anchorId;}
+    public void restoreAnchorId(String value)
+    {
+        if(value!=null&&!value.isEmpty())
+            anchorId=value;
+    }
 
     private String modelName;
     private String attachmentBoneName;
