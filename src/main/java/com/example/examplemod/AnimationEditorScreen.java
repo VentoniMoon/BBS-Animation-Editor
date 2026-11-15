@@ -3403,6 +3403,8 @@ public class AnimationEditorScreen extends GuiScreen
                     {
                         this.cameraWorkspace.drawNativeLightGizmo(
                                 this,mc,filmX,filmY,filmW,filmH);
+                        this.cameraWorkspace.drawNativeParticleGizmo(
+                                this,mc,filmX,filmY,filmW,filmH);
                         this.cameraWorkspace.drawNativeMirrorGizmo(
                                 this,mc,filmX,filmY,filmW,filmH);
                     }
@@ -4265,6 +4267,13 @@ public class AnimationEditorScreen extends GuiScreen
         // CAMERA's toolbar uses the same hitboxes as all other modes.
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
                 &&clickStage8PreviewButton(mouseX,mouseY,mouseButton))return;
+        // Static particle sources use the same native POSE arrow gizmo.
+        if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
+                &&sceneViewport!=null&&
+                cameraWorkspace.beginParticleGizmo(this,mouseX,mouseY,
+                        mouseButton,sceneViewport.getX(),
+                        sceneViewport.getY(),sceneViewport.getWidth(),
+                        sceneViewport.getHeight()))return;
         // A mirror is a world-space clickable rectangle. Pick it before
         // moving the camera, scrubbing clips or dragging IMAGE/VIDEO layers.
         if(editorModeController.getMode()==EditorModeController.EditorMode.CAMERA
@@ -4373,6 +4382,7 @@ public class AnimationEditorScreen extends GuiScreen
                 && clickedMouseButton == 0)
         {
             if(cameraWorkspace.dragMirror(this,mouseX,mouseY))return;
+            if(cameraWorkspace.dragParticleGizmo(this,mouseX,mouseY))return;
             if(cameraWorkspace.dragLightSetting(this,mouseX,mouseY))return;
             if(cameraWorkspace.dragLightGizmo(this,mouseX,mouseY))return;
             this.cameraWorkspace.move(mouseX,mouseY,getSceneLength());
@@ -4402,6 +4412,7 @@ public class AnimationEditorScreen extends GuiScreen
         if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.CAMERA)
         {
+            this.cameraWorkspace.releaseParticleGizmo(this);
             this.cameraWorkspace.releaseLightSetting(this);
             this.cameraWorkspace.releaseLightGizmo(this);
             this.cameraWorkspace.releaseMirror(this);
