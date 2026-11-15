@@ -207,7 +207,9 @@ public class BodyPartsEditorPanel
             drawButton(mc,
                     selected.hasModel() ? selected.getModelName() : "SELECT MODEL",
                     x + 9, contentY, WIDTH - 18, 22, mouseX, mouseY);
-            drawButton(mc, "REMOVE ATTACHMENT",
+            drawButton(mc,selected.isAnchorAttachment()
+                            ? "REMOVE VIA ANCHORS"
+                            : "REMOVE ATTACHMENT",
                     x + 9, contentY + 27, WIDTH - 18, 20, mouseX, mouseY);
             boolean chameleon=isChameleonWeldCandidate(selected);
             drawButton(mc,
