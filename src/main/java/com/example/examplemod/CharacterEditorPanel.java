@@ -596,7 +596,7 @@ public class CharacterEditorPanel
         if (!isSelectedKeyValid())
         {
             this.selectedKey = null;
-
+            anchorsPanel.setSelectedKey(null);
             resetBodyPartScroll();
         }
     }
@@ -604,7 +604,7 @@ public class CharacterEditorPanel
     public void clearSelectedKey()
     {
         this.selectedKey = null;
-
+        anchorsPanel.setSelectedKey(null);
         resetBodyPartScroll();
     }
 
