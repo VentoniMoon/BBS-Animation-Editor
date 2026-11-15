@@ -500,48 +500,41 @@ public class AnimationEditorInput
 
         if (this.sceneDropdownOpen)
         {
-            int x = 175;
-            int y =
-                    AnimationEditorScreen.TOP_BAR_HEIGHT + 2;
-            int dropdownWidth = 180;
-            int rowHeight = 19;
+            int x=175;
+            int y=AnimationEditorScreen.TOP_BAR_HEIGHT+2;
+            int dropdownWidth=180;
+            int rowHeight=19;
+            java.util.List<Integer> matches=getFilteredSceneIndices();
+            int count=Math.min(SCENE_VISIBLE_ROWS,matches.size());
+            int listY=y+SCENE_SEARCH_HEIGHT;
 
-            int count =
-                    Math.min(
-                            8,
-                            this.sceneState
-                                    .getSceneFiles()
-                                    .size()
-                    );
-
-            if (mouseX >= x
-                    && mouseX <= x + dropdownWidth
-                    && mouseY >= y
-                    && mouseY < y + count * rowHeight)
+            if(mouseX>=x&&mouseX<x+dropdownWidth &&
+                    mouseY>=y&&mouseY<listY)
             {
-                int sceneIndex =
-                        getSceneDropdownOffset()+(mouseY-y)/rowHeight;
+                // X clears the filter; clicking inside the search row
+                // keeps the menu and keyboard focus open.
+                if(mouseButton==0&&mouseX>=x+153)
+                    setSceneSearchText("");
+                return;
+            }
 
-                if (sceneIndex >= 0
-                        && sceneIndex <
-                        this.sceneState
-                                .getSceneFiles()
-                                .size())
+            if(mouseButton==0&&mouseX>=x&&
+                    mouseX<x+dropdownWidth &&
+                    mouseY>=listY&&mouseY<listY+count*rowHeight)
+            {
+                int matchIndex=getSceneDropdownOffset()+
+                        (mouseY-listY)/rowHeight;
+                if(matchIndex>=0&&matchIndex<matches.size())
                 {
-                    /*
-                     * Loading another scene changes the editor
-                     * context completely.
-                     */
-                    this.screen.loadScene(sceneIndex);
-
+                    // loadScene expects the ORIGINAL scene-list index.
+                    this.screen.loadScene(matches.get(matchIndex).intValue());
                     this.markClean();
                     this.resetInputState();
-
                     return;
                 }
             }
 
-            this.sceneDropdownOpen = false;
+            setSceneDropdownOpen(false);
             this.editorModeController.closeDropdown();
             this.editorThemeController.closeDropdown();
         }
