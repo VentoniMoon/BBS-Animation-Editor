@@ -87,7 +87,7 @@ public final class CharacterAnchorTransfers
             float[] local=nbt.hasKey("Local",10)?
                     AnchorTransferMath.matrixFromNBT(
                             nbt.getCompoundTag("Local")):null;
-            if(!owner.isEmpty()&&(!bone.isEmpty()&&local==null))
+            if(!owner.isEmpty()&&(bone.isEmpty()||local==null))
                 return null; // Never display a wrong-space attachment.
             return new Transfer(id,source,part,owner,bone,frame,morph,
                     world,local);
