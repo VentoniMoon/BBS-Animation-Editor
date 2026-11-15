@@ -209,6 +209,7 @@ public final class EditorSceneSerializer
         scene.setTag("CameraOutput",state.getCameraOutput().toNBT());
         scene.setTag("CameraSceneLights",state.getCameraLights().save());
         scene.setTag("CameraSceneMirrors",state.getCameraMirrors().save());
+        scene.setTag("CameraSceneParticles",state.getCameraParticles().save());
 
         root.setTag(
                 "Scene",
@@ -389,6 +390,9 @@ public final class EditorSceneSerializer
         state.getCameraMirrors().load(
                 scene.hasKey("CameraSceneMirrors",10)
                     ?scene.getCompoundTag("CameraSceneMirrors"):null);
+        state.getCameraParticles().load(
+                scene.hasKey("CameraSceneParticles",10)
+                    ?scene.getCompoundTag("CameraSceneParticles"):null);
 
         /* CAMERA is optional for all existing editor.dat files. */
         state.getCameraClips().clear();
@@ -1366,6 +1370,8 @@ public final class EditorSceneSerializer
             // Origin tracks may animate all native BetterLights groups.
             if(keyframe.getLightSettings()!=null)
                 tag.setTag("LightSettings",keyframe.getLightSettings());
+            if(keyframe.getParticleSettings()!=null)
+                tag.setTag("ParticleSettings",keyframe.getParticleSettings());
 
             list.appendTag(
                     tag
@@ -1644,6 +1650,9 @@ public final class EditorSceneSerializer
             if(tag.hasKey("LightSettings",10))
                 keyframe.setLightSettings(
                         tag.getCompoundTag("LightSettings"));
+            if(tag.hasKey("ParticleSettings",10))
+                keyframe.setParticleSettings(
+                        tag.getCompoundTag("ParticleSettings"));
 
             target.add(
                     keyframe

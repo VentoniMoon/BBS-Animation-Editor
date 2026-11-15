@@ -9,6 +9,16 @@ public class AnimationKeyframe
     private final AnimationTransform transform;
     /** Full BetterLightsMorph settings on an Origin key, optional. */
     private net.minecraft.nbt.NBTTagCompound lightSettings;
+    /** Full ParticleMorph NBT at the keyed Origin frame, optional. */
+    private net.minecraft.nbt.NBTTagCompound particleSettings;
+    public net.minecraft.nbt.NBTTagCompound getParticleSettings()
+    {
+        return particleSettings==null?null:particleSettings.copy();
+    }
+    public void setParticleSettings(net.minecraft.nbt.NBTTagCompound value)
+    {
+        particleSettings=value==null?null:value.copy();
+    }
     public net.minecraft.nbt.NBTTagCompound getLightSettings()
     {
         return lightSettings==null?null:lightSettings.copy();

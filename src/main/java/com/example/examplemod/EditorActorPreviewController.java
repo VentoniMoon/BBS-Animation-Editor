@@ -169,9 +169,14 @@ public class EditorActorPreviewController
             // Existing Origin/Target keys survive every actor selection.
             BlockbusterSceneActorData selected=sceneState.getSelectedActorData();
             if(selected!=null&&actorId.equals(selected.getId())&&
-                    selected.getActor()!=null&&
-                    BetterLightsRig.isLight(selected.getActor().getMorph()))
-                BetterLightsRig.ensure(data);
+                    selected.getActor()!=null)
+            {
+                if(BetterLightsRig.isLight(selected.getActor().getMorph()))
+                    BetterLightsRig.ensure(data);
+                else if(ParticleActorRig.isParticle(
+                        selected.getActor().getMorph()))
+                    ParticleActorRig.ensure(data);
+            }
             return data;
         }
 
@@ -231,6 +236,13 @@ public class EditorActorPreviewController
             ActorAnimationData light=new ActorAnimationData(actorId);
             BetterLightsRig.ensure(light);
             return light;
+        }
+        if(ParticleActorRig.isParticle(morphNBT))
+        {
+            this.currentActorIsChameleon=false;
+            ActorAnimationData particle=new ActorAnimationData(actorId);
+            ParticleActorRig.ensure(particle);
+            return particle;
         }
 
         AbstractMorph morph = null;
