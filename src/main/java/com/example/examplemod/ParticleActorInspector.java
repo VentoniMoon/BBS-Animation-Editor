@@ -46,21 +46,27 @@ public final class ParticleActorInspector
         else actor.getActor().setMorph(editTag.copy());
         screen.getSceneState().getSaveController().markDirty();
     }
+    /** Matching the CAMERA LIGHTS and CLIPS segmented inspector tabs. */
     public void drawTabs(Minecraft mc,int panelX,int topY)
     {
         x=panelX;top=topY;
-        Gui.drawRect(x+7,top+10,x+91,top+34,
-                EditorVisualStyle.themedSurface(settingsTab?.11F:.30F));
-        Gui.drawRect(x+94,top+10,x+180,top+34,
-                EditorVisualStyle.themedSurface(settingsTab?.30F:.11F));
-        String left=mc.fontRenderer.trimStringToWidth("POSITION",78);
-        String right=mc.fontRenderer.trimStringToWidth("SETTINGS",78);
-        mc.fontRenderer.drawString(left,
-                x+7+(84-mc.fontRenderer.getStringWidth(left))/2,
-                top+18,0xFFE4ECF2);
-        mc.fontRenderer.drawString(right,
-                x+94+(86-mc.fontRenderer.getStringWidth(right))/2,
-                top+18,0xFFE4ECF2);
+        int accent=EditorThemeManager.get().getAccent();
+        final String[] titles={"POSITION","SETTINGS"};
+        for(int i=0;i<2;i++)
+        {
+            int tx=x+7+i*86;
+            boolean selected=(settingsTab?1:0)==i;
+            Gui.drawRect(tx,top+10,tx+84,top+34,
+                    EditorVisualStyle.themedSurface(
+                            selected?.29F:.11F));
+            Gui.drawRect(tx,top+32,tx+84,top+34,
+                    selected?accent:0xFF45404B);
+            String title=mc.fontRenderer.trimStringToWidth(
+                    titles[i],76);
+            mc.fontRenderer.drawString(title,
+                    tx+(84-mc.fontRenderer.getStringWidth(title))/2,
+                    top+18,selected?0xFFE9E5F0:0xFFB0A9B8);
+        }
     }
     public void drawSettings(AnimationEditorScreen screen,
             int px,int py,int lower)
