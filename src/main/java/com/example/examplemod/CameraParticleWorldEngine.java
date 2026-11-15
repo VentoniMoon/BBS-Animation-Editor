@@ -72,7 +72,8 @@ public final class CameraParticleWorldEngine
         int frame=screen.getCurrentFrame();
         for(BlockbusterSceneActorData actor:scene.getActors())
         {
-            if(!ParticleActorRig.isParticleActor(actor))continue;
+            if(!ParticleActorRig.isParticleActor(actor)||
+                    !actor.getActor().isEnabled())continue;
             BlockbusterRecord record=actor.getRecord();
             if(record==null)continue;
             BlockbusterRecordFrame position=record.getFrame(frame);
