@@ -245,6 +245,10 @@ public final class EditorLanguage
         add("particles.actor.position", "POSITION");
         add("particles.actor.settings", "SETTINGS");
         add("particles.editor.title", "PARTICLE MORPH");
+        add("particles.section.emission", "EMISSION");
+        add("particles.section.vanilla", "VANILLA PROPERTIES");
+        add("particles.field.short_rotation", "Rel. rotation");
+        add("particles.field.short_args", "Args");
         add("particles.editor.vanilla", "VANILLA");
         add("particles.editor.morph", "MORPH");
         add("particles.camera.header", "SCENE PARTICLES");
