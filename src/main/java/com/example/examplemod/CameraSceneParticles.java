@@ -16,7 +16,7 @@ public final class CameraSceneParticles
     {
         public final String id;
         public String name;
-        public double x,y,z,yaw;
+        public double x,y,z,yaw,pitch,roll;
         public boolean enabled=true;
         public NBTTagCompound morph=ParticleEmitterConfig.defaults();
 
@@ -31,6 +31,8 @@ public final class CameraSceneParticles
             tag.setString("Label",name);
             tag.setDouble("X",x);tag.setDouble("Y",y);tag.setDouble("Z",z);
             tag.setDouble("Yaw",yaw);
+            tag.setDouble("Pitch",pitch);
+            tag.setDouble("Roll",roll);
             tag.setBoolean("Enabled",enabled);
             tag.setTag("Morph",morph.copy());
             return tag;
@@ -85,6 +87,8 @@ public final class CameraSceneParticles
                     tag.getDouble("X"),tag.getDouble("Y"),
                     tag.getDouble("Z"));
             s.yaw=tag.getDouble("Yaw");
+            s.pitch=tag.getDouble("Pitch");
+            s.roll=tag.getDouble("Roll");
             s.enabled=!tag.hasKey("Enabled")||
                     tag.getBoolean("Enabled");
             if(tag.hasKey("Morph",10))
