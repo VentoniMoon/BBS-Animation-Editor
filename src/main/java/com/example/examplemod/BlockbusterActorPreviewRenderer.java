@@ -1071,6 +1071,19 @@ public class BlockbusterActorPreviewRenderer
             if(this.actor!=null)reset();
             return;
         }
+        // An actor ParticleMorph in VANILLA mode is emitted by the
+        // logical-tick particle engine, not by a detached RenderWorldLast
+        // EntityActor. Otherwise every camera/shader pass may re-spawn.
+        // The existing native Morph-particle mode is intentionally left
+        // with Blockbuster's renderer rather than faking nested morphs.
+        if(actorData.getActor()!=null&&
+                ParticleActorRig.isParticle(actorData.getActor().getMorph())&&
+                !"morph".equalsIgnoreCase(actorData.getActor().getMorph()
+                        .getString("Mode")))
+        {
+            if(this.actor!=null)reset();
+            return;
+        }
 
         EntityActor entityActor =
                 getOrCreateActor(mc);
