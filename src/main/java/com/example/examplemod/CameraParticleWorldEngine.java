@@ -94,7 +94,9 @@ public final class CameraParticleWorldEngine
                     position.getX()+offset[0],
                     position.getY()+offset[1],
                     position.getZ()+offset[2],
-                    ParticleActorRig.yaw(rig,frame),
+                    (position.hasBodyYaw()?position.getBodyYaw():
+                            position.getYaw())+
+                            ParticleActorRig.yaw(rig,frame),
                     clock.random,clock.elapsed++);
         }
     }
