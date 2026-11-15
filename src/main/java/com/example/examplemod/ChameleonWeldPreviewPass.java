@@ -460,7 +460,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             {
                 String boneName=raw.patches.get(i).bone;
                 Bone bone=byName.get(boneName);
-                if(bone==null)return;
+                if(bone==null||!visibleNativeChain(bone))return;
                 List<Object> cubes=(List<Object>)field(bone.value,"cubes");
                 if(cubes==null||cubes.size()!=1)return;
                 Object cube=cubes.get(0);
