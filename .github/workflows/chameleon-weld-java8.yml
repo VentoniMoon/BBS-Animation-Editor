@@ -14,6 +14,8 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtXPBDContacts.java'
       - 'src/main/java/com/example/examplemod/SkirtXPBDSolver.java'
       - 'src/main/java/com/example/examplemod/SkirtXPBDRuntime.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDVolumeSkin.java'
+      - 'src/main/java/com/example/examplemod/ChameleonSkirtXPBDVolumeRenderer.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
@@ -33,6 +35,8 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtXPBDContacts.java'
       - 'src/main/java/com/example/examplemod/SkirtXPBDSolver.java'
       - 'src/main/java/com/example/examplemod/SkirtXPBDRuntime.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDVolumeSkin.java'
+      - 'src/main/java/com/example/examplemod/ChameleonSkirtXPBDVolumeRenderer.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
@@ -94,6 +98,7 @@ jobs:
             src/main/java/com/example/examplemod/SkirtXPBDContacts.java \
             src/main/java/com/example/examplemod/SkirtXPBDSolver.java \
             src/main/java/com/example/examplemod/SkirtXPBDRuntime.java \
+            src/main/java/com/example/examplemod/SkirtXPBDVolumeSkin.java \
             src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java \
             src/main/java/com/example/examplemod/SkirtGeoProfile.java \
             src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java \
@@ -103,6 +108,7 @@ jobs:
             src/main/java/com/example/examplemod/ChameleonWeldMorphTransformer.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonSkirtXPBDRenderer.java \
+            src/test/weld-stubs/com/example/examplemod/ChameleonSkirtXPBDVolumeRenderer.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldPreviewCompileSmoke.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldNativeHookSmoke.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldMorphHookSmoke.java \

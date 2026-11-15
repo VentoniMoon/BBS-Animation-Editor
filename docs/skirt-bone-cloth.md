@@ -1970,3 +1970,96 @@ same Chameleon source are not intentionally coupled.
 A Java 8 regression test creates two distinct morph objects
 mapped to one track and asserts that both resolve the
 same fitted body collider frame.
+
+## Physics 3.0 screenshot regression: colored bridges and missing detached waistband
+
+The FIRST Minecraft run of PR #208 had a correct-looking source skirt at
+the actor, but the detached XPBD cloth looked like a partial open blue/green
+fabric cylinder with narrow red and green vertical strips. The log reported:
+
+```text
+[SkirtXPBD] drawn=true particles=60 renderedQuads=136
+ bridgeQuads=96 skippedDegenerate=24 offsetX=1.2
+ legBoxes=0 maxConstraintError=5.9604645E-8
+[SkirtXPBD] NO_REAL_LEG_BOXES
+[SkirtXPBDFrame] stepSubpasses=0/2 legs=0 self=0 ...
+```
+
+This confirms a functioning **render submission and XPBD node graph**,
+not a faithful fabric appearance. The 40 original *selected* outer quads
+plus colored UV-edge seam bridges expose texture edges and omit all
+inside/back/cap faces and the original three waist cubes in the
+**detached A/B**. 24 zero-area candidate seam quads were deliberately
+skipped. A small XPBD constraint error is unrelated to visual UV
+matching. `legBoxes=0` says the editor has not published valid
+Emoticons thigh contact OBBs for this actor. The initial instructed
+A/B command did not enable `-PenableJoltExperimental`, so the
+missing collision input needs a separate run with the existing local
+Jolt bundled JARs, not invented cylinders.
+
+### Opt-in source-volume visual deformation driven by the same XPBD
+
+Use `-PskirtXPBDVolumeSkin` together with
+`-PenableSkirtXPBD`. This is a **parallel, alternative material
+renderer** for the existing 60-node XPBD solver. It:
+
+* Captures all **43 source cuboids** (3 waist + 40 fabric) in both
+  **rest and current posed Chameleon bone/cube transforms**;
+* Preserves **all original ModelQuad UVs** and independent six-sided
+  native cube surfaces (typically 258 face quads / 1032 UV corners);
+* Applies each panel's 4 posed shared-physical-node offsets to all
+  of that cuboid's native faces via a bounded bilinear interpolation
+  in the actual authored outer face's local geometry. No new UV atlas
+  or half-seam color blending is introduced;
+* At zero solver displacement the duplicate is **exactly the native
+  posed source volume**, not a reconstructed 40-quad partial skirt;
+* At nonzero solver displacement the **same physical 60 nodes** move
+  each fabric cuboid's complete textured volume, including sidewalls
+  and caps; waistband remains on its original pose, tied to the actor;
+* In overlay mode the **three waist cubes** are also duplicated at
+  +1.2 model blocks. In replacement mode the original native waist
+  remains visible, so the custom volume render skips it to avoid
+  overlapping/z-fighting;
+* Builds before any 40 native cube lists are temporarily hidden,
+  failing closed if the exact native 43-cube geometry is missing or
+  invalid, leaving the original actor renderer unchanged.
+
+This mode deliberately **retains the original cuboid panel silhouette,
+thickness and material seams**. It is **NOT a mathematically continuous
+watertight rendered cloth shell**. The separate existing
+`POSED_CONNECTED_CLOTH` mode (40 source quads + seam bridges)
+is unchanged and remains the experiment for true single-skin
+generation; this new alternative isolates source-material fidelity
+under XPBD before revisiting its seam topology.
+
+Example comparison (no collisions/Jolt required):
+```text
+runClient -PfixMixinAsm -PenableSkirtXPBD -PskirtXPBDOverlay -PskirtXPBDVolumeSkin -PcaptureSkirtMesh
+```
+
+For the collision test, add `-PenableJoltExperimental`
+only if the local experimental Jolt Java 8 bundled JARs are present.
+Do not add `-PenableSkirtClothV2`: old Jolt cloth V2 and the new
+XPBD skirt are mutually exclusive. Collision box count
+`legBoxes=0` is NOT itself a solver error when no existing fitting
+data has been published.
+
+The new log marker is:
+```text
+[BBS Editor][SkirtXPBDVolume] drawn=true
+ mode=POSED_NATIVE_VOLUME_XPBD sourceCuboids=43
+ totalSourceQuads=258 drawnQuads=258
+ skippedNativeWaistQuads=0 offsetX=1.2
+ legBoxes=0 ... allNativeUV=UNCHANGED
+ warning=NOT_CONTINUOUS_RENDER_MESH
+```
+
+Inspect a stationary, walking, rotated and kneeling character:
+* source vs detached waist and hem geometry;
+* no unexpected atlas colors compared with the **original volume**;
+* cloth motion in response to walking (separately from leg collision);
+* logs for `SkirtXPBDVolumeFrame` and `NO_REAL_LEG_BOXES`.
+
+A successful standalone Java 8 and Forge compile can validate
+geometric parity, but Minecraft screenshots/video are required to
+confirm pose, texture, shader lightmap and motion.
