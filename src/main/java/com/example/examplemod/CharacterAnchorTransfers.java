@@ -209,6 +209,24 @@ public final class CharacterAnchorTransfers
         return false;
     }
 
+    /**
+     * A saved editable BODY PART has one transfer-key identity. Keep
+     * that part in the owner's editor list at every frame, but render
+     * it only while the matching key is the effective logical owner.
+     * A later hand-off (even back to the same actor) must not resurrect
+     * the earlier editable instance.
+     */
+    public static boolean isActiveEditableAttachment(
+            List<BlockbusterSceneActorData> actors,
+            String itemId,String actorId,int eventFrame,double frame)
+    {
+        if(itemId==null||itemId.isEmpty()||actorId==null)return false;
+        Transfer current=resolve(actors,frame).get(itemId);
+        return current!=null&&current.attached()&&
+                actorId.equals(current.ownerActorId)&&
+                current.frame==eventFrame;
+    }
+
     public static List<Transfer> forOwner(
             List<BlockbusterSceneActorData> actors,String owner,double frame)
     {
