@@ -351,39 +351,49 @@ public final class CameraSceneParticlesPanel
         {
             return properties.click(mx,my,button);
         }
-        if(bottom>433&&my>=405&&my<430)
+        // Position inspector rows are scrollable to the exact same
+        // visible range as drawRight() (including narrow GUI scales).
+        int rows=visiblePositionRows();
+        if(my>=POSITION_TOP&&my<POSITION_TOP+rows*POSITION_ROW)
         {
-            source.enabled=!source.enabled;
-            screen.getCameraWorkspace().saveScene();return true;
-        }
-        for(int axis=0;axis<6;axis++)
-        {
-            int py=130+axis*40;
-            if(py+39>=bottom)break;
-            if(my>=py+15&&my<py+39)
+            int index=positionScroll+(my-POSITION_TOP)/POSITION_ROW;
+            if(index<0||index>=POSITION_ITEMS.length)return true;
+            int yy=POSITION_TOP+
+                    (index-positionScroll)*POSITION_ROW;
+            if(!POSITION_ITEMS[index].startsWith("#"))
             {
-                commit(screen);
-                if(mx<leftRight+38)
+                if("Enabled".equals(POSITION_ITEMS[index]))
                 {
+                    commit(screen);
+                    source.enabled=!source.enabled;
+                    screen.getCameraWorkspace().saveScene();
+                    return true;
+                }
+                int axis=axisForItem(index);
+                if(axis<0)return true;
+                if(mx>=leftRight+FIELD_LEFT&&mx<leftRight+101)
+                {
+                    commit(screen);
                     set(source,axis,get(source,axis)-.0625D);
                     screen.getCameraWorkspace().saveScene();
                 }
-                else if(mx>=leftRight+153)
+                else if(mx>=leftRight+163&&mx<leftRight+FIELD_RIGHT)
                 {
+                    commit(screen);
                     set(source,axis,get(source,axis)+.0625D);
                     screen.getCameraWorkspace().saveScene();
                 }
-                else
+                else if(mx>=leftRight+101&&mx<leftRight+163)
                 {
+                    commit(screen);
                     editing=axis;
                     input=new GuiTextField(796,
                             Minecraft.getMinecraft().fontRenderer,
-                            leftRight+54,py+19,91,17);
+                            leftRight+102,yy+5,59,15);
                     input.setMaxStringLength(30);
                     input.setText(Double.toString(get(source,axis)));
                     input.setFocused(true);
                 }
-                return true;
             }
         }
         return true;
@@ -427,6 +437,14 @@ public final class CameraSceneParticlesPanel
             int count=screen.getSceneState().getCameraParticles().all().size();
             scroll=Math.max(0,Math.min(Math.max(0,count-visible()),
                     scroll+(direction>0?-1:1)));
+            return true;
+        }
+        if(tab==0&&mx>=leftRight&&mx<leftRight+INSPECTOR_WIDTH&&
+                my>=POSITION_TOP&&my<bottom)
+        {
+            commit(screen);
+            positionScroll+=direction>0?-1:1;
+            clampPosition();
             return true;
         }
         return false;
