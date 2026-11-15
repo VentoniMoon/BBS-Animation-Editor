@@ -4429,8 +4429,13 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
         if(this.editorModeController.getMode()==EditorModeController.EditorMode.POSE
-                &&ParticleActorRig.isParticleActor(getSelectedActor())
-                &&particleActorInspector.scroll(mouseX,mouseY,direction))
+                &&ParticleActorRig.isParticleActor(getSelectedActor())&&
+                particleActorInspector.scroll(
+                    org.lwjgl.input.Mouse.getEventX()*width/
+                        Math.max(1,mc.displayWidth),
+                    height-org.lwjgl.input.Mouse.getEventY()*height/
+                        Math.max(1,mc.displayHeight)-1,
+                    org.lwjgl.input.Mouse.getEventDWheel()))
             return;
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.POSE &&
@@ -4771,10 +4776,10 @@ public class AnimationEditorScreen extends GuiScreen
         }
         if(advanceTimeline)
             this.timeline.update();
+        this.playbackController.update();
         // Particle emitters advance only once per logical client tick,
         // not per preview, mirror, shader or export render pass.
         CameraParticleWorldEngine.tick(this);
-        this.playbackController.update();
         this.wavWaveform.sync(this.wavAudio.getLoadedFile());
         this.wavAudio.update(
                 this.playbackController.getCurrentFrame(),
