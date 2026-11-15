@@ -1,0 +1,41 @@
+name: Particle Morph editor Java 8
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/com/example/examplemod/ParticleEmitterConfig.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneParticles.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneParticlesPanel.java'
+      - 'src/main/java/com/example/examplemod/ParticleSettingsPanel.java'
+      - 'src/main/java/com/example/examplemod/ParticleActorRig.java'
+      - 'src/main/java/com/example/examplemod/CameraParticleWorldEngine.java'
+      - 'src/test/particle-stubs/**'
+      - 'src/test/java/com/example/examplemod/ParticleEmitterConfigSmokeTest.java'
+      - '.github/workflows/particle-editor-java8.yml'
+  push:
+    paths:
+      - 'src/main/java/com/example/examplemod/ParticleEmitterConfig.java'
+      - 'src/main/java/com/example/examplemod/CameraSceneParticles.java'
+      - 'src/test/particle-stubs/**'
+      - 'src/test/java/com/example/examplemod/ParticleEmitterConfigSmokeTest.java'
+      - '.github/workflows/particle-editor-java8.yml'
+
+jobs:
+  particle-emitter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Verify ParticleMorph keys, type catalog, output and NBT scene roundtrip
+        run: |
+          mkdir -p build/particle-editor-java8
+          javac -encoding UTF-8 -d build/particle-editor-java8 \
+            $(find src/test/particle-stubs -name '*.java') \
+            src/main/java/com/example/examplemod/ParticleEmitterConfig.java \
+            src/main/java/com/example/examplemod/CameraSceneParticles.java \
+            src/test/java/com/example/examplemod/ParticleEmitterConfigSmokeTest.java
+          java -cp build/particle-editor-java8 \
+            com.example.examplemod.ParticleEmitterConfigSmokeTest
