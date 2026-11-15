@@ -261,13 +261,29 @@ public final class CharacterAnchorPanel
                 CharacterAnchorTransfers.resolve(scene.getActors(),frame)
                         .get(item.itemId);
         float[] world=null;
+        NBTTagCompound movedMorph=item.morph;
         if(previous!=null&&previous.attached())
         {
+            BodyPartsEditorController parts=scene.getBodyPartsController();
+            BodyPartModelData edited=parts==null?null:
+                    parts.findAnchorAttachment(previous.ownerActorId,
+                            previous.itemId,previous.frame);
+            // The BODY PARTS author may have changed the held item's
+            // position, rotation, scale or Morph AFTER the first pickup.
+            // Inherit the actual editable model rather than the obsolete
+            // base matrix stored on its CHARACTER key.
+            String heldBone=edited==null?previous.ownerBone:
+                    edited.getAttachmentBoneName();
+            float[] localHeld=edited==null?previous.boneFromItem:
+                    AnchorTransferMath.composeBodyPart(
+                            edited.getGlobalTransform());
             float[] holder=CharacterAnchorPoseCache.bone(
-                    previous.ownerActorId,previous.ownerBone,frame);
-            if(holder!=null&&previous.boneFromItem!=null)
+                    previous.ownerActorId,heldBone,frame);
+            if(holder!=null&&localHeld!=null)
                 world=BodyPartPhysicsMatrixSpace.multiply(
-                        holder,previous.boneFromItem);
+                        holder,localHeld);
+            if(edited!=null&&edited.getMorphAt(frame)!=null)
+                movedMorph=edited.getMorphAt(frame).toNBT();
         }
         else if(item.sourcePart.isEmpty())
             world=CharacterAnchorPoseCache.actor(item.sourceActor,frame);
@@ -310,10 +326,29 @@ public final class CharacterAnchorPanel
             CharacterAnchorTransfers.Transfer transfer=
                     new CharacterAnchorTransfers.Transfer(
                             item.itemId,item.sourceActor,item.sourcePart,
-                            target.getId(),bone,frame,item.morph,world,local);
+                            target.getId(),bone,frame,movedMorph,world,local);
             CharacterKey key=CharacterAnchorTransfers.upsert(
                     target.getCharacterTimeline(),transfer);
+            // The key is authoritative; the receiving model must now be
+            // a regular persistent/visible BODY PARTS editor entry, not
+            // just a render-time anonymous proxy.
+            CharacterAnchorPreview.synchronizeEditableParts(scene);
+            BodyPartsEditorController parts=scene.getBodyPartsController();
+            if(parts!=null)
+            {
+                BodyPartModelData editable=parts.findAnchorAttachment(
+                        target.getId(),transfer.itemId,transfer.frame);
+                if(editable!=null)
+                {
+                    parts.rebaseAnchorAttachment(editable,transfer);
+                    if(editor.getSelectedActor()!=null&&
+                            target.getId().equals(
+                                    editor.getSelectedActor().getId()))
+                        parts.selectAttachment(editable);
+                }
+            }
             editor.getSceneState().getSaveController().markDirty();
+            editor.syncCharacterTimelineActor();
             CharacterTimelineEditorController
                     .requestInspectorKeySelection(target,key);
             setSelectedKey(key);
@@ -361,7 +396,12 @@ public final class CharacterAnchorPanel
                 CharacterAnchorTransfers.KEY,retained);
         else data.removeTag(CharacterAnchorTransfers.KEY);
         key.setData(data);
+        // Prune the keyed model as well, rather than leaving a ghost
+        // that reappears or blocks a second transfer on scene reload.
+        CharacterAnchorPreview.synchronizeEditableParts(
+                editor.getSceneState());
         editor.getSceneState().getSaveController().markDirty();
+        editor.syncCharacterTimelineActor();
         status="KEY REMOVED";
     }
 }
