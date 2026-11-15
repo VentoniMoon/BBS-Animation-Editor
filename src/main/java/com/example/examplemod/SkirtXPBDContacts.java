@@ -29,6 +29,10 @@ public final class SkirtXPBDContacts
      * resetting XPBD for each temporary morph clone. */
     private static final WeakHashMap<Object,Object> MORPH_OWNERS=
             new WeakHashMap<Object,Object>();
+    /** Per-editor attachment cloth activation. Unregistered standalone
+     * morphs keep the preexisting XPBD preview behavior. */
+    private static final WeakHashMap<Object,Boolean> CLOTH_ENABLED=
+            new WeakHashMap<Object,Boolean>();
     private static final long MAX_AGE_NANOS=1500000000L;
 
     public static final class Frame
@@ -61,6 +65,25 @@ public final class SkirtXPBDContacts
     {
         if(morph!=null&&track!=null)
             MORPH_OWNERS.put(morph,track);
+    }
+
+    /** Unlike legacy Jolt hair chains, cloth activation is attached
+     * to the complete skirt model, never to an internal bone name. */
+    public static synchronized void setClothEnabled(Object track,
+            boolean enabled)
+    {
+        if(track!=null)
+        {
+            CLOTH_ENABLED.put(track,Boolean.valueOf(enabled));
+            if(!enabled)FRAMES.remove(track);
+        }
+    }
+
+    public static synchronized boolean isClothEnabled(Object morph)
+    {
+        if(morph==null)return false;
+        Boolean enabled=CLOTH_ENABLED.get(stableOwner(morph));
+        return enabled==null||enabled.booleanValue();
     }
 
     public static synchronized Object stableOwner(Object morph)
@@ -128,7 +151,7 @@ public final class SkirtXPBDContacts
 
     public static synchronized Frame forMorph(Object morph)
     {
-        if(morph==null)return null;
+        if(morph==null||!isClothEnabled(morph))return null;
         Object owner=stableOwner(morph);
         Frame frame=FRAMES.get(owner);
         if(frame!=null&&System.nanoTime()-frame.createdNanos>
