@@ -64,7 +64,8 @@ public final class CameraParticleWorldEngine
                 clock=new Clock();statics.put(source.id,clock);
             }
             ParticleEmitterConfig.emit(world,source.morph,
-                    source.x,source.y,source.z,source.yaw,
+                    source.x,source.y,source.z,
+                    source.yaw,source.pitch,source.roll,
                     clock.random,clock.elapsed++);
         }
         if(!screen.isCameraPlaying())return;
@@ -97,6 +98,8 @@ public final class CameraParticleWorldEngine
                     (position.hasBodyYaw()?position.getBodyYaw():
                             position.getYaw())+
                             ParticleActorRig.yaw(rig,frame),
+                    position.getPitch()+ParticleActorRig.pitch(rig,frame),
+                    position.getRoll()+ParticleActorRig.roll(rig,frame),
                     clock.random,clock.elapsed++);
         }
     }
