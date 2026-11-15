@@ -338,6 +338,8 @@ public class AnimationEditorScreen extends GuiScreen
     /** Only selected BetterLightsMorph actors use this POSE inspector. */
     private final BetterLightsActorInspector betterLightsInspector =
             new BetterLightsActorInspector();
+    private final ParticleActorInspector particleActorInspector=
+            new ParticleActorInspector();
 
     private final InterpolationPanel interpolationPanel =
             new InterpolationPanel();
@@ -923,10 +925,15 @@ public class AnimationEditorScreen extends GuiScreen
                 this.playbackController.getCurrentFrame()
         );
         // Light rig tracks store WORLD blocks rather than model pixels.
-        this.gizmoController.setLightRigTarget(
-                editorModeController.getMode()==EditorModeController.EditorMode.POSE
-                && BetterLightsActorInspector.isLightActor(getSelectedActor())
-                    ?BetterLightsRig.forActor(getSelectedActor()):null);
+        ActorAnimationData worldSourceRig=null;
+        if(editorModeController.getMode()==EditorModeController.EditorMode.POSE)
+        {
+            if(BetterLightsActorInspector.isLightActor(getSelectedActor()))
+                worldSourceRig=BetterLightsRig.forActor(getSelectedActor());
+            else if(ParticleActorRig.isParticleActor(getSelectedActor()))
+                worldSourceRig=ParticleActorRig.forActor(getSelectedActor());
+        }
+        this.gizmoController.setLightRigTarget(worldSourceRig);
 
         boolean chameleonGizmoTarget =
                 this.actorPreviewController.isCurrentActorChameleon();
@@ -1993,6 +2000,7 @@ public class AnimationEditorScreen extends GuiScreen
          * Otherwise the world texture would contain our dark editor panels.
          */
         BetterLightsRig.bind(this.sceneState);
+        ParticleActorRig.bind(this.sceneState);
         BbsFsWorldFrameCapture.beginFrame(this.mc);
         // During CAMERA output a Minecraft world pass uses the *film* FBO
         // dimensions (e.g. 3840x2160, or 1080x1920). Vanilla may configure
@@ -3540,9 +3548,37 @@ public class AnimationEditorScreen extends GuiScreen
         else if (this.editorModeController.getMode()
                 == EditorModeController.EditorMode.POSE)
         {
+            boolean particleActor=ParticleActorRig.isParticleActor(
+                    getSelectedActor());
             boolean lightActor=BetterLightsActorInspector.isLightActor(
                     getSelectedActor());
-            if(lightActor)
+            if(particleActor)
+            {
+                AnimationBone bone=actorPreviewController.getSelectedBone(
+                        keyframeController);
+                AnimationKeyframe chosen=bone!=null&&
+                        ParticleActorRig.ORIGIN.equals(bone.getName())
+                        ?keyframeController.getSelectedKeyframe():null;
+                particleActorInspector.select(this,getSelectedActor(),chosen);
+                if(particleActorInspector.settingsTab())
+                    particleActorInspector.drawSettings(this,panelX,top,bottom);
+                else
+                {
+                    this.actorPreviewController.getTransformPanel()
+                            .setLightRigMode(true);
+                    this.actorPreviewController.getTransformPanel()
+                            .setPosition(panelX,top+39);
+                    this.actorPreviewController.getTransformPanel().draw(
+                            mc,chosen,getCurrentTransform(),
+                            this.playbackController.getCurrentFrame());
+                    if(chosen==null)
+                        fontRenderer.drawString(
+                                "Select an Origin key to animate position",
+                                panelX+9,top+38,0xFF98BFCE);
+                }
+                particleActorInspector.drawTabs(mc,panelX,top);
+            }
+            else if(lightActor)
             {
                 AnimationBone bone=actorPreviewController.getSelectedBone(
                         keyframeController);
@@ -3552,13 +3588,14 @@ public class AnimationEditorScreen extends GuiScreen
                         ?keyframeController.getSelectedKeyframe():null);
             }
             else betterLightsInspector.setOriginKey(null);
-            if(lightActor&&!betterLightsInspector.rigTab())
+            if(!particleActor&&lightActor&&
+                    !betterLightsInspector.rigTab())
             {
                 this.betterLightsInspector.draw(mc,panelX,top,bottom,
                         getSelectedActor(),
                         this.playbackController.getCurrentFrame());
             }
-            else
+            else if(!particleActor)
             {
             this.actorPreviewController
                     .getTransformPanel()
@@ -4260,6 +4297,17 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.POSE &&
+                ParticleActorRig.isParticleActor(getSelectedActor()))
+        {
+            if(mouseButton==0&&particleActorInspector.selectTab(
+                    mouseX,mouseY,width-185,
+                    AnimationEditorScreen.TOP_BAR_HEIGHT))return;
+            if(particleActorInspector.settingsTab()&&
+                    particleActorInspector.click(mouseX,mouseY,mouseButton))
+                return;
+        }
+        if(this.editorModeController.getMode()
+                ==EditorModeController.EditorMode.POSE &&
                 BetterLightsActorInspector.isLightActor(getSelectedActor()))
         {
             if(mouseButton==0&&betterLightsInspector.selectTab(
@@ -4380,6 +4428,10 @@ public class AnimationEditorScreen extends GuiScreen
             super.handleMouseInput();
             return;
         }
+        if(this.editorModeController.getMode()==EditorModeController.EditorMode.POSE
+                &&ParticleActorRig.isParticleActor(getSelectedActor())
+                &&particleActorInspector.scroll(mouseX,mouseY,direction))
+            return;
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.POSE &&
                 BetterLightsActorInspector.isLightActor(getSelectedActor()) &&
@@ -4482,6 +4534,10 @@ public class AnimationEditorScreen extends GuiScreen
             CameraNativeFrameProbe.request(out.getWidth(),out.getHeight());
             return;
         }
+        if(editorModeController.getMode()==EditorModeController.EditorMode.POSE
+                &&ParticleActorRig.isParticleActor(getSelectedActor())
+                &&particleActorInspector.keyTyped(typedChar,keyCode))
+            return;
         if(cameraOutputPopup.keyTyped(typedChar,keyCode,
                     sceneState.getCameraOutput(),
                     () -> saveCameraOutputSettings()))return;
@@ -4715,6 +4771,9 @@ public class AnimationEditorScreen extends GuiScreen
         }
         if(advanceTimeline)
             this.timeline.update();
+        // Particle emitters advance only once per logical client tick,
+        // not per preview, mirror, shader or export render pass.
+        CameraParticleWorldEngine.tick(this);
         this.playbackController.update();
         this.wavWaveform.sync(this.wavAudio.getLoadedFile());
         this.wavAudio.update(
