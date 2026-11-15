@@ -22,6 +22,7 @@ public final class CharacterAnchorPoseCache
         float[] actorWorld;
         float animatedMorphRootScale=1F;
         AbstractMorph morph;
+        BodyPartsPreviewRenderer bodyPartsRenderer;
     }
     private static final Map<String,Pose> POSES=new HashMap<String,Pose>();
     private static EditorSceneState scene;
@@ -60,7 +61,8 @@ public final class CharacterAnchorPoseCache
     }
 
     public static void capture(BlockbusterSceneActorData data,
-            EntityActor entity,int frame,float partialTicks)
+            EntityActor entity,int frame,float partialTicks,
+            BodyPartsPreviewRenderer bodyPartsRenderer)
     {
         if(scene==null||data==null||entity==null||
                 data.getId()==null||data.getId().isEmpty())return;
@@ -70,6 +72,10 @@ public final class CharacterAnchorPoseCache
                 entity.posX,entity.posY,entity.posZ,
                 renderedBodyYaw(entity,partialTicks));
         pose.morph=entity.getMorph();
+        // Each actor owns a distinct native BODY PARTS renderer. Retain
+        // only its latest prepared-frame reference; every query below
+        // also validates the exact current frame before taking a copy.
+        pose.bodyPartsRenderer=bodyPartsRenderer;
         if(pose.morph instanceof
                 mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
         {
@@ -93,6 +99,24 @@ public final class CharacterAnchorPoseCache
         if(local==null)return null;
         return AnchorTransferMath.worldFromAnimatedBone(
                 pose.actorWorld,pose.animatedMorphRootScale,local);
+    }
+
+    /**
+     * Snapshot the fully posed Metamorph/Blockbuster child exactly as
+     * BODY PARTS rendered it at frame f. The unposed data.getMorphAt(f)
+     * is NOT sufficient: its internal pose keys have not yet been
+     * applied and caused a visible angular reset on release/handoff.
+     *
+     * No snapshot from a prior frame is ever accepted.
+     */
+    public static net.minecraft.nbt.NBTTagCompound posedPartMorph(
+            String actorId,BodyPartModelData part,int frame)
+    {
+        Pose pose=POSES.get(actorId);
+        if(pose==null||pose.frame!=frame||
+                pose.bodyPartsRenderer==null||part==null)
+            return null;
+        return pose.bodyPartsRenderer.snapshotPreparedMorph(part);
     }
 
     /** Returns the exact native AnimatorController root scale sampled
