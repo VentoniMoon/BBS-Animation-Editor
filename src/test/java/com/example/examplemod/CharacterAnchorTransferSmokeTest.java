@@ -134,6 +134,31 @@ public final class CharacterAnchorTransferSmokeTest
       "new holder gains item on same frame");
   check(CharacterAnchorTransfers.forOwner(scene,"actor-two",24).isEmpty(),
       "scrubbing backwards restores prior owner");
+  // Two persistent editable BodyParts remain in the actor editors,
+  // but only one can be rendered at the effective timeline owner.
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,19),"no editable item before pickup");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,20),"recipient editor part at pickup");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,44),"previous owner until handoff");
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,45),"old recipient stays editable but hidden");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-two",45,45),"new recipient takes over exactly at frame");
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-two",45,44),"new recipient must not show early");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,25),"reverse scrub restores original editor part");
+  // A second transfer back to the same owner is a different editable
+  // instance: do not resurrect their original BodyPart at the new key.
+  CharacterAnchorTransfers.Transfer returnKey=new CharacterAnchorTransfers.Transfer(
+      id,"item-source","","actor-one","left_arm",65,morph,world,rebased);
+  CharacterAnchorTransfers.upsert(actor1.getCharacterTimeline(),returnKey);
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,65),"prior instance must stay hidden");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",65,65),"new instance active on return");
 
   NBTTagCompound saved=k.getData();
   CharacterKey restored=new CharacterKey(20,CharacterKey.Type.CUSTOM);
@@ -154,6 +179,84 @@ public final class CharacterAnchorTransferSmokeTest
       "native body part hidden only once moved");
   check(!CharacterAnchorTransfers.hidesPart(scene,"p","stable-uuid",54),
       "body part restored when seeking before transfer");
+  // World release: the source Record must remain visually hidden,
+  // while the item is no longer parented to either character.
+  // Its frozen full matrix/Morph comes from the release key, and
+  // survives save/load, forward play and backwards seek.
+  float[] droppedWorld=AnchorTransferMath.composeBodyPart(
+      t(230,16,-205,17,31,-12,.7F,.7F,.7F));
+  CharacterAnchorTransfers.Transfer release=
+      new CharacterAnchorTransfers.Transfer(
+          id,"item-source","","","",75,morph,droppedWorld,null);
+  CharacterKey releasedKey=CharacterAnchorTransfers.upsert(
+      actor1.getCharacterTimeline(),release);
+  check(CharacterAnchorTransfers.resolve(scene,74).get(id).attached(),
+      "before release the item still belongs to actor one");
+  check(CharacterAnchorTransfers.resolve(scene,75).get(id).released(),
+      "item becomes released exactly at the authored frame");
+  check(CharacterAnchorTransfers.releasedItems(scene,74).isEmpty(),
+      "no premature world copy");
+  check(CharacterAnchorTransfers.releasedItems(scene,75).size()==1,
+      "one world item on release");
+  // A different item (source BODY PART p) is still independently held
+  // by actor one at this frame. Releasing the bag must not affect it.
+  check(CharacterAnchorTransfers.forOwner(scene,"actor-one",75).size()==1,
+      "dropping only removes the released item from its parent");
+  check(CharacterAnchorTransfers.hidesActor(
+      scene,"item-source",80),
+      "do not resurrect original actor at its Record coordinates");
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",65,75),
+      "old holder's editable part is now hidden");
+  approx(CharacterAnchorTransfers.releasedItems(scene,88).get(0).worldAtKey,
+      droppedWorld,"released matrix stays fixed across frames");
+  CharacterAnchorTransfers.Transfer loadedRelease=
+      CharacterAnchorTransfers.Transfer.load(
+          releasedKey.getData().getTagList(CharacterAnchorTransfers.KEY,10)
+              .getCompoundTagAt(0),75);
+  check(loadedRelease!=null&&loadedRelease.released(),
+      "release survives CHARACTER key NBT roundtrip");
+  approx(loadedRelease.worldAtKey,droppedWorld,
+      "full release orientation/translation/scale persisted");
+  check(loadedRelease.boneFromItem==null&&
+      loadedRelease.ownerActorId.isEmpty(),
+      "release must not inherit any bone owner");
+
+  // Re-grab the placed object under its ORIGINAL logical item ID,
+  // without duplicating another actor or its source Morph.
+  CharacterAnchorTransfers.Transfer regrab=
+      new CharacterAnchorTransfers.Transfer(
+          id,"item-source","","actor-two","right_hand",90,
+          morph,droppedWorld,rebased);
+  CharacterAnchorTransfers.upsert(actor2.getCharacterTimeline(),regrab);
+  check(CharacterAnchorTransfers.releasedItems(scene,89).size()==1,
+      "placed item remains static until next attachment");
+  check(CharacterAnchorTransfers.releasedItems(scene,90).isEmpty(),
+      "world proxy vanishes on re-grab without a duplicate");
+  check(CharacterAnchorTransfers.forOwner(scene,"actor-two",90).size()==1,
+      "re-grab restores a single held instance");
+  check(CharacterAnchorTransfers.releasedItems(scene,80).size()==1,
+      "reverse scrubbing brings back the placed state");
+  check(CharacterAnchorTransfers.resolve(scene,64).get(id)
+      .ownerActorId.equals("actor-two"),
+      "rewinding before placement restores previous owner");
+  check(!CharacterAnchorTransfers.hidesActor(
+      scene,"item-source",19),
+      "rewinding before pickup restores original item actor");
+
+  CharacterAnchorTransfers.Transfer dropPart=
+      new CharacterAnchorTransfers.Transfer(
+          "part:p:stable-uuid","p","stable-uuid","","",
+          70,another,droppedWorld,null);
+  CharacterAnchorTransfers.upsert(
+      actor1.getCharacterTimeline(),dropPart);
+  check(CharacterAnchorTransfers.hidesPart(
+      scene,"p","stable-uuid",75),
+      "released source BODY PART stays hidden on original actor");
+  check(CharacterAnchorTransfers.releasedItems(scene,75).size()==2,
+      "separate original item and body part may both be released");
+  check(CharacterAnchorTransfers.releasedItems(scene,71).size()==1,
+      "part source is present in world before the other item's release");
   System.out.println("CharacterAnchorTransferSmokeTest OK");
  }
 }

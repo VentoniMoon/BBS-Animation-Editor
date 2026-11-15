@@ -319,6 +319,14 @@ public final class EditorLanguage
         add("character.anchors.no_transfer", "NO TRANSFER AT FRAME");
         add("character.anchors.notselected", "NO KEY FOR SELECTED ITEM");
         add("character.anchors.removed", "KEY REMOVED");
+        add("character.anchors.place", "PLACE / RELEASE IN WORLD");
+        add("character.anchors.notheld", "ITEM IS NOT HELD BY THIS ACTOR");
+        add("character.anchors.after_pickup", "RELEASE AFTER PICKUP KEY FRAME");
+        add("character.anchors.holder_pose", "RENDER HOLDER POSE FIRST");
+        add("character.anchors.invalid_world", "INVALID WORLD TRANSFORM");
+        add("character.anchors.no_local", "ITEM HAS NO LOCAL TRANSFORM");
+        add("character.anchors.held", "HELD");
+        add("character.anchors.world", "WORLD");
         add("character.appearance", "APPEARANCE");
         add("character.animsetup", "ANIMATION SETUP");
         add("character.overrides", "BODY PART OVERRIDES");

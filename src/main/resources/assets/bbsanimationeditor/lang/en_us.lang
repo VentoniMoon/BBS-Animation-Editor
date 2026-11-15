@@ -506,3 +506,12 @@ bbsanimationeditor.ui.character.anchors.fail_pose=INVALID POSE / SCALE
 bbsanimationeditor.ui.character.anchors.no_transfer=NO TRANSFER AT FRAME
 bbsanimationeditor.ui.character.anchors.notselected=NO KEY FOR SELECTED ITEM
 bbsanimationeditor.ui.character.anchors.removed=KEY REMOVED
+
+bbsanimationeditor.ui.character.anchors.place=PLACE / RELEASE IN WORLD
+bbsanimationeditor.ui.character.anchors.notheld=ITEM IS NOT HELD BY THIS ACTOR
+bbsanimationeditor.ui.character.anchors.after_pickup=RELEASE AFTER PICKUP KEY FRAME
+bbsanimationeditor.ui.character.anchors.holder_pose=RENDER HOLDER POSE FIRST
+bbsanimationeditor.ui.character.anchors.invalid_world=INVALID WORLD TRANSFORM
+bbsanimationeditor.ui.character.anchors.no_local=ITEM HAS NO LOCAL TRANSFORM
+bbsanimationeditor.ui.character.anchors.held=HELD
+bbsanimationeditor.ui.character.anchors.world=WORLD

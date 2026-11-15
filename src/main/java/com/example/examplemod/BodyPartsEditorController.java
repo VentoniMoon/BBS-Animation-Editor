@@ -127,6 +127,158 @@ public class BodyPartsEditorController
                 : new ArrayList<BodyPartModelData>(saved);
     }
 
+    /**
+     * Link a keyed transfer to the REAL BodyPart in this actor's editor
+     * tracks. Never use the temporary renderer proxy's timelineId:
+     * different preview/render passes would otherwise create duplicates.
+     */
+    public BodyPartModelData findAnchorAttachment(
+            String actorId,String itemId,int eventFrame)
+    {
+        if(itemId==null||itemId.isEmpty())return null;
+        for(BodyPartModelData model:getModelsForActor(actorId))
+            if(model!=null&&model.isAnchorAttachment()&&
+                    itemId.equals(model.getAnchorItemId())&&
+                    model.getAnchorEventFrame()==eventFrame)
+                return model;
+        return null;
+    }
+
+    /**
+     * One editable destination model per (actor, ItemId, CHARACTER key
+     * frame), including nonselected/background actor tracks. Called on
+     * authoring and when migrating previously virtual-only anchor keys
+     * from old editor.dat files. This is NOT called each render pass.
+     */
+    public BodyPartModelData ensureAnchorAttachment(
+            CharacterAnchorTransfers.Transfer transfer,
+            BodyPartModelData prior,int sceneLength)
+    {
+        if(transfer==null||!transfer.attached()||
+                transfer.boneFromItem==null)return null;
+        BodyPartModelData existing=findAnchorAttachment(
+                transfer.ownerActorId,transfer.itemId,transfer.frame);
+        if(existing!=null)return existing;
+
+        AbstractMorph morph=null;
+        try
+        {
+            if(prior!=null)
+                morph=prior.getMorphAt(transfer.frame);
+            if(morph==null)
+                morph=MorphManager.INSTANCE.morphFromNBT(
+                        transfer.morph.copy());
+            if(morph==null)return null;
+            List<AnimationBone> skeleton=createAnimationBonesFromMorph(morph);
+            BodyPartModelData created=new BodyPartModelData(
+                    morph.name==null?"anchored item":morph.name,
+                    transfer.ownerBone,null,skeleton,
+                    transfer.frame,Math.max(transfer.frame+1,
+                            Math.max(sceneLength-1,transfer.frame+20)));
+            created.setMorph(morph);
+            created.bindAnchorAttachment(transfer.itemId,transfer.frame);
+            applyAnchorTransform(created,transfer);
+            if(prior!=null)
+            {
+                // Carry over the actual author's Morph/pose edits at
+                // handoff. The new owner edits a separate key-scoped
+                // instance; the prior owner keeps their earlier frames.
+                NBTTagCompound skeletonTag=new NBTTagCompound();
+                skeletonTag.setTag("Bones",
+                        EditorSceneSerializer.writeBones(prior.getBones()));
+                List<AnimationBone> copy=new ArrayList<AnimationBone>();
+                EditorSceneSerializer.readBones(copy,skeletonTag);
+                if(!copy.isEmpty())
+                    created.setModel(created.getModelName(),null,copy);
+                created.restoreMorphKeys(prior.getMorphKeysSnapshot());
+                created.restoreModelKeys(prior.getModelKeysSnapshot());
+                created.readPhysicsSettings(prior.writePhysicsSettings());
+                created.readColliderSettings(prior.writeColliderSettings());
+                created.setWeldEnabled(prior.isWeldEnabled());
+                if(prior.hasExplicitClothPhysicsSetting())
+                    created.setClothPhysicsEnabled(
+                            prior.isClothPhysicsEnabled());
+                CharacterTimelineController sourceTimeline=
+                        CharacterTimelineController.fromNBT(
+                                prior.getCharacterTimeline().toNBT());
+                created.getCharacterTimeline().clear();
+                if(sourceTimeline!=null)
+                    for(CharacterTrack track:sourceTimeline.getTracks())
+                        if(track!=null)
+                            created.getCharacterTimeline().addTrack(track);
+            }
+            List<BodyPartModelData> owner;
+            if(transfer.ownerActorId.equals(activeActorId))
+                owner=models;
+            else
+            {
+                owner=modelsByActor.get(transfer.ownerActorId);
+                if(owner==null)
+                {
+                    owner=new ArrayList<BodyPartModelData>();
+                    modelsByActor.put(transfer.ownerActorId,owner);
+                }
+            }
+            owner.add(created);
+            if(transfer.ownerActorId.equals(activeActorId))
+                localTimeline.setLength(Math.max(
+                        localTimeline.getLength(),created.getEndFrame()+1));
+            System.out.println("[BBS Editor][Anchors] EDITABLE_PART "+
+                    "item="+transfer.itemId+" owner="+transfer.ownerActorId+
+                    " key="+transfer.frame+" model="+created.getModelName());
+            return created;
+        }
+        catch(RuntimeException invalid)
+        {
+            System.err.println("[BBS Editor][Anchors] Cannot register "+
+                    "editable attachment for "+transfer.itemId+
+                    ": "+invalid.getMessage());
+            return null;
+        }
+    }
+
+    /** Explicit re-authoring overwrites the base offset; subsequent
+     * BODY PARTS edits persist as the source of truth until next rebase.
+     */
+    public void rebaseAnchorAttachment(
+            BodyPartModelData model,CharacterAnchorTransfers.Transfer transfer)
+    {
+        if(model==null||transfer==null)return;
+        model.setAttachmentBoneName(transfer.ownerBone);
+        applyAnchorTransform(model,transfer);
+    }
+
+    private static void applyAnchorTransform(BodyPartModelData model,
+            CharacterAnchorTransfers.Transfer transfer)
+    {
+        AnimationTransform local=AnchorTransferMath.toBodyPartTransform(
+                transfer.boneFromItem);
+        AnimationTransform target=model.getGlobalTransform();
+        target.setPosition(local.getPositionX(),local.getPositionY(),
+                local.getPositionZ());
+        target.setRotation(local.getRotationX(),local.getRotationY(),
+                local.getRotationZ());
+        target.setScale(local.getScaleX(),local.getScaleY(),
+                local.getScaleZ());
+    }
+
+    public boolean removeAnchorAttachment(
+            String actorId,String itemId,int eventFrame)
+    {
+        BodyPartModelData model=findAnchorAttachment(
+                actorId,itemId,eventFrame);
+        if(model==null)return false;
+        List<BodyPartModelData> owner=
+                actorId.equals(activeActorId)?models:modelsByActor.get(actorId);
+        if(owner==null||!owner.remove(model))return false;
+        if(selectedAttachment==model||selectedModel==model)
+        {
+            selectedAttachment=null;selectedModel=null;
+            keyframeController.clearSelection();
+        }
+        return true;
+    }
+
     private List<AnimationBone> actorBones =
             new ArrayList<AnimationBone>();
 
@@ -550,6 +702,10 @@ public class BodyPartsEditorController
         {
             return false;
         }
+        // A transferred part is owned by a CHARACTER anchor key.
+        // Deleting its editor rectangle without deleting the key
+        // would simply recreate it on the next scene synchronization.
+        if(target.isAnchorAttachment())return false;
 
         boolean removed =
                 this.models.remove(target);

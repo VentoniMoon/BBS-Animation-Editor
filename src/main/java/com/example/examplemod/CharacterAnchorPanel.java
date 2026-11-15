@@ -16,7 +16,7 @@ import net.minecraft.nbt.NBTTagCompound;
  */
 public final class CharacterAnchorPanel
 {
-    public static final int HEIGHT=161;
+    public static final int HEIGHT=191;
 
     private static final class Candidate
     {
@@ -102,7 +102,11 @@ public final class CharacterAnchorPanel
             for(BodyPartModelData model:
                     parts.getModelsForActor(actor.getId()))
             {
-                if(model==null||model.getBaseMorph()==null)continue;
+                // This is a receiver view of an EXISTING logical item.
+                // Do not offer it as a new independent source: doing so
+                // creates a second item ID and duplicates the object.
+                if(model==null||model.isAnchorAttachment()||
+                        model.getBaseMorph()==null)continue;
                 AbstractMorph selected=model.getMorphAt(frame);
                 if(selected==null)continue;
                 String idItem="part:"+actor.getId()+":"+
@@ -112,17 +116,22 @@ public final class CharacterAnchorPanel
                                 " ["+actor.getName()+"]",selected.toNBT()));
             }
         }
-        // Items already held by another actor remain selectable without
-        // creating another source or a second identifier on hand-off.
+        // Current logical items appear under their ORIGINAL identity:
+        // [HELD] for placing, [WORLD] for picking up a released item,
+        // or [ACTOR] for handing off to another actor. Never duplicate
+        // an anchored BODY PART as a newly capturable model.
         for(CharacterAnchorTransfers.Transfer current:
                 CharacterAnchorTransfers.resolve(
                         scene.getActors(),frame).values())
-            if(!current.ownerActorId.equals(target.getId())&&
-                    current.attached())
+        {
+            String state=current.released()?"WORLD":
+                    current.ownerActorId.equals(target.getId())
+                            ?"HELD":"ACTOR";
+            if(current.attached()||current.released())
                 all.put(current.itemId,new Candidate(current.itemId,
                         current.sourceActorId,current.sourcePartId,
-                        current.itemId+" ["+current.ownerActorId+"]",
-                        current.morph));
+                        current.itemId+" ["+state+"]",current.morph));
+        }
         choices.addAll(all.values());
         if(!preferredSourceId.isEmpty())
             for(int i=0;i<choices.size();i++)
@@ -177,11 +186,15 @@ public final class CharacterAnchorPanel
                 EditorVisualStyle.themedSurface(.25F));
         Gui.drawRect(x+4,y+111,right-4,y+113,accent);
         center(mc,"ADD / UPDATE KEY",y+96,text);
-        Gui.drawRect(x+4,y+118,right-4,y+138,
+        Gui.drawRect(x+4,y+118,right-4,y+140,
+                EditorVisualStyle.themedSurface(.22F));
+        Gui.drawRect(x+4,y+138,right-4,y+140,accent);
+        center(mc,"PLACE / RELEASE IN WORLD",y+125,text);
+        Gui.drawRect(x+4,y+145,right-4,y+164,
                 EditorVisualStyle.themedSurface(.10F));
-        center(mc,"REMOVE KEY TRANSFER",y+124,text);
+        center(mc,"REMOVE KEY TRANSFER",y+150,text);
         mc.fontRenderer.drawString(mc.fontRenderer.trimStringToWidth(
-                status,width-11),x+5,y+148,
+                status,width-11),x+5,y+175,
                 status.startsWith("KEY")?0xFF9FE6BE:muted);
     }
 
@@ -236,7 +249,12 @@ public final class CharacterAnchorPanel
             author(editor,actor,frame);
             return true;
         }
-        if(my>=y+118&&my<y+138)
+        if(my>=y+118&&my<y+140)
+        {
+            release(editor,actor,frame);
+            return true;
+        }
+        if(my>=y+145&&my<y+164)
         {
             remove(editor,actor,frame);
             return true;
@@ -261,13 +279,36 @@ public final class CharacterAnchorPanel
                 CharacterAnchorTransfers.resolve(scene.getActors(),frame)
                         .get(item.itemId);
         float[] world=null;
-        if(previous!=null&&previous.attached())
+        NBTTagCompound movedMorph=item.morph;
+        if(previous!=null&&previous.released())
         {
+            // A released item remains at its saved world pose while
+            // every original source actor Record continues separately.
+            world=previous.worldAtKey.clone();
+            movedMorph=previous.morph.copy();
+        }
+        else if(previous!=null&&previous.attached())
+        {
+            BodyPartsEditorController parts=scene.getBodyPartsController();
+            BodyPartModelData edited=parts==null?null:
+                    parts.findAnchorAttachment(previous.ownerActorId,
+                            previous.itemId,previous.frame);
+            // The BODY PARTS author may have changed the held item's
+            // position, rotation, scale or Morph AFTER the first pickup.
+            // Inherit the actual editable model rather than the obsolete
+            // base matrix stored on its CHARACTER key.
+            String heldBone=edited==null?previous.ownerBone:
+                    edited.getAttachmentBoneName();
+            float[] localHeld=edited==null?previous.boneFromItem:
+                    AnchorTransferMath.composeBodyPart(
+                            edited.getGlobalTransform());
             float[] holder=CharacterAnchorPoseCache.bone(
-                    previous.ownerActorId,previous.ownerBone,frame);
-            if(holder!=null&&previous.boneFromItem!=null)
+                    previous.ownerActorId,heldBone,frame);
+            if(holder!=null&&localHeld!=null)
                 world=BodyPartPhysicsMatrixSpace.multiply(
-                        holder,previous.boneFromItem);
+                        holder,localHeld);
+            if(edited!=null&&edited.getMorphAt(frame)!=null)
+                movedMorph=edited.getMorphAt(frame).toNBT();
         }
         else if(item.sourcePart.isEmpty())
             world=CharacterAnchorPoseCache.actor(item.sourceActor,frame);
@@ -310,10 +351,30 @@ public final class CharacterAnchorPanel
             CharacterAnchorTransfers.Transfer transfer=
                     new CharacterAnchorTransfers.Transfer(
                             item.itemId,item.sourceActor,item.sourcePart,
-                            target.getId(),bone,frame,item.morph,world,local);
+                            target.getId(),bone,frame,movedMorph,world,local);
             CharacterKey key=CharacterAnchorTransfers.upsert(
                     target.getCharacterTimeline(),transfer);
+            // The key is authoritative; the receiving model must now be
+            // a regular persistent/visible BODY PARTS editor entry, not
+            // just a render-time anonymous proxy.
+            CharacterAnchorPreview.synchronizeEditableParts(scene);
+            BodyPartsEditorController parts=scene.getBodyPartsController();
+            if(parts!=null)
+            {
+                BodyPartModelData editable=parts.findAnchorAttachment(
+                        target.getId(),transfer.itemId,transfer.frame);
+                if(editable!=null)
+                {
+                    parts.rebaseAnchorAttachment(editable,transfer);
+                    // The active actor's BODY PARTS collection is
+                    // authoritative for selection; don't reach into
+                    // AnimationEditorScreen's private actor getter.
+                    if(parts.getModels().contains(editable))
+                        parts.selectAttachment(editable);
+                }
+            }
             editor.getSceneState().getSaveController().markDirty();
+            editor.syncCharacterTimelineActor();
             CharacterTimelineEditorController
                     .requestInspectorKeySelection(target,key);
             setSelectedKey(key);
@@ -333,6 +394,93 @@ public final class CharacterAnchorPanel
         catch(IllegalArgumentException invalid)
         {
             status="INVALID POSE / SCALE";
+        }
+    }
+
+    /**
+     * Opposite of pickup: freeze the CURRENT, user-edited item's full
+     * world transform and Morph on this CHARACTER frame. From this
+     * tick it is no longer a BodyPart of the holder; the detached
+     * world proxy renders the exact saved pose until the next key.
+     *
+     * A key cannot overwrite the original pickup at the same frame:
+     * that would erase the frame interval in which it was held.
+     */
+    private void release(AnimationEditorScreen editor,
+            BlockbusterSceneActorData actor,int frame)
+    {
+        if(editor==null||actor==null||choices.isEmpty())
+        {status="SELECT HELD ITEM";return;}
+        EditorSceneState scene=editor.getSceneState();
+        if(scene==null)return;
+        Candidate selected=choices.get(selectedSource);
+        CharacterAnchorTransfers.Transfer current=
+                CharacterAnchorTransfers.resolve(scene.getActors(),frame)
+                        .get(selected.itemId);
+        if(current==null||!current.attached()||
+                !actor.getId().equals(current.ownerActorId))
+        {
+            status="ITEM IS NOT HELD BY THIS ACTOR";
+            return;
+        }
+        if(current.frame>=frame)
+        {
+            status="RELEASE AFTER PICKUP KEY FRAME";
+            return;
+        }
+
+        BodyPartsEditorController parts=scene.getBodyPartsController();
+        BodyPartModelData edited=parts==null?null:
+                parts.findAnchorAttachment(current.ownerActorId,
+                        current.itemId,current.frame);
+        String bone=edited==null?current.ownerBone:
+                edited.getAttachmentBoneName();
+        float[] holder=CharacterAnchorPoseCache.bone(
+                actor.getId(),bone,frame);
+        if(holder==null)
+        {status="RENDER HOLDER POSE FIRST";return;}
+        try
+        {
+            float[] local=edited==null?current.boneFromItem:
+                    AnchorTransferMath.composeBodyPart(
+                            edited.getGlobalTransform());
+            if(local==null)
+            {status="ITEM HAS NO LOCAL TRANSFORM";return;}
+            float[] world=BodyPartPhysicsMatrixSpace.multiply(
+                    holder,local);
+            // Refuse malformed/singular transforms, not phantom world
+            // objects that teleport to the original source on playback.
+            AnchorTransferMath.inverseAffine(world);
+
+            NBTTagCompound morph=current.morph.copy();
+            if(edited!=null)
+            {
+                AbstractMorph visible=edited.getMorphAt(frame);
+                if(visible!=null)morph=visible.toNBT();
+            }
+
+            CharacterAnchorTransfers.Transfer drop=
+                    new CharacterAnchorTransfers.Transfer(
+                            current.itemId,current.sourceActorId,
+                            current.sourcePartId,"","",frame,morph,
+                            world,null);
+            CharacterKey key=CharacterAnchorTransfers.upsert(
+                    actor.getCharacterTimeline(),drop);
+            CharacterAnchorPreview.synchronizeEditableParts(scene);
+            scene.getSaveController().markDirty();
+            editor.syncCharacterTimelineActor();
+            CharacterTimelineEditorController
+                    .requestInspectorKeySelection(actor,key);
+            setSelectedKey(key);
+            status="WORLD PLACED @ "+frame;
+            System.out.println("[BBS Editor][Anchors] RELEASE "+
+                    "frame="+frame+" item="+current.itemId+
+                    " from="+actor.getId()+" world=("+
+                    world[12]+","+world[13]+","+world[14]+")");
+        }
+        catch(IllegalArgumentException invalid)
+        {
+            status="INVALID WORLD TRANSFORM";
         }
     }
 
@@ -361,7 +509,12 @@ public final class CharacterAnchorPanel
                 CharacterAnchorTransfers.KEY,retained);
         else data.removeTag(CharacterAnchorTransfers.KEY);
         key.setData(data);
+        // Prune the keyed model as well, rather than leaving a ghost
+        // that reappears or blocks a second transfer on scene reload.
+        CharacterAnchorPreview.synchronizeEditableParts(
+                editor.getSceneState());
         editor.getSceneState().getSaveController().markDirty();
+        editor.syncCharacterTimelineActor();
         status="KEY REMOVED";
     }
 }

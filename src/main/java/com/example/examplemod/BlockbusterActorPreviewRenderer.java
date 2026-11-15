@@ -26,6 +26,58 @@ public class BlockbusterActorPreviewRenderer
     private boolean preparedForMirror;
     private BlockbusterSceneActorData preparedActorData;
     private int preparedActorFrame;
+    /** Full world transform for a detached item, independent of Record
+     * interpolation and applied in all main, mirror and shadow passes.
+     */
+    private float[] fixedAnchorWorldMatrix;
+
+    public void setFixedAnchorWorldMatrix(float[] matrix)
+    {
+        if(matrix!=null&&(matrix.length!=16))
+            throw new IllegalArgumentException("World anchor needs 4x4 matrix");
+        this.fixedAnchorWorldMatrix=matrix==null?null:matrix.clone();
+    }
+
+    /**
+     * RenderManager expects an ordinary actor at (x,y,z) with yaw=0.
+     * Wrap its native entity render in a matrix conjugation that turns
+     * the exact world affine pose W into the parent of the original
+     * Morph renderer without losing the native item's own pivot.
+     *
+     * Parent transform = T(relWorld) * linear(W) * T(-relWorld).
+     * Hence parent * T(relWorld) * Morph = W * Morph.
+     * The relative position uses the same viewer origin as its caller,
+     * so OptiFine's native GBuffer, mirrors and shadow maps agree.
+     */
+    private void renderEntityWithWorldAnchor(RenderManager manager,
+            EntityActor entity,double x,double y,double z,
+            float yaw,float partialTicks)
+    {
+        if(fixedAnchorWorldMatrix==null)
+        {
+            manager.renderEntity(entity,x,y,z,yaw,partialTicks,true);
+            return;
+        }
+        float[] w=fixedAnchorWorldMatrix;
+        java.nio.FloatBuffer linear=
+                org.lwjgl.BufferUtils.createFloatBuffer(16);
+        for(int i=0;i<16;i++)
+            linear.put(i==12||i==13||i==14?0F:
+                    i==15?1F:w[i]);
+        linear.flip();
+        GL11.glPushMatrix();
+        try
+        {
+            GL11.glTranslated(x,y,z);
+            GL11.glMultMatrix(linear);
+            GL11.glTranslated(-x,-y,-z);
+            manager.renderEntity(entity,x,y,z,yaw,partialTicks,true);
+        }
+        finally
+        {
+            GL11.glPopMatrix();
+        }
+    }
     private static boolean nativeRasterStateReported;
 
     /** A/B rendering diagnostics, enabled only by the explicit F10 probe. */
@@ -1836,15 +1888,12 @@ public class BlockbusterActorPreviewRenderer
             // Match OptiFine's RenderGlobal entity pass (entity ID/material
             // uniforms), in addition to the correct world lightmap coords.
             BbsFsOptiFineEntityStage.beforeEntity(entityActor);
-            renderManager.renderEntity(
-                    entityActor,
+            renderEntityWithWorldAnchor(
+                    renderManager,entityActor,
                     entityActor.posX - (nativeGBuffer ? oldViewerPosX : 0D),
                     entityActor.posY - (nativeGBuffer ? oldViewerPosY : 0D),
                     entityActor.posZ - (nativeGBuffer ? oldViewerPosZ : 0D),
-                    entityActor.rotationYaw,
-                    actorPartialTicks,
-                    true
-            );
+                    entityActor.rotationYaw,actorPartialTicks);
             diagnoseRenderedEmoticons(actorData,entityActor);
         }
 
@@ -2071,11 +2120,11 @@ public class BlockbusterActorPreviewRenderer
                     BbsFsActorShadowSamplingProbe shadowProbe=
                             !mirror?BbsFsActorShadowSamplingProbe.begin():null)
                 {
-                    rm.renderEntity(actor,
+                    renderEntityWithWorldAnchor(rm,actor,
                             actor.posX-(nativeGBuffer?nativeViewerX:0D),
                             actor.posY-(nativeGBuffer?nativeViewerY:0D),
                             actor.posZ-(nativeGBuffer?nativeViewerZ:0D),
-                            actor.rotationYaw,preparedPartialTicks,true);
+                            actor.rotationYaw,preparedPartialTicks);
                 }
             }
             finally
@@ -2139,8 +2188,9 @@ public class BlockbusterActorPreviewRenderer
             GL11.glAlphaFunc(GL11.GL_GREATER,0.1F);
             GlStateManager.disableBlend();
             GlStateManager.disableLighting();
-            manager.renderEntity(actor,actor.posX,actor.posY,actor.posZ,
-                    actor.rotationYaw,preparedPartialTicks,true);
+            renderEntityWithWorldAnchor(manager,actor,
+                    actor.posX,actor.posY,actor.posZ,
+                    actor.rotationYaw,preparedPartialTicks);
             return true;
         }
     }
@@ -2170,6 +2220,7 @@ public class BlockbusterActorPreviewRenderer
         this.preparedForMirror=false;
         this.preparedActorData=null;
         this.preparedActorFrame=0;
+        this.fixedAnchorWorldMatrix=null;
         this.passiveBodyPartsModels=null;
         this.restoreUneditedNativeParts=false;
 

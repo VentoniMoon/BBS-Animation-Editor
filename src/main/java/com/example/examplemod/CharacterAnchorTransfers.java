@@ -53,6 +53,14 @@ public final class CharacterAnchorTransfers
         {
             return !ownerActorId.isEmpty()&&!ownerBone.isEmpty();
         }
+        /** An explicit release has no owner but keeps a fixed world pose.
+         * It is NOT a return to the original scene actor's Record.
+         */
+        public boolean released()
+        {
+            return ownerActorId.isEmpty()&&ownerBone.isEmpty()&&
+                    worldAtKey!=null;
+        }
         private static String nonNull(String v){return v==null?"":v;}
         public NBTTagCompound save()
         {
@@ -89,6 +97,8 @@ public final class CharacterAnchorTransfers
                             nbt.getCompoundTag("Local")):null;
             if(!owner.isEmpty()&&(bone.isEmpty()||local==null))
                 return null; // Never display a wrong-space attachment.
+            if(owner.isEmpty()&&(!bone.isEmpty()||world==null))
+                return null; // A released object needs an explicit world pose.
             return new Transfer(id,source,part,owner,bone,frame,morph,
                     world,local);
         }
@@ -100,7 +110,8 @@ public final class CharacterAnchorTransfers
     {
         if(timeline==null||transfer==null||transfer.itemId.isEmpty()||
                 transfer.sourceActorId.isEmpty()||
-                (transfer.attached()&&transfer.boneFromItem==null))
+                (transfer.attached()&&transfer.boneFromItem==null)||
+                (!transfer.attached()&&!transfer.released()))
             throw new IllegalArgumentException("Incomplete anchor transfer");
         CharacterTrack main=timeline.ensureMainTrack();
         CharacterKey key=main.getKeyAtFrame(transfer.frame);
@@ -191,7 +202,7 @@ public final class CharacterAnchorTransfers
     {
         if(actorId==null||actorId.isEmpty())return false;
         for(Transfer t:resolve(actors,frame).values())
-            if(t.attached()&&t.sourcePartId.isEmpty()&&
+            if((t.attached()||t.released())&&t.sourcePartId.isEmpty()&&
                     actorId.equals(t.sourceActorId))
                 return true;
         return false;
@@ -203,10 +214,41 @@ public final class CharacterAnchorTransfers
     {
         if(ownerActor==null||partId==null||partId.isEmpty())return false;
         for(Transfer t:resolve(actors,frame).values())
-            if(t.attached()&&ownerActor.equals(t.sourceActorId)&&
+            if((t.attached()||t.released())&&
+                    ownerActor.equals(t.sourceActorId)&&
                     partId.equals(t.sourcePartId))
                 return true;
         return false;
+    }
+
+    /**
+     * A saved editable BODY PART has one transfer-key identity. Keep
+     * that part in the owner's editor list at every frame, but render
+     * it only while the matching key is the effective logical owner.
+     * A later hand-off (even back to the same actor) must not resurrect
+     * the earlier editable instance.
+     */
+    public static boolean isActiveEditableAttachment(
+            List<BlockbusterSceneActorData> actors,
+            String itemId,String actorId,int eventFrame,double frame)
+    {
+        if(itemId==null||itemId.isEmpty()||actorId==null)return false;
+        Transfer current=resolve(actors,frame).get(itemId);
+        return current!=null&&current.attached()&&
+                actorId.equals(current.ownerActorId)&&
+                current.frame==eventFrame;
+    }
+
+    /** Explicit world-released items: one current state per logical item.
+     * Scrubbing before the release removes this world instance.
+     */
+    public static List<Transfer> releasedItems(
+            List<BlockbusterSceneActorData> actors,double frame)
+    {
+        List<Transfer> result=new ArrayList<Transfer>();
+        for(Transfer t:resolve(actors,frame).values())
+            if(t.released())result.add(t);
+        return result;
     }
 
     public static List<Transfer> forOwner(
