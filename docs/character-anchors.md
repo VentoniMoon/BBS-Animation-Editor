@@ -196,3 +196,67 @@ Note: the visual equivalence of a **CustomMorph** source actor and a
 child BodyPart still needs manual in-game confirmation. The CI test
 validates affine math and the precisely known Emoticons renderer root
 transform, not actual GPU raster output.
+
+## Editable transfer recipients (BODY PARTS integration)
+
+Previously, ANCHORS added the handed-off object only to the private
+renderer cache. The destination actor's BODY PARTS model list and
+editor.dat never contained this object. This meant there was no
+MODEL, GLOBAL TRANSFORM or keyed bone inspector for the new object.
+
+Each transfer now registers **exactly one real BodyPartModelData** in
+the receiving actor's `BodyPartsEditorController` collection. Its
+stable identity is **ItemId + owner actor ID + CHARACTER key frame**,
+not the preview renderer's temporary object or a UI timeline ID.
+
+In the editor:
+
+1. Select the actor who receives the item and create the CHARACTER
+   anchor key as before.
+2. Switch to BODY PARTS. The received prop is a regular attachment
+   on the chosen bone, available for MODEL, GLOBAL TRANSFORM and
+   per-model bone, Morph/Skin/Character key editing as supported by
+   that Morph.
+3. Move/rotate/scale the item, save editor.dat and reopen. The
+   editable transform persists. An existing old anchor key will
+   automatically migrate into an editable model on the next editor
+   draw, without manual recreation.
+4. At hand-off, the next actor gets a **separate editable** attachment,
+   inheriting the previous holder's edited state. Its new local
+   offset is calculated using the previous holder's current GLOBAL
+   TRANSFORM rather than the original transfer's stale matrix.
+5. Scrubbing backward switches the rendered owner again. Both actors'
+   BODY PARTS editor entries remain saved, but only the effective
+   owner is rendered at each scene time. Repeated handoffs back to
+   a prior actor use different event-frame identities.
+6. Delete an anchor attachment by removing its CHARACTER transfer key
+   (via CHARACTER → ANCHORS). Removing the BODY PARTS rectangle alone
+   is intentionally disabled: otherwise the unchanged CHARACTER key
+   would recreate the supposedly removed object.
+
+The saved per-model NBT now includes `AnchorItemId` and
+`AnchorEventFrame` alongside the existing Morph, attachment bone,
+global transform, animation bones, Character timeline, physics and
+collision settings. No standalone item actor is destructively
+converted to Empty, so seeking before pickup restores the source.
+
+### In-game regression checklist
+
+- Test an **old editor.dat** made before this update with an existing
+  ANCHORS pickup key. Open it and confirm an editable BODY PARTS row
+  appears for the receiver. Save/reload and check no duplicates.
+- Change the new attachment's global X/Y/Z and rotation/scale in BODY
+  PARTS. Confirm the rendered bag follows the edits at paused frames.
+- Transfer the edited bag to a second actor at a later key. Confirm
+  the new actor inherits its visible world transform rather than
+  jumping back to the earlier key's original position.
+- Scrub before pickup, after pickup, before handoff and after handoff.
+  Confirm exactly one visible bag at each frame and that both actors'
+  earlier BODY PARTS edits remain accessible.
+- Remove a transfer key and inspect both BODY PARTS and the renderer.
+  The corresponding keyed attachment should disappear without
+  deleting the original bag actor or its source Morph.
+- Save/reopen and repeat the same checks with mirrors and export.
+
+The only remaining acceptance criterion that CI cannot establish is
+the actual in-game UI and native rendering correspondence.
