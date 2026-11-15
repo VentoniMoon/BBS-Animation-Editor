@@ -11,7 +11,8 @@ public final class BodyPartPhysicsPanel
     private String boneName = "";
     private BodyPartPhysicsSettings settings;
     private BodyPartCollisionSettings colliders;
-    private boolean colliderTab;
+    /** Hair Jolt / Cloth XPBD / passive collision volumes. */
+    private int section;
     private int chainBones;
     private int activeNumericProperty = -1;
     private BodyPartModelData skirtModel;
@@ -39,6 +40,11 @@ public final class BodyPartPhysicsPanel
     public void setSkirtTarget(BodyPartModelData model,
             AnimationBone selectedBone,int frame)
     {
+        if(skirtModel!=model)
+        {
+            section=model!=null&&model.supportsClothPhysics()?1:0;
+            activeNumericProperty=-1;
+        }
         if(skirtModel!=model||skirtWaist!=selectedBone)
             skirtStatus="";
         skirtModel=model;
@@ -53,19 +59,9 @@ public final class BodyPartPhysicsPanel
         setTarget(x,y,boneName,settings,null,chainBones);
     }
 
-    /** Only show a cloth preset for a selectable 7-strip anchor or ALL. */
-    private boolean skirtPresetAvailable()
+    private boolean clothAvailable()
     {
-        return skirtModel!=null && skirtWaist!=null &&
-                ("ALL".equals(skirtWaist.getName()) ||
-                 skirtWaist.getChildren().size()==7);
-    }
-
-    private boolean skirtPresetActive()
-    {
-        return "ALL".equals(skirtWaist.getName()) ?
-                BodyPartSkirtPreset.isFullEnabled(skirtModel,skirtWaist) :
-                settings!=null&&settings.isEnabled();
+        return skirtModel!=null&&skirtModel.supportsClothPhysics();
     }
 
     public void draw(Minecraft mc, int mouseX, int mouseY)
@@ -75,14 +71,24 @@ public final class BodyPartPhysicsPanel
         Gui.drawRect(x,y,x+175,y+235,EditorVisualStyle.themedSurface(0.080F));
         Gui.drawRect(x,y,x+175,y+22,EditorVisualStyle.themedSurface(0.170F));
         Gui.drawRect(x,y,x+3,y+22,accent);
-        Gui.drawRect(x+5,y+2,x+87,y+21,
-                colliderTab?EditorVisualStyle.themedSurface(0.170F):EditorVisualStyle.themedSurface(0.290F));
-        Gui.drawRect(x+88,y+2,x+174,y+21,
-                colliderTab?EditorVisualStyle.themedSurface(0.290F):EditorVisualStyle.themedSurface(0.170F));
-        mc.fontRenderer.drawString("CHAINS",x+13,y+7,0xFFE0E0E0);
-        mc.fontRenderer.drawString("COLLIDERS",x+96,y+7,0xFFE0E0E0);
-        mc.fontRenderer.drawString(trim(mc,boneName,155),x+9,y+31,0xFFAAAAAA);
-        if(colliderTab && colliders!=null)
+        final String[] tabs={"HAIR","CLOTH","BOXES"};
+        final int[] lefts={x+5,x+61,x+116};
+        final int[] rights={x+60,x+115,x+174};
+        for(int i=0;i<tabs.length;i++)
+        {
+            Gui.drawRect(lefts[i],y+2,rights[i],y+21,
+                    EditorVisualStyle.themedSurface(
+                            section==i?0.290F:0.170F));
+            String title=EditorLanguage.tr(tabs[i]);
+            mc.fontRenderer.drawString(trim(mc,tabs[i],
+                    rights[i]-lefts[i]-3),
+                    lefts[i]+Math.max(1,(rights[i]-lefts[i]-
+                            mc.fontRenderer.getStringWidth(title))/2),
+                    y+7,0xFFE0E0E0);
+        }
+        mc.fontRenderer.drawString(trim(mc,boneName,155),
+                x+9,y+31,0xFFAAAAAA);
+        if(section==2 && colliders!=null)
         {
             drawToggle(mc,"Enable collider",colliders.isEnabled(),50);
             mc.fontRenderer.drawString("Shape",x+9,y+81,0xFFE0E0E0);
@@ -94,30 +100,65 @@ public final class BodyPartPhysicsPanel
             mc.fontRenderer.drawString("Hair-driven bones excluded",x+9,y+169,
                     0xFF999999);
         }
+        else if(section==1)
+        {
+            if(clothAvailable())
+            {
+                drawToggle(mc,"Enable cloth XPBD",
+                        skirtModel.isClothPhysicsEnabled(),50);
+                mc.fontRenderer.drawString(
+                        EditorLanguage.tr("Solver: XPBD 60 Hz"),
+                        x+9,y+82,0xFFE0E0E0);
+                mc.fontRenderer.drawString(
+                        EditorLanguage.tr("60 nodes / 20 waist pins"),
+                        x+9,y+110,0xFFBDF8C6);
+                mc.fontRenderer.drawString(
+                        EditorLanguage.tr("Leg contacts: Emoticons"),
+                        x+9,y+141,0xFFE0E0E0);
+                mc.fontRenderer.drawString(
+                        EditorLanguage.tr("Jolt chains: independent"),
+                        x+9,y+171,0xFFAAAAAA);
+                mc.fontRenderer.drawString(
+                        trim(mc,SkirtXPBDRuntime.ENABLED
+                                ?"XPBD ready (60 Hz)"
+                                :"Enable XPBD at launch",155),
+                        x+9,y+196,0xFFAAAAAA);
+            }
+            else
+            {
+                mc.fontRenderer.drawString("CLOTH: XPBD",
+                        x+9,y+52,0xFFE0E0E0);
+                mc.fontRenderer.drawString(
+                        trim(mc,"20-strip Chameleon model required",155),
+                        x+9,y+82,0xFFAAAAAA);
+                mc.fontRenderer.drawString(
+                        trim(mc,"Hair remains on Jolt",155),
+                        x+9,y+110,0xFFAAAAAA);
+            }
+        }
         else
         {
-            // The skirt activation MUST stay above the timeline. The old
-            // button at row 237 was clipped at normal GUI scale. Reuse the
-            // existing root-toggle row, never simulate ALL as one chain.
-            if(skirtPresetAvailable())
-                drawToggle(mc,"ALL".equals(skirtWaist.getName())?
-                        "SKIRT 20 STRIPS":"SKIRT 7 STRIPS",
-                        skirtPresetActive(),50);
+            if(clothAvailable() && SkirtXPBDRuntime.ENABLED)
+            {
+                mc.fontRenderer.drawString(
+                        trim(mc,"This attachment uses CLOTH",155),
+                        x+9,y+60,0xFFAAAAAA);
+                mc.fontRenderer.drawString(
+                        trim(mc,"Jolt hair chains are isolated",155),
+                        x+9,y+87,0xFFAAAAAA);
+            }
             else
+            {
                 drawToggle(mc,"Enable chain root",settings.isEnabled(),50);
-            drawValue(mc,"Gravity",settings.getGravity(),77);
-            drawValue(mc,"Stiffness",settings.getStiffness(),108);
-            drawValue(mc,"Damping",settings.getDamping(),139);
-            drawToggle(mc,"Body collisions",settings.hasBodyCollisions(),170);
-            String status=skirtStatus;
-            if(skirtPresetAvailable()&&status.isEmpty())
-                status="ALL".equals(skirtWaist.getName())?
-                        "20 strips / 40 bones (7+7+3+3)":
-                        "7 independent strips";
-            if(!skirtPresetAvailable())
-                status="Chain bones: "+chainBones;
-            mc.fontRenderer.drawString(trim(mc,status,155),
-                    x+9,y+196,0xFFAAAAAA);
+                drawValue(mc,"Gravity",settings.getGravity(),77);
+                drawValue(mc,"Stiffness",settings.getStiffness(),108);
+                drawValue(mc,"Damping",settings.getDamping(),139);
+                drawToggle(mc,"Body collisions",
+                        settings.hasBodyCollisions(),170);
+                mc.fontRenderer.drawString(
+                        trim(mc,"Chain bones: "+chainBones,155),
+                        x+9,y+196,0xFFAAAAAA);
+            }
         }
         if(BodyPartJoltPreviewAdapter.isRequested())
             drawToggle(mc,"Show Jolt colliders",
@@ -131,7 +172,7 @@ public final class BodyPartPhysicsPanel
     {
         mc.fontRenderer.drawString(title, x + 9, y + lineY, 0xFFE0E0E0);
         String number = String.format(java.util.Locale.ROOT, "%.4f", value);
-        int id = colliderTab ? 3 : lineY == 77 ? 0 : lineY == 108 ? 1 : 2;
+        int id = section==2 ? 3 : lineY == 77 ? 0 : lineY == 108 ? 1 : 2;
         Gui.drawRect(x + 87, y + lineY - 4, x + 174, y + lineY + 13,
                 id == activeNumericProperty ? EditorVisualStyle.themedSurface(0.290F) : EditorVisualStyle.themedSurface(0.130F));
         mc.fontRenderer.drawString(number, x + 110, y + lineY, 0xFFE6F0F3);
@@ -167,7 +208,7 @@ public final class BodyPartPhysicsPanel
         int row=mouseY-y;
         if(row>=2 && row<=22)
         {
-            colliderTab=mouseX>=x+88;
+            section=mouseX<x+61?0:mouseX<x+116?1:2;
             activeNumericProperty = -1;
             return true;
         }
@@ -177,7 +218,7 @@ public final class BodyPartPhysicsPanel
             BodyPartJoltPreviewAdapter.toggleDrawContacts();
             return true;
         }
-        if(colliderTab)
+        if(section==2)
         {
             if(colliders==null)return true;
             if(row>=47 && row<=64 && mouseX>=x+140)
@@ -200,12 +241,19 @@ public final class BodyPartPhysicsPanel
             }
             return true;
         }
-        if(row>=47 && row<=64 && mouseX>=x+8 && mouseX<x+167 &&
-                skirtPresetAvailable())
+        if(section==1)
         {
-            toggleSkirtPreset();
+            if(clothAvailable()&&row>=47&&row<=64&&
+                    mouseX>=x+8&&mouseX<x+167)
+            {
+                skirtModel.setClothPhysicsEnabled(
+                        !skirtModel.isClothPhysicsEnabled());
+                skirtStatus="";
+            }
             return true;
         }
+        if(clothAvailable()&&SkirtXPBDRuntime.ENABLED)
+            return true;
         if(row>=47 && row<=64 && mouseX>=x+140)
             settings.setEnabled(!settings.isEnabled());
         else if(row>=73 && row<=93)change(mouseX,0);
@@ -214,48 +262,6 @@ public final class BodyPartPhysicsPanel
         else if(row>=167 && row<=185 && mouseX>=x+140)
             settings.setBodyCollisions(!settings.hasBodyCollisions());
         return true;
-    }
-
-    /** Activate the preset without ever toggling ALL into a Jolt link. */
-    private void toggleSkirtPreset()
-    {
-        try
-        {
-            if("ALL".equals(skirtWaist.getName()))
-            {
-                if(BodyPartSkirtPreset.isFullEnabled(skirtModel,skirtWaist))
-                {
-                    BodyPartSkirtPreset.disableFull(skirtModel,skirtWaist);
-                    skirtStatus="20 strips disabled";
-                }
-                else
-                {
-                    SkirtGeoProfile.Plan<AnimationBone> plan=
-                            BodyPartSkirtPreset.enableFull(
-                                    skirtModel,skirtWaist,skirtFrame);
-                    skirtStatus=plan.stripCount()+" strips / "+
-                            plan.drivenBoneCount()+" driven bones";
-                }
-            }
-            else
-            {
-                BodyPartSkirtPreset.inspect(skirtWaist);
-                if(settings.isEnabled())
-                {
-                    BodyPartSkirtPreset.disable(skirtModel,skirtWaist);
-                    skirtStatus="7 strips disabled";
-                }
-                else
-                {
-                    BodyPartSkirtPreset.enable(skirtModel,skirtWaist,skirtFrame);
-                    skirtStatus="7 strips active (3+2+2)";
-                }
-            }
-        }
-        catch(IllegalArgumentException|IllegalStateException failed)
-        {
-            skirtStatus=failed.getMessage();
-        }
     }
 
     private void change(int mouseX, int property)
@@ -267,7 +273,8 @@ public final class BodyPartPhysicsPanel
 
     public boolean keyTyped(char typedChar, int keyCode)
     {
-        if (activeNumericProperty < 0 ||
+        if (activeNumericProperty < 0 || section==1 ||
+                (section==0&&clothAvailable()&&SkirtXPBDRuntime.ENABLED) ||
                 (keyCode != org.lwjgl.input.Keyboard.KEY_UP &&
                  keyCode != org.lwjgl.input.Keyboard.KEY_DOWN)) return false;
         nudge(activeNumericProperty,
@@ -283,7 +290,7 @@ public final class BodyPartPhysicsPanel
                     Math.max(0.25F, colliders.getScale() + delta)));
             return;
         }
-        if (settings == null) return;
+        if (settings == null || section!=0) return;
         if (property == 0) settings.setGravity(settings.getGravity() + delta);
         else if (property == 1) settings.setStiffness(settings.getStiffness() + delta);
         else if (property == 2) settings.setDamping(settings.getDamping() + delta);
