@@ -14,6 +14,7 @@ public final class SkirtClothSurfaceMeshSmokeTest
         sharedStaticSurfaceKeepsOriginalUvsAndClosesAllSeams();
         restBindingsPreserveEverySourceCornerAndUv();
         restBindingsFollowRigidMotionWithoutRestDistortion();
+        originalVolumeReferenceKeepsAllCubeFacesAndNativeUvs();
         sharedSurfaceTopologyIsDeterministic();
         bothSeamEndpointOrdersAreCompared();
         mirroredBackAndRotatedSectionsHaveStableTopology();
@@ -185,6 +186,84 @@ public final class SkirtClothSurfaceMeshSmokeTest
         try{binding.evaluate(new float[59][3]);}
         catch(IllegalArgumentException expected){rejected=true;}
         require(rejected,"incomplete XPBD pose must fail closed");
+    }
+
+    /**
+     * Visual parity must NOT reuse the one-outward-face-per-cube source-skin
+     * mesh, which made the real user's skirt A/B appear as disconnected
+     * cardboard plates. Every authored cube face, texture corner and end
+     * cap needs to survive into the detached reference.
+     */
+    private static void originalVolumeReferenceKeepsAllCubeFacesAndNativeUvs()
+    {
+        java.util.List<SkirtClothSurfaceMesh.Strip> straps=fixture();
+        java.util.List<ChameleonSkirtVolumeSnapshot.Part> cubes=
+                new java.util.ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+        float[] white={1F,1F,1F,1F,0F,0F};
+        // Real supplied skirt has 3 waist cubes on ALL.
+        for(int i=0;i<3;i++)
+            cubes.add(new ChameleonSkirtVolumeSnapshot.Part(
+                    straps.get(i).upper,white));
+        for(SkirtClothSurfaceMesh.Strip pair:straps)
+        {
+            cubes.add(new ChameleonSkirtVolumeSnapshot.Part(pair.upper,white));
+            cubes.add(new ChameleonSkirtVolumeSnapshot.Part(pair.lower,white));
+        }
+        ChameleonSkirtVolumeSnapshot.Snapshot actual=
+                ChameleonSkirtVolumeSnapshot.capture(cubes);
+        require(actual.cuboidCount==43,"3 waist + 40 fabric cuboids");
+        require(actual.quadCount==258,
+                "all six faces of each textured native cube must render");
+        require(actual.vertexCount==1032,
+                "each of 258 native quads retains four independent UV corners");
+        int index=0;
+        for(ChameleonSkirtVolumeSnapshot.Part cube:cubes)
+            for(SkirtClothSurfaceMesh.Quad sourceFace:cube.cube.quads)
+            {
+                ChameleonSkirtVolumeSnapshot.Face drawn=actual.faces.get(index++);
+                require(drawn.bone.equals(cube.cube.bone),
+                        "native bone name and volume order must survive");
+                for(int k=0;k<4;k++)
+                    for(int j=0;j<2;j++)
+                        close(drawn.uv[k][j],sourceFace.vertices[k].uv[j],0F,
+                                "full reference must keep exact native face UV");
+                float normalLength=(float)Math.sqrt(
+                        drawn.normal[0]*drawn.normal[0]+
+                        drawn.normal[1]*drawn.normal[1]+
+                        drawn.normal[2]*drawn.normal[2]);
+                close(normalLength,1F,.00001F,
+                        "outward native face normal must stay normalized");
+            }
+        // Repeating the capture must neither patch a ModelVertex nor leak
+        // the changed material input from another run.
+        white[0]=0F;
+        require(actual.faces.get(0).material[0]==1F,
+                "source material must be snapshotted, not aliased");
+
+        boolean rejected=false;
+        try {
+            ChameleonSkirtVolumeSnapshot.capture(cubes.subList(0,42));
+        } catch(IllegalArgumentException expected) {rejected=true;}
+        require(rejected,"incomplete native 43-cube ring must fail closed");
+
+        // A negative-scale mirrored cube still requires correct transformed
+        // face normals: image winding alone is not the correct normal matrix.
+        java.util.List<SkirtClothSurfaceMesh.Quad> q=
+                straps.get(0).upper.quads;
+        float[] mirrored={-1F,0,0,0, 0,1F,0,0, 0,0,1F,0,
+                0,0,0,1F};
+        java.util.List<ChameleonSkirtVolumeSnapshot.Part> mirroredCubes=
+                new java.util.ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+        for(int i=0;i<43;i++)
+            mirroredCubes.add(new ChameleonSkirtVolumeSnapshot.Part(
+                    new SkirtClothSurfaceMesh.Cube(
+                            "ref"+i,mirrored,q),
+                    new float[]{1,1,1,1,0,0}));
+        ChameleonSkirtVolumeSnapshot.Snapshot reflected=
+                ChameleonSkirtVolumeSnapshot.capture(mirroredCubes);
+        // Fixture's third quad normal is +X; negative X scale flips it.
+        close(reflected.faces.get(2).normal[0],-1F,.00001F,
+                "mirror negative X must also flip the face normal");
     }
 
     private static void sharedSurfaceTopologyIsDeterministic()

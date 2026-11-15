@@ -1,7 +1,5 @@
 package com.example.examplemod;
 
-import java.util.List;
-
 import mchorse.mclib.client.render.VertexBuilder;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -10,16 +8,17 @@ import net.minecraft.client.renderer.Tessellator;
 import org.lwjgl.opengl.GL11;
 
 /**
- * Physics 3.0 static A/B preview, EXPERIMENTAL and OFF by default.
+ * Optional static A/B volume PARITY preview (OFF by default).
  *
- * Draws the detached source-UV outward fabric skin as a second textured skirt
- * 1.2 blocks to model +X, after the original Chameleon actor has been drawn.
- * It does NOT replace the original Chameleon renderer, body parts, physics,
- * pose, or texture, and does not mutate shared ModelVertex resources.
+ * The first experimental preview exposed an important topology issue: it
+ * selected only 40 exterior quads from the 40 fabric cubes, and therefore
+ * looked like separate loose cardboard strips. The source Chameleon
+ * appearance is actually 43 cuboids / up to 258 textured quads, including
+ * all sidewalls and 3 waist pieces. We must verify an exact source-volume
+ * replica before attempting any further cloth surface elimination.
  *
- * This is a REST/source-skin parity test: the duplicate stays in its authored
- * shape while the source character can animate. It is not yet XPBD, fabric
- * gap bridging, a live skinned mesh, or a collision/lighting parity guarantee.
+ * Draws a detached +1.2-block static reference. Does NOT replace native
+ * rendering, edit native vertices/UV, change animation, or affect Jolt.
  */
 public final class ChameleonSkirtStaticVisualRenderer
 {
@@ -29,19 +28,14 @@ public final class ChameleonSkirtStaticVisualRenderer
 
     private ChameleonSkirtStaticVisualRenderer(){}
 
-    public static void draw(SkirtClothRestBinding.Binding skin,
-            SkirtClothSurfaceMesh.Snapshot source,float[][] properties)
+    public static void draw(ChameleonSkirtVolumeSnapshot.Snapshot snapshot)
     {
-        if(skin==null||source==null||properties==null)return;
-        if(skin.patches.size()!=40||source.patches.size()!=40||
-                properties.length!=40||
-                skin.maxRestReconstructionError>1E-5F)
-            return;
-
+        if(snapshot==null ||
+                snapshot.cuboidCount!=ChameleonSkirtVolumeSnapshot.EXPECTED_CUBES||
+                snapshot.quadCount<43)return;
         try
         {
-            // The enclosing native ChameleonMorph has already bound the
-            // actor's real texture and established its modelview matrix.
+            // Same native texture already bound by ChameleonMorph.
             GlStateManager.disableCull();
             GlStateManager.enableRescaleNormal();
             GlStateManager.enableBlend();
@@ -50,34 +44,25 @@ public final class ChameleonSkirtStaticVisualRenderer
                     GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
             try
             {
-                List<SkirtClothRestBinding.FramePatch> rest=skin.atRest();
                 BufferBuilder builder=Tessellator.getInstance().getBuffer();
                 builder.begin(GL11.GL_QUADS,
                         VertexBuilder.getFormat(true,true,true,true));
-                int lx=(int)OpenGlHelper.lastBrightnessX;
-                int ly=(int)OpenGlHelper.lastBrightnessY;
-                for(int i=0;i<rest.size();i++)
+                int lightX=(int)OpenGlHelper.lastBrightnessX;
+                int lightY=(int)OpenGlHelper.lastBrightnessY;
+                for(ChameleonSkirtVolumeSnapshot.Face quad:snapshot.faces)
                 {
-                    SkirtClothRestBinding.FramePatch patch=rest.get(i);
-                    SkirtClothSurfaceMesh.Patch authored=source.patches.get(i);
-                    float[] tint=properties[i];
-                    if(tint==null||tint.length!=6)
-                        throw new IllegalArgumentException("Bad Chameleon tint");
-                    float r=tint[0],g=tint[1],b=tint[2],a=tint[3];
-                    int light=(tint[4]>.5F)?0:lx;
+                    float[] tint=quad.material;
+                    int light=tint[4]>.5F?0:lightX;
                     light=(int)(light+(240-light)*tint[5]);
-                    float nx=authored.normal[0],
-                            ny=authored.normal[1],
-                            nz=authored.normal[2];
-                    for(int j=0;j<4;j++)
+                    for(int i=0;i<4;i++)
                     {
-                        float[] pos=patch.world[j];
-                        float[] uv=patch.uv[j];
-                        builder.pos(pos[0]+OFFSET_X,pos[1],pos[2])
-                                .color(r,g,b,a)
+                        float[] p=quad.world[i],uv=quad.uv[i];
+                        builder.pos(p[0]+OFFSET_X,p[1],p[2])
+                                .color(tint[0],tint[1],tint[2],tint[3])
                                 .tex(uv[0],uv[1])
-                                .lightmap(ly,light)
-                                .normal(nx,ny,nz)
+                                .lightmap(lightY,light)
+                                .normal(quad.normal[0],quad.normal[1],
+                                        quad.normal[2])
                                 .endVertex();
                     }
                 }
@@ -87,19 +72,20 @@ public final class ChameleonSkirtStaticVisualRenderer
                     reportedFirstDraw=true;
                     System.out.println(
                             "[BBS Editor][SkirtStaticVisual] "+
-                            "drawn=true mode=DETACHED_REST_UV_AB"+
-                            " outwardQuads=40 triangles=80"+
+                            "drawn=true mode=DETACHED_FULL_VOLUME_PARITY"+
+                            " cubes="+snapshot.cuboidCount+
+                            " quads="+snapshot.quadCount+
+                            " vertices="+snapshot.vertexCount+
                             " xOffsetBlocks="+OFFSET_X+
-                            " restError="+skin.maxRestReconstructionError+
+                            " includes=WAIST_AND_ALL_NATIVE_CUBE_FACES"+
                             " sourceTexture=BOUND_CHAMELEON"+
                             " sourceModel=UNCHANGED"+
-                            " (compare geometry only; lighting may differ)");
+                            " (rest volume A/B; not connected cloth or XPBD)");
                 }
             }
             finally
             {
-                // ChameleonRenderer.render restores precisely these
-                // defaults after its own BufferBuilder draw.
+                // Mirrors the native ChameleonRenderer.render state restore.
                 GlStateManager.disableBlend();
                 GlStateManager.disableRescaleNormal();
                 GlStateManager.enableCull();
@@ -111,9 +97,10 @@ public final class ChameleonSkirtStaticVisualRenderer
             {
                 reportedFailure=true;
                 System.err.println("[BBS Editor][SkirtStaticVisual] "+
-                        "Render failed without changing source model: "+
+                        "Detached source-volume parity draw failed: "+
                         failure.getClass().getSimpleName()+": "+
-                        failure.getMessage());
+                        failure.getMessage()+
+                        " (normal actor/source model unchanged)");
             }
         }
     }

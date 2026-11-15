@@ -7,8 +7,7 @@ package com.example.examplemod;
 public final class ChameleonSkirtStaticVisualRenderer
 {
     private ChameleonSkirtStaticVisualRenderer(){}
-    public static void draw(SkirtClothRestBinding.Binding skin,
-            SkirtClothSurfaceMesh.Snapshot source,float[][] props)
+    public static void draw(ChameleonSkirtVolumeSnapshot.Snapshot snapshot)
     {
         // No GL dependencies in the standalone bytecode/Weld smoke tests.
     }
