@@ -334,3 +334,74 @@ The Java 8 anchor smoke test verifies that a release:
 
 Shader/GBuffer, mirror and real-world screen placement still require
 gameplay testing. No original Record or Morph NBT is overwritten.
+
+## Fix: edited BODY PART angle reset at world release or actor handoff
+
+### Two independent root causes
+
+1. **Lost internal BODY PARTS pose.** The old release/handoff
+   authoring path serialized `BodyPartModelData.getMorphAt(frame).toNBT()`.
+   That method reads the *unposed base Morph*. The actual on-screen
+   child receives its internal pose only later in
+   `BodyPartsPreviewRenderer.createMorphBodyPart()` through
+   `applyInternalBonePose()` / Emoticons / Chameleon variants.
+   Consequently the created key retained a correct parent-space
+   position, but a bag rotated via a BODY PART bone key returned to
+   its original angle.
+2. **CustomPose was cleared by the released-world renderer.** The
+   synthetic world actor (correctly) has no POSE animation snapshots.
+   However `BlockbusterActorPreviewRenderer.applyAnimationPose()`
+   historically assigned `CustomMorph.customPose=null` whenever
+   no POSE snapshots were present. This erased even a correctly
+   saved `CustomPose` on a world-released item.
+
+### Changes
+
+- Every actor render retains a *read-only reference* to its prepared
+  native BODY PART renderer at the exact frame in
+  `CharacterAnchorPoseCache`. On a CHARACTER transfer key click,
+  `snapshotPreparedMorph(data)` serializes the **already-evaluated**
+  child Morph, including the user's visual internal bone edits.
+- New CHARACTER key NBT has `BakedPose=true`. This indicates that
+  the Morph includes the visual source pose and **must not** inherit
+  and reapply the old owner's internal bone keys, Morph keys or skin
+  timeline on the destination. The new owner receives an editable
+  snapshot and can animate it independently.
+- Existing keys without `BakedPose` still load with their old
+  behavior for compatibility. Previously authored *release/handoff*
+  keys must be removed and recreated; the original actor/part and
+  previous source BODY PARTS edits need not be erased.
+- On world-released objects `BlockbusterActorPreviewRenderer`
+  no longer calls native editor POSE/Chameleon/Emoticons replay that
+  would reset their saved static Morph. Only world-released actors
+  use this guard; normal actor animation is unchanged.
+- When the current-frame native BODY PART snapshot is not available,
+  the authoring UI shows `RENDER ITEM POSE FIRST` and **does not**
+  silently create another wrong-angle key.
+
+### Retest: edited bag rotation
+
+1. Frame 40: original bag actor is picked up and registered as a BODY PART.
+2. Frame 55: rotate the **bag's internal bone** (not only GLOBAL
+   TRANSFORM) by a clearly visible angle; verify the edited pose in
+   the normal viewport.
+3. At frame 60: select the holding actor → CHARACTER → ANCHORS,
+   remove any *old* release key at that frame, then **PLACE / RELEASE
+   IN WORLD** again. The bag should keep the exact angle, size and
+   world position at frames 59/60/61, and remain stable at frame 100.
+4. Reverse scrub to 55 and confirm the edited held bag reappears.
+5. Remove any old handoff key, create a fresh actor A → actor B
+   handoff and check the bag's internal bone orientation at f-1/f,
+   with **one** visible copy. In B's BODY PARTS inspector create
+   *new* bone edits, then test release from B.
+6. Save and reload editor.dat; compare the same frames again,
+   including mirror and shader-enabled rendering. If `RENDER ITEM
+   POSE FIRST` appears, ensure both actors were actually drawn at
+   that precise frame before clicking.
+7. For diagnostics inspect:
+   `Select-String -Path '.\\run\\logs\\latest.log' -SimpleMatch '[BBS Editor][Anchors]'`
+
+Automated Java 8 regression checks the `BakedPose` key and edited
+Morph NBT roundtrip plus old-key default behavior. Full Forge compile
+checks integration. Final GPU-rendered visual parity requires this
+in-game test.
