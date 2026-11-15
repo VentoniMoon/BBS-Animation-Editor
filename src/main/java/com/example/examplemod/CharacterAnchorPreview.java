@@ -83,6 +83,51 @@ public final class CharacterAnchorPreview
                             new ArrayList<AnimationBone>(),0,
                             Integer.MAX_VALUE-2);
                     virtual.setMorph(morph);
+                    // On actor-to-actor hand-off preserve the source BODY
+                    // PART's internal keyframes, physics, morph changes and
+                    // skin settings as well as its visible Morph. Only its
+                    // parent attachment and global offset are rebased.
+                    if(!transfer.sourcePartId.isEmpty()&&
+                            scene.getBodyPartsController()!=null)
+                        for(BodyPartModelData original:
+                                scene.getBodyPartsController()
+                                    .getModelsForActor(
+                                            transfer.sourceActorId))
+                        {
+                            if(original==null||
+                                    !transfer.sourcePartId.equals(
+                                        original.getAnchorId()))continue;
+                            net.minecraft.nbt.NBTTagCompound skeleton=
+                                    new net.minecraft.nbt.NBTTagCompound();
+                            skeleton.setTag("Bones",
+                                    EditorSceneSerializer.writeBones(
+                                            original.getBones()));
+                            EditorSceneSerializer.readBones(
+                                    virtual.getBones(),skeleton);
+                            virtual.restoreMorphKeys(
+                                    original.getMorphKeysSnapshot());
+                            virtual.restoreModelKeys(
+                                    original.getModelKeysSnapshot());
+                            virtual.readPhysicsSettings(
+                                    original.writePhysicsSettings());
+                            virtual.readColliderSettings(
+                                    original.writeColliderSettings());
+                            virtual.setWeldEnabled(
+                                    original.isWeldEnabled());
+                            if(original.hasExplicitClothPhysicsSetting())
+                                virtual.setClothPhysicsEnabled(
+                                        original.isClothPhysicsEnabled());
+                            CharacterTimelineController tracks=
+                                    CharacterTimelineController.fromNBT(
+                                        original.getCharacterTimeline().toNBT());
+                            if(tracks!=null)
+                            {
+                                virtual.getCharacterTimeline().clear();
+                                virtual.getCharacterTimeline().getTracks()
+                                        .addAll(tracks.getTracks());
+                            }
+                            break;
+                        }
                     AnimationTransform local=AnchorTransferMath
                             .toBodyPartTransform(transfer.boneFromItem);
                     AnimationTransform target=virtual.getGlobalTransform();
