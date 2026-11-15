@@ -2063,3 +2063,50 @@ Inspect a stationary, walking, rotated and kneeling character:
 A successful standalone Java 8 and Forge compile can validate
 geometric parity, but Minecraft screenshots/video are required to
 confirm pose, texture, shader lightmap and motion.
+
+## XPBD playback inward-collapse diagnostic and bounded corrections (November 15)
+
+Real in-game tests confirmed `boxes=12`, two-substep `legs=640`
+contact corrections, and an active 60-node solver. However, during
+walking the detached garment sometimes folds noticeably inward; pausing
+changes only the **degree of inward folding**, not the model topology.
+This is NOT evidence that the mesh or Jolt is uninitialized.
+
+This opt-in XPBD refinement (does not affect the old Jolt skirt):
+* Pass the native-posed **radial direction of each actual skirt node**
+  into the existing real Emoticons leg-OBB projection. When a particle
+  is inside a thigh box, use the exterior ray exit in that direction
+  instead of a box's arbitrary nearest face, which could push the left
+  side inwards. No new colliders are synthesized, and large per-contact
+  corrections remain bounded.
+* Advect free cloth particles and their Verlet history by the actual
+  Chameleon pose-target displacement before stepping physics. Even a
+  paused redraw with `dt=0` follows the newly posed model without
+  injecting spurious velocity; seek/teleport resets remain bounded.
+* Add a conservative, outward-only anti-collapse limit at 85% of EACH
+  non-pinned particle's current native horizontal distance from the
+  skirt's moving waist center. This never modifies the three source
+  waist cubes, the authoring data, the 40 original fabric bones, or
+  the UV atlas. Each correction is capped at 0.08 blocks and respects
+  the pre-existing 0.37-block maximum native-pose displacement.
+  If this causes excessive stiffness, A/B disable with
+  `-Dbbs.editor.physics.skirt.xpbdRadialGuard=false`.
+* Extend `[SkirtXPBDVolumeFrame]` with `boxes`, `legs`, `self`,
+  `substeps` and `constraintError` (the previous first-frame
+  `legBoxes=0` diagnostic is not evidence of later active collisions).
+* Java 8 regressions: left/right thigh outward contact, unmodified
+  non-contact particles, pause target change, repeated paused redraw
+  idempotence, moving pinned waist.
+
+To compare to the user-observed detached volume:
+```text
+runClient -PfixMixinAsm -PenableSkirtXPBD -PskirtXPBDOverlay -PskirtXPBDVolumeSkin -PcaptureSkirtMesh -PenableJoltExperimental
+```
+After walking and pausing on the **same animation frame**, inspect
+`[SkirtXPBDVolumeFrame]` for `boxes>0`, intermittent `legs>0`
+when stepping, and bounded `constraintError`. A paused sample can have
+`substeps=0 legs=0` by design. Compare front/side/underside views;
+the source-volume render is still 43 separate cuboids, not yet a
+continuous watertight cloth surface. Visual Minecraft verification is
+required before merging; Java tests alone do not prove absence of
+clipping or fabric collapse.

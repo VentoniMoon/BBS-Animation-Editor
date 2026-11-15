@@ -94,6 +94,11 @@ public final class ChameleonSkirtXPBDVolumeRenderer
                 System.out.println("[BBS Editor][SkirtXPBDVolumeFrame] "+
                         "maxNodeMotion="+mesh.maxNodeDisplacement+
                         " maxVisualMotion="+mesh.maxVisualDisplacement+
+                        " boxes="+frame.legBoxCount+
+                        " legs="+frame.solved.legContacts+
+                        " self="+frame.solved.selfContacts+
+                        " substeps="+frame.solved.substeps+
+                        " constraintError="+frame.solved.maxDistanceError+
                         " renderedQuads="+faces);
             return true;
         }

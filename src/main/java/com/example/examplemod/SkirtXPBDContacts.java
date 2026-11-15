@@ -126,10 +126,36 @@ public final class SkirtXPBDContacts
     public static float[] corrected(float[] clothLocal,Frame frame,
             float thickness)
     {
+        return corrected(clothLocal,frame,thickness,null);
+    }
+
+    /**
+     * For the 60-node skirt, choose the OUTER exit of a fitted thigh OBB
+     * using this particle's native posed direction from the waist. A generic
+     * nearest-face projection can send a deeply penetrating left-thigh node
+     * toward the actor center and collapse the skirt during playback.
+     * This direction is from REAL posed skirt geometry, not a fake collider.
+     * Null retains the original nearest-face behavior for legacy callers.
+     */
+    public static float[] corrected(float[] clothLocal,Frame frame,
+            float thickness,float[] posedOutwardLocal)
+    {
         if(clothLocal==null||clothLocal.length!=3||
                 frame==null||!matrixValid(frame.modelToWorld))
             return clothLocal==null?null:clothLocal.clone();
         float[] point=point(frame.modelToWorld,clothLocal);
+        float[] outwardWorld=null;
+        if(posedOutwardLocal!=null&&posedOutwardLocal.length==3)
+        {
+            float[] m=frame.modelToWorld;
+            float ox=m[0]*posedOutwardLocal[0]+
+                    m[4]*posedOutwardLocal[1]+m[8]*posedOutwardLocal[2];
+            float oz=m[2]*posedOutwardLocal[0]+
+                    m[6]*posedOutwardLocal[1]+m[10]*posedOutwardLocal[2];
+            float radial=(float)Math.sqrt(ox*ox+oz*oz);
+            if(Float.isFinite(radial)&&radial>1E-5F)
+                outwardWorld=new float[]{ox/radial,0F,oz/radial};
+        }
         for(float[] b:frame.legBoxes)
         {
             float[] q={b[3],b[4],b[5],b[6]};
@@ -148,8 +174,34 @@ public final class SkirtXPBDContacts
                 if(depth<minimum){minimum=depth;closest=j;}
             }
             if(closest<0)continue;
-            float sign=axes[closest]>=0F?1F:-1F;
-            axes[closest]+=minimum*sign;
+            boolean outwardExit=false;
+            if(outwardWorld!=null)
+            {
+                float[] direction=rotateInverse(q,outwardWorld);
+                float ray=Float.POSITIVE_INFINITY;
+                for(int j=0;j<3;j++)
+                {
+                    float d=direction[j];
+                    if(Math.abs(d)<1E-6F)continue;
+                    float boundary=d>0F?limits[j]:-limits[j];
+                    float exit=(boundary-axes[j])/d;
+                    if(exit>=0F&&exit<ray)ray=exit;
+                }
+                if(Float.isFinite(ray))
+                {
+                    // Bound a single contact correction; subsequent XPBD
+                    // iterations may continue projecting deep penetrations.
+                    float travel=Math.min(.37F,ray+1E-4F);
+                    for(int j=0;j<3;j++)
+                        axes[j]+=direction[j]*travel;
+                    outwardExit=true;
+                }
+            }
+            if(!outwardExit)
+            {
+                float sign=axes[closest]>=0F?1F:-1F;
+                axes[closest]+=minimum*sign;
+            }
             float[] moved=rotate(q,axes);
             point[0]=b[0]+moved[0];
             point[1]=b[1]+moved[1];
