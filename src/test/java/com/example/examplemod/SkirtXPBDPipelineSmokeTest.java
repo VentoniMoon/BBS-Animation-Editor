@@ -31,7 +31,9 @@ public final class SkirtXPBDPipelineSmokeTest
         nativeVolumeFollowsXPBDWithoutDestroyingTextureFaces();
         originalUvsAndSeamBridgesAreConnected();
         xpbdHasPinnedWaistGravityAndBounds();
+        pausedPoseChangePreservesClothRelativeMotion();
         actualBodyObbsProjectWithoutInventedContacts();
+        outwardThighContactsPreserveHemSide();
         clonedMorphFramesShareOneLiveXPBDState();
         System.out.println("SkirtXPBDPipelineSmokeTest OK");
     }
@@ -272,6 +274,72 @@ public final class SkirtXPBDPipelineSmokeTest
         try{simulation.advance(.5F,f.rest,null);}
         catch(IllegalArgumentException expected){rejected=true;}
         need(rejected,"unbounded time step must fail closed");
+    }
+
+    /** A newly posed Chameleon frame must carry existing XPBD dynamics
+     * into the CURRENT pose even if that render has dt=0 (pause/seek).
+     * The same paused frame twice must not move the nodes a second time. */
+    private static void pausedPoseChangePreservesClothRelativeMotion()
+    {
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State solver=
+                SkirtXPBDSolver.create(f.raw,f.shared,f.rest);
+        for(int i=0;i<8;i++)
+            solver.advance(1F/60F,f.rest,null);
+        float[][] before=solver.current().particles;
+        float[] move=identity();
+        move[12]=.10F;
+        SkirtXPBDPoseSkin.Frame next=pose(f.raw,f.binding,move);
+        SkirtXPBDSolver.Result paused=solver.advance(0F,next,null);
+        need(paused.substeps==0,"pause must not advance cloth integration");
+        for(int n=0;n<60;n++)
+        {
+            float[] expected=before[n].clone();
+            expected[0]+=.10F;
+            equal(paused.particles[n],expected,1E-5F,
+                    "paused native pose delta must carry cloth position");
+        }
+        SkirtXPBDSolver.Result repeat=solver.advance(0F,next,null);
+        for(int n=0;n<60;n++)
+            equal(repeat.particles[n],paused.particles[n],1E-7F,
+                    "repeated pause render must be idempotent");
+        SkirtXPBDSolver.Result running=solver.advance(1F/60F,next,null);
+        for(int n=0;n<60;n++)
+            if(f.shared.nodes.get(n).row==0)
+                equal(running.particles[n],next.target[n],1E-6F,
+                        "playback must not detach the authored waistband");
+    }
+
+    /** Regression: nearest-face exit at a thigh's center pushed LEFT
+     * cloth to the right (into the actor), particularly on a wide walk. */
+    private static void outwardThighContactsPreserveHemSide()
+    {
+        Object morph=new Object();
+        float[] left={-.16F,.46F,0F,0F,0F,0F,1F,
+                .13F,.18F,.14F};
+        float[] right={.16F,.46F,0F,0F,0F,0F,1F,
+                .13F,.18F,.14F};
+        SkirtXPBDContacts.publish(morph,40,identity(),
+                new float[][]{left,right},
+                java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"));
+        SkirtXPBDContacts.Frame frame=SkirtXPBDContacts.forMorph(morph);
+        need(frame!=null&&frame.legBoxes.size()==2,
+                "real bilateral thigh fitting must be available");
+        float[] hitLeft={-.16F,.46F,0F};
+        float[] hitRight={.16F,.46F,0F};
+        float[] pushedLeft=SkirtXPBDContacts.corrected(
+                hitLeft,frame,.018F,new float[]{-1F,0F,0F});
+        float[] pushedRight=SkirtXPBDContacts.corrected(
+                hitRight,frame,.018F,new float[]{1F,0F,0F});
+        need(pushedLeft[0]<hitLeft[0]-.01F,
+                "left-thigh interior must exit OUTSIDE, not toward center");
+        need(pushedRight[0]>hitRight[0]+.01F,
+                "right-thigh interior must exit OUTSIDE, not toward center");
+        float[] noHit={.60F,.46F,.60F};
+        equal(SkirtXPBDContacts.corrected(
+                noHit,frame,.018F,new float[]{1F,0F,1F}),
+                noHit,1E-6F,"outside cloth must remain unchanged");
     }
 
     private static void actualBodyObbsProjectWithoutInventedContacts()
