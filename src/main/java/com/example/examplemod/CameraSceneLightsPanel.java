@@ -89,6 +89,10 @@ public final class CameraSceneLightsPanel
     }
 
     public boolean opened(){return opened;}
+    public void open(AnimationEditorScreen screen)
+    {
+        opened=true;sync(screen);
+    }
     public void reset()
     {
         opened=false;chosen=null;nativeActor=null;
