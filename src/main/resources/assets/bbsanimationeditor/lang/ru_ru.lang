@@ -506,3 +506,12 @@ bbsanimationeditor.ui.character.anchors.fail_pose=НЕВЕРНАЯ ПОЗА / М
 bbsanimationeditor.ui.character.anchors.no_transfer=НЕТ ПЕРЕДАЧИ В КАДРЕ
 bbsanimationeditor.ui.character.anchors.notselected=НЕТ КЛЮЧА ДЛЯ ПРЕДМЕТА
 bbsanimationeditor.ui.character.anchors.removed=КЛЮЧ УДАЛЁН
+
+bbsanimationeditor.ui.character.anchors.place=ПОЛОЖИТЬ В МИР
+bbsanimationeditor.ui.character.anchors.notheld=ЭТОТ АКТЁР НЕ ДЕРЖИТ ПРЕДМЕТ
+bbsanimationeditor.ui.character.anchors.after_pickup=ПОЛОЖИТЬ ПОСЛЕ КЛЮЧА ЗАХВАТА
+bbsanimationeditor.ui.character.anchors.holder_pose=НУЖНА ПОЗА ДЕРЖАТЕЛЯ
+bbsanimationeditor.ui.character.anchors.invalid_world=ОШИБКА МИРОВОЙ ТРАНСФОРМАЦИИ
+bbsanimationeditor.ui.character.anchors.no_local=НЕТ ЛОКАЛЬНОЙ ТРАНСФОРМАЦИИ
+bbsanimationeditor.ui.character.anchors.held=В РУКЕ
+bbsanimationeditor.ui.character.anchors.world=В МИРЕ
