@@ -53,10 +53,14 @@ public final class ParticleActorInspector
                 EditorVisualStyle.themedSurface(settingsTab?.11F:.30F));
         Gui.drawRect(x+94,top+10,x+180,top+34,
                 EditorVisualStyle.themedSurface(settingsTab?.30F:.11F));
-        mc.fontRenderer.drawString("POSITION",x+17,top+18,
-                0xFFE4ECF2);
-        mc.fontRenderer.drawString("SETTINGS",x+106,top+18,
-                0xFFE4ECF2);
+        String left=mc.fontRenderer.trimStringToWidth("POSITION",78);
+        String right=mc.fontRenderer.trimStringToWidth("SETTINGS",78);
+        mc.fontRenderer.drawString(left,
+                x+7+(84-mc.fontRenderer.getStringWidth(left))/2,
+                top+18,0xFFE4ECF2);
+        mc.fontRenderer.drawString(right,
+                x+94+(86-mc.fontRenderer.getStringWidth(right))/2,
+                top+18,0xFFE4ECF2);
     }
     public void drawSettings(AnimationEditorScreen screen,
             int px,int py,int lower)
