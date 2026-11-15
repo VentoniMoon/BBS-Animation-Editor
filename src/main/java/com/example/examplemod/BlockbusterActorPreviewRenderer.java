@@ -1905,7 +1905,7 @@ public class BlockbusterActorPreviewRenderer
         this.bodyPartsPreviewRenderer.captureRenderedAttachmentMatrices(
                 entityActor, previewFrame);
         CharacterAnchorPoseCache.capture(actorData,entityActor,
-                previewFrame,actorPartialTicks);
+                previewFrame,actorPartialTicks,this.bodyPartsPreviewRenderer);
         // From here the cached actor is ready for a second VIEW ONLY.
         // The mirror pass must never call drawActor() / prepare() again.
         preparedPartialTicks=actorPartialTicks;
