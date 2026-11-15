@@ -26,18 +26,57 @@ public final class CameraParticleWorldEngine
     private WorldClient lastWorld;
     private EditorSceneState lastScene;
     private int lastSceneIndex=Integer.MIN_VALUE;
+    private boolean reportedPausedParticleTick;
     private CameraParticleWorldEngine(){}
     private static final CameraParticleWorldEngine INSTANCE=
             new CameraParticleWorldEngine();
+
     public static void tick(AnimationEditorScreen screen)
     {
         INSTANCE.update(screen);
+
+        /*
+         * Vanilla ParticleManager.spawnEffectParticle() only QUEUES the
+         * newly-created particle. Minecraft.runTick() normally flushes that
+         * queue and updates live particles via effectRenderer.updateEffects().
+         * In single-player the editor is a pausing GuiScreen, so vanilla
+         * SKIPS updateEffects() while the GUI is open. Every emitter then
+         * appears invisible until the user closes the editor, at which
+         * point the queued particles suddenly become visible for a moment.
+         *
+         * The editor already advances its particle emitters once from
+         * GuiScreen.updateScreen() (20 TPS). Drain/advance the client-only
+         * particle manager here exactly once per GUI tick while Minecraft
+         * is paused, without unpausing the world, changing actor physics,
+         * advancing the timeline twice or rendering any extra world pass.
+         *
+         * When the world is NOT paused (multiplayer / unpaused GUI), vanilla
+         * runs updateEffects() itself later in Minecraft.runTick(). Never
+         * double-update those particles.
+         */
+        Minecraft mc=Minecraft.getMinecraft();
+        if(screen!=null&&mc!=null&&mc.currentScreen==screen&&
+                mc.world!=null&&mc.effectRenderer!=null&&mc.isGamePaused())
+        {
+            mc.effectRenderer.updateEffects();
+            if(!INSTANCE.reportedPausedParticleTick&&
+                    (!INSTANCE.statics.isEmpty()||
+                     !INSTANCE.actors.isEmpty()))
+            {
+                INSTANCE.reportedPausedParticleTick=true;
+                System.out.println("[BBS Editor][Particles] Paused world: "+
+                        "advancing vanilla particle queue in editor "+
+                        "GUI tick (20 TPS); native renderer unchanged.");
+            }
+        }
     }
+
     public static void reset()
     {
         INSTANCE.actors.clear();INSTANCE.statics.clear();
         INSTANCE.lastWorld=null;INSTANCE.lastScene=null;
         INSTANCE.lastSceneIndex=Integer.MIN_VALUE;
+        INSTANCE.reportedPausedParticleTick=false;
     }
     private void update(AnimationEditorScreen screen)
     {
