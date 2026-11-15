@@ -237,10 +237,10 @@ public final class ParticleSettingsPanel
             int rows=pickerRows();
             if(rows<1)return;
             clampPicker();
-            int py=y+PICK_TOP;
-            Gui.drawRect(x+5,py-2,x+180,py+rows*PICK_ROW+2,
+            int pickerY=y+PICK_TOP;
+            Gui.drawRect(x+5,pickerY-2,x+180,pickerY+rows*PICK_ROW+2,
                     0xFF4C4454);
-            Gui.drawRect(x+6,py-1,x+179,py+rows*PICK_ROW+1,
+            Gui.drawRect(x+6,pickerY-1,x+179,pickerY+rows*PICK_ROW+1,
                     0xFF111115);
             for(int i=0;i<rows;i++)
             {
@@ -248,7 +248,7 @@ public final class ParticleSettingsPanel
                 if(index>=choices.size())break;
                 String candidate=choices.get(index);
                 boolean selected=candidate.equals(type);
-                int iy=py+i*PICK_ROW;
+                int iy=pickerY+i*PICK_ROW;
                 Gui.drawRect(x+7,iy,x+178,iy+PICK_ROW-1,
                         selected?EditorVisualStyle.themedSurface(.33F):
                                 0xFF1A1A1D);
