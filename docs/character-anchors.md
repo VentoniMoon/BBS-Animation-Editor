@@ -17,7 +17,8 @@ physics-enabled object-handling mechanism.
    from SOURCE ITEM and a receiving hand bone from ATTACH TO BONE.
    The hand must be present in the rendered Emoticons skeleton.
 4. Press **ADD / UPDATE KEY**. The key is on the ordinary CHARACTER
-   main track at that frame and is saved through CharacterKey NBT.
+   main track at that frame (marked **@** on the CHARACTER timeline) and is
+   saved through CharacterKey NBT.
 5. From this frame, ITEM actor is visually hidden (equivalent to Empty),
    and a temporary BODY PART with ITEM's original Morph appears on A's
    selected bone. The source actor/Record/Morph is **never modified**.
@@ -55,7 +56,10 @@ bone name, full source morph NBT, plus the 4×4 matrices `World` and
 Runtime resolves all active transitions sorted by frame. For any
 `ItemId` only its most recent event applies. Preview hides the
 source model (actor or original part) and adds one temporary
-`BodyPartModelData` on the current owner. Multiple normal shader,
+`BodyPartModelData` on the current owner. For source BODY PARTS it
+also copies original bone keys, Character timeline, morph keys,
+physics/collision settings and Weld configuration into the transient
+attachment; the saved original is not changed. Multiple normal shader,
 mirror, export and UI passes do not produce extra stored BodyParts.
 Scene switching resets all transient matrix and morph caches.
 
