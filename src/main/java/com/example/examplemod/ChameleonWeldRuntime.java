@@ -138,8 +138,18 @@ public final class ChameleonWeldRuntime
             try
             {
                 if(ChameleonWeldPreviewPass.isSkirtXPBDRequested())
-                    ChameleonSkirtXPBDRenderer.draw(
-                            scope.getXPBDFrame());
+                {
+                    // Both outputs use the SAME 60-node XPBD simulation.
+                    // The volume mode keeps ALL original fabric UV faces and
+                    // the waist for source-parity comparison, while the
+                    // existing thin-shell + bridges mode is unchanged.
+                    if(SkirtXPBDVolumeSkin.ENABLED)
+                        ChameleonSkirtXPBDVolumeRenderer.draw(
+                                scope.getXPBDVolume(),scope.getXPBDFrame());
+                    else
+                        ChameleonSkirtXPBDRenderer.draw(
+                                scope.getXPBDFrame());
+                }
                 if(ChameleonWeldPreviewPass.isSkirtStaticABRequested())
                     // The parity A/B must duplicate ALL original
                     // decoded cube faces, not the deliberately sparse

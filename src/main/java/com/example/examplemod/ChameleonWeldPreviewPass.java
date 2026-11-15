@@ -59,6 +59,9 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     /** Independent XPBD fabric, gated by a separate system property.
      * All original native cubes are restored in close(), even on failure. */
     private SkirtXPBDRuntime.RenderFrame xpbdFrame;
+    /** Optional fully textured native volume under the same 60 XPBD nodes.
+     * Used ONLY in the new visual parity A/B mode. */
+    private SkirtXPBDVolumeSkin.Mesh xpbdVolume;
     private static boolean reportedXPBDFailure;
     private final IdentityHashMap<Object,Object> hiddenFabricCubes=
             new IdentityHashMap<Object,Object>();
@@ -100,6 +103,10 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     public SkirtXPBDRuntime.RenderFrame getXPBDFrame()
     {
         return xpbdFrame;
+    }
+    public SkirtXPBDVolumeSkin.Mesh getXPBDVolume()
+    {
+        return xpbdVolume;
     }
     public SkirtClothSurfaceMesh.Snapshot getStaticPreviewSource()
     {
@@ -479,10 +486,47 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                     SkirtXPBDContacts.forMorph(morph);
             xpbdFrame=SkirtXPBDRuntime.sample(
                     morph,raw,shared,binding,topology,pose,colors,bodies);
+
+            if(xpbdFrame!=null&&SkirtXPBDVolumeSkin.ENABLED)
+            {
+                // Preserve ALL 43 authored Chameleon cubes, including
+                // the three ALL waist pieces and every source UV face.
+                // The same XPBD particles deform the source cuboid volume
+                // via each panel's original 4 UV-owned skin corners.
+                // Build BEFORE hideNativeFabric, so unsupported/missing
+                // geometry always falls back to original Chameleon.
+                List<ChameleonSkirtVolumeSnapshot.Part> restParts=
+                        new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+                List<ChameleonSkirtVolumeSnapshot.Part> posedParts=
+                        new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+                for(Bone bone:bones)
+                {
+                    if(!visibleNativeChain(bone))
+                        throw new IllegalArgumentException(
+                                "XPBD native volume contains hidden bone");
+                    List<Object> cubes=(List<Object>)field(
+                            bone.value,"cubes");
+                    float[] tint=skinMaterialProperties(bone);
+                    for(Object cube:cubes)
+                    {
+                        restParts.add(
+                            new ChameleonSkirtVolumeSnapshot.Part(
+                                meshDecodedCube(bone,cube,false),tint));
+                        posedParts.add(
+                            new ChameleonSkirtVolumeSnapshot.Part(
+                                meshDecodedCube(bone,cube,true),tint));
+                    }
+                }
+                xpbdVolume=SkirtXPBDVolumeSkin.build(
+                        ChameleonSkirtVolumeSnapshot.capture(restParts),
+                        ChameleonSkirtVolumeSnapshot.capture(posedParts),
+                        raw,binding,pose,xpbdFrame.solved.particles);
+            }
         }
         catch(Exception error)
         {
             xpbdFrame=null;
+            xpbdVolume=null;
             if(!reportedXPBDFailure)
             {
                 reportedXPBDFailure=true;

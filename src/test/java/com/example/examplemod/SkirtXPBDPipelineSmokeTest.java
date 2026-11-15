@@ -28,6 +28,7 @@ public final class SkirtXPBDPipelineSmokeTest
     public static void main(String[] args)
     {
         exactlyFollowAnimatedNativeBonePoses();
+        nativeVolumeFollowsXPBDWithoutDestroyingTextureFaces();
         originalUvsAndSeamBridgesAreConnected();
         xpbdHasPinnedWaistGravityAndBounds();
         actualBodyObbsProjectWithoutInventedContacts();
@@ -79,6 +80,114 @@ public final class SkirtXPBDPipelineSmokeTest
                 equal(turned.corner(f.binding,turned.target,p,v),
                         goal,1E-6F,"rotated bone changed native UV corner XYZ");
             }
+    }
+
+    /** Regression for the first real XPBD screenshot: the 40 selected
+     * front quads + bridges had cyan/green/red cardboard edges and no
+     * detached belt. This alternate material draw must preserve ALL
+     * original cube sides/caps, original native UVs and a moving waist. */
+    private static void nativeVolumeFollowsXPBDWithoutDestroyingTextureFaces()
+    {
+        Fixture f=new Fixture();
+        List<SkirtClothSurfaceMesh.Strip> strips=
+                SkirtClothSurfaceMeshSmokeTest.fixture();
+        float[] translation=identity();
+        translation[12]=.13F;translation[13]=.04F;
+        SkirtXPBDPoseSkin.Frame posed=pose(f.raw,f.binding,translation);
+        List<ChameleonSkirtVolumeSnapshot.Part> original=
+                new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+        List<ChameleonSkirtVolumeSnapshot.Part> animated=
+                new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+        float[] white={1F,1F,1F,1F,0F,0F};
+        // The real 43-cube skirt includes 3 ALL-bone waist cubes;
+        // model them with independent full six-quad cube lists.
+        for(int i=0;i<3;i++)
+            volumePart(original,animated,"ALL",
+                    strips.get(i).upper,translation,white);
+        for(SkirtClothSurfaceMesh.Strip strip:strips)
+        {
+            volumePart(original,animated,strip.upper.bone,
+                    strip.upper,translation,white);
+            volumePart(original,animated,strip.lower.bone,
+                    strip.lower,translation,white);
+        }
+        ChameleonSkirtVolumeSnapshot.Snapshot rest=
+                ChameleonSkirtVolumeSnapshot.capture(original);
+        ChameleonSkirtVolumeSnapshot.Snapshot current=
+                ChameleonSkirtVolumeSnapshot.capture(animated);
+        SkirtXPBDVolumeSkin.Mesh neutral=SkirtXPBDVolumeSkin.build(
+                rest,current,f.raw,f.binding,posed,posed.target);
+        need(neutral.cubes==43&&neutral.quads==258 &&
+                neutral.waistQuads==18&&neutral.fabricQuads==240,
+                "XPBD original material volume omitted native cube faces");
+        need(neutral.maxNodeDisplacement==0F &&
+                neutral.maxVisualDisplacement==0F,
+                "source pose must not be moved when particle targets match");
+        for(int face=0;face<current.faces.size();face++)
+        {
+            ChameleonSkirtVolumeSnapshot.Face source=current.faces.get(face);
+            SkirtXPBDVolumeSkin.Face result=neutral.faces.get(face);
+            need(source.bone.equals(result.bone),
+                    "native volume face order changed");
+            for(int v=0;v<4;v++)
+            {
+                equal(result.world[v],source.world[v],1E-6F,
+                        "XPBD zero-displacement altered current Chameleon pose");
+                equal2(result.uv[v],source.uv[v],0F,
+                        "source cube UV must survive exact native skin copy");
+            }
+        }
+
+        float[][] dynamic=new float[60][3];
+        for(int n=0;n<60;n++)
+        {
+            dynamic[n]=posed.target[n].clone();
+            if(f.shared.nodes.get(n).row>0)
+            {
+                dynamic[n][0]+=.025F;
+                dynamic[n][1]-=.013F;
+            }
+        }
+        SkirtXPBDVolumeSkin.Mesh moving=SkirtXPBDVolumeSkin.build(
+                rest,current,f.raw,f.binding,posed,dynamic);
+        need(moving.maxNodeDisplacement>.02F &&
+                moving.maxVisualDisplacement>.01F &&
+                moving.maxVisualDisplacement<.045F,
+                "actual XPBD particles did not move the source-volume skin");
+        for(int i=0;i<moving.faces.size();i++)
+        {
+            SkirtXPBDVolumeSkin.Face live=moving.faces.get(i);
+            ChameleonSkirtVolumeSnapshot.Face source=current.faces.get(i);
+            for(int v=0;v<4;v++)
+            {
+                equal2(live.uv[v],source.uv[v],0F,
+                        "dynamic cloth corrupted a native source-face UV");
+                if(live.waist)
+                    equal(live.world[v],source.world[v],1E-6F,
+                            "XPBD may not deform source waist cuboids");
+            }
+        }
+        boolean rejected=false;
+        try{SkirtXPBDVolumeSkin.build(
+                rest,null,f.raw,f.binding,posed,dynamic);}
+        catch(IllegalArgumentException expected){rejected=true;}
+        need(rejected,"incomplete native volume must fail before hiding cubes");
+    }
+
+    private static void volumePart(
+            List<ChameleonSkirtVolumeSnapshot.Part> rest,
+            List<ChameleonSkirtVolumeSnapshot.Part> posed,
+            String bone,SkirtClothSurfaceMesh.Cube cube,
+            float[] shift,float[] material)
+    {
+        rest.add(new ChameleonSkirtVolumeSnapshot.Part(
+                new SkirtClothSurfaceMesh.Cube(bone,
+                        cube.restMatrix,cube.quads),material));
+        float[] m=cube.restMatrix.clone();
+        m[12]+=shift[12];m[13]+=shift[13];m[14]+=shift[14];
+        posed.add(new ChameleonSkirtVolumeSnapshot.Part(
+                new SkirtClothSurfaceMesh.Cube(bone,m,cube.quads),
+                material));
     }
 
     private static void originalUvsAndSeamBridgesAreConnected()

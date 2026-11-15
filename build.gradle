@@ -93,6 +93,16 @@ minecraft {
                 }
                 jvmArg '-Dbbs.editor.physics.skirt.xpbd=true'
             }
+            // Debug source-volume material fidelity: render ALL original
+            // cuboid UVs under the SAME XPBD node displacements instead
+            // of the experimental 40-quad cloth shell + seam bridges.
+            if (project.hasProperty('skirtXPBDVolumeSkin')) {
+                if (!project.hasProperty('enableSkirtXPBD')) {
+                    throw new GradleException(
+                            '-PskirtXPBDVolumeSkin requires -PenableSkirtXPBD')
+                }
+                jvmArg '-Dbbs.editor.physics.skirt.xpbdVolumeSkin=true'
+            }
             // Optional source-vs-new-cloth A/B instead of direct
             // replacement. The new shell appears +1.2 blocks on X.
             if (project.hasProperty('skirtXPBDOverlay')) {
