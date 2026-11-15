@@ -350,6 +350,7 @@ public class CharacterEditorPanel
         if (this.selectedActor != actor)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
             this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
