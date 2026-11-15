@@ -65,10 +65,24 @@ public final class ParticleActorRig
     }
     public static double yaw(ActorAnimationData rig,double frame)
     {
+        return rotation(rig,frame,1);
+    }
+    public static double pitch(ActorAnimationData rig,double frame)
+    {
+        return rotation(rig,frame,0);
+    }
+    public static double roll(ActorAnimationData rig,double frame)
+    {
+        return rotation(rig,frame,2);
+    }
+    private static double rotation(ActorAnimationData rig,double frame,int axis)
+    {
         AnimationBone origin=rig==null?null:rig.getBone(ORIGIN);
         if(origin==null||origin.getKeyframes().isEmpty())return 0D;
         AnimationTransform t=origin.getTransformAt((float)frame);
-        return t==null?0D:t.getRotationY();
+        if(t==null)return 0D;
+        return axis==0?t.getRotationX():
+                axis==1?t.getRotationY():t.getRotationZ();
     }
     /** Native ParticleMorph numeric settings interpolate linearly. Type,
      * Args, LocalRotation and Mode are discrete at the previous key.
