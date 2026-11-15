@@ -21,6 +21,37 @@ public final class AnchorTransferMath
                 inverseAffine(worldFromBone),worldFromItem);
     }
 
+    /**
+     * Exact Emoticons AnimatorController.render() root hierarchy:
+     *
+     * GL11.glTranslated(actorX, actorY, actorZ);
+     * GL11.glScalef(userConfig.scale, ...);  <-- NOT part of BOBJ bone.mat
+     * GL11.glRotatef(360 - interpolatedBodyYaw, Y);
+     * setupMatrix(bone.mat);
+     *
+     * actorWorld already contains T(actor) * Ry(-bodyYaw).
+     * Uniform scale commutes with that rotation, but NOT with the
+     * translated bone matrix. Omitting it produces a visible jump
+     * and a size mismatch when a source actor becomes a BodyPart.
+     *
+     * The independent actor origin used by source items must NOT
+     * receive this factor: the same item's morph applies its own
+     * scale identically before and after attachment.
+     */
+    public static float[] worldFromAnimatedBone(float[] actorWorld,
+            float animationRootScale,float[] boneLocal)
+    {
+        if(!Float.isFinite(animationRootScale)||
+                Math.abs(animationRootScale)<1E-6F)
+            throw new IllegalArgumentException(
+                    "Invalid animated morph root scale");
+        float[] scale=BodyPartPhysicsMatrixSpace.identity();
+        scale[0]=scale[5]=scale[10]=animationRootScale;
+        return BodyPartPhysicsMatrixSpace.multiply(
+                BodyPartPhysicsMatrixSpace.multiply(actorWorld,scale),
+                boneLocal);
+    }
+
     public static float[] inverseAffine(float[] input)
     {
         if(input==null||input.length!=16)
