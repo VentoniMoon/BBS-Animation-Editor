@@ -260,3 +260,77 @@ converted to Empty, so seeking before pickup restores the source.
 
 The only remaining acceptance criterion that CI cannot establish is
 the actual in-game UI and native rendering correspondence.
+
+## Third action — place / release an item into the world
+
+The reverse action from pickup is now available under
+**CHARACTER → ANCHORS → PLACE / RELEASE IN WORLD** (RU: **ПОЛОЖИТЬ В МИР**).
+
+It creates an ordinary CHARACTER key for the selected item with:
+- the original stable **ItemId** and original source actor/part IDs;
+- **no receiving actor and no receiving bone**;
+- the item's complete **world 4×4 matrix** captured from the animated
+  holder bone and the **current editable BODY PARTS global transform**;
+- a copy of the item's **current Morph NBT**, including edits made after
+  the previous pickup.
+
+The item switches to the world-released state on this exact frame.
+The previous owner's Body Part stays in BODY PARTS for editing older
+frames, but is no longer rendered at or after release. The original
+source actor/part remains hidden; it must **not** reappear at its
+original recorded location.
+
+A separate, **render-only world object** with the same Morph and exact
+saved world matrix is drawn through the existing Blockbuster detached
+actor renderer. No extra scene actor, Record file or server entity is
+created or saved. The renderer applies the full world affine matrix
+(including rotation and scale) with the same parent conjugation in
+native GBuffer, mirror and shadow replay. Position does not depend
+on the current animated hand or subsequent source actor movement.
+
+Subsequent ANCHORS events can **pick up the placed object again** from
+its saved world pose, hand it to either actor and release it repeatedly.
+Only one logical item is rendered at a given timeline time. Backward
+seeking restores the exact previous owner (and its persistent editable
+BODY PARTS), or the original item before the first pickup.
+
+### In-game test: pickup → place → pickup
+
+1. Use an actor holding a bag in a hand after the first pickup key
+   (e.g. pickup at frame **40**).
+2. In BODY PARTS, adjust the bag's global position, angles and/or scale.
+3. Select the holding actor, go to CHARACTER → ANCHORS, choose the
+   original item (shown as `[HELD]`), and move to frame **60**.
+4. Press **PLACE / RELEASE IN WORLD**. Release must be on a *later*
+   frame than the pickup. A `WORLD PLACED @ 60` status confirms
+   the new CHARACTER key.
+5. Move the actor's hands and body at frames 61–100. The bag should
+   remain at the *exact world pose* it had at frame 60.
+6. Scrub to 59/60/61 and back to 39/40: no double item, no teleport
+   to the original source Record position, no visual seam.
+7. At frame 110, select either actor and the same logical item
+   (`[WORLD]`) and create an ordinary pickup key. The item should
+   disappear from its static position and reappear in the hand
+   without moving across the transfer frame.
+8. Save editor.dat, reload, check the same sequence, then test
+   mirror and exported film frames.
+
+A release **freezes** an item, it does **not** apply gravity or
+dynamic Jolt physics. To place it naturally on a table/floor, adjust
+the body's held item transform or animate the hand into position
+before authoring the release key. The current version does not
+offer free-world gizmo editing of the released proxy.
+
+### Automated regression
+
+The Java 8 anchor smoke test verifies that a release:
+- only takes effect on or after its key;
+- hides the source actor/body part but displays no body-part owner;
+- retains the entire Morph, world matrix and ownerless state in NBT;
+- stays at one unchanged world pose across later scene frames;
+- disappears from the world when the same item is re-grabbed;
+- restores the prior owner, release and original actor on reverse seek;
+- does not affect a second independent item held by the same actor.
+
+Shader/GBuffer, mirror and real-world screen placement still require
+gameplay testing. No original Record or Morph NBT is overwritten.
