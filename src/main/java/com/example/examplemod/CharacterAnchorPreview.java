@@ -44,6 +44,80 @@ public final class CharacterAnchorPreview
         return scene!=null&&CharacterAnchorTransfers.hidesActor(
                 scene.getActors(),actorId,sceneTick);
     }
+
+    /**
+     * Migrate the older renderer-only keys to actual editable BODY PARTS.
+     * Run once from the editor GUI per observed state, never from actor,
+     * mirror or 60fps export render callbacks. Registered models survive
+     * saving editor.dat and subsequent reloads; stable transfer identities
+     * guarantee that revisiting a frame cannot duplicate them.
+     */
+    public static void synchronizeEditableParts(EditorSceneState current)
+    {
+        if(current==null)return;
+        bind(current);
+        BodyPartsEditorController parts=current.getBodyPartsController();
+        if(parts==null)return;
+        java.util.List<CharacterAnchorTransfers.Transfer> events=
+                CharacterAnchorTransfers.all(current.getActors());
+        java.util.Map<String,BodyPartModelData> previous=
+                new java.util.HashMap<String,BodyPartModelData>();
+        boolean modified=false;
+        int sceneLength=Math.max(2,current.getSceneLength());
+        for(CharacterAnchorTransfers.Transfer event:events)
+        {
+            if(!event.attached())
+            {
+                previous.remove(event.itemId);
+                continue;
+            }
+            BodyPartModelData prior=previous.get(event.itemId);
+            if(prior==null&&!event.sourcePartId.isEmpty())
+                for(BodyPartModelData original:
+                        parts.getModelsForActor(event.sourceActorId))
+                    if(original!=null&&
+                            event.sourcePartId.equals(original.getAnchorId()))
+                    {
+                        prior=original;
+                        break;
+                    }
+            BodyPartModelData model=parts.findAnchorAttachment(
+                    event.ownerActorId,event.itemId,event.frame);
+            if(model==null)
+            {
+                model=parts.ensureAnchorAttachment(event,prior,sceneLength);
+                if(model!=null)modified=true;
+            }
+            if(model!=null)previous.put(event.itemId,model);
+        }
+
+        // A deleted anchor key must never leave a permanent ghost BODY
+        // PART in the saved actor editor. Do not alter normal attachments.
+        for(java.util.Map.Entry<String,
+                java.util.List<BodyPartModelData>> entry:
+                parts.snapshotActorModels().entrySet())
+            for(BodyPartModelData model:entry.getValue())
+            {
+                if(model==null||!model.isAnchorAttachment())continue;
+                boolean exists=false;
+                for(CharacterAnchorTransfers.Transfer event:events)
+                    if(event.attached()&&
+                            entry.getKey().equals(event.ownerActorId)&&
+                            model.getAnchorItemId().equals(event.itemId)&&
+                            model.getAnchorEventFrame()==event.frame)
+                    {
+                        exists=true;
+                        break;
+                    }
+                if(!exists&&parts.removeAnchorAttachment(
+                        entry.getKey(),model.getAnchorItemId(),
+                        model.getAnchorEventFrame()))
+                    modified=true;
+            }
+        if(modified&&current.getSaveController()!=null)
+            current.getSaveController().markDirty();
+    }
+
     public static List<BodyPartModelData> modelsFor(String actorId,
             double sceneTick,List<BodyPartModelData> originals)
     {
@@ -54,17 +128,49 @@ public final class CharacterAnchorPreview
             return result;
         }
         int frame=Math.max(0,(int)Math.floor(sceneTick));
+        Map<String,CharacterAnchorTransfers.Transfer> owners=
+                CharacterAnchorTransfers.resolve(scene.getActors(),sceneTick);
         if(originals!=null)
             for(BodyPartModelData model:originals)
-                if(model!=null&&!CharacterAnchorTransfers.hidesPart(
-                        scene.getActors(),actorId,model.getAnchorId(),sceneTick))
+            {
+                if(model==null)continue;
+                if(model.isAnchorAttachment())
+                {
+                    CharacterAnchorTransfers.Transfer active=
+                            owners.get(model.getAnchorItemId());
+                    // Keep every authored recipient in BODY PARTS, but
+                    // render only the current owner and the exact event
+                    // instance. A hand-off at the same frame switches
+                    // render representation atomically.
+                    if(active!=null&&active.attached()&&
+                            actorId.equals(active.ownerActorId)&&
+                            model.getAnchorEventFrame()==active.frame)
+                        result.add(model);
+                }
+                else if(!CharacterAnchorTransfers.hidesPart(
+                        scene.getActors(),actorId,model.getAnchorId(),
+                        sceneTick))
                     result.add(model);
+            }
         for(CharacterAnchorTransfers.Transfer transfer:
                 CharacterAnchorTransfers.forOwner(
                         scene.getActors(),actorId,sceneTick))
         {
             if(transfer.boneFromItem==null||
                     transfer.ownerBone.isEmpty())continue;
+            // The registered, editable BODY PART is authoritative. The
+            // old virtual renderer is only a temporary compatibility
+            // fallback if registration failed while loading a scene.
+            boolean registered=false;
+            for(BodyPartModelData model:result)
+                if(model.isAnchorAttachment()&&
+                        transfer.itemId.equals(model.getAnchorItemId())&&
+                        transfer.frame==model.getAnchorEventFrame())
+                {
+                    registered=true;
+                    break;
+                }
+            if(registered)continue;
             String signature=transfer.itemId+"|"+transfer.frame+"|"+
                     actorId+"|"+transfer.ownerBone+"|"+
                     transfer.morph.toString()+"|"+
