@@ -4831,6 +4831,7 @@ public class AnimationEditorScreen extends GuiScreen
         BbsFsActorShadowSamplingProbe.dispose();
         BbsFsNativeActorSunShadowOverlay.resetEditorOverride();
         BetterLightsWorldEngine.reset();
+        CameraParticleWorldEngine.reset();
         cameraVideoExport.close();
         cameraExportDialog.close();
         /* Never leave the detached preview camera as Minecraft's view. */
