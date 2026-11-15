@@ -267,6 +267,17 @@ public final class CameraSceneParticlesPanel
                         x+104,yy+8,0xFFE7EBF1);
             }
         }
+        // Show where the other coordinate rows are on short screens.
+        if(visible>0&&POSITION_ITEMS.length>visible)
+        {
+            int height=visible*POSITION_ROW;
+            int handle=Math.max(12,height*visible/POSITION_ITEMS.length);
+            int knob=POSITION_TOP+(height-handle)*positionScroll/
+                    Math.max(1,POSITION_ITEMS.length-visible);
+            Gui.drawRect(x+180,POSITION_TOP,x+183,POSITION_TOP+height,
+                    0xFF25212B);
+            Gui.drawRect(x+180,knob,x+183,knob+handle,accent);
+        }
     }
 
     private double get(CameraSceneParticles.Source s,int axis)
