@@ -280,12 +280,14 @@ public final class CharacterAnchorPanel
                         .get(item.itemId);
         float[] world=null;
         NBTTagCompound movedMorph=item.morph;
+        boolean bakedPose=false;
         if(previous!=null&&previous.released())
         {
             // A released item remains at its saved world pose while
             // every original source actor Record continues separately.
             world=previous.worldAtKey.clone();
             movedMorph=previous.morph.copy();
+            bakedPose=previous.bakedPose;
         }
         else if(previous!=null&&previous.attached())
         {
@@ -307,8 +309,30 @@ public final class CharacterAnchorPanel
             if(holder!=null&&localHeld!=null)
                 world=BodyPartPhysicsMatrixSpace.multiply(
                         holder,localHeld);
-            if(edited!=null&&edited.getMorphAt(frame)!=null)
-                movedMorph=edited.getMorphAt(frame).toNBT();
+            if(edited!=null)
+            {
+                // The rendered BODY PART already has its *internal*
+                // bone keys applied by BodyPartsPreviewRenderer.
+                // getMorphAt(frame) is only the unposed source Morph
+                // and used to lose rotations at handoff.
+                NBTTagCompound posed=CharacterAnchorPoseCache
+                        .posedPartMorph(previous.ownerActorId,edited,frame);
+                if(posed==null)
+                {
+                    status="RENDER ITEM POSE FIRST";
+                    System.err.println("[BBS Editor][Anchors] No posed "+
+                            "BODY PART snapshot at frame "+frame+
+                            " for handoff "+previous.itemId);
+                    return;
+                }
+                movedMorph=posed;
+                bakedPose=true;
+            }
+            else
+            {
+                movedMorph=previous.morph.copy();
+                bakedPose=previous.bakedPose;
+            }
         }
         else if(item.sourcePart.isEmpty())
             world=CharacterAnchorPoseCache.actor(item.sourceActor,frame);
@@ -328,6 +352,15 @@ public final class CharacterAnchorPanel
                         world=BodyPartPhysicsMatrixSpace.multiply(sourceBone,
                                 AnchorTransferMath.composeBodyPart(
                                         original.getGlobalTransform()));
+                    NBTTagCompound posed=CharacterAnchorPoseCache
+                            .posedPartMorph(item.sourceActor,original,frame);
+                    if(posed==null)
+                    {
+                        status="RENDER ITEM POSE FIRST";
+                        return;
+                    }
+                    movedMorph=posed;
+                    bakedPose=true;
                     break;
                 }
         }
@@ -351,7 +384,8 @@ public final class CharacterAnchorPanel
             CharacterAnchorTransfers.Transfer transfer=
                     new CharacterAnchorTransfers.Transfer(
                             item.itemId,item.sourceActor,item.sourcePart,
-                            target.getId(),bone,frame,movedMorph,world,local);
+                            target.getId(),bone,frame,movedMorph,world,local,
+                            bakedPose);
             CharacterKey key=CharacterAnchorTransfers.upsert(
                     target.getCharacterTimeline(),transfer);
             // The key is authoritative; the receiving model must now be
@@ -382,6 +416,7 @@ public final class CharacterAnchorPanel
             System.out.println("[BBS Editor][Anchors] KEY frame="+frame+
                     " item="+item.itemId+" owner="+target.getId()+
                     " bone="+bone+" worldRebased=true"+
+                    " bakedPose="+bakedPose+
                     " targetMorphScale="+
                     CharacterAnchorPoseCache.nativeAnimatedScale(
                             target.getId(),frame)+
@@ -453,17 +488,33 @@ public final class CharacterAnchorPanel
             AnchorTransferMath.inverseAffine(world);
 
             NBTTagCompound morph=current.morph.copy();
+            boolean bakedPose=current.bakedPose;
             if(edited!=null)
             {
-                AbstractMorph visible=edited.getMorphAt(frame);
-                if(visible!=null)morph=visible.toNBT();
+                // Freeze the exact final pose produced by BODY PARTS:
+                // customPose / Emoticons.pose / Chameleon.pose already
+                // includes all authored internal-bone keyframes.
+                // Never silently fall back to getMorphAt(frame), which
+                // is unposed and caused the reported rotation reset.
+                NBTTagCompound posed=CharacterAnchorPoseCache
+                        .posedPartMorph(actor.getId(),edited,frame);
+                if(posed==null)
+                {
+                    status="RENDER ITEM POSE FIRST";
+                    System.err.println("[BBS Editor][Anchors] No posed "+
+                            "BODY PART snapshot at frame "+frame+
+                            " for world release "+current.itemId);
+                    return;
+                }
+                morph=posed;
+                bakedPose=true;
             }
 
             CharacterAnchorTransfers.Transfer drop=
                     new CharacterAnchorTransfers.Transfer(
                             current.itemId,current.sourceActorId,
                             current.sourcePartId,"","",frame,morph,
-                            world,null);
+                            world,null,bakedPose);
             CharacterKey key=CharacterAnchorTransfers.upsert(
                     actor.getCharacterTimeline(),drop);
             CharacterAnchorPreview.synchronizeEditableParts(scene);
@@ -475,7 +526,8 @@ public final class CharacterAnchorPanel
             status="WORLD PLACED @ "+frame;
             System.out.println("[BBS Editor][Anchors] RELEASE "+
                     "frame="+frame+" item="+current.itemId+
-                    " from="+actor.getId()+" world=("+
+                    " from="+actor.getId()+
+                    " bakedPose="+bakedPose+" world=("+
                     world[12]+","+world[13]+","+world[14]+")");
         }
         catch(IllegalArgumentException invalid)
