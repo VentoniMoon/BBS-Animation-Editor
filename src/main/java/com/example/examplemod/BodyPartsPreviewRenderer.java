@@ -40,6 +40,39 @@ public class BodyPartsPreviewRenderer
             new IdentityHashMap<BodyPartModelData, AbstractMorph>();
 
     /**
+     * Return the ACTUAL native child Morph prepared for a BODY PART in
+     * the current actor frame. Unlike data.getMorphAt(frame), this
+     * already contains the editor's evaluated internal bone rotations,
+     * translations and scales (CustomMorph.customPose, Emoticons.pose,
+     * Chameleon.pose, etc.). Thus a release can freeze exactly the
+     * visible edited item instead of resetting to its unposed base.
+     *
+     * Called only on the user clicking a CHARACTER anchor action,
+     * after the ordinary actor render. Never evaluate animation twice.
+     * No live renderer morph or BodyPartModelData is mutated.
+     */
+    public net.minecraft.nbt.NBTTagCompound snapshotPreparedMorph(
+            BodyPartModelData data)
+    {
+        if(data==null)return null;
+        AbstractMorph rendered=preparedMorphs.get(data);
+        if(rendered==null)return null;
+        try
+        {
+            net.minecraft.nbt.NBTTagCompound snapshot=rendered.toNBT();
+            return snapshot==null||snapshot.hasNoTags()
+                    ?null:snapshot.copy();
+        }
+        catch(RuntimeException invalid)
+        {
+            System.err.println("[BBS Editor][Anchors] Cannot snapshot "+
+                    "posed BODY PART "+data.getModelName()+": "+
+                    invalid.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * A background actor can have real Metamorph Body Parts embedded in its
      * original morph NBT without any editor BODY PARTS tracks. Previously
      * prepareModels() cleared manager.parts unconditionally, discarding those
