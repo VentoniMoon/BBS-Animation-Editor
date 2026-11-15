@@ -91,7 +91,8 @@ public final class ChameleonWeldRuntime
         try
         {
             boolean weld=isEnabled() && currentMorphWeld();
-            if(weld || ChameleonWeldPreviewPass.isSkirtMeshCaptureRequested())
+            if(weld || ChameleonWeldPreviewPass.isSkirtMeshCaptureRequested()
+                    || ChameleonWeldPreviewPass.isSkirtStaticABRequested())
             {
                 // Mesh capture is independent of the Weld checkbox. The
                 // read-only path MUST NOT mutate native Chameleon vertices.
@@ -123,7 +124,24 @@ public final class ChameleonWeldRuntime
     public static void end()
     {
         ArrayDeque<ChameleonWeldPreviewPass> scopes=SCOPES.get();
-        if(!scopes.isEmpty())scopes.pop().close();
+        if(!scopes.isEmpty())
+        {
+            ChameleonWeldPreviewPass scope=scopes.pop();
+            try
+            {
+                if(ChameleonWeldPreviewPass.isSkirtStaticABRequested())
+                    ChameleonSkirtStaticVisualRenderer.draw(
+                            scope.getStaticPreviewBinding(),
+                            scope.getStaticPreviewSource(),
+                            scope.getStaticPreviewProperties());
+            }
+            finally
+            {
+                // Guaranteed restoration of any Weld-mutated native
+                // positions even when the optional A/B draw fails.
+                scope.close();
+            }
+        }
         if(scopes.isEmpty())SCOPES.remove();
     }
 

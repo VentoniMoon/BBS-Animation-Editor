@@ -46,6 +46,13 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     private static final boolean SKIRT_MESH_CAPTURE=
             Boolean.getBoolean("bbs.editor.physics.skirt.meshCapture");
     private static int skirtMeshCapturePasses;
+    /** Experimental detached textured source-skin A/B, OFF by default. */
+    private static final boolean SKIRT_STATIC_AB=
+            Boolean.getBoolean("bbs.editor.physics.skirt.staticSkinAB");
+    private static boolean reportedStaticPreviewFailure;
+    private SkirtClothSurfaceMesh.Snapshot staticPreviewSource;
+    private SkirtClothRestBinding.Binding staticPreviewBinding;
+    private float[][] staticPreviewProperties;
     /** Print full ranked seam diagnostics only once, not every render. */
     private static boolean skirtMeshSeamDetailsLogged;
     /**
@@ -72,6 +79,22 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     public static boolean isSkirtMeshCaptureRequested()
     {
         return SKIRT_MESH_CAPTURE;
+    }
+    public static boolean isSkirtStaticABRequested()
+    {
+        return SKIRT_STATIC_AB;
+    }
+    public SkirtClothSurfaceMesh.Snapshot getStaticPreviewSource()
+    {
+        return staticPreviewSource;
+    }
+    public SkirtClothRestBinding.Binding getStaticPreviewBinding()
+    {
+        return staticPreviewBinding;
+    }
+    public float[][] getStaticPreviewProperties()
+    {
+        return staticPreviewProperties;
     }
 
     /** When weld=false, capture decoded UV/positions but NEVER modify any
@@ -172,9 +195,13 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             collectBone(root,null,identity(),identity(),bones);
         // Snapshot the untouched ORIGINAL decoded geometry and UVs before
         // hair/parent weld or circumferential weld modifies any positions.
-        if(SKIRT_MESH_CAPTURE && bones.size()==44 &&
-                ++skirtMeshCapturePasses%120==1)
-            inspectSkirtMesh(bones);
+        if(bones.size()==44)
+        {
+            if(SKIRT_MESH_CAPTURE && ++skirtMeshCapturePasses%120==1)
+                inspectSkirtMesh(bones);
+            if(SKIRT_STATIC_AB)
+                prepareStaticPreview(bones);
+        }
         if(!weld)return;
         for(Bone bone:bones)
             if(bone.parent!=null)
@@ -235,30 +262,8 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     {
         try
         {
-            Map<String,Bone> byName=new HashMap<String,Bone>();
-            Bone waist=null;
-            for(Bone b:all)
-            {
-                String id=(String)field(b.value,"id");
-                if(id==null||byName.put(id,b)!=null)return;
-                if("ALL".equals(id))waist=b;
-            }
-            if(waist==null)return;
-            SkirtGeoProfile.Plan<Object> profile=
-                    SkirtGeoProfile.inspect(waist.value,
-                            value->childrenOf(value),value->idOf(value));
-            List<SkirtClothSurfaceMesh.Strip> strips=
-                    new ArrayList<SkirtClothSurfaceMesh.Strip>();
-            for(List<Object> chain:profile.strips)
-            {
-                Bone upper=byName.get(idOf(chain.get(0)));
-                Bone lower=byName.get(idOf(chain.get(1)));
-                if(upper==null||lower==null)return;
-                strips.add(new SkirtClothSurfaceMesh.Strip(
-                        meshCube(upper),meshCube(lower)));
-            }
-            SkirtClothSurfaceMesh.Snapshot mesh=
-                    SkirtClothSurfaceMesh.capture(strips);
+            SkirtClothSurfaceMesh.Snapshot mesh=collectSkirtSource(all);
+            if(mesh==null)return;
             // Stage 2 constructs an immutable 20x3 canonical rest lattice.
             // This does not render the proposed surface or move a cube:
             // report the precise distortion required BEFORE any visual test.
@@ -352,8 +357,8 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             }
             System.out.println(
                     "[BBS Animation Editor][SkirtMeshCapture] "+
-                    "bones="+profile.allBones.size()+
-                    " strips="+profile.stripCount()+
+                    "bones="+all.size()+
+                    " strips="+SkirtClothSurfaceMesh.STRIP_COUNT+
                     " outwardQuads="+mesh.patches.size()+
                     " triangles="+mesh.triangleCount+
                     " uvCorners="+(mesh.patches.size()*4)+
@@ -383,6 +388,103 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                     error.getMessage()+
                     " (source cubes/render/physics unchanged)");
         }
+    }
+
+    /** Exact authored 44-bone profile only. Source quad vertices and UV
+     * are copied BEFORE any Weld pass can change their positions. */
+    private static SkirtClothSurfaceMesh.Snapshot collectSkirtSource(
+            List<Bone> all)throws Exception
+    {
+        if(all==null||all.size()!=44)return null;
+        Map<String,Bone> byName=new HashMap<String,Bone>();
+        Bone waist=null;
+        for(Bone b:all)
+        {
+            String id=(String)field(b.value,"id");
+            if(id==null||byName.put(id,b)!=null)return null;
+            if("ALL".equals(id))waist=b;
+        }
+        if(waist==null)return null;
+        SkirtGeoProfile.Plan<Object> profile=
+                SkirtGeoProfile.inspect(waist.value,
+                        value->childrenOf(value),value->idOf(value));
+        List<SkirtClothSurfaceMesh.Strip> strips=
+                new ArrayList<SkirtClothSurfaceMesh.Strip>();
+        for(List<Object> chain:profile.strips)
+        {
+            Bone upper=byName.get(idOf(chain.get(0)));
+            Bone lower=byName.get(idOf(chain.get(1)));
+            if(upper==null||lower==null)return null;
+            strips.add(new SkirtClothSurfaceMesh.Strip(
+                    meshCube(upper),meshCube(lower)));
+        }
+        return SkirtClothSurfaceMesh.capture(strips);
+    }
+
+    /** Prepare a completely separate source-UV material mesh in rest pose.
+     * Native cubes still render unchanged. On any unsupported model, the
+     * optional renderer receives null and draws nothing. */
+    private void prepareStaticPreview(List<Bone> bones)
+    {
+        try
+        {
+            SkirtClothSurfaceMesh.Snapshot raw=collectSkirtSource(bones);
+            if(raw==null)return;
+            SkirtClothSharedSurface.Surface shared=
+                    SkirtClothSharedSurface.connect(raw);
+            SkirtClothRestBinding.Binding binding=
+                    SkirtClothRestBinding.bind(raw,shared);
+            if(binding.maxRestReconstructionError>1E-5F)return;
+
+            Map<String,Bone> names=new HashMap<String,Bone>();
+            for(Bone bone:bones)
+                names.put(idOf(bone.value),bone);
+            float[][] props=new float[raw.patches.size()][];
+            for(int i=0;i<raw.patches.size();i++)
+                props[i]=skinMaterialProperties(
+                        names.get(raw.patches.get(i).bone));
+            staticPreviewSource=raw;
+            staticPreviewBinding=binding;
+            staticPreviewProperties=props;
+        }
+        catch(Exception error)
+        {
+            staticPreviewSource=null;
+            staticPreviewBinding=null;
+            staticPreviewProperties=null;
+            if(!reportedStaticPreviewFailure)
+            {
+                reportedStaticPreviewFailure=true;
+                System.err.println("[BBS Editor][SkirtStaticVisual] "+
+                        "Failed to build a static source mesh: "+
+                        error.getClass().getSimpleName()+": "+
+                        error.getMessage()+
+                        " (original Chameleon render unchanged)");
+            }
+        }
+    }
+
+    /**
+     * ChameleonCubeRenderer uses per-bone color and glow. Reflection keeps
+     * Chameleon optional, including in the standalone Weld Java 8 tests.
+     * RGBA + absoluteBrightness + glow; default white without glow.
+     */
+    private static float[] skinMaterialProperties(Bone bone)
+    {
+        float[] props={1F,1F,1F,1F,0F,0F};
+        if(bone==null)return props;
+        try
+        {
+            Object tint=field(bone.value,"color");
+            String[] keys={"r","g","b","a"};
+            for(int i=0;i<4;i++)
+                props[i]=((Number)field(tint,keys[i])).floatValue();
+            props[4]=Boolean.TRUE.equals(
+                    field(bone.value,"absoluteBrightness"))?1F:0F;
+            props[5]=((Number)field(bone.value,"glow")).floatValue();
+        }
+        catch(Exception optional){ /* original white material fallback */ }
+        return props;
     }
 
     @SuppressWarnings("unchecked")
