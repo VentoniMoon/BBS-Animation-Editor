@@ -180,6 +180,56 @@ public final class EditorMultiActorPreviewController
             }
         }
 
+        /*
+         * CHARACTER → ANCHORS → PLACE / RELEASE.
+         *
+         * These are real rendered world objects, but NOT scene/Record
+         * actors. They use the exact Morph and full 4x4 world matrix
+         * from the release key. Each item is represented once, and it
+         * stays frozen even while the source actor's Record continues.
+         *
+         * Reuse the normal background actor renderer so all native
+         * OptiFine GBuffer, mirror and shadow replay paths keep working.
+         * Renderers are cached by stable logical item IDs; the only
+         * per-frame change is which release key is currently active.
+         */
+        for(CharacterAnchorTransfers.Transfer placed:
+                CharacterAnchorTransfers.releasedItems(actors,sceneTime))
+        {
+            if(placed.worldAtKey==null)continue;
+            String id=CharacterAnchorWorldDrops.runtimeId(placed.itemId);
+            active.add(id);
+            BlockbusterActorPreviewRenderer renderer=renderers.get(id);
+            if(renderer==null)
+            {
+                renderer=new BlockbusterActorPreviewRenderer();
+                renderers.put(id,renderer);
+            }
+            renderer.setFixedAnchorWorldMatrix(placed.worldAtKey);
+            renderer.setPassiveBodyPartsModels(
+                    java.util.Collections.<BodyPartModelData>emptyList(),true);
+            mirrorPoseContexts.put(id,
+                    new ArrayList<AnimationBoneSnapshot>());
+            try
+            {
+                BlockbusterPreviewAnimationState.set(
+                        new ArrayList<AnimationBoneSnapshot>(),frame);
+                EmoticonsPreviewAnimationState.set(
+                        new ArrayList<AnimationBoneSnapshot>(),frame);
+                BlockbusterSceneActorData worldItem=
+                        CharacterAnchorWorldDrops.create(placed);
+                viewport.drawAdditionalActor(mc,worldItem,
+                        worldItem.getRecord().getFrame(0),renderer);
+            }
+            finally
+            {
+                BlockbusterPreviewAnimationState.set(
+                        selectedBlockbuster,selectedBlockbusterFrame);
+                EmoticonsPreviewAnimationState.set(
+                        selectedEmoticons,selectedEmoticonsFrame);
+            }
+        }
+
         /* Discard stale actor state when a scene changes. */
         java.util.Iterator<Map.Entry<String, BlockbusterActorPreviewRenderer>> it =
                 renderers.entrySet().iterator();
