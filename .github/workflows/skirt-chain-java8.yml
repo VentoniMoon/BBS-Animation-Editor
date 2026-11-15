@@ -196,7 +196,8 @@ jobs:
             com.example.examplemod.SkirtClothV2SolverSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtClothSurfaceMeshSmokeTest
-          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtV2JoltFrameGateSmokeTest

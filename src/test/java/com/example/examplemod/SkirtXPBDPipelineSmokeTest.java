@@ -31,6 +31,7 @@ public final class SkirtXPBDPipelineSmokeTest
         originalUvsAndSeamBridgesAreConnected();
         xpbdHasPinnedWaistGravityAndBounds();
         actualBodyObbsProjectWithoutInventedContacts();
+        clonedMorphFramesShareOneLiveXPBDState();
         System.out.println("SkirtXPBDPipelineSmokeTest OK");
     }
 
@@ -218,6 +219,51 @@ public final class SkirtXPBDPipelineSmokeTest
                 java.util.Arrays.asList("emoticons.left_leg"));
         need(SkirtXPBDContacts.forMorph(bad)==null,
                 "single thigh shape must not masquerade as full collision set");
+    }
+
+    private static void clonedMorphFramesShareOneLiveXPBDState()
+    {
+        need(SkirtXPBDRuntime.ENABLED,
+                "CI must opt into XPBD for runtime owner continuity test");
+        Fixture f=new Fixture();
+        float[][] tint=new float[40][];
+        for(int p=0;p<40;p++)
+            tint[p]=new float[]{1F,1F,1F,1F,0F,0F};
+        float[] matrix=identity();
+        float[] left={-.16F,.46F,0F,0F,0F,0F,1F,.12F,.17F,.12F};
+        float[] right={.16F,.46F,0F,0F,0F,0F,1F,.12F,.17F,.12F};
+        float[][] box={left,right};
+        java.util.List<String> labels=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        Object stableTrack=new Object();
+        Object firstMorph=new Object();
+        Object nextMorph=new Object();
+        SkirtXPBDContacts.registerOwner(firstMorph,stableTrack);
+        SkirtXPBDContacts.registerOwner(nextMorph,stableTrack);
+        SkirtXPBDContacts.publish(firstMorph,50,matrix,box,labels);
+        SkirtXPBDRuntime.RenderFrame first=SkirtXPBDRuntime.sample(
+                firstMorph,f.raw,f.shared,f.binding,f.topology,
+                f.rest,tint,SkirtXPBDContacts.forMorph(firstMorph));
+        need(first!=null,"XPBD runtime should activate under CI flag");
+        SkirtXPBDContacts.publish(nextMorph,51,matrix,box,labels);
+        SkirtXPBDRuntime.RenderFrame continued=SkirtXPBDRuntime.sample(
+                nextMorph,f.raw,f.shared,f.binding,f.topology,
+                f.rest,tint,SkirtXPBDContacts.forMorph(nextMorph));
+        need(continued!=null,"clone continuation should succeed");
+        Object separate=new Object();
+        SkirtXPBDContacts.publish(separate,51,matrix,box,labels);
+        SkirtXPBDRuntime.RenderFrame fresh=SkirtXPBDRuntime.sample(
+                separate,f.raw,f.shared,f.binding,f.topology,
+                f.rest,tint,SkirtXPBDContacts.forMorph(separate));
+        need(fresh!=null,"independent morph must still simulate");
+        float difference=0F;
+        for(int n=0;n<60;n++)
+            if(f.shared.nodes.get(n).row>0)
+                difference=Math.max(difference,distance(
+                        continued.solved.particles[n],
+                        fresh.solved.particles[n]));
+        need(difference>1E-7F,
+                "cloning morph every frame reset XPBD rather than continuing");
     }
 
     private static SkirtXPBDPoseSkin.Frame pose(
