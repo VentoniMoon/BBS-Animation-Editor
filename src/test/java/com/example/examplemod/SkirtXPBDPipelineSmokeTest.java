@@ -34,6 +34,8 @@ public final class SkirtXPBDPipelineSmokeTest
         pausedPoseChangePreservesClothRelativeMotion();
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
+        fractionalClockAdvancesOncePerSixtiethSecond();
+        renderOnlyFramesStillCorrectFastThighContact();
         clonedMorphFramesShareOneLiveXPBDState();
         System.out.println("SkirtXPBDPipelineSmokeTest OK");
     }
@@ -396,6 +398,92 @@ public final class SkirtXPBDPipelineSmokeTest
                 java.util.Arrays.asList("emoticons.left_leg"));
         need(SkirtXPBDContacts.forMorph(bad)==null,
                 "single thigh shape must not masquerade as full collision set");
+    }
+
+    /**
+     * On a 60fps preview the scene clock contains fractions of a 20-TPS
+     * tick. Identical shadow/mirror passes at each time must not advance
+     * the solver again. Three 1/60 steps occur over one 20-TPS interval.
+     */
+    private static void fractionalClockAdvancesOncePerSixtiethSecond()
+    {
+        Fixture f=new Fixture();
+        float[][] tint=new float[40][];
+        for(int p=0;p<40;p++)
+            tint[p]=new float[]{1F,1F,1F,1F,0F,0F};
+        Object morph=new Object();
+        float[] left={-0.16F,.46F,0F,0F,0F,0F,1F,
+                .10F,.18F,.10F};
+        float[] right={.16F,.46F,0F,0F,0F,0F,1F,
+                .10F,.18F,.10F};
+        float[][] boxes={left,right};
+        java.util.List<String> labels=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        int[] expected={1,1,1,1};
+        for(int i=0;i<4;i++)
+        {
+            double tick=60D+i/3D;
+            SkirtXPBDContacts.publish(morph,60,tick,
+                    identity(),boxes,labels);
+            SkirtXPBDContacts.Frame contact=
+                    SkirtXPBDContacts.forMorph(morph);
+            need(contact!=null&&Math.abs(contact.sampleTick-tick)<1E-9,
+                    "fractional fitted contact clock must be preserved");
+            SkirtXPBDRuntime.RenderFrame frame=SkirtXPBDRuntime.sample(
+                    morph,f.raw,f.shared,f.binding,f.topology,
+                    f.rest,tint,contact);
+            need(frame!=null&&frame.physicsSteps==expected[i],
+                    "60Hz fixed step missing at sub-tick "+i);
+            SkirtXPBDRuntime.RenderFrame mirror=SkirtXPBDRuntime.sample(
+                    morph,f.raw,f.shared,f.binding,f.topology,
+                    f.rest,tint,contact);
+            need(mirror!=null&&mirror.physicsSteps==0 &&
+                    mirror.solved.substeps==0,
+                    "same-time mirror/overlay must not double-step XPBD");
+        }
+        SkirtXPBDContacts.publish(morph,61,61D,
+                identity(),boxes,labels);
+        SkirtXPBDRuntime.RenderFrame next=SkirtXPBDRuntime.sample(
+                morph,f.raw,f.shared,f.binding,f.topology,
+                f.rest,tint,SkirtXPBDContacts.forMorph(morph));
+        need(next.physicsSteps==0,
+                "1/20 tick must contain three, not four, 1/60 advances");
+    }
+
+    /** A fractional intermediate render with zero integration dt still
+     * has to correct against the most recently published genuine thigh
+     * OBB: otherwise a fast advancing leg pierces the garment visibly. */
+    private static void renderOnlyFramesStillCorrectFastThighContact()
+    {
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State cloth=
+                SkirtXPBDSolver.create(f.raw,f.shared,f.rest);
+        int n=-1;
+        for(int i=0;i<60;i++)
+            if(f.shared.nodes.get(i).row>0)
+            {n=i;break;}
+        need(n>=0,"missing free skirt node for contact regression");
+        float[] pos=f.rest.target[n];
+        // Cover the target node with both actually fitted leg boxes.
+        // Do not invent collision boxes inside the production pipeline.
+        float[] l={pos[0],pos[1],pos[2],
+                0F,0F,0F,1F,.09F,.12F,.09F};
+        float[] r={pos[0]+.28F,pos[1],pos[2],
+                0F,0F,0F,1F,.09F,.12F,.09F};
+        Object morph=new Object();
+        SkirtXPBDContacts.publish(morph,10,10.2D,identity(),
+                new float[][]{l,r},java.util.Arrays.asList(
+                        "emoticons.left_leg","emoticons.right_leg"));
+        SkirtXPBDContacts.Frame bodies=SkirtXPBDContacts.forMorph(morph);
+        need(bodies!=null,"test must publish both real-style thigh OBBs");
+        SkirtXPBDSolver.Result corrected=cloth.advance(0F,f.rest,bodies);
+        need(corrected.substeps==0&&corrected.legContacts>0,
+                "render-only intermediate frame must resolve leg contact");
+        need(distance(corrected.particles[n],pos)>.01F,
+                "leg collision must move penetrating fabric on dt=0");
+        SkirtXPBDSolver.Result repeated=cloth.advance(0F,f.rest,bodies);
+        need(repeated.substeps==0,
+                "second render should remain render-only");
     }
 
     private static void clonedMorphFramesShareOneLiveXPBDState()
