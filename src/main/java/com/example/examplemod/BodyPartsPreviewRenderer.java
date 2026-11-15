@@ -2202,7 +2202,11 @@ public class BodyPartsPreviewRenderer
                 {
                     BodyPartJoltContactBudget.Selection fitted=
                             passiveCollisionSelection(data,frame);
+                    // Use the exact fractional scene clock of this
+                    // display sample; otherwise the 60Hz XPBD solver sees
+                    // only integer 20-TPS frames and misses fast leg motion.
                     SkirtXPBDContacts.publish(part.morph.get(),frame,
+                            CameraVisualFrameClock.sceneTime(frame),
                             attached,fitted.boxes,fitted.owners);
                 }
                 Map<String,Float> thighContactDepths=
