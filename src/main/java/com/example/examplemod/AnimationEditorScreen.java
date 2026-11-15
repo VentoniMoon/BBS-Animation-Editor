@@ -2003,6 +2003,10 @@ public class AnimationEditorScreen extends GuiScreen
         ParticleActorRig.bind(this.sceneState);
         CharacterAnchorPreview.bind(this.sceneState);
         CharacterAnchorPoseCache.bind(this.sceneState);
+        // Register each anchored item in the normal BODY PARTS editor
+        // before actor render or inspector/timeline drawing. Existing
+        // keyed scenes are migrated automatically once on first draw.
+        CharacterAnchorPreview.synchronizeEditableParts(this.sceneState);
         BbsFsWorldFrameCapture.beginFrame(this.mc);
         // During CAMERA output a Minecraft world pass uses the *film* FBO
         // dimensions (e.g. 3840x2160, or 1080x1920). Vanilla may configure
