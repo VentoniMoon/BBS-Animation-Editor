@@ -99,8 +99,10 @@ public final class ParticleSettingsPanel
 
     private static String display(String key)
     {
-        if("LocalRotation".equals(key))return "Relative rotation";
-        if("Args".equals(key))return "Extra arguments";
+        // Short inspector labels; full native parameter names remain
+        // unchanged in ParticleEmitterConfig and editor.dat.
+        if("LocalRotation".equals(key))return "Rel. rotation";
+        if("Args".equals(key))return "Args";
         return key;
     }
 
