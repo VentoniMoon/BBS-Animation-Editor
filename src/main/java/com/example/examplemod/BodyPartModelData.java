@@ -23,6 +23,25 @@ public class BodyPartModelData
             anchorId=value;
     }
 
+    /**
+     * A CHARACTER anchor recipient is a real editable Body Part. The
+     * source ItemId and event frame identify its owning transfer key,
+     * independently of ephemeral GUI/timeline ids and source Morph NBT.
+     * Empty means a normal, manually-authored Body Part.
+     */
+    private String anchorItemId="";
+    private int anchorEventFrame=-1;
+    public boolean isAnchorAttachment(){return !anchorItemId.isEmpty();}
+    public String getAnchorItemId(){return anchorItemId;}
+    public int getAnchorEventFrame(){return anchorEventFrame;}
+    public void bindAnchorAttachment(String itemId,int frame)
+    {
+        if(itemId==null||itemId.isEmpty()||frame<0)
+            throw new IllegalArgumentException("Invalid anchor owner");
+        this.anchorItemId=itemId;
+        this.anchorEventFrame=frame;
+    }
+
     private String modelName;
     private String attachmentBoneName;
     private BlockbusterModelAccess modelAccess;
