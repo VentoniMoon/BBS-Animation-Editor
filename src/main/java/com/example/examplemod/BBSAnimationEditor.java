@@ -16,7 +16,7 @@ public class BBSAnimationEditor
 {
     public static final String MODID = "bbsanimationeditor";
     public static final String NAME = "BBS Animation Editor";
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.0.2";
 
     private static Logger logger;
 

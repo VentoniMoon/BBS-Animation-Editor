@@ -11,7 +11,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # This release job freezes v0.0.2 as an immutable named GitHub Release.
+  contents: write
 
 jobs:
   package:
@@ -118,7 +119,7 @@ jobs:
             fi
           done
           test "$built" = true
-          test -s build/libs/bbs-animation-editor-0.1.0.jar
+          test -s build/libs/bbs-animation-editor-0.0.2.jar
 
       - name: Verify release manifest, mod identity, natives and bytecode
         shell: bash
@@ -126,7 +127,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json, pathlib, struct, zipfile
-          path = pathlib.Path("build/libs/bbs-animation-editor-0.1.0.jar")
+          path = pathlib.Path("build/libs/bbs-animation-editor-0.0.2.jar")
           with zipfile.ZipFile(path) as jar:
               assert jar.testzip() is None, "Broken ZIP entry in distributable JAR"
               names = set(jar.namelist())
@@ -145,6 +146,22 @@ jobs:
                   "assets/bbsanimationeditor/lang/en_us.lang",
                   "assets/bbsanimationeditor/lang/ru_ru.lang",
                   "com/example/examplemod/EditorLanguageCatalog.class",
+                  # Physics 3.0: actual connected skirt solver and visible
+                  # Chameleon surfaces, not only the earlier Jolt hair JAR.
+                  "com/example/examplemod/SkirtXPBDRuntime.class",
+                  "com/example/examplemod/SkirtXPBDSolver.class",
+                  "com/example/examplemod/SkirtXPBDContacts.class",
+                  "com/example/examplemod/SkirtXPBDVolumeSkin.class",
+                  "com/example/examplemod/ChameleonSkirtXPBDRenderer.class",
+                  "com/example/examplemod/ChameleonSkirtXPBDVolumeRenderer.class",
+                  # Complete latest CHARACTER item system, including held
+                  # body parts, world release and baked posed Morph handoff.
+                  "com/example/examplemod/CharacterAnchorTransfers.class",
+                  "com/example/examplemod/CharacterAnchorPanel.class",
+                  "com/example/examplemod/CharacterAnchorPoseCache.class",
+                  "com/example/examplemod/CharacterAnchorPreview.class",
+                  "com/example/examplemod/CharacterAnchorWorldDrops.class",
+                  "com/example/examplemod/BodyPartsPersistence.class",
               ]
               missing = [name for name in required if name not in names]
               assert not missing, "Required release files missing: " + repr(missing)
@@ -153,7 +170,7 @@ jobs:
               assert "FMLCorePluginContainsFMLMod: true" in manifest
               metadata = json.loads(jar.read("mcmod.info").decode("utf-8"))[0]
               assert metadata["modid"] == "bbsanimationeditor", metadata
-              assert metadata["version"] == "0.1.0", metadata
+              assert metadata["version"] == "0.0.2", metadata
               assert metadata["mcversion"] == "1.12.2", metadata
               own_classes = [n for n in names if n.startswith(
                   ("com/example/examplemod/", "com/github/stephengold/joltjni/")
@@ -167,14 +184,43 @@ jobs:
               print("Validated Java 8 classes:", len(own_classes))
               print("Mod identity, Forge coremod, Jolt native DLL/SO: OK")
           PY
-          (cd build/libs && sha256sum bbs-animation-editor-0.1.0.jar > SHA256SUMS.txt)
+          (cd build/libs && sha256sum bbs-animation-editor-0.0.2.jar > SHA256SUMS.txt)
 
       - name: Publish installable Forge mod artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bbs-animation-editor-0.1.0-forge-1.12.2-jolt-java8
+          name: bbs-animation-editor-0.0.2-forge-1.12.2-jolt-java8
           path: |
-            build/libs/bbs-animation-editor-0.1.0.jar
+            build/libs/bbs-animation-editor-0.0.2.jar
             build/libs/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 90
+
+      # Unlike a transient Actions artifact, this is the permanent,
+      # versioned download. A tag is created only once: subsequent
+      # main pushes must never silently repoint an existing 0.0.2.
+      - name: Check whether v0.0.2 is already frozen
+        id: release_tag
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --tags origin refs/tags/v0.0.2 >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish immutable BBS Animation Editor v0.0.2 release
+        if: github.ref == 'refs/heads/main' && steps.release_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.0.2
+          target_commitish: ${{ github.sha }}
+          name: BBS Animation Editor 0.0.2
+          body_path: docs/releases/v0.0.2.md
+          draft: false
+          prerelease: true
+          files: |
+            build/libs/bbs-animation-editor-0.0.2.jar
+            build/libs/SHA256SUMS.txt
+          fail_on_unmatched_files: true
