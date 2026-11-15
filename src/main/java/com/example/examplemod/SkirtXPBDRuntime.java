@@ -136,9 +136,11 @@ public final class SkirtXPBDRuntime
             if(now-actor.lastUpdate>=MIN_STEP_NANOS)
                 dt=Math.min(.03F,(now-actor.lastUpdate)/1000000000F);
         }
-        SkirtXPBDSolver.Result output=dt>0F?
-                actor.solver.advance(dt,posed,collisions):
-                actor.solver.current();
+        // Even a paused timeline/render replay must keep the 20 waist
+        // anchors on the CURRENT bone pose. advance(0) does not step
+        // gravity or collisions, but updates fixed pins safely.
+        SkirtXPBDSolver.Result output=
+                actor.solver.advance(dt,posed,collisions);
         if(dt>0F)actor.lastUpdate=now;
         return new RenderFrame(raw,binding,topology,posed,output,
                 materials,collisions==null?0:collisions.legBoxes.size());

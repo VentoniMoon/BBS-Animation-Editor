@@ -273,8 +273,15 @@ public final class SkirtXPBDSolver
                             }
                         }
                     }
-                    self+=selfParticles();
-                    self+=selfTriangles();
+                    // Full non-neighbor self checks are comparatively
+                    // expensive in Forge 1.12 and don't need to run on
+                    // every stretch/shear iteration. Two trailing passes
+                    // settle interpenetration after most edge corrections.
+                    if(iteration>=ITERATIONS-2)
+                    {
+                        self+=selfParticles();
+                        self+=selfTriangles();
+                    }
                     // Collision resolution MUST NOT move the pinned waist.
                     for(int n=0;n<N;n++)
                         if(pinned[n])

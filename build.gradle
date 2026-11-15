@@ -87,6 +87,10 @@ minecraft {
                     throw new GradleException(
                             'Skirt XPBD replaces Skirt Cloth V2; remove -PenableSkirtClothV2')
                 }
+                if (project.hasProperty('previewSkirtStaticSkin')) {
+                    throw new GradleException(
+                            'Do not draw both the full-volume A/B reference and XPBD; remove -PpreviewSkirtStaticSkin')
+                }
                 jvmArg '-Dbbs.editor.physics.skirt.xpbd=true'
             }
             // Optional source-vs-new-cloth A/B instead of direct
