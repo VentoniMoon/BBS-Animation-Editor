@@ -266,6 +266,20 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             {
                 SkirtClothSharedSurface.Surface shared=
                         SkirtClothSharedSurface.connect(mesh);
+                SkirtClothRestBinding.Binding binding=
+                        SkirtClothRestBinding.bind(mesh,shared);
+                System.out.println(
+                        "[BBS Animation Editor][SkirtRestBinding] "+
+                        "physicalNodes="+binding.nodeRest.length+
+                        " sourcePatches="+binding.patches.size()+
+                        " maxMaterialOffset="+binding.maxMaterialOffset+
+                        " maxRestReconstructionError="+
+                            binding.maxRestReconstructionError+
+                        " directProjectionUnsafe="+
+                            binding.directProjectionUnsafe+
+                        " projectedRelativeEdgeChange="+
+                            binding.projectedRelativeEdgeChange+
+                        " mode=READ_ONLY_REST_PARITY_NO_RENDER");
                 System.out.println(
                         "[BBS Animation Editor][SkirtStaticSkin] "+
                         "particles="+shared.nodes.size()+
