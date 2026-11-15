@@ -68,7 +68,12 @@ public final class CharacterAnchorPreview
         {
             if(!event.attached())
             {
-                previous.remove(event.itemId);
+                // A release does not destroy the previous holder's
+                // editable Body Part. Keep it as the inheritance source
+                // if the SAME logical item is later picked up again.
+                // Only an invalid/unrecognized event clears history.
+                if(!event.released())
+                    previous.remove(event.itemId);
                 continue;
             }
             BodyPartModelData prior=previous.get(event.itemId);
