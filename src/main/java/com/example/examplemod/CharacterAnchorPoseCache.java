@@ -20,6 +20,7 @@ public final class CharacterAnchorPoseCache
     {
         int frame;
         float[] actorWorld;
+        float animatedMorphRootScale=1F;
         AbstractMorph morph;
     }
     private static final Map<String,Pose> POSES=new HashMap<String,Pose>();
@@ -44,16 +45,41 @@ public final class CharacterAnchorPoseCache
         sceneIndex=Integer.MIN_VALUE;
         POSES.clear();
     }
+    /**
+     * Match RenderLivingBase and AnimatorController.interpolate() rather
+     * than using the un-interpolated renderYawOffset. Both use shortest
+     * body-yaw interpolation at the same native render partial tick.
+     */
+    private static float renderedBodyYaw(EntityActor entity,float partialTicks)
+    {
+        float d=entity.renderYawOffset-entity.prevRenderYawOffset;
+        while(d < -180F)d+=360F;
+        while(d >= 180F)d-=360F;
+        return entity.prevRenderYawOffset+
+                Math.max(0F,Math.min(1F,partialTicks))*d;
+    }
+
     public static void capture(BlockbusterSceneActorData data,
-            EntityActor entity,int frame)
+            EntityActor entity,int frame,float partialTicks)
     {
         if(scene==null||data==null||entity==null||
                 data.getId()==null||data.getId().isEmpty())return;
         Pose pose=new Pose();
         pose.frame=frame;
         pose.actorWorld=BodyPartJoltActorSpace.worldFromActor(
-                entity.posX,entity.posY,entity.posZ,entity.renderYawOffset);
+                entity.posX,entity.posY,entity.posZ,
+                renderedBodyYaw(entity,partialTicks));
         pose.morph=entity.getMorph();
+        if(pose.morph instanceof
+                mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+        {
+            mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph animated=
+                (mchorse.emoticons.skin_n_bones.api.metamorph.AnimatedMorph)
+                        pose.morph;
+            if(animated.animator!=null&&animated.animator.userConfig!=null)
+                pose.animatedMorphRootScale=
+                        animated.animator.userConfig.scale;
+        }
         POSES.put(data.getId(),pose);
     }
     /** Exact rendered animated parent bone in world coordinates. */
@@ -65,8 +91,20 @@ public final class CharacterAnchorPoseCache
         float[] local=BodyPartEmoticonsAttachmentProbe
                 .lastRenderedBoneMatrix(pose.morph,bone);
         if(local==null)return null;
-        return BodyPartPhysicsMatrixSpace.multiply(pose.actorWorld,local);
+        return AnchorTransferMath.worldFromAnimatedBone(
+                pose.actorWorld,pose.animatedMorphRootScale,local);
     }
+
+    /** Returns the exact native AnimatorController root scale sampled
+     * at a frame, so seam reports can distinguish pose, scale and pivots.
+     */
+    public static float nativeAnimatedScale(String actorId,int frame)
+    {
+        Pose pose=POSES.get(actorId);
+        return pose==null||pose.frame!=frame?
+                Float.NaN:pose.animatedMorphRootScale;
+    }
+
     public static float[] actor(String actorId,int frame)
     {
         Pose p=POSES.get(actorId);

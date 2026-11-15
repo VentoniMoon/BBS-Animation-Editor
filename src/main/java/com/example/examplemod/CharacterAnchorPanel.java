@@ -296,7 +296,17 @@ public final class CharacterAnchorPanel
         {
             float[] local=AnchorTransferMath.rebase(world,receiving);
             // All rotations/scale must survive native BodyPart TRS.
-            AnchorTransferMath.toBodyPartTransform(local);
+            AnimationTransform attachment=AnchorTransferMath
+                    .toBodyPartTransform(local);
+            float[] reconstructed=BodyPartPhysicsMatrixSpace.multiply(
+                    receiving,AnchorTransferMath.composeBodyPart(attachment));
+            float matrixError=0F;
+            for(int i=0;i<16;i++)
+                matrixError=Math.max(matrixError,
+                        Math.abs(world[i]-reconstructed[i]));
+            if(matrixError>1E-3F)
+                throw new IllegalArgumentException(
+                        "Anchor BodyPart decomposition error "+matrixError);
             CharacterAnchorTransfers.Transfer transfer=
                     new CharacterAnchorTransfers.Transfer(
                             item.itemId,item.sourceActor,item.sourcePart,
@@ -310,7 +320,15 @@ public final class CharacterAnchorPanel
             status="KEY @ "+frame+" / WORLD PRESERVED";
             System.out.println("[BBS Editor][Anchors] KEY frame="+frame+
                     " item="+item.itemId+" owner="+target.getId()+
-                    " bone="+bone+" worldRebased=true");
+                    " bone="+bone+" worldRebased=true"+
+                    " targetMorphScale="+
+                    CharacterAnchorPoseCache.nativeAnimatedScale(
+                            target.getId(),frame)+
+                    " localPx=("+
+                    attachment.getPositionX()+","+
+                    attachment.getPositionY()+","+
+                    attachment.getPositionZ()+")"+
+                    " maxMatrixError="+matrixError);
         }
         catch(IllegalArgumentException invalid)
         {

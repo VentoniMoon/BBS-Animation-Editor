@@ -138,3 +138,61 @@ both actors rendered or inspect native BOBJ bone capture diagnostics.
 
 **Do not merge into main before the in-game A/B confirms seamless
 handoff and correct native BODY PART render space.**
+
+## Bugfix: small position/size jump when a free item becomes a BodyPart
+
+**Report:** two screenshots of a bag on a stone stand, before/after
+pickup into an actor's hand, show the carried bag slightly displaced
+and visually smaller. The full 4x4 affine inverse in
+`AnchorTransferMath.rebase()` was correct, but its **input native bone
+matrix was missing a renderer transform**.
+
+**Root cause:** In Emoticons 1.12.2,
+`AnimatorController.render()` applies the actor morph's
+`userConfig.scale` **before** yaw and before the native
+`BOBJBone.mat` transform. The previous
+`CharacterAnchorPoseCache.bone()` assumed only
+`worldFromActor * bone.mat`. With a scale such as `0.9375`, a key
+looked mathematically exact but the BODY PART was actually rendered
+at `worldFromActor * S(.9375) * bone.mat * localOffset`, producing
+the reported seam. A hand moving at fractional playback times could
+also disagree because the cache used raw `renderYawOffset` while the
+native renderer interpolated `prevRenderYawOffset` to it.
+
+**Fix:** `CharacterAnchorPoseCache.capture()` now records both the
+native Emoticons `animator.userConfig.scale` and the shortest-path
+interpolated body yaw at the **same partial tick** the actor was
+rendered. `bone()` composes
+`worldFromActor * S(nativeMorphScale) * nativeBone.mat` before
+rebasing. The standalone original item actor retains its own original
+actor origin; its Morph still performs its normal child animation and
+scaling when later attached. No manually guessed Y offset, item-specific
+compensation or new playback interpolation is introduced.
+
+At authoring time, the new BodyPart transform is composed again,
+compared against the stored original world matrix, and a transfer key
+is rejected if its TRS decomposition has a maximum matrix-element
+error greater than `1e-3`. One informational log per authoring action
+shows `targetMorphScale`, local offsets and `maxMatrixError`.
+
+**Automated regression:** Java 8 smoke test intentionally recreates
+the old bag seam with an animated-morph scale of `0.9375`: a carried
+source shrinks and shifts when root scale is omitted, and the corrected
+world/root/local composition reconstructs the source's complete
+translation, rotation and scale. This test ensures the fix does not
+silently regress.
+
+**In-game retest:** On the **same item and frame** as the screenshot,
+remove/re-create the original transfer key (older keys store the
+previous offset and cannot correct themselves). Compare `f-1` and
+`f` without changing the camera or character's pose. Confirm both
+the bag's position and apparent size remain stable. Then animate the
+character's hand, try the transfer into the second actor, reverse
+scrub and reload the scene. If the bag still jumps, inspect
+`[BBS Editor][Anchors] KEY` in `run/logs/latest.log` and include the
+actor Morph type and scale before introducing any further compensation.
+
+Note: the visual equivalence of a **CustomMorph** source actor and a
+child BodyPart still needs manual in-game confirmation. The CI test
+validates affine math and the precisely known Emoticons renderer root
+transform, not actual GPU raster output.
