@@ -1673,3 +1673,74 @@ Regression tests cover original XYZ/UV preservation of all 160
 corners, rigid translations of all 60 particle inputs, repeated
 rest evaluation without mutation, incomplete poses and the
 explicit direct-projection warning.
+
+## Stage 2.2: opt-in native-textured source-skin A/B visual preview
+
+Real Minecraft after Stage 2.1 repeatedly reported:
+```
+[SkirtRestBinding] physicalNodes=60 sourcePatches=40
+maxMaterialOffset=0.056624245 maxRestReconstructionError=0.0
+directProjectionUnsafe=true projectedRelativeEdgeChange=0.45020545
+mode=READ_ONLY_REST_PARITY_NO_RENDER
+```
+This validates that **at rest** the 40 original textured outside Chameleon
+quads can be reconstructed from 60 physical positions + 160 distinct
+material offsets with no reconstruction error. It does NOT validate
+lighting, source texture draw, live bone pose, seam bridging or XPBD.
+
+New opt-in standalone renderer:
+`ChameleonSkirtStaticVisualRenderer` is called *after* the unchanged
+`ChameleonRenderer.render(Model)` by the existing native
+`ChameleonWeldRuntime.end()` hook. It draws **another** isolated,
+detached replica of only the 40 captured outside fabric quads,
+translated **+1.20 model blocks on X** next to the original actor.
+The extra draw preserves the already-bound native Chameleon texture,
+each of the 160 source-UV coordinates, per-bone RGBA/glow/brightness
+where available, and Chameleon's BufferBuilder vertex format.
+It uses source-face transformed normals (initial comparison), not
+the final live Chameleon normal matrix, so perfect normal/lighting
+parity is not guaranteed yet.
+
+The first implementation purposely does NOT hide or modify the
+original 43 authored cubes, does not edit any Chameleon
+`ModelVertex`, does not change Jolt or keyframe animation and
+**does not render shared averaged node positions** (which would
+otherwise distort panel edge lengths by 45%). It draws the reconstructed
+`atRest()` positions; dynamic poses do not yet deform the detached
+copy. The ghost covers ONLY the outer faces, so the solid skirt's
+interior, cube caps and thickness are absent by design.
+
+For a clean A/B test disable Jolt and physics if possible, pose the
+skirt at its authored rest shape, and run the Gradle client with:
+```text
+runClient -PfixMixinAsm -PpreviewSkirtStaticSkin -PcaptureSkirtMesh
+```
+To keep testing your existing physics context, add
+`-PpreviewSkirtStaticSkin` to the previous longer runClient flags.
+The new switch forwards
+`-Dbbs.editor.physics.skirt.staticSkinAB=true`.
+The separate visual must appear next to the source skirt. On first
+successful draw the client logs:
+```text
+[BBS Editor][SkirtStaticVisual] drawn=true mode=DETACHED_REST_UV_AB
+outwardQuads=40 triangles=80 xOffsetBlocks=1.2
+restError=0.0 sourceTexture=BOUND_CHAMELEON sourceModel=UNCHANGED
+```
+
+**Acceptance check:** compare the original side of the *idle* skirt
+against the detached source-textured material skin from front,
+back and both sides. Check UV orientation, whether the 20-panel
+texture pattern is complete, missing back-facing cube faces/caps,
+transformed normals/brightness, and side seams. These remain
+different objects, so do not expect the detached copy to track
+walking or collisions. Report screenshots + the visual log line.
+
+This preview does **not** claim the side gaps are closed. A future
+stage will decide which original volumetric faces must be replaced or
+how bridging polygons can preserve appearance, while keeping a shared
+60-node physics graph without large rest distortion. Only after
+render parity will XPBD be connected.
+
+Strict off-by-default runtime switch, exact 44-bone
+`SkirtGeoProfile` verification, and guaranteed Weld vertex
+restoration make non-test renders retain their previous behavior.

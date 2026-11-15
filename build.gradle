@@ -93,6 +93,12 @@ minecraft {
                 jvmArg '-Dbbs.editor.physics.skirt.meshCapture=true'
             }
 
+            // Physics 3.0 A/B static TEXTURED visual source-skin preview.
+            // Draws a detached +X copy; never replaces original actor cubes.
+            if (project.hasProperty('previewSkirtStaticSkin')) {
+                jvmArg '-Dbbs.editor.physics.skirt.staticSkinAB=true'
+            }
+
             // A single opt-in flag for debugging both Jolt and connected
             // skirt; no environment variables are necessary in IntelliJ.
             if (project.hasProperty('diagnoseSkirtV2')) {
