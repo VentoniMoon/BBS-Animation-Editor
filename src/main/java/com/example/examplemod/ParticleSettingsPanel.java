@@ -292,8 +292,9 @@ public final class ParticleSettingsPanel
         if((key==Keyboard.KEY_UP||key==Keyboard.KEY_DOWN)&&
                 !"Args".equals(editing))
         {
+            String property=editing;
             commit();
-            step(editing,key==Keyboard.KEY_UP?1:-1);
+            step(property,key==Keyboard.KEY_UP?1:-1);
             return true;
         }
         input.textboxKeyTyped(c,key);
