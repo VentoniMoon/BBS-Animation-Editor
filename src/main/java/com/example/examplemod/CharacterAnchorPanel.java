@@ -341,9 +341,10 @@ public final class CharacterAnchorPanel
                 if(editable!=null)
                 {
                     parts.rebaseAnchorAttachment(editable,transfer);
-                    if(editor.getSelectedActor()!=null&&
-                            target.getId().equals(
-                                    editor.getSelectedActor().getId()))
+                    // The active actor's BODY PARTS collection is
+                    // authoritative for selection; don't reach into
+                    // AnimationEditorScreen's private actor getter.
+                    if(parts.getModels().contains(editable))
                         parts.selectAttachment(editable);
                 }
             }
