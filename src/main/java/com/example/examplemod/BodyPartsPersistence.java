@@ -33,6 +33,12 @@ public final class BodyPartsPersistence
                 tag.setString("ActorId", owner.getKey());
                 tag.setString("Model", model.getModelName());
                 tag.setString("AnchorId", model.getAnchorId());
+                if(model.isAnchorAttachment())
+                {
+                    tag.setString("AnchorItemId",model.getAnchorItemId());
+                    tag.setInteger("AnchorEventFrame",
+                            model.getAnchorEventFrame());
+                }
                 tag.setString("Attachment", model.getAttachmentBoneName());
                 tag.setInteger("Start", model.getStartFrame());
                 tag.setInteger("End", model.getEndFrame());
@@ -143,6 +149,19 @@ public final class BodyPartsPersistence
             readTransform(model.getGlobalTransform(), tag.getCompoundTag("Global"));
             if(tag.hasKey("AnchorId",8))
                 model.restoreAnchorId(tag.getString("AnchorId"));
+            if(tag.hasKey("AnchorItemId",8)&&
+                    tag.hasKey("AnchorEventFrame",3))
+                try
+                {
+                    model.bindAnchorAttachment(
+                            tag.getString("AnchorItemId"),
+                            tag.getInteger("AnchorEventFrame"));
+                }
+                catch(IllegalArgumentException invalid)
+                {
+                    System.err.println("[BBS Editor][Anchors] Invalid saved "+
+                            "attachment identity: "+invalid.getMessage());
+                }
             model.readPhysicsSettings(tag.getTagList("Physics", 10));
             if(tag.hasKey("ClothPhysicsEnabled"))
                 model.setClothPhysicsEnabled(
