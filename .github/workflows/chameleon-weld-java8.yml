@@ -9,6 +9,11 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
       - 'src/main/java/com/example/examplemod/SkirtClothRestBinding.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSurfaceTopology.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDContacts.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSolver.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDRuntime.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
@@ -23,6 +28,11 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
       - 'src/main/java/com/example/examplemod/SkirtClothRestBinding.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSurfaceTopology.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDContacts.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSolver.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDRuntime.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java'
       - 'src/main/java/com/example/examplemod/SkirtGeoProfile.java'
@@ -79,6 +89,11 @@ jobs:
             src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java \
             src/main/java/com/example/examplemod/SkirtClothSharedSurface.java \
             src/main/java/com/example/examplemod/SkirtClothRestBinding.java \
+            src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java \
+            src/main/java/com/example/examplemod/SkirtXPBDSurfaceTopology.java \
+            src/main/java/com/example/examplemod/SkirtXPBDContacts.java \
+            src/main/java/com/example/examplemod/SkirtXPBDSolver.java \
+            src/main/java/com/example/examplemod/SkirtXPBDRuntime.java \
             src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java \
             src/main/java/com/example/examplemod/SkirtGeoProfile.java \
             src/main/java/com/example/examplemod/ChameleonWeldPreviewPass.java \
@@ -87,9 +102,11 @@ jobs:
             src/main/java/com/example/examplemod/ChameleonWeldRendererTransformer.java \
             src/main/java/com/example/examplemod/ChameleonWeldMorphTransformer.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java \
+            src/test/weld-stubs/com/example/examplemod/ChameleonSkirtXPBDRenderer.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldPreviewCompileSmoke.java \
             src/test/weld-stubs/com/example/examplemod/ChameleonWeldNativeHookSmoke.java \
-            src/test/weld-stubs/com/example/examplemod/ChameleonWeldMorphHookSmoke.java
+            src/test/weld-stubs/com/example/examplemod/ChameleonWeldMorphHookSmoke.java \
+            src/test/weld-stubs/com/example/examplemod/ChameleonSkirtXPBDNativeScopeSmoke.java
 
       - name: Verify native hook, model filtering, and exception-safe cleanup
         run: |
@@ -100,3 +117,5 @@ jobs:
             com.example.examplemod.ChameleonWeldNativeHookSmoke
           java -ea -cp "$CP" \
             com.example.examplemod.ChameleonWeldMorphHookSmoke
+          java -ea -cp "$CP" \
+            com.example.examplemod.ChameleonSkirtXPBDNativeScopeSmoke

@@ -56,6 +56,12 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     /** Exact 43-cube/6-face reference: unlike the deliberately incomplete
      * 40-quad cloth skin, this preserves the real visible source volume. */
     private ChameleonSkirtVolumeSnapshot.Snapshot staticPreviewVolume;
+    /** Independent XPBD fabric, gated by a separate system property.
+     * All original native cubes are restored in close(), even on failure. */
+    private SkirtXPBDRuntime.RenderFrame xpbdFrame;
+    private static boolean reportedXPBDFailure;
+    private final IdentityHashMap<Object,Object> hiddenFabricCubes=
+            new IdentityHashMap<Object,Object>();
     /** Print full ranked seam diagnostics only once, not every render. */
     private static boolean skirtMeshSeamDetailsLogged;
     /**
@@ -86,6 +92,14 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     public static boolean isSkirtStaticABRequested()
     {
         return SKIRT_STATIC_AB;
+    }
+    public static boolean isSkirtXPBDRequested()
+    {
+        return SkirtXPBDRuntime.ENABLED;
+    }
+    public SkirtXPBDRuntime.RenderFrame getXPBDFrame()
+    {
+        return xpbdFrame;
     }
     public SkirtClothSurfaceMesh.Snapshot getStaticPreviewSource()
     {
@@ -208,6 +222,19 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                 inspectSkirtMesh(bones);
             if(SKIRT_STATIC_AB)
                 prepareStaticPreview(bones);
+            if(SkirtXPBDRuntime.ENABLED)
+            {
+                prepareXPBD(bones);
+                if(xpbdFrame!=null&&SkirtXPBDRuntime.REPLACE)
+                {
+                    // Everything must be built/validated BEFORE the
+                    // original fabric is hidden. The waist's 3 authored
+                    // cubes stay visible in the normal native renderer.
+                    if(hideNativeFabric(bones))
+                        return; // No old per-bone Weld over new cloth.
+                    xpbdFrame=null;
+                }
+            }
         }
         if(!weld)return;
         for(Bone bone:bones)
@@ -397,6 +424,147 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         }
     }
 
+    /**
+     * Complete opt-in 3-stage fabric pipeline:
+     *  1. capture CURRENT Chameleon bone and cube transforms,
+     *  2. build a shared 60-particle + original UV + gap-bridge shell,
+     *  3. step independent XPBD with real Emoticons leg OBBs when present.
+     * No model resources or cached morph animation data are mutated here.
+     */
+    @SuppressWarnings("unchecked")
+    private void prepareXPBD(List<Bone> bones)
+    {
+        try
+        {
+            Object morph=ChameleonWeldRuntime.activeMorph();
+            if(morph==null)return; // Outside exact actor scope: fail closed.
+            SkirtClothSurfaceMesh.Snapshot raw=collectSkirtSource(bones);
+            if(raw==null)return;
+            SkirtClothSharedSurface.Surface shared=
+                    SkirtClothSharedSurface.connect(raw);
+            if(shared.flippedTriangles>0||
+                    shared.degenerateTriangles>0)return;
+            SkirtClothRestBinding.Binding binding=
+                    SkirtClothRestBinding.bind(raw,shared);
+            if(binding.maxRestReconstructionError>1E-5F)return;
+            SkirtXPBDSurfaceTopology.Topology topology=
+                    SkirtXPBDSurfaceTopology.connect(raw,binding);
+
+            Map<String,Bone> byName=new HashMap<String,Bone>();
+            for(Bone bone:bones)
+                byName.put(idOf(bone.value),bone);
+            List<SkirtXPBDPoseSkin.Transform> transforms=
+                    new ArrayList<SkirtXPBDPoseSkin.Transform>(40);
+            float[][] colors=new float[40][];
+            for(int i=0;i<raw.patches.size();i++)
+            {
+                String boneName=raw.patches.get(i).bone;
+                Bone bone=byName.get(boneName);
+                if(bone==null||!visibleNativeChain(bone))return;
+                List<Object> cubes=(List<Object>)field(bone.value,"cubes");
+                if(cubes==null||cubes.size()!=1)return;
+                Object cube=cubes.get(0);
+                float[] rest=meshDecodedCube(
+                        bone,cube,false).restMatrix;
+                float[] posed=meshDecodedCube(
+                        bone,cube,true).restMatrix;
+                transforms.add(new SkirtXPBDPoseSkin.Transform(
+                        boneName,rest,posed));
+                colors[i]=skinMaterialProperties(bone);
+            }
+            SkirtXPBDPoseSkin.Frame pose=
+                    SkirtXPBDPoseSkin.follow(binding,transforms);
+            if(pose.maxPoseReconstructionError>1E-5F)return;
+            SkirtXPBDContacts.Frame bodies=
+                    SkirtXPBDContacts.forMorph(morph);
+            xpbdFrame=SkirtXPBDRuntime.sample(
+                    morph,raw,shared,binding,topology,pose,colors,bodies);
+        }
+        catch(Exception error)
+        {
+            xpbdFrame=null;
+            if(!reportedXPBDFailure)
+            {
+                reportedXPBDFailure=true;
+                System.err.println("[BBS Editor][SkirtXPBD] "+
+                        "Opt-in cloth preparation failed: "+
+                        error.getClass().getSimpleName()+": "+
+                        error.getMessage()+
+                        " (normal native cloth remains visible)");
+            }
+        }
+    }
+
+    /**
+     * Suppress only the 40 fabric cubes while the custom cloth draws.
+     * The native waist, character and all other morphs remain unchanged.
+     * NEVER clear the shared Chameleon list itself; temporarily replace
+     * the reference and restore it in close() even if native draw throws.
+     */
+    private boolean hideNativeFabric(List<Bone> bones)
+    {
+        Map<String,Bone> names=new HashMap<String,Bone>();
+        for(Bone bone:bones)names.put(idOfSafe(bone.value),bone);
+        if(xpbdFrame==null||xpbdFrame.source.patches.size()!=40)
+            return false;
+        for(SkirtClothSurfaceMesh.Patch panel:xpbdFrame.source.patches)
+        {
+            Bone bone=names.get(panel.bone);
+            if(bone==null)return false;
+            try
+            {
+                Object existing=field(bone.value,"cubes");
+                if(!(existing instanceof List)||
+                        ((List<?>)existing).size()!=1)
+                    return false;
+            }
+            catch(Exception invalid){return false;}
+        }
+        try
+        {
+            for(SkirtClothSurfaceMesh.Patch panel:xpbdFrame.source.patches)
+            {
+                Object bone=names.get(panel.bone).value;
+                Object existing=field(bone,"cubes");
+                hiddenFabricCubes.put(bone,existing);
+                bone.getClass().getField("cubes").set(bone,
+                        Collections.emptyList());
+            }
+            return hiddenFabricCubes.size()==40;
+        }
+        catch(Exception error)
+        {
+            restoreNativeFabric();
+            return false;
+        }
+    }
+
+    private static String idOfSafe(Object bone)
+    {
+        try{return (String)field(bone,"id");}
+        catch(Exception missing){return null;}
+    }
+
+    /** Restore before another model/actor can see shared native cubes. */
+    private void restoreNativeFabric()
+    {
+        for(Map.Entry<Object,Object> hidden:hiddenFabricCubes.entrySet())
+        {
+            try
+            {
+                hidden.getKey().getClass().getField("cubes").set(
+                        hidden.getKey(),hidden.getValue());
+            }
+            catch(Exception failure)
+            {
+                System.err.println("[BBS Editor][SkirtXPBD] "+
+                        "CRITICAL: original native cubes restore failed: "+
+                        failure.getClass().getSimpleName());
+            }
+        }
+        hiddenFabricCubes.clear();
+    }
+
     /** Exact authored 44-bone profile only. Source quad vertices and UV
      * are copied BEFORE any Weld pass can change their positions. */
     private static SkirtClothSurfaceMesh.Snapshot collectSkirtSource(
@@ -548,6 +716,13 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     private static SkirtClothSurfaceMesh.Cube meshDecodedCube(
             Bone bone,Object cube)throws Exception
     {
+        return meshDecodedCube(bone,cube,false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static SkirtClothSurfaceMesh.Cube meshDecodedCube(
+            Bone bone,Object cube,boolean posed)throws Exception
+    {
         Vector3f pivot=vec(cube,"pivot");
         Vector3f r=vec(cube,"rotation");
         float[] local=translate(pivot.x/16F,pivot.y/16F,
@@ -557,7 +732,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         local=mul(local,rotationX(r.x));
         local=mul(local,translate(-pivot.x/16F,-pivot.y/16F,
                 -pivot.z/16F));
-        float[] cubeRest=mul(bone.rest,local);
+        float[] cubeRest=mul(posed?bone.posed:bone.rest,local);
 
         List<SkirtClothSurfaceMesh.Quad> quads=
                 new ArrayList<SkirtClothSurfaceMesh.Quad>();
@@ -912,6 +1087,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     @Override
     public void close()
     {
+        restoreNativeFabric();
         for(Map.Entry<Vector3f,float[]> pair:originals.entrySet())
         {
             float[] p=pair.getValue();

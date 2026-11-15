@@ -2193,6 +2193,18 @@ public class BodyPartsPreviewRenderer
                                 skirtTransform.getScaleZ());
                 if(!SKIRT_SCALE_CONTACT_COMPENSATION)
                     skirtVisualScale=1F;
+                // Stage 3: publish the SAME real Emoticons collider fitting
+                // that legacy Jolt uses, but keyed by the exact Chameleon
+                // morph instance and expressed in the actor-world frame.
+                // XPBD itself is pure Java 8 and does not run Jolt.
+                if(SkirtXPBDRuntime.ENABLED && part!=null &&
+                        part.morph!=null && part.morph.get()!=null)
+                {
+                    BodyPartJoltContactBudget.Selection fitted=
+                            passiveCollisionSelection(data,frame);
+                    SkirtXPBDContacts.publish(part.morph.get(),frame,
+                            attached,fitted.boxes,fitted.owners);
+                }
                 Map<String,Float> thighContactDepths=
                         java.util.Collections.<String,Float>emptyMap();
                 Map<String,float[]> stitched=SKIRT_CLOTH_V2?
@@ -3131,6 +3143,16 @@ public class BodyPartsPreviewRenderer
                                     net.minecraft.client.Minecraft.getMinecraft()
                                             .getRenderPartialTicks())):
                             physicsFrames.forRenderWidths(data,frame);
+            // An XPBD-driven skirt must not ALSO inherit the old Jolt
+            // 40-bone visual swings/width offsets. Other hair, other
+            // attachment types and the actual fitted body contacts are
+            // completely unaffected.
+            if(SkirtXPBDRuntime.ENABLED &&
+                    isSkirtAttachment(data,getPreviewPhysicsChains(data)))
+            {
+                swings=null;
+                renderedWidths=null;
+            }
             if(SKIRT_PANEL_COUPLING &&
                 (SKIRT_ADAPTIVE_WIDTH||SKIRT_CLOTH_V2) &&
                     renderedWidths!=null&&!renderedWidths.isEmpty())
@@ -3253,6 +3275,11 @@ public class BodyPartsPreviewRenderer
         /* Chameleon animations must keep ticking while the actor preview plays. */
         part.animate = true;
         part.morph.setDirect(child);
+        // A fresh ChameleonMorph is often built for EACH timeline frame.
+        // The XPBD solver and real-body-collider bridge must share the
+        // stable attachment-track identity across these short-lived clones.
+        if(SkirtXPBDRuntime.ENABLED)
+            SkirtXPBDContacts.registerOwner(child,data);
         this.preparedMorphs.put(data, child);
         return part;
     }

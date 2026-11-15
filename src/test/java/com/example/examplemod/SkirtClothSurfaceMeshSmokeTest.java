@@ -393,7 +393,7 @@ public final class SkirtClothSurfaceMeshSmokeTest
         }
         throw new AssertionError("Missing source "+name);
     }
-    private static List<SkirtClothSurfaceMesh.Strip> fixture()
+    static List<SkirtClothSurfaceMesh.Strip> fixture()
     {
         List<SkirtClothSurfaceMesh.Strip> list=
                 new ArrayList<SkirtClothSurfaceMesh.Strip>();
