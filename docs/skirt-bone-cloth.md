@@ -2110,3 +2110,54 @@ the source-volume render is still 43 separate cuboids, not yet a
 continuous watertight cloth surface. Visual Minecraft verification is
 required before merging; Java tests alone do not prove absence of
 clipping or fabric collapse.
+
+## Physics 3.0 XPBD — 60Hz fractional scene clock and contact-only renders
+
+The in-game character visibly animates at interpolated 60fps while the
+old `SkirtXPBDRuntime` advanced only when the INTEGER 20-TPS editor frame
+changed. During fast walking, this allowed an animated leg to cross the
+skirt between physics steps, even though manual frame-by-frame scrubbing
+looked correct.
+
+The new opt-in XPBD pipeline (ordinary Jolt / original animation unchanged):
+
+- `BodyPartsPreviewRenderer` publishes
+  `CameraVisualFrameClock.sceneTime(frame)` alongside the actually fitted
+  Emoticons thigh OBBs. The pure Java 8 bridge stores
+  `SkirtXPBDContacts.Frame.sampleTick`. No wall-clock timestamp is used
+  to advance simulation while editor contacts exist.
+- `SkirtXPBDRuntime` accumulates continuous scene time and takes bounded
+  **fixed 1/60-second steps**, normally three per Minecraft tick. Multiple
+  video, shadow, mirror and overlay renders with the SAME sample time
+  take zero additional physical steps; seek/reverse and large stalls
+  reset the simulation instead of applying stale impulses.
+- When the current displayed time falls between fixed physics steps,
+  `SkirtXPBDSolver.advance(0,...)` updates the native target pose and
+  resolves penetration against the **latest fitted leg OBBs**, without
+  integrating gravity or injecting additional Verlet velocity.
+- `[SkirtXPBDVolumeFrame]` now includes `sampleTick` and
+  `physicsSteps`, in addition to `boxes`, `legs`,
+  `substeps` and constraint diagnostics.
+- Java 8 smoke tests cover fractional 60Hz clocks, repeated same-time
+  render passes, a contact-only frame with genuine-style left/right OBBs,
+  and the existing pause/seek/actor-owner continuity paths.
+
+Run from the Gradle tasks runner:
+```text
+runClient -PfixMixinAsm -PenableSkirtXPBD -PskirtXPBDVolumeSkin -PcaptureSkirtMesh -PenableJoltExperimental
+```
+Inspect while actually playing (not just paused):
+```powershell
+Select-String -Path '.\\run\\logs\\latest.log' `
+  -SimpleMatch '[SkirtXPBDVolumeFrame]' |
+  Select-Object -Last 25 |
+  ForEach-Object { $_.Line }
+```
+At 60fps playback, look for noninteger `sampleTick`, regular
+`physicsSteps=1` (with `physicsSteps=0` on repeated passes), and
+`legs>0` either on solver or contact-only passes. At a pause,
+`physicsSteps=0` is expected. **The underlying Emoticons bone matrix
+capture still comes from the last rendered actor**; fitted collider
+pose freshness and collision of visual triangle interiors need
+additional Minecraft A/B validation. The renderer is still the
+existing 43-source-cuboid geometry, not the finished continuous mesh.

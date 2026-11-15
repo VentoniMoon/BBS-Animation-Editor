@@ -8,10 +8,10 @@ import java.util.WeakHashMap;
  * other standalone morphs use their own identity. Never key by shared
  * 44-bone model name. Existing Jolt skirt/record/keys are never edited.
  *
- * A real editor timeline frame from fitted Emoticons colliders is preferred
- * to wall time so 60fps camera render / repeated shadow passes cannot
- * advance the same 20 TPS cloth sample more than once. Without a bridge
- * sample (external Blockbuster use), wall time is rate-limited to <=50Hz.
+ * Fractional editor scene time from fitted Emoticons colliders advances a
+ * fixed 60Hz simulation. Repeated shadow/mirror/video passes at the same
+ * exact scene time NEVER advance a second step. Without editor contacts
+ * (external Blockbuster use), wall time is rate-limited to <=50Hz.
  */
 public final class SkirtXPBDRuntime
 {
@@ -25,6 +25,9 @@ public final class SkirtXPBDRuntime
     private static final long MIN_STEP_NANOS=18000000L;
     private static final long STALE_RESET_NANOS=600000000L;
     private static final float MAX_REST_DELTA=.025F;
+    private static final double STEP_SECONDS=1D/60D;
+    private static final int MAX_STEPS_PER_SAMPLE=6;
+    private static final double CLOCK_EPS=1E-6D;
 
     public static final class RenderFrame
     {
@@ -35,17 +38,22 @@ public final class SkirtXPBDRuntime
         public final SkirtXPBDSolver.Result solved;
         public final float[][] materials;
         public final int legBoxCount;
+        /** Number of fixed 60Hz integration steps in this render sample. */
+        public final int physicsSteps;
+        public final double sampleTick;
         private RenderFrame(SkirtClothSurfaceMesh.Snapshot source,
                 SkirtClothRestBinding.Binding binding,
                 SkirtXPBDSurfaceTopology.Topology topology,
                 SkirtXPBDPoseSkin.Frame pose,
                 SkirtXPBDSolver.Result solved,float[][] materials,
-                int legBoxCount)
+                int legBoxCount,int steps,double tick)
         {
             this.source=source;this.binding=binding;
             this.topology=topology;this.pose=pose;this.solved=solved;
             this.materials=materials;
             this.legBoxCount=legBoxCount;
+            physicsSteps=steps;
+            sampleTick=tick;
         }
     }
     private static final class Actor
@@ -54,8 +62,8 @@ public final class SkirtXPBDRuntime
         SkirtClothSharedSurface.Surface rest;
         String fingerprint;
         long lastUpdate;
-        int lastTimelineFrame=Integer.MIN_VALUE;
-        float[][] lastParticles;
+        double lastSampleTick=Double.NaN;
+        double pendingSeconds;
         float[] lastWorldOrigin;
     }
 
@@ -94,58 +102,91 @@ public final class SkirtXPBDRuntime
             // reset rather than applying a giant unbounded gravity impulse.
             actor.solver=SkirtXPBDSolver.create(raw,shared,posed);
             actor.lastUpdate=now;
-            actor.lastTimelineFrame=Integer.MIN_VALUE;
+            actor.lastSampleTick=Double.NaN;
+            actor.pendingSeconds=0D;
             actor.lastWorldOrigin=null;
         }
 
-        float dt=0F;
+        SkirtXPBDSolver.Result output=null;
+        int steps=0;
+        double renderTick=Double.NaN;
         if(collisions!=null)
         {
-            int frame=collisions.timelineFrame;
-            if(actor.lastTimelineFrame==Integer.MIN_VALUE)
-                dt=1F/20F;
-            else if(frame>actor.lastTimelineFrame&&
-                    frame-actor.lastTimelineFrame<=2)
-                dt=Math.min(.05F,(frame-actor.lastTimelineFrame)/20F);
-            else if(frame!=actor.lastTimelineFrame)
+            renderTick=collisions.sampleTick;
+            if(!Double.isFinite(actor.lastSampleTick))
             {
-                actor.solver=SkirtXPBDSolver.create(raw,shared,posed);
-                actor.lastWorldOrigin=null;
+                // A new actor must be simulated at least once before the
+                // first visible render. Subsequently use only scene time.
+                actor.pendingSeconds=STEP_SECONDS;
             }
-            actor.lastTimelineFrame=frame;
-            if(dt>0F)
+            else
             {
-                // Follow actor-world locomotion with bounded inertial lag
-                // rather than relying only on local Chameleon bone edits.
-                float[] current=new float[]{
-                        collisions.modelToWorld[12],
-                        collisions.modelToWorld[13],
-                        collisions.modelToWorld[14]};
-                if(actor.lastWorldOrigin!=null)
+                double elapsedTicks=renderTick-actor.lastSampleTick;
+                if(elapsedTicks>2D+CLOCK_EPS ||
+                        elapsedTicks< -CLOCK_EPS)
                 {
-                    float[] delta=new float[3];
-                    for(int i=0;i<3;i++)
-                        delta[i]=current[i]-actor.lastWorldOrigin[i];
-                    actor.solver.rootMotion(delta,collisions.modelToWorld);
+                    // Seek/reverse/large stall: never replay old impulses
+                    // against a newly posed character or fitted leg set.
+                    actor.solver=SkirtXPBDSolver.create(raw,shared,posed);
+                    actor.lastWorldOrigin=null;
+                    actor.pendingSeconds=0D;
                 }
-                actor.lastWorldOrigin=current;
+                else if(elapsedTicks>CLOCK_EPS)
+                    actor.pendingSeconds+=elapsedTicks/20D;
             }
+            actor.lastSampleTick=renderTick;
+
+            // Exactly three 1/60 steps per Minecraft 1/20 tick, with
+            // fractional render clock delivery. This is independent of
+            // the GPU's rendering FPS and is stable in export/shadow passes.
+            while(actor.pendingSeconds+1E-8D>=STEP_SECONDS &&
+                    steps<MAX_STEPS_PER_SAMPLE)
+            {
+                // Actor-root inertial lag runs once for this sample even
+                // when we need multiple fixed simulation catch-up steps.
+                if(steps==0)
+                {
+                    float[] current={
+                            collisions.modelToWorld[12],
+                            collisions.modelToWorld[13],
+                            collisions.modelToWorld[14]};
+                    if(actor.lastWorldOrigin!=null)
+                    {
+                        float[] delta=new float[3];
+                        for(int i=0;i<3;i++)
+                            delta[i]=current[i]-actor.lastWorldOrigin[i];
+                        actor.solver.rootMotion(delta,
+                                collisions.modelToWorld);
+                    }
+                    actor.lastWorldOrigin=current;
+                }
+                output=actor.solver.advance((float)STEP_SECONDS,
+                        posed,collisions);
+                actor.pendingSeconds-=STEP_SECONDS;
+                steps++;
+            }
+            if(actor.pendingSeconds<0D)actor.pendingSeconds=0D;
+            // On 60+fps views between fixed simulation samples, the
+            // source pose may already differ. Resolve penetration against
+            // the latest real fitted thigh boxes without adding gravity,
+            // and without stepping a second time on a shadow/mirror pass.
+            if(steps==0)
+                output=actor.solver.advance(0F,posed,collisions);
         }
         else
         {
-            // No fitted body contacts: still simulate gravity + cloth
-            // self-collision, but do NOT fabricate model-derived leg boxes.
+            // External morph without real Emoticons thigh fitting:
+            // keep old rate-limited, wall-clock gravity-only behavior.
+            float dt=0F;
             if(now-actor.lastUpdate>=MIN_STEP_NANOS)
                 dt=Math.min(.03F,(now-actor.lastUpdate)/1000000000F);
+            output=actor.solver.advance(dt,posed,null);
+            steps=dt>0F?1:0;
         }
-        // Even a paused timeline/render replay must keep the 20 waist
-        // anchors on the CURRENT bone pose. advance(0) does not step
-        // gravity or collisions, but updates fixed pins safely.
-        SkirtXPBDSolver.Result output=
-                actor.solver.advance(dt,posed,collisions);
-        if(dt>0F)actor.lastUpdate=now;
+        if(steps>0)actor.lastUpdate=now;
         return new RenderFrame(raw,binding,topology,posed,output,
-                materials,collisions==null?0:collisions.legBoxes.size());
+                materials,collisions==null?0:collisions.legBoxes.size(),
+                steps,renderTick);
     }
 
     private static String signature(SkirtClothSurfaceMesh.Snapshot raw,

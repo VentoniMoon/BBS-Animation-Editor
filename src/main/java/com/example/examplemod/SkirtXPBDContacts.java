@@ -34,15 +34,18 @@ public final class SkirtXPBDContacts
     public static final class Frame
     {
         public final int timelineFrame;
+        /** Fractional editor tick captured with the fitted Emoticons hull. */
+        public final double sampleTick;
         public final float[] modelToWorld;
         public final List<float[]> legBoxes;
         public final boolean leftThigh,rightThigh;
         private final long createdNanos;
 
-        private Frame(int frame,float[] world,List<float[]> boxes,
+        private Frame(int frame,double tick,float[] world,List<float[]> boxes,
                 boolean left,boolean right,long time)
         {
             timelineFrame=frame;
+            sampleTick=tick;
             modelToWorld=world.clone();
             List<float[]> data=new ArrayList<float[]>();
             for(float[] b:boxes)data.add(b.clone());
@@ -70,6 +73,22 @@ public final class SkirtXPBDContacts
     public static synchronized void publish(Object morph,int timelineFrame,
             float[] modelToWorld,float[][] boxes,List<String> owners)
     {
+        publish(morph,timelineFrame,(double)timelineFrame,
+                modelToWorld,boxes,owners);
+    }
+
+    /**
+     * Fractional clock must be taken from the SAME editor render sample
+     * used to fit the legs, not from wall time (shadow/reflection passes
+     * must not progress physical time independently).
+     */
+    public static synchronized void publish(Object morph,int timelineFrame,
+            double sampleTick,float[] modelToWorld,float[][] boxes,
+            List<String> owners)
+    {
+        if(!Double.isFinite(sampleTick)||
+                sampleTick<timelineFrame-1E-4D||
+                sampleTick>timelineFrame+1.0001D)return;
         if(morph==null||!matrixValid(modelToWorld)||boxes==null||
                 owners==null||boxes.length!=owners.size())
             return;
@@ -103,7 +122,7 @@ public final class SkirtXPBDContacts
             FRAMES.remove(owner);
             return;
         }
-        FRAMES.put(owner,new Frame(timelineFrame,modelToWorld,
+        FRAMES.put(owner,new Frame(timelineFrame,sampleTick,modelToWorld,
                 selected,left,right,System.nanoTime()));
     }
 
