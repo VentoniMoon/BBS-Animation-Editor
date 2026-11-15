@@ -1809,3 +1809,145 @@ volumetric skirt instead of sparse disjoint plates, excluding
 differences in shader normals, world lighting and pose animation.
 This is only a **baseline for future continuous cloth rendering**,
 not XPBD, a new collision solver or a final visual replacement.
+
+## Physics 3.0 — Three stages integrated (experimental)
+
+After successfully testing PR #207, the user confirmed the detached,
+**complete 43-cube / 258-quad** copy looks like the original skirt,
+apart from its offset (appropriate for an A/B test). A real source
+volume render is now available as the reference.
+
+The following stages were implemented together in the optional
+`physics/skirt-xpbd-three-stages` branch. **All opt-in and off by
+default**; this work does not silently replace the old Jolt system.
+
+### Stage 1 — follow the current actor and animated bone pose
+
+`SkirtXPBDPoseSkin` uses *actual* Chameleon `bone.current`
+matrices and the authored native cube pivot/XYZ rotations.
+For each of 40 fabric cubes, the affine mapping from authored
+rest to native posed coordinates is
+`posedWorldMatrix * inverse(restWorldMatrix)`.
+Each of the original 160 exterior material corners follows the
+animated source bone directly at zero cloth displacement. The
+60 physical node anchor targets are averaged from the same
+transformed shared rest nodes, so an actor can change bone poses
+while remaining one cloth object.
+
+This is NOT the previous detached +1.2-block static rest copy;
+the replacement renders directly at the actor's modelview location.
+A/B display is still available with `-PskirtXPBDOverlay`.
+
+### Stage 2 — one continuous textured cloth shell
+
+`SkirtXPBDSurfaceTopology` contains 40 exact source UV quads
+plus two narrow **bridging quads** for each of the 60 measured
+neighbor seams (40 horizontal + 20 upper/lower), 160 quads maximum
+(320 triangles). The original source panel corner XYZ and UV
+are preserved **without** forcing them onto the old averaged
+shared-node mesh (45% relative edge distortion).
+Each narrow bridge starts with its adjacent original edge and
+uses repeated edge UVs to avoid interpolating directly across
+two unrelated texture islands. The two halves meet at a common
+middle point. Some perfectly coincident original mid-level seams
+produce zero-area bridges; the renderer omits them.
+
+A shell is not a blocky volume. Source cube side walls and caps are
+deliberately replaced by the two-sided connected surface; the
+three waist cubes **remain rendered natively**.
+This does not guarantee that a color seam looks identical to the
+original 43-cube reference, nor does it produce fabric thickness.
+A/B screenshots will decide where rim/inner-face geometry and
+better texture bridging are needed.
+
+### Stage 3 — actual shared-particle XPBD
+
+`SkirtXPBDSolver` drives 60 common particles (20 waist pins;
+20 hinge/mid and 20 hem particles), not 40 independent bone boxes.
+Constraints: ring/vertical stretching, diagonal shearing,
+second-neighbor circumferential bending, upper-to-hem bending,
+weak current-pose attraction, damping and gravity. Two substeps
+and eight XPBD iterations per simulation step, bounded pose
+drift/teleport recovery and non-finite frame rejection.
+Self-contacts cover non-neighbor particle/particle and
+vertex/triangle penetration; swept edge-edge CCD and
+continuous triangle/triangle detection remain future tasks.
+
+**Body contacts** reuse the same fitted actual Emoticons leg
+oriented boxes supplied to the Jolt contact budget. The new
+`SkirtXPBDContacts` bridge stores these per rendered morph
+identity, with the actor world attachment transform; each cloth
+particle is converted to world-space for OBB collision and the
+correction is converted back into local-space. A missing left
+or right thigh or stale contact sample deactivates leg
+collisions with a log warning. No invented fallback cylinder
+is used. The XPBD solver itself does **not** require Jolt JNI,
+though the existing Jolt-enabled editor path currently provides
+the fitted collider selection.
+
+`SkirtXPBDRuntime` holds one solver per ChameleonMorph, with
+a weak owner key. Editor timeline frames prevent multiple
+physics advances across repeated shader/FBO passes; outside
+that editor bridge, real time is clamped/rate-limited.
+World-origin translation generates bounded inertial cloth lag
+when the exact body attachment transform is available.
+When XPBD is opted in, old Jolt skirt visual swings/width
+multipliers are not layered onto its same bones.
+
+### Rendering safety and running tests
+
+`ChameleonWeldPreviewPass` strictly validates the exact
+44-bone/43-cube model, UV/skin binding, pose and topology.
+Only after the new mesh and solver have a complete frame does
+it temporarily swap the 40 fabric bones' native `cubes` lists
+with empty lists. Chameleon's three waist cubes and all other
+body/actor geometry remain intact. After the native draw,
+`ChameleonSkirtXPBDRenderer` draws the connected textured
+cloth with the already-bound Chameleon texture and per-bone
+colors; the existing `ChameleonWeldRuntime.end()` finally
+restores all source cube lists and any Weld-modified vertices.
+Unsupported models continue to use the original renderer.
+
+**IntelliJ / Gradle (experimental replacement):**
+```text
+runClient -PfixMixinAsm -PenableSkirtXPBD -PcaptureSkirtMesh
+```
+Body contacts require **actual fitted** Emoticons collider
+samples; if your test setup already uses native Jolt collider
+capture, add `-PenableJoltExperimental`, but do not combine
+`-PenableSkirtClothV2` with `-PenableSkirtXPBD`.
+The new XPBD integrator remains independent of Jolt itself.
+
+**Safer first A/B comparison:**
+```text
+runClient -PfixMixinAsm -PenableSkirtXPBD -PskirtXPBDOverlay
+```
+The old skirt remains visible and the animated XPBD copy
+renders +1.2 blocks on model X. Once the shape looks correct,
+remove `-PskirtXPBDOverlay` to switch to native-fabric replacement.
+The old `-PpreviewSkirtStaticSkin` shows the full-volume source
+reference; do not enable both previews simultaneously.
+
+Inspect:
+```powershell
+Select-String -Path '.\run\logs\latest.log' \`
+  -SimpleMatch '[SkirtXPBD]', '[SkirtXPBDFrame]' \`
+  | Select-Object -Last 20 \`
+  | ForEach-Object { $_.Line }
+```
+First draw should report
+`drawn=true mode=POSED_CONNECTED_CLOTH particles=60`.
+If real body colliders were not published, the log says
+`NO_REAL_LEG_BOXES`; do not interpret the absence as full
+leg collision support.
+
+**Acceptance checklist:** screenshot walking/rotating in A/B
+mode from front/back/side, compare hem and seam coverage;
+confirm waistband follows current pose, no repeated shadow-pass
+physics acceleration, no native cube leaks after disabling
+the feature or switching actors, bounded constraints and
+non-zero real leg contacts (if present). CI Java8 tests and
+Forge compile validate program structure, **not visual parity
+or final physics stability** in Minecraft/BSL; the latter
+requires the requested game test before promoting XPBD
+to default production mode.

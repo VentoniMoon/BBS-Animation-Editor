@@ -74,6 +74,13 @@ public final class ChameleonWeldRuntime
         if(stack.isEmpty())ACTIVE_MORPHS.remove();
     }
 
+    /** Actual current morph identity; never use shared Model as actor ID. */
+    public static Object activeMorph()
+    {
+        ArrayDeque<Object> active=ACTIVE_MORPHS.get();
+        return active.isEmpty()?null:active.peek();
+    }
+
     private static boolean currentMorphWeld()
     {
         ArrayDeque<Object> stack=ACTIVE_MORPHS.get();
@@ -92,7 +99,8 @@ public final class ChameleonWeldRuntime
         {
             boolean weld=isEnabled() && currentMorphWeld();
             if(weld || ChameleonWeldPreviewPass.isSkirtMeshCaptureRequested()
-                    || ChameleonWeldPreviewPass.isSkirtStaticABRequested())
+                    || ChameleonWeldPreviewPass.isSkirtStaticABRequested()
+                    || ChameleonWeldPreviewPass.isSkirtXPBDRequested())
             {
                 // Mesh capture is independent of the Weld checkbox. The
                 // read-only path MUST NOT mutate native Chameleon vertices.
@@ -129,6 +137,9 @@ public final class ChameleonWeldRuntime
             ChameleonWeldPreviewPass scope=scopes.pop();
             try
             {
+                if(ChameleonWeldPreviewPass.isSkirtXPBDRequested())
+                    ChameleonSkirtXPBDRenderer.draw(
+                            scope.getXPBDFrame());
                 if(ChameleonWeldPreviewPass.isSkirtStaticABRequested())
                     // The parity A/B must duplicate ALL original
                     // decoded cube faces, not the deliberately sparse

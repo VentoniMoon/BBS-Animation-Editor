@@ -78,6 +78,26 @@ minecraft {
                 jvmArg '-Dbbs.editor.physics.skirt.clothV2=true'
             }
 
+            // Physics 3.0: independent shared-particle XPBD cloth.
+            // OFF by default. In replacement mode native FABRIC cubes
+            // are hidden for one render scope; the original waist stays.
+            // Do not opt into two competing skirt solvers simultaneously.
+            if (project.hasProperty('enableSkirtXPBD')) {
+                if (project.hasProperty('enableSkirtClothV2')) {
+                    throw new GradleException(
+                            'Skirt XPBD replaces Skirt Cloth V2; remove -PenableSkirtClothV2')
+                }
+                jvmArg '-Dbbs.editor.physics.skirt.xpbd=true'
+            }
+            // Optional source-vs-new-cloth A/B instead of direct
+            // replacement. The new shell appears +1.2 blocks on X.
+            if (project.hasProperty('skirtXPBDOverlay')) {
+                if (!project.hasProperty('enableSkirtXPBD'))
+                    throw new GradleException(
+                            '-PskirtXPBDOverlay requires -PenableSkirtXPBD')
+                jvmArg '-Dbbs.editor.physics.skirt.xpbdReplace=false'
+            }
+
             if (project.hasProperty('enableJoltRagdoll')) {
                 if (!project.hasProperty('enableJoltExperimental')) {
                     throw new GradleException(

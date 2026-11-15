@@ -11,6 +11,11 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
       - 'src/main/java/com/example/examplemod/SkirtClothRestBinding.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSurfaceTopology.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDContacts.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSolver.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDRuntime.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java'
       - 'src/main/java/com/example/examplemod/SkirtV2JoltFrameGate.java'
@@ -41,6 +46,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtConnectedClothSolverSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothV2SolverSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothSurfaceMeshSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtXPBDPipelineSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtV2JoltFrameGateSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtRingSeamGeometrySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java'
@@ -65,6 +71,11 @@ on:
       - 'src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java'
       - 'src/main/java/com/example/examplemod/SkirtClothSharedSurface.java'
       - 'src/main/java/com/example/examplemod/SkirtClothRestBinding.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSurfaceTopology.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDContacts.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDSolver.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDRuntime.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java'
       - 'src/main/java/com/example/examplemod/ChameleonSkirtStaticVisualRenderer.java'
       - 'src/main/java/com/example/examplemod/SkirtV2JoltFrameGate.java'
@@ -92,6 +103,7 @@ on:
       - 'src/test/java/com/example/examplemod/SkirtConnectedClothSolverSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothV2SolverSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtClothSurfaceMeshSmokeTest.java'
+      - 'src/test/java/com/example/examplemod/SkirtXPBDPipelineSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtV2JoltFrameGateSmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtRingSeamGeometrySmokeTest.java'
       - 'src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java'
@@ -130,6 +142,11 @@ jobs:
             src/main/java/com/example/examplemod/SkirtClothSurfaceMesh.java \
             src/main/java/com/example/examplemod/SkirtClothSharedSurface.java \
             src/main/java/com/example/examplemod/SkirtClothRestBinding.java \
+            src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java \
+            src/main/java/com/example/examplemod/SkirtXPBDSurfaceTopology.java \
+            src/main/java/com/example/examplemod/SkirtXPBDContacts.java \
+            src/main/java/com/example/examplemod/SkirtXPBDSolver.java \
+            src/main/java/com/example/examplemod/SkirtXPBDRuntime.java \
             src/main/java/com/example/examplemod/ChameleonSkirtVolumeSnapshot.java \
             src/main/java/com/example/examplemod/SkirtV2JoltFrameGate.java \
             src/main/java/com/example/examplemod/SkirtRingSeamGeometry.java \
@@ -154,6 +171,7 @@ jobs:
             src/test/java/com/example/examplemod/SkirtConnectedClothSolverSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtClothV2SolverSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtClothSurfaceMeshSmokeTest.java \
+            src/test/java/com/example/examplemod/SkirtXPBDPipelineSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtV2JoltFrameGateSmokeTest.java \
             src/test/java/com/example/examplemod/SkirtRingSeamGeometrySmokeTest.java \
             src/test/java/com/example/examplemod/SkirtAdaptiveWidthSmokeTest.java \
@@ -178,6 +196,8 @@ jobs:
             com.example.examplemod.SkirtClothV2SolverSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtClothSurfaceMeshSmokeTest
+          java -ea -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtV2JoltFrameGateSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
