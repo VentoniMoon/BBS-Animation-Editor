@@ -222,6 +222,49 @@ public final class CharacterAnchorTransferSmokeTest
       loadedRelease.ownerActorId.isEmpty(),
       "release must not inherit any bone owner");
 
+  // BakedPose preserves the evaluated BODY PARTS internal-bone pose
+  // (rotation, translation and scale) across a CHARACTER key save/load.
+  // A receiving Body Part must not replay the old owner's keys on top.
+  check(!loadedRelease.bakedPose,
+      "legacy anchor keys must default to an unbaked Morph");
+  NBTTagCompound rotatedMorph=morph.copy();
+  rotatedMorph.setString("InternalPoseRotation","72.5");
+  CharacterAnchorTransfers.Transfer posedRelease=
+      new CharacterAnchorTransfers.Transfer(id,"item-source","","","",
+          75,rotatedMorph,droppedWorld,null,true);
+  CharacterAnchorTransfers.upsert(
+      actor1.getCharacterTimeline(),posedRelease);
+  CharacterAnchorTransfers.Transfer loadedPosed=
+      CharacterAnchorTransfers.Transfer.load(
+          actor1.getCharacterTimeline().ensureMainTrack()
+              .getKeyAtFrame(75).getData()
+              .getTagList(CharacterAnchorTransfers.KEY,10)
+              .getCompoundTagAt(0),75);
+  check(loadedPosed!=null&&loadedPosed.bakedPose,
+      "world release retains the baked internal pose marker");
+  check("72.5".equals(
+      loadedPosed.morph.getString("InternalPoseRotation")),
+      "world release preserves edited internal bone rotation");
+  check(!morph.hasKey("InternalPoseRotation"),
+      "baking must not alter the original source actor Morph");
+  CharacterAnchorTransfers.Transfer posedHandoff=
+      new CharacterAnchorTransfers.Transfer(
+          id,"item-source","","actor-two","right_hand",90,
+          rotatedMorph,droppedWorld,rebased,true);
+  CharacterAnchorTransfers.upsert(
+      actor2.getCharacterTimeline(),posedHandoff);
+  CharacterAnchorTransfers.Transfer loadedHandoff=
+      CharacterAnchorTransfers.Transfer.load(
+          actor2.getCharacterTimeline().ensureMainTrack()
+              .getKeyAtFrame(90).getData()
+              .getTagList(CharacterAnchorTransfers.KEY,10)
+              .getCompoundTagAt(0),90);
+  check(loadedHandoff!=null&&loadedHandoff.bakedPose,
+      "handoff retains the baked internal pose marker");
+  check("72.5".equals(
+      loadedHandoff.morph.getString("InternalPoseRotation")),
+      "handoff preserves the rotated Morph, not its initial pose");
+
   // Re-grab the placed object under its ORIGINAL logical item ID,
   // without duplicating another actor or its source Morph.
   CharacterAnchorTransfers.Transfer regrab=

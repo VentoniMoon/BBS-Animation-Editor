@@ -163,7 +163,10 @@ public class BodyPartsEditorController
         AbstractMorph morph=null;
         try
         {
-            if(prior!=null)
+            // BakedPose NBT contains all source internal-bone edits at
+            // this event's frame. Do not overwrite that exact snapshot
+            // with the old owner's unposed getMorphAt(frame).
+            if(prior!=null&&!transfer.bakedPose)
                 morph=prior.getMorphAt(transfer.frame);
             if(morph==null)
                 morph=MorphManager.INSTANCE.morphFromNBT(
@@ -180,32 +183,46 @@ public class BodyPartsEditorController
             applyAnchorTransform(created,transfer);
             if(prior!=null)
             {
-                // Carry over the actual author's Morph/pose edits at
-                // handoff. The new owner edits a separate key-scoped
-                // instance; the prior owner keeps their earlier frames.
-                NBTTagCompound skeletonTag=new NBTTagCompound();
-                skeletonTag.setTag("Bones",
-                        EditorSceneSerializer.writeBones(prior.getBones()));
-                List<AnimationBone> copy=new ArrayList<AnimationBone>();
-                EditorSceneSerializer.readBones(copy,skeletonTag);
-                if(!copy.isEmpty())
-                    created.setModel(created.getModelName(),null,copy);
-                created.restoreMorphKeys(prior.getMorphKeysSnapshot());
-                created.restoreModelKeys(prior.getModelKeysSnapshot());
+                // The native Morph on BakedPose already includes the
+                // previous owner's final internal-bone keyframe pose.
+                // Do NOT additionally copy old internal bone keys,
+                // morph keys or CHARACTER skin tracks onto it; doing so
+                // double-rotates the item or reverts to the old base.
+                //
+                // The receiving actor starts a new editable Body Part
+                // with that exact visual pose, and can author new keys
+                // independently. Non-pose physics/collider/Weld settings
+                // are inherited normally.
+                if(!transfer.bakedPose)
+                {
+                    NBTTagCompound skeletonTag=new NBTTagCompound();
+                    skeletonTag.setTag("Bones",
+                            EditorSceneSerializer.writeBones(
+                                    prior.getBones()));
+                    List<AnimationBone> copy=
+                            new ArrayList<AnimationBone>();
+                    EditorSceneSerializer.readBones(copy,skeletonTag);
+                    if(!copy.isEmpty())
+                        created.setModel(created.getModelName(),null,copy);
+                    created.restoreMorphKeys(
+                            prior.getMorphKeysSnapshot());
+                    created.restoreModelKeys(
+                            prior.getModelKeysSnapshot());
+                    CharacterTimelineController sourceTimeline=
+                            CharacterTimelineController.fromNBT(
+                                    prior.getCharacterTimeline().toNBT());
+                    created.getCharacterTimeline().clear();
+                    if(sourceTimeline!=null)
+                        for(CharacterTrack track:sourceTimeline.getTracks())
+                            if(track!=null)
+                                created.getCharacterTimeline().addTrack(track);
+                }
                 created.readPhysicsSettings(prior.writePhysicsSettings());
                 created.readColliderSettings(prior.writeColliderSettings());
                 created.setWeldEnabled(prior.isWeldEnabled());
                 if(prior.hasExplicitClothPhysicsSetting())
                     created.setClothPhysicsEnabled(
                             prior.isClothPhysicsEnabled());
-                CharacterTimelineController sourceTimeline=
-                        CharacterTimelineController.fromNBT(
-                                prior.getCharacterTimeline().toNBT());
-                created.getCharacterTimeline().clear();
-                if(sourceTimeline!=null)
-                    for(CharacterTrack track:sourceTimeline.getTracks())
-                        if(track!=null)
-                            created.getCharacterTimeline().addTrack(track);
             }
             List<BodyPartModelData> owner;
             if(transfer.ownerActorId.equals(activeActorId))

@@ -33,11 +33,30 @@ public final class CharacterAnchorTransfers
         public final NBTTagCompound morph;
         public final float[] worldAtKey;
         public final float[] boneFromItem;
+        /**
+         * True if Morph NBT already contains the internal BODY PARTS bone
+         * pose evaluated at this transfer frame. This is a boundary
+         * snapshot, NOT the original unposed source Morph. Copying the old
+         * owner's internal bone keys on top would apply them twice.
+         *
+         * Old scenes have no BakedPose tag and keep legacy behavior until
+         * the user re-authors a transition.
+         */
+        public final boolean bakedPose;
 
         public Transfer(String itemId,String sourceActorId,
                 String sourcePartId,String ownerActorId,String ownerBone,
                 int frame,NBTTagCompound morph,float[] worldAtKey,
                 float[] boneFromItem)
+        {
+            this(itemId,sourceActorId,sourcePartId,ownerActorId,ownerBone,
+                    frame,morph,worldAtKey,boneFromItem,false);
+        }
+
+        public Transfer(String itemId,String sourceActorId,
+                String sourcePartId,String ownerActorId,String ownerBone,
+                int frame,NBTTagCompound morph,float[] worldAtKey,
+                float[] boneFromItem,boolean bakedPose)
         {
             this.itemId=nonNull(itemId);
             this.sourceActorId=nonNull(sourceActorId);
@@ -48,6 +67,7 @@ public final class CharacterAnchorTransfers
             this.morph=morph==null?new NBTTagCompound():morph.copy();
             this.worldAtKey=worldAtKey==null?null:worldAtKey.clone();
             this.boneFromItem=boneFromItem==null?null:boneFromItem.clone();
+            this.bakedPose=bakedPose;
         }
         public boolean attached()
         {
@@ -71,6 +91,7 @@ public final class CharacterAnchorTransfers
             tag.setString("OwnerActor",ownerActorId);
             tag.setString("OwnerBone",ownerBone);
             tag.setTag("Morph",morph.copy());
+            if(bakedPose)tag.setBoolean("BakedPose",true);
             if(worldAtKey!=null)
                 tag.setTag("World",AnchorTransferMath.matrixToNBT(worldAtKey));
             if(boneFromItem!=null)
@@ -100,7 +121,7 @@ public final class CharacterAnchorTransfers
             if(owner.isEmpty()&&(!bone.isEmpty()||world==null))
                 return null; // A released object needs an explicit world pose.
             return new Transfer(id,source,part,owner,bone,frame,morph,
-                    world,local);
+                    world,local,nbt.getBoolean("BakedPose"));
         }
     }
 

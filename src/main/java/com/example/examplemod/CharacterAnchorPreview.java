@@ -194,7 +194,8 @@ public final class CharacterAnchorPreview
                     // PART's internal keyframes, physics, morph changes and
                     // skin settings as well as its visible Morph. Only its
                     // parent attachment and global offset are rebased.
-                    if(!transfer.sourcePartId.isEmpty()&&
+                    if(!transfer.bakedPose&&
+                            !transfer.sourcePartId.isEmpty()&&
                             scene.getBodyPartsController()!=null)
                         for(BodyPartModelData original:
                                 scene.getBodyPartsController()
