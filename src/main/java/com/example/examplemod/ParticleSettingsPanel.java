@@ -229,6 +229,19 @@ public final class ParticleSettingsPanel
             }
         }
 
+        // The same narrow scrollbar as the scene search list makes
+        // additional settings discoverable even on low-height windows.
+        if(count>0&&ENTRIES.length>count)
+        {
+            int track=y+CONTENT_TOP,trackHeight=count*ROW;
+            int handle=Math.max(12,trackHeight*count/ENTRIES.length);
+            int knob=track+(trackHeight-handle)*scroll/
+                    Math.max(1,ENTRIES.length-count);
+            Gui.drawRect(x+180,track,x+183,track+trackHeight,
+                    0xFF25212B);
+            Gui.drawRect(x+180,knob,x+183,knob+handle,accent);
+        }
+
         // Popup overlays rows just like the scene dropdown. Bounds are
         // clipped by the inspector bottom and the full enum catalog scrolls.
         if(typesOpen)
@@ -257,6 +270,16 @@ public final class ParticleSettingsPanel
                 mc.fontRenderer.drawString(
                         mc.fontRenderer.trimStringToWidth(candidate,151),
                         x+15,iy+5,selected?bright:0xFFDFDAE4);
+            }
+            if(choices.size()>rows)
+            {
+                int height=rows*PICK_ROW;
+                int handle=Math.max(9,height*rows/choices.size());
+                int knob=pickerY+(height-handle)*selectionScroll/
+                        Math.max(1,choices.size()-rows);
+                Gui.drawRect(x+174,pickerY,x+177,pickerY+height,
+                        0xFF26222E);
+                Gui.drawRect(x+174,knob,x+177,knob+handle,accent);
             }
         }
     }
