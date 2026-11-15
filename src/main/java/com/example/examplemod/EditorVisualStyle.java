@@ -30,34 +30,24 @@ public final class EditorVisualStyle
         return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
-    /** Shared CLIPS / LIGHTS / MIRRORS navigation across CAMERA modes. */
+    /** Compact CAMERA section selector. The list is drawn/owned by
+     * CameraWorkspace above all panels so it works with narrow Cyrillic UI.
+     * This retains the original left toolbar's y=25..54 footprint.
+     */
     public static void drawCameraTabs(net.minecraft.client.Minecraft mc,
             int leftWidth,int selected)
     {
-        final String[] labels={"CLIPS","LIGHTS","MIRRORS"};
-        Gui.drawRect(0,25,leftWidth,54,themedSurface(0.08F));
-        Gui.drawRect(0,53,leftWidth,54,themedSurface(0.28F));
-        for(int i=0;i<3;i++)
-        {
-            int x1=i==0?0:i==1?43:87;
-            int x2=i==0?43:i==1?87:leftWidth;
-            boolean active=i==selected;
-            Gui.drawRect(x1+1,27,x2-1,52,
-                    active?themedSurface(0.24F):themedSurface(0.10F));
-            if(active)
-                Gui.drawRect(x1+2,50,x2-2,53,getAccent());
-            // Fixed-width hit regions must stay unchanged. Cyrillic labels
-            // can be wider than their English equivalents, especially with
-            // the editor's pixel-matched Unicode glyph scale. Measure and
-            // clip with the SAME font renderer used for drawing, so a long
-            // translation never overpaints the adjacent CAMERA tab.
-            String label=mc.fontRenderer.trimStringToWidth(
-                    labels[i],Math.max(1,x2-x1-6));
-            int textW=mc.fontRenderer.getStringWidth(label);
-            mc.fontRenderer.drawString(label,
-                    x1+(x2-x1-textW)/2,36,
-                    active?getAccentBright():TEXT_SECONDARY);
-        }
+        final String[] labels={"CLIPS","LIGHTS","MIRRORS","PARTICLES"};
+        int index=Math.max(0,Math.min(labels.length-1,selected));
+        Gui.drawRect(0,25,leftWidth,54,themedSurface(.08F));
+        Gui.drawRect(0,53,leftWidth,54,themedSurface(.28F));
+        Gui.drawRect(5,28,leftWidth-5,51,themedSurface(.23F));
+        Gui.drawRect(5,50,leftWidth-5,53,getAccent());
+        String label="CAMERA / "+labels[index];
+        String display=mc.fontRenderer.trimStringToWidth(label,
+                Math.max(1,leftWidth-28));
+        mc.fontRenderer.drawString(display,11,36,getAccentBright());
+        mc.fontRenderer.drawString("v",leftWidth-15,36,TEXT_SECONDARY);
     }
 
     /*
