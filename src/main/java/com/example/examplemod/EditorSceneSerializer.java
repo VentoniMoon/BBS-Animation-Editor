@@ -209,6 +209,7 @@ public final class EditorSceneSerializer
         scene.setTag("CameraOutput",state.getCameraOutput().toNBT());
         scene.setTag("CameraSceneLights",state.getCameraLights().save());
         scene.setTag("CameraSceneMirrors",state.getCameraMirrors().save());
+        scene.setTag("CameraSceneParticles",state.getCameraParticles().save());
 
         root.setTag(
                 "Scene",
@@ -389,6 +390,9 @@ public final class EditorSceneSerializer
         state.getCameraMirrors().load(
                 scene.hasKey("CameraSceneMirrors",10)
                     ?scene.getCompoundTag("CameraSceneMirrors"):null);
+        state.getCameraParticles().load(
+                scene.hasKey("CameraSceneParticles",10)
+                    ?scene.getCompoundTag("CameraSceneParticles"):null);
 
         /* CAMERA is optional for all existing editor.dat files. */
         state.getCameraClips().clear();
