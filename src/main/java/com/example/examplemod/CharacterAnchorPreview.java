@@ -128,23 +128,19 @@ public final class CharacterAnchorPreview
             return result;
         }
         int frame=Math.max(0,(int)Math.floor(sceneTick));
-        Map<String,CharacterAnchorTransfers.Transfer> owners=
-                CharacterAnchorTransfers.resolve(scene.getActors(),sceneTick);
         if(originals!=null)
             for(BodyPartModelData model:originals)
             {
                 if(model==null)continue;
                 if(model.isAnchorAttachment())
                 {
-                    CharacterAnchorTransfers.Transfer active=
-                            owners.get(model.getAnchorItemId());
                     // Keep every authored recipient in BODY PARTS, but
                     // render only the current owner and the exact event
                     // instance. A hand-off at the same frame switches
                     // render representation atomically.
-                    if(active!=null&&active.attached()&&
-                            actorId.equals(active.ownerActorId)&&
-                            model.getAnchorEventFrame()==active.frame)
+                    if(CharacterAnchorTransfers.isActiveEditableAttachment(
+                            scene.getActors(),model.getAnchorItemId(),
+                            actorId,model.getAnchorEventFrame(),sceneTick))
                         result.add(model);
                 }
                 else if(!CharacterAnchorTransfers.hidesPart(
