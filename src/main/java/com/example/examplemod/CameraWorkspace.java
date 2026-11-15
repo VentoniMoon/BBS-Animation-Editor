@@ -43,42 +43,78 @@ public final class CameraWorkspace
         if(section==2)mirrorPanel.open();
         if(section==3)particlePanel.open();
     }
-    /** Click and draw the selector BEFORE other overlapping CAMERA panels. */
+    /* CAMERA dropdown shares the scene selector's framed popup style. */
+    private static final int CAMERA_MENU_X=4;
+    private static final int CAMERA_MENU_Y=54;
+    private static final int CAMERA_MENU_ROW=22;
+    private static final int CAMERA_MENU_COUNT=4;
+
+    private static int cameraMenuRight(int screenWidth)
+    {
+        return Math.min(screenWidth-5,Math.max(CAMERA_LEFT_WIDTH-4,174));
+    }
+
+    /** The popup may extend into the film; it is an overlay, not a panel.
+     * Hit testing uses the EXACT same bounds as the visible list.
+     */
     private boolean clickCameraSelector(AnimationEditorScreen screen,
             int mx,int my,int button)
     {
-        if(mx>=0&&mx<CAMERA_LEFT_WIDTH&&my>=25&&my<54)
+        if(mx>=4&&mx<CAMERA_LEFT_WIDTH-4&&my>=27&&my<53)
         {
             if(button==0)cameraSelectorOpen=!cameraSelectorOpen;
             return true;
         }
-        if(cameraSelectorOpen)
+        if(!cameraSelectorOpen)return false;
+
+        int right=cameraMenuRight(screen.width);
+        if(button==0&&mx>=CAMERA_MENU_X&&mx<right&&
+                my>=CAMERA_MENU_Y&&
+                my<CAMERA_MENU_Y+CAMERA_MENU_ROW*CAMERA_MENU_COUNT)
         {
-            if(button==0&&mx>=5&&mx<CAMERA_LEFT_WIDTH-5&&
-                    my>=54&&my<54+4*22)
-                setCameraSection(screen,(my-54)/22);
-            else cameraSelectorOpen=false;
-            return true;
+            int section=(my-CAMERA_MENU_Y)/CAMERA_MENU_ROW;
+            setCameraSection(screen,section);
         }
-        return false;
+        else cameraSelectorOpen=false;
+        // Modal until a section was selected or the menu closed.
+        return true;
     }
-    private void drawCameraSelector(Minecraft mc)
+
+    private void drawCameraSelector(Minecraft mc,int screenWidth)
     {
         if(!cameraSelectorOpen)return;
         final String[] names={"CLIPS","LIGHTS","MIRRORS","PARTICLES"};
+        final int x=CAMERA_MENU_X,y=CAMERA_MENU_Y;
+        final int right=cameraMenuRight(screenWidth);
+        final int height=CAMERA_MENU_ROW*CAMERA_MENU_COUNT;
+        if(right<=x+24)return;
+        final int accent=EditorThemeManager.get().getAccent();
+        GuiScreen.drawRect(x-2,y-2,right+2,y+height+2,0xFF4C4552);
+        GuiScreen.drawRect(x-1,y-1,right+1,y+height+1,0xFF111114);
+        GuiScreen.drawRect(x,y,right,y+height,0xFF151518);
+        int mx=org.lwjgl.input.Mouse.getX()*screenWidth/
+                Math.max(1,mc.displayWidth);
+        int my=mc.currentScreen==null?-1:
+                mc.currentScreen.height-
+                org.lwjgl.input.Mouse.getY()*mc.currentScreen.height/
+                Math.max(1,mc.displayHeight)-1;
         for(int i=0;i<names.length;i++)
         {
-            int cy=54+i*22;
-            GuiScreen.drawRect(4,cy,CAMERA_LEFT_WIDTH-4,cy+21,
-                    EditorVisualStyle.themedSurface(
-                            i==selectedSection()?.33F:.19F));
-            if(i==selectedSection())
-                GuiScreen.drawRect(4,cy,7,cy+21,
-                        EditorThemeManager.get().getAccent());
-            mc.fontRenderer.drawString(names[i],14,cy+7,
-                    i==selectedSection()?
-                            EditorThemeManager.get().getAccentBright():
-                            0xFFE1E7EA);
+            int row=y+i*CAMERA_MENU_ROW;
+            boolean selected=i==selectedSection();
+            boolean hover=mx>=x&&mx<right&&
+                    my>=row&&my<row+CAMERA_MENU_ROW;
+            GuiScreen.drawRect(x+1,row+1,right-1,row+CAMERA_MENU_ROW-1,
+                    selected?EditorVisualStyle.themedSurface(.34F):
+                    hover?EditorVisualStyle.themedSurface(.23F):
+                            0xFF18191B);
+            if(selected)
+                GuiScreen.drawRect(x+1,row+1,x+4,
+                        row+CAMERA_MENU_ROW-1,accent);
+            String text=mc.fontRenderer.trimStringToWidth(
+                    names[i],right-x-20);
+            mc.fontRenderer.drawString(text,x+11,row+7,
+                    selected?0xFFEFE5F7:0xFFD4D0D9);
         }
     }
     public boolean beginParticleGizmo(AnimationEditorScreen screen,
@@ -1282,7 +1318,7 @@ public final class CameraWorkspace
             editField.drawTextBox();
         }
         // Dropdown above all four CAMERA sections, not under preset rows.
-        drawCameraSelector(mc);
+        drawCameraSelector(mc,width);
     }
     private void drawPalette(AnimationEditorScreen screen)
     {

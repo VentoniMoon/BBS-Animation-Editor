@@ -486,3 +486,8 @@ bbsanimationeditor.ui.particles.camera.sceneselect.mirrors=КАМЕРА / ЗЕР
 bbsanimationeditor.ui.particles.camera.sceneselect.particles=КАМЕРА / ЧАСТИЦЫ
 bbsanimationeditor.ui.particles.camera.enabled=ВКЛЮЧЕНО: ДА
 bbsanimationeditor.ui.particles.camera.disabled=ВКЛЮЧЕНО: НЕТ
+
+bbsanimationeditor.ui.particles.section.emission=ИЗЛУЧЕНИЕ
+bbsanimationeditor.ui.particles.section.vanilla=СВОЙСТВА ВАНИЛИ
+bbsanimationeditor.ui.particles.field.short_rotation=Отн. вращ.
+bbsanimationeditor.ui.particles.field.short_args=Аргументы

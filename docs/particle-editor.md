@@ -123,3 +123,50 @@ world remains paused. This advances all already-present vanilla client
 particles in the same manager, not only editor-owned ones; it does NOT
 tick world entities, the integrated server, Minecraft physics or
 the editor timeline.
+
+## UI consistency pass — CAMERA scene selector and particle inspectors
+
+The existing particle emitters, their world preview, all ParticleMorph
+NBT keys and timeline interpolation remain unchanged. This UI-only pass
+addresses narrow Cyrillic layout and visual mismatches reported in the
+editor screenshots.
+
+- **CAMERA section selector** is now a framed, themed dropdown like
+  the SCENE search menu: dark input, accent underline, selected row,
+  hover state and consistent clickable popup bounds. It still offers
+  CLIPS, LIGHTS, MIRRORS and PARTICLES.
+- **Static PARTICLES inspector** matches the CAMERA CLIPS and LIGHTS
+  layout: header/source label, underlined POSITION/SETTINGS tabs, a
+  left-label/right-value row pattern, and grouped WORLD POSITION,
+  ROTATION and SOURCE headings. It preserves XYZ, Yaw/Pitch/Roll and
+  Enabled, without introducing keyframes. Mouse wheel scrolls the
+  position fields on shorter editor windows.
+- **Shared particle settings** (static and keyed actor) use the same
+  grouped sections: EMISSION (Frequency, Duration, Delay, Cap, Speed,
+  Count), VANILLA PROPERTIES (offset X/Y/Z and spread DX/DY/DZ), and
+  GENERAL (Args and LocalRotation). Numeric arrow buttons and text
+  fields use bounded horizontal rectangles. The vanilla particle type
+  selector still includes all EnumParticleTypes and scrolls within
+  the right panel rather than opening beyond its bottom edge.
+- **POSE particle actor tabs** now use the same segmented active
+  underline. The Origin-key hint is clipped and moved away from the
+  Transform controls.
+- New RU/EN translations cover compact heading and narrow row labels
+  without altering serialized values.
+
+### Manual layout test
+
+1. Open the editor in Russian and select CAMERA -> PARTICLES.
+2. Compare the dropdown with the scene picker: identical dark framing,
+   highlighted active row and no menu overlap after it is closed.
+3. Select a static source; check the XYZ values near world-coordinate
+   limits, wheel scroll down to Yaw/Pitch/Roll and Enabled, and edit
+   values with keyboard and arrows. Save and reload without value change.
+4. Open SETTINGS; scroll every parameter and the full vanilla particle
+   catalog. Verify dropdown contents and every arrow/input remain
+   inside the 185px inspector even with smaller GUI scales.
+5. Select a ParticleMorph actor in POSE; switch between POSITION and
+   SETTINGS, check selected-key editing and visual alignment with
+   normal TRANSFORM panel.
+6. Switch back to LIGHTS, MIRRORS and CLIPS to verify the selector
+   still routes to the original independent panels.

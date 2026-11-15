@@ -3573,10 +3573,16 @@ public class AnimationEditorScreen extends GuiScreen
                     this.actorPreviewController.getTransformPanel().draw(
                             mc,chosen,getCurrentTransform(),
                             this.playbackController.getCurrentFrame());
-                    if(chosen==null)
-                        fontRenderer.drawString(
+                    if(chosen==null&&bottom-top>140)
+                    {
+                        // Keep the hint away from the TRANSFORM header
+                        // and within the active right-hand inspector.
+                        String hint=fontRenderer.trimStringToWidth(
                                 "Select an Origin key to animate position",
-                                panelX+9,top+38,0xFF98BFCE);
+                                Math.max(1,width-panelX-18));
+                        fontRenderer.drawString(hint,panelX+9,
+                                bottom-16,0xFF98BFCE);
+                    }
                 }
                 particleActorInspector.drawTabs(mc,panelX,top);
             }

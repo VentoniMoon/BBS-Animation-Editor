@@ -10,58 +10,107 @@ import net.minecraft.nbt.NBTTagCompound;
 import org.lwjgl.input.Keyboard;
 
 /**
- * Shared, scrollable native ParticleMorph property editor.
- * Used unchanged for actor keys and static CAMERA particle emitters.
- * The vanilla type picker contains every EnumParticleTypes entry.
+ * Shared Blockbuster ParticleMorph inspector for POSE and CAMERA.
+ * Uses the CameraClipInspector / LIGHTS visual language:
+ * section headers, one compact label/value row, integral arrow buttons.
+ * The whole UI stays within a 185px right-hand panel at every scroll offset.
+ *
+ * Only visual structure and hit testing are changed here; native NBT keys,
+ * emission physics, editor timeline and saved values remain untouched.
  */
 public final class ParticleSettingsPanel
 {
-    private static final String[] PROPERTIES={
-            "Frequency","Duration","Delay","Cap","Speed","Count",
-            "X","Y","Z","DX","DY","DZ","Args","LocalRotation"};
+    private static final String[] ENTRIES={
+            "#EMISSION","Frequency","Duration","Delay","Cap","Speed",
+            "Count","#VANILLA PROPERTIES","X","Y","Z","DX","DY","DZ",
+            "#GENERAL","Args","LocalRotation"};
+    private static final int PANEL_WIDTH=185;
+    private static final int CONTENT_TOP=79;
+    private static final int ROW=24;
+    private static final int TYPE_TOP=48;
+    private static final int TYPE_HEIGHT=22;
+    private static final int PICK_TOP=74;
+    private static final int PICK_ROW=20;
+    private static final int PICK_MAX=7;
+    private static final int FIELD_LEFT=89;
+    private static final int FIELD_RIGHT=177;
+
     private NBTTagCompound settings;
     private Runnable onChange;
     private int x,y,bottom,scroll,selectionScroll;
     private boolean typesOpen;
     private GuiTextField input;
     private String editing;
-    private static final int ROW=29;
-    private static final int LIST_TOP=71;
-    private static final int PICK_ROWS=7;
 
     public void bind(NBTTagCompound value,Runnable callback)
     {
         if(settings!=value)
         {
             settings=value;
-            scroll=0;typesOpen=false;input=null;editing=null;
+            scroll=0;
+            selectionScroll=0;
+            typesOpen=false;
+            input=null;
+            editing=null;
         }
         onChange=callback;
     }
+
     public void reset()
     {
-        settings=null;onChange=null;scroll=0;
-        typesOpen=false;input=null;editing=null;
+        settings=null;
+        onChange=null;
+        scroll=0;
+        selectionScroll=0;
+        typesOpen=false;
+        input=null;
+        editing=null;
     }
+
     private void changed()
     {
         if(onChange!=null)onChange.run();
     }
-    private int rows()
+
+    private int visibleRows()
     {
-        return Math.max(1,(bottom-y-LIST_TOP-8)/ROW);
+        return Math.max(0,(bottom-y-CONTENT_TOP-5)/ROW);
     }
+
     private void clampScroll()
     {
-        scroll=Math.max(0,Math.min(Math.max(0,
-                PROPERTIES.length-rows()),scroll));
+        scroll=Math.max(0,Math.min(scroll,
+                Math.max(0,ENTRIES.length-visibleRows())));
     }
+
+    private int pickerRows()
+    {
+        return Math.max(0,Math.min(PICK_MAX,
+                Math.min(ParticleEmitterConfig.types().size(),
+                        (bottom-y-PICK_TOP-4)/PICK_ROW)));
+    }
+
+    private void clampPicker()
+    {
+        selectionScroll=Math.max(0,Math.min(selectionScroll,
+                Math.max(0,ParticleEmitterConfig.types().size()-
+                        pickerRows())));
+    }
+
     private static String display(String key)
     {
-        if("LocalRotation".equals(key))return "Relative rotation";
-        if("Args".equals(key))return "Extra arguments";
+        // Short inspector labels; full native parameter names remain
+        // unchanged in ParticleEmitterConfig and editor.dat.
+        if("LocalRotation".equals(key))return "Rel. rotation";
+        if("Args".equals(key))return "Args";
         return key;
     }
+
+    private static String sectionName(String key)
+    {
+        return key.substring(1);
+    }
+
     private String shown(String key)
     {
         if("LocalRotation".equals(key))
@@ -75,119 +124,190 @@ public final class ParticleSettingsPanel
         return String.format(Locale.ROOT,"%.4f",n)
                 .replaceAll("0+$","").replaceAll("\\.$","");
     }
+
+    private static boolean within(int mx,int my,int left,int top,
+            int right,int bottom)
+    {
+        return mx>=left&&mx<right&&my>=top&&my<bottom;
+    }
+
     public void draw(Minecraft mc,int px,int py,int lower)
     {
         if(settings==null||mc==null)return;
         x=px;y=py;bottom=lower;
         clampScroll();
-        int accent=EditorThemeManager.get().getAccent();
-        Gui.drawRect(x+5,y+3,x+179,y+23,
-                EditorVisualStyle.themedSurface(0.23F));
-        mc.fontRenderer.drawString("PARTICLE MORPH",x+12,y+9,0xFFE5EBF1);
-        String mode=settings.getString("Mode");
-        boolean vanilla=mode.isEmpty()||
-                "vanilla".equalsIgnoreCase(mode);
+        final int accent=EditorThemeManager.get().getAccent();
+        final int bright=EditorThemeManager.get().getAccentBright();
+
+        // Same thin, accent-led section heading as camera clip properties.
+        Gui.drawRect(x+7,y+3,x+178,y+22,
+                EditorVisualStyle.themedSurface(.18F));
+        Gui.drawRect(x+7,y+3,x+10,y+22,accent);
+        String title=mc.fontRenderer.trimStringToWidth("PARTICLE MORPH",153);
+        mc.fontRenderer.drawString(title,x+15,y+9,0xFFE4E5EB);
+
+        boolean vanilla=settings.getString("Mode").isEmpty()||
+                "vanilla".equalsIgnoreCase(settings.getString("Mode"));
         mc.fontRenderer.drawString(vanilla?"VANILLA":"MORPH",
-                x+9,y+32,vanilla?0xFFA5E8BE:0xFFFFD796);
+                x+11,y+31,vanilla?0xFF9FE7C0:0xFFF2CB87);
 
-        String selected=ParticleEmitterConfig.type(settings);
-        Gui.drawRect(x+7,y+49,x+178,y+70,
-                EditorVisualStyle.themedSurface(0.22F));
-        mc.fontRenderer.drawString("<",x+12,y+55,0xFFEAF1F5);
-        mc.fontRenderer.drawString(
-                mc.fontRenderer.trimStringToWidth(selected,118),
-                x+26,y+55,0xFFEAF1F5);
-        mc.fontRenderer.drawString(">",x+165,y+55,0xFFEAF1F5);
+        String type=ParticleEmitterConfig.type(settings);
+        Gui.drawRect(x+7,y+TYPE_TOP,x+178,y+TYPE_TOP+TYPE_HEIGHT,
+                EditorVisualStyle.themedSurface(.08F));
+        Gui.drawRect(x+7,y+TYPE_TOP,x+22,y+TYPE_TOP+TYPE_HEIGHT,
+                EditorVisualStyle.themedSurface(.28F));
+        Gui.drawRect(x+163,y+TYPE_TOP,x+178,y+TYPE_TOP+TYPE_HEIGHT,
+                EditorVisualStyle.themedSurface(.28F));
+        mc.fontRenderer.drawString("<",x+11,y+TYPE_TOP+7,0xFFE9E5F0);
+        mc.fontRenderer.drawString(">",x+168,y+TYPE_TOP+7,0xFFE9E5F0);
+        String visibleType=mc.fontRenderer.trimStringToWidth(type,132);
+        mc.fontRenderer.drawString(visibleType,
+                x+26,y+TYPE_TOP+7,0xFFE7EDF2);
 
-        int visible=rows();
-        for(int row=0;row<visible&&row+scroll<PROPERTIES.length;row++)
+        int count=visibleRows();
+        for(int row=0;row<count&&row+scroll<ENTRIES.length;row++)
         {
-            String property=PROPERTIES[row+scroll];
-            int line=y+LIST_TOP+row*ROW;
-            Gui.drawRect(x+7,line,x+178,line+ROW-2,
-                    EditorVisualStyle.themedSurface(0.12F));
-            mc.fontRenderer.drawString(display(property),
-                    x+11,line+3,0xFFC8D3DC);
-            if(input!=null&&property.equals(editing))
+            String key=ENTRIES[row+scroll];
+            int ry=y+CONTENT_TOP+row*ROW;
+            if(ry+ROW>bottom)break;
+            if(key.startsWith("#"))
             {
-                input.x=x+89;input.y=line+13;
-                input.width=69;input.height=14;
+                Gui.drawRect(x+7,ry+2,x+178,ry+21,
+                        EditorVisualStyle.themedSurface(.18F));
+                Gui.drawRect(x+7,ry+2,x+10,ry+21,accent);
+                mc.fontRenderer.drawString(
+                        mc.fontRenderer.trimStringToWidth(
+                                sectionName(key),155),
+                        x+15,ry+7,0xFFE0E3E8);
+                continue;
+            }
+
+            Gui.drawRect(x+7,ry+1,x+178,ry+ROW-1,
+                    EditorVisualStyle.themedSurface(.045F));
+            Gui.drawRect(x+FIELD_LEFT,ry+3,x+FIELD_RIGHT,ry+ROW-3,
+                    EditorVisualStyle.themedSurface(.07F));
+            Gui.drawRect(x+FIELD_LEFT,ry+ROW-4,x+FIELD_RIGHT,ry+ROW-3,
+                    EditorVisualStyle.themedSurface(.26F));
+
+            String label=mc.fontRenderer.trimStringToWidth(
+                    display(key),FIELD_LEFT-17);
+            mc.fontRenderer.drawString(label,x+11,ry+8,0xFFC9CED7);
+
+            if("LocalRotation".equals(key))
+            {
+                boolean enabled=ParticleEmitterConfig.rotation(settings);
+                mc.fontRenderer.drawString(enabled?"ON":"OFF",
+                        x+105,ry+8,0xFFE6EDF0);
+                Gui.drawRect(x+161,ry+6,x+172,ry+18,
+                        enabled?accent:0xFF57525E);
+                continue;
+            }
+
+            if(!"Args".equals(key))
+            {
+                Gui.drawRect(x+FIELD_LEFT,ry+3,x+103,ry+ROW-3,
+                        EditorVisualStyle.themedSurface(.29F));
+                Gui.drawRect(x+163,ry+3,x+FIELD_RIGHT,ry+ROW-3,
+                        EditorVisualStyle.themedSurface(.29F));
+                mc.fontRenderer.drawString("<",x+93,ry+8,0xFFE9EAF1);
+                mc.fontRenderer.drawString(">",x+168,ry+8,0xFFE9EAF1);
+            }
+
+            if(input!=null&&key.equals(editing))
+            {
+                input.x=x+104;input.y=ry+5;
+                input.width=57;input.height=15;
                 input.drawTextBox();
             }
             else
             {
-                String value=shown(property);
-                mc.fontRenderer.drawString(
-                        mc.fontRenderer.trimStringToWidth(value,64),
-                        x+93,line+17,0xFFE5F0F2);
+                String value=mc.fontRenderer.trimStringToWidth(
+                        shown(key),"Args".equals(key)?76:55);
+                mc.fontRenderer.drawString(value,
+                        "Args".equals(key)?x+95:x+105,
+                        ry+8,0xFFE6EBF0);
             }
-            if(!"Args".equals(property)&&!"LocalRotation".equals(property))
-            {
-                Gui.drawRect(x+77,line+13,x+91,line+27,
-                        EditorVisualStyle.themedSurface(0.3F));
-                Gui.drawRect(x+159,line+13,x+175,line+27,
-                        EditorVisualStyle.themedSurface(0.3F));
-                mc.fontRenderer.drawString("<",x+81,line+16,0xFFFFFFFF);
-                mc.fontRenderer.drawString(">",x+164,line+16,0xFFFFFFFF);
-            }
-            else if("LocalRotation".equals(property))
-                Gui.drawRect(x+151,line+14,x+176,line+26,
-                        ParticleEmitterConfig.rotation(settings)?
-                                0xFF34795A:0xFF50535B);
         }
+
+        // The same narrow scrollbar as the scene search list makes
+        // additional settings discoverable even on low-height windows.
+        if(count>0&&ENTRIES.length>count)
+        {
+            int track=y+CONTENT_TOP,trackHeight=count*ROW;
+            int handle=Math.max(12,trackHeight*count/ENTRIES.length);
+            int knob=track+(trackHeight-handle)*scroll/
+                    Math.max(1,ENTRIES.length-count);
+            Gui.drawRect(x+180,track,x+183,track+trackHeight,
+                    0xFF25212B);
+            Gui.drawRect(x+180,knob,x+183,knob+handle,accent);
+        }
+
+        // Popup overlays rows just like the scene dropdown. Bounds are
+        // clipped by the inspector bottom and the full enum catalog scrolls.
         if(typesOpen)
         {
-            List<String> types=ParticleEmitterConfig.types();
-            int top=y+71;
-            int max=Math.min(PICK_ROWS,types.size());
-            Gui.drawRect(x+7,top-2,x+178,top+max*20+2,
-                    0xFF1B2027);
-            for(int i=0;i<max;i++)
+            List<String> choices=ParticleEmitterConfig.types();
+            int rows=pickerRows();
+            if(rows<1)return;
+            clampPicker();
+            int pickerY=y+PICK_TOP;
+            Gui.drawRect(x+5,pickerY-2,x+180,pickerY+rows*PICK_ROW+2,
+                    0xFF4C4454);
+            Gui.drawRect(x+6,pickerY-1,x+179,pickerY+rows*PICK_ROW+1,
+                    0xFF111115);
+            for(int i=0;i<rows;i++)
             {
                 int index=selectionScroll+i;
-                if(index>=types.size())break;
-                String name=types.get(index);
-                int cy=top+i*20;
-                Gui.drawRect(x+8,cy,x+177,cy+19,
-                        name.equals(selected)?
-                                EditorVisualStyle.themedSurface(.36F):
-                                EditorVisualStyle.themedSurface(.18F));
+                if(index>=choices.size())break;
+                String candidate=choices.get(index);
+                boolean selected=candidate.equals(type);
+                int iy=pickerY+i*PICK_ROW;
+                Gui.drawRect(x+7,iy,x+178,iy+PICK_ROW-1,
+                        selected?EditorVisualStyle.themedSurface(.33F):
+                                0xFF1A1A1D);
+                if(selected)
+                    Gui.drawRect(x+7,iy,x+10,iy+PICK_ROW-1,accent);
                 mc.fontRenderer.drawString(
-                        mc.fontRenderer.trimStringToWidth(name,156),
-                        x+13,cy+5,name.equals(selected)?
-                                accent:0xFFE5E7EA);
+                        mc.fontRenderer.trimStringToWidth(candidate,151),
+                        x+15,iy+5,selected?bright:0xFFDFDAE4);
             }
-            mc.fontRenderer.drawString(
-                    (selectionScroll+1)+"-"+Math.min(types.size(),
-                            selectionScroll+max)+"/"+types.size(),
-                    x+90,top+max*20+3,0xFF9CA6B0);
+            if(choices.size()>rows)
+            {
+                int height=rows*PICK_ROW;
+                int handle=Math.max(9,height*rows/choices.size());
+                int knob=pickerY+(height-handle)*selectionScroll/
+                        Math.max(1,choices.size()-rows);
+                Gui.drawRect(x+174,pickerY,x+177,pickerY+height,
+                        0xFF26222E);
+                Gui.drawRect(x+174,knob,x+177,knob+handle,accent);
+            }
         }
     }
-    private boolean in(int mx,int my,int left,int top,int w,int h)
-    {
-        return mx>=left&&mx<left+w&&my>=top&&my<top+h;
-    }
+
     private void step(String key,int direction)
     {
         if(settings==null)return;
-        boolean integer="Frequency".equals(key)||"Duration".equals(key)||
+        boolean integral="Frequency".equals(key)||"Duration".equals(key)||
                 "Delay".equals(key)||"Cap".equals(key)||
                 "Count".equals(key);
-        double increment=integer?1D:0.0625D;
+        double increment=integral?1D:.0625D;
         if(ParticleEmitterConfig.update(settings,key,
                 ParticleEmitterConfig.value(settings,key)+
                         direction*increment))
             changed();
     }
+
     private void cycleType(int delta)
     {
         List<String> types=ParticleEmitterConfig.types();
+        if(types.isEmpty())return;
         int index=types.indexOf(ParticleEmitterConfig.type(settings));
         if(index<0)index=0;
         if(ParticleEmitterConfig.changeType(settings,
                 types.get((index+delta+types.size())%types.size())))
             changed();
     }
+
     private void commit()
     {
         if(input==null||editing==null)return;
@@ -208,113 +328,152 @@ public final class ParticleSettingsPanel
         }
         input=null;editing=null;
     }
+
     public boolean click(int mx,int my,int button)
     {
-        if(settings==null||mx<x||mx>=x+185||my<y||my>=bottom)
+        if(settings==null||!within(mx,my,x,y,x+PANEL_WIDTH,bottom))
             return false;
         if(button!=0)return true;
+
         if(typesOpen)
         {
-            List<String> types=ParticleEmitterConfig.types();
-            int pos=(my-y-71)/20;
-            if(in(mx,my,x+7,y+71,171,
-                    PICK_ROWS*20)&&pos>=0&&
-                    selectionScroll+pos<types.size())
+            int rows=pickerRows();
+            int py=y+PICK_TOP;
+            if(within(mx,my,x+7,py,x+178,py+rows*PICK_ROW))
             {
-                ParticleEmitterConfig.changeType(settings,
-                        types.get(selectionScroll+pos));
-                changed();
+                int choice=selectionScroll+(my-py)/PICK_ROW;
+                List<String> choices=ParticleEmitterConfig.types();
+                if(choice>=0&&choice<choices.size()&&
+                        ParticleEmitterConfig.changeType(settings,
+                                choices.get(choice)))
+                    changed();
             }
             typesOpen=false;
             return true;
         }
-        if(in(mx,my,x+7,y+49,171,22))
+
+        if(within(mx,my,x+7,y+TYPE_TOP,x+178,y+TYPE_TOP+TYPE_HEIGHT))
         {
             commit();
-            if(mx<x+24)cycleType(-1);
-            else if(mx>=x+159)cycleType(1);
+            if(mx<x+22)cycleType(-1);
+            else if(mx>=x+163)cycleType(1);
             else
             {
                 typesOpen=true;
-                selectionScroll=Math.max(0,
-                        ParticleEmitterConfig.types().indexOf(
-                                ParticleEmitterConfig.type(settings))-2);
+                int index=ParticleEmitterConfig.types().indexOf(
+                        ParticleEmitterConfig.type(settings));
+                selectionScroll=Math.max(0,index-2);
+                clampPicker();
             }
             return true;
         }
-        int index=(my-y-LIST_TOP)/ROW+scroll;
-        if(my>=y+LIST_TOP&&index>=0&&index<PROPERTIES.length)
+
+        int rows=visibleRows(),py=y+CONTENT_TOP;
+        if(my<py||my>=py+rows*ROW)return true;
+        int index=scroll+(my-py)/ROW;
+        if(index<0||index>=ENTRIES.length)return true;
+        String key=ENTRIES[index];
+        if(key.startsWith("#"))return true;
+        int ry=py+(index-scroll)*ROW;
+        if(!within(mx,my,x+7,ry,x+178,ry+ROW))return true;
+
+        if("LocalRotation".equals(key))
         {
-            String prop=PROPERTIES[index];
-            int rowY=y+LIST_TOP+(index-scroll)*ROW;
-            if(!in(mx,my,x+7,rowY,171,ROW))return true;
-            if("LocalRotation".equals(prop))
-            {
-                commit();
-                settings.setBoolean("LocalRotation",
-                        !ParticleEmitterConfig.rotation(settings));
-                changed();return true;
-            }
-            if("Args".equals(prop))
-            {
-                commit();startEdit(prop,rowY);return true;
-            }
-            if(my>=rowY+13)
-            {
-                if(mx>=x+77&&mx<x+91){commit();step(prop,-1);}
-                else if(mx>=x+159&&mx<x+177)
-                {commit();step(prop,1);}
-                else {commit();startEdit(prop,rowY);}
-            }
+            commit();
+            settings.setBoolean("LocalRotation",
+                    !ParticleEmitterConfig.rotation(settings));
+            changed();
             return true;
+        }
+        if("Args".equals(key))
+        {
+            commit();startEdit(key,ry);return true;
+        }
+
+        if(mx>=x+FIELD_LEFT&&mx<x+103)
+        {
+            commit();step(key,-1);
+        }
+        else if(mx>=x+163&&mx<x+FIELD_RIGHT)
+        {
+            commit();step(key,1);
+        }
+        else if(mx>=x+103&&mx<x+163)
+        {
+            commit();startEdit(key,ry);
         }
         return true;
     }
-    private void startEdit(String key,int rowY)
+
+    private void startEdit(String key,int ry)
     {
         editing=key;
         input=new GuiTextField(785,Minecraft.getMinecraft().fontRenderer,
-                x+89,rowY+13,69,14);
+                x+104,ry+5,57,15);
         input.setMaxStringLength("Args".equals(key)?96:40);
         input.setText(shown(key));
         input.setFocused(true);
     }
-    public boolean keyTyped(char c,int key)
+
+    public boolean keyTyped(char character,int key)
     {
-        if(settings==null||input==null)return false;
-        if(key==Keyboard.KEY_ESCAPE||key==Keyboard.KEY_RETURN||
-                key==Keyboard.KEY_NUMPADENTER)
+        if(settings==null)return false;
+        if(typesOpen)
         {
-            if(key==Keyboard.KEY_ESCAPE){input=null;editing=null;}
-            else commit();
-            return true;
+            if(key==Keyboard.KEY_ESCAPE||key==Keyboard.KEY_RETURN||
+                    key==Keyboard.KEY_NUMPADENTER)
+            {
+                typesOpen=false;
+                return true;
+            }
+            if(key==Keyboard.KEY_UP||key==Keyboard.KEY_DOWN)
+            {
+                selectionScroll+=key==Keyboard.KEY_UP?-1:1;
+                clampPicker();
+                return true;
+            }
+            return false;
+        }
+        if(input==null)return false;
+        if(key==Keyboard.KEY_ESCAPE)
+        {
+            input=null;editing=null;return true;
+        }
+        if(key==Keyboard.KEY_RETURN||key==Keyboard.KEY_NUMPADENTER)
+        {
+            commit();return true;
         }
         if((key==Keyboard.KEY_UP||key==Keyboard.KEY_DOWN)&&
                 !"Args".equals(editing))
         {
-            String property=editing;
+            String keyName=editing;
             commit();
-            step(property,key==Keyboard.KEY_UP?1:-1);
+            step(keyName,key==Keyboard.KEY_UP?1:-1);
             return true;
         }
-        input.textboxKeyTyped(c,key);
+        input.textboxKeyTyped(character,key);
         return true;
     }
+
     public boolean scroll(int mx,int my,int direction)
     {
         if(settings==null||direction==0||
-                mx<x||mx>=x+185||my<y||my>=bottom)return false;
+                !within(mx,my,x,y,x+PANEL_WIDTH,bottom))
+            return false;
         if(typesOpen)
         {
-            selectionScroll=Math.max(0,Math.min(
-                    Math.max(0,ParticleEmitterConfig.types().size()-PICK_ROWS),
-                    selectionScroll+(direction>0?-1:1)));
+            selectionScroll+=direction>0?-1:1;
+            clampPicker();
             return true;
         }
-        if(in(mx,my,x+7,y+49,171,22))
+        if(within(mx,my,x+7,y+TYPE_TOP,x+178,y+TYPE_TOP+TYPE_HEIGHT))
+        {
+            commit();
             cycleType(direction>0?-1:1);
+        }
         else
         {
+            commit();
             scroll+=direction>0?-1:1;
             clampScroll();
         }

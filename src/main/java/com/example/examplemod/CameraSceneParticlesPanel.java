@@ -12,6 +12,15 @@ public final class CameraSceneParticlesPanel
 {
     private boolean opened;
     private int tab,scroll,top,bottom,leftRight;
+    private int positionScroll;
+    private static final int INSPECTOR_WIDTH=185;
+    private static final int POSITION_TOP=102;
+    private static final int POSITION_ROW=24;
+    private static final String[] POSITION_ITEMS={
+            "#WORLD POSITION","X","Y","Z","#ROTATION",
+            "Yaw","Pitch","Roll","#SOURCE","Enabled"};
+    private static final int FIELD_LEFT=87;
+    private static final int FIELD_RIGHT=177;
     private CameraSceneParticles.Source chosen;
     private final ParticleSettingsPanel properties=new ParticleSettingsPanel();
     private GuiTextField input;
@@ -41,7 +50,7 @@ public final class CameraSceneParticlesPanel
     public void reset()
     {
         opened=false;chosen=null;input=null;editing=-1;tab=0;
-        scroll=0;properties.reset();resetDrag();
+        scroll=0;positionScroll=0;properties.reset();resetDrag();
     }
     private CameraSceneParticles.Source sync(AnimationEditorScreen screen)
     {
@@ -49,8 +58,8 @@ public final class CameraSceneParticlesPanel
                 .getCameraParticles().selected();
         if(source!=chosen)
         {
-            chosen=source;input=null;editing=-1;resetDrag();
-            properties.reset();
+            chosen=source;input=null;editing=-1;positionScroll=0;
+            resetDrag();properties.reset();
         }
         return chosen;
     }
@@ -72,11 +81,23 @@ public final class CameraSceneParticlesPanel
                 EditorVisualStyle.themedSurface(.23F));
         Gui.drawRect(LEFT/2+2,61,LEFT-4,82,
                 EditorVisualStyle.themedSurface(.23F));
-        mc.fontRenderer.drawString("+ ADD",11,68,0xFFFFFFFF);
-        mc.fontRenderer.drawString("REMOVE",LEFT/2+6,68,0xFFFFFFFF);
+        String add=mc.fontRenderer.trimStringToWidth("+ ADD",
+                LEFT/2-13);
+        String remove=mc.fontRenderer.trimStringToWidth("REMOVE",
+                LEFT/2-13);
+        mc.fontRenderer.drawString(add,
+                4+Math.max(1,(LEFT/2-6-
+                        mc.fontRenderer.getStringWidth(add))/2),
+                68,0xFFEAE5F0);
+        mc.fontRenderer.drawString(remove,LEFT/2+2+
+                Math.max(1,(LEFT/2-6-
+                        mc.fontRenderer.getStringWidth(remove))/2),
+                68,0xFFEAE5F0);
         Gui.drawRect(4,87,LEFT-4,bottom-7,
                 EditorVisualStyle.themedSurface(.045F));
-        mc.fontRenderer.drawString("SCENE PARTICLES",11,92,
+        mc.fontRenderer.drawString(
+                mc.fontRenderer.trimStringToWidth("SCENE PARTICLES",
+                        LEFT-25),11,92,
                 EditorThemeManager.get().getAccentBright());
         java.util.List<CameraSceneParticles.Source> list=
                 screen.getSceneState().getCameraParticles().all();
@@ -98,84 +119,167 @@ public final class CameraSceneParticlesPanel
                     source==chosen?0xFFE0FAEF:0xFFCCD4DB);
         }
         if(list.isEmpty())
-            mc.fontRenderer.drawString("No particle sources",
+            mc.fontRenderer.drawString(
+                    mc.fontRenderer.trimStringToWidth(
+                            "No particle sources",LEFT-24),
                     12,112,0xFF9FA7AE);
     }
+    private int visiblePositionRows()
+    {
+        return Math.max(0,(bottom-POSITION_TOP-5)/POSITION_ROW);
+    }
+    private void clampPosition()
+    {
+        positionScroll=Math.max(0,Math.min(positionScroll,
+                Math.max(0,POSITION_ITEMS.length-visiblePositionRows())));
+    }
+    private static int axisForItem(int index)
+    {
+        if(index>=1&&index<=3)return index-1;
+        if(index>=5&&index<=7)return index-2;
+        return -1;
+    }
+    private static void section(Minecraft mc,int x,int y,String title)
+    {
+        int accent=EditorThemeManager.get().getAccent();
+        Gui.drawRect(x+7,y,x+178,y+19,
+                EditorVisualStyle.themedSurface(.18F));
+        Gui.drawRect(x+7,y,x+10,y+19,accent);
+        mc.fontRenderer.drawString(
+                mc.fontRenderer.trimStringToWidth(title,152),
+                x+15,y+5,0xFFE2E5EB);
+    }
+
     public void drawRight(AnimationEditorScreen screen,int panelBottom)
     {
         if(!opened)return;
         CameraSceneParticles.Source source=sync(screen);
         Minecraft mc=Minecraft.getMinecraft();
-        leftRight=screen.width-185;top=25;bottom=panelBottom;
-        Gui.drawRect(leftRight,25,screen.width,bottom,
+        leftRight=screen.width-INSPECTOR_WIDTH;top=25;bottom=panelBottom;
+        int x=leftRight;
+        int accent=EditorThemeManager.get().getAccent();
+        int bright=EditorThemeManager.get().getAccentBright();
+
+        Gui.drawRect(x,25,screen.width,bottom,
                 EditorVisualStyle.themedSurface(.07F));
-        mc.fontRenderer.drawString("PARTICLE SOURCE",leftRight+10,34,
-                EditorThemeManager.get().getAccentBright());
+        Gui.drawRect(x,25,x+2,bottom,
+                EditorVisualStyle.themedSurface(.20F));
+        mc.fontRenderer.drawString(
+                mc.fontRenderer.trimStringToWidth("PARTICLE SOURCE",165),
+                x+10,34,bright);
         if(source==null)
         {
-            mc.fontRenderer.drawString("Create a static source",
-                    leftRight+10,55,0xFFB0BAC2);
+            mc.fontRenderer.drawString(
+                    mc.fontRenderer.trimStringToWidth(
+                            "Create a static source",164),
+                    x+10,55,0xFF9CA6B0);
             return;
         }
-        Gui.drawRect(leftRight+7,47,leftRight+178,65,
-                EditorVisualStyle.themedSurface(.17F));
+        Gui.drawRect(x+7,46,x+178,64,
+                EditorVisualStyle.themedSurface(.15F));
+        Gui.drawRect(x+7,46,x+10,64,accent);
         mc.fontRenderer.drawString(
-                mc.fontRenderer.trimStringToWidth(source.name,155),
-                leftRight+14,51,0xFFE4EDF1);
-        String[] labels={"POSITION","SETTINGS"};
-        for(int i=0;i<2;i++)
+                mc.fontRenderer.trimStringToWidth(source.name,156),
+                x+15,51,0xFFE7EDF2);
+
+        final String[] labels={"POSITION","SETTINGS"};
+        for(int i=0;i<labels.length;i++)
         {
-            int tx=leftRight+7+i*86;
+            int tx=x+7+i*86;
+            boolean selected=tab==i;
             Gui.drawRect(tx,71,tx+84,94,
-                    EditorVisualStyle.themedSurface(
-                            tab==i?.29F:.12F));
-            String visible=mc.fontRenderer.trimStringToWidth(
-                    labels[i],78);
-            mc.fontRenderer.drawString(visible,
-                    tx+(84-mc.fontRenderer.getStringWidth(visible))/2,78,
-                    tab==i?0xFFE7EDF1:0xFFADB5BE);
+                    selected?EditorVisualStyle.themedSurface(.29F):
+                            EditorVisualStyle.themedSurface(.11F));
+            Gui.drawRect(tx,92,tx+84,94,
+                    selected?accent:0xFF45404B);
+            String label=mc.fontRenderer.trimStringToWidth(labels[i],76);
+            mc.fontRenderer.drawString(label,
+                    tx+(84-mc.fontRenderer.getStringWidth(label))/2,
+                    79,selected?0xFFE9E5F0:0xFFB0A9B8);
         }
+
         if(tab==1)
         {
             properties.bind(source.morph,
                     () -> screen.getCameraWorkspace().saveScene());
-            properties.draw(mc,leftRight,99,bottom);
+            properties.draw(mc,x,100,bottom);
             return;
         }
-        mc.fontRenderer.drawString("WORLD POSITION",leftRight+10,111,
-                0xFFB6C2CC);
-        String[] labelsXY={"X","Y","Z","Yaw","Pitch","Roll"};
-        for(int i=0;i<labelsXY.length;i++)
+
+        clampPosition();
+        int visible=visiblePositionRows();
+        for(int row=0;row<visible&&row+positionScroll<
+                POSITION_ITEMS.length;row++)
         {
-            int py=130+i*40;
-            if(py+39>=bottom)break;
-            mc.fontRenderer.drawString(labelsXY[i],leftRight+12,py,
-                    0xFFC9D5DD);
-            Gui.drawRect(leftRight+8,py+15,leftRight+178,py+39,
-                    EditorVisualStyle.themedSurface(.21F));
-            mc.fontRenderer.drawString("<",leftRight+17,py+23,
-                    0xFFE2EAF0);
-            mc.fontRenderer.drawString(">",leftRight+163,py+23,
-                    0xFFE2EAF0);
-            double value=get(source,i);
-            mc.fontRenderer.drawString(String.format(
-                    java.util.Locale.ROOT,"%.3f",value),
-                    leftRight+68,py+23,0xFFE1EAEE);
-            if(input!=null&&editing==i)input.drawTextBox();
-        }
-        if(bottom>404)
-            mc.fontRenderer.drawString("Gizmo: move XYZ in Preview",
-                    leftRight+10,381,0xFF9CAFB8);
-        if(bottom>433)
-        {
-            Gui.drawRect(leftRight+10,405,leftRight+175,430,
-                    EditorVisualStyle.themedSurface(.18F));
+            int index=row+positionScroll;
+            int yy=POSITION_TOP+row*POSITION_ROW;
+            if(yy+POSITION_ROW>bottom)break;
+            String item=POSITION_ITEMS[index];
+            if(item.startsWith("#"))
+            {
+                section(mc,x,yy+2,item.substring(1));
+                continue;
+            }
+
+            Gui.drawRect(x+7,yy+1,x+178,yy+POSITION_ROW-1,
+                    EditorVisualStyle.themedSurface(.045F));
+            Gui.drawRect(x+FIELD_LEFT,yy+3,x+FIELD_RIGHT,
+                    yy+POSITION_ROW-3,
+                    EditorVisualStyle.themedSurface(.07F));
+            Gui.drawRect(x+FIELD_LEFT,yy+POSITION_ROW-4,
+                    x+FIELD_RIGHT,yy+POSITION_ROW-3,
+                    EditorVisualStyle.themedSurface(.25F));
             mc.fontRenderer.drawString(
-                    "ENABLED: "+(source.enabled?"ON":"OFF"),
-                    leftRight+18,414,source.enabled?0xFF98E9B6:
-                            0xFFDDB2B0);
+                    mc.fontRenderer.trimStringToWidth(item,
+                            FIELD_LEFT-17),
+                    x+11,yy+8,0xFFCAD1D9);
+
+            if("Enabled".equals(item))
+            {
+                mc.fontRenderer.drawString(source.enabled?"ON":"OFF",
+                        x+105,yy+8,0xFFE9EEF2);
+                Gui.drawRect(x+162,yy+6,x+174,yy+18,
+                        source.enabled?accent:0xFF54535A);
+                continue;
+            }
+
+            Gui.drawRect(x+FIELD_LEFT,yy+3,x+101,
+                    yy+POSITION_ROW-3,
+                    EditorVisualStyle.themedSurface(.29F));
+            Gui.drawRect(x+163,yy+3,x+FIELD_RIGHT,
+                    yy+POSITION_ROW-3,
+                    EditorVisualStyle.themedSurface(.29F));
+            mc.fontRenderer.drawString("<",x+91,yy+8,0xFFEAE5EF);
+            mc.fontRenderer.drawString(">",x+168,yy+8,0xFFEAE5EF);
+            int axis=axisForItem(index);
+            if(input!=null&&editing==axis)
+            {
+                input.x=x+102;input.y=yy+5;
+                input.width=59;input.height=15;
+                input.drawTextBox();
+            }
+            else
+            {
+                String value=String.format(java.util.Locale.ROOT,
+                        "%.3f",get(source,axis));
+                mc.fontRenderer.drawString(
+                        mc.fontRenderer.trimStringToWidth(value,56),
+                        x+104,yy+8,0xFFE7EBF1);
+            }
+        }
+        // Show where the other coordinate rows are on short screens.
+        if(visible>0&&POSITION_ITEMS.length>visible)
+        {
+            int height=visible*POSITION_ROW;
+            int handle=Math.max(12,height*visible/POSITION_ITEMS.length);
+            int knob=POSITION_TOP+(height-handle)*positionScroll/
+                    Math.max(1,POSITION_ITEMS.length-visible);
+            Gui.drawRect(x+180,POSITION_TOP,x+183,POSITION_TOP+height,
+                    0xFF25212B);
+            Gui.drawRect(x+180,knob,x+183,knob+handle,accent);
         }
     }
+
     private double get(CameraSceneParticles.Source s,int axis)
     {
         switch(axis)
@@ -258,39 +362,49 @@ public final class CameraSceneParticlesPanel
         {
             return properties.click(mx,my,button);
         }
-        if(bottom>433&&my>=405&&my<430)
+        // Position inspector rows are scrollable to the exact same
+        // visible range as drawRight() (including narrow GUI scales).
+        int rows=visiblePositionRows();
+        if(my>=POSITION_TOP&&my<POSITION_TOP+rows*POSITION_ROW)
         {
-            source.enabled=!source.enabled;
-            screen.getCameraWorkspace().saveScene();return true;
-        }
-        for(int axis=0;axis<6;axis++)
-        {
-            int py=130+axis*40;
-            if(py+39>=bottom)break;
-            if(my>=py+15&&my<py+39)
+            int index=positionScroll+(my-POSITION_TOP)/POSITION_ROW;
+            if(index<0||index>=POSITION_ITEMS.length)return true;
+            int yy=POSITION_TOP+
+                    (index-positionScroll)*POSITION_ROW;
+            if(!POSITION_ITEMS[index].startsWith("#"))
             {
-                commit(screen);
-                if(mx<leftRight+38)
+                if("Enabled".equals(POSITION_ITEMS[index]))
                 {
+                    commit(screen);
+                    source.enabled=!source.enabled;
+                    screen.getCameraWorkspace().saveScene();
+                    return true;
+                }
+                int axis=axisForItem(index);
+                if(axis<0)return true;
+                if(mx>=leftRight+FIELD_LEFT&&mx<leftRight+101)
+                {
+                    commit(screen);
                     set(source,axis,get(source,axis)-.0625D);
                     screen.getCameraWorkspace().saveScene();
                 }
-                else if(mx>=leftRight+153)
+                else if(mx>=leftRight+163&&mx<leftRight+FIELD_RIGHT)
                 {
+                    commit(screen);
                     set(source,axis,get(source,axis)+.0625D);
                     screen.getCameraWorkspace().saveScene();
                 }
-                else
+                else if(mx>=leftRight+101&&mx<leftRight+163)
                 {
+                    commit(screen);
                     editing=axis;
                     input=new GuiTextField(796,
                             Minecraft.getMinecraft().fontRenderer,
-                            leftRight+54,py+19,91,17);
+                            leftRight+102,yy+5,59,15);
                     input.setMaxStringLength(30);
                     input.setText(Double.toString(get(source,axis)));
                     input.setFocused(true);
                 }
-                return true;
             }
         }
         return true;
@@ -334,6 +448,14 @@ public final class CameraSceneParticlesPanel
             int count=screen.getSceneState().getCameraParticles().all().size();
             scroll=Math.max(0,Math.min(Math.max(0,count-visible()),
                     scroll+(direction>0?-1:1)));
+            return true;
+        }
+        if(tab==0&&mx>=leftRight&&mx<leftRight+INSPECTOR_WIDTH&&
+                my>=POSITION_TOP&&my<bottom)
+        {
+            commit(screen);
+            positionScroll+=direction>0?-1:1;
+            clampPosition();
             return true;
         }
         return false;

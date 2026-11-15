@@ -486,3 +486,8 @@ bbsanimationeditor.ui.particles.camera.sceneselect.mirrors=CAMERA / MIRRORS
 bbsanimationeditor.ui.particles.camera.sceneselect.particles=CAMERA / PARTICLES
 bbsanimationeditor.ui.particles.camera.enabled=ENABLED: ON
 bbsanimationeditor.ui.particles.camera.disabled=ENABLED: OFF
+
+bbsanimationeditor.ui.particles.section.emission=EMISSION
+bbsanimationeditor.ui.particles.section.vanilla=VANILLA PROPERTIES
+bbsanimationeditor.ui.particles.field.short_rotation=Rel. rotation
+bbsanimationeditor.ui.particles.field.short_args=Args
