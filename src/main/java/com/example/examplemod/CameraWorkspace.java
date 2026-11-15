@@ -25,6 +25,81 @@ public final class CameraWorkspace
             new CameraSceneLightsPanel();
     private final CameraSceneMirrorsPanel mirrorPanel=
             new CameraSceneMirrorsPanel();
+    private final CameraSceneParticlesPanel particlePanel=
+            new CameraSceneParticlesPanel();
+    private boolean cameraSelectorOpen;
+    private int selectedSection()
+    {
+        return particlePanel.opened()?3:
+                mirrorPanel.opened()?2:lightPanel.opened()?1:0;
+    }
+    private void setCameraSection(AnimationEditorScreen screen,int section)
+    {
+        cameraSelectorOpen=false;
+        if(section!=1&&lightPanel.opened())lightPanel.close(screen);
+        if(section!=2&&mirrorPanel.opened())mirrorPanel.close(screen);
+        if(section!=3&&particlePanel.opened())particlePanel.close(screen);
+        if(section==1)lightPanel.open(screen);
+        if(section==2)mirrorPanel.open();
+        if(section==3)particlePanel.open();
+    }
+    /** Click and draw the selector BEFORE other overlapping CAMERA panels. */
+    private boolean clickCameraSelector(AnimationEditorScreen screen,
+            int mx,int my,int button)
+    {
+        if(mx>=0&&mx<CAMERA_LEFT_WIDTH&&my>=25&&my<54)
+        {
+            if(button==0)cameraSelectorOpen=!cameraSelectorOpen;
+            return true;
+        }
+        if(cameraSelectorOpen)
+        {
+            if(button==0&&mx>=5&&mx<CAMERA_LEFT_WIDTH-5&&
+                    my>=54&&my<54+4*22)
+                setCameraSection(screen,(my-54)/22);
+            else cameraSelectorOpen=false;
+            return true;
+        }
+        return false;
+    }
+    private void drawCameraSelector(Minecraft mc)
+    {
+        if(!cameraSelectorOpen)return;
+        final String[] names={"CLIPS","LIGHTS","MIRRORS","PARTICLES"};
+        for(int i=0;i<names.length;i++)
+        {
+            int cy=54+i*22;
+            GuiScreen.drawRect(4,cy,CAMERA_LEFT_WIDTH-4,cy+21,
+                    EditorVisualStyle.themedSurface(
+                            i==selectedSection()?.33F:.19F));
+            if(i==selectedSection())
+                GuiScreen.drawRect(4,cy,7,cy+21,
+                        EditorThemeManager.get().getAccent());
+            mc.fontRenderer.drawString(names[i],14,cy+7,
+                    i==selectedSection()?
+                            EditorThemeManager.get().getAccentBright():
+                            0xFFE1E7EA);
+        }
+    }
+    public boolean beginParticleGizmo(AnimationEditorScreen screen,
+            int mx,int my,int button,int x,int y,int w,int h)
+    {
+        return particlePanel.beginGizmo(screen,mx,my,button,x,y,w,h);
+    }
+    public boolean dragParticleGizmo(AnimationEditorScreen screen,
+            int mx,int my)
+    {
+        return particlePanel.drag(screen,mx,my);
+    }
+    public void releaseParticleGizmo(AnimationEditorScreen screen)
+    {
+        particlePanel.release(screen);
+    }
+    public void drawNativeParticleGizmo(AnimationEditorScreen screen,
+            Minecraft mc,int x,int y,int w,int h)
+    {
+        particlePanel.drawNativeGizmo(screen,mc,x,y,w,h);
+    }
     private int mirrorFilmX,mirrorFilmY,mirrorFilmW,mirrorFilmH;
     public boolean beginMirrorDrag(AnimationEditorScreen screen,
             int mx,int my,int button,int x,int y,int w,int h)
@@ -278,13 +353,17 @@ public final class CameraWorkspace
         Minecraft currentMinecraft=Minecraft.getMinecraft();
         if(currentMinecraft!=null&&currentMinecraft.currentScreen
                 instanceof AnimationEditorScreen&&
-                (mirrorPanel.keyTyped((AnimationEditorScreen)
+                (particlePanel.keyTyped((AnimationEditorScreen)
+                    currentMinecraft.currentScreen,typedChar,keyCode)||
+                mirrorPanel.keyTyped((AnimationEditorScreen)
                     currentMinecraft.currentScreen,typedChar,keyCode)||
                 lightPanel.keyTyped((AnimationEditorScreen)
                     currentMinecraft.currentScreen,typedChar,keyCode)))
             return true;
         if(editField==null)
         {
+            if(keyCode==1&&cameraSelectorOpen)
+            {cameraSelectorOpen=false;return true;}
             if(keyCode==1&&choosingMedia)
             {choosingMedia=false;return true;}
             if(keyCode==1&&inspector.isInterpolationOpen())
@@ -625,7 +704,9 @@ public final class CameraWorkspace
         Minecraft currentMinecraft=Minecraft.getMinecraft();
         if(currentMinecraft!=null&&currentMinecraft.currentScreen
                 instanceof AnimationEditorScreen&&
-                (mirrorPanel.scroll(mouseX,mouseY,direction)||
+                (particlePanel.scroll((AnimationEditorScreen)
+                    currentMinecraft.currentScreen,mouseX,mouseY,direction)||
+                mirrorPanel.scroll(mouseX,mouseY,direction)||
                 lightPanel.scroll((AnimationEditorScreen)
                     currentMinecraft.currentScreen,mouseX,mouseY,direction)))
             return true;
@@ -725,6 +806,8 @@ public final class CameraWorkspace
         activeSceneId=id;
         lightPanel.reset();
         mirrorPanel.reset();
+        particlePanel.reset();
+        cameraSelectorOpen=false;
         activeState=state;
         activeSceneFile=scene==null?null:sceneDocument(scene);
         document=state.getCameraClips();
@@ -978,7 +1061,8 @@ public final class CameraWorkspace
         GuiScreen.drawRect(right,25,width,top,
                 EditorVisualStyle.themedSurface(0.07F));
         Minecraft fontMc=mc;
-        EditorVisualStyle.drawCameraTabs(fontMc,timelineX,0);
+        EditorVisualStyle.drawCameraTabs(fontMc,timelineX,
+                selectedSection());
         GuiScreen.drawRect(4,58,timelineX-4,top-8,
                 EditorVisualStyle.themedSurface(0.045F));
         GuiScreen.drawRect(4,58,timelineX-4,59,
@@ -1009,7 +1093,9 @@ public final class CameraWorkspace
         boolean activeKey=selectedKey!=null&&keyOwner==selected;
         if(!activeKey&&selected!=null&&!selected.keys.isEmpty())
             displayedKey=selected.keys.get(0);
-        if(mirrorPanel.opened())
+        if(particlePanel.opened())
+            particlePanel.drawRight(screen,top);
+        else if(mirrorPanel.opened())
             mirrorPanel.drawRight(screen,top);
         else if(lightPanel.opened())
             lightPanel.drawRight(screen,top);
@@ -1021,6 +1107,7 @@ public final class CameraWorkspace
         }
         lightPanel.drawLeft(screen,top);
         mirrorPanel.drawLeft(screen,top);
+        particlePanel.drawLeft(screen,top);
         // Same exact dark accent-derived palette as CharacterTimeline.
         int accent=EditorThemeManager.get().getAccent();
         GuiScreen.drawRect(0,top,width,bottom,trackTheme(0.07F));
@@ -1194,6 +1281,8 @@ public final class CameraWorkspace
             }
             editField.drawTextBox();
         }
+        // Dropdown above all four CAMERA sections, not under preset rows.
+        drawCameraSelector(mc);
     }
     private void drawPalette(AnimationEditorScreen screen)
     {
@@ -1311,6 +1400,8 @@ public final class CameraWorkspace
 
     public boolean click(AnimationEditorScreen screen,int mouseX,int mouseY,int button,int frame,int length)
     {
+        if(clickCameraSelector(screen,mouseX,mouseY,button))return true;
+        if(particlePanel.click(screen,mouseX,mouseY,button))return true;
         if(mirrorPanel.click(screen,mouseX,mouseY,button))
         {
             if(mirrorPanel.opened())lightPanel.close(screen);
