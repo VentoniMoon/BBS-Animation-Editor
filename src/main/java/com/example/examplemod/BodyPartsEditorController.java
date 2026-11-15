@@ -196,14 +196,18 @@ public class BodyPartsEditorController
                 if(!transfer.bakedPose)
                 {
                     NBTTagCompound skeletonTag=new NBTTagCompound();
-                skeletonTag.setTag("Bones",
-                        EditorSceneSerializer.writeBones(prior.getBones()));
-                List<AnimationBone> copy=new ArrayList<AnimationBone>();
-                EditorSceneSerializer.readBones(copy,skeletonTag);
-                if(!copy.isEmpty())
-                    created.setModel(created.getModelName(),null,copy);
-                created.restoreMorphKeys(prior.getMorphKeysSnapshot());
-                    created.restoreModelKeys(prior.getModelKeysSnapshot());
+                    skeletonTag.setTag("Bones",
+                            EditorSceneSerializer.writeBones(
+                                    prior.getBones()));
+                    List<AnimationBone> copy=
+                            new ArrayList<AnimationBone>();
+                    EditorSceneSerializer.readBones(copy,skeletonTag);
+                    if(!copy.isEmpty())
+                        created.setModel(created.getModelName(),null,copy);
+                    created.restoreMorphKeys(
+                            prior.getMorphKeysSnapshot());
+                    created.restoreModelKeys(
+                            prior.getModelKeysSnapshot());
                     CharacterTimelineController sourceTimeline=
                             CharacterTimelineController.fromNBT(
                                     prior.getCharacterTimeline().toNBT());
