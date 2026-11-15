@@ -1370,6 +1370,8 @@ public final class EditorSceneSerializer
             // Origin tracks may animate all native BetterLights groups.
             if(keyframe.getLightSettings()!=null)
                 tag.setTag("LightSettings",keyframe.getLightSettings());
+            if(keyframe.getParticleSettings()!=null)
+                tag.setTag("ParticleSettings",keyframe.getParticleSettings());
 
             list.appendTag(
                     tag
@@ -1648,6 +1650,9 @@ public final class EditorSceneSerializer
             if(tag.hasKey("LightSettings",10))
                 keyframe.setLightSettings(
                         tag.getCompoundTag("LightSettings"));
+            if(tag.hasKey("ParticleSettings",10))
+                keyframe.setParticleSettings(
+                        tag.getCompoundTag("ParticleSettings"));
 
             target.add(
                     keyframe
