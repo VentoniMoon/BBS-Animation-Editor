@@ -24,19 +24,24 @@ public final class CharacterAnchorPoseCache
     }
     private static final Map<String,Pose> POSES=new HashMap<String,Pose>();
     private static EditorSceneState scene;
+    private static int sceneIndex=Integer.MIN_VALUE;
     private CharacterAnchorPoseCache(){}
 
     public static void bind(EditorSceneState current)
     {
-        if(scene!=current)
+        int index=current==null?Integer.MIN_VALUE:
+                current.getSelectedScene();
+        if(scene!=current||sceneIndex!=index)
         {
             POSES.clear();
             scene=current;
+            sceneIndex=index;
         }
     }
     public static void clear()
     {
         scene=null;
+        sceneIndex=Integer.MIN_VALUE;
         POSES.clear();
     }
     public static void capture(BlockbusterSceneActorData data,
