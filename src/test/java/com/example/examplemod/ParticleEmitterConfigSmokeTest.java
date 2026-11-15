@@ -57,12 +57,14 @@ public final class ParticleEmitterConfigSmokeTest
         CameraSceneParticles scene=new CameraSceneParticles();
         CameraSceneParticles.Source a=scene.add("Flame",4,5,6);
         a.morph=normalized;a.yaw=90D;
+        a.pitch=15D;a.roll=-25D;
         CameraSceneParticles saved=new CameraSceneParticles();
         saved.load(scene.save());
         need(saved.all().size()==1&&saved.selected()!=null,
                 "static source and selection saved");
-        need(saved.selected().x==4D&&saved.selected().yaw==90D,
-                "static source location/rotation preserved");
+        need(saved.selected().x==4D&&saved.selected().yaw==90D&&
+                saved.selected().pitch==15D&&saved.selected().roll==-25D,
+                "static source location and XYZ rotation preserved");
         need("flame".equals(ParticleEmitterConfig.type(
                 saved.selected().morph)),"source particle type preserved");
         need("keep me".equals(
