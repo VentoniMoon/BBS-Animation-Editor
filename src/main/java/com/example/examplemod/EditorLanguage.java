@@ -34,6 +34,8 @@ public final class EditorLanguage
         add("actor.unnamed", "Unnamed Actor");
         add("scene.select", "Select Scene");
         add("scene.missing", "No scenes found");
+        add("scene.search", "Search scenes...");
+        add("scene.no_matches", "No matching scenes");
         add("actor.unnamed_short", "Unnamed");
         add("scene.prefix", "SCENE: ");
         add("actor.prefix", "ACTOR: ");
