@@ -78,3 +78,48 @@ Plain Java 8 CI: `ParticleEmitterConfigSmokeTest` validates native
 values, all available type entries, numeric validation, frequency
 control, extra args and static-source NBT roundtrip.
 Full Forge compilation is tested by project CI.
+
+## Fixed: particles invisible inside the paused single-player editor
+
+Minecraft 1.12.2 pauses its world by default while a `GuiScreen` is
+open. The editor intentionally keeps this pause to avoid advancing
+unrelated world entities, actors and scene physics.
+
+Vanilla `ParticleManager.addEffect()` stores new particles in a **queue**.
+The queue is flushed by `ParticleManager.updateEffects()`, but
+`Minecraft.runTick()` skips that method while the game is paused.
+Before this fix, both CAMERA static sources and POSE particle actors
+spawned particles into the queue without ever making them renderable.
+Closing the editor unpaused the world and flushed the queue, causing the
+reported brief burst of particles AFTER exiting the editor.
+
+`CameraParticleWorldEngine.tick()`, already called exactly once from
+the editor's normal `updateScreen()` client tick, now conditionally
+calls `mc.effectRenderer.updateEffects()` when (and only when) the
+editor's world is paused. This drains the queue and advances particle
+lifetime at **20 TPS**, without invoking another world renderer or
+unpausing Minecraft. On unpaused/multiplayer clients, vanilla already
+calls `updateEffects()`, so the editor deliberately does not duplicate
+it. Source settings, ParticleMorph NBT, keyframes, emitter frequency and
+shader/mirror rendering are unchanged.
+
+### Check in the game
+
+1. Run `runClient -PfixMixinAsm` with the updated branch.
+2. Open the editor in a single-player world and add a static CAMERA
+   particle source, select `flame`, set a visible Count and Duration.
+3. Confirm particles show **while the editor remains open**, animate
+   over time and no longer appear only after leaving the editor.
+4. Select a vanilla ParticleMorph actor with a Record, play its timeline
+   and verify the same behavior. Check PAUSE and re-play.
+5. Optionally inspect `[BBS Editor][Particles] Paused world:` in
+   `run/logs/latest.log`; it should be printed only once per editor
+   session when sources are active.
+6. Recheck a shader-enabled scene or mirror. No additional world render
+   pass or frame-buffer attachment is introduced by this fix.
+
+The client-only particle manager is intentionally ticked while the
+world remains paused. This advances all already-present vanilla client
+particles in the same manager, not only editor-owned ones; it does NOT
+tick world entities, the integrated server, Minecraft physics or
+the editor timeline.
