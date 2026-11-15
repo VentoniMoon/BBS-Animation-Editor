@@ -1744,3 +1744,68 @@ render parity will XPBD be connected.
 Strict off-by-default runtime switch, exact 44-bone
 `SkirtGeoProfile` verification, and guaranteed Weld vertex
 restoration make non-test renders retain their previous behavior.
+
+## Stage 2.2 correction: the first detached "skirt" was only 40 disconnected quads
+
+The real Minecraft client reported `[SkirtStaticVisual] drawn=true`
+in PR #206 but the screenshot showed **thin, disconnected colored
+slabs** to the side of the source actor. The original skirt remained
+visually smooth and opaque. This was an expected failure of the
+*parity test design*, **not** evidence that `RestBinding` was
+inaccurate: the preview drew only 40 selected outward textured
+`ModelQuad` faces (one per fabric cuboid), whereas the original
+Chameleon skirt is built from 40 **full volumetric cubes** with
+independent sides and caps, plus **three waist cubes** on `ALL`.
+
+Actual test capture confirmed `maxRestReconstructionError=0.0`
+for the selected 160 render corners, but the chosen faces alone
+cannot reproduce the original 43-box surface or its occlusion.
+A detached 40-quad skin is *not* a valid visual-parity comparator.
+
+### Corrected source-reference comparison
+
+The original `-PpreviewSkirtStaticSkin` flag now draws a
+**FULL SOURCE-VOLUME detached reference** (mode
+`DETACHED_FULL_VOLUME_PARITY`) instead of the incomplete
+40-quad cloth extraction:
+
+* Extract **every decoded quad of all 43 original Chameleon cubes**
+  (3 waist + 40 fabric), including caps, inside/outside walls,
+  side faces and their distinct per-face UVs. In the common case
+  of six faces per cube, this is **258 textured quads / 1032
+  original texture corners**, not 40 quads.
+* Apply the same rest bone hierarchy and individual cube
+  pivot/XYZ rotation as in the real decoded Chameleon model.
+  Preserve bone RGB/alpha/glow/brightness; normals use inverse
+  transpose to handle negative/nonuniform rest scales.
+* Draw all faces on the actor-bound original texture, detached
+  **+1.20 model blocks on X**, without editing native
+  `ModelVertex.position`, pose, texture, existing physics or Weld.
+* Strictly verify the authored exact skirt skeleton, the 43
+  decoded cubes, and the absence of hidden native bone branches.
+  Unsupported/incomplete models fail closed; the original actor
+  still renders normally.
+* Keep the **40-quad skin capture and 60-node XPBD rest binding**
+  as separate *data diagnostics*. They are not substituted into
+  the renderer just because a mathematically shared node graph
+  exists. No claim that the final cloth is already connected
+  visually.
+
+The replacement log from the first full draw is:
+
+```text
+[BBS Editor][SkirtStaticVisual] drawn=true
+mode=DETACHED_FULL_VOLUME_PARITY cubes=43 quads=258 vertices=1032
+xOffsetBlocks=1.2 includes=WAIST_AND_ALL_NATIVE_CUBE_FACES
+sourceTexture=BOUND_CHAMELEON sourceModel=UNCHANGED
+```
+
+The exact `quads` count depends on which Chameleon face UVs
+were authored; **43 full cubes** are required. Use the existing
+`runClient -PfixMixinAsm -PpreviewSkirtStaticSkin -PcaptureSkirtMesh`.
+Inspect standing/rest screenshots from front/back/side. The
+detached source copy should now visually resemble the original
+volumetric skirt instead of sparse disjoint plates, excluding
+differences in shader normals, world lighting and pose animation.
+This is only a **baseline for future continuous cloth rendering**,
+not XPBD, a new collision solver or a final visual replacement.

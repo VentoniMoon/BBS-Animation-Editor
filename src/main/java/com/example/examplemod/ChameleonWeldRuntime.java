@@ -130,10 +130,11 @@ public final class ChameleonWeldRuntime
             try
             {
                 if(ChameleonWeldPreviewPass.isSkirtStaticABRequested())
+                    // The parity A/B must duplicate ALL original
+                    // decoded cube faces, not the deliberately sparse
+                    // one-quad-per-cube cloth skin candidate.
                     ChameleonSkirtStaticVisualRenderer.draw(
-                            scope.getStaticPreviewBinding(),
-                            scope.getStaticPreviewSource(),
-                            scope.getStaticPreviewProperties());
+                            scope.getStaticPreviewVolume());
             }
             finally
             {

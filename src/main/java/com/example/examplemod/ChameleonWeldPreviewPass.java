@@ -53,6 +53,9 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     private SkirtClothSurfaceMesh.Snapshot staticPreviewSource;
     private SkirtClothRestBinding.Binding staticPreviewBinding;
     private float[][] staticPreviewProperties;
+    /** Exact 43-cube/6-face reference: unlike the deliberately incomplete
+     * 40-quad cloth skin, this preserves the real visible source volume. */
+    private ChameleonSkirtVolumeSnapshot.Snapshot staticPreviewVolume;
     /** Print full ranked seam diagnostics only once, not every render. */
     private static boolean skirtMeshSeamDetailsLogged;
     /**
@@ -95,6 +98,10 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
     public float[][] getStaticPreviewProperties()
     {
         return staticPreviewProperties;
+    }
+    public ChameleonSkirtVolumeSnapshot.Snapshot getStaticPreviewVolume()
+    {
+        return staticPreviewVolume;
     }
 
     /** When weld=false, capture decoded UV/positions but NEVER modify any
@@ -443,15 +450,42 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
             for(int i=0;i<raw.patches.size();i++)
                 props[i]=skinMaterialProperties(
                         names.get(raw.patches.get(i).bone));
+            // The former A/B drew only one face of each of 40 cubes and
+            // naturally looked like an exploded skirt of disconnected
+            // cards. Native parity must include all 43 ORIGINAL cubes:
+            // 40 moving fabric segments AND the 3 waist cubes, complete
+            // with box ends, inner sides, caps and independent face UVs.
+            List<ChameleonSkirtVolumeSnapshot.Part> authored=
+                    new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+            for(Bone bone:bones)
+            {
+                // ChameleonRenderer skips entire hidden bone subtrees.
+                // A "native parity" duplicate must not resurrect an
+                // editor-disabled strip that the original renderer hides.
+                if(!visibleNativeChain(bone))
+                    throw new IllegalArgumentException(
+                            "Hidden native bone; cannot show full-volume A/B");
+                @SuppressWarnings("unchecked")
+                List<Object> cubes=(List<Object>)field(bone.value,"cubes");
+                if(cubes==null)continue;
+                float[] material=skinMaterialProperties(bone);
+                for(Object cube:cubes)
+                    authored.add(new ChameleonSkirtVolumeSnapshot.Part(
+                            meshDecodedCube(bone,cube),material));
+            }
+            ChameleonSkirtVolumeSnapshot.Snapshot volume=
+                    ChameleonSkirtVolumeSnapshot.capture(authored);
             staticPreviewSource=raw;
             staticPreviewBinding=binding;
             staticPreviewProperties=props;
+            staticPreviewVolume=volume;
         }
         catch(Exception error)
         {
             staticPreviewSource=null;
             staticPreviewBinding=null;
             staticPreviewProperties=null;
+            staticPreviewVolume=null;
             if(!reportedStaticPreviewFailure)
             {
                 reportedStaticPreviewFailure=true;
@@ -462,6 +496,15 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                         " (original Chameleon render unchanged)");
             }
         }
+    }
+
+    /** Native Chameleon recursive render omits a hidden parent and all
+     * children. Fail closed instead of drawing hidden model geometry. */
+    private static boolean visibleNativeChain(Bone bone)throws Exception
+    {
+        for(Bone b=bone;b!=null;b=b.parent)
+            if(!Boolean.TRUE.equals(field(b.value,"visible")))return false;
+        return true;
     }
 
     /**
@@ -495,7 +538,16 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
         if(cubes==null||cubes.size()!=1)
             throw new IllegalArgumentException(
                     "Need one decoded cube on "+idOf(bone.value));
-        Object cube=cubes.get(0);
+        return meshDecodedCube(bone,cubes.get(0));
+    }
+
+    /** Capture ANY authored native cube, including the three belt cubes
+     * on ALL. The original meshCube() is intentionally limited to one
+     * cuboid per moving cloth bone for Stage 1/2 cloth skin extraction. */
+    @SuppressWarnings("unchecked")
+    private static SkirtClothSurfaceMesh.Cube meshDecodedCube(
+            Bone bone,Object cube)throws Exception
+    {
         Vector3f pivot=vec(cube,"pivot");
         Vector3f r=vec(cube,"rotation");
         float[] local=translate(pivot.x/16F,pivot.y/16F,
