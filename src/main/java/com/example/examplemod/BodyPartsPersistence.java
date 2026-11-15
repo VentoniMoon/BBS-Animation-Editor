@@ -36,6 +36,11 @@ public final class BodyPartsPersistence
                 tag.setInteger("Start", model.getStartFrame());
                 tag.setInteger("End", model.getEndFrame());
                 tag.setBoolean("Weld", model.isWeldEnabled());
+                // Cloth XPBD is a per-attachment engine, not a Jolt
+                // hair-chain root. Older editor.dat files omit this tag.
+                if(model.hasExplicitClothPhysicsSetting())
+                    tag.setBoolean("ClothPhysicsEnabled",
+                            model.isClothPhysicsEnabled());
 
                 AbstractMorph morph = model.getBaseMorph();
                 if (morph != null)
@@ -136,6 +141,11 @@ public final class BodyPartsPersistence
             }
             readTransform(model.getGlobalTransform(), tag.getCompoundTag("Global"));
             model.readPhysicsSettings(tag.getTagList("Physics", 10));
+            if(tag.hasKey("ClothPhysicsEnabled"))
+                model.setClothPhysicsEnabled(
+                        tag.getBoolean("ClothPhysicsEnabled"));
+            // Absence means old project: use the legacy 20-strip preset
+            // as the activation default, retaining the accepted skirt.
             model.readColliderSettings(tag.getTagList("Colliders", 10));
             model.setWeldEnabled(tag.hasKey("Weld")
                     ? tag.getBoolean("Weld")
