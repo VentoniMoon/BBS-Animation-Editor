@@ -252,8 +252,14 @@ public final class SkirtXPBDSolver
             // coordinates or leave an already collapsed silhouette behind.
             if(dt<1E-6F)
             {
+                // Playback can render two fractional poses between fixed
+                // 60Hz steps. The latest FITTED leg positions must still
+                // push any cloth node outside them on that display frame.
+                // This pass does not integrate gravity, change constraints,
+                // or inject Verlet velocity on a repeated FBO render.
+                int contacts=resolveDisplayContacts(pose,bodies,waistCenter);
                 protectRadialSilhouette(pose,waistCenter);
-                return result(0,0,0);
+                return result(contacts,0,0);
             }
             int legs=0,self=0;
             float h=Math.min(dt,.045F)/SUBSTEPS;
@@ -337,6 +343,36 @@ public final class SkirtXPBDSolver
             protectRadialSilhouette(pose,waistCenter);
             stepCount++;
             return result(legs,self,SUBSTEPS);
+        }
+
+        private int resolveDisplayContacts(SkirtXPBDPoseSkin.Frame pose,
+                SkirtXPBDContacts.Frame bodies,float[] center)
+        {
+            if(bodies==null)return 0;
+            int contacts=0;
+            // Multiple overlapping fitted OBBs (three skirt zones per leg)
+            // need a second pass to settle adjacent contacts. Keep this
+            // cheaper than a complete XPBD integration step.
+            for(int pass=0;pass<2;pass++)
+                for(int n=0;n<N;n++)
+                {
+                    if(pinned[n])continue;
+                    float[] outward={
+                            pose.target[n][0]-center[0],0F,
+                            pose.target[n][2]-center[2]};
+                    float[] corrected=SkirtXPBDContacts.corrected(
+                            position[n],bodies,CONTACT_RADIUS,outward);
+                    if(distance(corrected,position[n])<=1E-7F)
+                        continue;
+                    for(int k=0;k<3;k++)
+                    {
+                        float delta=corrected[k]-position[n][k];
+                        position[n][k]=corrected[k];
+                        previous[n][k]+=delta;
+                    }
+                    contacts++;
+                }
+            return contacts;
         }
 
         private float[] waistCenter(SkirtXPBDPoseSkin.Frame pose)
