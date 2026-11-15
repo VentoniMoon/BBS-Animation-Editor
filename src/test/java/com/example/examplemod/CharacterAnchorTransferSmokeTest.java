@@ -41,6 +41,51 @@ public final class CharacterAnchorTransferSmokeTest
           "inverse affine with yaw/pitch/roll");
   approx(AnchorTransferMath.matrixFromNBT(
      AnchorTransferMath.matrixToNBT(world)),world,"matrix NBT copy");
+
+  // Reproduction of the visual "bag shrinks/jumps at pickup" bug:
+  // Emoticons' renderer multiplies userConfig.scale BEFORE bone.mat.
+  // Native BOBJ bone.mat alone does not contain this root scale. The
+  // old anchor cache assumed scale=1, so a 0.9375 (15/16) character
+  // rendered the carried bag visibly smaller and closer to its origin.
+  float[] actorRoot=AnchorTransferMath.composeBodyPart(
+      t(160,32,-208,0,37,0,1F,1F,1F));
+  float[] rightHand=AnchorTransferMath.composeBodyPart(
+      t(7,22,-5,0,-12,24,1F,1F,1F));
+  float[] actualHand=AnchorTransferMath.worldFromAnimatedBone(
+      actorRoot,.9375F,rightHand);
+  float[] ignoringMorphScale=
+      BodyPartPhysicsMatrixSpace.multiply(actorRoot,rightHand);
+  float[] sourceItem=AnchorTransferMath.composeBodyPart(
+      t(172,44,-193,0,28,0,.8F,.8F,.8F));
+  float[] wrongOffset=AnchorTransferMath.rebase(
+      sourceItem,ignoringMorphScale);
+  float[] wrongReconstructed=BodyPartPhysicsMatrixSpace.multiply(
+      actualHand,wrongOffset);
+  float translationError=Math.abs(
+      wrongReconstructed[12]-sourceItem[12])+
+      Math.abs(wrongReconstructed[13]-sourceItem[13])+
+      Math.abs(wrongReconstructed[14]-sourceItem[14]);
+  check(translationError>.02F,
+      "old scale=1 approximation must reproduce the bag jump");
+  check(Math.abs(wrongReconstructed[0]-sourceItem[0])>.01F,
+      "old scale=1 approximation must reproduce bag scaling");
+  float[] fixedOffset=AnchorTransferMath.rebase(
+      sourceItem,actualHand);
+  approx(BodyPartPhysicsMatrixSpace.multiply(
+      actualHand,fixedOffset),sourceItem,
+      "item world matrix unchanged after pickup at morph scale .9375");
+  approx(BodyPartPhysicsMatrixSpace.multiply(
+      actualHand,AnchorTransferMath.composeBodyPart(
+          AnchorTransferMath.toBodyPartTransform(fixedOffset))),
+      sourceItem,"real BodyPart T*Rz*Ry*Rx*S at pickup");
+  try
+  {
+      AnchorTransferMath.worldFromAnimatedBone(
+          actorRoot,0F,rightHand);
+      throw new AssertionError("zero root scale must be rejected");
+  }
+  catch(IllegalArgumentException expected){}
+
   try
   {
    float[] singular=bone.clone();
