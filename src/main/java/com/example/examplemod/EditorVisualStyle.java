@@ -30,26 +30,26 @@ public final class EditorVisualStyle
         return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
-    /** Compact CAMERA section selector. The list is drawn/owned by
-     * CameraWorkspace above all panels so it works with narrow Cyrillic UI.
-     * This retains the original left toolbar's y=25..54 footprint.
+    /**
+     * CAMERA section picker: same dark framed input, purple selection
+     * underline and balanced padding as the SCENE search dropdown.
+     * Keep its collapsed state inside the 130px CAMERA sidebar.
      */
     public static void drawCameraTabs(net.minecraft.client.Minecraft mc,
             int leftWidth,int selected)
     {
         final String[] labels={"CLIPS","LIGHTS","MIRRORS","PARTICLES"};
         int index=Math.max(0,Math.min(labels.length-1,selected));
-        Gui.drawRect(0,25,leftWidth,54,themedSurface(.08F));
-        Gui.drawRect(0,53,leftWidth,54,themedSurface(.28F));
-        Gui.drawRect(5,28,leftWidth-5,51,themedSurface(.23F));
-        Gui.drawRect(5,50,leftWidth-5,53,getAccent());
-        // The 131px toolbar must show the WHOLE selected section name,
-        // even with the wider Russian pixel font.
-        String label=labels[index];
-        String display=mc.fontRenderer.trimStringToWidth(label,
-                Math.max(1,leftWidth-28));
-        mc.fontRenderer.drawString(display,11,36,getAccentBright());
-        mc.fontRenderer.drawString("v",leftWidth-15,36,TEXT_SECONDARY);
+        int accent=getAccent();
+        Gui.drawRect(0,25,leftWidth,54,themedSurface(.07F));
+        Gui.drawRect(4,27,leftWidth-4,52,0xFF17171A);
+        Gui.drawRect(5,28,leftWidth-5,50,themedSurface(.21F));
+        Gui.drawRect(4,50,leftWidth-4,53,accent);
+        String display=mc.fontRenderer.trimStringToWidth(
+                labels[index],Math.max(1,leftWidth-42));
+        mc.fontRenderer.drawString(display,11,36,0xFFE9E5EE);
+        mc.fontRenderer.drawString("v",leftWidth-19,36,
+                TEXT_SECONDARY);
     }
 
     /*
