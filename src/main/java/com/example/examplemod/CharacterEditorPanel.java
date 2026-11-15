@@ -403,6 +403,7 @@ public class CharacterEditorPanel
         if (key == null)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
             this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
@@ -413,6 +414,7 @@ public class CharacterEditorPanel
         if (this.selectedActor == null)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
             this.setSelectedBodyPartModel(null);
 
             resetBodyPartScroll();
@@ -426,6 +428,7 @@ public class CharacterEditorPanel
         if (timeline == null)
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
 
             resetBodyPartScroll();
 
@@ -497,11 +500,13 @@ public class CharacterEditorPanel
             }
 
             this.selectedKey=key;
+            anchorsPanel.setSelectedKey(key);
             this.selectedBodyPartModel=null;
         }
         else
         {
             this.selectedKey = null;
+            anchorsPanel.setSelectedKey(null);
 
             resetBodyPartScroll();
         }
