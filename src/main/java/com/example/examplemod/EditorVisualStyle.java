@@ -43,7 +43,9 @@ public final class EditorVisualStyle
         Gui.drawRect(0,53,leftWidth,54,themedSurface(.28F));
         Gui.drawRect(5,28,leftWidth-5,51,themedSurface(.23F));
         Gui.drawRect(5,50,leftWidth-5,53,getAccent());
-        String label="CAMERA / "+labels[index];
+        // The 131px toolbar must show the WHOLE selected section name,
+        // even with the wider Russian pixel font.
+        String label=labels[index];
         String display=mc.fontRenderer.trimStringToWidth(label,
                 Math.max(1,leftWidth-28));
         mc.fontRenderer.drawString(display,11,36,getAccentBright());
