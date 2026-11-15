@@ -36,6 +36,7 @@ public final class SkirtXPBDPipelineSmokeTest
         outwardThighContactsPreserveHemSide();
         fractionalClockAdvancesOncePerSixtiethSecond();
         renderOnlyFramesStillCorrectFastThighContact();
+        perAttachmentClothActivationDoesNotAffectAnotherRig();
         clonedMorphFramesShareOneLiveXPBDState();
         System.out.println("SkirtXPBDPipelineSmokeTest OK");
     }
@@ -484,6 +485,44 @@ public final class SkirtXPBDPipelineSmokeTest
         SkirtXPBDSolver.Result repeated=cloth.advance(0F,f.rest,bodies);
         need(repeated.substeps==0,
                 "second render should remain render-only");
+    }
+
+    /** CLOTH is a model-level XPBD toggle. Disabling one garment
+     * must not disable another model (including independent hair owners)
+     * or leave a stale cloth simulation active in its former owner. */
+    private static void perAttachmentClothActivationDoesNotAffectAnotherRig()
+    {
+        Fixture f=new Fixture();
+        float[][] tint=new float[40][];
+        for(int i=0;i<tint.length;i++)
+            tint[i]=new float[]{1F,1F,1F,1F,0F,0F};
+        Object clothTrack=new Object();
+        Object hairTrack=new Object();
+        Object clothMorph=new Object();
+        Object otherMorph=new Object();
+        SkirtXPBDContacts.registerOwner(clothMorph,clothTrack);
+        SkirtXPBDContacts.registerOwner(otherMorph,hairTrack);
+        SkirtXPBDContacts.setClothEnabled(clothTrack,false);
+        need(!SkirtXPBDContacts.isClothEnabled(clothMorph),
+                "cloth toggle must apply to the stable cloth owner");
+        need(SkirtXPBDContacts.isClothEnabled(otherMorph),
+                "other model must keep its original independent setting");
+        SkirtXPBDRuntime.RenderFrame disabled=SkirtXPBDRuntime.sample(
+                clothMorph,f.raw,f.shared,f.binding,f.topology,
+                f.rest,tint,null);
+        need(disabled==null,"disabled cloth must not run XPBD");
+        SkirtXPBDContacts.setClothEnabled(clothTrack,true);
+        need(SkirtXPBDContacts.isClothEnabled(clothMorph),
+                "re-enabled cloth model must be independently active");
+        SkirtXPBDRuntime.RenderFrame active=SkirtXPBDRuntime.sample(
+                clothMorph,f.raw,f.shared,f.binding,f.topology,
+                f.rest,tint,null);
+        need(active!=null,"re-enabled cloth must create a new solver");
+        SkirtXPBDContacts.setClothEnabled(clothTrack,false);
+        SkirtXPBDRuntime.RenderFrame again=SkirtXPBDRuntime.sample(
+                clothMorph,f.raw,f.shared,f.binding,f.topology,
+                f.rest,tint,null);
+        need(again==null,"disable after running must stop XPBD");
     }
 
     private static void clonedMorphFramesShareOneLiveXPBDState()
