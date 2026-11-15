@@ -21,18 +21,24 @@ import mchorse.metamorph.api.morphs.AbstractMorph;
 public final class CharacterAnchorPreview
 {
     private static EditorSceneState scene;
+    private static int sceneIndex=Integer.MIN_VALUE;
     private static final Map<String,BodyPartModelData> CACHE=
             new HashMap<String,BodyPartModelData>();
     private CharacterAnchorPreview(){}
     public static void bind(EditorSceneState value)
     {
-        if(scene!=value)
+        int index=value==null?Integer.MIN_VALUE:value.getSelectedScene();
+        if(scene!=value||sceneIndex!=index)
         {
             scene=value;
+            sceneIndex=index;
             CACHE.clear();
         }
     }
-    public static void clear(){scene=null;CACHE.clear();}
+    public static void clear()
+    {
+        scene=null;sceneIndex=Integer.MIN_VALUE;CACHE.clear();
+    }
     public static boolean hidesActor(String actorId,double sceneTick)
     {
         return scene!=null&&CharacterAnchorTransfers.hidesActor(
