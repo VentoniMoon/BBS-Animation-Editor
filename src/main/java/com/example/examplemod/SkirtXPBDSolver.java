@@ -28,6 +28,10 @@ public final class SkirtXPBDSolver
     private static final float CONTACT_RADIUS=.018F;
     private static final float SELF_RADIUS=.030F;
     private static final float MAX_OFFSET=.37F;
+    private static final float POSE_JUMP_RESET=.40F;
+    private static final float MIN_RADIAL_FRACTION=.85F;
+    private static final boolean RADIAL_GUARD=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"));
     private static final float PIN_EPS=1E-8F;
 
     /** Rest-length constraint; rest authored geometry is never modified. */
@@ -58,6 +62,7 @@ public final class SkirtXPBDSolver
     {
         private final float[][] position=new float[N][3];
         private final float[][] previous=new float[N][3];
+        private final float[][] previousPoseTarget=new float[N][3];
         private final boolean[] pinned=new boolean[N];
         private final int[] column=new int[N];
         private final List<Constraint> links=new ArrayList<Constraint>();
@@ -108,6 +113,7 @@ public final class SkirtXPBDSolver
                 valid(target[i]);
                 System.arraycopy(target[i],0,position[i],0,3);
                 System.arraycopy(target[i],0,previous[i],0,3);
+                System.arraycopy(target[i],0,previousPoseTarget[i],0,3);
             }
 
             // Shared structural mesh: no independent local cube chains.
@@ -205,29 +211,50 @@ public final class SkirtXPBDSolver
             if(pose==null||pose.target.length!=N||
                     !Float.isFinite(dt)||dt<0F||dt>.1F)
                 throw new IllegalArgumentException("Invalid cloth time/pose");
-            float maxWaist=0F;
+            float maxWaist=0F,maxPoseShift=0F;
             for(int n=0;n<N;n++)
             {
                 valid(pose.target[n]);
+                maxPoseShift=Math.max(maxPoseShift,
+                        distance(previousPoseTarget[n],pose.target[n]));
                 if(pinned[n])
                     maxWaist=Math.max(maxWaist,
                             distance(position[n],pose.target[n]));
             }
-            if(maxWaist>.60F)
+            boolean reset=maxWaist>.60F||maxPoseShift>POSE_JUMP_RESET;
+            for(int n=0;n<N;n++)
             {
-                // Seek, new pose, teleport or invalid actor identity:
-                // carry zero prior inertia into the new timeline position.
-                for(int n=0;n<N;n++)
+                if(reset)
                 {
+                    // A seek/teleport must not inherit stale cloth velocity.
                     System.arraycopy(pose.target[n],0,position[n],0,3);
                     System.arraycopy(pose.target[n],0,previous[n],0,3);
                 }
-            }
-            for(int n=0;n<N;n++)
+                else if(!pinned[n])
+                {
+                    // Advect the simulated state by exactly the CURRENT
+                    // native pose delta, including paused/same-tick redraws.
+                    // Translate Verlet current AND previous together so a
+                    // new animation pose does not become spurious velocity.
+                    for(int k=0;k<3;k++)
+                    {
+                        float delta=pose.target[n][k]-previousPoseTarget[n][k];
+                        position[n][k]+=delta;
+                        previous[n][k]+=delta;
+                    }
+                }
                 if(pinned[n])
                     System.arraycopy(pose.target[n],0,position[n],0,3);
-
-            if(dt<1E-6F)return result(0,0,0);
+                System.arraycopy(pose.target[n],0,previousPoseTarget[n],0,3);
+            }
+            float[] waistCenter=waistCenter(pose);
+            // Pausing must freeze integration, not freeze outdated pose
+            // coordinates or leave an already collapsed silhouette behind.
+            if(dt<1E-6F)
+            {
+                protectRadialSilhouette(pose,waistCenter);
+                return result(0,0,0);
+            }
             int legs=0,self=0;
             float h=Math.min(dt,.045F)/SUBSTEPS;
             for(int sub=0;sub<SUBSTEPS;sub++)
@@ -264,8 +291,11 @@ public final class SkirtXPBDSolver
                         if(pinned[n])continue;
                         if(bodies!=null)
                         {
+                            float[] outward={
+                                    pose.target[n][0]-waistCenter[0],
+                                    0F,pose.target[n][2]-waistCenter[2]};
                             float[] corrected=SkirtXPBDContacts.corrected(
-                                    position[n],bodies,CONTACT_RADIUS);
+                                    position[n],bodies,CONTACT_RADIUS,outward);
                             if(distance(corrected,position[n])>1E-7F)
                             {
                                 System.arraycopy(corrected,0,position[n],0,3);
@@ -304,8 +334,60 @@ public final class SkirtXPBDSolver
                     }
                 }
             }
+            protectRadialSilhouette(pose,waistCenter);
             stepCount++;
             return result(legs,self,SUBSTEPS);
+        }
+
+        private float[] waistCenter(SkirtXPBDPoseSkin.Frame pose)
+        {
+            float[] center=new float[3];
+            int count=0;
+            for(int n=0;n<N;n++)
+                if(pinned[n])
+                {
+                    for(int k=0;k<3;k++)center[k]+=pose.target[n][k];
+                    count++;
+                }
+            if(count>0)
+                for(int k=0;k<3;k++)center[k]/=count;
+            return center;
+        }
+
+        /** Keep the hem and middle ring from inverting into the legs.
+         * A conservative 85% of EACH node's current native pose radius
+         * is a lower bound only, never a force that expands beyond the
+         * authored silhouette. No waist anchor or model bone is changed.
+         * Disabled with -Dbbs.editor.physics.skirt.xpbdRadialGuard=false. */
+        private void protectRadialSilhouette(SkirtXPBDPoseSkin.Frame pose,
+                float[] center)
+        {
+            if(!RADIAL_GUARD)return;
+            for(int n=0;n<N;n++)
+            {
+                if(pinned[n])continue;
+                float tx=pose.target[n][0]-center[0];
+                float tz=pose.target[n][2]-center[2];
+                float sourceRadius=(float)Math.sqrt(tx*tx+tz*tz);
+                if(sourceRadius<1E-5F)continue;
+                float dx=position[n][0]-center[0];
+                float dz=position[n][2]-center[2];
+                float radius=(float)Math.sqrt(dx*dx+dz*dz);
+                float deficit=sourceRadius*MIN_RADIAL_FRACTION-radius;
+                if(deficit<=0F)continue;
+                // Limit per-frame correction and preserve the existing
+                // maximum pose offset even with deep thigh contact.
+                float allowance=Math.max(0F,
+                        MAX_OFFSET-distance(position[n],pose.target[n]));
+                float shift=Math.min(.08F,Math.min(deficit,allowance));
+                if(shift<=0F)continue;
+                position[n][0]+=tx/sourceRadius*shift;
+                position[n][2]+=tz/sourceRadius*shift;
+                // Do not reintroduce an inward horizontal impulse on
+                // the next Verlet step; vertical movement remains free.
+                previous[n][0]=position[n][0];
+                previous[n][2]=position[n][2];
+            }
         }
 
         public Result current()
