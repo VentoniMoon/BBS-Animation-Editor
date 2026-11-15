@@ -2772,131 +2772,94 @@ public class AnimationEditorScreen extends GuiScreen
         }
     }
 
-    private void drawSceneDropdown(
-            int mouseX,
-            int mouseY)
+    /** Search row plus the original eight-row scrollable scene picker. */
+    private void drawSceneDropdown(int mouseX,int mouseY)
     {
-        int x = 175;
-        int y = TOP_BAR_HEIGHT + 2;
-        int dropdownWidth = 180;
-        int rowHeight = 19;
-        int maxVisible = 8;
+        int x=175;
+        int y=TOP_BAR_HEIGHT+2;
+        int dropdownWidth=180;
+        int rowHeight=19;
+        int searchHeight=AnimationEditorInput.SCENE_SEARCH_HEIGHT;
+        int maxVisible=8;
 
-        List<File> sceneFiles =
-                this.sceneState.getSceneFiles();
+        List<File> sceneFiles=this.sceneState.getSceneFiles();
+        List<Integer> matches=this.editorInput.getFilteredSceneIndices();
+        int selectedScene=this.sceneState.getSelectedScene();
+        int count=Math.min(maxVisible,matches.size());
+        int dropdownHeight=searchHeight+Math.max(rowHeight,
+                count*rowHeight);
+        int listY=y+searchHeight;
 
-        int selectedScene =
-                this.sceneState.getSelectedScene();
+        drawDropdownFrame(x,y,dropdownWidth,dropdownHeight);
 
-        int count =
-                Math.min(
-                        maxVisible,
-                        sceneFiles.size()
-                );
-
-        int dropdownHeight =
-                Math.max(
-                        rowHeight,
-                        count * rowHeight
-                );
-
-        drawDropdownFrame(
-                x,
-                y,
-                dropdownWidth,
-                dropdownHeight
-        );
-
-        if (sceneFiles.isEmpty())
+        // Dedicated input above the result rows. The menu auto-focuses
+        // typing when opened; the X can clear a nonempty filter.
+        drawRect(x+5,y+4,x+175,y+22,
+                EditorVisualStyle.themedSurface(0.260F));
+        String query=this.editorInput.getSceneSearchText();
+        if(query.isEmpty())
+            drawString(fontRenderer,"Search scenes...",
+                    x+10,y+9,COLOR_TEXT_MUTED);
+        else
         {
-            drawString(
-                    fontRenderer,
-                    "No scenes found",
-                    x + 9,
-                    y + 6,
-                    COLOR_TEXT_MUTED
-            );
+            String visible=query;
+            while(visible.length()>1&&
+                    fontRenderer.getStringWidth(visible)>137)
+                visible=visible.substring(1);
+            boolean cursor=(System.currentTimeMillis()/500L)%2==0;
+            drawString(fontRenderer,visible+(cursor?"_":""),
+                    x+10,y+9,COLOR_TEXT);
+        }
+        drawString(fontRenderer,"X",x+160,y+9,
+                query.isEmpty()?COLOR_TEXT_MUTED:getAccentBrightColor());
+        drawRect(x+5,listY-1,x+175,listY,
+                COLOR_BORDER);
 
+        if(matches.isEmpty())
+        {
+            drawString(fontRenderer,
+                    sceneFiles.isEmpty()?"No scenes found":
+                            "No matching scenes",
+                    x+9,listY+6,COLOR_TEXT_MUTED);
             return;
         }
 
         int first=this.editorInput.getSceneDropdownOffset();
-        for (int i = 0; i < count; i++)
+        for(int i=0;i<count;i++)
         {
-            int sceneIndex=first+i;
-            File file = sceneFiles.get(sceneIndex);
+            int sceneIndex=matches.get(first+i).intValue();
+            File file=sceneFiles.get(sceneIndex);
+            int rowY=listY+i*rowHeight;
+            boolean selected=sceneIndex==selectedScene;
+            boolean hovered=mouseX>=x&&mouseX<x+dropdownWidth&&
+                    mouseY>=rowY&&mouseY<rowY+rowHeight;
 
-            int rowY =
-                    y + i * rowHeight;
-
-            boolean selected =
-                    sceneIndex == selectedScene;
-
-            boolean hovered =
-                    mouseX >= x
-                            && mouseX < x + dropdownWidth
-                            && mouseY >= rowY
-                            && mouseY < rowY + rowHeight;
-
-            if (selected)
+            if(selected)
             {
-                drawRect(
-                        x,
-                        rowY,
-                        x + 2,
-                        rowY + rowHeight,
-                        getAccentColor()
-                );
-
-                drawRect(
-                        x + 2,
-                        rowY,
-                        x + dropdownWidth,
-                        rowY + rowHeight,
-                        hovered
-                                ? COLOR_PANEL_HOVER
-                                : COLOR_SELECTED
-                );
+                drawRect(x,rowY,x+2,rowY+rowHeight,getAccentColor());
+                drawRect(x+2,rowY,x+dropdownWidth,rowY+rowHeight,
+                        hovered?COLOR_PANEL_HOVER:COLOR_SELECTED);
             }
-            else if (hovered)
-            {
-                drawRect(
-                        x,
-                        rowY,
-                        x + dropdownWidth,
-                        rowY + rowHeight,
-                        COLOR_PANEL_HOVER
-                );
-            }
+            else if(hovered)
+                drawRect(x,rowY,x+dropdownWidth,rowY+rowHeight,
+                        COLOR_PANEL_HOVER);
 
-            String name = file.getName();
-
-            if (name.length() > 24)
-            {
-                name =
-                        name.substring(0, 21)
-                                + "...";
-            }
-
-            drawString(
-                    fontRenderer,
-                    name,
-                    x + 9,
-                    rowY + 6,
-                    selected
-                            ? getAccentBrightColor()
-                            : COLOR_TEXT
-            );
+            String name=file.getName();
+            // Trim the DISPLAY only; the filter sees the full name.
+            if(name.length()>24)
+                name=name.substring(0,21)+"...";
+            drawString(fontRenderer,name,x+9,rowY+6,
+                    selected?getAccentBrightColor():COLOR_TEXT);
         }
-        if(sceneFiles.size()>count&&count>0)
+
+        if(matches.size()>count)
         {
-            // Visible scroll thumb; the selected scene is tracked by its
-            // original index instead of the row currently on screen.
             int barX=x+dropdownWidth-4;
-            drawRect(barX,y,barX+3,y+dropdownHeight,0xFF17242B);
-            int knob=Math.max(10,dropdownHeight*count/sceneFiles.size());
-            int maxOffset=Math.max(1,sceneFiles.size()-count);
-            int knobY=y+(dropdownHeight-knob)*first/maxOffset;
+            int listHeight=count*rowHeight;
+            drawRect(barX,listY,barX+3,listY+listHeight,0xFF17242B);
+            int knob=Math.max(10,listHeight*count/matches.size());
+            int maxOffset=Math.max(1,matches.size()-count);
+            int knobY=listY+(listHeight-knob)*first/maxOffset;
             drawRect(barX,knobY,barX+3,knobY+knob,
                     getAccentBrightColor());
         }
