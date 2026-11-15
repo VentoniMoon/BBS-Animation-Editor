@@ -30,6 +30,7 @@ public class NBTTagCompound extends NBTBase
     public int[] getIntArray(String k)
     {Object x=value(k);return x instanceof int[]?((int[])x).clone():new int[0];}
     public boolean hasKey(String k){return data.containsKey(k);}
+    public boolean hasNoTags(){return data.isEmpty();}
     public boolean hasKey(String k,int tag)
     {return hasKey(k)&&(!(tag==10)||data.get(k) instanceof NBTTagCompound);}
     public NBTTagCompound getCompoundTag(String k)
