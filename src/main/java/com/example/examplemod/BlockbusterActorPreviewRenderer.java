@@ -470,6 +470,11 @@ public class BlockbusterActorPreviewRenderer
     private void applyAnimationPose(
             EntityActor entityActor)
     {
+        // Placed item Morph is already fully evaluated at the CHARACTER
+        // RELEASE boundary. Normal POSE playback clears customPose when
+        // there are no actor snapshots, which reverted the bag's edited
+        // internal bone rotation back to the model's default.
+        if(fixedAnchorWorldMatrix!=null)return;
         if (entityActor == null)
         {
             return;
@@ -1506,7 +1511,8 @@ public class BlockbusterActorPreviewRenderer
          * Therefore Character bone fixed flags must be applied AFTER it,
          * immediately before rendering, not only in the UI state update.
          */
-        if (entityActor.getMorph() instanceof CustomMorph)
+        if(fixedAnchorWorldMatrix==null&&
+                entityActor.getMorph() instanceof CustomMorph)
         {
             CharacterBodyPartOverrideController.apply(
                     entityActor.getMorph(),
@@ -1520,9 +1526,8 @@ public class BlockbusterActorPreviewRenderer
          * use CustomMorph.customPose. Apply the same editor snapshots
          * directly to that hierarchy after the normal pose pass.
          */
-        applyChameleonAnimationPose(
-                entityActor.getMorph()
-        );
+        if(fixedAnchorWorldMatrix==null)
+            applyChameleonAnimationPose(entityActor.getMorph());
 
         /*
          * =====================================================
@@ -1530,13 +1535,11 @@ public class BlockbusterActorPreviewRenderer
          * =====================================================
          */
 
-        updateEmoticonsAnimation(
-                entityActor,
-                actorData,
-                previewFrame
-        );
+        if(fixedAnchorWorldMatrix==null)
+            updateEmoticonsAnimation(entityActor,actorData,previewFrame);
 
-        if(preSampled && entityActor.getMorph() instanceof AnimatedMorph)
+        if(fixedAnchorWorldMatrix==null&&preSampled &&
+                entityActor.getMorph() instanceof AnimatedMorph)
         {
             // Deterministic Emoticons history playback restores the *integer*
             // record state to advance the Animator exactly once per tick.
