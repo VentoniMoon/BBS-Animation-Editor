@@ -141,10 +141,11 @@ public final class CameraSceneParticlesPanel
         }
         mc.fontRenderer.drawString("WORLD POSITION",leftRight+10,111,
                 0xFFB6C2CC);
-        String[] labelsXY={"X","Y","Z","Yaw"};
-        for(int i=0;i<4;i++)
+        String[] labelsXY={"X","Y","Z","Yaw","Pitch","Roll"};
+        for(int i=0;i<labelsXY.length;i++)
         {
-            int py=134+i*46;
+            int py=130+i*40;
+            if(py+39>=bottom)break;
             mc.fontRenderer.drawString(labelsXY[i],leftRight+12,py,
                     0xFFC9D5DD);
             Gui.drawRect(leftRight+8,py+15,leftRight+178,py+39,
@@ -159,14 +160,18 @@ public final class CameraSceneParticlesPanel
                     leftRight+68,py+23,0xFFE1EAEE);
             if(input!=null&&editing==i)input.drawTextBox();
         }
-        mc.fontRenderer.drawString("Gizmo: move XYZ in Preview",
-                leftRight+10,339,0xFF9CAFB8);
-        Gui.drawRect(leftRight+10,365,leftRight+175,390,
-                EditorVisualStyle.themedSurface(.18F));
-        mc.fontRenderer.drawString(
-                "ENABLED: "+(source.enabled?"ON":"OFF"),
-                leftRight+18,374,source.enabled?0xFF98E9B6:
-                        0xFFDDB2B0);
+        if(bottom>404)
+            mc.fontRenderer.drawString("Gizmo: move XYZ in Preview",
+                    leftRight+10,381,0xFF9CAFB8);
+        if(bottom>433)
+        {
+            Gui.drawRect(leftRight+10,405,leftRight+175,430,
+                    EditorVisualStyle.themedSurface(.18F));
+            mc.fontRenderer.drawString(
+                    "ENABLED: "+(source.enabled?"ON":"OFF"),
+                    leftRight+18,414,source.enabled?0xFF98E9B6:
+                            0xFFDDB2B0);
+        }
     }
     private double get(CameraSceneParticles.Source s,int axis)
     {
@@ -175,7 +180,9 @@ public final class CameraSceneParticlesPanel
             case 0:return s.x;
             case 1:return s.y;
             case 2:return s.z;
-            default:return s.yaw;
+            case 3:return s.yaw;
+            case 4:return s.pitch;
+            default:return s.roll;
         }
     }
     private void set(CameraSceneParticles.Source s,int axis,double v)
@@ -186,7 +193,9 @@ public final class CameraSceneParticlesPanel
             case 0:s.x=v;break;
             case 1:s.y=v;break;
             case 2:s.z=v;break;
-            default:s.yaw=v;break;
+            case 3:s.yaw=v;break;
+            case 4:s.pitch=v;break;
+            default:s.roll=v;break;
         }
     }
     public boolean click(AnimationEditorScreen screen,int mx,int my,
@@ -246,14 +255,15 @@ public final class CameraSceneParticlesPanel
         {
             return properties.click(mx,my,button);
         }
-        if(my>=365&&my<390)
+        if(bottom>433&&my>=405&&my<430)
         {
             source.enabled=!source.enabled;
             screen.getCameraWorkspace().saveScene();return true;
         }
-        for(int axis=0;axis<4;axis++)
+        for(int axis=0;axis<6;axis++)
         {
-            int py=134+axis*46;
+            int py=130+axis*40;
+            if(py+39>=bottom)break;
             if(my>=py+15&&my<py+39)
             {
                 commit(screen);
