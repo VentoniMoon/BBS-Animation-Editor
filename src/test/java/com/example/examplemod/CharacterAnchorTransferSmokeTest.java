@@ -198,8 +198,10 @@ public final class CharacterAnchorTransferSmokeTest
       "no premature world copy");
   check(CharacterAnchorTransfers.releasedItems(scene,75).size()==1,
       "one world item on release");
-  check(CharacterAnchorTransfers.forOwner(scene,"actor-one",75).isEmpty(),
-      "dropping removes parent body part at that frame");
+  // A different item (source BODY PART p) is still independently held
+  // by actor one at this frame. Releasing the bag must not affect it.
+  check(CharacterAnchorTransfers.forOwner(scene,"actor-one",75).size()==1,
+      "dropping only removes the released item from its parent");
   check(CharacterAnchorTransfers.hidesActor(
       scene,"item-source",80),
       "do not resurrect original actor at its Record coordinates");
