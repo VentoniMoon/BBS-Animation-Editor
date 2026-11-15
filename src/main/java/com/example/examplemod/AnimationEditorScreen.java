@@ -2001,6 +2001,8 @@ public class AnimationEditorScreen extends GuiScreen
          */
         BetterLightsRig.bind(this.sceneState);
         ParticleActorRig.bind(this.sceneState);
+        CharacterAnchorPreview.bind(this.sceneState);
+        CharacterAnchorPoseCache.bind(this.sceneState);
         BbsFsWorldFrameCapture.beginFrame(this.mc);
         // During CAMERA output a Minecraft world pass uses the *film* FBO
         // dimensions (e.g. 3840x2160, or 1080x1920). Vanilla may configure
@@ -4838,6 +4840,8 @@ public class AnimationEditorScreen extends GuiScreen
         BbsFsNativeActorSunShadowOverlay.resetEditorOverride();
         BetterLightsWorldEngine.reset();
         CameraParticleWorldEngine.reset();
+        CharacterAnchorPreview.clear();
+        CharacterAnchorPoseCache.clear();
         cameraVideoExport.close();
         cameraExportDialog.close();
         /* Never leave the detached preview camera as Minecraft's view. */
