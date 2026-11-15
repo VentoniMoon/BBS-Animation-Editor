@@ -39,7 +39,7 @@ public final class ParticleEmitterConfigSmokeTest
                 "unknown native NBT must survive normalization");
         WorldClient world=new WorldClient();
         ParticleEmitterConfig.emit(world,normalized,1,2,3,0,
-                new Random(1),0);
+                new Random(1),1);
         need(world.count==0,"wrong interval should not spawn");
         ParticleEmitterConfig.update(normalized,"Frequency",1);
         ParticleEmitterConfig.update(normalized,"Count",4);
