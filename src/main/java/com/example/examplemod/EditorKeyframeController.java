@@ -570,6 +570,7 @@ public class EditorKeyframeController
         copy.setLX(source.getLX());
         copy.setLY(source.getLY());
         copy.setLightSettings(source.getLightSettings());
+        copy.setParticleSettings(source.getParticleSettings());
         return copy;
     }
 
