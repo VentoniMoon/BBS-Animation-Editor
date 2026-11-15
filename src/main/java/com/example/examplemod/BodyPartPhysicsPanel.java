@@ -182,7 +182,8 @@ public final class BodyPartPhysicsPanel
 
     private void drawToggle(Minecraft mc, String label, boolean selected, int lineY)
     {
-        mc.fontRenderer.drawString(label, x + 9, y + lineY, 0xFFE0E0E0);
+        mc.fontRenderer.drawString(trim(mc,label,130),
+                x + 9, y + lineY, 0xFFE0E0E0);
         Gui.drawRect(x + 145, y + lineY - 3, x + 166, y + lineY + 10,
                 selected ? 0xFF408060 : 0xFF484848);
         mc.fontRenderer.drawString(selected ? "ON" : "OFF",
