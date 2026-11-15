@@ -67,24 +67,118 @@ public class AnimationEditorInput
      */
 
     private boolean sceneDropdownOpen;
-    /** First visible SCENE file; shared by render, hit testing and wheel. */
+    public static final int SCENE_SEARCH_HEIGHT=24;
+    private static final int SCENE_VISIBLE_ROWS=8;
+    private String sceneSearchText="";
+    /** First visible MATCH, rather than an index in all scene files. */
     private int sceneDropdownOffset;
+
+    public String getSceneSearchText()
+    {
+        return sceneSearchText;
+    }
+
+    public java.util.List<Integer> getFilteredSceneIndices()
+    {
+        return SceneDropdownSearch.filter(
+                sceneState.getSceneFiles(),sceneSearchText);
+    }
+
+    public void setSceneSearchText(String value)
+    {
+        sceneSearchText=value==null?"":value;
+        sceneDropdownOffset=0;
+    }
+
     public int getSceneDropdownOffset()
     {
-        int maximum=Math.max(0,sceneState.getSceneFiles().size()-8);
-        sceneDropdownOffset=Math.max(0,Math.min(maximum,sceneDropdownOffset));
+        sceneDropdownOffset=SceneDropdownSearch.limitOffset(
+                sceneDropdownOffset,getFilteredSceneIndices().size(),
+                SCENE_VISIBLE_ROWS);
         return sceneDropdownOffset;
     }
+
+    private void moveSceneDropdown(int delta)
+    {
+        sceneDropdownOffset=SceneDropdownSearch.limitOffset(
+                sceneDropdownOffset+delta,getFilteredSceneIndices().size(),
+                SCENE_VISIBLE_ROWS);
+    }
+
     public boolean scrollSceneDropdown(int mouseX,int mouseY,int direction)
     {
         if(!sceneDropdownOpen||mouseX<172||mouseX>358||
                 mouseY<AnimationEditorScreen.TOP_BAR_HEIGHT||
-                mouseY>AnimationEditorScreen.TOP_BAR_HEIGHT+2+8*19)
+                mouseY>AnimationEditorScreen.TOP_BAR_HEIGHT+2+
+                        SCENE_SEARCH_HEIGHT+SCENE_VISIBLE_ROWS*19)
             return false;
-        int maximum=Math.max(0,sceneState.getSceneFiles().size()-8);
-        sceneDropdownOffset=Math.max(0,Math.min(maximum,
-                sceneDropdownOffset+(direction>0?-1:1)));
+        moveSceneDropdown(direction>0?-1:1);
         return true;
+    }
+
+    /** Keep text edits away from the global keyframe/record shortcuts. */
+    private boolean handleSceneSearchKey(char character,int keyCode)
+            throws IOException
+    {
+        if(!sceneDropdownOpen)return false;
+        boolean ctrl=Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)||
+                Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
+        if(ctrl&&keyCode==Keyboard.KEY_S)return false;
+        if(keyCode==Keyboard.KEY_ESCAPE)
+        {
+            setSceneDropdownOpen(false);
+            return true;
+        }
+        if(keyCode==Keyboard.KEY_RETURN||
+                keyCode==Keyboard.KEY_NUMPADENTER)
+        {
+            java.util.List<Integer> matches=getFilteredSceneIndices();
+            int index=getSceneDropdownOffset();
+            if(index<matches.size())
+            {
+                screen.loadScene(matches.get(index).intValue());
+                markClean();
+                resetInputState();
+            }
+            return true;
+        }
+        if(keyCode==Keyboard.KEY_UP||keyCode==Keyboard.KEY_DOWN)
+        {
+            moveSceneDropdown(keyCode==Keyboard.KEY_UP?-1:1);
+            return true;
+        }
+        if(keyCode==Keyboard.KEY_BACK)
+        {
+            if(!sceneSearchText.isEmpty())
+                setSceneSearchText(sceneSearchText.substring(0,
+                        sceneSearchText.offsetByCodePoints(
+                                sceneSearchText.length(),-1)));
+            return true;
+        }
+        if(keyCode==Keyboard.KEY_DELETE||
+                (ctrl&&keyCode==Keyboard.KEY_A))
+        {
+            setSceneSearchText("");
+            return true;
+        }
+        if(ctrl&&keyCode==Keyboard.KEY_V)
+        {
+            String paste=net.minecraft.client.gui.GuiScreen.getClipboardString();
+            if(paste!=null)
+                for(int i=0;i<paste.length();i++)
+                    appendSceneSearchChar(paste.charAt(i));
+            return true;
+        }
+        if(!ctrl)appendSceneSearchChar(character);
+        return true;
+    }
+
+    private void appendSceneSearchChar(char character)
+    {
+        if(sceneSearchText.length()<100 &&
+                net.minecraft.util.ChatAllowedCharacters
+                        .isAllowedCharacter(character))
+            setSceneSearchText(sceneSearchText+character);
     }
     private boolean transformDragging;
 
@@ -188,7 +282,9 @@ public class AnimationEditorInput
 
     public void setSceneDropdownOpen(boolean value)
     {
-        this.sceneDropdownOpen = value;
+        if(value&&!this.sceneDropdownOpen)
+            setSceneSearchText("");
+        this.sceneDropdownOpen=value;
         if(value)getSceneDropdownOffset();
     }
 
@@ -216,7 +312,7 @@ public class AnimationEditorInput
 
     public void resetInputState()
     {
-        this.sceneDropdownOpen = false;
+        setSceneDropdownOpen(false);
         this.transformDragging = false;
     }
 
@@ -404,48 +500,41 @@ public class AnimationEditorInput
 
         if (this.sceneDropdownOpen)
         {
-            int x = 175;
-            int y =
-                    AnimationEditorScreen.TOP_BAR_HEIGHT + 2;
-            int dropdownWidth = 180;
-            int rowHeight = 19;
+            int x=175;
+            int y=AnimationEditorScreen.TOP_BAR_HEIGHT+2;
+            int dropdownWidth=180;
+            int rowHeight=19;
+            java.util.List<Integer> matches=getFilteredSceneIndices();
+            int count=Math.min(SCENE_VISIBLE_ROWS,matches.size());
+            int listY=y+SCENE_SEARCH_HEIGHT;
 
-            int count =
-                    Math.min(
-                            8,
-                            this.sceneState
-                                    .getSceneFiles()
-                                    .size()
-                    );
-
-            if (mouseX >= x
-                    && mouseX <= x + dropdownWidth
-                    && mouseY >= y
-                    && mouseY < y + count * rowHeight)
+            if(mouseX>=x&&mouseX<x+dropdownWidth &&
+                    mouseY>=y&&mouseY<listY)
             {
-                int sceneIndex =
-                        getSceneDropdownOffset()+(mouseY-y)/rowHeight;
+                // X clears the filter; clicking inside the search row
+                // keeps the menu and keyboard focus open.
+                if(mouseButton==0&&mouseX>=x+153)
+                    setSceneSearchText("");
+                return;
+            }
 
-                if (sceneIndex >= 0
-                        && sceneIndex <
-                        this.sceneState
-                                .getSceneFiles()
-                                .size())
+            if(mouseButton==0&&mouseX>=x&&
+                    mouseX<x+dropdownWidth &&
+                    mouseY>=listY&&mouseY<listY+count*rowHeight)
+            {
+                int matchIndex=getSceneDropdownOffset()+
+                        (mouseY-listY)/rowHeight;
+                if(matchIndex>=0&&matchIndex<matches.size())
                 {
-                    /*
-                     * Loading another scene changes the editor
-                     * context completely.
-                     */
-                    this.screen.loadScene(sceneIndex);
-
+                    // loadScene expects the ORIGINAL scene-list index.
+                    this.screen.loadScene(matches.get(matchIndex).intValue());
                     this.markClean();
                     this.resetInputState();
-
                     return;
                 }
             }
 
-            this.sceneDropdownOpen = false;
+            setSceneDropdownOpen(false);
             this.editorModeController.closeDropdown();
             this.editorThemeController.closeDropdown();
         }
@@ -1346,6 +1435,10 @@ public class AnimationEditorInput
             int keyCode)
             throws IOException
     {
+        // Escape closes this picker; Backspace edits search, not keys.
+        if(handleSceneSearchKey(typedChar,keyCode))
+            return;
+
         /* Jolt physics bake: arm on pause, play, pause and commit. */
         if(keyCode==Keyboard.KEY_B &&
                 (Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) ||

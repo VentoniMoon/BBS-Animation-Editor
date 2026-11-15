@@ -412,6 +412,12 @@ public class BodyPartsPreviewRenderer
             }
         }
         captureAttachedChameleonColliders(morph,frame);
+        // Cloth receives the same REAL Emoticons fitted leg OBBs as before,
+        // but no legacy skirt Jolt strand is evaluated. This bridge is
+        // intentionally outside the hair chain loop: a garment does not
+        // require any hair-chain roots to be enabled.
+        if(SkirtXPBDRuntime.ENABLED)
+            publishClothContactFrames(morph,frame);
         for (Map.Entry<BodyPartModelData, List<BodyPartPhysicsChains.Chain>> entry :
                 previewPhysicsChains.entrySet())
         {
@@ -589,6 +595,47 @@ public class BodyPartsPreviewRenderer
             {
                 reportColliderCapture(data,"collider capture failed: "
                         +error.getClass().getSimpleName());
+            }
+        }
+    }
+
+    private void publishClothContactFrames(Object actorMorph,int frame)
+    {
+        for(BodyPartModelData data:collisionPartOrder)
+        {
+            if(data==null||!data.supportsClothPhysics()||
+                    !data.isClothPhysicsEnabled())continue;
+            BodyPart part=renderedCollisionParts.get(data);
+            if(part==null||part.morph==null||part.morph.get()==null)
+                continue;
+            float[] parent=BodyPartEmoticonsAttachmentProbe
+                    .lastRenderedBoneMatrix(actorMorph,
+                            data.getAttachmentBoneName());
+            if(parent==null)continue;
+            try
+            {
+                float[] attached=worldFromRenderedChameleonChild(
+                        parent,part);
+                float[] actorWorld=actorFrameFor(frame);
+                if(actorWorld!=null)
+                    attached=BodyPartJoltActorSpace.matrix(
+                            actorWorld,attached);
+                BodyPartJoltContactBudget.Selection fitted=
+                        passiveCollisionSelection(data,frame);
+                double tick=CameraVisualFrameClock.sceneTime(frame);
+                if(!CameraVisualFrameClock.hasSample(frame) &&
+                        BlockbusterPreviewAnimationState.isPlaying())
+                    tick=frame+CameraVisualFrameClock.partialTick(frame,
+                            net.minecraft.client.Minecraft.getMinecraft()
+                                    .getRenderPartialTicks());
+                SkirtXPBDContacts.publish(part.morph.get(),frame,tick,
+                        attached,fitted.boxes,fitted.owners);
+            }
+            catch(RuntimeException invalid)
+            {
+                reportColliderCapture(data,
+                        "XPBD cloth collider capture skipped: "+
+                        invalid.getClass().getSimpleName());
             }
         }
     }
@@ -1753,6 +1800,12 @@ public class BodyPartsPreviewRenderer
     private boolean isSkirtAttachment(BodyPartModelData data,
             List<BodyPartPhysicsChains.Chain> chains)
     {
+        // Physics 3.0 cloth does NOT depend on 20 enabled Jolt strands.
+        // The native Chameleon hierarchy is validated independently.
+        if(data!=null && SkirtXPBDRuntime.ENABLED &&
+                data.supportsClothPhysics())
+            return true;
+        // Historical Jolt skirt mode remains available when XPBD is off.
         if(data==null || data.getBones()==null || chains==null ||
                 chains.size()!=20)return false;
         for(AnimationBone bone:data.getBones())
@@ -2605,6 +2658,15 @@ public class BodyPartsPreviewRenderer
 
         try
         {
+            if(SkirtXPBDRuntime.ENABLED && data.supportsClothPhysics())
+            {
+                // Cloth XPBD has its OWN node solver. The old 20 Jolt
+                // strips are retained only as migration/settings data;
+                // they must never be stepped alongside cloth.
+                previewPhysicsChains.put(data,
+                        java.util.Collections.<BodyPartPhysicsChains.Chain>emptyList());
+                return;
+            }
             List<BodyPartPhysicsChains.Chain> chains = BodyPartPhysicsChains.collect(data);
             previewPhysicsChains.put(data, chains);
 
@@ -3292,7 +3354,11 @@ public class BodyPartsPreviewRenderer
         // The XPBD solver and real-body-collider bridge must share the
         // stable attachment-track identity across these short-lived clones.
         if(SkirtXPBDRuntime.ENABLED)
+        {
             SkirtXPBDContacts.registerOwner(child,data);
+            SkirtXPBDContacts.setClothEnabled(data,
+                    data.isClothPhysicsEnabled());
+        }
         this.preparedMorphs.put(data, child);
         return part;
     }

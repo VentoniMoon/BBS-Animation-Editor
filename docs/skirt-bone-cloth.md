@@ -2161,3 +2161,53 @@ capture still comes from the last rendered actor**; fitted collider
 pose freshness and collision of visual triangle interiors need
 additional Minecraft A/B validation. The renderer is still the
 existing 43-source-cuboid geometry, not the finished continuous mesh.
+
+## Physics inspector split: HAIR / CLOTH / BOXES (2026-11-15)
+
+The accepted XPBD skirt no longer shares an activation control with
+the old Jolt-based 20-strip hair-chain preset.
+
+- **HAIR**: per-bone Jolt chain roots with gravity, stiffness, damping
+  and body contact controls. These parameters still govern the existing
+  hair solver and are **not** presented as cloth parameters.
+- **CLOTH**: an independent, per-attachment XPBD switch with a read-only
+  solver summary (60 nodes, 20 pinned waist nodes, 60Hz scene time and
+  real Emoticons thigh OBB contacts). The currently verified XPBD
+  constants are deliberately unchanged; no fake stiffness sliders.
+- **BOXES**: passive collision volume editing and contact debug overlay,
+  shared as geometry input, not as an independent moving hair chain.
+- The CLOTH panel is offered only for the **validated 44-bone Chameleon
+  20-strip geometry**, not for arbitrary hair and clothing rigs. Other
+  garment meshes need their own topology binding in a later iteration.
+- In XPBD-enabled builds, the validated skirt never advances its 20
+  legacy Jolt strand simulations. Instead, the same **real parent
+  Emoticons fitted leg OBBs** are published directly to the XPBD
+  attachment track after the actor's normal render. Hair on other body
+  parts continues through Jolt unchanged.
+- The cloth switch is serialized at the attachment level as
+  `ClothPhysicsEnabled` in `BodyPartsPersistence`. Existing
+  `Physics` bone tags and `Colliders` tags are not rewritten or
+  migrated destructively. Old files with no cloth tag inherit the
+  previously enabled 20-strip skirt preset so accepted skirts remain
+  active on reload; a new cloth-only attachment can enable XPBD
+  independently of Jolt bone chains.
+- The global developer gate `-PenableSkirtXPBD` is still required.
+  Without it, legacy Jolt chain mode retains its old behavior for
+  backward compatibility. CLOTH shows a launch-gate warning.
+- Turning off CLOTH on an attachment removes its active XPBD state,
+  leaving native Chameleon source fabric visible; the rest of the
+  scene and unrelated hair physics are not affected.
+
+### Test
+
+```text
+runClient -PfixMixinAsm -PenableSkirtXPBD -PskirtXPBDVolumeSkin -PcaptureSkirtMesh -PenableJoltExperimental
+```
+
+Verify: switch between HAIR and CLOTH on one active skirt, check that
+the former Jolt gravity/stiffness/damping values did not get modified,
+toggle cloth off/on with the preview running, then save and reload the
+scene. Check a separate attached hairstyle still animates on Jolt,
+and the skirt's 60Hz volume silhouette is unchanged from PR #211.
+`[SkirtXPBDVolumeFrame]` should still show active cloth steps when
+enabled. No claim of generic fabric support or continuous mesh yet.

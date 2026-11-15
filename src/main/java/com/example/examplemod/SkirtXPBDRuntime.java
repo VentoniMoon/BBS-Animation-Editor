@@ -84,6 +84,13 @@ public final class SkirtXPBDRuntime
             return null;
         long now=System.nanoTime();
         Object stableOwner=SkirtXPBDContacts.stableOwner(morph);
+        if(!SkirtXPBDContacts.isClothEnabled(morph))
+        {
+            // Disabling CLOTH must not continue a previously running XPBD
+            // state, and must not touch Jolt hair rigs on other models.
+            ACTORS.remove(stableOwner);
+            return null;
+        }
         Actor actor=ACTORS.get(stableOwner);
         String signature=signature(raw,shared);
         boolean fresh=actor==null||!signature.equals(actor.fingerprint);
