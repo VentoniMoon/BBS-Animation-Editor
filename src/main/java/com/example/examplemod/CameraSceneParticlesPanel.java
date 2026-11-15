@@ -129,7 +129,10 @@ public final class CameraSceneParticlesPanel
             Gui.drawRect(tx,71,tx+84,94,
                     EditorVisualStyle.themedSurface(
                             tab==i?.29F:.12F));
-            mc.fontRenderer.drawString(labels[i],tx+8,78,
+            String visible=mc.fontRenderer.trimStringToWidth(
+                    labels[i],78);
+            mc.fontRenderer.drawString(visible,
+                    tx+(84-mc.fontRenderer.getStringWidth(visible))/2,78,
                     tab==i?0xFFE7EDF1:0xFFADB5BE);
         }
         if(tab==1)
