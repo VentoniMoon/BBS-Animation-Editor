@@ -21,7 +21,9 @@ public class EditorSceneState
     /** Keyless CAMERA scene sources, never regular Blockbuster actors. */
     private final CameraSceneLights cameraLights=new CameraSceneLights();
     private final CameraSceneMirrors cameraMirrors=new CameraSceneMirrors();
+    private final CameraSceneParticles cameraParticles=new CameraSceneParticles();
     public CameraSceneMirrors getCameraMirrors(){return cameraMirrors;}
+    public CameraSceneParticles getCameraParticles(){return cameraParticles;}
     public CameraSceneLights getCameraLights(){return cameraLights;}
 
 
@@ -386,6 +388,7 @@ public class EditorSceneState
         this.cameraClips.clear();
         this.cameraLights.clear();
         this.cameraMirrors.clear();
+        this.cameraParticles.clear();
         this.cameraOutput.reset();
 
 
