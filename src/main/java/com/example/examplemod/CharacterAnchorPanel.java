@@ -30,6 +30,9 @@ public final class CharacterAnchorPanel
         }
     }
     private int selectedSource,selectedBone;
+    private String preferredSourceId="";
+    private Object inspectedMorph;
+    private final List<String> cachedBoneNames=new ArrayList<String>();
     private String status="SELECT ITEM + RECEIVER BONE";
     private String actorId="";
     private List<Candidate> choices=new ArrayList<Candidate>();
@@ -49,6 +52,8 @@ public final class CharacterAnchorPanel
         if(!id.equals(actorId))
         {
             actorId=id;selectedSource=0;selectedBone=0;
+            preferredSourceId="";
+            inspectedMorph=null;cachedBoneNames.clear();
             status="SELECT ITEM + RECEIVER BONE";
         }
         choices.clear();bones.clear();
@@ -95,12 +100,31 @@ public final class CharacterAnchorPanel
                         current.itemId+" ["+current.ownerActorId+"]",
                         current.morph));
         choices.addAll(all.values());
+        if(!preferredSourceId.isEmpty())
+            for(int i=0;i<choices.size();i++)
+                if(preferredSourceId.equals(choices.get(i).itemId))
+                {
+                    selectedSource=i;
+                    break;
+                }
         if(selectedSource>=choices.size())selectedSource=0;
+        if(!choices.isEmpty())
+            preferredSourceId=choices.get(selectedSource).itemId;
 
-        // Use the same parent-limb names as the existing BODY PARTS picker.
-        if(previewActor!=null&&previewActor.getMorph()!=null)
-            bones.addAll(CharacterBodyPartOverrideController.getBones(
-                    previewActor.getMorph()));
+        // BOBJ skeleton extraction is expensive and logged. Rebuild the
+        // list only when the runtime morph reference changes, not once
+        // per rendered GUI frame or shadow pass.
+        Object morph=previewActor==null?null:previewActor.getMorph();
+        if(morph!=inspectedMorph)
+        {
+            inspectedMorph=morph;
+            cachedBoneNames.clear();
+            if(morph instanceof mchorse.metamorph.api.morphs.AbstractMorph)
+                cachedBoneNames.addAll(
+                        CharacterBodyPartOverrideController.getBones(
+                            (mchorse.metamorph.api.morphs.AbstractMorph)morph));
+        }
+        bones.addAll(cachedBoneNames);
         if(selectedBone>=bones.size())selectedBone=0;
     }
 
@@ -159,8 +183,11 @@ public final class CharacterAnchorPanel
         if(my>=y+18&&my<y+41)
         {
             if(!choices.isEmpty())
+            {
                 selectedSource=(selectedSource+(mx<x+width/2?-1:1)+
                         choices.size())%choices.size();
+                preferredSourceId=choices.get(selectedSource).itemId;
+            }
             return true;
         }
         if(my>=y+61&&my<y+84)
