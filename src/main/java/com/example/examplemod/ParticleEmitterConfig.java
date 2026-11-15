@@ -163,6 +163,17 @@ public final class ParticleEmitterConfig
             double x,double y,double z,double yawDegrees,
             Random random,int elapsed)
     {
+        emit(world,tag,x,y,z,yawDegrees,0D,0D,random,elapsed);
+    }
+    /** Full actor/local orientation: Z roll, X pitch, Y yaw. The
+     * native particle-relative-rotation flag affects spawn dispersion,
+     * not the emitter's authored world-coordinate X/Y/Z offset.
+     */
+    public static void emit(WorldClient world,NBTTagCompound tag,
+            double x,double y,double z,double yawDegrees,
+            double pitchDegrees,double rollDegrees,
+            Random random,int elapsed)
+    {
         if(world==null||tag==null||random==null||elapsed<0||
                 !"VANILLA".equalsIgnoreCase(
                         tag.hasKey("Mode")?tag.getString("Mode"):"vanilla"))
@@ -183,6 +194,10 @@ public final class ParticleEmitterConfig
         boolean rotate=rotation(tag);
         double yaw=Math.toRadians(yawDegrees),c=Math.cos(yaw),
                 s=Math.sin(yaw);
+        double pitch=Math.toRadians(pitchDegrees),
+                cp=Math.cos(pitch),sp=Math.sin(pitch);
+        double roll=Math.toRadians(rollDegrees),
+                cr=Math.cos(roll),sr=Math.sin(roll);
         int[] args=tag.getIntArray("Args");
         for(int i=0;i<count;i++)
         {
@@ -191,8 +206,10 @@ public final class ParticleEmitterConfig
                     rz=random.nextGaussian()*dz;
             if(rotate)
             {
-                double a=rx*c-rz*s,b=rx*s+rz*c;
-                rx=a;rz=b;
+                double xx=rx*cr-ry*sr,yy=rx*sr+ry*cr;
+                double y2=yy*cp-rz*sp,z2=yy*sp+rz*cp;
+                double a=xx*c-z2*s,b=xx*s+z2*c;
+                rx=a;ry=y2;rz=b;
             }
             try
             {
