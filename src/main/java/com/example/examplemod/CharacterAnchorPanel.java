@@ -35,6 +35,12 @@ public final class CharacterAnchorPanel
     private List<Candidate> choices=new ArrayList<Candidate>();
     private List<String> bones=new ArrayList<String>();
     private int x,y,width;
+    private mchorse.blockbuster.common.entity.EntityActor previewActor;
+    public void setPreviewActor(
+            mchorse.blockbuster.common.entity.EntityActor actor)
+    {
+        this.previewActor=actor;
+    }
 
     private void update(AnimationEditorScreen editor,
             BlockbusterSceneActorData target,int frame)
@@ -92,14 +98,9 @@ public final class CharacterAnchorPanel
         if(selectedSource>=choices.size())selectedSource=0;
 
         // Use the same parent-limb names as the existing BODY PARTS picker.
-        if(editor.getCharacterEditorPanel()!=null)
-        {
-            mchorse.blockbuster.common.entity.EntityActor runtime=
-                    editor.getCharacterEditorPanel().getRuntimeActor();
-            if(runtime!=null&&runtime.getMorph()!=null)
-                bones.addAll(CharacterBodyPartOverrideController.getBones(
-                        runtime.getMorph()));
-        }
+        if(previewActor!=null&&previewActor.getMorph()!=null)
+            bones.addAll(CharacterBodyPartOverrideController.getBones(
+                    previewActor.getMorph()));
         if(selectedBone>=bones.size())selectedBone=0;
     }
 
