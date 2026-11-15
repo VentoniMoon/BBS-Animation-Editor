@@ -32,6 +32,7 @@ public final class BodyPartsPersistence
                 NBTTagCompound tag = new NBTTagCompound();
                 tag.setString("ActorId", owner.getKey());
                 tag.setString("Model", model.getModelName());
+                tag.setString("AnchorId", model.getAnchorId());
                 tag.setString("Attachment", model.getAttachmentBoneName());
                 tag.setInteger("Start", model.getStartFrame());
                 tag.setInteger("End", model.getEndFrame());
@@ -140,6 +141,8 @@ public final class BodyPartsPersistence
                 model.setModel(name, null, bones);
             }
             readTransform(model.getGlobalTransform(), tag.getCompoundTag("Global"));
+            if(tag.hasKey("AnchorId",8))
+                model.restoreAnchorId(tag.getString("AnchorId"));
             model.readPhysicsSettings(tag.getTagList("Physics", 10));
             if(tag.hasKey("ClothPhysicsEnabled"))
                 model.setClothPhysicsEnabled(
