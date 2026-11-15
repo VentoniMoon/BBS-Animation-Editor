@@ -2205,9 +2205,18 @@ public class BodyPartsPreviewRenderer
                     // Use the exact fractional scene clock of this
                     // display sample; otherwise the 60Hz XPBD solver sees
                     // only integer 20-TPS frames and misses fast leg motion.
+                    double sampleTick=CameraVisualFrameClock.sceneTime(frame);
+                    // Some BODY PARTS views do not install the CAMERA
+                    // visual clock. They still draw with Minecraft's
+                    // ordinary renderPartialTicks while playback runs.
+                    // Without this fallback the solver sees 20Hz again.
+                    if(!CameraVisualFrameClock.hasSample(frame) &&
+                            BlockbusterPreviewAnimationState.isPlaying())
+                        sampleTick=frame+CameraVisualFrameClock.partialTick(
+                                frame,net.minecraft.client.Minecraft
+                                        .getMinecraft().getRenderPartialTicks());
                     SkirtXPBDContacts.publish(part.morph.get(),frame,
-                            CameraVisualFrameClock.sceneTime(frame),
-                            attached,fitted.boxes,fitted.owners);
+                            sampleTick,attached,fitted.boxes,fitted.owners);
                 }
                 Map<String,Float> thighContactDepths=
                         java.util.Collections.<String,Float>emptyMap();
