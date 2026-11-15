@@ -24,6 +24,56 @@ public class BodyPartModelData
     /** Per-attachment geometry Weld. Explicit opt-in, separate from Jolt. */
     private boolean weldEnabled;
 
+    /**
+     * Independent cloth engine switch. Null means a legacy editor.dat:
+     * preserve the old 20-strip activation as the migration default.
+     * Unlike Jolt's per-bone hair settings this belongs to the attachment.
+     */
+    private Boolean clothPhysicsEnabled;
+
+    public boolean supportsClothPhysics()
+    {
+        if(bones==null||bones.size()!=44||
+                baseMorph==null||!baseMorph.getClass().getName()
+                        .endsWith(".ChameleonMorph"))
+            return false;
+        for(AnimationBone bone:bones)
+            if(bone!=null&&"ALL".equals(bone.getName()))
+                try
+                {
+                    SkirtGeoProfile.Plan<AnimationBone> plan=
+                            BodyPartSkirtPreset.inspectFull(bone);
+                    return plan.allBones.size()==44;
+                }
+                catch(IllegalArgumentException invalid)
+                {
+                    return false;
+                }
+        return false;
+    }
+
+    public boolean isClothPhysicsEnabled()
+    {
+        if(!supportsClothPhysics())return false;
+        if(clothPhysicsEnabled!=null)return clothPhysicsEnabled.booleanValue();
+        // Existing projects enabled the 20 Jolt strip preset before
+        // Physics 3.0 XPBD. Do not unexpectedly turn off their skirt.
+        for(AnimationBone bone:bones)
+            if(bone!=null&&"ALL".equals(bone.getName()))
+                return BodyPartSkirtPreset.isFullEnabled(this,bone);
+        return false;
+    }
+
+    public void setClothPhysicsEnabled(boolean enabled)
+    {
+        clothPhysicsEnabled=Boolean.valueOf(enabled);
+    }
+
+    public boolean hasExplicitClothPhysicsSetting()
+    {
+        return clothPhysicsEnabled!=null;
+    }
+
     public boolean isWeldEnabled()
     {
         return weldEnabled;
