@@ -25,6 +25,7 @@ public final class CameraParticleWorldEngine
     private final Map<String,Clock> statics=new HashMap<String,Clock>();
     private WorldClient lastWorld;
     private EditorSceneState lastScene;
+    private int lastSceneIndex=Integer.MIN_VALUE;
     private CameraParticleWorldEngine(){}
     private static final CameraParticleWorldEngine INSTANCE=
             new CameraParticleWorldEngine();
@@ -36,6 +37,7 @@ public final class CameraParticleWorldEngine
     {
         INSTANCE.actors.clear();INSTANCE.statics.clear();
         INSTANCE.lastWorld=null;INSTANCE.lastScene=null;
+        INSTANCE.lastSceneIndex=Integer.MIN_VALUE;
     }
     private void update(AnimationEditorScreen screen)
     {
@@ -45,10 +47,12 @@ public final class CameraParticleWorldEngine
             return;
         WorldClient world=mc.world;
         EditorSceneState scene=screen.getSceneState();
-        if(lastWorld!=world||lastScene!=scene)
+        if(lastWorld!=world||lastScene!=scene||
+                lastSceneIndex!=scene.getSelectedScene())
         {
             actors.clear();statics.clear();
             lastWorld=world;lastScene=scene;
+            lastSceneIndex=scene.getSelectedScene();
         }
         for(CameraSceneParticles.Source source:
                 scene.getCameraParticles().all())
