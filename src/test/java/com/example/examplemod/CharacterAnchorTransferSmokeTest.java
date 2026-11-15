@@ -134,6 +134,31 @@ public final class CharacterAnchorTransferSmokeTest
       "new holder gains item on same frame");
   check(CharacterAnchorTransfers.forOwner(scene,"actor-two",24).isEmpty(),
       "scrubbing backwards restores prior owner");
+  // Two persistent editable BodyParts remain in the actor editors,
+  // but only one can be rendered at the effective timeline owner.
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,19),"no editable item before pickup");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,20),"recipient editor part at pickup");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,44),"previous owner until handoff");
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,45),"old recipient stays editable but hidden");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-two",45,45),"new recipient takes over exactly at frame");
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-two",45,44),"new recipient must not show early");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,25),"reverse scrub restores original editor part");
+  // A second transfer back to the same owner is a different editable
+  // instance: do not resurrect their original BodyPart at the new key.
+  CharacterAnchorTransfers.Transfer returnKey=new CharacterAnchorTransfers.Transfer(
+      id,"item-source","","actor-one","left_arm",65,morph,world,rebased);
+  CharacterAnchorTransfers.upsert(actor1.getCharacterTimeline(),returnKey);
+  check(!CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",20,65),"prior instance must stay hidden");
+  check(CharacterAnchorTransfers.isActiveEditableAttachment(
+      scene,id,"actor-one",65,65),"new instance active on return");
 
   NBTTagCompound saved=k.getData();
   CharacterKey restored=new CharacterKey(20,CharacterKey.Type.CUSTOM);
