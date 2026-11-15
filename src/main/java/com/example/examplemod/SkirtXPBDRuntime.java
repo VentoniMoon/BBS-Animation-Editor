@@ -3,9 +3,10 @@ package com.example.examplemod;
 import java.util.WeakHashMap;
 
 /**
- * Physics 3.0 owner-aware XPBD runtime. Each live ChameleonMorph has its
- * own independent cloth and interpolation clock, not a global 44-bone model
- * cache. The existing native Jolt skirt/record/keyframes are never edited.
+ * Physics 3.0 owner-aware XPBD runtime. Each editor BodyPartModelData
+ * attachment track owns its cloth across short-lived ChameleonMorph clones;
+ * other standalone morphs use their own identity. Never key by shared
+ * 44-bone model name. Existing Jolt skirt/record/keys are never edited.
  *
  * A real editor timeline frame from fitted Emoticons colliders is preferred
  * to wall time so 60fps camera render / repeated shadow passes cannot
@@ -74,7 +75,8 @@ public final class SkirtXPBDRuntime
                 shared.nodes.size()!=60)
             return null;
         long now=System.nanoTime();
-        Actor actor=ACTORS.get(morph);
+        Object stableOwner=SkirtXPBDContacts.stableOwner(morph);
+        Actor actor=ACTORS.get(stableOwner);
         String signature=signature(raw,shared);
         boolean fresh=actor==null||!signature.equals(actor.fingerprint);
         if(fresh)
@@ -84,7 +86,7 @@ public final class SkirtXPBDRuntime
             actor.rest=shared;
             actor.solver=SkirtXPBDSolver.create(raw,shared,posed);
             actor.lastUpdate=now;
-            ACTORS.put(morph,actor);
+            ACTORS.put(stableOwner,actor);
         }
         else if(now-actor.lastUpdate>STALE_RESET_NANOS)
         {

@@ -1951,3 +1951,22 @@ Forge compile validate program structure, **not visual parity
 or final physics stability** in Minecraft/BSL; the latter
 requires the requested game test before promoting XPBD
 to default production mode.
+
+### Critical editor lifetime correction — stable track owners
+
+`BodyPartsPreviewRenderer.createBodyPart()` can construct a fresh
+`ChameleonMorph` for each timeline frame, even when it represents
+the **same** attached skirt. Keying `SkirtXPBDRuntime` only by
+the temporary morph instance would silently restart gravity
+and inertia every frame, producing a barely moving skirt.
+The editor now registers the stable `BodyPartModelData`
+attachment track as the owner of each new Chameleon morph
+when preparing its native `BodyPart`. The real leg OBB feed
+and XPBD state both use the same stable owner for samples
+across morph clones; standalone non-editor morphs still
+fall back to their per-instance identity. This remains
+independent of the *model name*, so two actors using the
+same Chameleon source are not intentionally coupled.
+A Java 8 regression test creates two distinct morph objects
+mapped to one track and asserts that both resolve the
+same fitted body collider frame.

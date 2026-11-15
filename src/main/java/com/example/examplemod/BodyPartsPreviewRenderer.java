@@ -3275,6 +3275,11 @@ public class BodyPartsPreviewRenderer
         /* Chameleon animations must keep ticking while the actor preview plays. */
         part.animate = true;
         part.morph.setDirect(child);
+        // A fresh ChameleonMorph is often built for EACH timeline frame.
+        // The XPBD solver and real-body-collider bridge must share the
+        // stable attachment-track identity across these short-lived clones.
+        if(SkirtXPBDRuntime.ENABLED)
+            SkirtXPBDContacts.registerOwner(child,data);
         this.preparedMorphs.put(data, child);
         return part;
     }

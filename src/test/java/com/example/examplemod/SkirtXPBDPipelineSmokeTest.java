@@ -183,6 +183,26 @@ public final class SkirtXPBDPipelineSmokeTest
         need(captured!=null&&captured.legBoxes.size()==2 &&
                 captured.leftThigh&&captured.rightThigh,
                 "must capture both real Emoticons leg OBBs");
+        // The editor creates a fresh ChameleonMorph on a new timeline
+        // sample. A replacement morph must find the previous track's
+        // real collider frame rather than resetting the cloth clock.
+        Object track=new Object();
+        Object firstMorph=new Object();
+        Object nextMorph=new Object();
+        SkirtXPBDContacts.registerOwner(firstMorph,track);
+        SkirtXPBDContacts.registerOwner(nextMorph,track);
+        SkirtXPBDContacts.publish(firstMorph,26,world,
+                new float[][]{left,right},
+                java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"));
+        need(SkirtXPBDContacts.stableOwner(firstMorph)==track &&
+                SkirtXPBDContacts.stableOwner(nextMorph)==track,
+                "cloned morphs must resolve to one physical actor track");
+        SkirtXPBDContacts.Frame next=
+                SkirtXPBDContacts.forMorph(nextMorph);
+        need(next!=null&&next.timelineFrame==26&&
+                next.legBoxes.size()==2,
+                "next frame's cloned morph must inherit fitted leg contacts");
         float[] corrected=SkirtXPBDContacts.corrected(
                 new float[]{.16F,.46F,0F},captured,.018F);
         need(distance(corrected,new float[]{.16F,.46F,0F})>.01F,

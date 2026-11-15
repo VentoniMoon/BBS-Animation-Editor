@@ -11,8 +11,10 @@ import java.util.WeakHashMap;
  * geometry: if editor contact fitting is unavailable, body collisions are
  * disabled with a visible diagnostic while gravity/self-contacts still work.
  *
- * Selection is keyed by the actual rendered ChameleonMorph instance, never
- * by model name (two actors may share one model with different leg poses).
+ * The editor's ephemeral ChameleonMorph instances are associated with
+ * their stable BodyPartModelData track; other render paths fall back to the
+ * actual morph identity. Never key contacts by model name (two actors may
+ * share one model with different leg poses).
  * The publisher supplies the same actor-world attachment matrix used by
  * the existing Jolt collider capture. The consumer resolves the cloth
  * local points to world, performs an OBB contact there, then transforms
@@ -22,6 +24,11 @@ public final class SkirtXPBDContacts
 {
     private static final WeakHashMap<Object,Frame> FRAMES=
             new WeakHashMap<Object,Frame>();
+    /** The editor rebuilds ChameleonMorph objects on every timeline draw.
+     * Resolve them to the STABLE BodyPartModelData owner instead of
+     * resetting XPBD for each temporary morph clone. */
+    private static final WeakHashMap<Object,Object> MORPH_OWNERS=
+            new WeakHashMap<Object,Object>();
     private static final long MAX_AGE_NANOS=1500000000L;
 
     public static final class Frame
@@ -46,6 +53,19 @@ public final class SkirtXPBDContacts
     }
 
     private SkirtXPBDContacts(){}
+
+    public static synchronized void registerOwner(Object morph,Object track)
+    {
+        if(morph!=null&&track!=null)
+            MORPH_OWNERS.put(morph,track);
+    }
+
+    public static synchronized Object stableOwner(Object morph)
+    {
+        if(morph==null)return null;
+        Object owner=MORPH_OWNERS.get(morph);
+        return owner==null?morph:owner;
+    }
 
     public static synchronized void publish(Object morph,int timelineFrame,
             float[] modelToWorld,float[][] boxes,List<String> owners)
@@ -77,23 +97,25 @@ public final class SkirtXPBDContacts
         }
         // Native Emoticons thigh fit must provide BOTH legs, otherwise
         // resolving just one would push cloth into the missing leg.
+        Object owner=stableOwner(morph);
         if(!left||!right||selected.isEmpty())
         {
-            FRAMES.remove(morph);
+            FRAMES.remove(owner);
             return;
         }
-        FRAMES.put(morph,new Frame(timelineFrame,modelToWorld,
+        FRAMES.put(owner,new Frame(timelineFrame,modelToWorld,
                 selected,left,right,System.nanoTime()));
     }
 
     public static synchronized Frame forMorph(Object morph)
     {
         if(morph==null)return null;
-        Frame frame=FRAMES.get(morph);
+        Object owner=stableOwner(morph);
+        Frame frame=FRAMES.get(owner);
         if(frame!=null&&System.nanoTime()-frame.createdNanos>
                 MAX_AGE_NANOS)
         {
-            FRAMES.remove(morph);
+            FRAMES.remove(owner);
             return null;
         }
         return frame;
