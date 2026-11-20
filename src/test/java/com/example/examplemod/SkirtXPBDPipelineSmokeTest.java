@@ -35,6 +35,8 @@ public final class SkirtXPBDPipelineSmokeTest
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
         fractionalClockAdvancesOncePerSixtiethSecond();
+        sweptFramesInterpolateNativePoseAndLegContacts();
+        fastGaitBatched20TpsMatches60HzMotion();
         renderOnlyFramesStillCorrectFastThighContact();
         perAttachmentClothActivationDoesNotAffectAnotherRig();
         clonedMorphFramesShareOneLiveXPBDState();
@@ -568,6 +570,140 @@ public final class SkirtXPBDPipelineSmokeTest
                         fresh.solved.particles[n]));
         need(difference>1E-7F,
                 "cloning morph every frame reset XPBD rather than continuing");
+    }
+
+    /** Genuine in-between skin targets and leg OBBs must be used for the
+     * physical step, without corrupting the exact render-frame source. */
+    private static void sweptFramesInterpolateNativePoseAndLegContacts()
+    {
+        Fixture f=new Fixture();
+        float[] movement=identity();
+        movement[12]=.84F;
+        SkirtXPBDPoseSkin.Frame far=pose(f.raw,f.binding,movement);
+        SkirtXPBDPoseSkin.Frame halfway=SkirtXPBDPoseSkin.between(
+                f.rest,far,.5F);
+        for(int n=0;n<60;n++)
+            for(int k=0;k<3;k++)
+                need(Math.abs(halfway.target[n][k]-
+                        (f.rest.target[n][k]+far.target[n][k])*.5F)<1E-6F,
+                        "20TPS pose jumped directly to its final state");
+        for(int p=0;p<40;p++)
+            for(int v=0;v<4;v++)
+                equal(halfway.patches[p][v],
+                        new float[]{
+                                (f.rest.patches[p][v][0]+far.patches[p][v][0])*.5F,
+                                (f.rest.patches[p][v][1]+far.patches[p][v][1])*.5F,
+                                (f.rest.patches[p][v][2]+far.patches[p][v][2])*.5F
+                        },1E-6F,"intermediate Chameleon material corner");
+        need(SkirtXPBDPoseSkin.maxTargetMotion(f.rest,far)>.8F,
+                "large motion must qualify for adaptive microsteps");
+
+        Object morph=new Object();
+        float[][] first={
+                {-.16F,.46F,0F,0F,0F,0F,1F,.11F,.18F,.12F},
+                {.16F,.46F,0F,0F,0F,0F,1F,.11F,.18F,.12F}};
+        float[][] second={
+                {.68F,.46F,0F,0F,.7071068F,0F,.7071068F,.11F,.18F,.12F},
+                {1.00F,.46F,0F,0F,.7071068F,0F,.7071068F,.11F,.18F,.12F}};
+        java.util.List<String> ids=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        SkirtXPBDContacts.publish(morph,70,70D,identity(),first,ids);
+        SkirtXPBDContacts.Frame a=SkirtXPBDContacts.forMorph(morph);
+        SkirtXPBDContacts.publish(morph,71,71D,identity(),second,ids);
+        SkirtXPBDContacts.Frame b=SkirtXPBDContacts.forMorph(morph);
+        SkirtXPBDContacts.Frame middle=SkirtXPBDContacts.between(a,b,.5F);
+        need(middle!=null&&middle.legBoxes.size()==2,
+                "interpolated fitted thigh boxes disappeared");
+        need(Math.abs(middle.legBoxes.get(0)[0]-.26F)<1E-5F,
+                "left thigh skipped an intermediate center");
+        float[] q=middle.legBoxes.get(0);
+        float norm=0F;
+        for(int k=3;k<7;k++)norm+=q[k]*q[k];
+        need(Math.abs(norm-1F)<1E-5F,
+                "interpolated thigh quaternion must stay unit length");
+        need(SkirtXPBDContacts.maxMotion(a,b)>.8F,
+                "rapid fitted leg sweep must request extra solver steps");
+        // Changed box topology must use only real current boxes.
+        SkirtXPBDContacts.publish(morph,72,72D,identity(),
+                new float[][]{second[1],second[0]},
+                java.util.Arrays.asList("emoticons.right_leg","emoticons.left_leg"));
+        SkirtXPBDContacts.Frame swapped=SkirtXPBDContacts.forMorph(morph);
+        need(SkirtXPBDContacts.between(a,swapped,.5F)==swapped,
+                "different legs were mistakenly interpolated together");
+    }
+
+    /**
+     * 20TPS native animation jumps .84 model units between editor frames.
+     * The XPBD state must see the SAME sequence of intermediate targets as
+     * if each 1/60 sample had arrived separately. This catches the original
+     * behavior that sent the end pose to all three steps and reset the cloth.
+     */
+    private static void fastGaitBatched20TpsMatches60HzMotion()
+    {
+        Fixture f=new Fixture();
+        float[][] tint=new float[40][];
+        for(int p=0;p<40;p++)
+            tint[p]=new float[]{1F,1F,1F,1F,0F,0F};
+        java.util.List<String> labels=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        Object smooth=new Object(),batched=new Object();
+        SkirtXPBDRuntime.RenderFrame[] first={
+                fastSample(smooth,f,tint,labels,70D,0F),
+                fastSample(batched,f,tint,labels,70D,0F)};
+        need(first[0].physicsSteps==1&&first[1].physicsSteps==1,
+                "initial states must share the first nominal physics step");
+        for(int step=1;step<=3;step++)
+        {
+            double tick=70D+step/3D;
+            SkirtXPBDRuntime.RenderFrame next=fastSample(
+                    smooth,f,tint,labels,tick,.84F*step/3F);
+            need(next.physicsSteps==1,
+                    "60FPS motion must integrate one nominal step");
+            need(next.motionSubsteps>=1,
+                    "accelerated animation must advance the physics");
+        }
+        SkirtXPBDRuntime.RenderFrame combined=fastSample(
+                batched,f,tint,labels,71D,.84F);
+        need(combined.physicsSteps==3&&combined.motionSubsteps>3,
+                "20TPS pose jump must become 3 swept steps with extra substeps");
+        // Reuse same contact and skin at identical timestamp: mirror and
+        // export passes must not integrate a fourth frame.
+        SkirtXPBDRuntime.RenderFrame repeat=fastSample(
+                batched,f,tint,labels,71D,.84F);
+        need(repeat.physicsSteps==0&&repeat.solved.substeps==0,
+                "repeated render pass added extra motion time");
+        SkirtXPBDRuntime.RenderFrame normal=fastSample(
+                smooth,f,tint,labels,71D,.84F);
+        need(normal.physicsSteps==0,
+                "stable 60FPS pose should not integrate twice");
+        float max=0F;
+        for(int n=0;n<60;n++)
+        {
+            float[] a=normal.solved.particles[n];
+            float[] b=combined.solved.particles[n];
+            max=Math.max(max,distance(a,b));
+            for(float v:b)need(Float.isFinite(v),
+                    "fast cloth movement generated a nonfinite particle");
+        }
+        need(max<.015F,
+                "20TPS batched sweep diverged from the 60FPS samples: "+max);
+    }
+
+    private static SkirtXPBDRuntime.RenderFrame fastSample(Object morph,
+            Fixture f,float[][] tint,List<String> labels,
+            double tick,float translation)
+    {
+        float[] move=identity();
+        move[12]=translation;
+        SkirtXPBDPoseSkin.Frame posed=pose(f.raw,f.binding,move);
+        float[][] boxes={
+                {-.16F+translation,.46F,0F,0F,0F,0F,1F,.11F,.18F,.12F},
+                {.16F+translation,.46F,0F,0F,0F,0F,1F,.11F,.18F,.12F}};
+        SkirtXPBDContacts.publish(morph,(int)Math.floor(tick),tick,
+                identity(),boxes,labels);
+        return SkirtXPBDRuntime.sample(morph,
+                f.raw,f.shared,f.binding,f.topology,posed,tint,
+                SkirtXPBDContacts.forMorph(morph));
     }
 
     private static SkirtXPBDPoseSkin.Frame pose(
