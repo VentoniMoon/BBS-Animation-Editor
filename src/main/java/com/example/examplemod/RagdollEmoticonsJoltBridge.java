@@ -25,8 +25,9 @@ import net.minecraft.client.Minecraft;
  * and the skinned matrices before this hook. For weight=0, absent JNI, or an
  * invalid rig, NOTHING is mutated (no behavioral or export regression).
  *
- * Opt-in in the development client:
- *   -Dbbs.editor.physics.jolt.ragdoll=true
+ * Ragdoll is enabled when a CHARACTER physics key activates it.
+ * Use -Dbbs.editor.physics.jolt.ragdoll=false to disable native physics
+ * explicitly (e.g. compatibility troubleshooting).
  *
  * Model-space physical scenes are owned per actor and tied to the actual
  * model bone signature. No hard JNI dependency is linked into Forge code;
@@ -35,8 +36,12 @@ import net.minecraft.client.Minecraft;
  */
 public final class RagdollEmoticonsJoltBridge
 {
+    // Default ON: the CHARACTER Ragdoll weight is the actual opt-in.
+    // Boolean.getBoolean(...) defaulted to false in production Minecraft
+    // because Gradle's runClient -D flag was absent from installed JARs.
     private static final boolean ENABLED=
-            Boolean.getBoolean("bbs.editor.physics.jolt.ragdoll");
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.ragdoll","true"));
     private static final String NATIVE=
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
     private static boolean attempted,available,logged,reportedHierarchy;
