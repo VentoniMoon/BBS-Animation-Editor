@@ -17,8 +17,11 @@ public final class SkirtXPBDRuntime
 {
     private static final WeakHashMap<Object,Actor> ACTORS=
             new WeakHashMap<Object,Actor>();
-    public static final boolean ENABLED=Boolean.getBoolean(
-            "bbs.editor.physics.skirt.xpbd");
+    // Cloth activation is selected per Body Part in the editor. The
+    // dev-only -D flag must not be required by an installed Forge JAR.
+    // Explicit -Dbbs.editor.physics.skirt.xpbd=false still opts out.
+    public static final boolean ENABLED=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbd","true"));
     public static final boolean REPLACE=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdReplace","true"));
 
