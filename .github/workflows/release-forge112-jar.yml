@@ -8,6 +8,16 @@ on:
       - 'build.gradle'
       - 'src/main/java/**'
       - 'src/main/resources/**'
+  # Build an installable test JAR for the RAGDOLL regression before
+  # merging; pull_request events never publish or move the immutable tag.
+  pull_request:
+    paths:
+      - 'build.gradle'
+      - 'src/main/java/com/example/examplemod/RagdollActivationPolicy.java'
+      - 'src/main/java/com/example/examplemod/RagdollEmoticonsJoltBridge.java'
+      - 'src/main/java/com/example/examplemod/PhysicsWorkspace.java'
+      - 'src/main/java/com/example/examplemod/PhysicsInspectorPanel.java'
+      - '.github/workflows/release-forge112-jar.yml'
   workflow_dispatch:
 
 permissions:
@@ -162,6 +172,12 @@ jobs:
                   "com/example/examplemod/CharacterAnchorPreview.class",
                   "com/example/examplemod/CharacterAnchorWorldDrops.class",
                   "com/example/examplemod/BodyPartsPersistence.class",
+                  # RAGDOLL must ship with both the Forge integration and
+                  # the real native fitted multi-body solver, not just the
+                  # inert PHYSICS inspector or the generic Jolt bootstrap.
+                  "com/example/examplemod/RagdollActivationPolicy.class",
+                  "com/example/examplemod/RagdollEmoticonsJoltBridge.class",
+                  "com/example/examplemod/physics/JoltHumanoidRagdoll.class",
               ]
               missing = [name for name in required if name not in names]
               assert not missing, "Required release files missing: " + repr(missing)
@@ -189,7 +205,7 @@ jobs:
       - name: Publish installable Forge mod artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bbs-animation-editor-0.0.2-forge-1.12.2-jolt-java8
+          name: ${{ github.event_name == 'pull_request' && 'bbs-animation-editor-0.0.2-ragdoll-fix-test' || 'bbs-animation-editor-0.0.2-forge-1.12.2-jolt-java8' }}
           path: |
             build/libs/bbs-animation-editor-0.0.2.jar
             build/libs/SHA256SUMS.txt
