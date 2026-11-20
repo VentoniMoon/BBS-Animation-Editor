@@ -43,8 +43,8 @@ public final class RagdollEmoticonsJoltBridge
     // should work without a second, undocumented JVM activation flag.
     // Explicit false still guarantees a zero-cost safe fallback.
     private static final boolean ENABLED=
-            !"false".equalsIgnoreCase(System.getProperty(
-                    "bbs.editor.physics.jolt.ragdoll","true"));
+            RagdollActivationPolicy.runtimeEnabled(System.getProperty(
+                    "bbs.editor.physics.jolt.ragdoll"));
     private static final String NATIVE=
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
     private static boolean attempted,available,logged,reportedHierarchy;
