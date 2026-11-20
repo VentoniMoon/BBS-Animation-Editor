@@ -372,9 +372,8 @@ public final class PhysicsWorkspace
                     hasOtherRagdollKey=true;
                     break;
                 }
-            float authored=explicitWeight>=0F?
-                    explicitWeight:
-                    (!hasOtherRagdollKey&&sampled<=0F?1F:sampled);
+            float authored=RagdollActivationPolicy.initialKeyWeight(
+                    explicitWeight,sampled,hasOtherRagdollKey);
             PhysicsChannels.setWeight(t,f,authored);
             break;
         case PhysicsChannels.IMPULSE:
