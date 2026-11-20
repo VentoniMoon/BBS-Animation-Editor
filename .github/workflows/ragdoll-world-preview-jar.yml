@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   package:
@@ -222,3 +222,22 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Publish separate experimental preview release
+        if: github.ref == 'refs/heads/fix/ragdoll-real-world-collisions-20261120'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.0.2-ragdoll-world-preview-20261120
+          target_commitish: ${{ github.sha }}
+          name: BBS Animation Editor 0.0.2 - ragdoll world collisions (test)
+          prerelease: true
+          draft: false
+          body: |
+            Test JAR for Minecraft Forge 1.12.2 / Java 8.
+            Replaces ragdoll's synthetic platform with real Minecraft
+            collision boxes; includes bundled Jolt physics and Chameleon skirt.
+            Experimental: test balcony falls and Chisels & Bits / LittleTiles.
+            Does not replace stable v0.0.2.
+          files: |
+            build/libs/bbs-animation-editor-0.0.2-ragdoll-world-preview.jar
+            build/libs/SHA256SUMS.txt
+          fail_on_unmatched_files: true
