@@ -42,11 +42,14 @@ public final class SkirtXPBDContacts
         public final double sampleTick;
         public final float[] modelToWorld;
         public final List<float[]> legBoxes;
+        /** Stable source names guard against pairing a left box with
+         * a right box if the renderer changes its collider order. */
+        public final List<String> legOwners;
         public final boolean leftThigh,rightThigh;
         private final long createdNanos;
 
         private Frame(int frame,double tick,float[] world,List<float[]> boxes,
-                boolean left,boolean right,long time)
+                List<String> owners,boolean left,boolean right,long time)
         {
             timelineFrame=frame;
             sampleTick=tick;
@@ -54,6 +57,8 @@ public final class SkirtXPBDContacts
             List<float[]> data=new ArrayList<float[]>();
             for(float[] b:boxes)data.add(b.clone());
             legBoxes=Collections.unmodifiableList(data);
+            legOwners=Collections.unmodifiableList(
+                    new ArrayList<String>(owners));
             leftThigh=left;rightThigh=right;
             createdNanos=time;
         }
@@ -116,6 +121,7 @@ public final class SkirtXPBDContacts
                 owners==null||boxes.length!=owners.size())
             return;
         List<float[]> selected=new ArrayList<float[]>();
+        List<String> selectedOwners=new ArrayList<String>();
         boolean left=false,right=false;
         for(int i=0;i<boxes.length;i++)
         {
@@ -136,6 +142,7 @@ public final class SkirtXPBDContacts
             if(name.contains("left"))left=true;
             if(name.contains("right"))right=true;
             selected.add(b.clone());
+            selectedOwners.add(name);
         }
         // Native Emoticons thigh fit must provide BOTH legs, otherwise
         // resolving just one would push cloth into the missing leg.
@@ -146,7 +153,7 @@ public final class SkirtXPBDContacts
             return;
         }
         FRAMES.put(owner,new Frame(timelineFrame,sampleTick,modelToWorld,
-                selected,left,right,System.nanoTime()));
+                selected,selectedOwners,left,right,System.nanoTime()));
     }
 
     public static synchronized Frame forMorph(Object morph)
@@ -161,6 +168,98 @@ public final class SkirtXPBDContacts
             return null;
         }
         return frame;
+    }
+
+    /** True only when the SAME fitted leg geometry can be swept between
+     * samples. A change of box ordering/count must never manufacture a
+     * phantom collider between different legs. */
+    private static boolean sameGeometry(Frame from,Frame to)
+    {
+        return from!=null&&to!=null&&
+                from.legOwners.equals(to.legOwners)&&
+                from.leftThigh==to.leftThigh&&
+                from.rightThigh==to.rightThigh;
+    }
+
+    /**
+     * Swept thigh contacts for the intermediate 60Hz cloth pose.
+     * Positions and extents are linearly blended; OBB quaternions follow
+     * the shortest arc (normalized lerp, no flipping at the +/-q boundary).
+     * If the source topology changes, use actual current contacts rather
+     * than inventing an intermediate mapping.
+     */
+    public static Frame between(Frame from,Frame to,float alpha)
+    {
+        if(to==null)return null;
+        if(from==null||alpha>=1F||!sameGeometry(from,to))return to;
+        if(alpha<=0F)return from;
+        if(!Float.isFinite(alpha))
+            throw new IllegalArgumentException("Nonfinite cloth collision alpha");
+        float[] matrix=new float[16];
+        for(int i=0;i<16;i++)
+            matrix[i]=lerp(from.modelToWorld[i],to.modelToWorld[i],alpha);
+        // A 180-degree discontinuity can make a linearly blended 3x3
+        // singular. Avoid impossible inverse transforms in the contact pass.
+        float determinant=matrix[0]*(matrix[5]*matrix[10]-matrix[9]*matrix[6])-
+                matrix[4]*(matrix[1]*matrix[10]-matrix[9]*matrix[2])+
+                matrix[8]*(matrix[1]*matrix[6]-matrix[5]*matrix[2]);
+        if(!Float.isFinite(determinant)||Math.abs(determinant)<1E-5F)
+            return to;
+        List<float[]> boxes=new ArrayList<float[]>(to.legBoxes.size());
+        for(int i=0;i<to.legBoxes.size();i++)
+        {
+            float[] a=from.legBoxes.get(i),b=to.legBoxes.get(i);
+            float[] out=new float[10];
+            for(int k=0;k<3;k++)out[k]=lerp(a[k],b[k],alpha);
+            float dot=0F;
+            for(int k=3;k<7;k++)dot+=a[k]*b[k];
+            float sign=dot<0F?-1F:1F;
+            float length=0F;
+            for(int k=3;k<7;k++)
+            {
+                out[k]=lerp(a[k],sign*b[k],alpha);
+                length+=out[k]*out[k];
+            }
+            if(length<1E-9F)return to;
+            float inv=1F/(float)Math.sqrt(length);
+            for(int k=3;k<7;k++)out[k]*=inv;
+            for(int k=7;k<10;k++)out[k]=lerp(a[k],b[k],alpha);
+            boxes.add(out);
+        }
+        return new Frame(to.timelineFrame,
+                from.sampleTick+(to.sampleTick-from.sampleTick)*alpha,
+                matrix,boxes,to.legOwners,to.leftThigh,to.rightThigh,
+                System.nanoTime());
+    }
+
+    /** Conservative physical travel estimate including thigh rotations
+     * and root motion, so rapid kicks request extra XPBD microsteps. */
+    public static float maxMotion(Frame from,Frame to)
+    {
+        if(!sameGeometry(from,to))return 0F;
+        float shift=0F;
+        for(int k=12;k<15;k++)
+            shift+=(to.modelToWorld[k]-from.modelToWorld[k])*
+                    (to.modelToWorld[k]-from.modelToWorld[k]);
+        float biggest=(float)Math.sqrt(shift);
+        for(int i=0;i<to.legBoxes.size();i++)
+        {
+            float[] a=from.legBoxes.get(i),b=to.legBoxes.get(i);
+            float travel=0F,dot=0F;
+            for(int k=0;k<3;k++)travel+=(b[k]-a[k])*(b[k]-a[k]);
+            for(int k=3;k<7;k++)dot+=a[k]*b[k];
+            float rotation=2F*(float)Math.acos(
+                    Math.min(1F,Math.max(0F,Math.abs(dot))));
+            float radius=Math.max(b[7],Math.max(b[8],b[9]));
+            biggest=Math.max(biggest,(float)Math.sqrt(travel)+
+                    rotation*radius);
+        }
+        return biggest;
+    }
+
+    private static float lerp(float a,float b,float t)
+    {
+        return a+(b-a)*t;
     }
 
     /** Sphere-padded point vs REAL actor-world oriented box.
