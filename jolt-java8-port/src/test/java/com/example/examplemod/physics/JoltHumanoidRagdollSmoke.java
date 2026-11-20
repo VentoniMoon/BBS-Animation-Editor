@@ -228,6 +228,38 @@ public final class JoltHumanoidRagdollSmoke
                 belowPlaneY+"/"+abovePlaneY);
         check(Math.abs(abovePlaneY-earthY)<.14F,
                 "Dry actor below surface plane still receives water force");
+        // True world colliders replace the synthetic 24x24 preview floor.
+        // A body with NO block below must fall, even though floorY is
+        // initially authored at zero.
+        float unsupportedY,supportedY;
+        try(JoltHumanoidRagdoll empty=JoltHumanoidRagdoll.createFitted(
+                    heads,tails,radii,parents,kind,limits,frames,-.03F))
+        {
+            empty.setWorldCollisionBoxes(new float[0][]);
+            for(int tick=0;tick<18;tick++)empty.step();
+            unsupportedY=empty.poses()[0][1];
+        }
+        try(JoltHumanoidRagdoll platform=JoltHumanoidRagdoll.createFitted(
+                    heads,tails,radii,parents,kind,limits,frames,-.03F))
+        {
+            // Only one actual solid block below the feet, not a plane.
+            platform.setWorldCollisionBoxes(new float[][]{
+                    {0F,-.125F,0F,.5F,.125F,.5F,0F,0F,0F,1F}
+            });
+            for(int tick=0;tick<18;tick++)platform.step();
+            supportedY=platform.poses()[0][1];
+            // Moving the single platform away must remove that support.
+            platform.setWorldCollisionBoxes(new float[][]{
+                    {6F,-.125F,0F,.5F,.125F,.5F,0F,0F,0F,1F}
+            });
+            for(int tick=0;tick<18;tick++)platform.step();
+            check(platform.poses()[0][1]<supportedY-.4F,
+                    "Removed world support kept the ragdoll afloat");
+        }
+        check(supportedY>unsupportedY+1F,
+                "A missing block was treated as a full 24x24 floor: "+
+                supportedY+"/"+unsupportedY);
+        System.out.println("Native Minecraft-style ragdoll support / void OK");
         System.out.println("Native water plane / buoyancy OK");
         System.out.println("Native Jolt Emoticons 11-body ragdoll OK");
     }

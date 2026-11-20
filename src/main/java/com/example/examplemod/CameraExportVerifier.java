@@ -40,6 +40,49 @@ public final class CameraExportVerifier
      * A bare command resolves via PATH, while an explicitly selected FFmpeg
      * 7.1 executable prefers the companion utility in the same bin folder.
      */
+    /**
+     * FFprobe accepts -version and lives in the same bin directory, so the
+     * companion-probe availability test alone cannot detect an accidentally
+     * selected ffprobe.exe in the encoder field. That typo previously caused
+     * "FFmpeg frame 0 failed: Failed to set value '-n' for option 'nostdin'".
+     *
+     * Check the actual executable's version banner before streaming RGBA.
+     */
+    public static void requireEncoderAvailable(File ffmpeg) throws IOException
+    {
+        String executable=ffmpeg==null?"ffmpeg":ffmpeg.getPath();
+        File log=File.createTempFile("bbs-camera-encoder-check-",".log");
+        Process process=null;
+        try
+        {
+            process=new ProcessBuilder(executable,"-version")
+                    .redirectErrorStream(true).redirectOutput(log).start();
+            if(!process.waitFor(5L,TimeUnit.SECONDS))
+                throw new IOException("FFmpeg executable did not respond");
+            if(log.length()>32768L)
+                throw new IOException("Unexpected FFmpeg version output");
+            String banner=new String(Files.readAllBytes(log.toPath()),
+                    StandardCharsets.UTF_8).trim();
+            if(banner.startsWith("ffprobe version"))
+                throw new IOException("Selected ffprobe instead of ffmpeg. "+
+                        "Choose ffmpeg.exe in the CAMERA Export dialog.");
+            if(process.exitValue()!=0||!banner.startsWith("ffmpeg version"))
+                throw new IOException("Selected executable is not FFmpeg: "+
+                        executable);
+        }
+        catch(InterruptedException interrupted)
+        {
+            Thread.currentThread().interrupt();
+            throw new IOException("FFmpeg executable check interrupted",
+                    interrupted);
+        }
+        finally
+        {
+            if(process!=null&&process.isAlive())process.destroyForcibly();
+            if(log.isFile())log.delete();
+        }
+    }
+
     public static void requireAvailable(File ffprobe) throws IOException
     {
         String probe=ffprobe==null?"ffprobe":ffprobe.getPath();

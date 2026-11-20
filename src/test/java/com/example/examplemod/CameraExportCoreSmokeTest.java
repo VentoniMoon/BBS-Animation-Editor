@@ -102,6 +102,21 @@ public final class CameraExportCoreSmokeTest
             return;
         }
 
+        // An ffprobe binary has a valid -version response, but is not an
+        // encoder. Using it caused failure at FFmpeg frame 0 in real mods.
+        CameraExportVerifier.requireEncoderAvailable(new File("ffmpeg"));
+        boolean probeRejected=false;
+        try
+        {
+            CameraExportVerifier.requireEncoderAvailable(new File("ffprobe"));
+        }
+        catch(IOException expected)
+        {
+            probeRejected=expected.getMessage().contains("ffprobe");
+        }
+        check(probeRejected,
+                "Selecting ffprobe as the MP4 encoder must fail before frame 0");
+
         File temp=Files.createTempDirectory("bbs-camera-encoder-test").toFile();
         File ffmpegTool=new File(temp,"ffmpeg.exe");
         File probeTool=new File(temp,"ffprobe.exe");

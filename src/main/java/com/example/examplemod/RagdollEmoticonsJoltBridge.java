@@ -25,24 +25,31 @@ import net.minecraft.client.Minecraft;
  * and the skinned matrices before this hook. For weight=0, absent JNI, or an
  * invalid rig, NOTHING is mutated (no behavioral or export regression).
  *
- * Opt-in in the development client:
- *   -Dbbs.editor.physics.jolt.ragdoll=true
+ * Ragdoll is enabled when a CHARACTER physics key activates it.
+ * Use -Dbbs.editor.physics.jolt.ragdoll=false to disable native physics
+ * explicitly (e.g. compatibility troubleshooting).
  *
  * Model-space physical scenes are owned per actor and tied to the actual
  * model bone signature. No hard JNI dependency is linked into Forge code;
  * the Java 8 Jolt prototype is loaded reflectively. This first-pass solver
- * only tests a ground plane at local Y0, not real Minecraft collision blocks.
+ * queries the active Minecraft world each physics tick for real collision boxes.
  */
 public final class RagdollEmoticonsJoltBridge
 {
+    // Default ON: the CHARACTER Ragdoll weight is the actual opt-in.
+    // Boolean.getBoolean(...) defaulted to false in production Minecraft
+    // because Gradle's runClient -D flag was absent from installed JARs.
     private static final boolean ENABLED=
-            Boolean.getBoolean("bbs.editor.physics.jolt.ragdoll");
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.ragdoll","true"));
     private static final String NATIVE=
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
     private static boolean attempted,available,logged,reportedHierarchy;
     private static Method create,step,poses,startFall;
     private static Method nativeImpulse,nativeEnvironment;
     private static Method nativeEnvironmentSurface;
+    private static Method nativeWorldColliders;
+    private static boolean reportedWorldPhysics;
     private static boolean reportedOldPhysicsJar;
     private static boolean fitted;
     private static final Map<String,State> scenes=
@@ -154,6 +161,20 @@ public final class RagdollEmoticonsJoltBridge
             }
             step=clazz.getMethod("step");
             poses=clazz.getMethod("poses");
+            // Old sidecars would silently keep the invisible 24x24 floor.
+            // Do not start an inaccurate preview without the updated API.
+            try
+            {
+                nativeWorldColliders=clazz.getMethod(
+                        "setWorldCollisionBoxes",float[][].class);
+            }
+            catch(NoSuchMethodException oldSidecar)
+            {
+                System.err.println("[BBS Editor][Ragdoll][World] "+
+                        "Updated Jolt Java 8 sidecar required for block "+
+                        "collisions; refusing legacy infinite floor");
+                return false;
+            }
             nativeImpulse=clazz.getMethod("impulse",int.class,float.class,
                     float.class,float.class,float.class,float.class,float.class);
             try
@@ -268,12 +289,14 @@ public final class RagdollEmoticonsJoltBridge
             }
             // Apply exactly once at activation, not on repeated preview,
             // mirror or screenshot passes for this same frame.
+            applyWorldColliders(state,actor,state.frame);
             applyEnvironment(state,actor,state.frame);
             applyImpulse(state,actor.getCharacterTimeline(),state.frame);
             // Fixed-step replay: impulses fire once on the frame crossing.
             while(state.frame<frame)
             {
                 int next=state.frame+1;
+                applyWorldColliders(state,actor,next);
                 applyEnvironment(state,actor,next);
                 applyImpulse(state,actor.getCharacterTimeline(),next);
                 step.invoke(state.nativeRig);
@@ -295,6 +318,30 @@ public final class RagdollEmoticonsJoltBridge
             }
         }
         return false;
+    }
+
+    /**
+     * Jolt bodies are model-local, while Minecraft collision AABBs are
+     * world-space. Sample the live physics poses every 20 Hz and transform
+     * real world boxes into their model-local OBB representation.
+     */
+    private static void applyWorldColliders(State state,
+            BlockbusterSceneActorData actor,int frame) throws Exception
+    {
+        Minecraft mc=Minecraft.getMinecraft();
+        BlockbusterRecord record=actor.getRecord();
+        BlockbusterRecordFrame authored=record==null?null:record.getFrame(frame);
+        float[][] live=(float[][])poses.invoke(state.nativeRig);
+        float[][] boxes=RagdollWorldCollisionSampler.sample(
+                mc==null?null:mc.world,authored,live,state.lengths);
+        nativeWorldColliders.invoke(state.nativeRig,(Object)boxes);
+        if(!reportedWorldPhysics)
+        {
+            reportedWorldPhysics=true;
+            System.out.println("[BBS Editor][Ragdoll][World] "+
+                    "Actual Minecraft collision AABBs enabled; "+
+                    "legacy synthetic floor removed");
+        }
     }
 
     /** Independent gravity + water channels for an actor's Jolt world. */
@@ -592,8 +639,9 @@ public final class RagdollEmoticonsJoltBridge
             float[] euler=extractEulerZYX(local);
             float[] row=new float[]{local.m03,local.m13,local.m23,
                     euler[0],euler[1],euler[2]};
-            for(float value:row)
-                if(!Float.isFinite(value)||Math.abs(value)>20F)
+            for(int k=0;k<row.length;k++)
+                if(!Float.isFinite(row[k])||
+                        Math.abs(row[k])>(k<3?4096F:20F))
                     return false;
             edits.add(row);
         }
