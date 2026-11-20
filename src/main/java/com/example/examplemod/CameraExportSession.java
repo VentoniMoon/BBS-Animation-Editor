@@ -76,6 +76,9 @@ public final class CameraExportSession implements AutoCloseable
     {
         if(tracks==null)throw new IllegalArgumentException("Missing sound plan");
         final File ffprobe=CameraExportVerifier.companionProbe(ffmpeg);
+        // Reject ffprobe.exe selected as the encoder before the first
+        // raw frame. It also responds to -version but cannot encode video.
+        CameraExportVerifier.requireEncoderAvailable(ffmpeg);
         CameraExportVerifier.requireAvailable(ffprobe);
         final boolean withAudio=!tracks.isEmpty();
         final File video=withAudio?new File(output.getAbsoluteFile().getParentFile(),

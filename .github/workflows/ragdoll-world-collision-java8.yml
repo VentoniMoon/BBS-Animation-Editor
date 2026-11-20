@@ -1,0 +1,37 @@
+name: Ragdoll world collision math Java 8 smoke
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/com/example/examplemod/RagdollWorldCollisionMath.java'
+      - 'src/main/java/com/example/examplemod/RagdollWorldCollisionSampler.java'
+      - 'src/test/java/com/example/examplemod/RagdollWorldCollisionMathSmoke.java'
+      - '.github/workflows/ragdoll-world-collision-java8.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/java/com/example/examplemod/RagdollWorldCollisionMath.java'
+      - 'src/main/java/com/example/examplemod/RagdollWorldCollisionSampler.java'
+      - 'src/test/java/com/example/examplemod/RagdollWorldCollisionMathSmoke.java'
+  workflow_dispatch:
+
+jobs:
+  java8-collision-mapping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile math with Java 8 API and bytecode target
+        run: |
+          mkdir -p build/ragdoll-world-smoke
+          javac --release 8 -encoding UTF-8 \
+            -d build/ragdoll-world-smoke \
+            src/main/java/com/example/examplemod/RagdollWorldCollisionMath.java \
+            src/test/java/com/example/examplemod/RagdollWorldCollisionMathSmoke.java
+      - name: Test rotation, actor position and micro-voxel dimensions
+        run: |
+          java -ea -cp build/ragdoll-world-smoke \
+            com.example.examplemod.RagdollWorldCollisionMathSmoke

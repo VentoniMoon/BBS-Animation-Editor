@@ -66,7 +66,9 @@ not all identical to the default bind rig; physical binding must use the
 - `JoltHumanoidRagdoll` (Java 8 optional sidecar): 11 dynamic rigid
   Jolt bodies with lengths and pivots from actual BOBJ head/tail,
   SwingTwist shoulders/hips/neck/spine, Hinge elbows/knees, and local
-  flat floor proxy. Includes native `impulse(index,vec,point)` hook.
+  legacy floor for isolated native tests; the editor now replaces it with
+  exact world collision AABBs streamed each 20 Hz tick. Includes native
+  `impulse(index,vec,point)` and `setWorldCollisionBoxes(...)` hooks.
 - `RagdollEmoticonsJoltBridge`: native Emoticons animator runs first,
   samples the clean bone matrices, calls Jolt, blends 0..100% world
   orientation and position, then updates those same BOBJ deform bones.
@@ -76,7 +78,10 @@ not all identical to the default bind rig; physical binding must use the
   classpath. No physics mutation if the property is off, JNI missing
   or the influence is 0. Not enabled in export or public JAR by default.
 - **Limitations**: only Emoticons hooked in this iteration; simple
-  local floor proxy (not real Minecraft terrain), hinge axes initially
+  real Minecraft terrain sampled in preview (via `World.getCollisionBoxes`),
+  updated around moving ragdoll bodies. Microblock accuracy depends on
+  Chisels & Bits and LittleTiles exposing their collision boxes to Forge,
+  and a bounded 192-box local contact budget. Hinge axes initially
   X-aligned and not calibrated to each model's bind frame, seek back
   reseeds from current pose. These remain engineering gates before
   publishing Physics 2.0.
@@ -159,3 +164,30 @@ Use **frame-stamped events**, not an always-on force slider.
    return, multiple actors, mirrored actor, BSL, fast rewind.
 5. Repeated frame-stamped impact should fire only once and be invariant
    between preview FPS and 60 FPS PNG/video export.
+
+## World collision sampling (2026-11-20)
+
+- `RagdollWorldCollisionSampler`: samples nearby `World.getCollisionBoxes(null, AABB)`
+  from the real client world around **each live native body**. The sampler
+  never assumes a solid full block just because the block position is occupied.
+  Empty air and holes remain empty.
+- `RagdollWorldCollisionMath`: the Record actor's position and body yaw are
+  used to convert world AABB collision boxes to **model-local oriented boxes**
+  before the JNI call. Physics never mistakes a rotated actor's world floor
+  for a plane aligned with the local XZ axes.
+- `JoltHumanoidRagdoll.setWorldCollisionBoxes(float[][])`: removes the old
+  24×24 floor on first call, atomically replaces static world bodies, and
+  handles **zero** colliders as empty air. Boxes are ordered nearest-first
+  when exceeding 192 local contacts. The native pose is re-queried every
+  frame, allowing the actor to hit lower levels after falling.
+- Older Jolt sidecars **cannot** run this mode: the Forge bridge explicitly
+  refuses to start ragdoll physics if the new native method is missing.
+  Rebuild the Java 8 sidecar from this branch before testing.
+- The interpolation/render behavior outside 20 Hz preview, long-distance
+  actor-root culling, exceptionally dense microtile meshes (>192 collision
+  AABBs in the live probe), and exported-video native ragdoll playback
+  still require separate testing/engineering. No Blender/Blockbuster export
+  data format is changed.
+- Tests: `RagdollWorldCollisionMathSmoke` checks yaw, actor translation,
+  and sub-block dimensions. `JoltHumanoidRagdollSmoke` exercises missing
+  ground and a localized 1-block support in native Jolt.

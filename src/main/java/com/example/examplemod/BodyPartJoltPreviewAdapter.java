@@ -12,8 +12,9 @@ import java.util.Map;
  * OPTIONAL Jolt preview bridge. Java 8 / Forge classes have NO hard JNI
  * linkage; an absent physics prototype leaves the old renderer available.
  *
- * Enable ONLY for development:
- *   -Dbbs.editor.physics.jolt.preview=true
+ * Native hair/body-part physics is selected by the existing Body Part
+ * settings. Installed Forge JARs enable the bridge by default; set
+ * -Dbbs.editor.physics.jolt.preview=false to opt out explicitly.
  *
  * Jolt JNI and the jolt-hair-prototype Java8 jar must both be on the launch
  * classpath. The experimental module is intentionally not a Forge mod.
@@ -24,7 +25,8 @@ import java.util.Map;
  */
 public final class BodyPartJoltPreviewAdapter {
     private static final boolean REQUESTED =
-            Boolean.getBoolean("bbs.editor.physics.jolt.preview");
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.preview","true"));
     private static final boolean RAW_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
     /** Jolt preview body contacts default ON; opt out explicitly for A/B. */

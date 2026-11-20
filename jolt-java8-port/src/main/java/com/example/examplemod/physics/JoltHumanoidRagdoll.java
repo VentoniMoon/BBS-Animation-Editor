@@ -1,6 +1,7 @@
 package com.example.examplemod.physics;
 
 import com.github.stephengold.joltjni.*;
+import java.util.Arrays;
 import com.github.stephengold.joltjni.enumerate.EActivation;
 import com.github.stephengold.joltjni.enumerate.EMotionType;
 import com.github.stephengold.joltjni.enumerate.EConstraintSpace;
@@ -13,7 +14,7 @@ import com.github.stephengold.joltjni.enumerate.EOverrideMassProperties;
  * positions in model space, ordered parents-first. Unlike JoltHairChain, this
  * rig has multiple branches and a separate constraint for each humanoid
  * joint. All eleven stock Emoticons rigid segments are dynamic. An independent
- * flat floor provides a test contact until Minecraft block geometry is added.
+ * legacy test floor is replaced by streamed real world collision boxes in the editor.
  *
  * The Forge integration must guard loading behind the optional Jolt native
  * bootstrap. No shared mutable world, no physics in the legacy editor if the
@@ -41,7 +42,11 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
     private float fluidDrag=.8F,fluidAngularDrag=.65F;
     private boolean surfaceEnabled;
     private float surfaceY=63F;
+    private static final int MAX_WORLD_COLLIDERS=192;
     private Body ground;
+    private final Body[] worldColliders=new Body[MAX_WORLD_COLLIDERS];
+    private int worldColliderCount;
+    private float[][] cachedWorldBoxes;
     private boolean closed;
 
     private JoltHumanoidRagdoll(float[][] head,float[][] tail,float[] radius,
@@ -50,9 +55,8 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
         int count=head.length;
         initialHeads=copy(head);initialTails=copy(tail);
         pairFilter=new ObjectLayerPairFilterTable(2);
-        // 0: ragdoll bodies, 1: world proxy. Adjacent segments never
-        // collide against each other. Real world and per-part body contacts
-        // can be added once collision geometry fitting has been tested.
+        // 0: dynamic ragdoll bodies, 1: static Minecraft collision boxes.
+        // Adjacent segments are still filtered separately.
         pairFilter.enableCollision(0,0);
         pairFilter.enableCollision(0,1);
         broadLayers=new BroadPhaseLayerInterfaceTable(2,2);
@@ -68,7 +72,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                     (parents[i]>=0&&parents[i]==parents[j]))
                 selfFilter.disableCollision(i,j);
         world=new PhysicsSystem();
-        world.init(Math.max(128,count*4),0,512,512,
+        world.init(Math.max(256,count+MAX_WORLD_COLLIDERS+1),0,1024,1024,
                 broadLayers,broadFilter,pairFilter);
         world.setGravity(0F,-9.81F,0F);
         PhysicsSettings physicalSettings=world.getPhysicsSettings();
@@ -237,6 +241,96 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
             close();
             throw failed;
         }
+    }
+
+    /**
+     * Replace the legacy preview floor with a bounded set of exact Minecraft
+     * collision boxes, preconverted into model-local oriented boxes.
+     * Each row: center XYZ, half extents XYZ, quaternion XYZW.
+     * The caller must refresh before every fixed tick as the body falls.
+     * Empty input intentionally means NO FLOOR (the edge of a balcony).
+     */
+    public void setWorldCollisionBoxes(float[][] boxes)
+    {
+        if(closed)throw new IllegalStateException("Closed ragdoll");
+        if(boxes==null||boxes.length>MAX_WORLD_COLLIDERS)
+            throw new IllegalArgumentException("Too many world colliders");
+        // Reject malformed samples before clearing any previous geometry.
+        for(float[] b:boxes)
+        {
+            if(b==null||b.length!=10)
+                throw new IllegalArgumentException("Invalid world box");
+            for(float value:b)
+                if(!Float.isFinite(value))
+                    throw new IllegalArgumentException("Nonfinite world box");
+            if(b[3]<=0F||b[4]<=0F||b[5]<=0F)
+                throw new IllegalArgumentException("Nonpositive world box");
+        }
+        if(cachedWorldBoxes!=null&&Arrays.deepEquals(cachedWorldBoxes,boxes))
+            return;
+        if(ground!=null)
+        {
+            interfaceBodies.removeBody(ground.getId());
+            interfaceBodies.destroyBody(ground.getId());
+            ground=null;
+        }
+        clearWorldColliders();
+        try
+        {
+            for(float[] b:boxes)
+            {
+                // Bit-sized shapes must keep their actual thickness. Never
+                // inflate a thin tile into a full Minecraft block.
+                Vec3 half=new Vec3(b[3],b[4],b[5]);
+                float convex=Math.min(.002F,Math.min(b[3],
+                        Math.min(b[4],b[5]))*.1F);
+                BoxShape shape=new BoxShape(half,convex);
+                BodyCreationSettings spec=new BodyCreationSettings(shape,
+                        new RVec3(b[0],b[1],b[2]),
+                        new Quat(b[6],b[7],b[8],b[9]),
+                        EMotionType.Static,1);
+                try
+                {
+                    spec.setFriction(.95F);
+                    spec.setRestitution(0F);
+                    Body collider=interfaceBodies.createBody(spec);
+                    if(collider==null)
+                        throw new IllegalStateException("Jolt world collider allocation");
+                    interfaceBodies.addBody(collider.getId(),
+                            EActivation.DontActivate);
+                    worldColliders[worldColliderCount++]=collider;
+                }
+                finally
+                {
+                    spec.close();
+                    shape.close();
+                }
+            }
+            cachedWorldBoxes=new float[boxes.length][];
+            for(int i=0;i<boxes.length;i++)
+                cachedWorldBoxes[i]=boxes[i].clone();
+        }
+        catch(Throwable failed)
+        {
+            clearWorldColliders();
+            throw failed;
+        }
+    }
+
+    private void clearWorldColliders()
+    {
+        for(int i=0;i<worldColliderCount;i++)
+        {
+            Body collider=worldColliders[i];
+            if(collider!=null)
+            {
+                interfaceBodies.removeBody(collider.getId());
+                interfaceBodies.destroyBody(collider.getId());
+                worldColliders[i]=null;
+            }
+        }
+        worldColliderCount=0;
+        cachedWorldBoxes=null;
     }
 
     /** Legacy reflection signature; apply a one-time tip at first activation. */
@@ -520,6 +614,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
             interfaceBodies.destroyBody(ground.getId());
             ground=null;
         }
+        clearWorldColliders();
         world.close();jobs.close();allocator.close();selfFilter.close();
         broadFilter.close();
         broadLayers.close();pairFilter.close();
