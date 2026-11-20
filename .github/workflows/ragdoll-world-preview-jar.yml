@@ -212,6 +212,22 @@ jobs:
           (cd build/libs && sha256sum \
              bbs-animation-editor-0.0.2-ragdoll-world-preview.jar > SHA256SUMS.txt)
 
+      - name: Verify ragdoll runtime does not need dev JVM flag
+        shell: bash
+        run: |
+          set -euo pipefail
+          javap -classpath build/libs/bbs-animation-editor-0.0.2.jar \
+            -c -p com.example.examplemod.RagdollEmoticonsJoltBridge \
+            > "$RUNNER_TEMP/ragdoll-bridge.bytecode"
+          grep -q 'java/lang/Boolean.parseBoolean' \
+            "$RUNNER_TEMP/ragdoll-bridge.bytecode"
+          if grep -q 'java/lang/Boolean.getBoolean' \
+            "$RUNNER_TEMP/ragdoll-bridge.bytecode"; then
+            echo "Old opt-in default is still present"
+            exit 1
+          fi
+          echo "Ragdoll startup policy: auto-enable on CHARACTER weight, explicit -Dfalse supported"
+
       - name: Publish installable Forge mod artifact
         uses: actions/upload-artifact@v4
         with:
@@ -226,9 +242,9 @@ jobs:
         if: github.ref == 'refs/heads/fix/ragdoll-real-world-collisions-20261120'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.0.2-ragdoll-world-preview-20261120
+          tag_name: v0.0.2-ragdoll-world-hotfix-20261120
           target_commitish: ${{ github.sha }}
-          name: BBS Animation Editor 0.0.2 - ragdoll world collisions (test)
+          name: BBS Animation Editor 0.0.2 - ragdoll startup hotfix (test)
           prerelease: true
           draft: false
           body: |
