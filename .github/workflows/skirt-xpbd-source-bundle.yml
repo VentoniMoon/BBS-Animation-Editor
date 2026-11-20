@@ -1,0 +1,30 @@
+name: XPBD swept-pose Java sources for verified JAR hotfix
+
+on:
+  push:
+    branches: [fix/skirt-xpbd-swept-poses-20261121]
+    paths:
+      - '.github/workflows/skirt-xpbd-source-bundle.yml'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDContacts.java'
+      - 'src/main/java/com/example/examplemod/SkirtXPBDRuntime.java'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload exact committed cloth runtime sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: skirt-xpbd-swept-source
+          path: |
+            src/main/java/com/example/examplemod/SkirtXPBDPoseSkin.java
+            src/main/java/com/example/examplemod/SkirtXPBDContacts.java
+            src/main/java/com/example/examplemod/SkirtXPBDRuntime.java
+          if-no-files-found: error
+          retention-days: 14
