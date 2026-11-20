@@ -98,7 +98,7 @@ jobs:
       - name: Switch to Minecraft 1.12.2's supported Java 8 runtime
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: zulu
           java-version: '8'
 
       - name: Assemble and reobfuscate the actual distributable Forge mod
