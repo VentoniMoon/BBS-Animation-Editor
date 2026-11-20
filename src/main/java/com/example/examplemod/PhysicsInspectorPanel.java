@@ -159,11 +159,37 @@ public final class PhysicsInspectorPanel
         {
         case PhysicsChannels.RAGDOLL:
             sectionLabel("RAGDOLL",cy);cy+=22;
-            numeric(0,"Weight %",CharacterRagdollController.sampleWeight(
-                    track,frame(screen))*100F,cy);cy+=ROW;
-            if(cy+19<bottom-30)
-                label("0% = анимация",left+10,cy+7,0xFF9AAAB4);
-            cy+=30;
+            float ragdollWeight=CharacterRagdollController.sampleWeight(
+                    track,frame(screen))*100F;
+            numeric(0,"Weight %",ragdollWeight,cy);cy+=ROW;
+            if(cy+18<bottom-30)
+                label("0% = анимация  100% = физика",
+                        left+10,cy+6,0xFF9AAAB4);
+            cy+=22;
+            if(cy+16<bottom-30)
+            {
+                String hint=ragdollWeight<=0F?
+                        "Первый ключ включает 100%":
+                        RagdollEmoticonsJoltBridge.status();
+                String line=Minecraft.getMinecraft().fontRenderer
+                        .trimStringToWidth(hint,W-19);
+                label(line,left+10,cy+3,
+                        ragdollWeight>0F&&
+                        RagdollEmoticonsJoltBridge.status()
+                                .startsWith("JOLT UNAVAILABLE")?
+                                0xFFFFA0A0:0xFF9AAAB4);
+                cy+=19;
+            }
+            if(cy+16<bottom-30)
+            {
+                String hint=ragdollWeight<=0F?
+                        "Emoticons: после ключа нажми Play":
+                        "Emoticons BOBJ; проиграй несколько кадров";
+                label(Minecraft.getMinecraft().fontRenderer
+                        .trimStringToWidth(hint,W-19),
+                        left+10,cy+3,0xFF9AAAB4);
+                cy+=19;
+            }
             break;
         case PhysicsChannels.IMPULSE:
             sectionLabel("IMPULSE",cy);cy+=22;
