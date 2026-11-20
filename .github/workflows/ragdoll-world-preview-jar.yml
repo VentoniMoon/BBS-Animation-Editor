@@ -216,7 +216,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          javap -classpath build/libs/bbs-animation-editor-0.0.2.jar \
+          # The previous step renames the JAR. Inspect the actual
+          # artifact rather than the now-nonexistent pre-rename path.
+          javap -classpath build/libs/bbs-animation-editor-0.0.2-ragdoll-world-preview.jar \
             -c -p com.example.examplemod.RagdollEmoticonsJoltBridge \
             > "$RUNNER_TEMP/ragdoll-bridge.bytecode"
           grep -q 'java/lang/Boolean.parseBoolean' \
@@ -227,6 +229,13 @@ jobs:
             exit 1
           fi
           echo "Ragdoll startup policy: auto-enable on CHARACTER weight, explicit -Dfalse supported"
+          javap -classpath build/libs/bbs-animation-editor-0.0.2-ragdoll-world-preview.jar \
+            com.example.examplemod.SkirtXPBDPoseSkin | grep -q 'between'
+          javap -classpath build/libs/bbs-animation-editor-0.0.2-ragdoll-world-preview.jar \
+            com.example.examplemod.SkirtXPBDContacts | grep -q 'between'
+          javap -classpath build/libs/bbs-animation-editor-0.0.2-ragdoll-world-preview.jar \
+            com.example.examplemod.SkirtXPBDRuntime | grep -q 'motionSubsteps\|sample'
+          echo "New swept-skirt XPBD APIs: OK"
 
       - name: Publish installable Forge mod artifact
         uses: actions/upload-artifact@v4
