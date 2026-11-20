@@ -25,8 +25,11 @@ import net.minecraft.client.Minecraft;
  * and the skinned matrices before this hook. For weight=0, absent JNI, or an
  * invalid rig, NOTHING is mutated (no behavioral or export regression).
  *
- * Opt-in in the development client:
- *   -Dbbs.editor.physics.jolt.ragdoll=true
+ * Activated by a positive CHARACTER/PHYSICS ragdoll weight key.
+ * A standalone JVM toggle is not required for an installed 0.0.2 mod:
+ * the editor does not allocate native physics for ordinary animations.
+ * For diagnostics or safe fallback, explicitly opt out with
+ *   -Dbbs.editor.physics.jolt.ragdoll=false
  *
  * Model-space physical scenes are owned per actor and tied to the actual
  * model bone signature. No hard JNI dependency is linked into Forge code;
@@ -35,11 +38,33 @@ import net.minecraft.client.Minecraft;
  */
 public final class RagdollEmoticonsJoltBridge
 {
+    // RAGDOLL is deliberately key-driven: once a user chooses a
+    // positive PHYSICS weight, an installed native Jolt implementation
+    // should work without a second, undocumented JVM activation flag.
+    // Explicit false still guarantees a zero-cost safe fallback.
     private static final boolean ENABLED=
-            Boolean.getBoolean("bbs.editor.physics.jolt.ragdoll");
+            !"false".equalsIgnoreCase(System.getProperty(
+                    "bbs.editor.physics.jolt.ragdoll","true"));
     private static final String NATIVE=
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
     private static boolean attempted,available,logged,reportedHierarchy;
+    private static String lastFailure="";
+    private static final java.util.Set<String> reportedMissingRigs=
+            new java.util.HashSet<String>();
+
+    /** Read-only status for PHYSICS UI; does not initialize native code
+     * from a GUI paint or allocate any Jolt worlds.
+     */
+    public static String status()
+    {
+        if(!ENABLED)return "JOLT RAGDOLL: DISABLED BY JVM";
+        if(!attempted)return "JOLT: CHECKING ON PREVIEW";
+        if(available)return "JOLT: READY";
+        return "JOLT UNAVAILABLE: "+lastFailure;
+    }
+
+    public static boolean isRuntimeEnabled(){return ENABLED;}
+
     private static Method create,step,poses,startFall;
     private static Method nativeImpulse,nativeEnvironment;
     private static Method nativeEnvironmentSurface;
@@ -134,7 +159,22 @@ public final class RagdollEmoticonsJoltBridge
             Class<?> bootstrap=Class.forName(
                     "com.example.examplemod.physics.JoltJava8Bootstrap");
             Method start=bootstrap.getMethod("available",File.class);
-            if(!Boolean.TRUE.equals(start.invoke(null,game)))return false;
+            if(!Boolean.TRUE.equals(start.invoke(null,game)))
+            {
+                try
+                {
+                    Object failure=bootstrap.getMethod("failure").invoke(null);
+                    lastFailure=failure==null?
+                            "NATIVE JNI NOT LOADED":String.valueOf(failure);
+                }
+                catch(Throwable noDiagnostics)
+                {
+                    lastFailure="NATIVE JNI NOT LOADED";
+                }
+                System.err.println("[BBS Editor][Ragdoll] Jolt not ready: "+
+                        lastFailure);
+                return false;
+            }
             Class<?> clazz=Class.forName(NATIVE);
             try
             {
@@ -182,11 +222,13 @@ public final class RagdollEmoticonsJoltBridge
                 }
             }
             available=true;
+            lastFailure="";
             System.out.println("[BBS Editor][Ragdoll] Native Jolt "+
                     "multibody solver connected (experimental)");
         }
         catch(Throwable error)
         {
+            lastFailure=String.valueOf(error);
             System.err.println("[BBS Editor][Ragdoll] Optional Jolt "+
                     "rig unavailable: "+error);
         }
@@ -217,7 +259,13 @@ public final class RagdollEmoticonsJoltBridge
                 RagdollSkeletonDefinition.bind(
                         RagdollSkeletonDefinition.Preset.EMOTICONS,
                         armature.bones.keySet());
-        if(!definition.hasPhysicalSkeleton())return false;
+        if(!definition.hasPhysicalSkeleton())
+        {
+            if(reportedMissingRigs.add(id))
+                System.err.println("[BBS Editor][Ragdoll] Actor "+id+
+                        " has no supported Emoticons physical skeleton");
+            return false;
+        }
         List<RagdollSkeletonDefinition.Segment> bones=
                 definition.getSegments();
         // The Emoticons special ragdoll.bobj has many detached model
