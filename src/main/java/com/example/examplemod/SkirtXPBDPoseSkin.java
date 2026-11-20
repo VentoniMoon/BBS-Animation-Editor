@@ -70,6 +70,49 @@ public final class SkirtXPBDPoseSkin
             return valid(result,3);
         }
     }
+    /**
+     * Interpolate actual native posed cloth corners and all shared node
+     * anchors between two consecutive editor samples. Only the target and
+     * the corners move; source UVs, rest geometry and the 20 pinned waist
+     * topology are never modified. This is for collision integration, not
+     * a replacement for the final exact render-time source pose.
+     */
+    public static Frame between(Frame from,Frame to,float alpha)
+    {
+        if(to==null)return from;
+        if(from==null||alpha>=1F)return to;
+        if(alpha<=0F)return from;
+        if(!Float.isFinite(alpha)||from.target.length!=NODES||
+                to.target.length!=NODES||from.patches.length!=PATCHES||
+                to.patches.length!=PATCHES)
+            throw new IllegalArgumentException("Bad cloth sweep");
+        float[][] anchors=new float[NODES][3];
+        float[][][] corners=new float[PATCHES][4][3];
+        for(int n=0;n<NODES;n++)
+            for(int k=0;k<3;k++)
+                anchors[n][k]=from.target[n][k]+
+                        (to.target[n][k]-from.target[n][k])*alpha;
+        for(int p=0;p<PATCHES;p++)
+            for(int v=0;v<4;v++)
+                for(int k=0;k<3;k++)
+                    corners[p][v][k]=from.patches[p][v][k]+
+                            (to.patches[p][v][k]-from.patches[p][v][k])*alpha;
+        return new Frame(corners,anchors,Math.max(
+                from.maxPoseReconstructionError,to.maxPoseReconstructionError));
+    }
+
+    /** Largest world-model cloth-anchor jump; used only to allocate extra
+     * microsteps during unusually fast keyed animation. */
+    public static float maxTargetMotion(Frame from,Frame to)
+    {
+        if(from==null||to==null)return 0F;
+        float longest=0F;
+        for(int n=0;n<NODES;n++)
+            longest=Math.max(longest,
+                    lengthDifference(from.target[n],to.target[n]));
+        return longest;
+    }
+
     private SkirtXPBDPoseSkin(){}
 
     public static Frame follow(SkirtClothRestBinding.Binding binding,
