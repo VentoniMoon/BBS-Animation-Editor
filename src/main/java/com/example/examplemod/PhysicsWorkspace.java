@@ -353,8 +353,28 @@ public final class PhysicsWorkspace
         switch(row)
         {
         case PhysicsChannels.RAGDOLL:
-            PhysicsChannels.setWeight(t,f,
-                    CharacterRagdollController.sampleWeight(t,f));
+            // A brand new RAGDOLL key must actually ENABLE physics.
+            // Previously the button wrote the sampled default 0% into
+            // a new key, so clicking "ADD / UPDATE KEY" silently kept
+            // the entire actor on animation even with Jolt installed.
+            //
+            // Preserve explicit 0% (animation) and every previously
+            // authored blend value on updates; never overwrite them.
+            CharacterKey ragdollAtFrame=
+                    CharacterRagdollController.keyAtFrame(t,f);
+            float explicitWeight=CharacterRagdollController
+                    .keyWeight(ragdollAtFrame);
+            float sampled=CharacterRagdollController.sampleWeight(t,f);
+            boolean hasOtherRagdollKey=false;
+            for(CharacterKey key:PhysicsChannels.keys(t))
+                if(key!=null&&CharacterRagdollController.keyWeight(key)>=0F)
+                {
+                    hasOtherRagdollKey=true;
+                    break;
+                }
+            float authored=RagdollActivationPolicy.initialKeyWeight(
+                    explicitWeight,sampled,hasOtherRagdollKey);
+            PhysicsChannels.setWeight(t,f,authored);
             break;
         case PhysicsChannels.IMPULSE:
             PhysicsChannels.setImpulse(t,f,selectedImpact(screen));

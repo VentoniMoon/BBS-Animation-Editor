@@ -347,24 +347,30 @@ if (project.hasProperty('fixMixinAsm')) {
 }
 
 /*
- * Native Jolt is an opt-in EXPERIMENTAL preview for Java 8.
+ * Java 8 native Jolt runtime.
  *
- * Obtain the two JARs from the jolt-java8-experimental-jars GitHub Actions
- * artifact and put them in libs/. Without -PenableJoltExperimental the
- * existing editor builds exactly as before, with no Jolt dependency.
+ * The packaged release build supplies both JARs explicitly. In a local
+ * Gradle runClient workspace, make them available automatically whenever
+ * BOTH files already exist under libs/. Otherwise, even a positive
+ * RAGDOLL Weight key could never load the native solver, despite the
+ * editor showing a working PHYSICS panel.
  *
- * The native DLL/SO is already embedded as a classpath resource inside the
- * bundled JNI JAR. Repackage the content into our Forge mod, not as extra
- * "mods" JARs: Jolt's own JAR has no Forge @Mod entrypoint.
+ * Do NOT silently turn on the unrelated Jolt HAIR preview or the legacy
+ * skirt solver: their JVM flags remain independent. An explicit
+ * -PenableJoltExperimental still fails clearly when files are missing.
+ *
+ * The DLL/SO is inside the bundled JNI JAR. Never put either sidecar JAR
+ * into Minecraft's mods/ directory: they are ordinary Java libraries.
  */
-if (project.hasProperty('enableJoltExperimental')) {
-    def joltJava8 = file('libs/jolt-jni-6.0.0-java8-bundled.jar')
-    def joltPrototype = file('libs/jolt-hair-prototype-java8.jar')
-    if (!joltJava8.isFile() || !joltPrototype.isFile()) {
-        throw new GradleException('Experimental Jolt artifacts missing. ' +
-                'Place jolt-jni-6.0.0-java8-bundled.jar and ' +
-                'jolt-hair-prototype-java8.jar in libs/ before building.')
-    }
+def joltJava8 = file('libs/jolt-jni-6.0.0-java8-bundled.jar')
+def joltPrototype = file('libs/jolt-hair-prototype-java8.jar')
+def joltLibrariesPresent=joltJava8.isFile() && joltPrototype.isFile()
+if(project.hasProperty('enableJoltExperimental') && !joltLibrariesPresent) {
+    throw new GradleException('Experimental Jolt artifacts missing. ' +
+            'Place jolt-jni-6.0.0-java8-bundled.jar and ' +
+            'jolt-hair-prototype-java8.jar in libs/ before building.')
+}
+if(joltLibrariesPresent) {
     dependencies {
         compile files(joltJava8)
         compile files(joltPrototype)
@@ -377,6 +383,8 @@ if (project.hasProperty('enableJoltExperimental')) {
             exclude 'META-INF/**'
         }
     }
+    logger.lifecycle('BBS Editor: Jolt JNI and ragdoll sidecar available ' +
+            'for PHYSICS keys (no separate ragdoll JVM flag required)')
 }
 
 jar {
