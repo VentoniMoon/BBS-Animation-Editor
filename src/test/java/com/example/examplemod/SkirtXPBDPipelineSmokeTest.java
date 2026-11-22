@@ -400,7 +400,10 @@ public final class SkirtXPBDPipelineSmokeTest
         for(SkirtClothSurfaceMesh.Patch patch:f.raw.patches)
         {
             float[] matrix=identity();
-            if(patch.lower)matrix[13]=.46F;
+            // > 0.65 block seated hard leash, but below the intentional
+            // 1.0-block seek/teleport threshold for a deep seated pose.
+            // A smaller .46 shift would NOT exercise the actual regression.
+            if(patch.lower)matrix[13]=.88F;
             transforms.add(new SkirtXPBDPoseSkin.Transform(
                     patch.bone,identity(),matrix));
         }
@@ -424,7 +427,7 @@ public final class SkirtXPBDPipelineSmokeTest
                     before[n][1]);
             lowerCount++;
         }
-        need(lowerCount==20&&targetShift/lowerCount>.35F,
+        need(lowerCount==20&&targetShift/lowerCount>.70F,
                 "fixture failed to lift 20 real lower cloth nodes");
         if(SkirtXPBDSolver.SEATED_POSE_ISOLATION)
             need(clothShift/targetShift<.20F,
@@ -437,6 +440,28 @@ public final class SkirtXPBDPipelineSmokeTest
         for(int n=0;n<60;n++)
             equal(changed.particles[n],same.particles[n],1E-6F,
                     "seated repeat draw drifted without a pose change");
+
+        // The real bug occurred during RUNNING simulation. Prior patch
+        // isolated pose deltas, but left the hard MAX_OFFSET clamp using
+        // lifted.target. At .88 blocks and max seated offset .65, the clamp
+        // forced at least ~.23-block upward hem drift EVERY substep.
+        SkirtXPBDSolver.Result running=null;
+        for(int i=0;i<14;i++)
+            running=state.advance(1F/60F,lifted,frame);
+        float positiveHemLift=0F;
+        for(int n=0;n<60;n++)
+            if(f.shared.nodes.get(n).row==2)
+                positiveHemLift+=Math.max(0F,
+                        running.particles[n][1]-before[n][1]);
+        positiveHemLift/=20F;
+        if(SkirtXPBDSolver.SEATED_POSE_ISOLATION)
+            need(positiveHemLift<.18F,
+                    "the running XPBD hard leash still lifts the free hem "+
+                    "toward folded native lower bones: "+positiveHemLift);
+        else
+            need(positiveHemLift>.45F,
+                    "original baseline should still follow folded native "+
+                    "lower bones: "+positiveHemLift);
     }
 
     /** A newly posed Chameleon frame must carry existing XPBD dynamics

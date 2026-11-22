@@ -531,7 +531,14 @@ public final class SkirtXPBDSolver
                 for(int n=0;n<SIM_NODES;n++)
                 {
                     if(pinned[n])continue;
-                    float[] p=position[n],ref=fineTarget[n];
+                    // CRITICAL: a seated free drape cannot be transported
+                    // relative to the waist while its hard pose leash still
+                    // uses the folded native Chameleon hem. The mismatch
+                    // pulls every node back up toward the original bones
+                    // on EACH substep, recreating the waistband bunching.
+                    // physicalTarget is identical to fineTarget when
+                    // walking or the A/B flag is disabled.
+                    float[] p=position[n],ref=physicalTarget[n];
                     float gap=distance(p,ref);
                     if(!Float.isFinite(gap))
                         throw new IllegalStateException("XPBD divergence");
