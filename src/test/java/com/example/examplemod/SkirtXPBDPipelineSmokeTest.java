@@ -34,6 +34,7 @@ public final class SkirtXPBDPipelineSmokeTest
         adaptiveSeatedRearDrapeKeepsWalkingAndEdges();
         poseAwareLapGuideChangesSeatedReferenceNotWalking();
         restLengthLapGuideSurvivesAlreadyFoldedNativeHem();
+        additionalSevenRowSkinRetainsOriginalUVs();
         refinedGridRetainsNativeSkinCorrespondence();
         pausedPoseChangePreservesClothRelativeMotion();
         seatedDrapePoseDeltaDoesNotFoldHemIntoWaist();
@@ -195,11 +196,13 @@ public final class SkirtXPBDPipelineSmokeTest
                 SkirtXPBDSolver.create(f.raw,f.shared,posed).current();
         SkirtXPBDVolumeSkin.Mesh refined=SkirtXPBDVolumeSkin.build(
                 rest,current,f.raw,f.binding,posed,neutralFine);
-        if(SkirtXPBDSolver.ROWS==5)
+        if(SkirtXPBDSolver.ROWS>=5)
         {
-            need(refined.quads==978&&refined.waistQuads==18&&
-                    refined.fabricQuads==960,
-                    "20x5 skirt must subdivide 240 fabric faces into 960");
+            int faces=240*(SkirtXPBDSolver.ROWS-1);
+            need(refined.quads==18+faces&&refined.waistQuads==18&&
+                    refined.fabricQuads==faces,
+                    "20x"+SkirtXPBDSolver.ROWS+
+                    " skirt must render each real cloth subrow");
             for(SkirtXPBDVolumeSkin.Face face:refined.faces)
             {
                 for(float[] uv:face.uv)
@@ -579,6 +582,56 @@ public final class SkirtXPBDPipelineSmokeTest
                     "rest-based target reapplied on a duplicate FBO pass");
     }
 
+    /** With two originally authored model sections (three rows), each
+     * section gets THREE physics intervals at 7 rows instead of two at
+     * 5. Texture UV and original corner positions must remain the same.
+     * Also check subdivision really DISPLAYS the new middle latitudes:
+     * without volume-skin adaptation only hidden physics would change.
+     */
+    private static void additionalSevenRowSkinRetainsOriginalUVs()
+    {
+        if(SkirtXPBDSolver.ROWS!=7)return;
+        Fixture f=new Fixture();
+        List<ChameleonSkirtVolumeSnapshot.Part> original=
+                new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+        List<ChameleonSkirtVolumeSnapshot.Part> animated=
+                new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
+        float[] white={1F,1F,1F,1F,0F,0F};
+        for(int i=0;i<3;i++)
+            volumePart(original,animated,"ALL",
+                    f.raw.patches.get(i).world,
+                    identity(),white);
+        for(SkirtClothSurfaceMesh.Strip strip:
+                SkirtClothSurfaceMeshSmokeTest.fixture())
+        {
+            volumePart(original,animated,strip.upper.bone,
+                    strip.upper,identity(),white);
+            volumePart(original,animated,strip.lower.bone,
+                    strip.lower,identity(),white);
+        }
+        ChameleonSkirtVolumeSnapshot.Snapshot rest=
+                ChameleonSkirtVolumeSnapshot.capture(original);
+        ChameleonSkirtVolumeSnapshot.Snapshot pose=
+                ChameleonSkirtVolumeSnapshot.capture(animated);
+        SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        SkirtXPBDSolver.Result solved=state.current();
+        need(solved.refinedParticles.length==140,
+                "seven rings require exactly 140 physical nodes");
+        SkirtXPBDVolumeSkin.Mesh mesh=SkirtXPBDVolumeSkin.build(
+                rest,pose,f.raw,f.binding,f.rest,solved);
+        need(mesh.fabricQuads==1440&&mesh.waistQuads==18&&
+                mesh.quads==1458,
+                "7-ring physics must display 2x3 native UV subfaces");
+        for(SkirtXPBDVolumeSkin.Face face:mesh.faces)
+        {
+            for(float[] uv:face.uv)
+                for(float coord:uv)
+                    need(Float.isFinite(coord),
+                            "7-ring UV interpolation invalid");
+        }
+    }
+
     /**
      * A finer internal fabric lattice must NOT reorder the original 60
      * Chameleon skin/UV anchors. Original pose reproduction stays exact.
@@ -604,19 +657,29 @@ public final class SkirtXPBDPipelineSmokeTest
                     initial.particles[n],1E-6F,
                     "fine grid remapping differs from native skin");
         }
-        if(SkirtXPBDSolver.ROWS==5)
+        if(SkirtXPBDSolver.ROWS>=5)
         {
-            need(initial.refinedParticles.length==100,
-                    "20x5 skirt lattice must contain 100 nodes");
+            int section=(SkirtXPBDSolver.ROWS-1)/2;
+            need(initial.refinedParticles.length==
+                    20*SkirtXPBDSolver.ROWS,
+                    "20xN skirt lattice has incorrect node count");
             for(int c=0;c<20;c++)
-                for(int r=1;r<5;r+=2)
+                for(int base=0;base<2;base++)
                 {
-                    float[] a=initial.refinedParticles[(r-1)*20+c];
-                    float[] b=initial.refinedParticles[(r+1)*20+c];
-                    float[] mid=initial.refinedParticles[r*20+c];
-                    for(int k=0;k<3;k++)
-                        need(Math.abs(mid[k]-(a[k]+b[k])*.5F)<1E-5F,
-                                "extra cloth latitude has incorrect rest pose");
+                    float[] start=initial.refinedParticles[
+                            (base*section)*20+c];
+                    float[] end=initial.refinedParticles[
+                            ((base+1)*section)*20+c];
+                    for(int part=1;part<section;part++)
+                    {
+                        float[] mid=initial.refinedParticles[
+                                (base*section+part)*20+c];
+                        float t=part/(float)section;
+                        for(int k=0;k<3;k++)
+                            need(Math.abs(mid[k]-
+                                    (start[k]*(1F-t)+end[k]*t))<1E-5F,
+                                    "extra cloth latitude changed native rest pose");
+                    }
                 }
         }
         for(int i=0;i<3;i++)
