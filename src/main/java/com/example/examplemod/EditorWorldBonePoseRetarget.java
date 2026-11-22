@@ -40,6 +40,43 @@ public final class EditorWorldBonePoseRetarget
 
     private EditorWorldBonePoseRetarget(){}
 
+    private static final float[] UNIT_SCALE={1F,1F,1F};
+
+    /**
+     * ModelCustomRenderer's outer matrix includes API model scale and
+     * CustomMorph.Scale. Resolve from the same saved actor morph as Preview;
+     * never assume that a custom Blockbuster model is 1x tall.
+     */
+    public static float[] worldScale(BlockbusterSceneActorData actor)
+    {
+        if(actor==null||actor.getActor()==null||
+                actor.getActor().getMorph()==null)return null;
+        try
+        {
+            String name=actor.getMorphName();
+            if(name==null||!name.startsWith("blockbuster."))return null;
+            mchorse.blockbuster.client.model.ModelCustom renderer=
+                    mchorse.blockbuster.client.model.ModelCustom.MODELS.get(
+                            name.substring("blockbuster.".length()));
+            if(renderer==null||renderer.model==null||
+                    renderer.model.scale==null||
+                    renderer.model.scale.length<3)return null;
+            net.minecraft.nbt.NBTTagCompound tag=actor.getActor().getMorph();
+            float morphScale=tag.hasKey("Scale",99)?tag.getFloat("Scale"):1F;
+            float[] scale=new float[]{
+                    renderer.model.scale[0]*morphScale,
+                    renderer.model.scale[1]*morphScale,
+                    renderer.model.scale[2]*morphScale};
+            for(float v:scale)
+                if(!Float.isFinite(v)||Math.abs(v)<1E-5F)return null;
+            return scale;
+        }
+        catch(RuntimeException unavailable)
+        {
+            return null;
+        }
+    }
+
     public static boolean supports(AnimationBone tip)
     {
         return tip!=null&&tip.getParent()!=null;
@@ -48,24 +85,40 @@ public final class EditorWorldBonePoseRetarget
     public static float[] currentWorld(AnimationBone tip,float frame,
             BlockbusterRecordFrame record)
     {
-        if(!supports(tip)||record==null)return null;
+        return currentWorld(tip,frame,record,UNIT_SCALE);
+    }
+
+    public static float[] currentWorld(AnimationBone tip,float frame,
+            BlockbusterRecordFrame record,float[] worldScale)
+    {
+        if(!supports(tip)||record==null||!validScale(worldScale))
+            return null;
         List<AnimationBone> chain=chain(tip);
         Map<AnimationBone,AnimationTransform> pose=sample(chain,frame);
         AnimationTransform[] world=forward(chain,pose);
-        return modelToWorld(world[world.length-1],record);
+        return modelToWorld(position(world[world.length-1]),
+                record,worldScale);
     }
 
     public static Result retarget(AnimationBone tip,float frame,
             BlockbusterRecordFrame record,float[] pinnedWorld)
     {
-        if(!supports(tip)||record==null||!finite3(pinnedWorld))
+        return retarget(tip,frame,record,pinnedWorld,UNIT_SCALE);
+    }
+
+    public static Result retarget(AnimationBone tip,float frame,
+            BlockbusterRecordFrame record,float[] pinnedWorld,
+            float[] worldScale)
+    {
+        if(!supports(tip)||record==null||!finite3(pinnedWorld)||
+                !validScale(worldScale))
             return null;
         List<AnimationBone> chain=chain(tip);
         if(chain.size()>64)return null;
         Map<AnimationBone,AnimationTransform> pose=sample(chain,frame);
         AnimationTransform[] original=forward(chain,pose);
         float[][] joints=positions(original);
-        float[] target=worldToModel(pinnedWorld,record);
+        float[] target=worldToModel(pinnedWorld,record,worldScale);
         EditorWorldBoneIK.Result solved;
         try
         {
@@ -92,9 +145,9 @@ public final class EditorWorldBonePoseRetarget
             // ModelCustomRenderer applies native X,-Y,-Z. Conjugate the
             // data channels in the same way as the working POSE gizmo.
             float[] localEuler=new float[]{
-                    bone.getBaseRotationX()+authored.getRotationX(),
-                    -(bone.getBaseRotationY()+authored.getRotationY()),
-                    -(bone.getBaseRotationZ()+authored.getRotationZ())};
+                    authored.getRotationX(),
+                    -authored.getRotationY(),
+                    -authored.getRotationZ()};
             float[] aligned;
             try
             {
@@ -106,11 +159,11 @@ public final class EditorWorldBonePoseRetarget
                 return null;
             }
             float rx=EditorWorldBoneRetargetMath.nearestAngle(
-                    aligned[0]-bone.getBaseRotationX(),authored.getRotationX());
+                    aligned[0],authored.getRotationX());
             float ry=EditorWorldBoneRetargetMath.nearestAngle(
-                    -aligned[1]-bone.getBaseRotationY(),authored.getRotationY());
+                    -aligned[1],authored.getRotationY());
             float rz=EditorWorldBoneRetargetMath.nearestAngle(
-                    -aligned[2]-bone.getBaseRotationZ(),authored.getRotationZ());
+                    -aligned[2],authored.getRotationZ());
             authored.setRotation(rx,ry,rz);
         }
 
@@ -128,6 +181,15 @@ public final class EditorWorldBonePoseRetarget
         float[] estimated=currentWorld(bone,frame,record);
         return estimated!=null&&finite3(nativeWorld)&&
                 distance(estimated,nativeWorld)<=maxDifferenceBlocks;
+    }
+
+    public static float pivotDifference(AnimationBone bone,float frame,
+            BlockbusterRecordFrame record,float[] nativeWorld,
+            float[] worldScale)
+    {
+        float[] estimated=currentWorld(bone,frame,record,worldScale);
+        return estimated==null||!finite3(nativeWorld)?
+                Float.NaN:distance(estimated,nativeWorld);
     }
 
     private static List<AnimationBone> chain(AnimationBone tip)
@@ -167,12 +229,18 @@ public final class EditorWorldBonePoseRetarget
             AnimationBone bone=chain.get(i);
             AnimationTransform authored=pose.get(bone);
             AnimationTransform local=new AnimationTransform();
+            // Mirror ModelCustomRenderer.applyTransform() exactly:
+            // root rotationPointY = -translateY + 24, child = -translateY;
+            // Z is also negated and X rotation is unmodified. The source
+            // limb's rest rotation is already contained in its native pose;
+            // it must NOT be added again as an editor baseRotation.
             local.setPosition(bone.getLocalX()+authored.getPositionX(),
-                    bone.getLocalY()+authored.getPositionY(),
-                    bone.getLocalZ()+authored.getPositionZ());
-            local.setRotation(bone.getBaseRotationX()+authored.getRotationX(),
-                    -(bone.getBaseRotationY()+authored.getRotationY()),
-                    -(bone.getBaseRotationZ()+authored.getRotationZ()));
+                    -(bone.getLocalY()+authored.getPositionY())+
+                            (i==0?24F:0F),
+                    -(bone.getLocalZ()+authored.getPositionZ()));
+            local.setRotation(authored.getRotationX(),
+                    -authored.getRotationY(),
+                    -authored.getRotationZ());
             // Preserve authored scale exactly; IK never changes it.
             local.setScale(authored.getScaleX(),authored.getScaleY(),
                     authored.getScaleZ());
@@ -203,36 +271,44 @@ public final class EditorWorldBonePoseRetarget
         return new float[]{a[0]-b[0],a[1]-b[1],a[2]-b[2]};
     }
 
-    private static float[] modelToWorld(AnimationTransform model,
-            BlockbusterRecordFrame record)
-    {
-        return modelToWorld(position(model),record);
-    }
-
-    private static float[] modelToWorld(float[] model,
-            BlockbusterRecordFrame record)
+    /** Native Blockbuster root matrix:
+     * T(actor) * RY(180-yaw) * S(model*morph) * S(-1,-1,1)
+     * * T(0,-1.501,0) * BonePixelPose(1/16).
+     */
+    static float[] modelToWorld(float[] model,
+            BlockbusterRecordFrame record,float[] worldScale)
     {
         float yaw=(float)Math.toRadians(180D-record.getYaw());
         float cos=(float)Math.cos(yaw),sin=(float)Math.sin(yaw);
-        float x=-model[0]/16F,y=-model[1]/16F+1.501F,
-                z=-model[2]/16F;
+        float x=-model[0]/16F*worldScale[0];
+        float y=(1.501F-model[1]/16F)*worldScale[1];
+        float z=model[2]/16F*worldScale[2];
         return new float[]{
                 (float)record.getX()+cos*x+sin*z,
                 (float)record.getY()+y,
                 (float)record.getZ()-sin*x+cos*z};
     }
 
-    private static float[] worldToModel(float[] world,
-            BlockbusterRecordFrame record)
+    static float[] worldToModel(float[] world,
+            BlockbusterRecordFrame record,float[] worldScale)
     {
         float yaw=(float)Math.toRadians(180D-record.getYaw());
         float cos=(float)Math.cos(yaw),sin=(float)Math.sin(yaw);
         float dx=world[0]-(float)record.getX();
         float dz=world[2]-(float)record.getZ();
         float x=cos*dx-sin*dz,z=sin*dx+cos*dz;
-        return new float[]{-16F*x,
-                -16F*(world[1]-(float)record.getY()-1.501F),
-                -16F*z};
+        return new float[]{-16F*x/worldScale[0],
+                16F*(1.501F-
+                        (world[1]-(float)record.getY())/worldScale[1]),
+                16F*z/worldScale[2]};
+    }
+
+    private static boolean validScale(float[] scale)
+    {
+        if(!finite3(scale))return false;
+        for(float value:scale)
+            if(Math.abs(value)<1E-5F)return false;
+        return true;
     }
 
     private static float distance(float[] a,float[] b)
