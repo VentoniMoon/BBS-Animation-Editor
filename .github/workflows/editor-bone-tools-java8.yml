@@ -1,0 +1,89 @@
+name: Editor bone picker, world pin math and assistant Java 8
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/**'
+      - 'src/test/java/**'
+      - '.github/workflows/editor-bone-tools-java8.yml'
+  workflow_dispatch:
+
+jobs:
+  editor-bone-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '8'
+      - name: Check pure world IK and assistant safety (Java 8)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/editor-bone-tests"
+          javac -source 8 -target 8 -encoding UTF-8 \
+            -d "$RUNNER_TEMP/editor-bone-tests" \
+            src/main/java/com/example/examplemod/EditorWorldBoneIK.java \
+            src/main/java/com/example/examplemod/EditorWorldBonePinRegistry.java \
+            src/main/java/com/example/examplemod/EditorAssistantCore.java \
+            src/test/java/com/example/examplemod/EditorWorldBoneIKSmokeTest.java \
+            src/test/java/com/example/examplemod/EditorAssistantCoreSmokeTest.java
+          java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
+            com.example.examplemod.EditorWorldBoneIKSmokeTest
+          java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
+            com.example.examplemod.EditorAssistantCoreSmokeTest
+      - name: Compile entire Forge 1.12.2 editor
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace -PciDependencies compileJava jar
+          test -s build/libs/bbs-animation-editor-0.0.2.jar
+      - name: Bundle full new editor classes with proven 0.0.2 Jolt runtime
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --silent --show-error \
+            'https://github.com/VentoniMoon/BBS-Animation-Editor/releases/download/v0.0.2/bbs-animation-editor-0.0.2.jar' \
+            -o "$RUNNER_TEMP/bbs-animation-editor-0.0.2-release.jar"
+          python3 - <<'PY'
+          import pathlib,zipfile
+          baseline=pathlib.Path(__import__('os').environ["RUNNER_TEMP"])/"bbs-animation-editor-0.0.2-release.jar"
+          compiled=pathlib.Path("build/libs/bbs-animation-editor-0.0.2.jar")
+          output=pathlib.Path("build/libs/bbs-animation-editor-bone-tools-test.jar")
+          pkg="com/example/examplemod/"
+          with zipfile.ZipFile(baseline) as old, zipfile.ZipFile(compiled) as new:
+              names=set(old.namelist())
+              replacements={n:new.read(n) for n in new.namelist()
+                            if n.startswith(pkg) and n.endswith(".class")}
+              assert len(replacements)>200, "Compiled editor class set incomplete"
+              assert sum(n.startswith("com/github/stephengold/joltjni/")
+                         for n in names)>50, "Expected bundled Jolt classes"
+              with zipfile.ZipFile(output,"w") as dest:
+                  for info in old.infolist():
+                      if info.filename in replacements:
+                          dest.writestr(info,replacements.pop(info.filename))
+                      else:
+                          dest.writestr(info,old.read(info.filename))
+                  for name,data in sorted(replacements.items()):
+                      dest.writestr(name,data)
+          with zipfile.ZipFile(output) as jar, zipfile.ZipFile(compiled) as new:
+              assert jar.testzip() is None, "Bad mod archive"
+              required=["EditorBoneViewportPicker","EditorWorldBoneIK",
+                        "EditorWorldBonePinRegistry","EditorAssistantCore",
+                        "EditorGizmoController","AnimationEditorScreen",
+                        "AnimationEditorInput"]
+              for name in required:
+                  path=pkg+name+".class"
+                  assert path in jar.namelist(), "Missing "+path
+                  assert jar.read(path)==new.read(path), "Stale "+path
+              assert sum(n.startswith("com/github/stephengold/joltjni/")
+                         for n in jar.namelist())>50
+          print("Final installable test JAR:",output,output.stat().st_size)
+          PY
+          sha256sum build/libs/bbs-animation-editor-bone-tools-test.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bbs-animation-editor-bone-tools-world-pin-ai-java8-with-jolt
+          path: build/libs/bbs-animation-editor-bone-tools-test.jar
+          if-no-files-found: error
+          retention-days: 30
