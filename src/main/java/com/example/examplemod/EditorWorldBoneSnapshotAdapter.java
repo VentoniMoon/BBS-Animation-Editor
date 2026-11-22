@@ -11,10 +11,13 @@ public final class EditorWorldBoneSnapshotAdapter
     public static EditorWorldBonePoseRetarget.Result solve(
             EditorWorldBonePinRegistry pins,String actorId,
             List<AnimationBone> bones,float frame,
-            BlockbusterRecordFrame record)
+            BlockbusterRecordFrame record,
+            BlockbusterSceneActorData actor)
     {
         if(pins==null||pins.size()==0||actorId==null||
                 bones==null||record==null)return null;
+        float[] worldScale=EditorWorldBonePoseRetarget.worldScale(actor);
+        if(worldScale==null)return null;
         for(AnimationBone bone:bones)
         {
             if(bone==null)continue;
@@ -22,7 +25,7 @@ public final class EditorWorldBoneSnapshotAdapter
                     actorId,bone.getName());
             if(pin!=null)
                 return EditorWorldBonePoseRetarget.retarget(
-                        bone,frame,record,pin.world);
+                        bone,frame,record,pin.world,worldScale);
         }
         return null;
     }
