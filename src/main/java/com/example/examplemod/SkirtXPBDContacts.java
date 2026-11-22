@@ -52,6 +52,8 @@ public final class SkirtXPBDContacts
         public final List<String> legOwners;
         /** Actual animated thigh/pelvis triangles, or null for legacy OBBs. */
         public final SkinSurface skinSurface;
+        /** 0 = proven walking OBB, 1 = real skinned thigh contact. */
+        public final float meshContactBlend;
         public final String surfaceStatus;
         public final boolean leftThigh,rightThigh;
         /** 0 = walking, 1 = BOTH real thigh axes close to horizontal. */
@@ -74,6 +76,14 @@ public final class SkirtXPBDContacts
             this.surfaceStatus=surfaceStatus;
             leftThigh=left;rightThigh=right;
             seatedBlend=bothThighsBent(boxes,owners);
+            if(surface==null)meshContactBlend=0F;
+            else if(SKINNED_WALKING_CONTACTS)meshContactBlend=1F;
+            else
+            {
+                float t=Math.max(0F,Math.min(1F,
+                        (seatedBlend-.12F)/.62F));
+                meshContactBlend=t*t*(3F-2F*t);
+            }
             createdNanos=time;
         }
     }
@@ -142,6 +152,18 @@ public final class SkirtXPBDContacts
     public static final boolean SKINNED_PELVIS_CONTACTS=Boolean.parseBoolean(
             System.getProperty(
                     "bbs.editor.physics.skirt.xpbdSkinnedPelvisContacts","false"));
+    /**
+     * New Emoticons surface contacts are useful for deeply raised thighs,
+     * but existing tapered OBBs already give stable walking. Do NOT
+     * substitute a dense skinned surface at 0 degrees: it turns the
+     * standing skirt into a rigid bell near the upper-thigh edges.
+     * Explicit A/B override:
+     * -Dbbs.editor.physics.skirt.xpbdSkinnedWalkingContacts=true
+     */
+    private static final boolean SKINNED_WALKING_CONTACTS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSkinnedWalkingContacts",
+                    "false"));
 
     /** One CPU-skinned Emoticons submesh, selected by dominant bone weights. */
     public static final class SkinRegion
@@ -824,12 +846,13 @@ public final class SkirtXPBDContacts
             if(Float.isFinite(radial)&&radial>1E-5F)
                 outwardWorld=new float[]{ox/radial,0F,oz/radial};
         }
-        if(frame.skinSurface!=null)
+        final float mix=frame.meshContactBlend;
+        final float[] skinExit=frame.skinSurface!=null&&mix>0F?
+                frame.skinSurface.correctedWorld(point,thickness):null;
+        if(mix>=.99999F&&skinExit!=null)
         {
-            // The skinned surface already combines all thigh and pelvis
-            // triangles. Running the three-zone OBBs as a second collision
-            // layer here recreates the cracks and trapped fabric.
-            point=frame.skinSurface.correctedWorld(point,thickness);
+            // Deep sitting: one true continuous surface, no OBB seams.
+            point=skinExit;
         }
         else for(int boxIndex=0;boxIndex<frame.legBoxes.size();boxIndex++)
         {
@@ -912,6 +935,13 @@ public final class SkirtXPBDContacts
             point[1]=b[1]+moved[1];
             point[2]=b[2]+moved[2];
         }
+        if(skinExit!=null&&mix>0F&&mix<.99999F)
+            for(int k=0;k<3;k++)
+                // Between moderate and deep sitting, interpolate the
+                // TWO proposed exits from the same original cloth point.
+                // Never apply OBB then mesh consecutively, which compounds
+                // penetration corrections and bunches the waistband.
+                point[k]+=mix*(skinExit[k]-point[k]);
         float[] matrix=frame.modelToWorld;
         float dx=point[0]-matrix[12],dy=point[1]-matrix[13],
                 dz=point[2]-matrix[14];
