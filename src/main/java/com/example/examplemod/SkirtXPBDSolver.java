@@ -487,6 +487,13 @@ public final class SkirtXPBDSolver
             float strength=Math.min(1F,Math.max(0F,
                     (seated-.60F)/.30F));
             if(strength<=1E-5F)return 0;
+
+            // Jacobi accumulation: repeated adjacent triangle hits must NOT
+            // move a shared node once per face. Gauss-Seidel-style in-place
+            // correction made the 20x5 skirt alternate between two poses,
+            // even with an unchanged leg collider.
+            float[][] accumulated=new float[SIM_NODES][3];
+            int[] samples=new int[SIM_NODES];
             int contacts=0;
             for(int[] tri:triangles)
             {
@@ -508,19 +515,39 @@ public final class SkirtXPBDSolver
                         sample,bodies,CONTACT_RADIUS,outward);
                 float depth=distance(sample,clearance);
                 if(!Float.isFinite(depth)||depth<=1E-5F)continue;
-                // Capping one correction avoids pulling a large fabric
-                // flap into the stretched "cardboard" shape seen before.
-                float amount=Math.min(depth,MAX_SURFACE_CORRECTION)*
-                        strength;
-                float multiplier=amount/depth*(3F/free);
+
+                // Three barycentric weights; fixed contact cap, and an
+                // averaged single update per cloth node, not per triangle.
+                float ratio=Math.min(depth,MAX_SURFACE_CORRECTION)*
+                        strength/depth*(3F/free);
                 for(int index:tri)
                 {
                     if(pinned[index])continue;
                     for(int k=0;k<3;k++)
-                        position[index][k]+=
-                                (clearance[k]-sample[k])*multiplier;
+                        accumulated[index][k]+=
+                                (clearance[k]-sample[k])*ratio;
+                    samples[index]++;
                 }
                 contacts++;
+            }
+            for(int n=0;n<SIM_NODES;n++)
+            {
+                if(pinned[n]||samples[n]==0)continue;
+                float[] delta=accumulated[n];
+                float dx=delta[0]/samples[n],dy=delta[1]/samples[n],
+                        dz=delta[2]/samples[n];
+                float norm=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+                float max=MAX_SURFACE_CORRECTION*strength;
+                float scale=norm>max?max/norm:1F;
+                for(int k=0;k<3;k++)
+                {
+                    float amount=(k==0?dx:(k==1?dy:dz))*scale;
+                    position[n][k]+=amount;
+                    // A correction is a positional contact constraint,
+                    // NOT a bounce impulse. Translate Verlet history with
+                    // it to prevent alternating-frame velocity.
+                    previous[n][k]+=amount;
+                }
             }
             return contacts;
         }
