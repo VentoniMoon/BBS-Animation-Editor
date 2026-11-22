@@ -26,16 +26,53 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon --stacktrace -PciDependencies compileJava
-      - name: Assemble reobfuscated test mod jar
+      - name: Assemble reobfuscated mod classes
         run: |
           ./gradlew --no-daemon --stacktrace -PciDependencies jar
           test -f build/libs/bbs-animation-editor-0.0.2.jar
-          jar tf build/libs/bbs-animation-editor-0.0.2.jar | grep -q 'com/example/examplemod/SkirtXPBDContacts.class'
-          jar tf build/libs/bbs-animation-editor-0.0.2.jar | grep -q 'com/example/examplemod/CharacterEditorPanel.class'
-      - name: Upload test JAR for seated-skirt correction
+      - name: Preserve release 0.0.2 Jolt runtime and patch corrected classes
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --silent --show-error \
+            'https://github.com/VentoniMoon/BBS-Animation-Editor/releases/download/v0.0.2/bbs-animation-editor-0.0.2.jar' \
+            -o "$RUNNER_TEMP/bbs-animation-editor-0.0.2-release.jar"
+          python3 - <<'PY'
+          import os
+          import zipfile
+          base=os.environ["RUNNER_TEMP"]+"/bbs-animation-editor-0.0.2-release.jar"
+          compiled="build/libs/bbs-animation-editor-0.0.2.jar"
+          output="build/libs/bbs-animation-editor-0.0.2-seated-skirt-fix.jar"
+          patched={
+              "com/example/examplemod/CharacterEditorPanel.class",
+              "com/example/examplemod/SkirtXPBDContacts.class",
+          }
+          with zipfile.ZipFile(base) as released, zipfile.ZipFile(compiled) as updated:
+              old_names=set(released.namelist())
+              new_names=set(updated.namelist())
+              assert patched<=old_names and patched<=new_names, "missing patched class"
+              assert not any(x.upper().startswith("META-INF/") and
+                             x.upper().endswith((".SF",".RSA",".DSA"))
+                             for x in old_names), "signed baseline jar"
+              jolt=sum(x.startswith("com/github/stephengold/joltjni/")
+                       for x in old_names)
+              assert jolt>50, "v0.0.2 baseline did not contain bundled Jolt"
+              with zipfile.ZipFile(output,"w") as assembled:
+                  for info in released.infolist():
+                      payload=(updated.read(info.filename) if info.filename in patched
+                               else released.read(info.filename))
+                      assembled.writestr(info,payload)
+          with zipfile.ZipFile(output) as result:
+              assert result.testzip() is None, "corrupted final archive"
+              assert patched<=set(result.namelist()), "patched class absent"
+          print("Patched:",", ".join(sorted(patched)))
+          print("Preserved JNI classes:",jolt)
+          print("Output:",output,os.stat(output).st_size,"bytes")
+          PY
+          sha256sum build/libs/bbs-animation-editor-0.0.2-seated-skirt-fix.jar
+      - name: Upload test JAR with existing Jolt physics
         uses: actions/upload-artifact@v4
         with:
-          name: bbs-animation-editor-0.0.2-seated-skirt-test-jar
-          path: build/libs/bbs-animation-editor-0.0.2.jar
+          name: bbs-animation-editor-0.0.2-seated-skirt-with-jolt
+          path: build/libs/bbs-animation-editor-0.0.2-seated-skirt-fix.jar
           if-no-files-found: error
           retention-days: 30
