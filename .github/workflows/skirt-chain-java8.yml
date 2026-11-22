@@ -316,5 +316,9 @@ jobs:
             com.example.examplemod.SkirtPostWidthSurfaceSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtLegCollisionProxySmokeTest
+          # Exact previous distal OBB dimensions for same scene A/B.
+          java -ea -Dbbs.editor.physics.skirt.taperedDistalShrink=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtLegCollisionProxySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.BodyPartJoltContactBudgetSmokeTest
