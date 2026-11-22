@@ -499,7 +499,7 @@ public final class SkirtXPBDPipelineSmokeTest
                     "repeated render must not re-advect pose-aware guide");
         SkirtXPBDSolver.Result stand=state.advance(0F,f.rest,upright);
         for(int c=0;c<20;c++)
-            equal(stand.refinedParticles[c],f.rest.target[c],1E-6F,
+            equal(stand.refinedParticles[c],stand.refinedTarget[c],1E-6F,
                     "returning to standing altered the waist");
         SkirtXPBDSolver.Result again=state.advance(0F,f.rest,upright);
         for(int n=0;n<SkirtXPBDSolver.SIM_NODES;n++)
