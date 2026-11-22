@@ -40,37 +40,50 @@ model/scene abstractions.
   **not pixel-perfect occluded mesh surfaces**. Test with overlapping
   limbs before considering this final.
 
-## World-space bone lock (foundation ONLY)
+## World-space bone lock (experimental native Blockbuster POSE)
 
-- `EditorWorldBonePinRegistry` captures immutable per-actor/per-bone
-  WORLD XYZ anchors, isolated across actors.
-- `EditorWorldBoneIK.solve` implements a FABRIK chain solver that
-  retains **each input joint distance** exactly. Reachable targets
-  converge; unreachable targets extend the chain only to its original
-  full reach, with **zero mesh/limb scaling**.
-- This is **not yet connected to live actor pose snapshots**: a
-  model-specific local rotation/quaternion retarget pass is required,
-  especially for Emoticons/Chameleon and actor yaw. It must use a
-  per-frame render-only pose override rather than writing dozens of
-  animation keys every viewport refresh. Pin controls, serialization,
-  multiple-pin conflicts and native-rig acceptance tests are pending.
-- Do not surface a toggle claiming to lock a bone until the rig adapter
-  actually holds it in world space. The assistant action currently
-  rejects PIN/UNPIN rather than pretending success.
+- In **POSE**, select a Blockbuster limb with a parent and click **PIN WORLD
+  XYZ** (top-left of Preview), or press **Ctrl+Shift+P**. Click again / use the
+  shortcut to remove that same bone's lock. Root-only bones are rejected.
+- Capture uses `EditorGizmoController.getWorldBonePivot` with the actual
+  prepared native model. The editor checks that its kinematic hierarchy is
+  reasonably close (within 0.20 blocks); if not, pinning fails visibly rather
+  than manufacturing a seemingly successful world lock.
+- `EditorWorldBonePoseRetarget` converts the immutable world target through
+  the actor's current Record X/Y/Z/yaw into model space. FABRIK preserves the
+  measured length of every link. `EditorWorldBoneRetargetMath` converts
+  direction changes into the native Blockbuster X/-Y/-Z rotation convention.
+  **Only temporary POSE snapshots receive the corrected local Euler angles**:
+  no keyframe spam, scaling, Morph changes or Record edits.
+- The pin remains active in other editor modes and also applies while that
+  actor is rendered in the background (after selecting a different actor).
+  Individual actors retain independent world anchors.
+- Anchors are saved as an optional `WorldBonePins` NBT field in the scene's
+  `editor.dat` and restored on scene load. Older editor.dat files and original
+  Blockbuster Records remain compatible. The first adapter currently allows
+  **one pinned chain per actor**, replacing its previous anchor.
+- When a pin moves outside the original limb's reach, the chain reaches as
+  far as possible **without lengthening bones**. Preview shows an out-of-reach
+  warning. Large FK/native mismatch or degenerate segments fail safely.
+- This is the **first testable native adapter, not a verified production IK
+  feature**. Emoticons/Chameleon, multi-pin constraints on the *same* actor,
+  angle limits, rest-pose calibration and acceptance against all character
+  model scales are pending. Do not claim they work yet.
 
-## AI assistant (foundation ONLY)
+## AI assistant (offline panel + approved actions)
 
-- `EditorAssistantCore` contains offline deterministic parsing and
-  typed `Proposal` actions: HELP, INSPECT, GOTO_FRAME, CREATE_BONE_KEY,
-  PIN_BONE, UNPIN_BONE and UNKNOWN.
-- No model, network, API key, background agent, chat UI or script
-  executor is enabled. Proposals never mutate the scene.
-- `AnimationEditorScreen.previewAssistantCommand` collects a narrow
-  editor snapshot. `executeAssistantCommand` requires an **explicit
-  approved=true** call. It can navigate to a bounded frame and add a
-  selected-bone key. World pin actions fail safely until live IK is ready.
-- Future LLM output must be validated into this allowlist; no direct
-  Java/reflection/file system execution.
+- Open the integrated panel using **Ctrl+Shift+A**. Type a Russian or English
+  command and hit Enter or PREVIEW. A separate **APPROVE** button is required
+  for all scene mutations; Esc closes it. Editing the input invalidates an
+  old proposal and approvals are one-time.
+- `EditorAssistantCore` offers typed HELP, INSPECT, GOTO_FRAME,
+  CREATE_BONE_KEY, PIN_BONE, UNPIN_BONE and UNKNOWN proposals. The screen
+  validates actor IDs, bone names, timeline bounds, and supported pin rigs.
+  Scene-level navigation works without a selected actor.
+- No model, external API connection, password/token storage, network access,
+  arbitrary source execution, silent commands or background worker exists.
+  An eventual LLM must output a validated proposal and never write directly
+  to the editor's animation data.
 
 ## Required manual checks before merging
 
@@ -82,11 +95,21 @@ model/scene abstractions.
 3. Occlusion, overlapping bones, thin fingers, zoom, camera yaw,
    shader/FBO and a bodypart attached to a moving actor. Confirm green
    wire is not in exported video.
-4. World IK pure tests assert fixed goal, unchanged root and unscaled
-   segment lengths; live/native rig world anchoring must be separately
-   implemented and visually validated.
-5. Assistant smoke tests verify unapproved/unknown commands never edit.
+4. Blockbuster POSE world pin: create a pin on a foot at a paused frame,
+   move the Record root while previewing and rendering at 60 FPS. Check the
+   world position through several actor yaws, camera moves and multiple
+   zooms; confirm that nearby joints bend rather than grow in scale.
+5. Select another actor: the original actor's foot should remain pinned
+   in the background. Save/re-open the scene and check that the anchor
+   persists. Unpin and verify original authored movement returns.
+6. Attempt to pin Emoticons / Chameleon, the actor root and degenerate
+   bones: controls should refuse unsupported rigs without changing animation.
+7. Assistant: Enter must only preview; APPROVE executes a valid allowlisted
+   command exactly once; unknown text, stale actor selection, and rejected
+   pin requests must never change a scene.
 
 Build: `.github/workflows/editor-bone-tools-java8.yml` runs Java 8
-geometry/assistant tests and full Forge 1.12.2 compilation, producing a
-Jolt-bundled test JAR. Branch is intentionally a draft against `main`.
+FABRIK, local-Euler retarget and assistant authorization tests, plus full
+Forge 1.12.2 compilation, producing a Jolt-bundled test JAR. All native
+world-lock motion still requires interactive game acceptance. This branch
+remains a draft against `main`.
