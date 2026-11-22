@@ -26,6 +26,13 @@ public final class SkirtXPBDRuntime
 
     private static final long MIN_STEP_NANOS=18000000L;
     private static final long STALE_RESET_NANOS=600000000L;
+    /**
+     * Read-only export/preview cloth clock diagnostics. Default OFF.
+     * Enable only during short comparison captures:
+     * -Dbbs.editor.physics.skirt.xpbdClockTrace=true
+     */
+    private static final boolean CLOCK_TRACE=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdClockTrace","false"));
     private static final float MAX_REST_DELTA=.025F;
     private static final double STEP_SECONDS=1D/60D;
     private static final int MAX_STEPS_PER_SAMPLE=6;
@@ -74,6 +81,7 @@ public final class SkirtXPBDRuntime
         float[][] lastLegBoxes;
         float[] lastModelToWorld;
         float lastSeatedBlend;
+        long lastTraceSlice=Long.MIN_VALUE;
         long lastSkinSurfaceFingerprint;
     }
 
@@ -102,10 +110,14 @@ public final class SkirtXPBDRuntime
             return null;
         }
         Actor actor=ACTORS.get(stableOwner);
+        long wallGapMs=actor==null?-1L:
+                Math.max(0L,(now-actor.lastUpdate)/1000000L);
+        String resetCause="NONE";
         String signature=signature(raw,shared);
         boolean fresh=actor==null||!signature.equals(actor.fingerprint);
         if(fresh)
         {
+            resetCause=actor==null?"NEW":"MODEL_SIGNATURE";
             actor=new Actor();
             actor.fingerprint=signature;
             actor.rest=shared;
@@ -115,6 +127,7 @@ public final class SkirtXPBDRuntime
         }
         else if(now-actor.lastUpdate>STALE_RESET_NANOS)
         {
+            resetCause="STALE_WALL_CLOCK";
             // Scrubbing, a long pause, actor deletion/recreate, menu freeze:
             // reset rather than applying a giant unbounded gravity impulse.
             actor.solver=SkirtXPBDSolver.create(raw,shared,posed);
@@ -169,6 +182,7 @@ public final class SkirtXPBDRuntime
                 if(elapsedTicks>2D+CLOCK_EPS ||
                         elapsedTicks< -CLOCK_EPS)
                 {
+                    resetCause="SCENE_TIME_SEEK";
                     // Seek/reverse/large stall: never replay old impulses
                     // against a newly posed character or fitted leg set.
                     actor.solver=SkirtXPBDSolver.create(raw,shared,posed);
@@ -241,10 +255,75 @@ public final class SkirtXPBDRuntime
                     collisions.skinSurface==null?0L:
                             collisions.skinSurface.fingerprint;
         }
+        if(CLOCK_TRACE&&collisions!=null&&output!=null)
+            logClockTrace(actor,stableOwner,collisions,posed,output,
+                    steps,renderTick,wallGapMs,resetCause);
         return new RenderFrame(raw,binding,topology,posed,output,
                 materials,collisions==null?0:collisions.legBoxes.size(),
                 collisions==null?0F:collisions.seatedBlend,
                 steps,renderTick);
+    }
+
+    /**
+     * Compare physical geometry, native animation target and clock/reset
+     * behavior using only final render samples (never mutate the solver).
+     * The same format is emitted for preview and offline export.
+     * A healthy unclipped skirt has a nonzero waist-to-hem span. When the
+     * VISUAL hem remains at the waist but simulatedSpan is normal, the
+     * defect is in the volume/vertex skinning pass, not in XPBD nodes.
+     */
+    private static void logClockTrace(Actor actor,Object owner,
+            SkirtXPBDContacts.Frame contacts,SkirtXPBDPoseSkin.Frame pose,
+            SkirtXPBDSolver.Result result,int steps,double sceneTick,
+            long wallGapMs,String resetCause)
+    {
+        // At 20TPS, six slices correspond to ~100 ms. Log every reset
+        // even when outside the scheduled slice so stalls are not hidden.
+        long slice=Math.round(sceneTick*3D);
+        boolean event=!"NONE".equals(resetCause);
+        if(!event&&(slice%6L!=0L||actor.lastTraceSlice==slice))
+            return;
+        actor.lastTraceSlice=slice;
+        if(result.particles.length<60||pose.target.length<60)return;
+        float nativeSpan=0F,simSpan=0F,nativeVertical=0F,simVertical=0F;
+        float maxSimY=Float.NEGATIVE_INFINITY;
+        for(int c=0;c<20;c++)
+        {
+            float[] root=result.particles[c],hem=result.particles[40+c];
+            float[] a=pose.target[c],b=pose.target[40+c];
+            float ndx=a[0]-b[0],ndy=a[1]-b[1],ndz=a[2]-b[2];
+            float sdx=root[0]-hem[0],sdy=root[1]-hem[1],
+                    sdz=root[2]-hem[2];
+            nativeSpan+=(float)Math.sqrt(ndx*ndx+ndy*ndy+ndz*ndz);
+            simSpan+=(float)Math.sqrt(sdx*sdx+sdy*sdy+sdz*sdz);
+            nativeVertical+=Math.abs(ndy);
+            simVertical+=Math.abs(sdy);
+            maxSimY=Math.max(maxSimY,hem[1]);
+        }
+        CameraExportPlan.Sample film=CameraExportRenderClock.current();
+        String mode=film==null?"PREVIEW":"EXPORT";
+        String frame=film==null?"-":Integer.toString(film.outputFrame);
+        System.out.println("[BBS Editor][SkirtClockTrace] "+
+                "mode="+mode+" outputFrame="+frame+
+                " owner="+Integer.toHexString(System.identityHashCode(owner))+
+                " tick="+round3(sceneTick)+
+                " wallGapMs="+wallGapMs+
+                " reset="+resetCause+
+                " steps="+steps+
+                " seated="+round3(contacts.seatedBlend)+
+                " obbs="+contacts.legBoxes.size()+
+                " nativeSpan="+round3(nativeSpan/20F)+
+                " solvedSpan="+round3(simSpan/20F)+
+                " nativeHeight="+round3(nativeVertical/20F)+
+                " solvedHeight="+round3(simVertical/20F)+
+                " legContacts="+result.legContacts+
+                " selfContacts="+result.selfContacts+
+                " maxLinkError="+round3(result.maxDistanceError));
+    }
+
+    private static float round3(double v)
+    {
+        return (float)(Math.round(v*1000D)/1000D);
     }
 
     private static boolean samePose(float[] a,float[] b)
