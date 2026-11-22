@@ -73,6 +73,10 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorBoneViewportPicker boneViewportPicker =
             new EditorBoneViewportPicker();
 
+    /** Offline assistant console; all mutations require a second click. */
+    private final EditorAssistantPanel assistantPanel =
+            new EditorAssistantPanel();
+
     private final EditorModeController editorModeController =
             new EditorModeController();
 
@@ -2417,6 +2421,7 @@ public class AnimationEditorScreen extends GuiScreen
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA)
             cameraExportDialog.draw(this,mouseX,mouseY);
+        assistantPanel.draw(this);
     }
 
     private void drawTopBar()
@@ -4437,6 +4442,11 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws java.io.IOException
     {
+        if(assistantPanel.isOpen())
+        {
+            assistantPanel.mouseClicked(this,mouseX,mouseY,mouseButton);
+            return;
+        }
         // Modal Export must intercept clicks before the timeline, preview or
         // normal editor toolbars; cancellation stays available in this panel.
         if(cameraExportDialog.isOpen())
@@ -4556,6 +4566,7 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        if(assistantPanel.isOpen())return;
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         if(clickedMouseButton==0&&
                 editorModeController.getMode()==EditorModeController.EditorMode.POSE
@@ -4604,6 +4615,7 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             int state)
     {
+        if(assistantPanel.isOpen())return;
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         betterLightsInspector.mouseReleased();
         physicsWorkspace.releaseImpulseDrag();
@@ -4685,6 +4697,20 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        // Consume modal text input BEFORE editor shortcuts and global hotkeys.
+        if(assistantPanel.isOpen())
+        {
+            assistantPanel.keyTyped(this,typedChar,keyCode);
+            return;
+        }
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_A
+                &&isCtrlKeyDown()&&isShiftKeyDown()
+                &&!cameraExportDialog.isOpen()
+                &&!cameraVideoExport.isExporting())
+        {
+            assistantPanel.open(this);
+            return;
+        }
         // A/B actor render order: selects whether the chosen character is
         // drawn before or after the background actors. This tests for
         // cross-morph state leaks without changing the actual scene.
@@ -5024,6 +5050,7 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
+        assistantPanel.close();
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
         BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(false);
