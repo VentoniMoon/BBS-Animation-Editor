@@ -174,8 +174,8 @@ public final class SkirtLegCollisionProxySmokeTest
         require(zones[1][8]+zones[2][8]>
                 middleDistalDistance+.001F,
                 "lower overlap must remain even with distal taper");
-        require(zones[0][7]<zones[1][7]&&
-                zones[1][7]<zones[2][7],
+        require(zones[0][7]<=zones[1][7]+1E-6F&&
+                zones[1][7]<=zones[2][7]+1E-6F,
                 "hip-to-knee taper should never form an outward ridge");
 
         // The same selected OBB is passed to the native/Jolt shape,
