@@ -52,6 +52,7 @@ public final class SkirtXPBDContacts
         public final List<String> legOwners;
         /** Actual animated thigh/pelvis triangles, or null for legacy OBBs. */
         public final SkinSurface skinSurface;
+        public final String surfaceStatus;
         public final boolean leftThigh,rightThigh;
         /** 0 = walking, 1 = BOTH real thigh axes close to horizontal. */
         public final float seatedBlend;
@@ -59,7 +60,7 @@ public final class SkirtXPBDContacts
 
         private Frame(int frame,double tick,float[] world,List<float[]> boxes,
                 List<String> owners,boolean left,boolean right,
-                SkinSurface surface,long time)
+                SkinSurface surface,String surfaceStatus,long time)
         {
             timelineFrame=frame;
             sampleTick=tick;
@@ -70,6 +71,7 @@ public final class SkirtXPBDContacts
             legOwners=Collections.unmodifiableList(
                     new ArrayList<String>(owners));
             skinSurface=surface;
+            this.surfaceStatus=surfaceStatus;
             leftThigh=left;rightThigh=right;
             seatedBlend=bothThighsBent(boxes,owners);
             createdNanos=time;
@@ -133,6 +135,13 @@ public final class SkirtXPBDContacts
     public static final boolean SKINNED_MESH_CONTACTS=Boolean.parseBoolean(
             System.getProperty(
                     "bbs.editor.physics.skirt.xpbdSkinnedMeshContacts","true"));
+    // Pelvis is located directly under the PINNED waist. Including all
+    // pelvis triangles as active cloth contacts prematurely lifts and
+    // crushes the first unpinned ring even in the standing pose.
+    // Keep this opt-in until a separate waist/thigh stitching test passes.
+    public static final boolean SKINNED_PELVIS_CONTACTS=Boolean.parseBoolean(
+            System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSkinnedPelvisContacts","false"));
 
     /** One CPU-skinned Emoticons submesh, selected by dominant bone weights. */
     public static final class SkinRegion
@@ -444,6 +453,31 @@ public final class SkirtXPBDContacts
 
         /** Subsample read-only REAL skinned triangle edges for GUI.
          * The preview never feeds them back into collision or Jolt. */
+        /**
+         * Fails closed if a contact hull is far from the garment's
+         * animated attachment. Coordinates are compared in world space
+         * before any contact projection. Do not silently apply a guessed
+         * offset/rotation to make a detached hull appear to overlap.
+         */
+        public boolean closeToClothAnchor(float[] clothWorld)
+        {
+            if(!matrixValid(clothWorld))return false;
+            // The skirt starts at the hip: a real thigh must have an
+            // AABB horizontally near the waist attachment. Vertical leg
+            // travel can be longer, so give Y a more generous margin.
+            for(int k=0;k<3;k++)
+            {
+                float v=clothWorld[12+k];
+                float tolerance=k==1?1.15F:.65F;
+                if(!Float.isFinite(bounds[k])||
+                        !Float.isFinite(bounds[k+3])||
+                        v<bounds[k]-tolerance||
+                        v>bounds[k+3]+tolerance)
+                    return false;
+            }
+            return true;
+        }
+
         public java.util.List<float[][]> debugEdges(int maxFaces)
         {
             int limit=Math.max(1,maxFaces);
@@ -607,9 +641,20 @@ public final class SkirtXPBDContacts
             FRAMES.remove(owner);
             return;
         }
+        SkinSurface active=SKINNED_MESH_CONTACTS?surface:null;
+        String status=active!=null?"skinned triangles":
+                "real skin unavailable";
+        if(active!=null&&!active.closeToClothAnchor(modelToWorld))
+        {
+            // The same discrepancy can make cyan debug triangles appear
+            // beside the actor rather than over its thighs. This prevents
+            // invalid world-space contacts from distorting the skirt.
+            active=null;
+            status="skin/cloth world-space mismatch";
+        }
         FRAMES.put(owner,new Frame(timelineFrame,sampleTick,modelToWorld,
-                selected,selectedOwners,left,right,
-                SKINNED_MESH_CONTACTS?surface:null,System.nanoTime()));
+                selected,selectedOwners,left,right,active,status,
+                System.nanoTime()));
     }
 
     public static synchronized Frame forMorph(Object morph)
