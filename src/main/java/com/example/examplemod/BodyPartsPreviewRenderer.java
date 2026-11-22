@@ -1080,12 +1080,9 @@ public class BodyPartsPreviewRenderer
                     continue;
                 }
                 clothInfo=cloth.skinSurface==null?
-                        "XPBD OBB fallback: "+
-                        ("skin/cloth world-space mismatch".equals(
-                                cloth.surfaceStatus)?
-                                cloth.surfaceStatus:
-                                skirtSkinFrame==frame?skirtSkinDiagnostic:
-                                        "mesh not captured this frame"):
+                        "XPBD OBB + HIP BRIDGE "+cloth.hipBridges.size()+
+                        " active (SKIN disabled)":
+
                         cloth.meshContactBlend<.001F?
                                 "XPBD OBB walking | SKIN ready: "+
                                 cloth.skinSurface.triangleCount:
@@ -1138,6 +1135,18 @@ public class BodyPartsPreviewRenderer
                     if(cloth.meshContactBlend>.999F)
                         continue; // full skin contact; OBB no longer active
                 }
+                // These are the SAME world-space capsules evaluated by
+                // SkirtXPBDContacts for the cloth. Show rounded gap-fill
+                // geometry instead of reintroducing 300 cyan skin edges.
+                for(SkirtXPBDContacts.HipBridge bridge:cloth.hipBridges)
+                    try
+                    {
+                        shapes.add(new JoltContactOverlaySnapshot.Shape(
+                                JoltContactOverlaySnapshot.Kind.ADDED,
+                                bridge.a,bridge.b,bridge.radius,
+                                "[BRIDGE] "+bridge.side));
+                    }
+                    catch(IllegalArgumentException ignored) {}
                 for(int n=0;n<cloth.legBoxes.size();n++)
                     try
                     {
