@@ -28,6 +28,16 @@ public final class SkirtXPBDSolver
     // mapped exactly onto a physics row (3 source -> 3,5,7 rings).
     public static final int N=60;
     public static final int SEGMENTS=20;
+    /** Minimal stable cloth profile for walking and a conservative
+     * 3-ring seated collision experiment. All seat-specific cosmetic
+     * shape modifications remain available for an explicit A/B, but are
+     * inactive here. Restart required to change any system properties.
+     * -Dbbs.editor.physics.skirt.xpbdCleanThreeRow=false restores
+     * the experimental customizations when their flags are enabled.
+     */
+    public static final boolean CLEAN_THREE_ROW=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdCleanThreeRow","true"));
     public static final int ROWS=resolveRows();
 
     private static int resolveRows()
@@ -37,7 +47,7 @@ public final class SkirtXPBDSolver
         if(raw==null||raw.trim().isEmpty())
             return Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdFineGrid","true"))?
-                    7:3;
+                    (CLEAN_THREE_ROW?3:7):3;
         int n;
         try{n=Integer.parseInt(raw.trim());}
         catch(NumberFormatException invalid)
@@ -48,6 +58,12 @@ public final class SkirtXPBDSolver
         return n;
     }
     public static final int SIM_NODES=SEGMENTS*ROWS;
+    /** Minimal skirt: no extra pelvis capsules, no invented seat guide,
+     * no extra ring stiffness. Keep ONLY cloth links + fitted leg boxes
+     * and conservative per-vertex collision resolution. */
+    public static final boolean ANTI_PINCH_CONTACTS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdAntiPinchContacts","true"));
     private static final int ITERATIONS=8;
     private static final int SUBSTEPS=2;
     private static final float GRAVITY=-9.81F;
@@ -65,11 +81,11 @@ public final class SkirtXPBDSolver
     static final boolean ADAPTIVE_SEATED_GRAVITY=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity",
-                    "false"));
+                    "false"))&&!CLEAN_THREE_ROW;
     static final boolean ADAPTIVE_SEATED_SHAPE=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdAdaptiveSeatedShape",
-                    "false"));
+                    "false"))&&!CLEAN_THREE_ROW;
     /**
      * New isolated experiment: when BOTH upper legs raise for sitting,
      * guide the free skirt latitudes around the lap, instead of holding
@@ -82,7 +98,8 @@ public final class SkirtXPBDSolver
      */
     public static final boolean POSE_AWARE_LAP_GUIDE=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdPoseAwareLapGuide","true"));
+                    "bbs.editor.physics.skirt.xpbdPoseAwareLapGuide","false"))&&
+            !CLEAN_THREE_ROW;
     /**
      * PR #248 used the CURRENT animated hem to measure the amount of cloth
      * available to rotate around the lap. That measurement collapses near
@@ -96,10 +113,11 @@ public final class SkirtXPBDSolver
      */
     public static final boolean REST_LENGTH_LAP_GUIDE=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdRestLengthLapGuide","true"));
+                    "bbs.editor.physics.skirt.xpbdRestLengthLapGuide","false"))&&
+            !CLEAN_THREE_ROW;
     private static final boolean SEATED_GEOMETRY_AUDIT=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdSeatedGeometryAudit","true"));
+                    "bbs.editor.physics.skirt.xpbdSeatedGeometryAudit","false"));
 
     /** Gradual rotation of the hanging cloth latitude, up to ~60 degrees
      * on the rear hem. Ordinary walking or unilateral leg lift returns 0.
@@ -209,6 +227,50 @@ public final class SkirtXPBDSolver
             previous[0]+=dx;previous[1]+=dy;previous[2]+=dz;
         }
     }
+    /** A fitted thigh may overlap a fast-moving 3-ring cloth panel. An
+     * OBB nearest-face projection can choose the UP face and teleport
+     * cloth toward the pinned belt. Reject inward and strongly upward
+     * exits; allow bounded lateral/OUTWARD movement. When the fitted
+     * collision has no safe exit, some penetration is preferable to
+     * crushing the skirt into the waistband.
+     *
+     * Pure, repeatable and A/B testable. Works identically in preview
+     * (dt=0) and 60 Hz integration (dt>0). */
+    static float[] boundedThighExit(float[] before,float[] proposed,
+            float[] waist,float seated)
+    {
+        if(!CLEAN_THREE_ROW||!ANTI_PINCH_CONTACTS||seated<=.20F)
+            return proposed.clone();
+        float t=Math.max(0F,Math.min(1F,(seated-.20F)/.45F));
+        t=t*t*(3F-2F*t);
+        float dx=proposed[0]-before[0];
+        float dy=proposed[1]-before[1];
+        float dz=proposed[2]-before[2];
+        float x=before[0]-waist[0],z=before[2]-waist[2];
+        float length=(float)Math.sqrt(x*x+z*z);
+        if(length>1E-5F)
+        {
+            float nx=x/length,nz=z/length;
+            float inward=Math.min(0F,dx*nx+dz*nz);
+            dx-=inward*nx;
+            dz-=inward*nz;
+        }
+        // At full bilateral bend do not select the top face of the thigh
+        // as an ejector into the belt. Nearby real contact can still move
+        // upward a little in transition / gait.
+        dy=Math.min(dy,.012F*(1F-t));
+        float d=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(d>.018F)
+        {
+            float scale=.018F/d;
+            dx*=scale;dy*=scale;dz*=scale;
+        }
+        return new float[]{
+                before[0]+(proposed[0]-before[0])*(1F-t)+dx*t,
+                before[1]+(proposed[1]-before[1])*(1F-t)+dy*t,
+                before[2]+(proposed[2]-before[2])*(1F-t)+dz*t};
+    }
+
     private static final float CONTACT_RADIUS=.018F;
     private static final float SELF_RADIUS=.030F;
     private static final float MAX_OFFSET=.37F;
@@ -238,7 +300,8 @@ public final class SkirtXPBDSolver
     // pose. A/B: -Dbbs.editor.physics.skirt.xpbdSeatedCollapseGuard=false
     private static final boolean SEATED_COLLAPSE_GUARD=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdSeatedCollapseGuard","true"));
+                    "bbs.editor.physics.skirt.xpbdSeatedCollapseGuard","true"))&&
+            !CLEAN_THREE_ROW;
     private static final boolean SEATED_FOLD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdSeatedFold","true"));
     // Keep the first free ring below the belt from expanding when the
@@ -246,19 +309,23 @@ public final class SkirtXPBDSolver
     // outside the real leg hull. A/B: -D...xpbdSeatedUpperControl=false
     private static final boolean SEATED_UPPER_CONTROL=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdSeatedUpperControl","true"));
+                    "bbs.editor.physics.skirt.xpbdSeatedUpperControl","true"))&&
+            !CLEAN_THREE_ROW;
     private static final boolean SEATED_BEND_RELIEF=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdSeatedBendRelief","true"));
+                    "bbs.editor.physics.skirt.xpbdSeatedBendRelief","true"))&&
+            !CLEAN_THREE_ROW;
     // Contact must be evaluated on the triangles BETWEEN cloth nodes:
     // a thigh can intersect a polygon without containing any vertex.
     // Keep this additional work restricted to a deep bilateral seat.
     private static final boolean SEATED_SURFACE_CONTACTS=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdSeatedSurfaceContacts","true"));
+                    "bbs.editor.physics.skirt.xpbdSeatedSurfaceContacts","true"))&&
+            !CLEAN_THREE_ROW;
     private static final float MAX_SURFACE_CORRECTION=.045F;
     private static final boolean RADIAL_GUARD=Boolean.parseBoolean(
-            System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"));
+            System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"))&&
+            !CLEAN_THREE_ROW;
     private static final float PIN_EPS=1E-8F;
 
     /** Rest-length constraint; rest authored geometry is never modified. */
@@ -838,6 +905,7 @@ public final class SkirtXPBDSolver
                 protectRadialSilhouette(physicalTarget,waistCenter,
                         seated,maxOffset);
                 stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
+                keepFabricOutOfWaist(fineTarget,seated);
                 measureGuide(physicalTarget,guide);
                 auditSeat(bodies,0,contacts);
                 return result(contacts,0,0);
@@ -903,6 +971,8 @@ public final class SkirtXPBDSolver
                                     position[n],bodies,
                                     clothContactRadius(n,bodies),outward,
                                     kneeContactWeight(n));
+                            corrected=boundedThighExit(position[n],corrected,
+                                    waistCenter,seated);
                             if(distance(corrected,position[n])>1E-7F)
                             {
                                 // Both fitted OBB and optional skinned
@@ -969,6 +1039,7 @@ public final class SkirtXPBDSolver
             }
             protectRadialSilhouette(physicalTarget,waistCenter,seated,maxOffset);
             stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
+            keepFabricOutOfWaist(fineTarget,seated);
             measureGuide(physicalTarget,guide);
             auditSeat(bodies,SUBSTEPS,legs);
             stepCount++;
@@ -1120,6 +1191,50 @@ public final class SkirtXPBDSolver
             return Math.min(1F,.65F+1.4F*(t-.75F));
         }
 
+        /** A very small one-sided separation guard; it only fires when a
+         * free cloth latitude is crushed close to its own fixed belt point.
+         * This guards against the exact waistband bunching reported at
+         * strong thigh bend WITHOUT holding the native standing silhouette
+         * or inventing a rigid platform. Vertical motion away from the
+         * belt is allowed; belt points remain physically pinned. */
+        private void keepFabricOutOfWaist(float[][] reference,float seated)
+        {
+            if(!CLEAN_THREE_ROW||!ANTI_PINCH_CONTACTS||
+                    seated<=.35F)return;
+            float t=Math.min(1F,(seated-.35F)/.40F);
+            t=t*t*(3F-2F*t);
+            for(int n=0;n<SIM_NODES;n++)
+            {
+                if(pinned[n])continue;
+                int belt=ring[0][n%SEGMENTS];
+                float source=distance(restFine[n],restFine[belt]);
+                float minimum=source*.49F;
+                float[] p=position[n],waist=reference[belt];
+                float dx=p[0]-waist[0],dy=p[1]-waist[1],
+                        dz=p[2]-waist[2];
+                float distance=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+                if(distance>=minimum||minimum<1E-5F)continue;
+                float ux,uy,uz;
+                if(distance>1E-5F)
+                {
+                    ux=dx/distance;uy=dy/distance;uz=dz/distance;
+                    if(uy>0F)uy=0F;
+                }
+                else
+                {
+                    ux=restFine[n][0]-restFine[belt][0];
+                    uy=Math.min(0F,
+                            restFine[n][1]-restFine[belt][1]);
+                    uz=restFine[n][2]-restFine[belt][2];
+                }
+                float norm=(float)Math.sqrt(ux*ux+uy*uy+uz*uz);
+                if(norm<1E-5F){ux=0F;uy=-1F;uz=0F;norm=1F;}
+                float correction=Math.min(.025F,minimum-distance)*t/norm;
+                contactMove(p,previous[n],ux*correction,
+                        uy*correction,uz*correction);
+            }
+        }
+
         private int resolveDisplayContacts(float[][] fineTarget,
                 SkirtXPBDContacts.Frame bodies,float[] center)
         {
@@ -1139,6 +1254,8 @@ public final class SkirtXPBDSolver
                             position[n],bodies,
                             clothContactRadius(n,bodies),outward,
                             kneeContactWeight(n));
+                    corrected=boundedThighExit(position[n],corrected,
+                            center,bodies.seatedBlend);
                     if(distance(corrected,position[n])<=1E-7F)
                         continue;
                     for(int k=0;k<3;k++)
