@@ -19,8 +19,14 @@ import java.util.Set;
  */
 public final class SkirtXPBDSolver
 {
+    // Keep the original 60 source/UV nodes stable for existing Chameleon
+    // bindings, but physically solve five rows (100 nodes) by default.
+    // The 3-row baseline remains available for a controlled A/B comparison.
     public static final int N=60;
     public static final int SEGMENTS=20;
+    public static final int ROWS=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdFineGrid","true"))?5:3;
+    public static final int SIM_NODES=SEGMENTS*ROWS;
     private static final int ITERATIONS=8;
     private static final int SUBSTEPS=2;
     private static final float GRAVITY=-9.81F;
@@ -47,24 +53,35 @@ public final class SkirtXPBDSolver
     }
     public static final class Result
     {
+        /** Sixty UV-owned control points, backward compatible with the
+         * original Chameleon material binding and volumetric skin. */
         public final float[][] particles;
+        /** All solver particles, including interpolated height rows. */
+        public final float[][] refinedParticles,refinedTarget;
         public final int legContacts,selfContacts,substeps;
         public final float maxDistanceError;
-        private Result(float[][] points,int legs,int self,int steps,
+        private Result(float[][] nativePoints,float[][] finePoints,
+                float[][] fineTargets,int legs,int self,int steps,
                 float stretch)
         {
-            particles=copy(points);
+            particles=copy(nativePoints);
+            refinedParticles=copy(finePoints);
+            refinedTarget=copy(fineTargets);
             legContacts=legs;selfContacts=self;substeps=steps;
             maxDistanceError=stretch;
         }
     }
     public static final class State
     {
-        private final float[][] position=new float[N][3];
-        private final float[][] previous=new float[N][3];
-        private final float[][] previousPoseTarget=new float[N][3];
-        private final boolean[] pinned=new boolean[N];
-        private final int[] column=new int[N];
+        private final float[][] position=new float[SIM_NODES][3];
+        private final float[][] previous=new float[SIM_NODES][3];
+        private final float[][] previousPoseTarget=new float[SIM_NODES][3];
+        private final float[][] restFine=new float[SIM_NODES][3];
+        private final boolean[] pinned=new boolean[SIM_NODES];
+        private final int[] column=new int[SIM_NODES];
+        private final int[] sourceToFine=new int[N];
+        private final int[][] originalRing=new int[3][SEGMENTS];
+        private final int[][] ring=new int[ROWS][SEGMENTS];
         private final List<Constraint> links=new ArrayList<Constraint>();
         private final List<int[]> triangles=new ArrayList<int[]>();
         private final Set<Long> adjacent=new HashSet<Long>();
@@ -76,7 +93,6 @@ public final class SkirtXPBDSolver
             if(source==null||shared==null||shared.nodes.size()!=N||
                     target==null||target.length!=N)
                 throw new IllegalArgumentException("Invalid XPBD source");
-            int[][] rings=new int[3][SEGMENTS];
             boolean[] used=new boolean[N];
             for(int c=0;c<SEGMENTS;c++)
             {
@@ -92,75 +108,117 @@ public final class SkirtXPBDSolver
                         !upper.bone.equals(up.bone)||
                         !lower.bone.equals(lo.bone))
                     throw new IllegalArgumentException("Wrong cloth patch order");
-                rings[0][c]=up.nodes[upper.topLeft];
-                rings[1][c]=up.nodes[upper.bottomLeft];
-                rings[2][c]=lo.nodes[lower.bottomLeft];
+                originalRing[0][c]=up.nodes[upper.topLeft];
+                originalRing[1][c]=up.nodes[upper.bottomLeft];
+                originalRing[2][c]=lo.nodes[lower.bottomLeft];
                 for(int row=0;row<3;row++)
                 {
-                    int n=rings[row][c];
+                    int n=originalRing[row][c];
                     if(n<0||n>=N||used[n]||
                             shared.nodes.get(n).row!=row)
-                        throw new IllegalArgumentException("Invalid 20x3 cloth ring");
+                        throw new IllegalArgumentException("Invalid source ring");
                     used[n]=true;
-                    column[n]=c;
-                    pinned[n]=(row==0);
                 }
             }
             for(boolean b:used)
-                if(!b)throw new IllegalArgumentException("Unbound particle");
-            for(int i=0;i<N;i++)
+                if(!b)throw new IllegalArgumentException("Unbound source node");
+            int stride=(ROWS-1)/2;
+            for(int row=0;row<ROWS;row++)
+                for(int c=0;c<SEGMENTS;c++)
+                {
+                    int id=row*SEGMENTS+c;
+                    ring[row][c]=id;
+                    pinned[id]=(row==0);
+                    column[id]=c;
+                    int lower=Math.min(1,row/stride);
+                    float t=(row-lower*stride)/(float)stride;
+                    int a=originalRing[lower][c];
+                    int b=originalRing[lower+1][c];
+                    for(int k=0;k<3;k++)
+                        restFine[id][k]=
+                                shared.nodes.get(a).rest[k]*(1F-t)+
+                                shared.nodes.get(b).rest[k]*t;
+                }
+            for(int sourceRow=0;sourceRow<3;sourceRow++)
+                for(int c=0;c<SEGMENTS;c++)
+                    sourceToFine[originalRing[sourceRow][c]]=
+                            ring[sourceRow*stride][c];
+            float[][] fineTarget=refine(target);
+            for(int i=0;i<SIM_NODES;i++)
             {
-                valid(target[i]);
-                System.arraycopy(target[i],0,position[i],0,3);
-                System.arraycopy(target[i],0,previous[i],0,3);
-                System.arraycopy(target[i],0,previousPoseTarget[i],0,3);
+                valid(fineTarget[i]);
+                System.arraycopy(fineTarget[i],0,position[i],0,3);
+                System.arraycopy(fineTarget[i],0,previous[i],0,3);
+                System.arraycopy(fineTarget[i],0,previousPoseTarget[i],0,3);
             }
 
-            // Shared structural mesh: no independent local cube chains.
-            for(int row=0;row<3;row++)
+            // Each original source strip receives an intermediate physical
+            // latitude; the rendered UV seam stays in its original place.
+            for(int row=0;row<ROWS;row++)
                 for(int c=0;c<SEGMENTS;c++)
                 {
                     int next=(c+1)%SEGMENTS,second=(c+2)%SEGMENTS;
-                    link(rings[row][c],rings[row][next],
-                            shared,.0000005F); // circumferential stretch
+                    link(ring[row][c],ring[row][next],
+                            restFine,.0000005F);
                     if(row>0)
-                        link(rings[row][c],rings[row][second],
-                                shared,.00008F); // in-plane bending
+                        link(ring[row][c],ring[row][second],
+                                restFine,.00008F);
                 }
             for(int c=0;c<SEGMENTS;c++)
             {
-                int n=(c+1)%SEGMENTS;
-                for(int row=0;row<2;row++)
+                int next=(c+1)%SEGMENTS;
+                for(int row=0;row<ROWS-1;row++)
                 {
-                    link(rings[row][c],rings[row+1][c],
-                            shared,.0000004F); // vertical stretch
-                    link(rings[row][c],rings[row+1][n],
-                            shared,.000004F); // shear
-                    link(rings[row][n],rings[row+1][c],
-                            shared,.000004F);
-                    // Build a fixed 20x2 two-triangle cloth manifold.
-                    triangles.add(new int[]{rings[row][c],
-                            rings[row+1][c],rings[row+1][n]});
-                    triangles.add(new int[]{rings[row][c],
-                            rings[row+1][n],rings[row][n]});
+                    link(ring[row][c],ring[row+1][c],
+                            restFine,.0000004F);
+                    link(ring[row][c],ring[row+1][next],
+                            restFine,.000004F);
+                    link(ring[row][next],ring[row+1][c],
+                            restFine,.000004F);
+                    triangles.add(new int[]{ring[row][c],
+                            ring[row+1][c],ring[row+1][next]});
+                    triangles.add(new int[]{ring[row][c],
+                            ring[row+1][next],ring[row][next]});
                 }
-                link(rings[0][c],rings[2][c],
-                        shared,.00010F); // vertical bend
+                // Bending over two adjacent latitudes allows the fabric to
+                // curve across a bent thigh instead of one rigid plate.
+                for(int row=0;row<ROWS-2;row++)
+                    link(ring[row][c],ring[row+2][c],
+                            restFine,.00010F);
             }
         }
 
-        private void link(int a,int b,SkirtClothSharedSurface.Surface rest,
-                float compliance)
+        /** Map 60 native control nodes to the chosen 60/100 solver grid. */
+        private float[][] refine(float[][] source)
+        {
+            if(source==null||source.length!=N)
+                throw new IllegalArgumentException("Incomplete source pose");
+            float[][] out=new float[SIM_NODES][3];
+            int stride=(ROWS-1)/2;
+            for(int row=0;row<ROWS;row++)
+                for(int c=0;c<SEGMENTS;c++)
+                {
+                    int lower=Math.min(1,row/stride);
+                    float t=(row-lower*stride)/(float)stride;
+                    float[] a=source[originalRing[lower][c]];
+                    float[] b=source[originalRing[lower+1][c]];
+                    int id=ring[row][c];
+                    for(int k=0;k<3;k++)
+                        out[id][k]=a[k]*(1F-t)+b[k]*t;
+                }
+            return out;
+        }
+
+        private void link(int a,int b,float[][] rest,float compliance)
         {
             if(a==b)return;
             long key=key(a,b);
             if(adjacent.add(key))
             {
-                float r=distance(rest.nodes.get(a).rest,
-                        rest.nodes.get(b).rest);
-                if(r<.0001F||!Float.isFinite(r))
+                float length=distance(rest[a],rest[b]);
+                if(length<.0001F||!Float.isFinite(length))
                     throw new IllegalArgumentException("Zero XPBD cloth edge");
-                links.add(new Constraint(a,b,r,compliance));
+                links.add(new Constraint(a,b,length,compliance));
             }
         }
 
@@ -187,7 +245,7 @@ public final class SkirtXPBDSolver
             };
             float magnitude=length(local);
             if(!Float.isFinite(magnitude)||magnitude>.4F)return;
-            for(int n=0;n<N;n++)
+            for(int n=0;n<SIM_NODES;n++)
             {
                 if(pinned[n])continue;
                 float response=(magnitude<.001F?0F:.25F);
@@ -211,24 +269,25 @@ public final class SkirtXPBDSolver
             if(pose==null||pose.target.length!=N||
                     !Float.isFinite(dt)||dt<0F||dt>.1F)
                 throw new IllegalArgumentException("Invalid cloth time/pose");
+            float[][] fineTarget=refine(pose.target);
             float maxWaist=0F,maxPoseShift=0F;
-            for(int n=0;n<N;n++)
+            for(int n=0;n<SIM_NODES;n++)
             {
-                valid(pose.target[n]);
+                valid(fineTarget[n]);
                 maxPoseShift=Math.max(maxPoseShift,
-                        distance(previousPoseTarget[n],pose.target[n]));
+                        distance(previousPoseTarget[n],fineTarget[n]));
                 if(pinned[n])
                     maxWaist=Math.max(maxWaist,
-                            distance(position[n],pose.target[n]));
+                            distance(position[n],fineTarget[n]));
             }
             boolean reset=maxWaist>.60F||maxPoseShift>POSE_JUMP_RESET;
-            for(int n=0;n<N;n++)
+            for(int n=0;n<SIM_NODES;n++)
             {
                 if(reset)
                 {
                     // A seek/teleport must not inherit stale cloth velocity.
-                    System.arraycopy(pose.target[n],0,position[n],0,3);
-                    System.arraycopy(pose.target[n],0,previous[n],0,3);
+                    System.arraycopy(fineTarget[n],0,position[n],0,3);
+                    System.arraycopy(fineTarget[n],0,previous[n],0,3);
                 }
                 else if(!pinned[n])
                 {
@@ -238,16 +297,16 @@ public final class SkirtXPBDSolver
                     // new animation pose does not become spurious velocity.
                     for(int k=0;k<3;k++)
                     {
-                        float delta=pose.target[n][k]-previousPoseTarget[n][k];
+                        float delta=fineTarget[n][k]-previousPoseTarget[n][k];
                         position[n][k]+=delta;
                         previous[n][k]+=delta;
                     }
                 }
                 if(pinned[n])
-                    System.arraycopy(pose.target[n],0,position[n],0,3);
-                System.arraycopy(pose.target[n],0,previousPoseTarget[n],0,3);
+                    System.arraycopy(fineTarget[n],0,position[n],0,3);
+                System.arraycopy(fineTarget[n],0,previousPoseTarget[n],0,3);
             }
-            float[] waistCenter=waistCenter(pose);
+            float[] waistCenter=waistCenter(fineTarget);
             // Pausing must freeze integration, not freeze outdated pose
             // coordinates or leave an already collapsed silhouette behind.
             if(dt<1E-6F)
@@ -257,7 +316,7 @@ public final class SkirtXPBDSolver
                 // push any cloth node outside them on that display frame.
                 // This pass does not integrate gravity, change constraints,
                 // or inject Verlet velocity on a repeated FBO render.
-                int contacts=resolveDisplayContacts(pose,bodies,waistCenter);
+                int contacts=resolveDisplayContacts(fineTarget,bodies,waistCenter);
                 if(contacts>0)
                 {
                     // The earlier display-only path displaced individual
@@ -270,21 +329,21 @@ public final class SkirtXPBDSolver
                     {
                         for(Constraint c:links)c.lambda=0F;
                         for(Constraint c:links)project(c,relaxDt);
-                        for(int n=0;n<N;n++)
+                        for(int n=0;n<SIM_NODES;n++)
                             if(pinned[n])
-                                System.arraycopy(pose.target[n],0,
+                                System.arraycopy(fineTarget[n],0,
                                         position[n],0,3);
                         // Finish every pass with body contact projection,
                         // not a link correction that pushes cloth into legs.
-                        contacts+=resolveDisplayContacts(pose,bodies,waistCenter);
+                        contacts+=resolveDisplayContacts(fineTarget,bodies,waistCenter);
                     }
                     // Paused FBO, mirror and shadow passes must not turn
                     // these collision corrections into physical velocity.
-                    for(int n=0;n<N;n++)
+                    for(int n=0;n<SIM_NODES;n++)
                         if(!pinned[n])
                             System.arraycopy(position[n],0,previous[n],0,3);
                 }
-                protectRadialSilhouette(pose,waistCenter);
+                protectRadialSilhouette(fineTarget,waistCenter);
                 return result(contacts,0,0);
             }
             int legs=0,self=0;
@@ -292,12 +351,12 @@ public final class SkirtXPBDSolver
             for(int sub=0;sub<SUBSTEPS;sub++)
             {
                 // Inverse-mass zero anchors at the moving waistband.
-                for(int n=0;n<N;n++)
+                for(int n=0;n<SIM_NODES;n++)
                 {
                     if(pinned[n])
                     {
-                        System.arraycopy(pose.target[n],0,position[n],0,3);
-                        System.arraycopy(pose.target[n],0,previous[n],0,3);
+                        System.arraycopy(fineTarget[n],0,position[n],0,3);
+                        System.arraycopy(fineTarget[n],0,previous[n],0,3);
                         continue;
                     }
                     float[] p=position[n],prev=previous[n];
@@ -311,21 +370,21 @@ public final class SkirtXPBDSolver
                     // Weak pose following, not an independent second bone
                     // animation. Waist follows the actor exactly.
                     for(int k=0;k<3;k++)
-                        p[k]+=(pose.target[n][k]-p[k])*.012F;
+                        p[k]+=(fineTarget[n][k]-p[k])*.012F;
                 }
 
                 for(Constraint c:links)c.lambda=0F;
                 for(int iteration=0;iteration<ITERATIONS;iteration++)
                 {
                     for(Constraint c:links)project(c,h);
-                    for(int n=0;n<N;n++)
+                    for(int n=0;n<SIM_NODES;n++)
                     {
                         if(pinned[n])continue;
                         if(bodies!=null)
                         {
                             float[] outward={
-                                    pose.target[n][0]-waistCenter[0],
-                                    0F,pose.target[n][2]-waistCenter[2]};
+                                    fineTarget[n][0]-waistCenter[0],
+                                    0F,fineTarget[n][2]-waistCenter[2]};
                             float[] corrected=SkirtXPBDContacts.corrected(
                                     position[n],bodies,CONTACT_RADIUS,outward);
                             if(distance(corrected,position[n])>1E-7F)
@@ -345,15 +404,15 @@ public final class SkirtXPBDSolver
                         self+=selfTriangles();
                     }
                     // Collision resolution MUST NOT move the pinned waist.
-                    for(int n=0;n<N;n++)
+                    for(int n=0;n<SIM_NODES;n++)
                         if(pinned[n])
-                            System.arraycopy(pose.target[n],0,position[n],0,3);
+                            System.arraycopy(fineTarget[n],0,position[n],0,3);
                 }
 
-                for(int n=0;n<N;n++)
+                for(int n=0;n<SIM_NODES;n++)
                 {
                     if(pinned[n])continue;
-                    float[] p=position[n],ref=pose.target[n];
+                    float[] p=position[n],ref=fineTarget[n];
                     float gap=distance(p,ref);
                     if(!Float.isFinite(gap))
                         throw new IllegalStateException("XPBD divergence");
@@ -366,12 +425,12 @@ public final class SkirtXPBDSolver
                     }
                 }
             }
-            protectRadialSilhouette(pose,waistCenter);
+            protectRadialSilhouette(fineTarget,waistCenter);
             stepCount++;
             return result(legs,self,SUBSTEPS);
         }
 
-        private int resolveDisplayContacts(SkirtXPBDPoseSkin.Frame pose,
+        private int resolveDisplayContacts(float[][] fineTarget,
                 SkirtXPBDContacts.Frame bodies,float[] center)
         {
             if(bodies==null)return 0;
@@ -380,12 +439,12 @@ public final class SkirtXPBDSolver
             // need a second pass to settle adjacent contacts. Keep this
             // cheaper than a complete XPBD integration step.
             for(int pass=0;pass<2;pass++)
-                for(int n=0;n<N;n++)
+                for(int n=0;n<SIM_NODES;n++)
                 {
                     if(pinned[n])continue;
                     float[] outward={
-                            pose.target[n][0]-center[0],0F,
-                            pose.target[n][2]-center[2]};
+                            fineTarget[n][0]-center[0],0F,
+                            fineTarget[n][2]-center[2]};
                     float[] corrected=SkirtXPBDContacts.corrected(
                             position[n],bodies,CONTACT_RADIUS,outward);
                     if(distance(corrected,position[n])<=1E-7F)
@@ -401,14 +460,14 @@ public final class SkirtXPBDSolver
             return contacts;
         }
 
-        private float[] waistCenter(SkirtXPBDPoseSkin.Frame pose)
+        private float[] waistCenter(float[][] fineTarget)
         {
             float[] center=new float[3];
             int count=0;
-            for(int n=0;n<N;n++)
+            for(int n=0;n<SIM_NODES;n++)
                 if(pinned[n])
                 {
-                    for(int k=0;k<3;k++)center[k]+=pose.target[n][k];
+                    for(int k=0;k<3;k++)center[k]+=fineTarget[n][k];
                     count++;
                 }
             if(count>0)
@@ -421,15 +480,15 @@ public final class SkirtXPBDSolver
          * is a lower bound only, never a force that expands beyond the
          * authored silhouette. No waist anchor or model bone is changed.
          * Disabled with -Dbbs.editor.physics.skirt.xpbdRadialGuard=false. */
-        private void protectRadialSilhouette(SkirtXPBDPoseSkin.Frame pose,
+        private void protectRadialSilhouette(float[][] fineTarget,
                 float[] center)
         {
             if(!RADIAL_GUARD)return;
-            for(int n=0;n<N;n++)
+            for(int n=0;n<SIM_NODES;n++)
             {
                 if(pinned[n])continue;
-                float tx=pose.target[n][0]-center[0];
-                float tz=pose.target[n][2]-center[2];
+                float tx=fineTarget[n][0]-center[0];
+                float tz=fineTarget[n][2]-center[2];
                 float sourceRadius=(float)Math.sqrt(tx*tx+tz*tz);
                 if(sourceRadius<1E-5F)continue;
                 float dx=position[n][0]-center[0];
@@ -440,7 +499,7 @@ public final class SkirtXPBDSolver
                 // Limit per-frame correction and preserve the existing
                 // maximum pose offset even with deep thigh contact.
                 float allowance=Math.max(0F,
-                        MAX_OFFSET-distance(position[n],pose.target[n]));
+                        MAX_OFFSET-distance(position[n],fineTarget[n]));
                 float shift=Math.min(.08F,Math.min(deficit,allowance));
                 if(shift<=0F)continue;
                 position[n][0]+=tx/sourceRadius*shift;
@@ -461,7 +520,11 @@ public final class SkirtXPBDSolver
             for(Constraint c:links)
                 max=Math.max(max,Math.abs(
                         distance(position[c.a],position[c.b])-c.rest));
-            return new Result(position,contacts,self,steps,max);
+            float[][] nativeNodes=new float[N][3];
+            for(int n=0;n<N;n++)
+                System.arraycopy(position[sourceToFine[n]],0,nativeNodes[n],0,3);
+            return new Result(nativeNodes,position,previousPoseTarget,
+                    contacts,self,steps,max);
         }
 
         private void project(Constraint c,float dt)
@@ -486,8 +549,8 @@ public final class SkirtXPBDSolver
         private int selfParticles()
         {
             int contacts=0;
-            for(int i=0;i<N;i++)
-                for(int j=i+1;j<N;j++)
+            for(int i=0;i<SIM_NODES;i++)
+                for(int j=i+1;j<SIM_NODES;j++)
                 {
                     if(neighbor(i,j)||Math.abs(column[i]-column[j])<=1||
                             Math.abs(column[i]-column[j])>=SEGMENTS-1)
@@ -514,7 +577,7 @@ public final class SkirtXPBDSolver
         private int selfTriangles()
         {
             int contacts=0;
-            for(int p=0;p<N;p++)
+            for(int p=0;p<SIM_NODES;p++)
             {
                 for(int[] tri:triangles)
                 {
