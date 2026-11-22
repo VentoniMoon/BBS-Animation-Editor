@@ -164,7 +164,10 @@ public final class SkirtXPBDContacts
     {
         private static final float CELL=.22F;
         private static final float BAND=.16F;
-        private static final float MAX_CONTACT_STEP=.065F;
+        // Previous contact could advance .065 per XPBD iteration. Near a
+        // thigh edge, that jumped across a second face and raised the
+        // pinned waist's neighboring rows like a rigid shelf.
+        private static final float MAX_CONTACT_STEP=.032F;
         // The 20x5 cloth queries a broadphase hash, not every face.
         // Detailed Emoticons thigh skins can exceed 1700 faces EACH,
         // before pelvic geometry is included. The former 4500-face cap
@@ -204,9 +207,33 @@ public final class SkirtXPBDContacts
         }
         private static final class Face
         {
-            final float[] a,b,c,normal;
-            Face(float[] a,float[] b,float[] c,float[] n)
-            {this.a=a;this.b=b;this.c=c;normal=n;}
+            final float[] a,b,c,normal,na,nb,nc;
+            Face(float[] a,float[] b,float[] c,float[] n,
+                    float[] na,float[] nb,float[] nc)
+            {
+                this.a=a;this.b=b;this.c=c;normal=n;
+                this.na=na;this.nb=nb;this.nc=nc;
+            }
+        }
+        /** Weld identical skinned positions ONLY within the same limb,
+         * so UV seams do not reintroduce sharp artificial normals. */
+        private static final class VertexKey
+        {
+            final int x,y,z;
+            VertexKey(float[] p)
+            {
+                x=Math.round(p[0]*10000F);
+                y=Math.round(p[1]*10000F);
+                z=Math.round(p[2]*10000F);
+            }
+            @Override public int hashCode()
+            {return (x*73856093)^(y*19349663)^(z*83492791);}
+            @Override public boolean equals(Object other)
+            {
+                if(!(other instanceof VertexKey))return false;
+                VertexKey k=(VertexKey)other;
+                return x==k.x&&y==k.y&&z==k.z;
+            }
         }
         private static int cell(float value)
         {return (int)Math.floor(value/CELL);}
@@ -299,6 +326,8 @@ public final class SkirtXPBDContacts
                 }
                 if(count<3)continue;
                 for(int k=0;k<3;k++)center[k]/=count;
+                float[][] smooth=vertexNormals(world,region.triangles,
+                        center);
                 int regionAccepted=0;
                 for(int j=0;j<region.triangles.length;j+=3)
                 {
@@ -359,7 +388,10 @@ public final class SkirtXPBDContacts
                         return null;
                     }
                     cellReferences+=(int)newRefs;
-                    Face face=new Face(a,b,c,normal);
+                    Face face=new Face(a,b,c,normal,
+                            smooth[region.triangles[j]],
+                            smooth[region.triangles[j+1]],
+                            smooth[region.triangles[j+2]]);
                     allFaces.add(face);
                     for(int ix=lo[0];ix<=hi[0];ix++)
                         for(int iy=lo[1];iy<=hi[1];iy++)
@@ -404,6 +436,91 @@ public final class SkirtXPBDContacts
                     skippedOversized+" skippedDegenerate="+skippedDegenerate);
             return new SkinSurface(cells,allFaces,accepted,left,right,pelvis,
                     hash,bounds);
+        }
+
+        /**
+         * Area-weighted normals, oriented toward the owning limb's
+         * exterior and welded across duplicated UV seam vertices.
+         * Compute from all valid incident triangles BEFORE contact,
+         * so a particle crossing a 90-degree thigh corner receives
+         * a smoothly interpolated surface normal instead of an abrupt
+         * top-face versus side-face jump.
+         */
+        private static float[][] vertexNormals(float[][] vertices,
+                int[] indices,float[] centroid)
+        {
+            java.util.Map<VertexKey,float[]> sums=
+                    new java.util.HashMap<VertexKey,float[]>();
+            VertexKey[] keys=new VertexKey[vertices.length];
+            for(int i=0;i<vertices.length;i++)
+                keys[i]=new VertexKey(vertices[i]);
+            for(int j=0;j+2<indices.length;j+=3)
+            {
+                int ia=indices[j],ib=indices[j+1],ic=indices[j+2];
+                float[] a=vertices[ia],b=vertices[ib],c=vertices[ic];
+                float[] n=cross(minus(b,a),minus(c,a));
+                float length=(float)Math.sqrt(dot(n,n));
+                if(!(length>1E-7F)||!Float.isFinite(length))continue;
+                boolean oversized=false;
+                for(int k=0;k<3;k++)
+                    if(Math.max(a[k],Math.max(b[k],c[k]))-
+                            Math.min(a[k],Math.min(b[k],c[k]))>1.5F)
+                        oversized=true;
+                if(oversized)continue;
+                float[] middle={(a[0]+b[0]+c[0])/3F,
+                        (a[1]+b[1]+c[1])/3F,
+                        (a[2]+b[2]+c[2])/3F};
+                if(dot(n,minus(middle,centroid)) < -1E-5F)
+                    for(int k=0;k<3;k++)n[k]=-n[k];
+                // Cap face-area dominance to avoid imported long faces
+                // forcing an incorrect normal across a small smooth seam.
+                float factor=Math.min(length,.075F)/length;
+                for(int index:new int[]{ia,ib,ic})
+                {
+                    VertexKey key=keys[index];
+                    float[] sum=sums.get(key);
+                    if(sum==null)
+                    {
+                        sum=new float[3];
+                        sums.put(key,sum);
+                    }
+                    for(int k=0;k<3;k++)sum[k]+=n[k]*factor;
+                }
+            }
+            float[][] out=new float[vertices.length][3];
+            for(int i=0;i<vertices.length;i++)
+            {
+                float[] sum=sums.get(keys[i]);
+                if(sum==null)continue;
+                float length=(float)Math.sqrt(dot(sum,sum));
+                if(length>1E-7F)
+                    for(int k=0;k<3;k++)out[i][k]=sum[k]/length;
+            }
+            return out;
+        }
+
+        private static float[] smoothNormal(Face face,float[] closest)
+        {
+            float[] ab=minus(face.b,face.a),
+                    ac=minus(face.c,face.a),
+                    ap=minus(closest,face.a);
+            float d00=dot(ab,ab),d01=dot(ab,ac),
+                    d11=dot(ac,ac),d20=dot(ap,ab),d21=dot(ap,ac);
+            float denominator=d00*d11-d01*d01;
+            if(Math.abs(denominator)<1E-9F)return face.normal;
+            float v=(d11*d20-d01*d21)/denominator;
+            float w=(d00*d21-d01*d20)/denominator;
+            float u=1F-v-w;
+            float[] n=new float[3];
+            for(int k=0;k<3;k++)
+                n[k]=u*face.na[k]+v*face.nb[k]+w*face.nc[k];
+            float magnitude=(float)Math.sqrt(dot(n,n));
+            if(!(magnitude>1E-5F))return face.normal;
+            for(int k=0;k<3;k++)n[k]/=magnitude;
+            // Do not allow an ill-formed skinned mesh to turn its surface
+            // contact more than ~70 degrees away from the actual face.
+            if(dot(n,face.normal)<.35F)return face.normal;
+            return n;
         }
 
         private static void reason(String[] output,String value)
@@ -534,13 +651,14 @@ public final class SkirtXPBDContacts
                 }
             }
             if(best==null)return world.clone();
-            float signed=dot(minus(world,bestPoint),best.normal);
+            float[] normal=smoothNormal(best,bestPoint);
+            float signed=dot(minus(world,bestPoint),normal);
             float need=thickness+0.004F-signed;
             if(need<=0F)return world.clone();
             float step=Math.min(MAX_CONTACT_STEP,need);
-            return new float[]{world[0]+best.normal[0]*step,
-                    world[1]+best.normal[1]*step,
-                    world[2]+best.normal[2]*step};
+            return new float[]{world[0]+normal[0]*step,
+                    world[1]+normal[1]*step,
+                    world[2]+normal[2]*step};
         }
     }
 
