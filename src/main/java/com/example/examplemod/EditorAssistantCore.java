@@ -125,9 +125,11 @@ public final class EditorAssistantCore
     private static Proposal plan(Action action,String description,
             Context context,int frame,boolean mutation)
     {
-        if(mutation&&(context.actorId.isEmpty()||
-                (action!=Action.GOTO_FRAME&&
-                 context.boneName.isEmpty())))
+        // Timeline navigation is scene-level, so it works even when
+        // there is no selected actor. Bone operations require both IDs.
+        if(mutation&&action!=Action.GOTO_FRAME&&
+                (context.actorId.isEmpty()||
+                 context.boneName.isEmpty()))
             return new Proposal(Action.UNKNOWN,
                     "Сначала выбери актёра и кость",
                     frame,context.actorId,context.boneName,false);
