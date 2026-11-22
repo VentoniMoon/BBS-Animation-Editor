@@ -426,6 +426,15 @@ public final class SkirtXPBDSolver
                                     clothContactRadius(n,bodies),outward);
                             if(distance(corrected,position[n])>1E-7F)
                             {
+                                if(bodies.skinSurface!=null)
+                                    for(int k=0;k<3;k++)
+                                        // Contact correction is not an
+                                        // acceleration. Otherwise every
+                                        // 60Hz Verlet step replays the face
+                                        // projection as outward velocity,
+                                        // inflating the skirt near its belt.
+                                        previous[n][k]+=
+                                                corrected[k]-position[n][k];
                                 System.arraycopy(corrected,0,position[n],0,3);
                                 legs++;
                             }
