@@ -1049,6 +1049,11 @@ public class BodyPartsPreviewRenderer
                     catch(IllegalArgumentException ignored) {}
             }
         }
+        // A truthful indicator of the ACTIVE cloth contact source, not
+        // the separate Jolt native parent boxes drawn on the first lines.
+        String clothInfo=!SkirtXPBDRuntime.ENABLED?
+                "XPBD: global solver disabled":
+                "XPBD: no current cloth contact frame";
         // These are the ACTUAL selected, tapered, and filtered OBBs
         // consumed by SkirtXPBDContacts.corrected(). The earlier native
         // Jolt overlay could show only hair-chain colliders and made the
@@ -1064,7 +1069,17 @@ public class BodyPartsPreviewRenderer
                     continue;
                 SkirtXPBDContacts.Frame cloth=
                         SkirtXPBDContacts.forMorph(part.morph.get());
-                if(cloth==null||cloth.timelineFrame!=frame)continue;
+                if(cloth==null||cloth.timelineFrame!=frame)
+                {
+                    clothInfo="XPBD: no contact sample (cloth/pose not ready)";
+                    continue;
+                }
+                clothInfo=cloth.skinSurface==null?
+                        "XPBD OBB fallback: "+
+                        (skirtSkinFrame==frame?skirtSkinDiagnostic:
+                                "mesh not captured this frame"):
+                        "XPBD SKIN: "+
+                        cloth.skinSurface.triangleCount+" triangles";
                 if(cloth.skinSurface!=null)
                 {
                     // Show the ACTUAL animated collision mesh. The old
@@ -1098,7 +1113,7 @@ public class BodyPartsPreviewRenderer
                     }
             }
         return new JoltContactOverlaySnapshot(frame,activeScenes,shapes,boxes,
-                actorFrameFor(frame)!=null);
+                actorFrameFor(frame)!=null,clothInfo);
     }
 
     /**
