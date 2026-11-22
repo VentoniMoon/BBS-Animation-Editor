@@ -430,7 +430,8 @@ public final class SkirtXPBDSolver
                                     0F,fineTarget[n][2]-waistCenter[2]};
                             float[] corrected=SkirtXPBDContacts.corrected(
                                     position[n],bodies,
-                                    clothContactRadius(n,bodies),outward);
+                                    clothContactRadius(n,bodies),outward,
+                                    kneeContactWeight(n));
                             if(distance(corrected,position[n])>1E-7F)
                             {
                                 if(bodies.meshContactBlend>0F)
@@ -540,11 +541,14 @@ public final class SkirtXPBDSolver
                 if(freeWeight<=0F)continue;
                 outward[0]-=center[0];
                 outward[2]-=center[2];
-                float surfaceRadius=0F;
+                float surfaceRadius=0F,kneeWeight=0F;
                 for(int index:tri)
+                {
                     surfaceRadius+=clothContactRadius(index,bodies)/3F;
+                    kneeWeight+=kneeContactWeight(index)/3F;
+                }
                 float[] clearance=SkirtXPBDContacts.corrected(
-                        sample,bodies,surfaceRadius,outward);
+                        sample,bodies,surfaceRadius,outward,kneeWeight);
                 float depth=distance(sample,clearance);
                 if(!Float.isFinite(depth)||depth<=1E-5F)continue;
 
@@ -619,6 +623,19 @@ public final class SkirtXPBDSolver
                     bodies.meshContactBlend*(skinRadius-CONTACT_RADIUS);
         }
 
+        /**
+         * A knee gap should affect the lower drape, not the pinned belt
+         * or upper skirt. In the 5-row refinement, the last two rows get
+         * most of the contact; the original 3-row mode is also supported.
+         */
+        private float kneeContactWeight(int index)
+        {
+            int row=index/SEGMENTS;
+            if(ROWS==5)
+                return row<=1?0F:row==2?.25F:row==3?.65F:1F;
+            return row==0?0F:row==1?.25F:1F;
+        }
+
         private int resolveDisplayContacts(float[][] fineTarget,
                 SkirtXPBDContacts.Frame bodies,float[] center)
         {
@@ -636,7 +653,8 @@ public final class SkirtXPBDSolver
                             fineTarget[n][2]-center[2]};
                     float[] corrected=SkirtXPBDContacts.corrected(
                             position[n],bodies,
-                            clothContactRadius(n,bodies),outward);
+                            clothContactRadius(n,bodies),outward,
+                            kneeContactWeight(n));
                     if(distance(corrected,position[n])<=1E-7F)
                         continue;
                     for(int k=0;k<3;k++)
@@ -757,7 +775,8 @@ public final class SkirtXPBDSolver
                         float[] pushed=SkirtXPBDContacts.corrected(
                                 proposed,bodies,
                                 clothContactRadius(n,bodies),
-                                new float[]{tx,0F,tz});
+                                new float[]{tx,0F,tz},
+                                kneeContactWeight(n));
                         // If restricting the ring would enter a thigh,
                         // physical contact wins over the aesthetic cap.
                         if(distance(pushed,proposed)>.001F)continue;
