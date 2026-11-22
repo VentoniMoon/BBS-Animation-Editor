@@ -38,6 +38,7 @@ public final class SkirtXPBDPipelineSmokeTest
         raisedThighContactsSupportClothFromAbove();
         taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong();
         roundedHipGapBridgeAppearsOnlyWithRealBentThigh();
+        bentKneeBridgesRequireFittedSameSideShin();
         skinnedThighMeshProvidesContinuousContact();
         skinnedThighCornerGentlyTransitionsFromTopToSide();
         denseEmoticonsSkinDoesNotFallBackFor4500PlusTriangles();
@@ -563,6 +564,120 @@ public final class SkirtXPBDPipelineSmokeTest
                 new float[][]{left,right,hip},owners);
         need(SkirtXPBDContacts.forMorph(gait).hipBridges.isEmpty(),
                 "45-degree walking pose must not enable gap filler");
+    }
+
+    /**
+     * Knee gap-fill is separate from hip correction: it depends on the
+     * relative upper/lower leg bend and the real same-side lower-leg box.
+     * Straight knees, an absent shin, an opposite-side shin and an
+     * improbable joint gap must not invent new collision geometry.
+     */
+    private static void bentKneeBridgesRequireFittedSameSideShin()
+    {
+        float[] leftThigh={-.18F,.55F,0F,0F,0F,0F,1F,
+                .13F,.09F,.12F};
+        float[] rightThigh={.18F,.55F,0F,0F,0F,0F,1F,
+                .13F,.09F,.12F};
+        float[] leftShin={-.18F,.30F,-.22F,0F,0F,0F,1F,
+                .11F,.16F,.11F};
+        float[] rightShin={.18F,.22F,0F,0F,0F,0F,1F,
+                .11F,.16F,.11F};
+        java.util.List<String> names=java.util.Arrays.asList(
+                "emoticons.left_leg@skirt-lower",
+                "emoticons.right_leg@skirt-lower",
+                "emoticons.low_leg_left",
+                "emoticons.low_leg_right");
+
+        Object standing=new Object();
+        SkirtXPBDContacts.publish(standing,84,identity(),
+                new float[][]{leftThigh,rightThigh,leftShin,rightShin},
+                names);
+        SkirtXPBDContacts.Frame straight=
+                SkirtXPBDContacts.forMorph(standing);
+        need(straight!=null&&straight.kneeBridges.isEmpty(),
+                "straight legs must not install a knee bridge");
+        float qx=(float)Math.sin(Math.toRadians(80D)/2D);
+        float qw=(float)Math.cos(Math.toRadians(80D)/2D);
+        leftShin=leftShin.clone();
+        leftShin[3]=qx;leftShin[6]=qw;
+        Object bent=new Object();
+        SkirtXPBDContacts.publish(bent,85,identity(),
+                new float[][]{leftThigh,rightThigh,leftShin,rightShin},
+                names);
+        SkirtXPBDContacts.Frame one=SkirtXPBDContacts.forMorph(bent);
+        need(one!=null,"fitted knees must publish a contact frame");
+        boolean enabled=Boolean.parseBoolean(System.getProperty(
+                "bbs.editor.physics.skirt.xpbdKneeBridge","true"));
+        if(!enabled)
+        {
+            need(one.kneeBridges.isEmpty(),
+                    "knee A/B opt-out must disable all bridges");
+            return;
+        }
+        need(one.hipBridges.isEmpty(),
+                "knee must not invent a pelvis/hip collider");
+        need(one.kneeBridges.size()==1&&
+                "left".equals(one.kneeBridges.get(0).side),
+                "a left bent knee must not activate the right leg: count="+
+                        one.kneeBridges.size()+" owners="+one.legOwners+
+                        " leftShin="+java.util.Arrays.toString(leftShin));
+        SkirtXPBDContacts.KneeBridge knee=one.kneeBridges.get(0);
+        need(knee.radius>.04F&&knee.radius<.105F&&
+                knee.weight>.95F,
+                "knee radius must be smaller than the hip bridge");
+        float[] inGap={
+                (knee.a[0]+knee.b[0])*.5F,
+                (knee.a[1]+knee.b[1])*.5F,
+                (knee.a[2]+knee.b[2])*.5F
+        };
+        float[] outward={-1F,0F,0F};
+        float[] without=SkirtXPBDContacts.corrected(
+                inGap,one,.018F,outward,0F);
+        float[] with=SkirtXPBDContacts.corrected(
+                inGap,one,.018F,outward,1F);
+        need(with[0]<without[0]-.03F,
+                "knee capsule failed to support cloth in joint gap");
+        equal(SkirtXPBDContacts.corrected(
+                inGap,one,.018F,outward,0F),without,1E-6F,
+                "upper cloth must remain free of knee influence");
+
+        leftShin[3]=qx;leftShin[6]=qw;
+        rightShin=rightShin.clone();
+        rightShin[2]=-.22F;rightShin[1]=.30F;
+        rightShin[3]=qx;rightShin[6]=qw;
+        Object two=new Object();
+        SkirtXPBDContacts.publish(two,86,identity(),
+                new float[][]{leftThigh,rightThigh,leftShin,rightShin},
+                names);
+        need(SkirtXPBDContacts.forMorph(two).kneeBridges.size()==2,
+                "both bent knees should have independent bridges");
+
+        Object missing=new Object();
+        SkirtXPBDContacts.publish(missing,86,identity(),
+                new float[][]{leftThigh,rightThigh},
+                names.subList(0,2));
+        need(SkirtXPBDContacts.forMorph(missing).kneeBridges.isEmpty(),
+                "no lower-leg box must mean no invented knee geometry");
+
+        rightShin[0]=4F;
+        Object far=new Object();
+        SkirtXPBDContacts.publish(far,86,identity(),
+                new float[][]{leftThigh,rightThigh,leftShin,rightShin},
+                names);
+        need(SkirtXPBDContacts.forMorph(far).kneeBridges.size()==1,
+                "far-away shin must not connect to a nearby knee");
+
+        float half=(float)Math.sin(Math.toRadians(45D)/2D);
+        float halfW=(float)Math.cos(Math.toRadians(45D)/2D);
+        leftShin[3]=half;leftShin[6]=halfW;
+        Object gait=new Object();
+        SkirtXPBDContacts.publish(gait,87,identity(),
+                new float[][]{leftThigh,rightThigh,leftShin,
+                        new float[]{.18F,.22F,0F,0F,0F,0F,1F,
+                                .11F,.16F,.11F}},
+                names);
+        need(SkirtXPBDContacts.forMorph(gait).kneeBridges.isEmpty(),
+                "ordinary 45-degree knee flex must not inflate the hem");
     }
 
     /**
