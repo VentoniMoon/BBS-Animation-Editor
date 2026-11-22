@@ -82,6 +82,18 @@ public final class SkirtXPBDSolver
     private static final boolean RADIAL_GUARD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"));
     private static final float PIN_EPS=1E-8F;
+    /**
+     * A 60fps export never resets or scrubs after a deep sit. If the cloth
+     * has collapsed onto the belt, the original XPBD graph can keep that
+     * near-degenerate configuration indefinitely. This optional, bounded
+     * recovery gently reopens the correct standing outline ONCE after
+     * leaving a deep seated pose; it never alters the sitting pose itself.
+     *
+     * A/B: -Dbbs.editor.physics.skirt.xpbdPostSeatUnfold=false
+     */
+    public static final boolean POST_SEAT_UNFOLD=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdPostSeatUnfold","true"));
 
     /** Rest-length constraint; rest authored geometry is never modified. */
     public static final class Constraint
@@ -135,6 +147,8 @@ public final class SkirtXPBDSolver
         private final List<int[]> triangles=new ArrayList<int[]>();
         private final Set<Long> adjacent=new HashSet<Long>();
         private int stepCount;
+        private boolean deepSeatSeen;
+        private int postSeatUnfoldFrames;
 
         private State(SkirtClothSurfaceMesh.Snapshot source,
                 SkirtClothSharedSurface.Surface shared,float[][] target)
@@ -321,6 +335,23 @@ public final class SkirtXPBDSolver
                 throw new IllegalArgumentException("Invalid cloth time/pose");
             float[][] fineTarget=refine(pose.target);
             float seated=SEATED_FOLD&&bodies!=null?bodies.seatedBlend:0F;
+            // The ordinary preview can rebuild an actor after scrubbing,
+            // but a sequential offline render MUST be able to unfold its
+            // existing state. Arm recovery only after a real deep bend and
+            // trigger when both thighs have returned toward standing.
+            if(POST_SEAT_UNFOLD&&dt>1E-6F)
+            {
+                if(seated>.80F)
+                {
+                    deepSeatSeen=true;
+                    postSeatUnfoldFrames=0;
+                }
+                else if(deepSeatSeen&&seated<.18F)
+                {
+                    deepSeatSeen=false;
+                    postSeatUnfoldFrames=42;
+                }
+            }
             float maxOffset=MAX_OFFSET+SEATED_EXTRA_OFFSET*seated;
             // Blend is driven only by both genuine upper-thigh orientations;
             // unilateral high steps and upright walking get EXACTLY the old
@@ -562,8 +593,66 @@ public final class SkirtXPBDSolver
             }
             protectRadialSilhouette(physicalTarget,waistCenter,seated,maxOffset);
             stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
+            if(POST_SEAT_UNFOLD&&postSeatUnfoldFrames>0)
+            {
+                // Only corrupted, short-waist/hem configurations recover.
+                // An already correct standing skirt stays bit-identical.
+                unfoldCompressedHem(fineTarget,bodies);
+                postSeatUnfoldFrames--;
+            }
             stepCount++;
             return result(legs,self,SUBSTEPS);
+        }
+
+        /**
+         * Recover a post-seat collapsed cloth from its current state without
+         * a wall-clock reset, a timeline jump or teleporting the hem. This is
+         * intentionally NOT active while seated or in ordinary walking.
+         * Rebuild is bounded to at most 42 physical 60Hz frames after a deep
+         * seat, and only if the hem lies unnaturally close to the waist.
+         */
+        private void unfoldCompressedHem(float[][] target,
+                SkirtXPBDContacts.Frame bodies)
+        {
+            float desired=0F,actual=0F;
+            int bottom=ROWS-1;
+            for(int c=0;c<SEGMENTS;c++)
+            {
+                int belt=ring[0][c],hem=ring[bottom][c];
+                desired+=distance(target[hem],target[belt]);
+                actual+=distance(position[hem],position[belt]);
+            }
+            desired/=SEGMENTS;
+            actual/=SEGMENTS;
+            if(desired<.14F||actual>=desired*.80F)
+            {
+                // No collapse to repair. Stop once a normal drape is back.
+                postSeatUnfoldFrames=0;
+                return;
+            }
+
+            for(int row=1;row<ROWS;row++)
+                for(int c=0;c<SEGMENTS;c++)
+                {
+                    int n=ring[row][c];
+                    float[] p=position[n],old=previous[n],ref=target[n];
+                    float[] delta=minus(ref,p);
+                    float len=length(delta);
+                    if(len<1E-5F)continue;
+                    float max=.080F*(row/(float)(ROWS-1));
+                    float scale=Math.min(.24F,max/len);
+                    for(int k=0;k<3;k++)
+                    {
+                        float d=delta[k]*scale;
+                        p[k]+=d;
+                        old[k]+=d; // contact/recovery is not Verlet velocity
+                    }
+                }
+
+            // Contact again using the same fitted OBBs as normal walking;
+            // never recover visual cloth through a thigh or a shin.
+            if(bodies!=null)
+                resolveDisplayContacts(target,bodies,waistCenter(target));
         }
 
         /**

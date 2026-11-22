@@ -34,6 +34,7 @@ public final class SkirtXPBDPipelineSmokeTest
         refinedGridRetainsNativeSkinCorrespondence();
         pausedPoseChangePreservesClothRelativeMotion();
         seatedDrapePoseDeltaDoesNotFoldHemIntoWaist();
+        continuousPostSeatUnfoldRecoversCollapsedHem();
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
@@ -1311,6 +1312,105 @@ public final class SkirtXPBDPipelineSmokeTest
     {
         float dx=a[0]-b[0],dz=a[2]-b[2];
         return (float)Math.sqrt(dx*dx+dz*dz);
+    }
+
+    /**
+     * Simulate the difference between a resetting editor and a 60fps export:
+     * start on a deep real bilateral seat, artificially trap every free node
+     * at its pinned waist, and then advance sequentially into STANDING
+     * without creating a new State or seeking the clock. Exactly the same
+     * fixed steps are used in the actual movie exporter.
+     */
+    private static void continuousPostSeatUnfoldRecoversCollapsedHem()
+    {
+        Fixture f=new Fixture();
+        float sin=(float)Math.sin(Math.toRadians(80D)/2D);
+        float cos=(float)Math.cos(Math.toRadians(80D)/2D);
+        java.util.List<String> names=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        float[] satL={-5F,-5F,0F,sin,0F,0F,cos,
+                .12F,.20F,.12F};
+        float[] satR={5F,-5F,0F,sin,0F,0F,cos,
+                .12F,.20F,.12F};
+        float[] upL={-5F,-5F,0F,0F,0F,0F,1F,
+                .12F,.20F,.12F};
+        float[] upR={5F,-5F,0F,0F,0F,0F,1F,
+                .12F,.20F,.12F};
+        Object sitter=new Object(),stander=new Object();
+        SkirtXPBDContacts.publish(sitter,110,identity(),
+                new float[][]{satL,satR},names);
+        SkirtXPBDContacts.publish(stander,110,identity(),
+                new float[][]{upL,upR},names);
+        SkirtXPBDContacts.Frame seated=SkirtXPBDContacts.forMorph(sitter);
+        SkirtXPBDContacts.Frame upright=SkirtXPBDContacts.forMorph(stander);
+        need(seated!=null&&seated.seatedBlend>.99F&&upright!=null&&
+                upright.seatedBlend==0F,
+                "test requires fully seated and straight true thigh fits");
+
+        SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        state.advance(1F/60F,f.rest,seated); // arm the real post-seat latch
+        float[][] nativeOutline=state.current().refinedTarget;
+        int bottom=(SkirtXPBDSolver.ROWS-1)*20;
+        try
+        {
+            java.lang.reflect.Field pfield=
+                    SkirtXPBDSolver.State.class.getDeclaredField("position");
+            java.lang.reflect.Field vfield=
+                    SkirtXPBDSolver.State.class.getDeclaredField("previous");
+            pfield.setAccessible(true);vfield.setAccessible(true);
+            float[][] positions=(float[][])pfield.get(state);
+            float[][] previous=(float[][])vfield.get(state);
+            // Tuck all loose rows into a thin near-degenerate belt band.
+            // An unmodified solver may get trapped here; the corrected
+            // one must unfold smoothly while scene time only increases.
+            for(int row=1;row<SkirtXPBDSolver.ROWS;row++)
+                for(int c=0;c<20;c++)
+                {
+                    int n=row*20+c;
+                    for(int k=0;k<3;k++)
+                    {
+                        float nativeOffset=
+                                nativeOutline[bottom+c][k]-
+                                nativeOutline[c][k];
+                        positions[n][k]=positions[c][k]+
+                                .010F*nativeOffset;
+                        previous[n][k]=positions[n][k];
+                    }
+                }
+        }
+        catch(ReflectiveOperationException ex)
+        {
+            throw new AssertionError("Cannot arrange collapsed cloth fixture",ex);
+        }
+
+        SkirtXPBDSolver.Result start=state.current();
+        float desired=0F,folded=0F;
+        for(int c=0;c<20;c++)
+        {
+            desired+=distance(start.refinedTarget[bottom+c],
+                    start.refinedTarget[c])/20F;
+            folded+=distance(start.refinedParticles[bottom+c],
+                    start.refinedParticles[c])/20F;
+        }
+        need(desired>.14F&&folded<desired*.05F,
+                "synthetic collapsed hem not sufficiently degenerate");
+
+        SkirtXPBDSolver.Result grown=null;
+        for(int i=0;i<35;i++)
+            grown=state.advance(1F/60F,f.rest,upright);
+        float recovered=0F;
+        for(int c=0;c<20;c++)
+            recovered+=distance(grown.refinedParticles[bottom+c],
+                    grown.refinedParticles[c])/20F;
+        if(SkirtXPBDSolver.POST_SEAT_UNFOLD)
+            need(recovered>desired*.72F,
+                    "continuous standing export did not unfold the hem; "+
+                    "rest="+desired+" recovered="+recovered);
+        // Do not change the authored waistband or native UV ownership.
+        for(int c=0;c<20;c++)
+            equal(grown.refinedParticles[c],grown.refinedTarget[c],
+                    1E-6F,"post-seat recovery moved a pinned waistband");
     }
 
     private static void bilateralSittingFoldsWithoutBreakingWalking()
