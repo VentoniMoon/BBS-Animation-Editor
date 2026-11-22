@@ -68,6 +68,11 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorPreviewAutoFocusController previewAutoFocus =
             new EditorPreviewAutoFocusController();
 
+    /** BBS-style viewport hover/click: never changes the real morph
+     * or starts a gizmo until the user explicitly presses LMB. */
+    private final EditorBoneViewportPicker boneViewportPicker =
+            new EditorBoneViewportPicker();
+
     private final EditorModeController editorModeController =
             new EditorModeController();
 
@@ -672,6 +677,81 @@ public class AnimationEditorScreen extends GuiScreen
                 ||
                 mode ==
                 EditorModeController.EditorMode.BODY_PARTS;
+    }
+
+    private List<AnimationBone> viewportSelectableBones()
+    {
+        if(!isGizmoEnabled())return null;
+        if(editorModeController.getMode()==EditorModeController.EditorMode.BODY_PARTS)
+        {
+            BodyPartModelData model=bodyPartsController.getSelectedModel();
+            // A Body Part model's internal bones are independent of the
+            // actor's attachment point. Only pick inside the active model.
+            return model==null?null:model.getBones();
+        }
+        return actorPreviewController.getBones();
+    }
+
+    private AnimationBone updateViewportBoneHover(int mouseX,int mouseY,
+            int x,int y,int width,int height)
+    {
+        if(!isGizmoEnabled()||getSelectedActor()==null||
+                sceneViewport==null||isCrossModeCameraView()||
+                playbackController.isPlaying())
+        {
+            boneViewportPicker.clear();
+            return null;
+        }
+        prepareGizmoTarget();
+        return boneViewportPicker.update(mouseX,mouseY,
+                viewportSelectableBones(),gizmoController,
+                getCurrentRecordFrame(),getPreviewInteractionCamera(),
+                x,y,width,height);
+    }
+
+    /** Called AFTER the gizmo handle hit test but BEFORE any camera
+     * movement. Click creates/selects exactly one key on this frame and
+     * starts a body drag in position/angle mode without an axis click. */
+    public boolean clickViewportBone(int mouseX,int mouseY,int button)
+    {
+        if(button!=0||sceneViewport==null||!isGizmoEnabled()||
+                isCrossModeCameraView()||playbackController.isPlaying())
+            return false;
+        int vx=sceneViewport.getX(),vy=sceneViewport.getY();
+        int vw=sceneViewport.getWidth(),vh=sceneViewport.getHeight();
+        AnimationBone picked=updateViewportBoneHover(
+                mouseX,mouseY,vx,vy,vw,vh);
+        List<AnimationBone> bones=viewportSelectableBones();
+        if(picked==null||bones==null)return false;
+        int index=bones.indexOf(picked);
+        if(index<0)return false;
+
+        EditorKeyframeController keys=
+                editorModeController.getMode()==EditorModeController.EditorMode.BODY_PARTS?
+                bodyPartsController.getKeyframeController():keyframeController;
+        int frame=playbackController.getCurrentFrame();
+        AnimationTransform evaluated=picked.getTransformAt((float)frame);
+        boolean newKey=keys.findKeyframe(picked,frame)==null;
+        keys.setSelectedBoneIndex(index,bones);
+        AnimationKeyframe key=keys.createKeyframe(picked,frame);
+        if(key==null)return false;
+        if(newKey&&evaluated!=null)
+        {
+            AnimationTransform to=key.getTransform();
+            to.setPosition(evaluated.getPositionX(),
+                    evaluated.getPositionY(),evaluated.getPositionZ());
+            to.setRotation(evaluated.getRotationX(),
+                    evaluated.getRotationY(),evaluated.getRotationZ());
+            to.setScale(evaluated.getScaleX(),
+                    evaluated.getScaleY(),evaluated.getScaleZ());
+        }
+
+        prepareGizmoTarget();
+        gizmoController.beginDirectBoneDrag(mouseX,mouseY,
+                vx,vy,vw,vh,picked,key,getCurrentRecordFrame(),
+                getPreviewInteractionCamera());
+        markEditorDirty();
+        return true;
     }
 
     public AnimationBone getGizmoBone()
@@ -3484,6 +3564,12 @@ public class AnimationEditorScreen extends GuiScreen
                 getPreviewInteractionCamera(),
                 isGizmoEnabled()
         );
+
+        // Green projected limb/pivot highlight follows the same camera
+        // and native bone matrices as the gizmo. The draw happens in GUI,
+        // after FBO compositing, so it is never baked into video output.
+        updateViewportBoneHover(mouseX,mouseY,filmX,filmY,filmW,filmH);
+        boneViewportPicker.drawHover();
 
         drawPreviewFrame(left,top,previewRight,bottom);
         if(outputView)
