@@ -43,6 +43,15 @@ public final class SkirtXPBDSolver
     private static final float SEATED_RADIAL_RELIEF=.38F;
     private static final boolean SEATED_FOLD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdSeatedFold","true"));
+    // Keep the first free ring below the belt from expanding when the
+    // thighs raise; a cap is applied ONLY if the proposed position is
+    // outside the real leg hull. A/B: -D...xpbdSeatedUpperControl=false
+    private static final boolean SEATED_UPPER_CONTROL=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSeatedUpperControl","true"));
+    private static final boolean SEATED_BEND_RELIEF=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSeatedBendRelief","true"));
     // Contact must be evaluated on the triangles BETWEEN cloth nodes:
     // a thigh can intersect a polygon without containing any vertex.
     // Keep this additional work restricted to a deep bilateral seat.
@@ -349,7 +358,7 @@ public final class SkirtXPBDSolver
                     for(int settle=0;settle<5;settle++)
                     {
                         for(Constraint c:links)c.lambda=0F;
-                        for(Constraint c:links)project(c,relaxDt);
+                        for(Constraint c:links)project(c,relaxDt,seated);
                         for(int n=0;n<SIM_NODES;n++)
                             if(pinned[n])
                                 System.arraycopy(fineTarget[n],0,
@@ -369,6 +378,7 @@ public final class SkirtXPBDSolver
                 }
                 protectRadialSilhouette(fineTarget,waistCenter,
                         seated,maxOffset);
+                stabilizeUpperRings(fineTarget,waistCenter,bodies,seated);
                 return result(contacts,0,0);
             }
             int legs=0,self=0;
@@ -402,7 +412,7 @@ public final class SkirtXPBDSolver
                 for(Constraint c:links)c.lambda=0F;
                 for(int iteration=0;iteration<ITERATIONS;iteration++)
                 {
-                    for(Constraint c:links)project(c,h);
+                    for(Constraint c:links)project(c,h,seated);
                     for(int n=0;n<SIM_NODES;n++)
                     {
                         if(pinned[n])continue;
@@ -464,6 +474,7 @@ public final class SkirtXPBDSolver
                         waistCenter,seated);
             }
             protectRadialSilhouette(fineTarget,waistCenter,seated,maxOffset);
+            stabilizeUpperRings(fineTarget,waistCenter,bodies,seated);
             stepCount++;
             return result(legs,self,SUBSTEPS);
         }
@@ -635,6 +646,62 @@ public final class SkirtXPBDSolver
             }
         }
 
+        /**
+         * Seat-specific upper silhouette guard. Rows 1 and 2 may bend and
+         * move vertically, but cannot balloon horizontally far beyond the
+         * animated native skirt. It NEVER forces a vertex into an actual
+         * thigh: skip that vertex instead of fighting the contact solver.
+         * Hem rows 3/4 are deliberately not constrained by this guard.
+         */
+        private void stabilizeUpperRings(float[][] target,float[] center,
+                SkirtXPBDContacts.Frame bodies,float seated)
+        {
+            if(!SEATED_UPPER_CONTROL||seated<=1E-5F)return;
+            int upper=ROWS==5?2:1;
+            for(int row=1;row<=upper;row++)
+            {
+                float extra=row==1?.08F:.17F;
+                float margin=row==1?.018F:.025F;
+                for(int c=0;c<SEGMENTS;c++)
+                {
+                    int n=ring[row][c];
+                    float tx=target[n][0]-center[0],
+                            tz=target[n][2]-center[2];
+                    float original=(float)Math.sqrt(tx*tx+tz*tz);
+                    if(original<1E-5F)continue;
+                    float px=position[n][0]-center[0],
+                            pz=position[n][2]-center[2];
+                    float actual=(float)Math.sqrt(px*px+pz*pz);
+                    if(actual<1E-5F)continue;
+                    // Gradual threshold after ~45 degrees on BOTH hips.
+                    // A partial seated pose is allowed a wider upper ring.
+                    float limit=original*(1F+extra+
+                            .05F*(1F-seated))+margin;
+                    if(actual<=limit)continue;
+                    float desired=actual-(actual-limit)*seated;
+                    float scale=desired/actual;
+                    float nx=center[0]+px*scale,
+                            nz=center[2]+pz*scale;
+                    float[] proposed={nx,position[n][1],nz};
+                    if(bodies!=null)
+                    {
+                        float[] pushed=SkirtXPBDContacts.corrected(
+                                proposed,bodies,CONTACT_RADIUS,
+                                new float[]{tx,0F,tz});
+                        // If restricting the ring would enter a thigh,
+                        // physical contact wins over the aesthetic cap.
+                        if(distance(pushed,proposed)>.001F)continue;
+                    }
+                    position[n][0]=nx;
+                    position[n][2]=nz;
+                    // The horizontal silhouette constraint must not
+                    // become outward Verlet velocity next frame.
+                    previous[n][0]=nx;
+                    previous[n][2]=nz;
+                }
+            }
+        }
+
         public Result current()
         {return result(0,0,0);}
 
@@ -651,14 +718,28 @@ public final class SkirtXPBDSolver
                     sourceToFine,contacts,self,steps,max);
         }
 
-        private void project(Constraint c,float dt)
+        private void project(Constraint c,float dt,float seated)
         {
             float[] a=position[c.a],b=position[c.b];
             float dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
             float dist=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
             if(dist<1E-7F)return;
             float wa=pinned[c.a]?0F:1F,wb=pinned[c.b]?0F:1F;
-            float alpha=c.compliance/(dt*dt);
+            float compliance=c.compliance;
+            if(seated>0F)
+            {
+                int rowA=c.a/SEGMENTS,rowB=c.b/SEGMENTS;
+                // Circumferential links on the first free ring resist
+                // widening, but the panel can still fold in 3D.
+                if(SEATED_UPPER_CONTROL&&rowA==1&&rowB==1)
+                    compliance*=1F-.85F*seated;
+                // Make the lower TWO-row bending constraints softer.
+                // Stretch/shear links stay intact; no torn seams.
+                if(SEATED_BEND_RELIEF&&Math.abs(rowA-rowB)==2&&
+                        Math.min(rowA,rowB)>=1)
+                    compliance*=1F+7F*seated;
+            }
+            float alpha=compliance/(dt*dt);
             float delta=-(dist-c.rest+alpha*c.lambda)/(wa+wb+alpha);
             c.lambda+=delta;
             float adjust=delta/dist;
