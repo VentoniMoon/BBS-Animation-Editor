@@ -894,6 +894,7 @@ public class BodyPartsPreviewRenderer
                         " omitted="+selected.skipped+
                         " taperedLegProxy="+SKIRT_TAPERED_LEG_PROXY+
                         " distalShrink="+SkirtLegCollisionProxy.DISTAL_SHRINK+
+                        " proximalShrink="+SkirtLegCollisionProxy.PROXIMAL_SHRINK+
                         " skirtZones="+countSkirtZones(selected.owners);
                 if(!selected.leftUpperLeg||!selected.rightUpperLeg)
                     System.err.println(report+" (missing thigh collider; "+
