@@ -18,6 +18,46 @@ public final class SkirtLegCollisionProxy
     private static final float MIDDLE_WIDTH=.85F;
     private static final float LOWER_WIDTH=1F;
     /**
+     * At steep hip bend the PROXIMAL thigh zone approaches the fixed
+     * skirt belt: a rigid box may eject the first free skirt latitude
+     * toward the waist and trap it on the wrong side of the leg.
+     *
+     * Conservative collision-space relief only for the skirt's 3-zone
+     * upper-leg OBBs. The actor, ragdoll and normal walking use the old
+     * physical dimensions. An independent A/B can disable just THIS
+     * addition without changing the previously tested distal taper.
+     *
+     * -Dbbs.editor.physics.skirt.taperedProximalShrink=false
+     */
+    public static final boolean PROXIMAL_SHRINK=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.taperedProximalShrink","true"));
+
+    /** Smooth 45-to-80 degree activation from each REAL thigh bone axis.
+     * No dependence on knee, skirt state or camera. */
+    static float proximalBendBlend(float boneAxisVertical)
+    {
+        if(!PROXIMAL_SHRINK||!Float.isFinite(boneAxisVertical))
+            return 0F;
+        float v=Math.abs(boneAxisVertical);
+        final float start=.70710678F; // cos(45 degrees)
+        final float full=.1736482F; // cos(80 degrees)
+        float t=Math.max(0F,Math.min(1F,(start-v)/(start-full)));
+        return t*t*(3F-2F*t);
+    }
+
+    /** Top ring is already 70% of fitted thigh; on full bend it is
+     * further reduced to 57.4%. Middle goes from 85% to 74.8%.
+     * Distal remains independent at 100% -> 85% under its own flag. */
+    static float proximalWidthFactor(float boneAxisVertical,int zone)
+    {
+        float t=proximalBendBlend(boneAxisVertical);
+        if(zone==0)return 1F-.18F*t;
+        if(zone==1)return 1F-.12F*t;
+        return 1F;
+    }
+
+    /**
      * A/B experiment: the distal (knee-facing) third of each TRUE upper
      * thigh collider is slightly too broad once the thigh lifts almost
      * horizontal. Leave the pelvis-facing and middle zones untouched.
@@ -118,11 +158,19 @@ public final class SkirtLegCollisionProxy
         {
             float[] b=source.clone();
             float offset=proximal*halfY*(2F-2F*zone)/3F;
+            if(zone==0)
+                // Move the near-waist contact BACK toward knee, rather
+                // than letting the box overlap the pinned skirt belt.
+                // Shifting toward center also INCREASES 0<->1 overlap.
+                offset-=proximal*halfY*.12F*
+                        proximalBendBlend(axisY);
             b[0]+=axisX*offset;
             b[1]+=axisY*offset;
             b[2]+=axisZ*offset;
-            float width=zone==0?TOP_WIDTH:
-                    zone==1?MIDDLE_WIDTH:
+            float width=zone==0?
+                    TOP_WIDTH*proximalWidthFactor(axisY,0):
+                    zone==1?
+                    MIDDLE_WIDTH*proximalWidthFactor(axisY,1):
                     LOWER_WIDTH*distalWidthFactor(axisY);
             b[7]*=width;
             b[8]=halfY/3F*AXIAL_OVERLAP*
