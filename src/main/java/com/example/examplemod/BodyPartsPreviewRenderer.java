@@ -277,6 +277,11 @@ public class BodyPartsPreviewRenderer
     private static final boolean SKIRT_TAPERED_LEG_PROXY=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.taperedLegProxy","true"));
+    // When JOLT's GUI "draw colliders" toggle is active, ALSO display
+    // the exact OBB array fed into XPBD cloth, rather than only Jolt hair.
+    private static final boolean SKIRT_XPBD_COLLIDER_OVERLAY=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdColliderOverlay","true"));
     private int parentEmoticonsColliderFrame=-1;
     private String reportedParentColliderState="";
 
@@ -917,6 +922,35 @@ public class BodyPartsPreviewRenderer
                     catch(IllegalArgumentException ignored) {}
             }
         }
+        // These are the ACTUAL selected, tapered, and filtered OBBs
+        // consumed by SkirtXPBDContacts.corrected(). The earlier native
+        // Jolt overlay could show only hair-chain colliders and made the
+        // XPBD skirt appear to have no collision geometry at all.
+        // This diagnostic is pure read-only and does not mutate physics.
+        if(SKIRT_XPBD_COLLIDER_OVERLAY&&SkirtXPBDRuntime.ENABLED)
+            for(BodyPartModelData data:collisionPartOrder)
+            {
+                if(data==null||!data.supportsClothPhysics()||
+                        !data.isClothPhysicsEnabled())continue;
+                BodyPart part=renderedCollisionParts.get(data);
+                if(part==null||part.morph==null||part.morph.get()==null)
+                    continue;
+                SkirtXPBDContacts.Frame cloth=
+                        SkirtXPBDContacts.forMorph(part.morph.get());
+                if(cloth==null||cloth.timelineFrame!=frame)continue;
+                for(int n=0;n<cloth.legBoxes.size();n++)
+                    try
+                    {
+                        String source=cloth.legOwners.get(n)+" [XPBD]";
+                        boxes.add(new JoltContactOverlaySnapshot.Box(
+                                cloth.legBoxes.get(n),source,
+                                JoltColliderPrimitives.BOX));
+                    }
+                    catch(IllegalArgumentException ignored)
+                    {
+                        // Incomplete fitted box: never invent debug geometry.
+                    }
+            }
         return new JoltContactOverlaySnapshot(frame,activeScenes,shapes,boxes,
                 actorFrameFor(frame)!=null);
     }
