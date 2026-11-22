@@ -208,6 +208,12 @@ jobs:
             -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # PR #254 A/B: exact old 3-ring point-only collision path.
+          # This must still pass every standing, sitting and export test.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdSafePanelContacts=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
           # Controlled explicit rollback of the new thigh pinch limit:
           # the previously authored 3-ring walking geometry is identical.
           java -ea -Dbbs.editor.physics.skirt.xpbd=true \
