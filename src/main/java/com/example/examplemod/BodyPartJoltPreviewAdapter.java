@@ -23,8 +23,12 @@ import java.util.Map;
  * Chameleon cuboids from other attached BodyParts.
  */
 public final class BodyPartJoltPreviewAdapter {
+    // A distributed editor JAR bundles the Java 8 Jolt runtime. Enable
+    // the chain solver by default so loading the mod actually activates
+    // physics, while retaining an explicit opt-out for crash isolation.
     private static final boolean REQUESTED =
-            Boolean.getBoolean("bbs.editor.physics.jolt.preview");
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.jolt.preview","true"));
     private static final boolean RAW_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
     /** Jolt preview body contacts default ON; opt out explicitly for A/B. */
