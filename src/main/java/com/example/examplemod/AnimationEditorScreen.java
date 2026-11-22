@@ -922,6 +922,21 @@ public class AnimationEditorScreen extends GuiScreen
         if(worldBonePins.size()==0||!worldPinRigSupported())return;
         BlockbusterSceneActorData actor=getSelectedActor();
         BlockbusterRecordFrame record=getCurrentRecordFrame();
+        BlockbusterRecord source=getSelectedActorRecord();
+        // A pin is a true WORLD XYZ anchor. When rendering sub-tick frames
+        // (including offline 60 FPS export), its inverse actor transform
+        // must use the SAME interpolated Record position/yaw as the actor.
+        // Otherwise feet appear to drift despite a stable FABRIK target.
+        if(source!=null&&Float.isFinite(animationFrame)&&
+                animationFrame>=0F)
+        {
+            int tick=(int)Math.floor(animationFrame);
+            double fraction=animationFrame-tick;
+            BlockbusterRecordFrame sampled=
+                    CameraExportActorFrameSampler.sample(
+                            source,tick,fraction);
+            if(sampled!=null)record=sampled;
+        }
         if(actor==null||record==null)return;
         java.util.List<AnimationBone> bones=actorPreviewController.getBones();
         if(bones==null||bones.isEmpty())return;
