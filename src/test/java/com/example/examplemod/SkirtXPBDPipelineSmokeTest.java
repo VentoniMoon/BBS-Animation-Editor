@@ -597,12 +597,12 @@ public final class SkirtXPBDPipelineSmokeTest
         List<ChameleonSkirtVolumeSnapshot.Part> animated=
                 new ArrayList<ChameleonSkirtVolumeSnapshot.Part>();
         float[] white={1F,1F,1F,1F,0F,0F};
+        List<SkirtClothSurfaceMesh.Strip> strips=
+                SkirtClothSurfaceMeshSmokeTest.fixture();
         for(int i=0;i<3;i++)
             volumePart(original,animated,"ALL",
-                    f.raw.patches.get(i).world,
-                    identity(),white);
-        for(SkirtClothSurfaceMesh.Strip strip:
-                SkirtClothSurfaceMeshSmokeTest.fixture())
+                    strips.get(i).upper,identity(),white);
+        for(SkirtClothSurfaceMesh.Strip strip:strips)
         {
             volumePart(original,animated,strip.upper.bone,
                     strip.upper,identity(),white);
