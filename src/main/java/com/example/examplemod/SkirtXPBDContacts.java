@@ -36,6 +36,10 @@ public final class SkirtXPBDContacts
     private static final long MAX_AGE_NANOS=1500000000L;
     private static final boolean SEATED_CONTACTS=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdSeatedContacts","false"));
+    // The old heuristic fired during a single high walking step. The new
+    // seated treatment requires BOTH real upper-thigh rigs to bend.
+    private static final boolean BILATERAL_DRAPE=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdBilateralDrape","true"));
 
     public static final class Frame
     {
@@ -45,10 +49,12 @@ public final class SkirtXPBDContacts
         public final float[] modelToWorld;
         public final List<float[]> legBoxes;
         public final boolean leftThigh,rightThigh;
+        /** 0 = walking, 1 = BOTH real thigh axes close to horizontal. */
+        public final float seatedBlend;
         private final long createdNanos;
 
         private Frame(int frame,double tick,float[] world,List<float[]> boxes,
-                boolean left,boolean right,long time)
+                List<String> owners,boolean left,boolean right,long time)
         {
             timelineFrame=frame;
             sampleTick=tick;
@@ -57,8 +63,37 @@ public final class SkirtXPBDContacts
             for(float[] b:boxes)data.add(b.clone());
             legBoxes=Collections.unmodifiableList(data);
             leftThigh=left;rightThigh=right;
+            seatedBlend=bothThighsBent(boxes,owners);
             createdNanos=time;
         }
+    }
+
+    /**
+     * Compute a stable, symmetric fold factor from actual Emoticons thigh
+     * orientations. Each tapered proxy zone repeats its parent's local-Y
+     * bone axis, so duplicates cannot artificially increase confidence.
+     * No single raised leg may activate seated cloth corrections.
+     */
+    private static float bothThighsBent(List<float[]> boxes,
+            List<String> owners)
+    {
+        float left=0F,right=0F;
+        for(int i=0;i<boxes.size();i++)
+        {
+            String name=owners.get(i);
+            if(!BodyPartJoltContactBudget.isUpperThigh(name))continue;
+            float[] box=boxes.get(i);
+            float[] q={box[3],box[4],box[5],box[6]};
+            normalizeQuat(q);
+            float vertical=Math.abs(rotate(q,new float[]{0F,1F,0F})[1]);
+            // A 45-degree knee raise is normal walking. Reserve full
+            // draping for both thighs bent near 75 degrees or more.
+            float bend=Math.max(0F,Math.min(1F,(.70F-vertical)/.40F));
+            bend=bend*bend*(3F-2F*bend);
+            if(name.contains("left"))left=Math.max(left,bend);
+            if(name.contains("right"))right=Math.max(right,bend);
+        }
+        return Math.min(left,right);
     }
 
     private SkirtXPBDContacts(){}
@@ -118,6 +153,7 @@ public final class SkirtXPBDContacts
                 owners==null||boxes.length!=owners.size())
             return;
         List<float[]> selected=new ArrayList<float[]>();
+        List<String> selectedOwners=new ArrayList<String>();
         boolean left=false,right=false;
         for(int i=0;i<boxes.length;i++)
         {
@@ -138,6 +174,7 @@ public final class SkirtXPBDContacts
             if(name.contains("left"))left=true;
             if(name.contains("right"))right=true;
             selected.add(b.clone());
+            selectedOwners.add(name);
         }
         // Native Emoticons thigh fit must provide BOTH legs, otherwise
         // resolving just one would push cloth into the missing leg.
@@ -148,7 +185,7 @@ public final class SkirtXPBDContacts
             return;
         }
         FRAMES.put(owner,new Frame(timelineFrame,sampleTick,modelToWorld,
-                selected,left,right,System.nanoTime()));
+                selected,selectedOwners,left,right,System.nanoTime()));
     }
 
     public static synchronized Frame forMorph(Object morph)
@@ -227,7 +264,8 @@ public final class SkirtXPBDContacts
             //
             // Keep the established radial behavior on vertical walking
             // thighs. This opt-out also permits exact A/B comparisons.
-            if(SEATED_CONTACTS)
+            if(SEATED_CONTACTS ||
+                    (BILATERAL_DRAPE&&frame.seatedBlend>.60F))
             {
                 int longest=0;
                 if(b[8]>b[7])longest=1;
