@@ -258,9 +258,18 @@ public final class SkirtXPBDSolver
         public final int[] sourceToRefined;
         public final int legContacts,selfContacts,substeps;
         public final float maxDistanceError;
+        /** Size of the NEW rest-length lap shape requested this sample.
+         * This is measured before XPBD constraints or leg collisions. */
+        public final float maxGuideTargetMotion;
+        /** Mean signed fraction of requested lap move still present in the
+         * solved nodes after ALL links, collisions and silhouette guards.
+         * Values near zero/negative indicate an active opposition. */
+        public final float meanGuideFollow;
+        /** Round pelvis-to-thigh capsules actually active in this frame. */
+        public final int hipBridgeCount;
         private Result(float[][] nativePoints,float[][] finePoints,
                 float[][] fineTargets,int[] map,int legs,int self,int steps,
-                float stretch)
+                float stretch,float guideMax,float guideFollow,int hips)
         {
             particles=copy(nativePoints);
             refinedParticles=copy(finePoints);
@@ -268,6 +277,9 @@ public final class SkirtXPBDSolver
             sourceToRefined=map.clone();
             legContacts=legs;selfContacts=self;substeps=steps;
             maxDistanceError=stretch;
+            maxGuideTargetMotion=guideMax;
+            meanGuideFollow=guideFollow;
+            hipBridgeCount=hips;
         }
     }
     public static final class State
@@ -281,8 +293,9 @@ public final class SkirtXPBDSolver
         /** Last pose-aware guide offsets are stored separately from the
          * native pose advection so neither movement is applied twice. */
         private final float[][] lapGuideOffset=new float[SIM_NODES][3];
-        private float lastGuideMaximum;
+        private float lastGuideMaximum,lastGuideFollow;
         private int lastHipBridgeCount;
+        private double lastAuditSample=Double.NaN;
         private final float[][] restFine=new float[SIM_NODES][3];
         private final boolean[] pinned=new boolean[SIM_NODES];
         private final int[] column=new int[SIM_NODES];
@@ -800,6 +813,8 @@ public final class SkirtXPBDSolver
                 protectRadialSilhouette(physicalTarget,waistCenter,
                         seated,maxOffset);
                 stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
+                measureGuide(physicalTarget,guide);
+                auditSeat(bodies,0,contacts);
                 return result(contacts,0,0);
             }
             int legs=0,self=0;
@@ -929,6 +944,8 @@ public final class SkirtXPBDSolver
             }
             protectRadialSilhouette(physicalTarget,waistCenter,seated,maxOffset);
             stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
+            measureGuide(physicalTarget,guide);
+            auditSeat(bodies,SUBSTEPS,legs);
             stepCount++;
             return result(legs,self,SUBSTEPS);
         }
@@ -1244,6 +1261,55 @@ public final class SkirtXPBDSolver
             }
         }
 
+        /**
+         * Compare the signed motion along each guide arrow with its
+         * desired length, AFTER all XPBD/collision/cosmetic corrections.
+         * Never use this measurement to force the physics into a pose.
+         */
+        private void measureGuide(float[][] guidedTarget,float[][] guide)
+        {
+            float sum=0F;
+            int count=0;
+            for(int n=0;n<SIM_NODES;n++)
+            {
+                if(pinned[n])continue;
+                float[] delta=guide[n];
+                float mag2=delta[0]*delta[0]+delta[1]*delta[1]+
+                        delta[2]*delta[2];
+                if(mag2<.0001F)continue;
+                float dot=0F;
+                for(int k=0;k<3;k++)
+                    dot+=(position[n][k]-
+                            (guidedTarget[n][k]-delta[k]))*delta[k];
+                float fraction=dot/mag2;
+                if(!Float.isFinite(fraction))continue;
+                sum+=fraction;
+                count++;
+            }
+            lastGuideFollow=count==0?0F:sum/count;
+        }
+
+        private void auditSeat(SkirtXPBDContacts.Frame bodies,
+                int substeps,int contacts)
+        {
+            if(!SEATED_GEOMETRY_AUDIT||bodies==null||
+                    bodies.seatedBlend<.10F||
+                    (Double.isFinite(lastAuditSample)&&
+                    Math.abs(lastAuditSample-bodies.sampleTick)<.01D))
+                return;
+            lastAuditSample=bodies.sampleTick;
+            System.out.println("[BBS Editor][SkirtSeatAudit] "+
+                    "sampleTick="+bodies.sampleTick+
+                    " seated="+bodies.seatedBlend+
+                    " realLegOBBs="+bodies.legBoxes.size()+
+                    " hipBridges="+lastHipBridgeCount+
+                    " lapGuideFromRest="+REST_LENGTH_LAP_GUIDE+
+                    " maxLapTargetMotion="+lastGuideMaximum+
+                    " meanGuideFollow="+lastGuideFollow+
+                    " contactProjections="+contacts+
+                    " substeps="+substeps);
+        }
+
         public Result current()
         {return result(0,0,0);}
 
@@ -1257,7 +1323,8 @@ public final class SkirtXPBDSolver
             for(int n=0;n<N;n++)
                 System.arraycopy(position[sourceToFine[n]],0,nativeNodes[n],0,3);
             return new Result(nativeNodes,position,previousPoseTarget,
-                    sourceToFine,contacts,self,steps,max);
+                    sourceToFine,contacts,self,steps,max,
+                    lastGuideMaximum,lastGuideFollow,lastHipBridgeCount);
         }
 
         private void project(Constraint c,float dt,float seated,
