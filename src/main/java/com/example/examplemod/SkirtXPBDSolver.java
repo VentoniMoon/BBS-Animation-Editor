@@ -422,7 +422,8 @@ public final class SkirtXPBDSolver
                                     fineTarget[n][0]-waistCenter[0],
                                     0F,fineTarget[n][2]-waistCenter[2]};
                             float[] corrected=SkirtXPBDContacts.corrected(
-                                    position[n],bodies,CONTACT_RADIUS,outward);
+                                    position[n],bodies,
+                                    clothContactRadius(n,bodies),outward);
                             if(distance(corrected,position[n])>1E-7F)
                             {
                                 System.arraycopy(corrected,0,position[n],0,3);
@@ -523,8 +524,11 @@ public final class SkirtXPBDSolver
                 if(freeWeight<=0F)continue;
                 outward[0]-=center[0];
                 outward[2]-=center[2];
+                float surfaceRadius=0F;
+                for(int index:tri)
+                    surfaceRadius+=clothContactRadius(index,bodies)/3F;
                 float[] clearance=SkirtXPBDContacts.corrected(
-                        sample,bodies,CONTACT_RADIUS,outward);
+                        sample,bodies,surfaceRadius,outward);
                 float depth=distance(sample,clearance);
                 if(!Float.isFinite(depth)||depth<=1E-5F)continue;
 
@@ -580,6 +584,24 @@ public final class SkirtXPBDSolver
             return 1F;
         }
 
+        /**
+         * The first free latitude is just under the pinned waist. A full
+         * .018m skin clearance on that ring creates a visible ledge on a
+         * cube-like Emoticons thigh. Taper only the mesh-based collision
+         * shell, never the legacy OBB path used for walking fallback.
+         * This does NOT weaken garment constraints or move the waist pins.
+         */
+        private float clothContactRadius(int index,
+                SkirtXPBDContacts.Frame bodies)
+        {
+            if(bodies==null||bodies.skinSurface==null)
+                return CONTACT_RADIUS;
+            int row=index/SEGMENTS;
+            if(row==1)return .008F;
+            if(row==2)return .013F;
+            return CONTACT_RADIUS;
+        }
+
         private int resolveDisplayContacts(float[][] fineTarget,
                 SkirtXPBDContacts.Frame bodies,float[] center)
         {
@@ -596,7 +618,8 @@ public final class SkirtXPBDSolver
                             fineTarget[n][0]-center[0],0F,
                             fineTarget[n][2]-center[2]};
                     float[] corrected=SkirtXPBDContacts.corrected(
-                            position[n],bodies,CONTACT_RADIUS,outward);
+                            position[n],bodies,
+                            clothContactRadius(n,bodies),outward);
                     if(distance(corrected,position[n])<=1E-7F)
                         continue;
                     for(int k=0;k<3;k++)
@@ -703,7 +726,8 @@ public final class SkirtXPBDSolver
                     if(bodies!=null)
                     {
                         float[] pushed=SkirtXPBDContacts.corrected(
-                                proposed,bodies,CONTACT_RADIUS,
+                                proposed,bodies,
+                                clothContactRadius(n,bodies),
                                 new float[]{tx,0F,tz});
                         // If restricting the ring would enter a thigh,
                         // physical contact wins over the aesthetic cap.
