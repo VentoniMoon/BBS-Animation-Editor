@@ -618,7 +618,9 @@ public final class SkirtXPBDPipelineSmokeTest
                 "knee must not invent a pelvis/hip collider");
         need(one.kneeBridges.size()==1&&
                 "left".equals(one.kneeBridges.get(0).side),
-                "a left bent knee must not activate the right leg");
+                "a left bent knee must not activate the right leg: count="+
+                        one.kneeBridges.size()+" owners="+one.legOwners+
+                        " leftShin="+java.util.Arrays.toString(leftShin));
         SkirtXPBDContacts.KneeBridge knee=one.kneeBridges.get(0);
         need(knee.radius>.04F&&knee.radius<.105F&&
                 knee.weight>.95F,
