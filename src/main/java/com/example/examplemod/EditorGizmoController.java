@@ -401,7 +401,10 @@ public class EditorGizmoController
                         displayAxes
                 );
 
-        if(hit<0&&directBonePickRequested)
+        // Direct limb LMB is not an axis-handle gesture: the hand can be
+        // anywhere on the model, so consistently choose screen XY or local Z.
+        // The separate ordinary gizmo click path still respects its hitTest.
+        if(directBonePickRequested)
             hit=this.mode==Mode.POSITION?PLANE_XY:
                     this.mode==Mode.ROTATION?AXIS_Z:-1;
         if (hit < 0)
