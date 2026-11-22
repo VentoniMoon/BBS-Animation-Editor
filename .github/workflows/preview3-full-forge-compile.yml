@@ -26,3 +26,16 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon --stacktrace -PciDependencies compileJava
+      - name: Assemble reobfuscated test mod jar
+        run: |
+          ./gradlew --no-daemon --stacktrace -PciDependencies jar
+          test -f build/libs/bbs-animation-editor-0.0.2.jar
+          jar tf build/libs/bbs-animation-editor-0.0.2.jar | grep -q 'com/example/examplemod/SkirtXPBDContacts.class'
+          jar tf build/libs/bbs-animation-editor-0.0.2.jar | grep -q 'com/example/examplemod/CharacterEditorPanel.class'
+      - name: Upload test JAR for seated-skirt correction
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbs-animation-editor-0.0.2-seated-skirt-test-jar
+          path: build/libs/bbs-animation-editor-0.0.2.jar
+          if-no-files-found: error
+          retention-days: 30
