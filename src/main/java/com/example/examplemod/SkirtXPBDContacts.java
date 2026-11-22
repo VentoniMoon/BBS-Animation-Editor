@@ -40,6 +40,9 @@ public final class SkirtXPBDContacts
     // seated treatment requires BOTH real upper-thigh rigs to bend.
     private static final boolean BILATERAL_DRAPE=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdBilateralDrape","true"));
+    /** Rollback: ordinary tapered OBBs, optional bridge, no SKIN by default. */
+    private static final boolean HIP_BRIDGE=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdHipBridge","true"));
 
     public static final class Frame
     {
@@ -50,6 +53,8 @@ public final class SkirtXPBDContacts
         public final List<float[]> legBoxes;
         /** Exact owners aligned with legBoxes, including @skirt zones. */
         public final List<String> legOwners;
+        /** Small rounded hip-gap contacts, stored in world coordinates. */
+        public final List<HipBridge> hipBridges;
         /** Actual animated thigh/pelvis triangles, or null for legacy OBBs. */
         public final SkinSurface skinSurface;
         /** 0 = proven walking OBB, 1 = real skinned thigh contact. */
@@ -61,7 +66,8 @@ public final class SkirtXPBDContacts
         private final long createdNanos;
 
         private Frame(int frame,double tick,float[] world,List<float[]> boxes,
-                List<String> owners,boolean left,boolean right,
+                List<String> owners,List<float[]> pelvis,
+                boolean left,boolean right,
                 SkinSurface surface,String surfaceStatus,long time)
         {
             timelineFrame=frame;
@@ -72,6 +78,8 @@ public final class SkirtXPBDContacts
             legBoxes=Collections.unmodifiableList(data);
             legOwners=Collections.unmodifiableList(
                     new ArrayList<String>(owners));
+            hipBridges=Collections.unmodifiableList(
+                    hipBridges(boxes,owners,pelvis));
             skinSurface=surface;
             this.surfaceStatus=surfaceStatus;
             leftThigh=left;rightThigh=right;
@@ -130,6 +138,127 @@ public final class SkirtXPBDContacts
     }
 
 
+    public static final class HipBridge
+    {
+        public final float[] a,b;
+        public final float radius,weight;
+        public final String side;
+        private HipBridge(float[] a,float[] b,float r,float weight,String side)
+        {
+            this.a=a.clone();this.b=b.clone();radius=r;
+            this.weight=weight;this.side=side;
+        }
+    }
+
+    private static float sat(float x)
+    {return Math.max(0F,Math.min(1F,x));}
+
+    private static boolean hipOwner(String s)
+    {
+        return "emoticons.low_body".equals(s)||
+                "emoticons.pelvis".equals(s)||
+                "emoticons.hip".equals(s)||"emoticons.hips".equals(s);
+    }
+
+    /** Fitted pelvis and PROXIMAL tapered upper zone only. Never use the
+     * knee or invented camera/waist positions. A separate bridge is
+     * activated independently for the left and right upper thighs. */
+    private static List<HipBridge> hipBridges(List<float[]> boxes,
+            List<String> owners,List<float[]> pelvis)
+    {
+        List<HipBridge> out=new ArrayList<HipBridge>();
+        if(!HIP_BRIDGE||pelvis.isEmpty())return out;
+        for(String side:new String[]{"left","right"})
+        {
+            float[] upper=null;
+            for(int i=0;i<boxes.size();i++)
+            {
+                String n=owners.get(i);
+                if(!isUpperThigh(n)||!n.contains(side))continue;
+                if(n.endsWith("@skirt-upper"))
+                {upper=boxes.get(i);break;}
+                if(!n.contains("@skirt-")&&upper==null)
+                    upper=boxes.get(i);
+            }
+            if(upper==null)continue;
+            float[] hip=null;
+            float nearest=Float.POSITIVE_INFINITY;
+            for(float[] p:pelvis)
+            {
+                float d=0F;
+                for(int k=0;k<3;k++)
+                {float e=p[k]-upper[k];d+=e*e;}
+                if(d<nearest){nearest=d;hip=p;}
+            }
+            if(hip==null||nearest>.49F)continue;
+            float[] q={upper[3],upper[4],upper[5],upper[6]};
+            normalizeQuat(q);
+            float[] axis=rotate(q,new float[]{0F,1F,0F});
+            float dot=0F;
+            for(int k=0;k<3;k++)
+                dot+=axis[k]*(hip[k]-upper[k]);
+            float sign=dot>=0F?1F:-1F;
+            // 45deg stride = off; starts at ~56deg, full at ~77deg.
+            float t=sat((.56F-Math.abs(axis[1]))/.34F);
+            float w=t*t*(3F-2F*t);
+            if(w<.01F)continue;
+            float[] proximal=new float[3];
+            for(int k=0;k<3;k++)
+                proximal[k]=upper[k]+axis[k]*sign*upper[8];
+            float[] hipQ={hip[3],hip[4],hip[5],hip[6]};
+            normalizeQuat(hipQ);
+            float[] relative={proximal[0]-hip[0],
+                    proximal[1]-hip[1],proximal[2]-hip[2]};
+            float[] local=rotateInverse(hipQ,relative);
+            for(int k=0;k<3;k++)
+                local[k]=Math.max(-hip[7+k],Math.min(hip[7+k],local[k]));
+            float[] surface=rotate(hipQ,local);
+            float[] a={hip[0]+surface[0],hip[1]+surface[1],
+                    hip[2]+surface[2]};
+            float[] b={upper[0]-axis[0]*sign*upper[8]*.25F,
+                    upper[1]-axis[1]*sign*upper[8]*.25F,
+                    upper[2]-axis[2]*sign*upper[8]*.25F};
+            float dist2=0F;
+            for(int k=0;k<3;k++){float v=b[k]-a[k];dist2+=v*v;}
+            if(dist2<.000625F||dist2>.1444F)continue;
+            // Never grow wider than the narrowed existing upper thigh.
+            float radius=Math.min(.135F,
+                    Math.min(upper[7],upper[9])*.82F)*w;
+            if(radius>=.012F)
+                out.add(new HipBridge(a,b,radius,w,side));
+        }
+        return out;
+    }
+
+    /** Finite rounded capsule contact. Prefer the authored outward
+     * direction if a cloth node fell inward through the medial seam. */
+    private static float[] bridgeExit(float[] p,HipBridge bridge,
+            float thickness,float[] outward)
+    {
+        float dx=bridge.b[0]-bridge.a[0],
+                dy=bridge.b[1]-bridge.a[1],
+                dz=bridge.b[2]-bridge.a[2];
+        float length2=dx*dx+dy*dy+dz*dz;
+        if(length2<1E-7F)return p;
+        float t=sat(((p[0]-bridge.a[0])*dx+
+                (p[1]-bridge.a[1])*dy+(p[2]-bridge.a[2])*dz)/length2);
+        float x=p[0]-bridge.a[0]-t*dx,
+                y=p[1]-bridge.a[1]-t*dy,
+                z=p[2]-bridge.a[2]-t*dz;
+        float dist=(float)Math.sqrt(x*x+y*y+z*z);
+        float limit=bridge.radius+thickness;
+        if(dist>=limit)return p;
+        float[] normal=dist>1E-6F?
+                new float[]{x/dist,y/dist,z/dist}:
+                outward!=null?outward.clone():new float[]{0F,1F,0F};
+        if(outward!=null&&
+                normal[0]*outward[0]+normal[2]*outward[2]<-.35F)
+            normal=outward.clone();
+        float depth=Math.min(.10F,limit-dist);
+        return new float[]{p[0]+depth*normal[0],
+                p[1]+depth*normal[1],p[2]+depth*normal[2]};
+    }
+
     /**
      * Read-only, CPU-skinned Emoticons thigh/pelvis collision surface.
      * This is NOT a second Jolt rigid-body world. The surface is captured
@@ -144,7 +273,7 @@ public final class SkirtXPBDContacts
      */
     public static final boolean SKINNED_MESH_CONTACTS=Boolean.parseBoolean(
             System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdSkinnedMeshContacts","true"));
+                    "bbs.editor.physics.skirt.xpbdSkinnedMeshContacts","false"));
     // Pelvis is located directly under the PINNED waist. Including all
     // pelvis triangles as active cloth contacts prematurely lifts and
     // crushes the first unpinned ring even in the standing pose.
@@ -769,6 +898,7 @@ public final class SkirtXPBDContacts
             return;
         List<float[]> selected=new ArrayList<float[]>();
         List<String> selectedOwners=new ArrayList<String>();
+        List<float[]> pelvis=new ArrayList<float[]>();
         boolean left=false,right=false;
         for(int i=0;i<boxes.length;i++)
         {
@@ -776,9 +906,9 @@ public final class SkirtXPBDContacts
             if(id==null)continue;
             String name=id.toLowerCase(java.util.Locale.ROOT)
                     .replace('-','_').replace(' ','_');
-            if(!name.startsWith("emoticons.")||
+            if(!hipOwner(name)&&(!name.startsWith("emoticons.")||
                     (!name.contains("leg")&&!name.contains("thigh")&&
-                            !name.contains("knee")))
+                            !name.contains("knee"))))
                 continue;
             float[] b=boxes[i];
             if(b==null||b.length!=10)continue;
@@ -786,6 +916,11 @@ public final class SkirtXPBDContacts
             for(float x:b)if(!Float.isFinite(x))finite=false;
             if(!finite||b[7]<.015F||b[8]<.015F||b[9]<.015F||
                     b[7]>1F||b[8]>1F||b[9]>1F)continue;
+            if(hipOwner(name))
+            {
+                pelvis.add(b.clone());
+                continue;
+            }
             if(name.contains("left"))left=true;
             if(name.contains("right"))right=true;
             selected.add(b.clone());
@@ -811,7 +946,7 @@ public final class SkirtXPBDContacts
             status="skin/cloth world-space mismatch";
         }
         FRAMES.put(owner,new Frame(timelineFrame,sampleTick,modelToWorld,
-                selected,selectedOwners,left,right,active,status,
+                selected,selectedOwners,pelvis,left,right,active,status,
                 System.nanoTime()));
     }
 
@@ -954,6 +1089,9 @@ public final class SkirtXPBDContacts
             point[1]=b[1]+moved[1];
             point[2]=b[2]+moved[2];
         }
+        if(mix<=0F)
+            for(HipBridge bridge:frame.hipBridges)
+                point=bridgeExit(point,bridge,thickness,outwardWorld);
         if(skinExit!=null&&mix>0F&&mix<.99999F)
             for(int k=0;k<3;k++)
                 // Between moderate and deep sitting, interpolate the
