@@ -464,7 +464,13 @@ public class EditorSceneViewport
             JoltContactOverlaySnapshot shapes =
                     this.actorPreviewRenderer.snapshotJoltContactShapes(
                             this.lastJoltOverlayFrame);
-            JoltContactGuiOverlay.draw(Minecraft.getMinecraft(),this.camera,
+            // The world frame and Emoticons actor were rendered with
+            // BbsFsWorldCameraDriver.nativeActorPose(). The editor's free/
+            // orbit camera can lag behind or differ completely during
+            // CAMERA clip playback. Always draw 2D collider wires using
+            // the EXACT camera sampled for the current native world frame.
+            EditorCamera renderedCamera=getCameraForPreviewInteractions();
+            JoltContactGuiOverlay.draw(Minecraft.getMinecraft(),renderedCamera,
                     this.x,this.y,this.width,this.height,shapes,
                     shapes!=null && shapes.worldSpace?0D:this.joltActorX,
                     shapes!=null && shapes.worldSpace?0D:this.joltActorY,

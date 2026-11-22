@@ -523,9 +523,11 @@ public final class SkirtXPBDPipelineSmokeTest
                 "real triangle thigh hull did not publish both legs");
         need(skin.bounds[0]>2F&&skin.bounds[5]<-1F,
                 "skinned Emoticons vertices were not transformed to actor world");
-        float[] left={2.75F,.50F,-2F,0F,0F,0F,1F,
+        float qx=(float)Math.sin(Math.toRadians(80D)/2D);
+        float qw=(float)Math.cos(Math.toRadians(80D)/2D);
+        float[] left={2.75F,.50F,-2F,qx,0F,0F,qw,
                 .11F,.15F,.11F};
-        float[] right={3.25F,.50F,-2F,0F,0F,0F,1F,
+        float[] right={3.25F,.50F,-2F,qx,0F,0F,qw,
                 .11F,.15F,.11F};
         Object morph=new Object();
         SkirtXPBDContacts.publish(morph,77,77D,world,
@@ -535,6 +537,35 @@ public final class SkirtXPBDPipelineSmokeTest
         SkirtXPBDContacts.Frame scene=SkirtXPBDContacts.forMorph(morph);
         need(scene!=null&&scene.skinSurface==skin,
                 "published skirt sample ignored animated triangle mesh");
+        need(scene.meshContactBlend>.999F,
+                "raised bilateral thighs must select real Emoticons triangles");
+
+        // Standing with the SAME real skin data should behave EXACTLY
+        // as the established 3-zone OBB walking solver: no new bell.
+        float[] standingLeft=left.clone(),standingRight=right.clone();
+        standingLeft[3]=standingRight[3]=0F;
+        standingLeft[6]=standingRight[6]=1F;
+        Object standing=new Object(),baseline=new Object();
+        float[][] standingBoxes={standingLeft,standingRight};
+        java.util.List<String> owners=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        SkirtXPBDContacts.publish(standing,77,77D,world,
+                standingBoxes,owners,skin);
+        SkirtXPBDContacts.publish(baseline,77,77D,world,
+                standingBoxes,owners,(SkirtXPBDContacts.SkinSurface)null);
+        SkirtXPBDContacts.Frame blended=
+                SkirtXPBDContacts.forMorph(standing);
+        SkirtXPBDContacts.Frame original=
+                SkirtXPBDContacts.forMorph(baseline);
+        need(blended!=null&&original!=null&&
+                blended.meshContactBlend==0F&&blended.skinSurface==skin,
+                "standing must retain OBB contact while real skin is ready");
+        for(float[] v:new float[][]{
+                {-.25F,.49F,0F},{-.25F,.60F,0F},
+                {-.16F,.50F,.01F},{0F,.49F,0F}})
+            equal(SkirtXPBDContacts.corrected(v,blended,.018F),
+                    SkirtXPBDContacts.corrected(v,original,.018F),0F,
+                    "walking contact changed when skin mesh is loaded");
         // Coordinate parity is a physical requirement, not just a HUD
         // issue: a mesh positioned several blocks from the skirt must
         // never push its cloth while the actor stands or sits.
