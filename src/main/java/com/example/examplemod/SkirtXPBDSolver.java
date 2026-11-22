@@ -32,6 +32,28 @@ public final class SkirtXPBDSolver
     private static final float GRAVITY=-9.81F;
     private static final float DRAG=.993F;
     private static final float CONTACT_RADIUS=.018F;
+    /**
+     * Experimental inset of the *effective* CPU-skinned thigh surface.
+     * Default 0.030 blocks at the middle thigh latitude, capped at .040.
+     * Set -Dbbs.editor.physics.skirt.xpbdSkinInset=0 to restore the
+     * previous exact-surface collision for A/B; requires a restart.
+     * Walking OBBs never use this property.
+     */
+    private static final float SKIN_INSET=skinInsetProperty();
+    private static float skinInsetProperty()
+    {
+        try
+        {
+            float requested=Float.parseFloat(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSkinInset","0.030"));
+            return Float.isFinite(requested)?
+                    Math.max(0F,Math.min(.040F,requested)):.030F;
+        }
+        catch(NumberFormatException invalid)
+        {
+            return .030F;
+        }
+    }
     private static final float SELF_RADIUS=.030F;
     private static final float MAX_OFFSET=.37F;
     private static final float POSE_JUMP_RESET=.40F;
@@ -430,7 +452,8 @@ public final class SkirtXPBDSolver
                                     0F,fineTarget[n][2]-waistCenter[2]};
                             float[] corrected=SkirtXPBDContacts.corrected(
                                     position[n],bodies,
-                                    clothContactRadius(n,bodies),outward);
+                                    clothContactRadius(n,bodies),outward,
+                                    clothSkinInset(n,bodies));
                             if(distance(corrected,position[n])>1E-7F)
                             {
                                 if(bodies.meshContactBlend>0F)
@@ -540,11 +563,14 @@ public final class SkirtXPBDSolver
                 if(freeWeight<=0F)continue;
                 outward[0]-=center[0];
                 outward[2]-=center[2];
-                float surfaceRadius=0F;
+                float surfaceRadius=0F,surfaceInset=0F;
                 for(int index:tri)
+                {
                     surfaceRadius+=clothContactRadius(index,bodies)/3F;
+                    surfaceInset+=clothSkinInset(index,bodies)/3F;
+                }
                 float[] clearance=SkirtXPBDContacts.corrected(
-                        sample,bodies,surfaceRadius,outward);
+                        sample,bodies,surfaceRadius,outward,surfaceInset);
                 float depth=distance(sample,clearance);
                 if(!Float.isFinite(depth)||depth<=1E-5F)continue;
 
@@ -619,6 +645,25 @@ public final class SkirtXPBDSolver
                     bodies.meshContactBlend*(skinRadius-CONTACT_RADIUS);
         }
 
+        /**
+         * The old thigh OBBs have smaller physical widths than the rendered
+         * Emoticons leg. Retain a little of that free space ONLY for real
+         * skinned contacts and primarily across the bendable upper/middle
+         * cloth latitudes. A pinned belt is never moved; the hem keeps its
+         * existing clearance. The contact API multiplies by bilateral
+         * seatedBlend and meshContactBlend, so ordinary walking is identical.
+         */
+        private float clothSkinInset(int index,
+                SkirtXPBDContacts.Frame bodies)
+        {
+            if(bodies==null||bodies.skinSurface==null||
+                    bodies.meshContactBlend<=0F||SKIN_INSET<=0F)
+                return 0F;
+            int row=index/SEGMENTS;
+            float weight=row==1?.65F:row==2?1F:row==3?.45F:0F;
+            return SKIN_INSET*weight;
+        }
+
         private int resolveDisplayContacts(float[][] fineTarget,
                 SkirtXPBDContacts.Frame bodies,float[] center)
         {
@@ -636,7 +681,8 @@ public final class SkirtXPBDSolver
                             fineTarget[n][2]-center[2]};
                     float[] corrected=SkirtXPBDContacts.corrected(
                             position[n],bodies,
-                            clothContactRadius(n,bodies),outward);
+                            clothContactRadius(n,bodies),outward,
+                            clothSkinInset(n,bodies));
                     if(distance(corrected,position[n])<=1E-7F)
                         continue;
                     for(int k=0;k<3;k++)
@@ -757,7 +803,8 @@ public final class SkirtXPBDSolver
                         float[] pushed=SkirtXPBDContacts.corrected(
                                 proposed,bodies,
                                 clothContactRadius(n,bodies),
-                                new float[]{tx,0F,tz});
+                                new float[]{tx,0F,tz},
+                                clothSkinInset(n,bodies));
                         // If restricting the ring would enter a thigh,
                         // physical contact wins over the aesthetic cap.
                         if(distance(pushed,proposed)>.001F)continue;
