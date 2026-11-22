@@ -37,6 +37,7 @@ public final class SkirtXPBDPipelineSmokeTest
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
         taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong();
+        roundedHipGapBridgeAppearsOnlyWithRealBentThigh();
         skinnedThighMeshProvidesContinuousContact();
         skinnedThighCornerGentlyTransitionsFromTopToSide();
         denseEmoticonsSkinDoesNotFallBackFor4500PlusTriangles();
@@ -474,6 +475,94 @@ public final class SkirtXPBDPipelineSmokeTest
                 point,walk,.018F,new float[]{-1F,0F,0F});
         need(side[0]<point[0]-.08F,
                 "standing taper zone lost normal outward contact");
+    }
+
+    /**
+     * A pelvis-to-thigh capsule is created only from actual fitted OBBs,
+     * not a new box invented around the belt. Independently bent legs
+     * activate independently; ordinary standing/45deg gait is unaffected.
+     */
+    private static void roundedHipGapBridgeAppearsOnlyWithRealBentThigh()
+    {
+        float[] hip={0F,.82F,0F,0F,0F,0F,1F,.28F,.17F,.24F};
+        float[] left={-.18F,.62F,0F,0F,0F,0F,1F,
+                .13F,.09F,.12F};
+        float[] right={.18F,.62F,0F,0F,0F,0F,1F,
+                .13F,.09F,.12F};
+        java.util.List<String> owners=java.util.Arrays.asList(
+                "emoticons.left_leg@skirt-upper",
+                "emoticons.right_leg@skirt-upper",
+                "emoticons.low_body");
+
+        Object standing=new Object();
+        SkirtXPBDContacts.publish(standing,80,identity(),
+                new float[][]{left,right,hip},owners);
+        SkirtXPBDContacts.Frame upright=
+                SkirtXPBDContacts.forMorph(standing);
+        need(upright!=null&&upright.hipBridges.isEmpty()&&
+                upright.legBoxes.size()==2,
+                "standing OBBs must stay unchanged and hip is not a leg");
+        // A single elevated knee must not turn on the symmetric full-
+        // seated cloth treatment; the bridge depends on THAT thigh only.
+        float qx=(float)Math.sin(Math.toRadians(80D)/2D);
+        float qw=(float)Math.cos(Math.toRadians(80D)/2D);
+        left=left.clone();
+        left[3]=qx;left[6]=qw;
+        Object one=new Object();
+        SkirtXPBDContacts.publish(one,81,identity(),
+                new float[][]{left,right,hip},owners);
+        SkirtXPBDContacts.Frame unilateral=
+                SkirtXPBDContacts.forMorph(one);
+        need(unilateral!=null&&unilateral.seatedBlend==0F&&
+                unilateral.hipBridges.size()==1&&
+                "left".equals(unilateral.hipBridges.get(0).side),
+                "one bent hip must produce exactly one independent bridge");
+        SkirtXPBDContacts.HipBridge capsule=
+                unilateral.hipBridges.get(0);
+        need(capsule.radius>.06F&&capsule.radius<.13F&&
+                capsule.weight>.95F,
+                "hip-gap capsule must be small, round and fully raised");
+        float[] p=new float[3];
+        for(int k=0;k<3;k++)p[k]=.5F*(capsule.a[k]+capsule.b[k]);
+        float[] q=SkirtXPBDContacts.corrected(p,unilateral,
+                .018F,new float[]{-1F,0F,0F});
+        float motion=0F;
+        for(int k=0;k<3;k++)
+        {
+            need(Float.isFinite(q[k]),"hip bridge exploded");
+            float d=q[k]-p[k];motion+=d*d;
+        }
+        need(motion>1E-6F&&motion<.25F,
+                "hip-gap contact must resolve without a huge bell kick");
+
+        right=right.clone();
+        right[3]=qx;right[6]=qw;
+        Object both=new Object();
+        SkirtXPBDContacts.publish(both,82,identity(),
+                new float[][]{left,right,hip},owners);
+        SkirtXPBDContacts.Frame bilateral=
+                SkirtXPBDContacts.forMorph(both);
+        need(bilateral!=null&&bilateral.hipBridges.size()==2&&
+                bilateral.seatedBlend>.95F,
+                "deep bilateral sit must have two independent hip bridges");
+
+        // No pelvis / bad pelvis = no invented rounded collision volume.
+        Object missing=new Object();
+        SkirtXPBDContacts.publish(missing,82,identity(),
+                new float[][]{left,right},owners.subList(0,2));
+        need(SkirtXPBDContacts.forMorph(missing).hipBridges.isEmpty(),
+                "gap bridge must fail closed without fitted pelvis");
+        // Even if the thigh is rotating, 45 degrees should not add a
+        // new collider or change ordinary walking.
+        float half=(float)Math.sin(Math.toRadians(45D)/2D);
+        float halfW=(float)Math.cos(Math.toRadians(45D)/2D);
+        left[3]=right[3]=half;
+        left[6]=right[6]=halfW;
+        Object gait=new Object();
+        SkirtXPBDContacts.publish(gait,83,identity(),
+                new float[][]{left,right,hip},owners);
+        need(SkirtXPBDContacts.forMorph(gait).hipBridges.isEmpty(),
+                "45-degree walking pose must not enable gap filler");
     }
 
     /**
