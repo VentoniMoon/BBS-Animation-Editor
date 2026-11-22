@@ -1172,6 +1172,107 @@ public class AnimationEditorScreen extends GuiScreen
         return null;
     }
 
+    /**
+     * Read-only assistant proposal. This is deliberately NOT a language
+     * model connection and is safe for later in-editor chat integration.
+     * It snapshots the current actor/selected bone, never editor secrets.
+     */
+    public EditorAssistantCore.Proposal previewAssistantCommand(
+            String request)
+    {
+        BlockbusterSceneActorData actor=getSelectedActor();
+        AnimationBone bone=getGizmoBone();
+        return EditorAssistantCore.propose(request,
+                new EditorAssistantCore.Context(
+                        playbackController.getCurrentFrame(),
+                        actor==null?"":actor.getId(),
+                        bone==null?"":bone.getName(),
+                        editorModeController.getMode().name()));
+    }
+
+    /**
+     * Explicit user approval is required for all typed assistant writes.
+     * The rig-specific world pin adapter is not finished yet, therefore
+     * PIN/UNPIN safely return false instead of claiming to lock a limb.
+     */
+    public boolean executeAssistantCommand(
+            EditorAssistantCore.Proposal proposal,boolean approved)
+    {
+        return EditorAssistantCore.execute(proposal,approved,
+                new EditorAssistantCore.EditorActions()
+                {
+                    @Override
+                    public boolean gotoFrame(int frame)
+                    {
+                        if(frame<0||frame>=getSceneLength())return false;
+                        playbackController.setCurrentFrame(frame);
+                        applyRecordFrame();
+                        applyAdapters();
+                        return true;
+                    }
+
+                    @Override
+                    public boolean createBoneKey(String actorId,
+                            String boneName,int frame)
+                    {
+                        BlockbusterSceneActorData actor=getSelectedActor();
+                        if(actor==null||!actor.getId().equals(actorId)||
+                                frame<0||frame>=getSceneLength()||
+                                !isGizmoEnabled())return false;
+                        List<AnimationBone> bones=viewportSelectableBones();
+                        if(bones==null)return false;
+                        for(int i=0;i<bones.size();i++)
+                        {
+                            AnimationBone bone=bones.get(i);
+                            if(bone==null||
+                                    !bone.getName().equals(boneName))
+                                continue;
+                            EditorKeyframeController keys=
+                                    editorModeController.getMode()==
+                                            EditorModeController.EditorMode.BODY_PARTS?
+                                            bodyPartsController.getKeyframeController():
+                                            keyframeController;
+                            AnimationTransform before=bone.getTransformAt(
+                                    (float)frame);
+                            boolean missing=keys.findKeyframe(
+                                    bone,frame)==null;
+                            keys.setSelectedBoneIndex(i,bones);
+                            AnimationKeyframe key=keys.createKeyframe(
+                                    bone,frame);
+                            if(key==null)return false;
+                            if(missing&&before!=null)
+                            {
+                                key.getTransform().setPosition(
+                                        before.getPositionX(),
+                                        before.getPositionY(),
+                                        before.getPositionZ());
+                                key.getTransform().setRotation(
+                                        before.getRotationX(),
+                                        before.getRotationY(),
+                                        before.getRotationZ());
+                                key.getTransform().setScale(
+                                        before.getScaleX(),
+                                        before.getScaleY(),
+                                        before.getScaleZ());
+                            }
+                            markEditorDirty();
+                            applyAdapters();
+                            return true;
+                        }
+                        return false;
+                    }
+
+                    @Override
+                    public boolean setWorldPin(String actorId,
+                            String boneName,boolean pinned)
+                    {
+                        // Do not expose a decorative pin that leaves the
+                        // actual actor limb free to move with the root.
+                        return false;
+                    }
+                });
+    }
+
     /*
      * =========================================================
      * SAVE
