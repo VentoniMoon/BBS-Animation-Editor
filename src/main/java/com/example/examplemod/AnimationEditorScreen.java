@@ -846,11 +846,22 @@ public class AnimationEditorScreen extends GuiScreen
         prepareGizmoTarget();
         float[] nativePivot=gizmoController.getWorldBonePivot(selected,record);
         float frame=(float)playbackController.getCurrentFrame();
-        if(nativePivot==null||
-                !EditorWorldBonePoseRetarget.pivotMatches(
-                        selected,frame,record,nativePivot,.20F))
+        float[] worldScale=EditorWorldBonePoseRetarget.worldScale(actor);
+        float pivotError=EditorWorldBonePoseRetarget.pivotDifference(
+                selected,frame,record,nativePivot,worldScale);
+        if(nativePivot==null||worldScale==null||
+                !Float.isFinite(pivotError)||pivotError>.20F)
         {
-            worldPinMessage="Unsupported native pivot / IK rig mismatch";
+            worldPinMessage=Float.isFinite(pivotError)
+                    ?"Native IK pivot mismatch: "+
+                        String.format(java.util.Locale.ROOT,"%.3f",pivotError)+
+                        " blocks"
+                    :"World IK: native pivot or model scale unavailable";
+            System.err.println("[BBS Editor][WorldPin] capture refused"
+                    +" actor="+actorId+" bone="+boneName
+                    +" frame="+frame+" pivotError="+pivotError
+                    +" native="+java.util.Arrays.toString(nativePivot)
+                    +" scale="+java.util.Arrays.toString(worldScale));
             return false;
         }
         // The first native adapter accepts one pinned chain per actor:
@@ -943,7 +954,7 @@ public class AnimationEditorScreen extends GuiScreen
 
         EditorWorldBonePoseRetarget.Result result=
                 EditorWorldBoneSnapshotAdapter.solve(worldBonePins,
-                        actor.getId(),bones,animationFrame,record);
+                        actor.getId(),bones,animationFrame,record,actor);
         if(result==null)
         {
             worldPinMessage="World pin paused: native rig is not solvable";
