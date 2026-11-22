@@ -320,5 +320,14 @@ jobs:
           java -ea -Dbbs.editor.physics.skirt.taperedDistalShrink=false \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtLegCollisionProxySmokeTest
+          # Keep knee-side taper but restore FULL old hip/middle OBB widths.
+          java -ea -Dbbs.editor.physics.skirt.taperedProximalShrink=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtLegCollisionProxySmokeTest
+          # Fully restore PR #251 OBB dimensions on the same three-row rig.
+          java -ea -Dbbs.editor.physics.skirt.taperedProximalShrink=false \
+            -Dbbs.editor.physics.skirt.taperedDistalShrink=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtLegCollisionProxySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.BodyPartJoltContactBudgetSmokeTest
