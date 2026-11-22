@@ -1836,7 +1836,8 @@ public class BodyPartsPreviewRenderer
         // Physics 3.0 cloth does NOT depend on 20 enabled Jolt strands.
         // The native Chameleon hierarchy is validated independently.
         if(data!=null && SkirtXPBDRuntime.ENABLED &&
-                data.supportsClothPhysics())
+                data.supportsClothPhysics() &&
+                data.isClothPhysicsEnabled())
             return true;
         // Historical Jolt skirt mode remains available when XPBD is off.
         if(data==null || data.getBones()==null || chains==null ||
@@ -2691,7 +2692,8 @@ public class BodyPartsPreviewRenderer
 
         try
         {
-            if(SkirtXPBDRuntime.ENABLED && data.supportsClothPhysics())
+            if(SkirtXPBDRuntime.ENABLED && data.supportsClothPhysics() &&
+                    data.isClothPhysicsEnabled())
             {
                 // Cloth XPBD has its OWN node solver. The old 20 Jolt
                 // strips are retained only as migration/settings data;
@@ -3255,7 +3257,7 @@ public class BodyPartsPreviewRenderer
             // 40-bone visual swings/width offsets. Other hair, other
             // attachment types and the actual fitted body contacts are
             // completely unaffected.
-            if(SkirtXPBDRuntime.ENABLED &&
+            if(SkirtXPBDRuntime.ENABLED && data.isClothPhysicsEnabled() &&
                     isSkirtAttachment(data,getPreviewPhysicsChains(data)))
             {
                 swings=null;
