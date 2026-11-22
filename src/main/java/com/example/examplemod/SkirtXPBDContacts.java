@@ -42,11 +42,11 @@ public final class SkirtXPBDContacts
             System.getProperty("bbs.editor.physics.skirt.xpbdBilateralDrape","true"));
     /** Rollback: ordinary tapered OBBs, optional bridge, no SKIN by default. */
     private static final boolean HIP_BRIDGE=Boolean.parseBoolean(
-            System.getProperty("bbs.editor.physics.skirt.xpbdHipBridge","true"));
+            System.getProperty("bbs.editor.physics.skirt.xpbdHipBridge","false"));
     /** Per-knee, cloth-only rounded bridge. Independent of the hip switch.
      * A/B: -Dbbs.editor.physics.skirt.xpbdKneeBridge=false. */
     private static final boolean KNEE_BRIDGE=Boolean.parseBoolean(
-            System.getProperty("bbs.editor.physics.skirt.xpbdKneeBridge","true"));
+            System.getProperty("bbs.editor.physics.skirt.xpbdKneeBridge","false"));
 
     public static final class Frame
     {
