@@ -36,6 +36,7 @@ public final class SkirtXPBDPipelineSmokeTest
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
+        taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong();
         bilateralSittingFoldsWithoutBreakingWalking();
         seatedUpperHoopGuardDoesNotFreezeTheHem();
         seatedTriangleInteriorContactDoesNotRequireVertexPenetration();
@@ -421,6 +422,55 @@ public final class SkirtXPBDPipelineSmokeTest
         equal(SkirtXPBDContacts.corrected(
                 noHit,frame,.018F,new float[]{1F,0F,1F}),
                 noHit,1E-6F,"outside cloth must remain unchanged");
+    }
+
+    /**
+     * Tapered 3-zone thigh OBBs become wider than their AXIAL half-length.
+     * Choosing the longest box dimension mistakes X/Z for the leg axis
+     * and pushes a sitting skirt sideways. A bone rotated ~80 degrees
+     * about X must still provide an upward thigh support.
+     */
+    private static void taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong()
+    {
+        float qx=(float)Math.sin(Math.toRadians(80D)/2D),
+                qw=(float)Math.cos(Math.toRadians(80D)/2D);
+        float[] left={-.16F,.46F,0F,qx,0F,0F,qw,
+                .11F,.099F,.14F};
+        float[] right={.16F,.46F,0F,qx,0F,0F,qw,
+                .11F,.099F,.14F};
+        Object seated=new Object();
+        SkirtXPBDContacts.publish(seated,51,identity(),
+                new float[][]{left,right},java.util.Arrays.asList(
+                        "emoticons.left_leg@skirt-middle",
+                        "emoticons.right_leg@skirt-middle"));
+        SkirtXPBDContacts.Frame fit=SkirtXPBDContacts.forMorph(seated);
+        need(fit!=null&&fit.seatedBlend>.90F,
+                "test requires both genuine horizontal upper thigh axes");
+        need(fit.legOwners.size()==fit.legBoxes.size()&&
+                fit.legOwners.get(0).contains("left_leg"),
+                "XPBD collider labels must align with fitted OBBs");
+        float[] point={-.16F,.49F,0F};
+        float[] top=SkirtXPBDContacts.corrected(
+                point,fit,.018F,new float[]{-1F,0F,0F});
+        need(top[1]>point[1]+.08F&&
+                Math.abs(top[0]-point[0])<.02F,
+                "80-degree taper zone must support cloth UP, not outward");
+
+        // Same flattened zone has a vertical BONE axis when upright.
+        Object upright=new Object();
+        float[] l={-.16F,.46F,0F,0F,0F,0F,1F,.11F,.099F,.14F};
+        float[] r={.16F,.46F,0F,0F,0F,0F,1F,.11F,.099F,.14F};
+        SkirtXPBDContacts.publish(upright,51,identity(),
+                new float[][]{l,r},java.util.Arrays.asList(
+                        "emoticons.left_leg@skirt-middle",
+                        "emoticons.right_leg@skirt-middle"));
+        SkirtXPBDContacts.Frame walk=SkirtXPBDContacts.forMorph(upright);
+        need(walk!=null&&walk.seatedBlend==0F,
+                "vertical thigh wrongly activated seated contacts");
+        float[] side=SkirtXPBDContacts.corrected(
+                point,walk,.018F,new float[]{-1F,0F,0F});
+        need(side[0]<point[0]-.08F,
+                "standing taper zone lost normal outward contact");
     }
 
     /** A horizontal thigh should carry the front hem from beneath instead

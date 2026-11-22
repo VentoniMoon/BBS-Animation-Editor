@@ -48,6 +48,8 @@ public final class SkirtXPBDContacts
         public final double sampleTick;
         public final float[] modelToWorld;
         public final List<float[]> legBoxes;
+        /** Exact owners aligned with legBoxes, including @skirt zones. */
+        public final List<String> legOwners;
         public final boolean leftThigh,rightThigh;
         /** 0 = walking, 1 = BOTH real thigh axes close to horizontal. */
         public final float seatedBlend;
@@ -62,6 +64,8 @@ public final class SkirtXPBDContacts
             List<float[]> data=new ArrayList<float[]>();
             for(float[] b:boxes)data.add(b.clone());
             legBoxes=Collections.unmodifiableList(data);
+            legOwners=Collections.unmodifiableList(
+                    new ArrayList<String>(owners));
             leftThigh=left;rightThigh=right;
             seatedBlend=bothThighsBent(boxes,owners);
             createdNanos=time;
@@ -250,8 +254,10 @@ public final class SkirtXPBDContacts
             if(Float.isFinite(radial)&&radial>1E-5F)
                 outwardWorld=new float[]{ox/radial,0F,oz/radial};
         }
-        for(float[] b:frame.legBoxes)
+        for(int boxIndex=0;boxIndex<frame.legBoxes.size();boxIndex++)
         {
+            float[] b=frame.legBoxes.get(boxIndex);
+            String owner=frame.legOwners.get(boxIndex);
             float[] q={b[3],b[4],b[5],b[6]};
             normalizeQuat(q);
             float[] relative={point[0]-b[0],point[1]-b[1],
@@ -280,13 +286,16 @@ public final class SkirtXPBDContacts
             if(SEATED_CONTACTS ||
                     (BILATERAL_DRAPE&&frame.seatedBlend>.60F))
             {
-                int longest=0;
-                if(b[8]>b[7])longest=1;
-                if(b[9]>b[7+longest])longest=2;
-                float[] lengthAxis=new float[3];
-                lengthAxis[longest]=1F;
-                float[] lengthWorld=rotate(q,lengthAxis);
-                boolean raised=Math.abs(lengthWorld[1])<.65F;
+                // A tapered thigh zone is intentionally SHORT in its
+                // bone-local Y direction. Using the LONGEST OBB dimension
+                // misidentifies X/Z as the thigh axis after splitting,
+                // especially at 70-90 degree seated bends.
+                //
+                // The fitted upper-leg quaternion is bone-aligned, so
+                // local +Y is its longitudinal axis regardless of shape
+                // width. A knee/shin OBB is not a thigh support plane.
+                boolean raised=isUpperThigh(owner)&&
+                        Math.abs(rotate(q,new float[]{0F,1F,0F})[1])<.65F;
                 if(raised&&point[1]>=b[1]-.06F)
                 {
                     float[] up=rotateInverse(q,new float[]{0F,1F,0F});
