@@ -195,9 +195,9 @@ public final class SkirtXPBDContacts
             {
                 String n=owners.get(i);
                 if(!isUpperThigh(n)||!n.contains(side))continue;
-                if(n.endsWith("@skirt-upper"))
+                if(n.endsWith("@skirt_upper"))
                 {upper=boxes.get(i);break;}
-                if(!n.contains("@skirt-")&&upper==null)
+                if(!n.contains("@skirt_")&&upper==null)
                     upper=boxes.get(i);
             }
             if(upper==null)continue;
@@ -313,12 +313,12 @@ public final class SkirtXPBDContacts
                 // checking bone identity: the generic isUpperThigh()
                 // rightly rejects lower-leg BONES containing "lower".
                 String bone=n;
-                int zone=bone.indexOf("@skirt-");
+                int zone=bone.indexOf("@skirt_");
                 if(zone>=0)bone=bone.substring(0,zone);
                 if(!isUpperThigh(bone)||!n.contains(side))continue;
-                if(n.endsWith("@skirt-lower"))
+                if(n.endsWith("@skirt_lower"))
                 {thigh=boxes.get(i);break;}
-                if(!n.contains("@skirt-")&&thigh==null)
+                if(!n.contains("@skirt_")&&thigh==null)
                     thigh=boxes.get(i);
             }
             if(thigh==null)continue;
