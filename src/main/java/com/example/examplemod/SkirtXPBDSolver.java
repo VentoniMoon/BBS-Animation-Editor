@@ -32,6 +32,70 @@ public final class SkirtXPBDSolver
     private static final float GRAVITY=-9.81F;
     private static final float DRAG=.993F;
     /**
+     * Sitting should not pull the dangling REAR hem straight down while
+     * the front is supported by raised thighs. Instead of removing cloth
+     * springs or adding new colliders, gradually reduce only the rear
+     * gravity load and the old standing-silhouette bias.
+     *
+     * Independent A/B (require restart):
+     * -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity=false
+     * -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedShape=false
+     */
+    static final boolean ADAPTIVE_SEATED_GRAVITY=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity",
+                    "true"));
+    static final boolean ADAPTIVE_SEATED_SHAPE=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdAdaptiveSeatedShape",
+                    "true"));
+
+    /** Smooth relief only when BOTH actual thighs bend. The upstream
+     * seatedBlend is already zero for ordinary gait / one raised knee. */
+    static float seatedRelief(float seated)
+    {
+        float t=Math.max(0F,Math.min(1F,(seated-.06F)/.86F));
+        return t*t*(3F-2F*t);
+    }
+
+    static float rearSector(float radialX,float radialZ,
+            float forwardX,float forwardZ)
+    {
+        float r=(float)Math.sqrt(radialX*radialX+radialZ*radialZ);
+        float f=(float)Math.sqrt(forwardX*forwardX+forwardZ*forwardZ);
+        if(r<1E-6F||f<1E-6F)return 0F;
+        float alignment=(radialX*forwardX+radialZ*forwardZ)/(r*f);
+        // Back of skirt=1, front over the thigh=0; sides only 1/4.
+        return Math.max(0F,Math.min(1F,(.30F-alignment)/1.30F));
+    }
+
+    static float clothRowWeight(int row)
+    {
+        if(row<=0)return 0F;
+        if(ROWS==5)
+            return row==1?.20F:row==2?.50F:row==3?.78F:1F;
+        return row==1?.50F:1F;
+    }
+
+    /** At maximal sitting the back hem retains at least 20% of gravity.
+     * Front fabric retains its full weight to settle onto the thigh. */
+    static float seatedGravityScale(float seated,int row,float rear)
+    {
+        if(!ADAPTIVE_SEATED_GRAVITY)return 1F;
+        return 1F-.80F*seatedRelief(seated)*
+                clothRowWeight(row)*Math.max(0F,Math.min(1F,rear));
+    }
+
+    /** Only a large posterior DOWNSWING is damped; true moving-bone
+     * velocity and walking inertia are untouched. */
+    static float seatedDownwardDamping(float seated,int row,float rear)
+    {
+        if(!ADAPTIVE_SEATED_GRAVITY)return 1F;
+        return 1F-.45F*seatedRelief(seated)*
+                clothRowWeight(row)*Math.max(0F,Math.min(1F,rear));
+    }
+
+    /**
      * A positional collision projection must NOT create additional Verlet
      * velocity. Without shifting previous[] by the same correction, a leg
      * can eject a cloth node at 60fps and the next step replays that eject
@@ -162,6 +226,64 @@ public final class SkirtXPBDSolver
         private final List<Constraint> links=new ArrayList<Constraint>();
         private final List<int[]> triangles=new ArrayList<int[]>();
         private final Set<Long> adjacent=new HashSet<Long>();
+        /** Raised thighs establish the forward/lap direction in WORLD
+         * space. No guessed model-forward sign, camera angle or fake box.
+         * When the fitted bodies are unavailable the old gravity is kept. */
+        private float[] seatedForward(SkirtXPBDContacts.Frame bodies,
+                float[] waist)
+        {
+            if(bodies==null||bodies.seatedBlend<=.06F||
+                    !SkirtXPBDContacts.matrixValid(bodies.modelToWorld))
+                return null;
+            float[] m=bodies.modelToWorld;
+            float wx=m[0]*waist[0]+m[4]*waist[1]+m[8]*waist[2]+m[12];
+            float wz=m[2]*waist[0]+m[6]*waist[1]+m[10]*waist[2]+m[14];
+            float dx=0F,dz=0F;
+            int count=0;
+            for(int i=0;i<bodies.legBoxes.size();i++)
+            {
+                String n=bodies.legOwners.get(i);
+                if(!n.startsWith("emoticons.")||
+                        !(n.contains("left_leg")||n.contains("right_leg")||
+                        n.contains("leg_left")||n.contains("leg_right")||
+                        n.contains("thigh_left")||n.contains("thigh_right")||
+                        n.contains("left_thigh")||n.contains("right_thigh"))||
+                        n.contains("low_leg")||n.contains("lower")||
+                        n.contains("knee")||n.contains("shin"))
+                    continue;
+                float[] b=bodies.legBoxes.get(i);
+                dx+=b[0]-wx;dz+=b[2]-wz;
+                count++;
+            }
+            if(count==0)return null;
+            float length=(float)Math.sqrt(dx*dx+dz*dz);
+            if(length<.05F*count)return null;
+            return new float[]{dx/length,dz/length};
+        }
+
+        /** Stable sector mask from the native/rest drape before the
+         * collision pass. Never classify the CURRENT crumpled particles:
+         * that would feed a collapse back into the gravity force. */
+        private float[] rearMask(float[][] nativeReference,float[] waist,
+                SkirtXPBDContacts.Frame bodies)
+        {
+            float[] values=new float[SIM_NODES];
+            float[] fwd=seatedForward(bodies,waist);
+            if(fwd==null)return values;
+            float[] m=bodies.modelToWorld;
+            float wx=m[0]*waist[0]+m[4]*waist[1]+m[8]*waist[2]+m[12];
+            float wz=m[2]*waist[0]+m[6]*waist[1]+m[10]*waist[2]+m[14];
+            for(int n=0;n<SIM_NODES;n++)
+            {
+                if(pinned[n])continue;
+                float[] p=nativeReference[n];
+                float x=m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12]-wx;
+                float z=m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]-wz;
+                values[n]=rearSector(x,z,fwd[0],fwd[1]);
+            }
+            return values;
+        }
+
         private int stepCount;
 
         private State(SkirtClothSurfaceMesh.Snapshot source,
@@ -432,6 +554,11 @@ public final class SkirtXPBDSolver
                 System.arraycopy(fineTarget[n],0,previousPoseTarget[n],0,3);
             }
             float[] waistCenter=waistCenter(fineTarget);
+            float[] rearWeight=rearMask(
+                    SEATED_POSE_ISOLATION?seatedReference:fineTarget,
+                    waistCenter,bodies);
+            float shapeRelief=ADAPTIVE_SEATED_SHAPE?
+                    seatedRelief(seated):0F;
             // Pausing must freeze integration, not freeze outdated pose
             // coordinates or leave an already collapsed silhouette behind.
             if(dt<1E-6F)
@@ -455,7 +582,8 @@ public final class SkirtXPBDSolver
                     for(int settle=0;settle<5;settle++)
                     {
                         for(Constraint c:links)c.lambda=0F;
-                        for(Constraint c:links)project(c,relaxDt,seated);
+                        for(Constraint c:links)
+                            project(c,relaxDt,seated,shapeRelief);
                         for(int n=0;n<SIM_NODES;n++)
                             if(pinned[n])
                                 System.arraycopy(fineTarget[n],0,
@@ -495,21 +623,32 @@ public final class SkirtXPBDSolver
                     float vx=(p[0]-prev[0])*DRAG;
                     float vy=(p[1]-prev[1])*DRAG;
                     float vz=(p[2]-prev[2])*DRAG;
+                    int row=n/SEGMENTS;
+                    // Downward motion is the source of the pulling rear
+                    // panels. Preserve upward/sideways animation movement.
+                    if(vy<0F)
+                        vy*=seatedDownwardDamping(
+                                seated,row,rearWeight[n]);
                     for(int k=0;k<3;k++)prev[k]=p[k];
                     p[0]+=vx;
-                    p[1]+=vy+GRAVITY*h*h;
+                    p[1]+=vy+GRAVITY*
+                            seatedGravityScale(seated,row,rearWeight[n])*
+                            h*h;
                     p[2]+=vz;
-                    // Weak pose following, not an independent second bone
-                    // animation. Waist follows the actor exactly.
+                    // The standing silhouette is only a weak guidance
+                    // target when the cloth is draping over a raised lap.
+                    // Keep actual distance/shear links intact.
+                    float pull=.012F*(1F-.75F*seated);
+                    pull*=1F-shapeRelief*(.45F+.40F*rearWeight[n]);
                     for(int k=0;k<3;k++)
-                        p[k]+=(physicalTarget[n][k]-p[k])*
-                                (.012F*(1F-.75F*seated));
+                        p[k]+=(physicalTarget[n][k]-p[k])*pull;
                 }
 
                 for(Constraint c:links)c.lambda=0F;
                 for(int iteration=0;iteration<ITERATIONS;iteration++)
                 {
-                    for(Constraint c:links)project(c,h,seated);
+                    for(Constraint c:links)
+                        project(c,h,seated,shapeRelief);
                     for(int n=0;n<SIM_NODES;n++)
                     {
                         if(pinned[n])continue;
@@ -811,6 +950,12 @@ public final class SkirtXPBDSolver
                     fraction=Math.max(fraction,
                             .47F+(floor-.47F)*blend);
                 }
+                // The minimum standing radius is aesthetic, not a
+                // fabric-length constraint. Allow curved posterior panels
+                // to take up a little more slack at deep bilateral bend.
+                if(ADAPTIVE_SEATED_SHAPE)
+                    fraction=Math.max(.45F,
+                            fraction-.10F*seatedRelief(seated));
                 float deficit=sourceRadius*fraction-radius;
                 if(deficit<=0F)continue;
                 // Limit per-frame correction and preserve the existing
@@ -902,7 +1047,8 @@ public final class SkirtXPBDSolver
                     sourceToFine,contacts,self,steps,max);
         }
 
-        private void project(Constraint c,float dt,float seated)
+        private void project(Constraint c,float dt,float seated,
+                float shapeRelief)
         {
             float[] a=position[c.a],b=position[c.b];
             float dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
@@ -916,12 +1062,15 @@ public final class SkirtXPBDSolver
                 // Circumferential links on the first free ring resist
                 // widening, but the panel can still fold in 3D.
                 if(SEATED_UPPER_CONTROL&&rowA==1&&rowB==1)
-                    compliance*=1F-.85F*seated;
+                    // Remove the EXTRA artificial seated hoop stiffening
+                    // while keeping original circumference edge lengths.
+                    compliance*=1F-.85F*seated*
+                            (1F-.80F*shapeRelief);
                 // Make the lower TWO-row bending constraints softer.
                 // Stretch/shear links stay intact; no torn seams.
                 if(SEATED_BEND_RELIEF&&Math.abs(rowA-rowB)==2&&
                         Math.min(rowA,rowB)>=1)
-                    compliance*=1F+7F*seated;
+                    compliance*=1F+(7F+4F*shapeRelief)*seated;
             }
             float alpha=compliance/(dt*dt);
             float delta=-(dist-c.rest+alpha*c.lambda)/(wa+wb+alpha);
