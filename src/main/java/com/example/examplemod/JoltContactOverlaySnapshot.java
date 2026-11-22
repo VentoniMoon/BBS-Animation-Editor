@@ -94,6 +94,8 @@ public final class JoltContactOverlaySnapshot
     /** True if native contact coordinates already include the actor's
      *  translation and render Y yaw; the GUI must not add it again. */
     public final boolean worldSpace;
+    /** The cloth collider's ACTUAL source, distinct from Jolt parent boxes. */
+    public final String clothContactInfo;
     public final int activeScenes;
     public final int torsoCount;
     public final int hairCount;
@@ -115,6 +117,12 @@ public final class JoltContactOverlaySnapshot
     public JoltContactOverlaySnapshot(int frame,int activeScenes,List<Shape> items,
             List<Box> boxItems,boolean worldSpace)
     {
+        this(frame,activeScenes,items,boxItems,worldSpace,"XPBD: not sampled");
+    }
+
+    public JoltContactOverlaySnapshot(int frame,int activeScenes,List<Shape> items,
+            List<Box> boxItems,boolean worldSpace,String clothInfo)
+    {
         if(activeScenes<0 || items==null || boxItems==null)
             throw new IllegalArgumentException("Invalid Jolt overlay snapshot");
         List<Shape> copy=new ArrayList<Shape>(items.size());
@@ -129,6 +137,7 @@ public final class JoltContactOverlaySnapshot
         }
         this.frame=frame;
         this.worldSpace=worldSpace;
+        this.clothContactInfo=clothInfo==null?"XPBD: unknown":clothInfo;
         this.activeScenes=activeScenes;
         this.torsoCount=torso;
         this.hairCount=hair;
