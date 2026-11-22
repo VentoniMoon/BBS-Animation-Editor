@@ -43,7 +43,7 @@ jobs:
           import zipfile
           base=os.environ["RUNNER_TEMP"]+"/bbs-animation-editor-0.0.2-release.jar"
           compiled="build/libs/bbs-animation-editor-0.0.2.jar"
-          output="build/libs/bbs-animation-editor-0.0.2-clean-three-row-safe-panel-contact-test.jar"
+          output="build/libs/bbs-animation-editor-0.0.2-manual-skirt-pose-isolation-off-test.jar"
           # Replacing ONLY the five outer classes broke cloth when nested
           # Result/State classes still came from the old release JAR.
           # Replace each whole class family, including anonymous inners.
@@ -108,6 +108,8 @@ jobs:
               solver=pkg+"SkirtXPBDSolver.class"
               assert b"xpbdSafePanelContacts" in result.read(solver), (
                   "new safe panel contact flag NOT present in final JAR")
+              assert b"xpbdSeatedPoseIsolation" in result.read(solver), (
+                  "seated pose isolation switch NOT present in final JAR")
               assert result.read(solver)==updated.read(solver), (
                   "runtime skirt solver class differs from freshly compiled code")
               solver_state=pkg+"SkirtXPBDSolver$State.class"
@@ -122,11 +124,11 @@ jobs:
           print("Preserved JNI classes:",jolt)
           print("Output:",output,os.stat(output).st_size,"bytes")
           PY
-          sha256sum build/libs/bbs-animation-editor-0.0.2-clean-three-row-safe-panel-contact-test.jar
+          sha256sum build/libs/bbs-animation-editor-0.0.2-manual-skirt-pose-isolation-off-test.jar
       - name: Upload test JAR with existing Jolt physics
         uses: actions/upload-artifact@v4
         with:
-          name: bbs-animation-editor-skirt-clean-three-row-safe-panel-contact-with-jolt
-          path: build/libs/bbs-animation-editor-0.0.2-clean-three-row-safe-panel-contact-test.jar
+          name: bbs-animation-editor-skirt-manual-skirt-pose-isolation-off-with-jolt
+          path: build/libs/bbs-animation-editor-0.0.2-manual-skirt-pose-isolation-off-test.jar
           if-no-files-found: error
           retention-days: 30
