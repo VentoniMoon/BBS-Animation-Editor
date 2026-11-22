@@ -70,6 +70,10 @@ public final class SkirtXPBDRuntime
         double lastSampleTick=Double.NaN;
         double pendingSeconds;
         float[] lastWorldOrigin;
+        float[][] lastPose;
+        float[][] lastLegBoxes;
+        float[] lastModelToWorld;
+        float lastSeatedBlend;
     }
 
     private SkirtXPBDRuntime(){}
@@ -117,6 +121,29 @@ public final class SkirtXPBDRuntime
             actor.lastSampleTick=Double.NaN;
             actor.pendingSeconds=0D;
             actor.lastWorldOrigin=null;
+            actor.lastPose=null;
+            actor.lastLegBoxes=null;
+            actor.lastModelToWorld=null;
+        }
+
+        // Same scene tick, same pose and same fitted collision hull must
+        // yield the EXACT same cloth shape on every preview/shadow/mirror
+        // pass. Calling advance(0) repeatedly was re-running contact and
+        // stretch projection until it alternated between two silhouettes.
+        // A pose edit or a changed leg collider at the same tick is still
+        // processed once, preserving scrubbing and interactive editing.
+        if(collisions!=null&&Double.isFinite(actor.lastSampleTick)&&
+                Math.abs(actor.lastSampleTick-collisions.sampleTick)<=CLOCK_EPS&&
+                samePose(actor.lastPose,posed.target)&&
+                samePose(actor.lastLegBoxes,collisions.legBoxes)&&
+                samePose(actor.lastModelToWorld,collisions.modelToWorld)&&
+                Math.abs(actor.lastSeatedBlend-collisions.seatedBlend)<1E-5F)
+        {
+            actor.lastUpdate=now;
+            return new RenderFrame(raw,binding,topology,posed,
+                    actor.solver.current(),materials,
+                    collisions.legBoxes.size(),collisions.seatedBlend,
+                    0,collisions.sampleTick);
         }
 
         SkirtXPBDSolver.Result output=null;
@@ -195,11 +222,61 @@ public final class SkirtXPBDRuntime
             output=actor.solver.advance(dt,posed,null);
             steps=dt>0F?1:0;
         }
-        if(steps>0)actor.lastUpdate=now;
+        // This is a LAST VISIBLE SAMPLE timestamp, not a last integration
+        // timestamp: a paused animation renders at 0 Hz physics but should
+        // never be reset every 600ms while still visible.
+        actor.lastUpdate=now;
+        if(collisions!=null)
+        {
+            actor.lastPose=copy(posed.target);
+            actor.lastLegBoxes=copy(collisions.legBoxes);
+            actor.lastModelToWorld=collisions.modelToWorld.clone();
+            actor.lastSeatedBlend=collisions.seatedBlend;
+        }
         return new RenderFrame(raw,binding,topology,posed,output,
                 materials,collisions==null?0:collisions.legBoxes.size(),
                 collisions==null?0F:collisions.seatedBlend,
                 steps,renderTick);
+    }
+
+    private static boolean samePose(float[] a,float[] b)
+    {
+        if(a==null||b==null||a.length!=b.length)return false;
+        for(int i=0;i<a.length;i++)
+            if(!Float.isFinite(a[i])||!Float.isFinite(b[i])||
+                    Math.abs(a[i]-b[i])>1E-5F)return false;
+        return true;
+    }
+
+    private static boolean samePose(float[][] a,float[][] b)
+    {
+        if(a==null||b==null||a.length!=b.length)return false;
+        for(int i=0;i<a.length;i++)
+            if(!samePose(a[i],b[i]))return false;
+        return true;
+    }
+
+    private static boolean samePose(float[][] a,
+            java.util.List<float[]> b)
+    {
+        if(a==null||b==null||a.length!=b.size())return false;
+        for(int i=0;i<a.length;i++)
+            if(!samePose(a[i],b.get(i)))return false;
+        return true;
+    }
+
+    private static float[][] copy(float[][] a)
+    {
+        float[][] out=new float[a.length][];
+        for(int i=0;i<a.length;i++)out[i]=a[i].clone();
+        return out;
+    }
+
+    private static float[][] copy(java.util.List<float[]> a)
+    {
+        float[][] out=new float[a.size()][];
+        for(int i=0;i<a.size();i++)out[i]=a.get(i).clone();
+        return out;
     }
 
     private static String signature(SkirtClothSurfaceMesh.Snapshot raw,
