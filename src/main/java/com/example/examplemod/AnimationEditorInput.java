@@ -343,6 +343,10 @@ public class AnimationEditorInput
             return;
         }
 
+        /* World-pin control is a viewport UI element, not a bone hit. */
+        if(this.screen.clickWorldPinControl(mouseX,mouseY,mouseButton))
+            return;
+
         /*
          * =========================================================
          * STAGE 5 - GIZMO
