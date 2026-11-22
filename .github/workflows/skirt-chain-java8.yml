@@ -208,6 +208,16 @@ jobs:
             -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # Exact prior geometry control: keep old seated reference,
+          # with old gravity and silhouette controls unchanged.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdPoseAwareLapGuide=false \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity=false \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedShape=false \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=false \
+            -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
           # A/B: switch off only posterior gravity relief.
           java -ea -Dbbs.editor.physics.skirt.xpbd=true \
             -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity=false \
