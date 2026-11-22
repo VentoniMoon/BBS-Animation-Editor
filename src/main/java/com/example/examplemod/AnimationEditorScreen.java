@@ -458,6 +458,8 @@ public class AnimationEditorScreen extends GuiScreen
     public void initGui()
     {
         super.initGui();
+        // Background actors use their OWN pinned chains when not selected.
+        this.multiActorPreview.setWorldPinRegistry(this.worldBonePins);
         // Minecraft's ru_ru forces its small Unicode font on Latin text too.
         // The editor uses its own font instance; all other GUI screens keep
         // their original font after onGuiClosed().
@@ -914,17 +916,9 @@ public class AnimationEditorScreen extends GuiScreen
         java.util.List<AnimationBone> bones=actorPreviewController.getBones();
         if(bones==null||bones.isEmpty())return;
 
-        EditorWorldBonePoseRetarget.Result result=null;
-        for(AnimationBone bone:bones)
-        {
-            if(bone==null)continue;
-            EditorWorldBonePinRegistry.Pin pin=worldBonePins.find(
-                    actor.getId(),bone.getName());
-            if(pin==null)continue;
-            result=EditorWorldBonePoseRetarget.retarget(bone,
-                    animationFrame,record,pin.world);
-            break;
-        }
+        EditorWorldBonePoseRetarget.Result result=
+                EditorWorldBoneSnapshotAdapter.solve(worldBonePins,
+                        actor.getId(),bones,animationFrame,record);
         if(result==null)
         {
             worldPinMessage="World pin paused: native rig is not solvable";
@@ -936,16 +930,8 @@ public class AnimationEditorScreen extends GuiScreen
                     "World IK residual too high; check skeleton":
                     "World pin beyond limb reach (no stretching)";
         java.util.List<AnimationBoneSnapshot> snapshots=
-                new java.util.ArrayList<AnimationBoneSnapshot>();
-        for(AnimationBone bone:bones)
-        {
-            if(bone==null)continue;
-            AnimationTransform t=result.overrides.get(bone);
-            if(t==null)t=bone.getTransformAt(animationFrame);
-            if(t==null)continue;
-            snapshots.add(new AnimationBoneSnapshot(bone.getName(),
-                    bone.getParent()==null?null:bone.getParent().getName(),t));
-        }
+                EditorWorldBoneSnapshotAdapter.snapshots(
+                        bones,animationFrame,result);
         // Keep normal native rendering, morph layers and mirrors intact.
         BlockbusterPreviewAnimationState.set(snapshots,(int)animationFrame);
         EmoticonsPreviewAnimationState.set(snapshots,(int)animationFrame);
