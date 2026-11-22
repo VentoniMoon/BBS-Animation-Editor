@@ -89,10 +89,12 @@ public final class EditorWorldBonePoseRetarget
                     angles(current[i-1]);
             AnimationBone bone=chain.get(i);
             AnimationTransform authored=pose.get(bone);
+            // ModelCustomRenderer applies native X,-Y,-Z. Conjugate the
+            // data channels in the same way as the working POSE gizmo.
             float[] localEuler=new float[]{
                     bone.getBaseRotationX()+authored.getRotationX(),
-                    bone.getBaseRotationY()+authored.getRotationY(),
-                    bone.getBaseRotationZ()+authored.getRotationZ()};
+                    -(bone.getBaseRotationY()+authored.getRotationY()),
+                    -(bone.getBaseRotationZ()+authored.getRotationZ())};
             float[] aligned;
             try
             {
@@ -106,9 +108,9 @@ public final class EditorWorldBonePoseRetarget
             float rx=EditorWorldBoneRetargetMath.nearestAngle(
                     aligned[0]-bone.getBaseRotationX(),authored.getRotationX());
             float ry=EditorWorldBoneRetargetMath.nearestAngle(
-                    aligned[1]-bone.getBaseRotationY(),authored.getRotationY());
+                    -aligned[1]-bone.getBaseRotationY(),authored.getRotationY());
             float rz=EditorWorldBoneRetargetMath.nearestAngle(
-                    aligned[2]-bone.getBaseRotationZ(),authored.getRotationZ());
+                    -aligned[2]-bone.getBaseRotationZ(),authored.getRotationZ());
             authored.setRotation(rx,ry,rz);
         }
 
@@ -169,8 +171,8 @@ public final class EditorWorldBonePoseRetarget
                     bone.getLocalY()+authored.getPositionY(),
                     bone.getLocalZ()+authored.getPositionZ());
             local.setRotation(bone.getBaseRotationX()+authored.getRotationX(),
-                    bone.getBaseRotationY()+authored.getRotationY(),
-                    bone.getBaseRotationZ()+authored.getRotationZ());
+                    -(bone.getBaseRotationY()+authored.getRotationY()),
+                    -(bone.getBaseRotationZ()+authored.getRotationZ()));
             // Preserve authored scale exactly; IK never changes it.
             local.setScale(authored.getScaleX(),authored.getScaleY(),
                     authored.getScaleZ());
