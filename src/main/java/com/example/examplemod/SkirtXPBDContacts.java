@@ -34,6 +34,8 @@ public final class SkirtXPBDContacts
     private static final WeakHashMap<Object,Boolean> CLOTH_ENABLED=
             new WeakHashMap<Object,Boolean>();
     private static final long MAX_AGE_NANOS=1500000000L;
+    private static final boolean SEATED_CONTACTS=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdSeatedContacts","true"));
 
     public static final class Frame
     {
@@ -225,8 +227,7 @@ public final class SkirtXPBDContacts
             //
             // Keep the established radial behavior on vertical walking
             // thighs. This opt-out also permits exact A/B comparisons.
-            if(Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.xpbdSeatedContacts","true")))
+            if(SEATED_CONTACTS)
             {
                 int longest=0;
                 if(b[8]>b[7])longest=1;
