@@ -28,6 +28,7 @@ public final class SkirtXPBDPipelineSmokeTest
     public static void main(String[] args)
     {
         cleanThreeRowThighPinchRegression();
+        safeThreeRowPanelContactCatchesInteriorCrossing();
         exactlyFollowAnimatedNativeBonePoses();
         nativeVolumeFollowsXPBDWithoutDestroyingTextureFaces();
         originalUvsAndSeamBridgesAreConnected();
@@ -58,6 +59,106 @@ public final class SkirtXPBDPipelineSmokeTest
         perAttachmentClothActivationDoesNotAffectAnotherRig();
         clonedMorphFramesShareOneLiveXPBDState();
         System.out.println("SkirtXPBDPipelineSmokeTest OK");
+    }
+
+    /**
+     * A 3-row skirt has large physical panels. Reproduce a fitted OBB
+     * piercing a TRIANGLE INTERIOR while all 60 original vertices remain
+     * outside its inflated volume. The old point-only minimal mode misses
+     * the entire contact. Verify the new one-frame Jacobi panel response
+     * follows the OUTER side and is quiet on a duplicate camera redraw.
+     */
+    private static void safeThreeRowPanelContactCatchesInteriorCrossing()
+    {
+        if(!SkirtXPBDSolver.CLEAN_THREE_ROW ||
+                SkirtXPBDSolver.ROWS!=3)return;
+        float[] original={.20F,-.40F,.08F};
+        float[] badExit={.08F,-.20F,.02F};
+        float[] waist={0F,0F,0F};
+        float[] top=SkirtXPBDSolver.safePanelExit(
+                original,badExit,waist,true,1F);
+        float[] below=SkirtXPBDSolver.safePanelExit(
+                original,badExit,waist,false,1F);
+        need(top[1]>.0001F,
+                "raised thigh top should permit a short upward correction");
+        need(below[1]<=.00001F,
+                "below-thigh sample cannot be lifted across thigh");
+        need(top[0]*original[0]+top[2]*original[2]>=-.00001F,
+                "panel correction ejected cloth inward behind the leg");
+        need((float)Math.sqrt(top[0]*top[0]+top[1]*top[1]+
+                top[2]*top[2])<=.01201F,
+                "panel solver permitted a huge upward impulse");
+
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        float[][] before=state.current().refinedParticles;
+        float[] middle=null;
+        float best=-1F;
+        // The bottom original panel has NO waist vertices and can be
+        // swept by a bent thigh between its three physical endpoints.
+        for(int c=0;c<20;c++)
+        {
+            int a=20+c,b=40+c,d=40+(c+1)%20;
+            float[] centroid=new float[3];
+            for(int k=0;k<3;k++)
+                centroid[k]=(before[a][k]+before[b][k]+
+                        before[d][k])/3F;
+            float nearest=Float.POSITIVE_INFINITY;
+            for(float[] v:before)
+                nearest=Math.min(nearest,distance(centroid,v));
+            if(nearest>best){best=nearest;middle=centroid;}
+        }
+        need(middle!=null&&best>.038F,
+                "three-row fixture needs a triangle interior clear of nodes");
+        float sine=(float)Math.sin(Math.toRadians(80D)/2D),
+                cosine=(float)Math.cos(Math.toRadians(80D)/2D);
+        float[] l={middle[0],middle[1],middle[2],
+                sine,0F,0F,cosine,.016F,.016F,.016F};
+        float[] r={middle[0]+5F,middle[1],middle[2],
+                sine,0F,0F,cosine,.016F,.016F,.016F};
+        Object morph=new Object();
+        SkirtXPBDContacts.publish(morph,35,35D,identity(),
+                new float[][]{l,r},
+                java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"));
+        SkirtXPBDContacts.Frame thighs=SkirtXPBDContacts.forMorph(morph);
+        need(thighs!=null&&thighs.seatedBlend>.99F,
+                "interior test requires actual bilateral thigh bend");
+        for(float[] vertex:before)
+            need(distance(vertex,SkirtXPBDContacts.corrected(
+                    vertex,thighs,.018F))<.00001F,
+                    "test wrongly collides with a VERTEX, not panel");
+        need(distance(middle,SkirtXPBDContacts.corrected(
+                middle,thighs,.018F))>.002F,
+                "triangle interior is not inside the real fitted OBB");
+
+        SkirtXPBDSolver.Result moved=state.advance(
+                0F,f.rest,thighs);
+        float motion=0F;
+        for(int n=0;n<SkirtXPBDSolver.SIM_NODES;n++)
+            motion=Math.max(motion,distance(
+                    before[n],moved.refinedParticles[n]));
+        if(SkirtXPBDSolver.SAFE_PANEL_CONTACTS)
+        {
+            need(moved.legContacts>0 && motion>.00001F,
+                    "three-row cloth missed an interior OBB penetration");
+            need(motion<=.0121F,
+                    "safe panel moved a node farther than its frame cap");
+        }
+        else
+            need(motion<.0001F,
+                    "A/B OFF must exactly restore point-only projection");
+        SkirtXPBDSolver.Result repeated=state.advance(
+                0F,f.rest,thighs);
+        for(int n=0;n<SkirtXPBDSolver.SIM_NODES;n++)
+            equal(repeated.refinedParticles[n],
+                    moved.refinedParticles[n],1E-6F,
+                    "same scene tick moved polygon twice on FBO rerender");
+        for(int c=0;c<20;c++)
+            equal(repeated.refinedParticles[c],
+                    repeated.refinedTarget[c],1E-6F,
+                    "interior panel contact moved the pinned skirt waist");
     }
 
     /**
