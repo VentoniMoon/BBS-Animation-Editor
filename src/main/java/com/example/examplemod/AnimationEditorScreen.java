@@ -4834,6 +4834,13 @@ public class AnimationEditorScreen extends GuiScreen
     public void handleMouseInput()
             throws java.io.IOException
     {
+        if(assistantPanel.isOpen())
+        {
+            // Modal assistant must not zoom, scrub or scroll the editor.
+            // GuiScreen still dispatches click events to our modal handler.
+            super.handleMouseInput();
+            return;
+        }
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())
         {
             // Keep the authored scene immutable while native frames are
