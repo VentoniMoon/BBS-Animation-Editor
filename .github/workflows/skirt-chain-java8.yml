@@ -335,5 +335,11 @@ jobs:
             -Dbbs.editor.physics.skirt.taperedDistalShrink=false \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtLegCollisionProxySmokeTest
+          # Previous PR #255 OBB sizes remain explicitly testable:
+          # independently reenable both 45-80deg shrink switches.
+          java -ea -Dbbs.editor.physics.skirt.taperedProximalShrink=true \
+            -Dbbs.editor.physics.skirt.taperedDistalShrink=true \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtLegCollisionProxySmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.BodyPartJoltContactBudgetSmokeTest
