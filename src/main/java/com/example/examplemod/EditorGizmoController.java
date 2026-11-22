@@ -225,6 +225,26 @@ public class EditorGizmoController
     /** The picker uses this exact native joint projection for all
      * Emoticons, Blockbuster and Chameleon rigs, never a guessed radius
      * from a screenshot. Return null when the renderer has no valid pose. */
+    /**
+     * Exact native world pivot for world-lock capture (not screen pixels).
+     * The caller must have prepared this actor and its matching Morph first.
+     */
+    public float[] getWorldBonePivot(AnimationBone bone,
+            BlockbusterRecordFrame recordFrame)
+    {
+        if(bone==null||recordFrame==null)return null;
+        AnimationKeyframe key=bone.getKeyframeAt(gizmoFrame);
+        double[] nativeWorld=getNativeBoneWorldPosition(
+                bone,key,recordFrame);
+        if(nativeWorld==null||nativeWorld.length<3)return null;
+        float[] result=new float[]{
+                (float)nativeWorld[0],(float)nativeWorld[1],
+                (float)nativeWorld[2]};
+        for(float component:result)
+            if(!Float.isFinite(component))return null;
+        return result;
+    }
+
     public float[] projectBonePivot(AnimationBone bone,
             BlockbusterRecordFrame recordFrame,EditorCamera camera,
             int viewportX,int viewportY,int viewportWidth,
