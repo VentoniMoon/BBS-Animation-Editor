@@ -309,7 +309,10 @@ public final class SkirtXPBDSolver
                 (seated-.55F)/.30F));
         if(!supportedAboveThigh||blend<=0F)
             dy=Math.min(0F,dy);
-        else dy=Math.min(dy,.014F*blend);
+        else
+            // A sample on the upper/lap side must NEVER be ejected
+            // downward through the thigh's back face.
+            dy=Math.max(0F,Math.min(dy,.014F*blend));
         if(!Float.isFinite(dx)||!Float.isFinite(dy)||
                 !Float.isFinite(dz))
             return new float[]{0F,0F,0F};
@@ -393,6 +396,10 @@ public final class SkirtXPBDSolver
                     "bbs.editor.physics.skirt.xpbdSafePanelContacts",
                     "true"))&&CLEAN_THREE_ROW;
     private static final float SAFE_PANEL_MAX_NODE_STEP=.012F;
+    private static final boolean SAFE_PANEL_AUDIT=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSafePanelAudit",
+                    "false"));
     private static final boolean RADIAL_GUARD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"))&&
             !CLEAN_THREE_ROW;
@@ -1246,6 +1253,12 @@ public final class SkirtXPBDSolver
                 contactMove(position[n],previous[n],dx,dy,dz);
                 moved++;
             }
+            if(SAFE_PANEL_AUDIT)
+                System.out.println("[BBS Editor][SkirtSafePanel] tick="+
+                        bodies.sampleTick+" seated="+seated+
+                        " panelProbes="+lastSafePanelProbes+
+                        " movedVertices="+moved+" maxStep="+
+                        SAFE_PANEL_MAX_NODE_STEP);
             return moved;
         }
 
