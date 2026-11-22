@@ -27,11 +27,13 @@ public final class SkirtLegCollisionProxy
      * physical dimensions. An independent A/B can disable just THIS
      * addition without changing the previously tested distal taper.
      *
-     * -Dbbs.editor.physics.skirt.taperedProximalShrink=false
+     * Disabled by default for PR #256 original-OBB A/B:
+     * -Dbbs.editor.physics.skirt.taperedProximalShrink=true
+     * reenables the experimental proximal reduction.
      */
     public static final boolean PROXIMAL_SHRINK=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.taperedProximalShrink","true"));
+                    "bbs.editor.physics.skirt.taperedProximalShrink","false"));
 
     /** Smooth 45-to-80 degree activation from each REAL thigh bone axis.
      * No dependence on knee, skirt state or camera. */
@@ -64,11 +66,13 @@ public final class SkirtLegCollisionProxy
      * This applies to the EXACT SAME selected OBBs for Jolt and XPBD.
      *
      * Disable and restore the previous three-zone fit with:
-     * -Dbbs.editor.physics.skirt.taperedDistalShrink=false
+     * Disabled by default for PR #256 original-OBB A/B:
+     * -Dbbs.editor.physics.skirt.taperedDistalShrink=true
+     * reenables the experimental distal reduction.
      */
     public static final boolean DISTAL_SHRINK=
             Boolean.parseBoolean(System.getProperty(
-                    "bbs.editor.physics.skirt.taperedDistalShrink","true"));
+                    "bbs.editor.physics.skirt.taperedDistalShrink","false"));
 
     /** From >50 degrees to ~80 degrees of thigh raise. Vertical walking
      * legs have factor 1 exactly; at deep sit, lower radius becomes

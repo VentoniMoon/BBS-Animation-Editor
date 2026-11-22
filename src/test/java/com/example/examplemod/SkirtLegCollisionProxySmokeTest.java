@@ -7,6 +7,7 @@ public final class SkirtLegCollisionProxySmokeTest
 
     public static void main(String[] args)
     {
+        defaultsRestoreOriginalThighZones();
         threeZonesAreProximalToDistal();
         tiltFollowsBoneInsteadOfWorldAxis();
         raisedThighShrinksOnlyDistalZone();
@@ -17,6 +18,45 @@ public final class SkirtLegCollisionProxySmokeTest
         shapeBudgetPreservesBothThighs();
         invalidAndLowerLegStayOriginal();
         System.out.println("SkirtLegCollisionProxySmokeTest OK");
+    }
+
+    /** Without JVM overrides this test JAR deliberately retains the
+     * old pelvis-to-knee 70/85/100% three-zone OBB at all bend angles.
+     * Passing a true override independently re-enables the prior
+     * shrink experiments for an exact same-JAR A/B. */
+    private static void defaultsRestoreOriginalThighZones()
+    {
+        if(System.getProperty(
+                "bbs.editor.physics.skirt.taperedProximalShrink")==null)
+            require(!SkirtLegCollisionProxy.PROXIMAL_SHRINK,
+                    "Default must restore the pelvis-side thigh collider");
+        if(System.getProperty(
+                "bbs.editor.physics.skirt.taperedDistalShrink")==null)
+            require(!SkirtLegCollisionProxy.DISTAL_SHRINK,
+                    "Default must restore the knee-side thigh collider");
+        float[] bent=box(.08F,-.28F,.04F,.19F,.24F,.18F);
+        setThighAngle(bent,80F);
+        float[][] zones=SkirtLegCollisionProxy.split(bent);
+        if(!SkirtLegCollisionProxy.PROXIMAL_SHRINK)
+        {
+            near(zones[0][7],bent[7]*.70F,
+                    "original upper thigh X radius");
+            near(zones[0][9],bent[9]*.70F,
+                    "original upper thigh Z radius");
+            near(zones[1][7],bent[7]*.85F,
+                    "original middle thigh X radius");
+            near(zones[1][9],bent[9]*.85F,
+                    "original middle thigh Z radius");
+        }
+        if(!SkirtLegCollisionProxy.DISTAL_SHRINK)
+        {
+            near(zones[2][7],bent[7],
+                    "original knee-facing X radius");
+            near(zones[2][9],bent[9],
+                    "original knee-facing Z radius");
+            near(zones[2][8],bent[8]/3F*1.06F,
+                    "original knee-facing overlap length");
+        }
     }
 
     private static void threeZonesAreProximalToDistal()
