@@ -31,6 +31,7 @@ public final class SkirtXPBDPipelineSmokeTest
         nativeVolumeFollowsXPBDWithoutDestroyingTextureFaces();
         originalUvsAndSeamBridgesAreConnected();
         xpbdHasPinnedWaistGravityAndBounds();
+        adaptiveSeatedRearDrapeKeepsWalkingAndEdges();
         refinedGridRetainsNativeSkinCorrespondence();
         pausedPoseChangePreservesClothRelativeMotion();
         seatedDrapePoseDeltaDoesNotFoldHemIntoWaist();
@@ -314,6 +315,108 @@ public final class SkirtXPBDPipelineSmokeTest
         try{simulation.advance(.5F,f.rest,null);}
         catch(IllegalArgumentException expected){rejected=true;}
         need(rejected,"unbounded time step must fail closed");
+    }
+
+    /**
+     * The actual observed bug starts only once BOTH thighs raise high.
+     * Preserve walking/gait and fabric edge lengths; reduce the rear
+     * dangling load, not the gravity of fabric resting atop the front lap.
+     * This checks all four A/B combinations in independent CI JVMs.
+     */
+    private static void adaptiveSeatedRearDrapeKeepsWalkingAndEdges()
+    {
+        need(SkirtXPBDSolver.seatedRelief(0F)==0F &&
+                SkirtXPBDSolver.seatedRelief(.05F)==0F,
+                "walking unexpectedly entered sitting force mode");
+        need(SkirtXPBDSolver.seatedRelief(1F)>.999F,
+                "deep bilateral seated pose failed to fully activate");
+        float back=SkirtXPBDSolver.rearSector(
+                0F,1F,0F,-1F);
+        float front=SkirtXPBDSolver.rearSector(
+                0F,-1F,0F,-1F);
+        float side=SkirtXPBDSolver.rearSector(
+                1F,0F,0F,-1F);
+        need(back>.99F&&front==0F&&side>.1F&&side<.30F,
+                "front/back fabric mask must follow actual lap direction");
+        for(int row=0;row<SkirtXPBDSolver.ROWS;row++)
+        {
+            float rear=SkirtXPBDSolver.seatedGravityScale(
+                    1F,row,back);
+            float ahead=SkirtXPBDSolver.seatedGravityScale(
+                    1F,row,front);
+            float walking=SkirtXPBDSolver.seatedGravityScale(
+                    0F,row,back);
+            float unilateral=SkirtXPBDSolver.seatedGravityScale(
+                    .03F,row,back);
+            need(walking==1F&&unilateral==1F&&ahead==1F,
+                    "ordinary gait or supported front cloth lost gravity");
+            if(row==0)
+                need(rear==1F,"pinned belt must never be affected");
+            else if(SkirtXPBDSolver.ADAPTIVE_SEATED_GRAVITY)
+                need(rear<1F&&rear>=.19F,
+                        "posterior drape gravity must be positive and reduced");
+            else
+                need(rear==1F,
+                        "gravity A/B OFF must exactly match baseline");
+        }
+        float fully=SkirtXPBDSolver.seatedGravityScale(
+                1F,SkirtXPBDSolver.ROWS-1,back);
+        float medium=SkirtXPBDSolver.seatedGravityScale(
+                .5F,SkirtXPBDSolver.ROWS-1,back);
+        if(SkirtXPBDSolver.ADAPTIVE_SEATED_GRAVITY)
+            need(fully<medium&&medium<1F&&fully>.19F,
+                    "rear relief must progress smoothly with thigh bend");
+        need(SkirtXPBDSolver.seatedDownwardDamping(
+                0F,SkirtXPBDSolver.ROWS-1,back)==1F,
+                "standing/one raised leg must not change motion");
+        float hoopWalk=SkirtXPBDSolver.upperHoopComplianceScale(0F);
+        float hoopSit=SkirtXPBDSolver.upperHoopComplianceScale(1F);
+        need(hoopWalk==1F&&hoopSit>.14F&&hoopSit<1F,
+                "seated first-ring material springs escaped bounded range");
+        if(SkirtXPBDSolver.ADAPTIVE_SEATED_SHAPE)
+            need(hoopSit>.70F,
+                    "new seated mode must release extra rigid-hoop stiffness");
+        else
+            need(Math.abs(hoopSit-.15F)<.0001F,
+                    "shape A/B OFF must preserve old hoop stiffness");
+
+        // Real solved cloth under repeated deep sitting must preserve
+        // pinned belt, UV ownership, finite particles and edge lengths.
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        float bendSin=(float)Math.sin(Math.toRadians(80D)/2D);
+        float bendCos=(float)Math.cos(Math.toRadians(80D)/2D);
+        // World-space thigh centers are out of collision reach, but
+        // their +Z offset from the actual waist establishes the forward
+        // sector for this gravity-only A/B, without additional OBB hits.
+        float[] left={-5F,-5F,-.5F,bendSin,0F,0F,bendCos,
+                .11F,.20F,.12F};
+        float[] right={5F,-5F,-.5F,bendSin,0F,0F,bendCos,
+                .11F,.20F,.12F};
+        Object sitter=new Object();
+        SkirtXPBDContacts.publish(sitter,90,identity(),
+                new float[][]{left,right},
+                java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"));
+        SkirtXPBDContacts.Frame seated=SkirtXPBDContacts.forMorph(sitter);
+        need(seated!=null&&seated.seatedBlend>.99F,
+                "seated gravity needs a real 80-degree two-thigh sample");
+        SkirtXPBDSolver.Result result=null;
+        for(int i=0;i<36;i++)
+            result=state.advance(1F/60F,f.rest,seated);
+        need(result!=null&&Float.isFinite(result.maxDistanceError)&&
+                result.maxDistanceError<.24F,
+                "adaptive sitting caused unacceptable cloth stretch");
+        for(int n=0;n<60;n++)
+        {
+            for(float v:result.particles[n])
+                need(Float.isFinite(v),
+                        "adaptive sitting generated invalid cloth nodes");
+            if(f.shared.nodes.get(n).row==0)
+                equal(result.particles[n],f.rest.target[n],1E-6F,
+                        "adaptive seated gravity displaced pinned belt");
+        }
     }
 
     /**
