@@ -43,6 +43,13 @@ public final class SkirtXPBDSolver
     private static final float SEATED_RADIAL_RELIEF=.38F;
     private static final boolean SEATED_FOLD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdSeatedFold","true"));
+    // Contact must be evaluated on the triangles BETWEEN cloth nodes:
+    // a thigh can intersect a polygon without containing any vertex.
+    // Keep this additional work restricted to a deep bilateral seat.
+    private static final boolean SEATED_SURFACE_CONTACTS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSeatedSurfaceContacts","true"));
+    private static final float MAX_SURFACE_CORRECTION=.045F;
     private static final boolean RADIAL_GUARD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"));
     private static final float PIN_EPS=1E-8F;
@@ -329,6 +336,8 @@ public final class SkirtXPBDSolver
                 // This pass does not integrate gravity, change constraints,
                 // or inject Verlet velocity on a repeated FBO render.
                 int contacts=resolveDisplayContacts(fineTarget,bodies,waistCenter);
+                contacts+=resolveSurfaceContacts(fineTarget,bodies,
+                        waistCenter,seated);
                 if(contacts>0)
                 {
                     // The earlier display-only path displaced individual
@@ -348,6 +357,9 @@ public final class SkirtXPBDSolver
                         // Finish every pass with body contact projection,
                         // not a link correction that pushes cloth into legs.
                         contacts+=resolveDisplayContacts(fineTarget,bodies,waistCenter);
+                        if(settle<2)
+                            contacts+=resolveSurfaceContacts(fineTarget,bodies,
+                                    waistCenter,seated);
                     }
                     // Paused FBO, mirror and shadow passes must not turn
                     // these collision corrections into physical velocity.
@@ -416,6 +428,9 @@ public final class SkirtXPBDSolver
                     {
                         self+=selfParticles();
                         self+=selfTriangles();
+                        if(seated>.60F)
+                            legs+=resolveSurfaceContacts(fineTarget,bodies,
+                                    waistCenter,seated);
                     }
                     // Collision resolution MUST NOT move the pinned waist.
                     for(int n=0;n<SIM_NODES;n++)
@@ -443,10 +458,71 @@ public final class SkirtXPBDSolver
             // substep of a seated pose. Unlike walking, deeply folded
             // cloth often needs to travel beyond its original silhouette.
             if(seated>.50F&&bodies!=null)
+            {
                 legs+=resolveDisplayContacts(fineTarget,bodies,waistCenter);
+                legs+=resolveSurfaceContacts(fineTarget,bodies,
+                        waistCenter,seated);
+            }
             protectRadialSilhouette(fineTarget,waistCenter,seated,maxOffset);
             stepCount++;
             return result(legs,self,SUBSTEPS);
+        }
+
+        /**
+         * Seated surface / thigh support (triangle-area contacts).
+         * The 100-node lattice can have three vertices clear of a thigh
+         * while the large triangle BETWEEN them still cuts through it.
+         * Sample its barycenter; if truly inside a fitted leg OBB, apply
+         * a small, mass-distributed correction to its free vertices.
+         *
+         * There is deliberately no artificial attraction to the leg:
+         * gravity remains responsible for bringing fabric DOWN onto
+         * its support. This is not run during ordinary walking.
+         */
+        private int resolveSurfaceContacts(float[][] fineTarget,
+                SkirtXPBDContacts.Frame bodies,float[] center,float seated)
+        {
+            if(!SEATED_SURFACE_CONTACTS||bodies==null||seated<=.60F)
+                return 0;
+            float strength=Math.min(1F,Math.max(0F,
+                    (seated-.60F)/.30F));
+            if(strength<=1E-5F)return 0;
+            int contacts=0;
+            for(int[] tri:triangles)
+            {
+                int free=0;
+                float[] sample=new float[3];
+                float[] outward=new float[3];
+                for(int index:tri)
+                {
+                    if(!pinned[index])free++;
+                    for(int k=0;k<3;k++)
+                        sample[k]+=position[index][k]/3F;
+                    outward[0]+=fineTarget[index][0]/3F;
+                    outward[2]+=fineTarget[index][2]/3F;
+                }
+                if(free==0)continue;
+                outward[0]-=center[0];
+                outward[2]-=center[2];
+                float[] clearance=SkirtXPBDContacts.corrected(
+                        sample,bodies,CONTACT_RADIUS,outward);
+                float depth=distance(sample,clearance);
+                if(!Float.isFinite(depth)||depth<=1E-5F)continue;
+                // Capping one correction avoids pulling a large fabric
+                // flap into the stretched "cardboard" shape seen before.
+                float amount=Math.min(depth,MAX_SURFACE_CORRECTION)*
+                        strength;
+                float multiplier=amount/depth*(3F/free);
+                for(int index:tri)
+                {
+                    if(pinned[index])continue;
+                    for(int k=0;k<3;k++)
+                        position[index][k]+=
+                                (clearance[k]-sample[k])*multiplier;
+                }
+                contacts++;
+            }
+            return contacts;
         }
 
         private int resolveDisplayContacts(float[][] fineTarget,
