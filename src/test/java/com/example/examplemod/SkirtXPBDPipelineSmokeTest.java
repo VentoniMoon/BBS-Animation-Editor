@@ -485,7 +485,7 @@ public final class SkirtXPBDPipelineSmokeTest
      */
     private static void roundedHipGapBridgeAppearsOnlyWithRealBentThigh()
     {
-        float[] hip={0F,.82F,0F,0F,0F,0F,1F,.28F,.17F,.24F};
+        float[] hip={0F,.86F,0F,0F,0F,0F,1F,.28F,.17F,.24F};
         float[] left={-.18F,.62F,0F,0F,0F,0F,1F,
                 .13F,.09F,.12F};
         float[] right={.18F,.62F,0F,0F,0F,0F,1F,
@@ -525,6 +525,15 @@ public final class SkirtXPBDPipelineSmokeTest
                 "hip-gap capsule must be small, round and fully raised");
         float[] p=new float[3];
         for(int k=0;k<3;k++)p[k]=.5F*(capsule.a[k]+capsule.b[k]);
+        // The capsule must be SHORT and connect only a genuinely open
+        // gap. The old endpoint reached deep into the thigh, where two
+        // simultaneous collision constraints repeatedly pinched fabric.
+        float span=0F;
+        for(int k=0;k<3;k++)
+            span+=(capsule.a[k]-capsule.b[k])*
+                    (capsule.a[k]-capsule.b[k]);
+        need(span>.025F*.025F&&span<.18F*.18F,
+                "hip capsule must join only the exposed hip gap");
         float[] q=SkirtXPBDContacts.corrected(p,unilateral,
                 .018F,new float[]{-1F,0F,0F});
         float motion=0F;
@@ -535,6 +544,31 @@ public final class SkirtXPBDPipelineSmokeTest
         }
         need(motion>1E-6F&&motion<.25F,
                 "hip-gap contact must resolve without a huge bell kick");
+
+        // If the fitted thigh and pelvis already overlap, do not invent
+        // another correction across their shared volume. Compare against
+        // the exact same two leg OBBs without a pelvis (no hip bridge).
+        float[] overlappingHip=hip.clone();
+        overlappingHip[1]=.82F;
+        Object overlapping=new Object(),noBridge=new Object();
+        SkirtXPBDContacts.publish(overlapping,81,identity(),
+                new float[][]{left,right,overlappingHip},owners);
+        SkirtXPBDContacts.publish(noBridge,81,identity(),
+                new float[][]{left,right},owners.subList(0,2));
+        SkirtXPBDContacts.Frame overlapped=
+                SkirtXPBDContacts.forMorph(overlapping);
+        SkirtXPBDContacts.Frame baseline=
+                SkirtXPBDContacts.forMorph(noBridge);
+        need(overlapped!=null&&baseline!=null,
+                "overlap control requires two valid contact frames");
+        need(overlapped.hipBridges.isEmpty(),
+                "no hip bridge should exist when actual cap gap is closed");
+        float[] inside={-.18F,.62F,0F};
+        equal(SkirtXPBDContacts.corrected(inside,overlapped,
+                .018F,new float[]{-1F,0F,0F}),
+                SkirtXPBDContacts.corrected(inside,baseline,
+                .018F,new float[]{-1F,0F,0F}),1E-6F,
+                "already-supported cloth must not receive a second hip push");
 
         right=right.clone();
         right[3]=qx;right[6]=qw;
@@ -622,7 +656,7 @@ public final class SkirtXPBDPipelineSmokeTest
                         one.kneeBridges.size()+" owners="+one.legOwners+
                         " leftShin="+java.util.Arrays.toString(leftShin));
         SkirtXPBDContacts.KneeBridge knee=one.kneeBridges.get(0);
-        need(knee.radius>.04F&&knee.radius<.105F&&
+        need(knee.radius>.04F&&knee.radius<.076F&&
                 knee.weight>.95F,
                 "knee radius must be smaller than the hip bridge");
         float[] inGap={
