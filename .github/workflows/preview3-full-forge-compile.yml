@@ -20,7 +20,9 @@ jobs:
       - name: Install Java 8
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          # The latest Temurin 8 download on GitHub Actions sometimes
+          # returns non-gzip HTML. Zulu provides a separate Java 8 mirror.
+          distribution: zulu
           java-version: '8'
       - name: Build against pinned public Minecraft 1.12.2 dependencies
         run: |
