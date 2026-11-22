@@ -168,7 +168,7 @@ public final class EditorMultiActorPreviewController
                         EditorWorldBoneSnapshotAdapter.solve(
                                 worldPinRegistry,data.getId(),
                                 actorAnimation.getBones(),(float)sceneTime,
-                                current);
+                                current,data);
                 if(pinned!=null)
                     own=EditorWorldBoneSnapshotAdapter.snapshots(
                             actorAnimation.getBones(),(float)sceneTime,pinned);
