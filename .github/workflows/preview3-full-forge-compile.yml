@@ -43,7 +43,7 @@ jobs:
           import zipfile
           base=os.environ["RUNNER_TEMP"]+"/bbs-animation-editor-0.0.2-release.jar"
           compiled="build/libs/bbs-animation-editor-0.0.2.jar"
-          output="build/libs/bbs-animation-editor-0.0.2-clean-three-row-distal-thigh-shrink-test.jar"
+          output="build/libs/bbs-animation-editor-0.0.2-clean-three-row-proximal-clearance-test.jar"
           # Replacing ONLY the five outer classes broke cloth when nested
           # Result/State classes still came from the old release JAR.
           # Replace each whole class family, including anonymous inners.
@@ -103,6 +103,8 @@ jobs:
               proxy=pkg+"SkirtLegCollisionProxy.class"
               assert b"taperedDistalShrink" in result.read(proxy), (
                   "new distal shrink flag NOT present in final JAR")
+              assert b"taperedProximalShrink" in result.read(proxy), (
+                  "new hip/middle shrink flag NOT present in final JAR")
               for group in ("SkirtLegCollisionProxy","BodyPartJoltContactBudget"):
                   cls=pkg+group+".class"
                   assert result.read(cls)==updated.read(cls), (
@@ -112,11 +114,11 @@ jobs:
           print("Preserved JNI classes:",jolt)
           print("Output:",output,os.stat(output).st_size,"bytes")
           PY
-          sha256sum build/libs/bbs-animation-editor-0.0.2-clean-three-row-distal-thigh-shrink-test.jar
+          sha256sum build/libs/bbs-animation-editor-0.0.2-clean-three-row-proximal-clearance-test.jar
       - name: Upload test JAR with existing Jolt physics
         uses: actions/upload-artifact@v4
         with:
-          name: bbs-animation-editor-skirt-clean-three-row-distal-thigh-shrink-with-jolt
-          path: build/libs/bbs-animation-editor-0.0.2-clean-three-row-distal-thigh-shrink-test.jar
+          name: bbs-animation-editor-skirt-clean-three-row-proximal-clearance-with-jolt
+          path: build/libs/bbs-animation-editor-0.0.2-clean-three-row-proximal-clearance-test.jar
           if-no-files-found: error
           retention-days: 30
