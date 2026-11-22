@@ -26,12 +26,16 @@ jobs:
           javac -source 8 -target 8 -encoding UTF-8 \
             -d "$RUNNER_TEMP/editor-bone-tests" \
             src/main/java/com/example/examplemod/EditorWorldBoneIK.java \
+            src/main/java/com/example/examplemod/EditorWorldBoneRetargetMath.java \
             src/main/java/com/example/examplemod/EditorWorldBonePinRegistry.java \
             src/main/java/com/example/examplemod/EditorAssistantCore.java \
             src/test/java/com/example/examplemod/EditorWorldBoneIKSmokeTest.java \
+            src/test/java/com/example/examplemod/EditorWorldBoneRetargetMathSmokeTest.java \
             src/test/java/com/example/examplemod/EditorAssistantCoreSmokeTest.java
           java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
             com.example.examplemod.EditorWorldBoneIKSmokeTest
+          java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
+            com.example.examplemod.EditorWorldBoneRetargetMathSmokeTest
           java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
             com.example.examplemod.EditorAssistantCoreSmokeTest
       - name: Compile entire Forge 1.12.2 editor
