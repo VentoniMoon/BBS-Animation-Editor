@@ -74,6 +74,19 @@ public final class SkirtXPBDContacts
      * bone axis, so duplicates cannot artificially increase confidence.
      * No single raised leg may activate seated cloth corrections.
      */
+    /** Pure-Java subset also compiles without the native Jolt bridge. */
+    private static boolean isUpperThigh(String name)
+    {
+        if(name==null||!name.startsWith("emoticons."))return false;
+        if(name.contains("lower")||name.contains("low_leg")||
+                name.contains("knee")||name.contains("foot")||
+                name.contains("ankle"))return false;
+        return name.contains("left_leg")||name.contains("right_leg")||
+                name.contains("leg_left")||name.contains("leg_right")||
+                name.contains("left_thigh")||name.contains("right_thigh")||
+                name.contains("thigh_left")||name.contains("thigh_right");
+    }
+
     private static float bothThighsBent(List<float[]> boxes,
             List<String> owners)
     {
@@ -81,7 +94,7 @@ public final class SkirtXPBDContacts
         for(int i=0;i<boxes.size();i++)
         {
             String name=owners.get(i);
-            if(!BodyPartJoltContactBudget.isUpperThigh(name))continue;
+            if(!isUpperThigh(name))continue;
             float[] box=boxes.get(i);
             float[] q={box[3],box[4],box[5],box[6]};
             normalizeQuat(q);
