@@ -38,6 +38,7 @@ public final class SkirtXPBDPipelineSmokeTest
         raisedThighContactsSupportClothFromAbove();
         taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong();
         skinnedThighMeshProvidesContinuousContact();
+        skinnedThighCornerGentlyTransitionsFromTopToSide();
         denseEmoticonsSkinDoesNotFallBackFor4500PlusTriangles();
         bilateralSittingFoldsWithoutBreakingWalking();
         seatedUpperHoopGuardDoesNotFreezeTheHem();
@@ -568,6 +569,82 @@ public final class SkirtXPBDPipelineSmokeTest
         equal(SkirtXPBDContacts.corrected(above,scene,.018F),
                 above,1E-6F,
                 "cloth above the actual Emoticons skin got pushed again");
+    }
+
+    /**
+     * A sharp, cube-like Emoticons thigh has a horizontal top and a
+     * vertical outside face. Their triangles share EXACTLY the same edge.
+     * Per-face normals jump 90 degrees and kick the skirt out like a
+     * rigid shelf. A smoothly welded normal must travel diagonally,
+     * while still leaving the gap between both thighs untouched.
+     */
+    private static void skinnedThighCornerGentlyTransitionsFromTopToSide()
+    {
+        if(!SkirtXPBDContacts.SKINNED_MESH_CONTACTS)return;
+        java.util.List<SkirtXPBDContacts.SkinRegion> pieces=
+                new java.util.ArrayList<SkirtXPBDContacts.SkinRegion>();
+        for(int side=0;side<2;side++)
+        {
+            float center=side==0?-.32F:.32F;
+            float[] vertex=new float[15*3];
+            for(int z=0;z<3;z++)
+                for(int x=0;x<3;x++)
+                {
+                    int index=z*3+x;
+                    vertex[index*3]=center-.10F+.10F*x;
+                    vertex[index*3+1]=.50F;
+                    vertex[index*3+2]=-.10F+.10F*z;
+                }
+            for(int row=1;row<=2;row++)
+                for(int z=0;z<3;z++)
+                {
+                    int index=9+(row-1)*3+z;
+                    vertex[index*3]=center-.10F;
+                    vertex[index*3+1]=.50F-.10F*row;
+                    vertex[index*3+2]=-.10F+.10F*z;
+                }
+            int[] tris=new int[16*3];
+            int at=0;
+            for(int z=0;z<2;z++)
+                for(int x=0;x<2;x++)
+                {
+                    int a=z*3+x,b=a+1,c=a+3,d=c+1;
+                    tris[at++]=a;tris[at++]=c;tris[at++]=b;
+                    tris[at++]=b;tris[at++]=c;tris[at++]=d;
+                }
+            for(int row=0;row<2;row++)
+                for(int z=0;z<2;z++)
+                {
+                    int a=row==0?z*3:9+z;
+                    int b=row==0?9+z:12+z;
+                    int c=row==0?(z+1)*3:10+z;
+                    int d=row==0?10+z:13+z;
+                    tris[at++]=a;tris[at++]=b;tris[at++]=c;
+                    tris[at++]=c;tris[at++]=b;tris[at++]=d;
+                }
+            need(at==tris.length,"corner fixture has incomplete triangles");
+            pieces.add(new SkirtXPBDContacts.SkinRegion(
+                    side==0?"emoticons.left_leg":"emoticons.right_leg",
+                    vertex,tris));
+        }
+        SkirtXPBDContacts.SkinSurface smooth=
+                SkirtXPBDContacts.SkinSurface.build(identity(),pieces);
+        need(smooth!=null&&smooth.leftCount==16&&smooth.rightCount==16,
+                "two complete real skin thigh surfaces required");
+        // Left thigh outside top edge is x=-.42, y=.50.
+        float[] atEdge={-.429F,.486F,0F};
+        float[] corrected=smooth.correctedWorld(atEdge,.018F);
+        need(corrected[0]<atEdge[0]-.004F&&
+                corrected[1]>atEdge[1]+.004F,
+                "smooth thigh seam must move both OUT and UP, not snap faces");
+        need(distance(atEdge,corrected)<.0321F,
+                "skinned face contact jumped too far in one iteration");
+        float[] above={-.32F,.65F,0F};
+        equal(smooth.correctedWorld(above,.018F),above,1E-6F,
+                "corner smoothing must not attract free fabric downward");
+        float[] gap={0F,.485F,0F};
+        equal(smooth.correctedWorld(gap,.018F),gap,1E-6F,
+                "smoothed normals invented solid tissue between legs");
     }
 
     /**
