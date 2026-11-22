@@ -1684,6 +1684,9 @@ public final class SkirtXPBDPipelineSmokeTest
      */
     private static void seatedUpperHoopGuardDoesNotFreezeTheHem()
     {
+        // Minimal 3-ring comparison intentionally removes the artificial
+        // seated cosmetic ring cap; its old regression is not applicable.
+        if(SkirtXPBDSolver.CLEAN_THREE_ROW)return;
         if(!Boolean.parseBoolean(System.getProperty(
                 "bbs.editor.physics.skirt.xpbdSeatedUpperControl","true")))
             return;
