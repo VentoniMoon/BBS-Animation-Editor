@@ -19,8 +19,10 @@ import java.util.Map;
  */
 public final class SkirtXPBDVolumeSkin
 {
-    public static final boolean ENABLED=Boolean.getBoolean(
-            "bbs.editor.physics.skirt.xpbdVolumeSkin");
+    // Preserve the full 43-cuboid material/UV skin verified in the
+    // earlier walking tests. Thin-shell seam bridges remain opt-in only.
+    public static final boolean ENABLED=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdVolumeSkin","true"));
     private static final int PATCHES=40;
     private static final int CUBES=43;
     private static final float EPS=1E-8F;
