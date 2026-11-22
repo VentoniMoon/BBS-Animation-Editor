@@ -43,7 +43,7 @@ jobs:
           import zipfile
           base=os.environ["RUNNER_TEMP"]+"/bbs-animation-editor-0.0.2-release.jar"
           compiled="build/libs/bbs-animation-editor-0.0.2.jar"
-          output="build/libs/bbs-animation-editor-0.0.2-rest-length-lap-no-hip-bridge-test.jar"
+          output="build/libs/bbs-animation-editor-0.0.2-seven-row-cloth-experiment-test.jar"
           # Replacing ONLY the five outer classes broke cloth when nested
           # Result/State classes still came from the old release JAR.
           # Replace each whole class family, including anonymous inners.
@@ -100,11 +100,11 @@ jobs:
           print("Preserved JNI classes:",jolt)
           print("Output:",output,os.stat(output).st_size,"bytes")
           PY
-          sha256sum build/libs/bbs-animation-editor-0.0.2-rest-length-lap-no-hip-bridge-test.jar
+          sha256sum build/libs/bbs-animation-editor-0.0.2-seven-row-cloth-experiment-test.jar
       - name: Upload test JAR with existing Jolt physics
         uses: actions/upload-artifact@v4
         with:
-          name: bbs-animation-editor-skirt-rest-length-lap-no-hip-bridge-with-jolt
-          path: build/libs/bbs-animation-editor-0.0.2-rest-length-lap-no-hip-bridge-test.jar
+          name: bbs-animation-editor-skirt-seven-row-cloth-experiment-with-jolt
+          path: build/libs/bbs-animation-editor-0.0.2-seven-row-cloth-experiment-test.jar
           if-no-files-found: error
           retention-days: 30

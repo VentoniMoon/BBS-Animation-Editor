@@ -208,6 +208,13 @@ jobs:
             -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # A/B: 5-ring baseline (2 free intervals per original
+          # section); new default is 7 rings (3 intervals/section).
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdRowCount=5 \
+            -Dbbs.editor.physics.skirt.xpbdDisableHipBridges=true \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
           # Exact prior geometry control: keep old seated reference,
           # with old gravity and silhouette controls unchanged.
           java -ea -Dbbs.editor.physics.skirt.xpbd=true \

@@ -19,13 +19,34 @@ import java.util.Set;
  */
 public final class SkirtXPBDSolver
 {
-    // Keep the original 60 source/UV nodes stable for existing Chameleon
-    // bindings, but physically solve five rows (100 nodes) by default.
-    // The 3-row baseline remains available for a controlled A/B comparison.
+    // Preserve the 60 original Chameleon anchors/UV nodes (three source
+    // latitudes x 20 sectors) and experiment with one simulated latitude
+    // per user-referenced pixel row: 7 rings, 6 fabric height intervals.
+    // Exact A/B: -Dbbs.editor.physics.skirt.xpbdRowCount=5; old 3-ring
+    // fallback still works via xpbdFineGrid=false or xpbdRowCount=3.
+    // Only ODD values are supported so the native central seam remains
+    // mapped exactly onto a physics row (3 source -> 3,5,7 rings).
     public static final int N=60;
     public static final int SEGMENTS=20;
-    public static final int ROWS=Boolean.parseBoolean(
-            System.getProperty("bbs.editor.physics.skirt.xpbdFineGrid","true"))?5:3;
+    public static final int ROWS=resolveRows();
+
+    private static int resolveRows()
+    {
+        String raw=System.getProperty(
+                "bbs.editor.physics.skirt.xpbdRowCount");
+        if(raw==null||raw.trim().isEmpty())
+            return Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdFineGrid","true"))?
+                    7:3;
+        int n;
+        try{n=Integer.parseInt(raw.trim());}
+        catch(NumberFormatException invalid)
+        {throw new IllegalArgumentException("Invalid XPBD row count: "+raw);}
+        if(n!=3&&n!=5&&n!=7)
+            throw new IllegalArgumentException(
+                    "xpbdRowCount supports exactly 3, 5, or 7: "+n);
+        return n;
+    }
     public static final int SIM_NODES=SEGMENTS*ROWS;
     private static final int ITERATIONS=8;
     private static final int SUBSTEPS=2;
@@ -115,9 +136,13 @@ public final class SkirtXPBDSolver
     static float clothRowWeight(int row)
     {
         if(row<=0)return 0F;
-        if(ROWS==5)
-            return row==1?.20F:row==2?.50F:row==3?.78F:1F;
-        return row==1?.50F:1F;
+        float t=row/(float)(ROWS-1);
+        // Previously tuned 5-ring control points (.25/.5/.75/1).
+        // Interpolate them for 7 rings; old 5-ring values stay exact.
+        if(t<=.25F)return .20F*t/.25F;
+        if(t<=.50F)return .20F+(.50F-.20F)*(t-.25F)/.25F;
+        if(t<=.75F)return .50F+(.78F-.50F)*(t-.50F)/.25F;
+        return .78F+.22F*(t-.75F)/.25F;
     }
 
     /** The seated mode releases only ADDITIONAL artificial stiffness
@@ -1052,9 +1077,10 @@ public final class SkirtXPBDSolver
         {
             if(!SEATED_UPPER_CONTROL)return 1F;
             int row=index/SEGMENTS;
-            if(row==1)return .30F;
-            if(row==2&&ROWS==5)return .65F;
-            return 1F;
+            float t=row/(float)(ROWS-1);
+            if(t<=.25F)return .30F*t/.25F;
+            if(t<=.50F)return .30F+.35F*(t-.25F)/.25F;
+            return Math.min(1F,.65F+.70F*(t-.50F));
         }
 
         /**
@@ -1070,8 +1096,11 @@ public final class SkirtXPBDSolver
             if(bodies==null||bodies.meshContactBlend<=0F)
                 return CONTACT_RADIUS;
             int row=index/SEGMENTS;
-            float skinRadius=row==1?.008F:row==2?.013F:
-                    CONTACT_RADIUS;
+            float t=row/(float)(ROWS-1);
+            float skinRadius=t<=.25F?.008F:
+                    t<=.5F?.008F+(.013F-.008F)*(t-.25F)/.25F:
+                    t<=.75F?.013F+(CONTACT_RADIUS-.013F)*
+                            (t-.50F)/.25F:CONTACT_RADIUS;
             return CONTACT_RADIUS+
                     bodies.meshContactBlend*(skinRadius-CONTACT_RADIUS);
         }
@@ -1084,9 +1113,11 @@ public final class SkirtXPBDSolver
         private float kneeContactWeight(int index)
         {
             int row=index/SEGMENTS;
-            if(ROWS==5)
-                return row<=1?0F:row==2?.25F:row==3?.65F:1F;
-            return row==0?0F:row==1?.25F:1F;
+            float t=row/(float)(ROWS-1);
+            if(t<=.25F)return 0F;
+            if(t<=.50F)return (t-.25F);
+            if(t<=.75F)return .25F+1.6F*(t-.50F);
+            return Math.min(1F,.65F+1.4F*(t-.75F));
         }
 
         private int resolveDisplayContacts(float[][] fineTarget,
@@ -1164,7 +1195,11 @@ public final class SkirtXPBDSolver
                     // drape over the knees. This is a MINIMUM, never an
                     // expansion beyond the garment's own posed outline.
                     int row=n/SEGMENTS;
-                    float floor=row==1?.79F:row==2?.70F:.61F;
+                    float depth=row/(float)(ROWS-1);
+                    float floor=depth<=.25F?.79F:
+                            depth<=.50F?.79F-.09F*(depth-.25F)/.25F:
+                            depth<=.75F?.70F-.09F*(depth-.50F)/.25F:
+                            .61F;
                     float blend=Math.min(1F,(seated-.60F)/.35F);
                     fraction=Math.max(fraction,
                             .47F+(floor-.47F)*blend);
@@ -1209,11 +1244,14 @@ public final class SkirtXPBDSolver
                 SkirtXPBDContacts.Frame bodies,float seated)
         {
             if(!SEATED_UPPER_CONTROL||seated<=1E-5F)return;
-            int upper=ROWS==5?2:1;
+            int upper=(ROWS-1)/2;
             for(int row=1;row<=upper;row++)
             {
-                float extra=row==1?.08F:.17F;
-                float margin=row==1?.018F:.025F;
+                float depth=row/(float)(ROWS-1);
+                float blend=Math.max(0F,Math.min(1F,
+                        (depth-.25F)/.25F));
+                float extra=.08F+.09F*blend;
+                float margin=.018F+.007F*blend;
                 for(int c=0;c<SEGMENTS;c++)
                 {
                     int n=ring[row][c];

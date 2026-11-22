@@ -155,9 +155,10 @@ public final class SkirtXPBDVolumeSkin
      * Draw a visibly finer cloth without replacing the authored Chameleon
      * volume or changing the old 60-point source UV binding.
      *
-     * The production 20x5 solver has two extra horizontal physical rings.
-     * Divide every moving original cube face into four native-UV quads and
-     * add ONLY the non-linear intermediate-row displacement. The original
+     * The 20x5 solver has two extra horizontal physical rings; the 20x7
+     * experiment has four extras. Divide each original cube face into
+     * 2x((ROWS-1)/2) native-UV quads and add intermediate-row displacement.
+     * The original
      * four corners stay bit-compatible with the verified volume renderer,
      * as do all 18 undisturbed waistband faces.
      *
@@ -172,19 +173,20 @@ public final class SkirtXPBDVolumeSkin
     {
         if(solved==null)throw new IllegalArgumentException("Missing XPBD result");
         Mesh coarse=build(rest,posed,source,binding,pose,solved.particles);
-        boolean refine=SkirtXPBDSolver.ROWS==5 &&
+        int perPanel=(SkirtXPBDSolver.ROWS-1)/2;
+        boolean refine=perPanel>=2 &&
                 Boolean.parseBoolean(System.getProperty(
                         "bbs.editor.physics.skirt.xpbdVolumeSubdivision","true"));
         if(!refine)return coarse;
         if(solved.refinedParticles==null||solved.refinedTarget==null||
-                solved.refinedParticles.length!=100||
-                solved.refinedTarget.length!=100||
+                solved.refinedParticles.length!=SkirtXPBDSolver.SIM_NODES||
+                solved.refinedTarget.length!=SkirtXPBDSolver.SIM_NODES||
                 solved.sourceToRefined==null||
                 solved.sourceToRefined.length!=60)
             throw new IllegalArgumentException("Incomplete fine cloth skin");
         Map<String,Integer> byBone=new HashMap<String,Integer>();
         float[][][] coarseDelta=new float[PATCHES][4][3];
-        float[][][] fineDelta=new float[PATCHES][6][3];
+        float[][][] fineDelta=new float[PATCHES][(perPanel+1)*2][3];
         for(int p=0;p<PATCHES;p++)
         {
             SkirtClothSurfaceMesh.Patch patch=source.patches.get(p);
@@ -202,16 +204,29 @@ public final class SkirtXPBDVolumeSkin
             int rt=solved.sourceToRefined[node[patch.topRight]];
             int lb=solved.sourceToRefined[node[patch.bottomLeft]];
             int rb=solved.sourceToRefined[node[patch.bottomRight]];
-            if(lb-lt!=40||rb-rt!=40)
-                throw new IllegalArgumentException("Invalid 20x5 panel stride");
-            int[] indices={lt,rt,lt+20,rt+20,lb,rb};
-            for(int v=0;v<indices.length;v++)
+            if(lb-lt!=perPanel*20||rb-rt!=perPanel*20)
+                throw new IllegalArgumentException(
+                        "Invalid 20x"+SkirtXPBDSolver.ROWS+" panel stride");
+            for(int y=0;y<=perPanel;y++)
+            {
+                int a=lt+y*20,b=rt+y*20;
+                if(a>=SkirtXPBDSolver.SIM_NODES||
+                        b>=SkirtXPBDSolver.SIM_NODES)
+                    throw new IllegalArgumentException(
+                            "Fine cloth index outside physical grid");
                 for(int k=0;k<3;k++)
-                    fineDelta[p][v][k]=
-                            solved.refinedParticles[indices[v]][k]-
-                            solved.refinedTarget[indices[v]][k];
+                {
+                    fineDelta[p][y*2][k]=
+                            solved.refinedParticles[a][k]-
+                            solved.refinedTarget[a][k];
+                    fineDelta[p][y*2+1][k]=
+                            solved.refinedParticles[b][k]-
+                            solved.refinedTarget[b][k];
+                }
+            }
         }
-        List<Face> out=new ArrayList<Face>(coarse.faces.size()*4);
+        List<Face> out=new ArrayList<Face>(
+                coarse.faces.size()*perPanel*2);
         float maxVisual=coarse.maxVisualDisplacement;
         for(int i=0;i<coarse.faces.size();i++)
         {
@@ -226,13 +241,15 @@ public final class SkirtXPBDVolumeSkin
                 throw new IllegalArgumentException("Unmapped skirt panel");
             SkirtClothSurfaceMesh.Patch panel=source.patches.get(index);
             float[][] sourceFace=rest.faces.get(i).world;
-            // These four subdivided faces share their old exact outside
-            // edges; interior points are displaced by the fine ring only.
-            for(int y=0;y<2;y++)
+            // The 2x2 (5 rows) or 2x3 (7 rows) UV subfaces preserve
+            // authored outer edges and use the real intermediate row
+            // displacement only inside each native panel.
+            for(int y=0;y<perPanel;y++)
                 for(int x=0;x<2;x++)
                 {
                     float left=x*.5F,right=(x+1)*.5F;
-                    float top=y*.5F,bottom=(y+1)*.5F;
+                    float top=y/(float)perPanel,
+                            bottom=(y+1)/(float)perPanel;
                     float[][] uvPairs={{left,top},{right,top},
                             {right,bottom},{left,bottom}};
                     float[][] world=new float[4][3],uv=new float[4][2];
@@ -257,7 +274,7 @@ public final class SkirtXPBDVolumeSkin
                 }
         }
         return new Mesh(out,coarse.waistQuads,
-                coarse.fabricQuads*4,
+                coarse.fabricQuads*perPanel*2,
                 coarse.maxNodeDisplacement,maxVisual);
     }
 
@@ -280,8 +297,11 @@ public final class SkirtXPBDVolumeSkin
         if(ww<EPS)throw new IllegalArgumentException("Collapsed fabric width");
         float u=clamp(dot(sub(xyz,left),across)/ww);
 
-        int row=t<.5F?0:1;
-        float inner=t*2F-row;
+        int panels=delta.length/2-1;
+        if(panels<1)throw new IllegalArgumentException(
+                "Missing subdivided cloth latitude");
+        int row=Math.min(panels-1,(int)(t*panels));
+        float inner=t*panels-row;
         float[] upper=lerp(delta[row*2],delta[row*2+1],u);
         float[] lower=lerp(delta[(row+1)*2],delta[(row+1)*2+1],u);
         return lerp(upper,lower,inner);
