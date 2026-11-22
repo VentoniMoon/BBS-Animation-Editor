@@ -38,6 +38,7 @@ public final class SkirtXPBDPipelineSmokeTest
         raisedThighContactsSupportClothFromAbove();
         taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong();
         skinnedThighMeshProvidesContinuousContact();
+        denseEmoticonsSkinDoesNotFallBackFor4500PlusTriangles();
         bilateralSittingFoldsWithoutBreakingWalking();
         seatedUpperHoopGuardDoesNotFreezeTheHem();
         seatedTriangleInteriorContactDoesNotRequireVertexPenetration();
@@ -552,6 +553,67 @@ public final class SkirtXPBDPipelineSmokeTest
         equal(SkirtXPBDContacts.corrected(above,scene,.018F),
                 above,1E-6F,
                 "cloth above the actual Emoticons skin got pushed again");
+    }
+
+    /**
+     * The real user's Emoticons character has 1704 triangles per thigh
+     * BEFORE the pelvis mesh. 4500 total was an unjustified early fallback.
+     * Also exercise one malformed long triangle among valid skinned faces:
+     * skipping it must not discard both complete thighs.
+     */
+    private static void denseEmoticonsSkinDoesNotFallBackFor4500PlusTriangles()
+    {
+        if(!SkirtXPBDContacts.SKINNED_MESH_CONTACTS)return;
+        java.util.List<SkirtXPBDContacts.SkinRegion> meshes=
+                new java.util.ArrayList<SkirtXPBDContacts.SkinRegion>();
+        String[] owners={"emoticons.left_leg",
+                "emoticons.right_leg","emoticons.low_body"};
+        int[] counts={1704,1704,1100};
+        for(int side=0;side<3;side++)
+        {
+            float middle=side==0?-.28F:side==1?.28F:0F;
+            float[] vertices={
+                    middle-.08F,.50F,-.08F,
+                    middle+.08F,.50F,-.08F,
+                    middle-.08F,.50F,.08F,
+                    middle+.08F,.50F,.08F,
+                    middle-1.15F,.5F,0F,
+                    middle+1.15F,.5F,0F,
+                    middle,.5F,.05F};
+            int count=counts[side];
+            int[] indices=new int[count*3+(side==0?3:0)];
+            for(int j=0;j<count;j++)
+            {
+                int[] tri=j%2==0?
+                        new int[]{0,2,1}:new int[]{1,2,3};
+                System.arraycopy(tri,0,indices,j*3,3);
+            }
+            if(side==0)
+            {
+                indices[count*3]=4;
+                indices[count*3+1]=5;
+                indices[count*3+2]=6;
+            }
+            meshes.add(new SkirtXPBDContacts.SkinRegion(
+                    owners[side],vertices,indices));
+        }
+        String[] diagnostic={"unset"};
+        SkirtXPBDContacts.SkinSurface hull=
+                SkirtXPBDContacts.SkinSurface.build(
+                        identity(),meshes,diagnostic);
+        need(hull!=null,
+                "dense Emoticons skin unexpectedly fell back: "+
+                        diagnostic[0]);
+        need(hull.triangleCount==4508&&
+                hull.leftCount==1704&&hull.rightCount==1704&&
+                hull.pelvisCount==1100,
+                "wrong retained triangle regions after outlier cleanup");
+        need(diagnostic[0].contains("skippedOversized=1"),
+                "malformed long triangle was not rejected individually");
+        float[] probe={-.28F,.49F,0F};
+        float[] projected=hull.correctedWorld(probe,.018F);
+        need(projected[1]>probe[1]+.005F,
+                "dense thigh contact surface no longer supports cloth");
     }
 
     /** A horizontal thigh should carry the front hem from beneath instead

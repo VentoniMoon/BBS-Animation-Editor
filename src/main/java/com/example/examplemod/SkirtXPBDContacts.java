@@ -156,7 +156,12 @@ public final class SkirtXPBDContacts
         private static final float CELL=.22F;
         private static final float BAND=.16F;
         private static final float MAX_CONTACT_STEP=.065F;
-        private static final int MAX_TRIANGLES=4500;
+        // The 20x5 cloth queries a broadphase hash, not every face.
+        // Detailed Emoticons thigh skins can exceed 1700 faces EACH,
+        // before pelvic geometry is included. The former 4500-face cap
+        // silently disabled the entire skin contact path.
+        private static final int MAX_TRIANGLES=12000;
+        private static final int MAX_CELL_REFERENCES=650000;
         public final int triangleCount,leftCount,rightCount,pelvisCount;
         /** Stable hash of the EXACT current skinned surface and actor yaw. */
         public final long fingerprint;
@@ -223,8 +228,23 @@ public final class SkirtXPBDContacts
         public static SkinSurface build(float[] actorWorld,
                 java.util.List<SkinRegion> regions)
         {
+            return build(actorWorld,regions,null);
+        }
+
+        /**
+         * Detailed rejection diagnostics remain separate from the caller's
+         * triangle selection counts. If a single skinned triangle is an
+         * extreme outlier, skip that face rather than discarding ALL legs.
+         */
+        public static SkinSurface build(float[] actorWorld,
+                java.util.List<SkinRegion> regions,String[] rejection)
+        {
             if(!SKINNED_MESH_CONTACTS||!matrixValid(actorWorld)||
-                    regions==null||regions.isEmpty())return null;
+                    regions==null||regions.isEmpty())
+            {
+                reason(rejection,"disabled, invalid actor frame or no regions");
+                return null;
+            }
             java.util.Map<Cell,java.util.List<Face>> cells=
                     new java.util.HashMap<Cell,java.util.List<Face>>();
             java.util.List<Face> allFaces=
@@ -234,6 +254,8 @@ public final class SkirtXPBDContacts
                     Float.NEGATIVE_INFINITY,Float.NEGATIVE_INFINITY,
                     Float.NEGATIVE_INFINITY};
             int accepted=0,left=0,right=0,pelvis=0;
+            int skippedOversized=0,skippedDegenerate=0;
+            int cellReferences=0;
             long hash=1469598103934665603L;
             for(SkinRegion region:regions)
             {
@@ -243,7 +265,11 @@ public final class SkirtXPBDContacts
                 for(int i=0;i<world.length;i++)
                 {
                     float[] p={source[3*i],source[3*i+1],source[3*i+2]};
-                    if(!finite(p))return null;
+                    if(!finite(p))
+                    {
+                        reason(rejection,"nonfinite Emoticons vertex");
+                        return null;
+                    }
                     world[i]=point(actorWorld,p);
                 }
                 // Compute the owning bone surface centroid from referenced
@@ -253,7 +279,11 @@ public final class SkirtXPBDContacts
                 int count=0;
                 for(int index:region.triangles)
                 {
-                    if(index<0||index>=world.length)return null;
+                    if(index<0||index>=world.length)
+                    {
+                        reason(rejection,"bone triangle index out of range");
+                        return null;
+                    }
                     if(used[index])continue;
                     used[index]=true;count++;
                     for(int k=0;k<3;k++)center[k]+=world[index][k];
@@ -269,7 +299,11 @@ public final class SkirtXPBDContacts
                     float[] ab=minus(b,a),ac=minus(c,a);
                     float[] normal=cross(ab,ac);
                     float length=(float)Math.sqrt(dot(normal,normal));
-                    if(length<1E-7F||!Float.isFinite(length))continue;
+                    if(length<1E-7F||!Float.isFinite(length))
+                    {
+                        skippedDegenerate++;
+                        continue;
+                    }
                     for(int k=0;k<3;k++)normal[k]/=length;
                     float[] middle={(a[0]+b[0]+c[0])/3F,
                             (a[1]+b[1]+c[1])/3F,
@@ -281,15 +315,24 @@ public final class SkirtXPBDContacts
                     if(outward < -1E-5F)
                         for(int k=0;k<3;k++)normal[k]=-normal[k];
                     float[] min=new float[3],max=new float[3];
+                    boolean oversized=false;
                     for(int k=0;k<3;k++)
                     {
                         min[k]=Math.min(a[k],Math.min(b[k],c[k]));
                         max[k]=Math.max(a[k],Math.max(b[k],c[k]));
-                        // Reject malformed skinned geometry/units.
-                        if(max[k]-min[k]>1.5F)return null;
+                        // Some imported Emoticons skins contain a few
+                        // malformed far-reaching faces. Exclude those
+                        // faces, not the entire otherwise valid thigh hull.
+                        if(!Float.isFinite(min[k])||
+                                !Float.isFinite(max[k])||
+                                max[k]-min[k]>1.5F)
+                            oversized=true;
                     }
-                    Face face=new Face(a,b,c,normal);
-                    allFaces.add(face);
+                    if(oversized)
+                    {
+                        skippedOversized++;
+                        continue;
+                    }
                     int[] lo=new int[3],hi=new int[3];
                     for(int k=0;k<3;k++)
                     {
@@ -298,6 +341,17 @@ public final class SkirtXPBDContacts
                         lo[k]=cell(min[k]-BAND);
                         hi[k]=cell(max[k]+BAND);
                     }
+                    long newRefs=(long)(hi[0]-lo[0]+1)*
+                            (hi[1]-lo[1]+1)*(hi[2]-lo[2]+1);
+                    if(newRefs>MAX_CELL_REFERENCES-cellReferences)
+                    {
+                        reason(rejection,"spatial hash limit reached after "+
+                                accepted+" triangles");
+                        return null;
+                    }
+                    cellReferences+=(int)newRefs;
+                    Face face=new Face(a,b,c,normal);
+                    allFaces.add(face);
                     for(int ix=lo[0];ix<=hi[0];ix++)
                         for(int iy=lo[1];iy<=hi[1];iy++)
                             for(int iz=lo[2];iz<=hi[2];iz++)
@@ -315,7 +369,12 @@ public final class SkirtXPBDContacts
                         hash=(hash^Float.floatToIntBits(value))*
                                 1099511628211L;
                     regionAccepted++;
-                    if(++accepted>MAX_TRIANGLES)return null;
+                    if(++accepted>MAX_TRIANGLES)
+                    {
+                        reason(rejection,"triangle budget reached: "+
+                                accepted+" > "+MAX_TRIANGLES);
+                        return null;
+                    }
                 }
                 String owner=region.owner.toLowerCase(java.util.Locale.ROOT);
                 if(owner.contains("left"))left+=regionAccepted;
@@ -325,9 +384,22 @@ public final class SkirtXPBDContacts
             }
             // Partial hulls are unsafe: falling back to OBBs is preferable
             // to leaving one leg without collisions.
-            if(left<8||right<8)return null;
+            if(left<8||right<8)
+            {
+                reason(rejection,"insufficient valid thighs L="+left+
+                        " R="+right+" oversized="+skippedOversized+
+                        " degenerate="+skippedDegenerate);
+                return null;
+            }
+            reason(rejection,"accepted="+accepted+" skippedOversized="+
+                    skippedOversized+" skippedDegenerate="+skippedDegenerate);
             return new SkinSurface(cells,allFaces,accepted,left,right,pelvis,
                     hash,bounds);
+        }
+
+        private static void reason(String[] output,String value)
+        {
+            if(output!=null&&output.length>0)output[0]=value;
         }
 
         private static boolean finite(float[] point)
