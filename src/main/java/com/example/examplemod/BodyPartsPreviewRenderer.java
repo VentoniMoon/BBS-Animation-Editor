@@ -730,7 +730,9 @@ public class BodyPartsPreviewRenderer
             for(EmoticonsCollisionGeometryProvider.MeshSnapshot source:
                     EmoticonsCollisionGeometryProvider.snapshot(morph))
             {
-                for(String bone:new String[]{left,right,pelvis})
+                for(String bone:new String[]{left,right,
+                        SkirtXPBDContacts.SKINNED_PELVIS_CONTACTS?
+                                pelvis:null})
                 {
                     if(bone==null)continue;
                     EmoticonsCollisionGeometryProvider.MeshSnapshot subset=
@@ -1079,8 +1081,11 @@ public class BodyPartsPreviewRenderer
                 }
                 clothInfo=cloth.skinSurface==null?
                         "XPBD OBB fallback: "+
-                        (skirtSkinFrame==frame?skirtSkinDiagnostic:
-                                "mesh not captured this frame"):
+                        ("skin/cloth world-space mismatch".equals(
+                                cloth.surfaceStatus)?
+                                cloth.surfaceStatus:
+                                skirtSkinFrame==frame?skirtSkinDiagnostic:
+                                        "mesh not captured this frame"):
                         "XPBD SKIN: "+
                         cloth.skinSurface.triangleCount+" triangles";
                 if(cloth.skinSurface!=null)
