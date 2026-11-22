@@ -2435,8 +2435,11 @@ public class BodyPartsPreviewRenderer
                                         .getMinecraft().getRenderPartialTicks());
                     SkirtXPBDContacts.publish(part.morph.get(),frame,
                             sampleTick,attached,fitted.boxes,fitted.owners,
-                            skirtSkinParent==morph&&skirtSkinFrame==frame?
-                                    skirtSkinSurface:null);
+                            // This rendering path has no parent morph
+                            // local variable; the renderer owns one actor
+                            // and refreshes the cached skinned snapshot in
+                            // captureRenderedAttachmentMatrices() each frame.
+                            skirtSkinFrame==frame?skirtSkinSurface:null);
                 }
                 Map<String,Float> thighContactDepths=
                         java.util.Collections.<String,Float>emptyMap();
