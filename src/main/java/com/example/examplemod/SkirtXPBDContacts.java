@@ -235,15 +235,17 @@ public final class SkirtXPBDContacts
             float[] surface=rotate(hipQ,local);
             float[] a={hip[0]+surface[0],hip[1]+surface[1],
                     hip[2]+surface[2]};
-            float[] b={upper[0]-axis[0]*sign*upper[8]*.25F,
-                    upper[1]-axis[1]*sign*upper[8]*.25F,
-                    upper[2]-axis[2]*sign*upper[8]*.25F};
+            // Previous endpoint crossed past the proximal end and deep
+            // INSIDE the thigh OBB. It created a second contact right
+            // where the original OBB already supported the skirt.
+            // Connect only the genuine free gap up to the proximal cap.
+            float[] b=proximal.clone();
             float dist2=0F;
             for(int k=0;k<3;k++){float v=b[k]-a[k];dist2+=v*v;}
-            if(dist2<.000625F||dist2>.1444F)continue;
+            if(dist2<.000625F||dist2>.0324F)continue;
             // Never grow wider than the narrowed existing upper thigh.
-            float radius=Math.min(.135F,
-                    Math.min(upper[7],upper[9])*.82F)*w;
+            float radius=Math.min(.085F,
+                    Math.min(upper[7],upper[9])*.62F)*w;
             if(radius>=.012F)
                 out.add(new HipBridge(a,b,radius,w,side));
         }
@@ -365,14 +367,42 @@ public final class SkirtXPBDContacts
             float gap2=sqDistance(nearEnd,endShin);
             // With coincident ends the source boxes already overlap.
             // Keep debug and physics from receiving degenerate capsules.
-            if(gap2<.025F*.025F||gap2>.25F*.25F)continue;
+            if(gap2<.025F*.025F||gap2>.18F*.18F)continue;
             float width=Math.min(Math.min(thigh[7],thigh[9]),
                     Math.min(shin[7],shin[9]));
-            float radius=Math.min(.10F,width*.72F)*weight;
+            float radius=Math.min(.075F,width*.55F)*weight;
             if(radius<.012F)continue;
             result.add(new KneeBridge(nearEnd,endShin,radius,weight,side));
         }
         return result;
+    }
+
+    /**
+     * Physically overlapping constraints fight each other: the box pass
+     * may push a cloth node OUTSIDE a thigh and the later rounded bridge
+     * would then push it BACK INSIDE that same thigh, creating the observed
+     * repeated pinching near the leg crease.
+     *
+     * Bridge contact is a filler only, never an extra collision layer on
+     * top of an existing OBB. With the same world frame used for the
+     * actual point contact, test both the input and projected result.
+     */
+    private static boolean insideAnyLegBox(float[] point,
+            List<float[]> boxes,float margin)
+    {
+        for(float[] b:boxes)
+        {
+            float[] q={b[3],b[4],b[5],b[6]};
+            normalizeQuat(q);
+            float[] rel={point[0]-b[0],point[1]-b[1],
+                    point[2]-b[2]};
+            float[] local=rotateInverse(q,rel);
+            if(Math.abs(local[0])<b[7]+margin&&
+                    Math.abs(local[1])<b[8]+margin&&
+                    Math.abs(local[2])<b[9]+margin)
+                return true;
+        }
+        return false;
     }
 
     /** Finite rounded capsule contact. Prefer the authored outward
@@ -1251,13 +1281,28 @@ public final class SkirtXPBDContacts
         }
         if(mix<=0F)
         {
+            // Never let the bridge counteract the OBB pass. Only points
+            // in the genuine outside-the-box joint gap can receive
+            // rounded contact, and their projection must stay outside
+            // every fitted leg box as well.
             for(HipBridge bridge:frame.hipBridges)
-                point=bridgeExit(point,bridge,thickness,outwardWorld);
+            {
+                if(insideAnyLegBox(point,frame.legBoxes,.002F))break;
+                float[] candidate=bridgeExit(point,bridge,thickness,
+                        outwardWorld);
+                if(!insideAnyLegBox(candidate,frame.legBoxes,.002F))
+                    point=candidate;
+            }
             if(kneeWeight>0F)
                 for(KneeBridge bridge:frame.kneeBridges)
-                    point=roundedExit(point,bridge.a,bridge.b,
+                {
+                    if(insideAnyLegBox(point,frame.legBoxes,.002F))break;
+                    float[] candidate=roundedExit(point,bridge.a,bridge.b,
                             bridge.radius*sat(kneeWeight),
                             thickness,outwardWorld);
+                    if(!insideAnyLegBox(candidate,frame.legBoxes,.002F))
+                        point=candidate;
+                }
         }
         if(skinExit!=null&&mix>0F&&mix<.99999F)
             for(int k=0;k<3;k++)

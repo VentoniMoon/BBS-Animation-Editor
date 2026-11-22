@@ -378,7 +378,11 @@ public final class JoltContactGuiOverlay
         double cx=(a[0]+b[0])*0.5D+actorX;
         double cy=(a[1]+b[1])*0.5D+actorY;
         double cz=(a[2]+b[2])*0.5D+actorZ;
-        double half=Math.max(0D,length*0.5D-shape.radius);
+        // Native Jolt Shape.a/b represent outer capsule tips, whereas
+        // XPBD [BRIDGE] a/b are the centers of the hemisphere endcaps.
+        // Debug must reflect the *actual* radius-padded collision segment.
+        double half=shape.source.startsWith("[BRIDGE]")?
+                length*0.5D:Math.max(0D,length*0.5D-shape.radius);
 
         float[][][] ring=new float[2*(CAP_STEPS+1)][SIDES][];
         for(int side=0;side<2;side++)
@@ -404,7 +408,9 @@ public final class JoltContactGuiOverlay
                 }
             }
         }
-        int rgb=shape.kind==JoltContactOverlaySnapshot.Kind.HAIR
+        int rgb=shape.source.startsWith("[BRIDGE] knee-")?
+                0x4FCBFF:shape.source.startsWith("[BRIDGE]")?
+                0xC88BFF:shape.kind==JoltContactOverlaySnapshot.Kind.HAIR
                 ?0xFF72C1:shape.source.startsWith("emoticons.")
                 ?0x66FFBA:shape.kind==JoltContactOverlaySnapshot.Kind.ADDED
                 ?0xFFD66B:0x55FFA1;
