@@ -1350,6 +1350,8 @@ public final class SkirtXPBDPipelineSmokeTest
         SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
                 f.raw,f.shared,f.rest);
         state.advance(1F/60F,f.rest,seated); // arm the real post-seat latch
+        float[][] nativeOutline=state.current().refinedTarget;
+        int bottom=(SkirtXPBDSolver.ROWS-1)*20;
         try
         {
             java.lang.reflect.Field pfield=
@@ -1368,10 +1370,9 @@ public final class SkirtXPBDPipelineSmokeTest
                     int n=row*20+c;
                     for(int k=0;k<3;k++)
                     {
-                        float nativeOffset=f.rest.target[
-                                f.shared.nodes.get((2*20)+c).row==2?
-                                        (2*20)+c:c][k]-
-                                f.rest.target[c][k];
+                        float nativeOffset=
+                                nativeOutline[bottom+c][k]-
+                                nativeOutline[c][k];
                         positions[n][k]=positions[c][k]+
                                 .010F*nativeOffset;
                         previous[n][k]=positions[n][k];
@@ -1385,7 +1386,6 @@ public final class SkirtXPBDPipelineSmokeTest
 
         SkirtXPBDSolver.Result start=state.current();
         float desired=0F,folded=0F;
-        int bottom=(SkirtXPBDSolver.ROWS-1)*20;
         for(int c=0;c<20;c++)
         {
             desired+=distance(start.refinedTarget[bottom+c],
