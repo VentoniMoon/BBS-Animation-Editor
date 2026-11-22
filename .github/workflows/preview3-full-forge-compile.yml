@@ -54,6 +54,8 @@ jobs:
               "SkirtXPBDSolver",
               "SkirtXPBDVolumeSkin",
               "ChameleonWeldPreviewPass",
+              "ChameleonSkirtXPBDVolumeRenderer",
+              "BodyPartPhysicsPanel",
           )
           pkg="com/example/examplemod/"
           def target(name):
