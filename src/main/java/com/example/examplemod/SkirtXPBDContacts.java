@@ -50,13 +50,16 @@ public final class SkirtXPBDContacts
         public final List<float[]> legBoxes;
         /** Exact owners aligned with legBoxes, including @skirt zones. */
         public final List<String> legOwners;
+        /** Actual animated thigh/pelvis triangles, or null for legacy OBBs. */
+        public final SkinSurface skinSurface;
         public final boolean leftThigh,rightThigh;
         /** 0 = walking, 1 = BOTH real thigh axes close to horizontal. */
         public final float seatedBlend;
         private final long createdNanos;
 
         private Frame(int frame,double tick,float[] world,List<float[]> boxes,
-                List<String> owners,boolean left,boolean right,long time)
+                List<String> owners,boolean left,boolean right,
+                SkinSurface surface,long time)
         {
             timelineFrame=frame;
             sampleTick=tick;
@@ -66,6 +69,7 @@ public final class SkirtXPBDContacts
             legBoxes=Collections.unmodifiableList(data);
             legOwners=Collections.unmodifiableList(
                     new ArrayList<String>(owners));
+            skinSurface=surface;
             leftThigh=left;rightThigh=right;
             seatedBlend=bothThighsBent(boxes,owners);
             createdNanos=time;
@@ -450,6 +454,15 @@ public final class SkirtXPBDContacts
             double sampleTick,float[] modelToWorld,float[][] boxes,
             List<String> owners)
     {
+        publish(morph,timelineFrame,sampleTick,modelToWorld,boxes,
+                owners,null);
+    }
+
+    /** Publish exactly one read-only surface with its matching collider tick. */
+    public static synchronized void publish(Object morph,int timelineFrame,
+            double sampleTick,float[] modelToWorld,float[][] boxes,
+            List<String> owners,SkinSurface surface)
+    {
         if(!Double.isFinite(sampleTick)||
                 sampleTick<timelineFrame-1E-4D||
                 sampleTick>timelineFrame+1.0001D)return;
@@ -489,7 +502,8 @@ public final class SkirtXPBDContacts
             return;
         }
         FRAMES.put(owner,new Frame(timelineFrame,sampleTick,modelToWorld,
-                selected,selectedOwners,left,right,System.nanoTime()));
+                selected,selectedOwners,left,right,
+                SKINNED_MESH_CONTACTS?surface:null,System.nanoTime()));
     }
 
     public static synchronized Frame forMorph(Object morph)
@@ -541,7 +555,14 @@ public final class SkirtXPBDContacts
             if(Float.isFinite(radial)&&radial>1E-5F)
                 outwardWorld=new float[]{ox/radial,0F,oz/radial};
         }
-        for(int boxIndex=0;boxIndex<frame.legBoxes.size();boxIndex++)
+        if(frame.skinSurface!=null)
+        {
+            // The skinned surface already combines all thigh and pelvis
+            // triangles. Running the three-zone OBBs as a second collision
+            // layer here recreates the cracks and trapped fabric.
+            point=frame.skinSurface.correctedWorld(point,thickness);
+        }
+        else for(int boxIndex=0;boxIndex<frame.legBoxes.size();boxIndex++)
         {
             float[] b=frame.legBoxes.get(boxIndex);
             String owner=frame.legOwners.get(boxIndex);
