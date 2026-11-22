@@ -255,7 +255,7 @@ public final class SkirtXPBDRuntime
                     collisions.skinSurface==null?0L:
                             collisions.skinSurface.fingerprint;
         }
-        if(CLOCK_TRACE&&collisions!=null&&output!=null)
+        if(CLOCK_TRACE&&output!=null)
             logClockTrace(actor,stableOwner,collisions,posed,output,
                     steps,renderTick,wallGapMs,resetCause);
         return new RenderFrame(raw,binding,topology,posed,output,
@@ -279,7 +279,8 @@ public final class SkirtXPBDRuntime
     {
         // At 20TPS, six slices correspond to ~100 ms. Log every reset
         // even when outside the scheduled slice so stalls are not hidden.
-        long slice=Math.round(sceneTick*3D);
+        long slice=Double.isFinite(sceneTick)?
+                Math.round(sceneTick*3D):-1L;
         boolean event=!"NONE".equals(resetCause);
         if(!event&&(slice%6L!=0L||actor.lastTraceSlice==slice))
             return;
@@ -313,8 +314,8 @@ public final class SkirtXPBDRuntime
                 " wallGapMs="+wallGapMs+
                 " reset="+resetCause+
                 " steps="+steps+
-                " seated="+round3(contacts.seatedBlend)+
-                " obbs="+contacts.legBoxes.size()+
+                " seated="+round3(contacts==null?0F:contacts.seatedBlend)+
+                " obbs="+(contacts==null?-1:contacts.legBoxes.size())+
                 " nativeSpan="+round3(nativeSpan/20F)+
                 " solvedSpan="+round3(simSpan/20F)+
                 " nativeHeight="+round3(nativeVertical/20F)+
