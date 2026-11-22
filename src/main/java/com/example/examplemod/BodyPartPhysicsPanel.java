@@ -110,7 +110,9 @@ public final class BodyPartPhysicsPanel
                         EditorLanguage.tr("Solver: XPBD 60 Hz"),
                         x+9,y+82,0xFFE0E0E0);
                 mc.fontRenderer.drawString(
-                        EditorLanguage.tr("60 nodes / 20 waist pins"),
+                        EditorLanguage.tr(
+                                SkirtXPBDSolver.SIM_NODES+
+                                " nodes / 20 waist pins"),
                         x+9,y+110,0xFFBDF8C6);
                 mc.fontRenderer.drawString(
                         EditorLanguage.tr("Leg contacts: Emoticons"),

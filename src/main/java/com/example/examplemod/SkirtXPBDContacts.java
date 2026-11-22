@@ -35,7 +35,7 @@ public final class SkirtXPBDContacts
             new WeakHashMap<Object,Boolean>();
     private static final long MAX_AGE_NANOS=1500000000L;
     private static final boolean SEATED_CONTACTS=Boolean.parseBoolean(
-            System.getProperty("bbs.editor.physics.skirt.xpbdSeatedContacts","true"));
+            System.getProperty("bbs.editor.physics.skirt.xpbdSeatedContacts","false"));
 
     public static final class Frame
     {

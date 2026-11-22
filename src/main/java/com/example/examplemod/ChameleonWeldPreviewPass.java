@@ -520,7 +520,7 @@ public final class ChameleonWeldPreviewPass implements AutoCloseable
                 xpbdVolume=SkirtXPBDVolumeSkin.build(
                         ChameleonSkirtVolumeSnapshot.capture(restParts),
                         ChameleonSkirtVolumeSnapshot.capture(posedParts),
-                        raw,binding,pose,xpbdFrame.solved.particles);
+                        raw,binding,pose,xpbdFrame.solved);
             }
         }
         catch(Exception error)

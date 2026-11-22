@@ -70,7 +70,10 @@ public final class ChameleonSkirtXPBDVolumeRenderer
                 printed=true;
                 System.out.println("[BBS Editor][SkirtXPBDVolume] "+
                         "drawn=true mode=POSED_NATIVE_VOLUME_XPBD"+
-                        " physicalNodes=60"+
+                        " physicalNodes="+frame.solved.refinedParticles.length+
+                        " gridRows="+SkirtXPBDSolver.ROWS+
+                        " volumeSubdivision="+
+                        (mesh.fabricQuads>240)+
                         " legBoxes="+frame.legBoxCount+
                         " sourceCuboids="+mesh.cubes+
                         " totalSourceQuads="+mesh.quads+

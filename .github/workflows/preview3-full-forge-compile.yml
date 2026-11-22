@@ -41,41 +41,65 @@ jobs:
           import zipfile
           base=os.environ["RUNNER_TEMP"]+"/bbs-animation-editor-0.0.2-release.jar"
           compiled="build/libs/bbs-animation-editor-0.0.2.jar"
-          output="build/libs/bbs-animation-editor-0.0.2-seated-skirt-fix.jar"
-          patched={
-              "com/example/examplemod/CharacterEditorPanel.class",
-              "com/example/examplemod/SkirtXPBDContacts.class",
-              "com/example/examplemod/SkirtXPBDRuntime.class",
-              "com/example/examplemod/BodyPartJoltPreviewAdapter.class",
-              "com/example/examplemod/BodyPartsPreviewRenderer.class",
-          }
+          output="build/libs/bbs-animation-editor-0.0.2-skirt-xpbd-grid5-test.jar"
+          # Replacing ONLY the five outer classes broke cloth when nested
+          # Result/State classes still came from the old release JAR.
+          # Replace each whole class family, including anonymous inners.
+          groups=(
+              "CharacterEditorPanel",
+              "SkirtXPBDContacts",
+              "SkirtXPBDRuntime",
+              "BodyPartJoltPreviewAdapter",
+              "BodyPartsPreviewRenderer",
+              "SkirtXPBDSolver",
+              "SkirtXPBDVolumeSkin",
+              "ChameleonWeldPreviewPass",
+              "ChameleonSkirtXPBDVolumeRenderer",
+              "BodyPartPhysicsPanel",
+          )
+          pkg="com/example/examplemod/"
+          def target(name):
+              return any(name==pkg+group+".class" or
+                         (name.startswith(pkg+group+"$") and
+                          name.endswith(".class")) for group in groups)
           with zipfile.ZipFile(base) as released, zipfile.ZipFile(compiled) as updated:
               old_names=set(released.namelist())
               new_names=set(updated.namelist())
-              assert patched<=old_names and patched<=new_names, "missing patched class"
+              for group in groups:
+                  marker=pkg+group+".class"
+                  assert marker in old_names and marker in new_names, (
+                      "missing patched Java class: "+marker)
               assert not any(x.upper().startswith("META-INF/") and
                              x.upper().endswith((".SF",".RSA",".DSA"))
                              for x in old_names), "signed baseline jar"
               jolt=sum(x.startswith("com/github/stephengold/joltjni/")
                        for x in old_names)
               assert jolt>50, "v0.0.2 baseline did not contain bundled Jolt"
+              patched={x for x in new_names if target(x)}
               with zipfile.ZipFile(output,"w") as assembled:
                   for info in released.infolist():
-                      payload=(updated.read(info.filename) if info.filename in patched
-                               else released.read(info.filename))
-                      assembled.writestr(info,payload)
+                      if target(info.filename):
+                          if info.filename in patched:
+                              assembled.writestr(info,updated.read(info.filename))
+                      else:
+                          assembled.writestr(info,released.read(info.filename))
+                  for name in sorted(patched-old_names):
+                      assembled.writestr(name,updated.read(name))
           with zipfile.ZipFile(output) as result:
               assert result.testzip() is None, "corrupted final archive"
-              assert patched<=set(result.namelist()), "patched class absent"
-          print("Patched:",", ".join(sorted(patched)))
+              assert patched<=set(result.namelist()), "patched inner class absent"
+              assert sum(x.startswith("com/github/stephengold/joltjni/")
+                         for x in result.namelist())==jolt, "missing bundled Jolt"
+          print("Patched class groups:",", ".join(groups))
+          print("Patched class count:",len(patched))
           print("Preserved JNI classes:",jolt)
           print("Output:",output,os.stat(output).st_size,"bytes")
           PY
-          sha256sum build/libs/bbs-animation-editor-0.0.2-seated-skirt-fix.jar
+          sha256sum build/libs/bbs-animation-editor-0.0.2-skirt-xpbd-grid5-test.jar
       - name: Upload test JAR with existing Jolt physics
         uses: actions/upload-artifact@v4
         with:
-          name: bbs-animation-editor-0.0.2-seated-skirt-with-jolt
-          path: build/libs/bbs-animation-editor-0.0.2-seated-skirt-fix.jar
+          name: bbs-animation-editor-skirt-grid5-volume-with-jolt
+          path: build/libs/bbs-animation-editor-0.0.2-skirt-xpbd-grid5-test.jar
           if-no-files-found: error
           retention-days: 30
