@@ -1035,6 +1035,25 @@ public class BodyPartsPreviewRenderer
                 SkirtXPBDContacts.Frame cloth=
                         SkirtXPBDContacts.forMorph(part.morph.get());
                 if(cloth==null||cloth.timelineFrame!=frame)continue;
+                if(cloth.skinSurface!=null)
+                {
+                    // Show the ACTUAL animated collision mesh. The old
+                    // orange OBBs are not the active cloth contact source
+                    // in skinned mode and must not mislead diagnostics.
+                    for(float[][] edge:cloth.skinSurface.debugEdges(120))
+                        try
+                        {
+                            shapes.add(new JoltContactOverlaySnapshot.Shape(
+                                    JoltContactOverlaySnapshot.Kind.ADDED,
+                                    edge[0],edge[1],.002F,
+                                    "[SKIN] Emoticons"));
+                        }
+                        catch(IllegalArgumentException invalidEdge)
+                        {
+                            // Degenerate mesh edge ignored in debug only.
+                        }
+                    continue;
+                }
                 for(int n=0;n<cloth.legBoxes.size();n++)
                     try
                     {
