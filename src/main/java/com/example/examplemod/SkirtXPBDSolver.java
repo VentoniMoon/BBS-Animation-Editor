@@ -31,6 +31,34 @@ public final class SkirtXPBDSolver
     private static final int SUBSTEPS=2;
     private static final float GRAVITY=-9.81F;
     private static final float DRAG=.993F;
+    /**
+     * A positional collision projection must NOT create additional Verlet
+     * velocity. Without shifting previous[] by the same correction, a leg
+     * can eject a cloth node at 60fps and the next step replays that eject
+     * as a real impulse. Repeated projections around a bent thigh can
+     * catapult the hem into the belt and trap it there.
+     *
+     * A/B to reproduce original behavior:
+     * -Dbbs.editor.physics.skirt.xpbdPreserveContactVelocity=false
+     */
+    static final boolean PRESERVE_CONTACT_VELOCITY=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdPreserveContactVelocity",
+                    "true"));
+
+    /** Transfer an explicitly positional CONTACT correction to Verlet
+     * history, preserving physical velocity across the projection.
+     * NOTE: XPBD link constraints remain untouched; only collision
+     * projections use this method. */
+    static void contactMove(float[] current,float[] previous,
+            float dx,float dy,float dz)
+    {
+        current[0]+=dx;current[1]+=dy;current[2]+=dz;
+        if(PRESERVE_CONTACT_VELOCITY)
+        {
+            previous[0]+=dx;previous[1]+=dy;previous[2]+=dz;
+        }
+    }
     private static final float CONTACT_RADIUS=.018F;
     private static final float SELF_RADIUS=.030F;
     private static final float MAX_OFFSET=.37F;
@@ -496,16 +524,14 @@ public final class SkirtXPBDSolver
                                     kneeContactWeight(n));
                             if(distance(corrected,position[n])>1E-7F)
                             {
-                                if(bodies.meshContactBlend>0F)
-                                    for(int k=0;k<3;k++)
-                                        // Contact correction is not an
-                                        // acceleration. Otherwise every
-                                        // 60Hz Verlet step replays the face
-                                        // projection as outward velocity,
-                                        // inflating the skirt near its belt.
-                                        previous[n][k]+=
-                                                corrected[k]-position[n][k];
-                                System.arraycopy(corrected,0,position[n],0,3);
+                                // Both fitted OBB and optional skinned
+                                // contacts are positional projections, not
+                                // accelerations. The old OBB-only branch
+                                // omitted previous[] compensation.
+                                contactMove(position[n],previous[n],
+                                        corrected[0]-position[n][0],
+                                        corrected[1]-position[n][1],
+                                        corrected[2]-position[n][2]);
                                 legs++;
                             }
                         }
@@ -923,12 +949,17 @@ public final class SkirtXPBDSolver
                     float wi=pinned[i]?0F:1F,wj=pinned[j]?0F:1F;
                     if(wi+wj<.5F)continue;
                     float push=(SELF_RADIUS-d)/(d*(wi+wj));
-                    for(int k=0;k<3;k++)
-                    {
-                        float delta=(position[j][k]-position[i][k])*push;
-                        position[i][k]-=wi*delta;
-                        position[j][k]+=wj*delta;
-                    }
+                    float[] delta={
+                            (position[j][0]-position[i][0])*push,
+                            (position[j][1]-position[i][1])*push,
+                            (position[j][2]-position[i][2])*push
+                    };
+                    // Fabric-to-fabric contact is a positional projection
+                    // too; do not replay its separation as a frame impulse.
+                    contactMove(position[i],previous[i],
+                            -wi*delta[0],-wi*delta[1],-wi*delta[2]);
+                    contactMove(position[j],previous[j],
+                            wj*delta[0],wj*delta[1],wj*delta[2]);
                     contacts++;
                 }
             return contacts;
@@ -974,14 +1005,17 @@ public final class SkirtXPBDSolver
                     float w2=pinned[tri[2]]?0F:1F;
                     float total=wa+(w0+w1+w2)/3F;
                     if(total<.5F)continue;
-                    for(int k=0;k<3;k++)
-                    {
-                        float push=sign*amount*n[k]/total;
-                        point[k]+=wa*push;
-                        a[k]-=w0*push/3F;
-                        b[k]-=w1*push/3F;
-                        c[k]-=w2*push/3F;
-                    }
+                    float px=sign*amount*n[0]/total;
+                    float py=sign*amount*n[1]/total;
+                    float pz=sign*amount*n[2]/total;
+                    contactMove(point,previous[p],
+                            wa*px,wa*py,wa*pz);
+                    contactMove(a,previous[tri[0]],
+                            -w0*px/3F,-w0*py/3F,-w0*pz/3F);
+                    contactMove(b,previous[tri[1]],
+                            -w1*px/3F,-w1*py/3F,-w1*pz/3F);
+                    contactMove(c,previous[tri[2]],
+                            -w2*px/3F,-w2*py/3F,-w2*pz/3F);
                     contacts++;
                 }
             }
