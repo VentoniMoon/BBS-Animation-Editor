@@ -35,6 +35,19 @@ public final class SkirtXPBDSolver
     private static final float SELF_RADIUS=.030F;
     private static final float MAX_OFFSET=.37F;
     private static final float POSE_JUMP_RESET=.40F;
+    /**
+     * Controlled A/B: free skirt latitudes should not inherit the full
+     * vertical rotation/translation of their authored Chameleon bones
+     * when BOTH real thighs are deeply seated. The belt stays pinned to
+     * the native pose; the simulated cloth follows the belt displacement
+     * and its own constraints/collisions.
+     *
+     * Original solver: -Dbbs.editor.physics.skirt.xpbdSeatedPoseIsolation=false
+     */
+    public static final boolean SEATED_POSE_ISOLATION=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSeatedPoseIsolation",
+                    "true"));
     private static final float MIN_RADIAL_FRACTION=.85F;
     // The normal 0.37-block leash and 85% radial silhouette work for
     // walking, but forbid folds over both horizontal thighs. Relax only
@@ -109,6 +122,9 @@ public final class SkirtXPBDSolver
         private final float[][] position=new float[SIM_NODES][3];
         private final float[][] previous=new float[SIM_NODES][3];
         private final float[][] previousPoseTarget=new float[SIM_NODES][3];
+        /** Free drape reference: held near the last unbent garment shape.
+         * Advected by the belt, NOT by fully folded native lower bones. */
+        private final float[][] seatedReference=new float[SIM_NODES][3];
         private final float[][] restFine=new float[SIM_NODES][3];
         private final boolean[] pinned=new boolean[SIM_NODES];
         private final int[] column=new int[SIM_NODES];
@@ -183,6 +199,7 @@ public final class SkirtXPBDSolver
                 System.arraycopy(fineTarget[i],0,position[i],0,3);
                 System.arraycopy(fineTarget[i],0,previous[i],0,3);
                 System.arraycopy(fineTarget[i],0,previousPoseTarget[i],0,3);
+                System.arraycopy(fineTarget[i],0,seatedReference[i],0,3);
             }
 
             // Each original source strip receives an intermediate physical
@@ -305,40 +322,85 @@ public final class SkirtXPBDSolver
             float[][] fineTarget=refine(pose.target);
             float seated=SEATED_FOLD&&bodies!=null?bodies.seatedBlend:0F;
             float maxOffset=MAX_OFFSET+SEATED_EXTRA_OFFSET*seated;
+            // Blend is driven only by both genuine upper-thigh orientations;
+            // unilateral high steps and upright walking get EXACTLY the old
+            // native per-node advection and silhouette reference.
+            float drape=0F;
+            if(SEATED_POSE_ISOLATION&&seated>.10F)
+            {
+                drape=Math.min(1F,Math.max(0F,(seated-.10F)/.70F));
+                drape=drape*drape*(3F-2F*drape);
+            }
             float maxWaist=0F,maxPoseShift=0F;
+            float[] waistDelta=new float[3];
+            int waistCount=0;
             for(int n=0;n<SIM_NODES;n++)
             {
                 valid(fineTarget[n]);
                 maxPoseShift=Math.max(maxPoseShift,
                         distance(previousPoseTarget[n],fineTarget[n]));
                 if(pinned[n])
+                {
                     maxWaist=Math.max(maxWaist,
                             distance(position[n],fineTarget[n]));
+                    for(int k=0;k<3;k++)
+                        waistDelta[k]+=fineTarget[n][k]-
+                                previousPoseTarget[n][k];
+                    waistCount++;
+                }
             }
-            boolean reset=maxWaist>.60F||maxPoseShift>POSE_JUMP_RESET;
+            if(waistCount>0)
+                for(int k=0;k<3;k++)waistDelta[k]/=waistCount;
+            // A seated garment can have large *authored lower-bone* jumps
+            // while its fixed belt hardly moves. Do not reset its physics
+            // onto a folded native mesh for those jumps. Still reset for
+            // actual waist teleports and very large seek discontinuities.
+            boolean reset=maxWaist>.60F||
+                    maxPoseShift>(drape>.50F?1.00F:POSE_JUMP_RESET);
+            float[][] physicalTarget=new float[SIM_NODES][3];
             for(int n=0;n<SIM_NODES;n++)
             {
                 if(reset)
                 {
-                    // A seek/teleport must not inherit stale cloth velocity.
                     System.arraycopy(fineTarget[n],0,position[n],0,3);
                     System.arraycopy(fineTarget[n],0,previous[n],0,3);
+                    System.arraycopy(fineTarget[n],0,seatedReference[n],0,3);
                 }
                 else if(!pinned[n])
                 {
-                    // Advect the simulated state by exactly the CURRENT
-                    // native pose delta, including paused/same-tick redraws.
-                    // Translate Verlet current AND previous together so a
-                    // new animation pose does not become spurious velocity.
                     for(int k=0;k<3;k++)
                     {
-                        float delta=fineTarget[n][k]-previousPoseTarget[n][k];
-                        position[n][k]+=delta;
-                        previous[n][k]+=delta;
+                        float nativeDelta=fineTarget[n][k]-
+                                previousPoseTarget[n][k];
+                        // At full sitting this is BELT movement only;
+                        // before sitting it is ordinary native deformation.
+                        float step=nativeDelta*(1F-drape)+
+                                waistDelta[k]*drape;
+                        position[n][k]+=step;
+                        previous[n][k]+=step;
+                        seatedReference[n][k]+=step;
                     }
                 }
                 if(pinned[n])
+                {
                     System.arraycopy(fineTarget[n],0,position[n],0,3);
+                    System.arraycopy(fineTarget[n],0,seatedReference[n],0,3);
+                }
+                if(drape<=1E-5F)
+                    System.arraycopy(fineTarget[n],0,seatedReference[n],0,3);
+                else if(!pinned[n])
+                    for(int k=0;k<3;k++)
+                    {
+                        // Converge gradually back to the native garment as
+                        // the actor STANDS again, without snapping the hem.
+                        float recovery=.30F*(1F-drape);
+                        seatedReference[n][k]+=
+                                (fineTarget[n][k]-seatedReference[n][k])*
+                                recovery;
+                    }
+                for(int k=0;k<3;k++)
+                    physicalTarget[n][k]=fineTarget[n][k]*(1F-drape)+
+                            seatedReference[n][k]*drape;
                 System.arraycopy(fineTarget[n],0,previousPoseTarget[n],0,3);
             }
             float[] waistCenter=waistCenter(fineTarget);
@@ -351,8 +413,8 @@ public final class SkirtXPBDSolver
                 // push any cloth node outside them on that display frame.
                 // This pass does not integrate gravity, change constraints,
                 // or inject Verlet velocity on a repeated FBO render.
-                int contacts=resolveDisplayContacts(fineTarget,bodies,waistCenter);
-                contacts+=resolveSurfaceContacts(fineTarget,bodies,
+                int contacts=resolveDisplayContacts(physicalTarget,bodies,waistCenter);
+                contacts+=resolveSurfaceContacts(physicalTarget,bodies,
                         waistCenter,seated);
                 if(contacts>0)
                 {
@@ -372,9 +434,9 @@ public final class SkirtXPBDSolver
                                         position[n],0,3);
                         // Finish every pass with body contact projection,
                         // not a link correction that pushes cloth into legs.
-                        contacts+=resolveDisplayContacts(fineTarget,bodies,waistCenter);
+                        contacts+=resolveDisplayContacts(physicalTarget,bodies,waistCenter);
                         if(settle<2)
-                            contacts+=resolveSurfaceContacts(fineTarget,bodies,
+                            contacts+=resolveSurfaceContacts(physicalTarget,bodies,
                                     waistCenter,seated);
                     }
                     // Paused FBO, mirror and shadow passes must not turn
@@ -383,9 +445,9 @@ public final class SkirtXPBDSolver
                         if(!pinned[n])
                             System.arraycopy(position[n],0,previous[n],0,3);
                 }
-                protectRadialSilhouette(fineTarget,waistCenter,
+                protectRadialSilhouette(physicalTarget,waistCenter,
                         seated,maxOffset);
-                stabilizeUpperRings(fineTarget,waistCenter,bodies,seated);
+                stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
                 return result(contacts,0,0);
             }
             int legs=0,self=0;
@@ -412,7 +474,7 @@ public final class SkirtXPBDSolver
                     // Weak pose following, not an independent second bone
                     // animation. Waist follows the actor exactly.
                     for(int k=0;k<3;k++)
-                        p[k]+=(fineTarget[n][k]-p[k])*
+                        p[k]+=(physicalTarget[n][k]-p[k])*
                                 (.012F*(1F-.75F*seated));
                 }
 
@@ -426,8 +488,8 @@ public final class SkirtXPBDSolver
                         if(bodies!=null)
                         {
                             float[] outward={
-                                    fineTarget[n][0]-waistCenter[0],
-                                    0F,fineTarget[n][2]-waistCenter[2]};
+                                    physicalTarget[n][0]-waistCenter[0],
+                                    0F,physicalTarget[n][2]-waistCenter[2]};
                             float[] corrected=SkirtXPBDContacts.corrected(
                                     position[n],bodies,
                                     clothContactRadius(n,bodies),outward,
@@ -457,7 +519,7 @@ public final class SkirtXPBDSolver
                         self+=selfParticles();
                         self+=selfTriangles();
                         if(seated>.60F)
-                            legs+=resolveSurfaceContacts(fineTarget,bodies,
+                            legs+=resolveSurfaceContacts(physicalTarget,bodies,
                                     waistCenter,seated);
                     }
                     // Collision resolution MUST NOT move the pinned waist.
@@ -487,12 +549,12 @@ public final class SkirtXPBDSolver
             // cloth often needs to travel beyond its original silhouette.
             if(seated>.50F&&bodies!=null)
             {
-                legs+=resolveDisplayContacts(fineTarget,bodies,waistCenter);
-                legs+=resolveSurfaceContacts(fineTarget,bodies,
+                legs+=resolveDisplayContacts(physicalTarget,bodies,waistCenter);
+                legs+=resolveSurfaceContacts(physicalTarget,bodies,
                         waistCenter,seated);
             }
-            protectRadialSilhouette(fineTarget,waistCenter,seated,maxOffset);
-            stabilizeUpperRings(fineTarget,waistCenter,bodies,seated);
+            protectRadialSilhouette(physicalTarget,waistCenter,seated,maxOffset);
+            stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
             stepCount++;
             return result(legs,self,SUBSTEPS);
         }

@@ -33,6 +33,7 @@ public final class SkirtXPBDPipelineSmokeTest
         xpbdHasPinnedWaistGravityAndBounds();
         refinedGridRetainsNativeSkinCorrespondence();
         pausedPoseChangePreservesClothRelativeMotion();
+        seatedDrapePoseDeltaDoesNotFoldHemIntoWaist();
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
@@ -363,6 +364,81 @@ public final class SkirtXPBDPipelineSmokeTest
                         "new fine solver produced nonfinite native geometry");
     }
 
+    /**
+     * Regression for the user-reported seated bunching: the exact lower
+     * Chameleon patches move upward ~0.46 blocks while the belt stays put.
+     * A deep bilateral seat must NOT carry 100% of that native patch delta
+     * into the already simulated hem. This is a controlled A/B with real
+     * immutable native patch poses; the native pose/UV itself is unchanged.
+     *
+     * Far-away but correctly bent real upper thighs trigger the seated mode
+     * without contacting the garment. Thus the only variable is the XPBD
+     * target transport, not any OBB or rounded bridge correction.
+     */
+    private static void seatedDrapePoseDeltaDoesNotFoldHemIntoWaist()
+    {
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State state=
+                SkirtXPBDSolver.create(f.raw,f.shared,f.rest);
+        float qx=(float)Math.sin(Math.toRadians(80D)/2D);
+        float qw=(float)Math.cos(Math.toRadians(80D)/2D);
+        float[] left={-5F,-5F,0F,qx,0F,0F,qw,.12F,.23F,.12F};
+        float[] right={5F,-5F,0F,qx,0F,0F,qw,.12F,.23F,.12F};
+        Object seated=new Object();
+        SkirtXPBDContacts.publish(seated,123,identity(),
+                new float[][]{left,right},
+                java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"));
+        SkirtXPBDContacts.Frame frame=SkirtXPBDContacts.forMorph(seated);
+        need(frame!=null&&frame.seatedBlend>.99F,
+                "lower-patch regression requires genuine bilateral seat");
+        state.advance(0F,f.rest,frame);
+        float[][] before=state.current().particles;
+
+        java.util.List<SkirtXPBDPoseSkin.Transform> transforms=
+                new ArrayList<SkirtXPBDPoseSkin.Transform>();
+        for(SkirtClothSurfaceMesh.Patch patch:f.raw.patches)
+        {
+            float[] matrix=identity();
+            if(patch.lower)matrix[13]=.46F;
+            transforms.add(new SkirtXPBDPoseSkin.Transform(
+                    patch.bone,identity(),matrix));
+        }
+        SkirtXPBDPoseSkin.Frame lifted=
+                SkirtXPBDPoseSkin.follow(f.binding,transforms);
+        SkirtXPBDSolver.Result changed=state.advance(0F,lifted,frame);
+        float targetShift=0F,clothShift=0F;
+        int lowerCount=0;
+        for(int n=0;n<60;n++)
+        {
+            if(f.shared.nodes.get(n).row==0)
+            {
+                equal(changed.particles[n],lifted.target[n],1E-6F,
+                        "seat pose isolation must never move belt pins");
+                continue;
+            }
+            if(f.shared.nodes.get(n).row!=2)continue;
+            targetShift+=Math.abs(lifted.target[n][1]-
+                    f.rest.target[n][1]);
+            clothShift+=Math.abs(changed.particles[n][1]-
+                    before[n][1]);
+            lowerCount++;
+        }
+        need(lowerCount==20&&targetShift/lowerCount>.35F,
+                "fixture failed to lift 20 real lower cloth nodes");
+        if(SkirtXPBDSolver.SEATED_POSE_ISOLATION)
+            need(clothShift/targetShift<.20F,
+                    "free cloth was still dragged upward by native bones");
+        else
+            need(clothShift/targetShift>.75F,
+                    "baseline A/B should preserve original native advection");
+
+        SkirtXPBDSolver.Result same=state.advance(0F,lifted,frame);
+        for(int n=0;n<60;n++)
+            equal(changed.particles[n],same.particles[n],1E-6F,
+                    "seated repeat draw drifted without a pose change");
+    }
+
     /** A newly posed Chameleon frame must carry existing XPBD dynamics
      * into the CURRENT pose even if that render has dt=0 (pause/seek).
      * The same paused frame twice must not move the nodes a second time. */
@@ -485,6 +561,9 @@ public final class SkirtXPBDPipelineSmokeTest
      */
     private static void roundedHipGapBridgeAppearsOnlyWithRealBentThigh()
     {
+        if(!Boolean.parseBoolean(System.getProperty(
+                "bbs.editor.physics.skirt.xpbdHipBridge","false")))
+            return; // Enabled-bridge test runs as a separate CI mode.
         float[] hip={0F,.86F,0F,0F,0F,0F,1F,.28F,.17F,.24F};
         float[] left={-.18F,.62F,0F,0F,0F,0F,1F,
                 .13F,.09F,.12F};
@@ -641,7 +720,7 @@ public final class SkirtXPBDPipelineSmokeTest
         SkirtXPBDContacts.Frame one=SkirtXPBDContacts.forMorph(bent);
         need(one!=null,"fitted knees must publish a contact frame");
         boolean enabled=Boolean.parseBoolean(System.getProperty(
-                "bbs.editor.physics.skirt.xpbdKneeBridge","true"));
+                "bbs.editor.physics.skirt.xpbdKneeBridge","false"));
         if(!enabled)
         {
             need(one.kneeBridges.isEmpty(),

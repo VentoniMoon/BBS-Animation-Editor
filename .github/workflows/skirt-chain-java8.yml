@@ -201,7 +201,25 @@ jobs:
             com.example.examplemod.SkirtClothV2SolverSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtClothSurfaceMeshSmokeTest
+          # Test NEW drape mode with NO rounded bridge colliders.
           java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdSeatedPoseIsolation=true \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=false \
+            -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # The ORIGINAL transport must remain an exact A/B option.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdSeatedPoseIsolation=false \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=false \
+            -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # Verify existing hip/knee contact fixtures independently.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdSeatedPoseIsolation=true \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=true \
+            -Dbbs.editor.physics.skirt.xpbdKneeBridge=true \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest
           java -ea -cp "$RUNNER_TEMP/skirt-test" \
