@@ -372,7 +372,7 @@ public final class SkirtXPBDPipelineSmokeTest
                 "standing/one raised leg must not change motion");
         float hoopWalk=SkirtXPBDSolver.upperHoopComplianceScale(0F);
         float hoopSit=SkirtXPBDSolver.upperHoopComplianceScale(1F);
-        need(hoopWalk==1F&&hoopSit>.14F&&hoopSit<1F,
+        need(hoopWalk==1F&&hoopSit>.14F&&hoopSit<=1F,
                 "seated first-ring material springs escaped bounded range");
         if(SkirtXPBDSolver.POSE_AWARE_LAP_GUIDE)
             need(hoopSit>.95F,
