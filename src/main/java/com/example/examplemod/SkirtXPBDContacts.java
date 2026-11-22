@@ -217,22 +217,47 @@ public final class SkirtXPBDContacts
             }
             if(closest<0)continue;
             boolean outwardExit=false;
-            if(outwardWorld!=null)
+            float[] direction=outwardWorld==null?null:
+                    rotateInverse(q,outwardWorld);
+            // A raised (nearly horizontal) thigh should support the skirt
+            // from BELOW. The old unconditional radial exit pushed fabric
+            // forward like a rigid shelf whenever the actor sat down.
+            //
+            // Keep the established radial behavior on vertical walking
+            // thighs. This opt-out also permits exact A/B comparisons.
+            if(Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSeatedContacts","true")))
             {
-                float[] direction=rotateInverse(q,outwardWorld);
-                float ray=Float.POSITIVE_INFINITY;
-                for(int j=0;j<3;j++)
+                int longest=0;
+                if(b[8]>b[7])longest=1;
+                if(b[9]>b[7+longest])longest=2;
+                float[] lengthAxis=new float[3];
+                lengthAxis[longest]=1F;
+                float[] lengthWorld=rotate(q,lengthAxis);
+                boolean raised=Math.abs(lengthWorld[1])<.65F;
+                if(raised&&point[1]>=b[1]-.06F)
                 {
-                    float d=direction[j];
-                    if(Math.abs(d)<1E-6F)continue;
-                    float boundary=d>0F?limits[j]:-limits[j];
-                    float exit=(boundary-axes[j])/d;
-                    if(exit>=0F&&exit<ray)ray=exit;
+                    float[] up=rotateInverse(q,new float[]{0F,1F,0F});
+                    float topExit=rayExit(axes,limits,up);
+                    float outerExit=direction==null?
+                            Float.POSITIVE_INFINITY:
+                            rayExit(axes,limits,direction);
+                    // Only take a nearby top exit: never send fabric
+                    // through the thigh from its underside or jump over
+                    // the whole leg when a short side exit is available.
+                    if(Float.isFinite(topExit)&&topExit<=.28F&&
+                            (!Float.isFinite(outerExit)||
+                            topExit<=outerExit*1.35F+.025F))
+                        direction=up;
                 }
+            }
+            if(direction!=null)
+            {
+                float ray=rayExit(axes,limits,direction);
                 if(Float.isFinite(ray))
                 {
-                    // Bound a single contact correction; subsequent XPBD
-                    // iterations may continue projecting deep penetrations.
+                    // Bound a single correction; XPBD iterations may
+                    // continue settling overlaps against neighboring OBBs.
                     float travel=Math.min(.37F,ray+1E-4F);
                     for(int j=0;j<3;j++)
                         axes[j]+=direction[j]*travel;
@@ -268,6 +293,22 @@ public final class SkirtXPBDContacts
         for(float x:local)if(!Float.isFinite(x))
             return clothLocal.clone();
         return local;
+    }
+
+    /** Distance from a point inside a local OBB to its first positive
+     * exit along a unit ray. Reused for radial and seated/top contacts. */
+    private static float rayExit(float[] point,float[] limits,float[] direction)
+    {
+        float ray=Float.POSITIVE_INFINITY;
+        for(int j=0;j<3;j++)
+        {
+            float d=direction[j];
+            if(Math.abs(d)<1E-6F)continue;
+            float boundary=d>0F?limits[j]:-limits[j];
+            float exit=(boundary-point[j])/d;
+            if(exit>=0F&&exit<ray)ray=exit;
+        }
+        return ray;
     }
 
     public static boolean matrixValid(float[] m)
