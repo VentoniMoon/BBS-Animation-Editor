@@ -36,6 +36,7 @@ public final class SkirtXPBDPipelineSmokeTest
         seatedDrapePoseDeltaDoesNotFoldHemIntoWaist();
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
+        contactProjectionPreservesRealVerletMomentum();
         raisedThighContactsSupportClothFromAbove();
         taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong();
         roundedHipGapBridgeAppearsOnlyWithRealBentThigh();
@@ -528,6 +529,75 @@ public final class SkirtXPBDPipelineSmokeTest
         equal(SkirtXPBDContacts.corrected(
                 noHit,frame,.018F,new float[]{1F,0F,1F}),
                 noHit,1E-6F,"outside cloth must remain unchanged");
+    }
+
+    /**
+     * Reproduction of the "stretch, spring, snap to belt" failure:
+     * a rising 80-degree OBB gives a large positional PUSH while the
+     * cloth's true pre-contact velocity is tiny. If previous[] does not
+     * follow that projection, the next Verlet substep interprets the
+     * ejection as an acceleration and can repeatedly feed energy into
+     * the same fabric panel.
+     *
+     * This checks the ACTUAL raised-thigh projection, not just synthetic
+     * coordinates, and offers an A/B against the old impulse behavior.
+     */
+    private static void contactProjectionPreservesRealVerletMomentum()
+    {
+        float theta=(float)Math.toRadians(80D);
+        float sin=(float)Math.sin(theta*.5F),
+                cos=(float)Math.cos(theta*.5F);
+        float[] left={-.16F,.46F,0F,sin,0F,0F,cos,
+                .11F,.099F,.14F};
+        float[] right={.16F,.46F,0F,sin,0F,0F,cos,
+                .11F,.099F,.14F};
+        Object morph=new Object();
+        SkirtXPBDContacts.publish(morph,80,identity(),
+                new float[][]{left,right},java.util.Arrays.asList(
+                        "emoticons.left_leg@skirt-middle",
+                        "emoticons.right_leg@skirt-middle"));
+        SkirtXPBDContacts.Frame frame=SkirtXPBDContacts.forMorph(morph);
+        need(frame!=null&&frame.seatedBlend>.90F,
+                "contact momentum fixture needs actual bent-leg OBB");
+        float[] current={-.16F,.49F,0F};
+        float[] previous={-.16F,.487F,0F};
+        float originalVy=current[1]-previous[1];
+        float[] corrected=SkirtXPBDContacts.corrected(
+                current,frame,.018F,new float[]{-1F,0F,0F});
+        need(corrected[1]>current[1]+.08F,
+                "bent thigh must project a real cloth penetration");
+        float push=corrected[1]-current[1];
+        SkirtXPBDSolver.contactMove(current,previous,
+                corrected[0]-current[0],
+                corrected[1]-current[1],
+                corrected[2]-current[2]);
+        equal(current,corrected,1E-6F,
+                "actual body collision position was not applied");
+        float injectedVy=(current[1]-previous[1])-originalVy;
+        if(SkirtXPBDSolver.PRESERVE_CONTACT_VELOCITY)
+            need(Math.abs(injectedVy)<1E-5F,
+                    "OBB collision injected a false Verlet jump: "+injectedVy);
+        else
+            need(Math.abs(injectedVy-push)<1E-5F,
+                    "old OBB A/B behavior unexpectedly preserved velocity");
+
+        // Adjacent faces or fabric self-contact can project several times
+        // during ONE 60Hz frame. Each extra projection must preserve the
+        // same physical velocity; the old code added all three as momentum.
+        for(int i=0;i<3;i++)
+        {
+            SkirtXPBDSolver.contactMove(current,previous,
+                    0F,.04F,0F);
+        }
+        float expected=SkirtXPBDSolver.PRESERVE_CONTACT_VELOCITY?
+                originalVy:originalVy+push+.12F;
+        need(Math.abs((current[1]-previous[1])-expected)<1E-5F,
+                "repeated OBB/self collision projected spurious motion");
+
+        float[] idle={1F,2F,3F},idlePrevious={.98F,2.01F,3F};
+        SkirtXPBDSolver.contactMove(idle,idlePrevious,0F,0F,0F);
+        equal(idle,new float[]{1F,2F,3F},0F,
+                "zero-depth collision changed an unobstructed node");
     }
 
     /**
