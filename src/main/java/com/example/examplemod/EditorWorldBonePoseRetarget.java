@@ -168,9 +168,10 @@ public final class EditorWorldBonePoseRetarget
         }
 
         float[] actual=position(forward(chain,pose)[chain.size()-1]);
-        float modelError=distance(actual,target);
+        float worldError=distance(modelToWorld(actual,record,worldScale),
+                pinnedWorld);
         return new Result(new LinkedHashMap<AnimationBone,AnimationTransform>(pose),
-                solved.reachable,modelError/16F,solved.iterations);
+                solved.reachable,worldError,solved.iterations);
     }
 
     /** Only used for initial native/kinematic pivot parity checks. */
