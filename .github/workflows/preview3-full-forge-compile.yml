@@ -56,6 +56,11 @@ jobs:
               "BodyPartsPreviewRenderer",
               "SkirtXPBDSolver",
               "SkirtXPBDVolumeSkin",
+              # These were missing from the release-JAR class-family
+              # patch list: the source/tests compiled but runtime kept
+              # stale v0.0.2 thigh collider sizes.
+              "SkirtLegCollisionProxy",
+              "BodyPartJoltContactBudget",
               "ChameleonWeldPreviewPass",
               "ChameleonSkirtXPBDVolumeRenderer",
               "BodyPartPhysicsPanel",
@@ -90,11 +95,18 @@ jobs:
                           assembled.writestr(info,released.read(info.filename))
                   for name in sorted(patched-old_names):
                       assembled.writestr(name,updated.read(name))
-          with zipfile.ZipFile(output) as result:
+          with zipfile.ZipFile(output) as result, zipfile.ZipFile(compiled) as updated:
               assert result.testzip() is None, "corrupted final archive"
               assert patched<=set(result.namelist()), "patched inner class absent"
               assert sum(x.startswith("com/github/stephengold/joltjni/")
                          for x in result.namelist())==jolt, "missing bundled Jolt"
+              proxy=pkg+"SkirtLegCollisionProxy.class"
+              assert b"taperedDistalShrink" in result.read(proxy), (
+                  "new distal shrink flag NOT present in final JAR")
+              for group in ("SkirtLegCollisionProxy","BodyPartJoltContactBudget"):
+                  cls=pkg+group+".class"
+                  assert result.read(cls)==updated.read(cls), (
+                      "runtime collider class differs from compiled source: "+cls)
           print("Patched class groups:",", ".join(groups))
           print("Patched class count:",len(patched))
           print("Preserved JNI classes:",jolt)
