@@ -1080,8 +1080,9 @@ public class BodyPartsPreviewRenderer
                     continue;
                 }
                 clothInfo=cloth.skinSurface==null?
-                        "XPBD OBB + HIP BRIDGE "+cloth.hipBridges.size()+
-                        " active (SKIN disabled)":
+                        "XPBD OBB | HIP "+cloth.hipBridges.size()+
+                        " | KNEE "+cloth.kneeBridges.size()+
+                        " bridges (SKIN disabled)":
 
                         cloth.meshContactBlend<.001F?
                                 "XPBD OBB walking | SKIN ready: "+
@@ -1145,6 +1146,17 @@ public class BodyPartsPreviewRenderer
                                 JoltContactOverlaySnapshot.Kind.ADDED,
                                 bridge.a,bridge.b,bridge.radius,
                                 "[BRIDGE] "+bridge.side));
+                    }
+                    catch(IllegalArgumentException ignored) {}
+                // Knee and hip capsule debug uses the same world-space
+                // endpoints/radii that the XPBD contact solver consumes.
+                for(SkirtXPBDContacts.KneeBridge bridge:cloth.kneeBridges)
+                    try
+                    {
+                        shapes.add(new JoltContactOverlaySnapshot.Shape(
+                                JoltContactOverlaySnapshot.Kind.ADDED,
+                                bridge.a,bridge.b,bridge.radius,
+                                "[BRIDGE] knee-"+bridge.side));
                     }
                     catch(IllegalArgumentException ignored) {}
                 for(int n=0;n<cloth.legBoxes.size();n++)
