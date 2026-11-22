@@ -44,11 +44,37 @@ public final class SkirtXPBDSolver
     static final boolean ADAPTIVE_SEATED_GRAVITY=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity",
-                    "true"));
+                    "false"));
     static final boolean ADAPTIVE_SEATED_SHAPE=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdAdaptiveSeatedShape",
-                    "true"));
+                    "false"));
+    /**
+     * New isolated experiment: when BOTH upper legs raise for sitting,
+     * guide the free skirt latitudes around the lap, instead of holding
+     * a vertical standing hem or weakening its actual cloth seams.
+     * The guide rotates only the standing HANGING portion of the
+     * per-column reference; its original lateral flare is preserved.
+     *
+     * Reproduce the previous solver with:
+     * -Dbbs.editor.physics.skirt.xpbdPoseAwareLapGuide=false
+     */
+    public static final boolean POSE_AWARE_LAP_GUIDE=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdPoseAwareLapGuide","true"));
+
+    /** Gradual rotation of the hanging cloth latitude, up to ~60 degrees
+     * on the rear hem. Ordinary walking or unilateral leg lift returns 0.
+     * No changes to structural XPBD rest lengths. */
+    static float lapGuideAngle(float seated,float rear,int row)
+    {
+        if(!POSE_AWARE_LAP_GUIDE||row<=0)return 0F;
+        float t=seatedRelief(seated);
+        float sector=.35F+.65F*Math.max(0F,Math.min(1F,rear));
+        float rowRatio=row/(float)(ROWS-1);
+        return 1.05F*t*sector*(.40F+.60F*rowRatio);
+    }
+
 
     /** Smooth relief only when BOTH actual thighs bend. The upstream
      * seatedBlend is already zero for ordinary gait / one raised knee. */
@@ -82,6 +108,15 @@ public final class SkirtXPBDSolver
      * circumference rest lengths are never dropped. */
     static float upperHoopComplianceScale(float seated)
     {
+        // A rotating guide cannot overcome an extra artificial rigid
+        // horizontal hoop. Its original circumferential material edges
+        // remain intact; release ONLY the seated stiffness multiplier.
+        if(POSE_AWARE_LAP_GUIDE&&seated>.06F)
+        {
+            float t=seatedRelief(seated);
+            float old=1F-.85F*seated;
+            return old+(1F-old)*t;
+        }
         float shape=ADAPTIVE_SEATED_SHAPE?seatedRelief(seated):0F;
         return 1F-.85F*seated*(1F-.80F*shape);
     }
@@ -226,6 +261,9 @@ public final class SkirtXPBDSolver
         /** Free drape reference: held near the last unbent garment shape.
          * Advected by the belt, NOT by fully folded native lower bones. */
         private final float[][] seatedReference=new float[SIM_NODES][3];
+        /** Last pose-aware guide offsets are stored separately from the
+         * native pose advection so neither movement is applied twice. */
+        private final float[][] lapGuideOffset=new float[SIM_NODES][3];
         private final float[][] restFine=new float[SIM_NODES][3];
         private final boolean[] pinned=new boolean[SIM_NODES];
         private final int[] column=new int[SIM_NODES];
@@ -291,6 +329,66 @@ public final class SkirtXPBDSolver
                 values[n]=rearSector(x,z,fwd[0],fwd[1]);
             }
             return values;
+        }
+
+        /** Invert the full actor 3x3, not just yaw. The world-space
+         * upper-thigh direction must remain correct for rotated actors. */
+        private float[] localLapDirection(float[] world,
+                SkirtXPBDContacts.Frame frame)
+        {
+            if(world==null||frame==null)return null;
+            float[] m=frame.modelToWorld;
+            float a=m[0],b=m[4],c=m[8],
+                    d=m[1],e=m[5],f=m[9],
+                    g=m[2],h=m[6],i=m[10];
+            float A=e*i-f*h,D=f*g-d*i,G=d*h-e*g;
+            float determinant=a*A+b*D+c*G;
+            if(!Float.isFinite(determin)||
+                    Math.abs(determin)<1E-8F)return null;
+            float x=(A*world[0]+(b*f-c*e)*world[1])/determinant;
+            float z=(G*world[0]+(a*e-b*d)*world[1])/determinant;
+            float size=(float)Math.sqrt(x*x+z*z);
+            if(!Float.isFinite(size)||size<1E-5F)return null;
+            return new float[]{x/size,0F,z/size};
+        }
+
+        /**
+         * Pose-aware lap reference. Unlike a new collider or force, this
+         * supplies a DIFFERENT target shape to the SAME free cloth nodes.
+         * Each longitudinal column tilts its dangling vertical distance
+         * toward the measured thigh direction. Original lateral flaring,
+         * belt pins and every structural/shear/bending rest length stay as
+         * authored. The solved mesh remains free to settle with contact.
+         *
+         * The returned offset is separate from native pose movement; it
+         * can be incrementally advected once per scene sample, including
+         * a paused/scrubbed pose. No repeated same-frame motion.
+         */
+        private void lapReference(float[][] physicalTarget,float[] waist,
+                SkirtXPBDContacts.Frame bodies,float[] rearWeight,
+                float[][] desiredOffsets)
+        {
+            if(!POSE_AWARE_LAP_GUIDE||
+                    bodies==null||bodies.seatedBlend<=.06F)return;
+            float[] forward=localLapDirection(
+                    seatedForward(bodies,waist),bodies);
+            if(forward==null)return;
+            for(int row=1;row<ROWS;row++)
+                for(int c=0;c<SEGMENTS;c++)
+                {
+                    int n=ring[row][c];
+                    float[] belt=physicalTarget[ring[0][c]];
+                    float hang=belt[1]-physicalTarget[n][1];
+                    if(hang<=.01F)continue;
+                    float angle=lapGuideAngle(
+                            bodies.seatedBlend,rearWeight[n],row);
+                    if(angle<=1E-5F)continue;
+                    float run=hang*(float)Math.sin(angle);
+                    float rise=hang*(1F-(float)Math.cos(angle));
+                    desiredOffsets[n][0]=forward[0]*run;
+                    desiredOffsets[n][1]=rise;
+                    desiredOffsets[n][2]=forward[2]*run;
+                }
         }
 
         private int stepCount;
@@ -568,6 +666,27 @@ public final class SkirtXPBDSolver
                     waistCenter,bodies);
             float shapeRelief=ADAPTIVE_SEATED_SHAPE?
                     seatedRelief(seated):0F;
+            float[][] guide=new float[SIM_NODES][3];
+            lapReference(physicalTarget,waistCenter,bodies,
+                    rearWeight,guide);
+            for(int n=0;n<SIM_NODES;n++)
+            {
+                if(pinned[n])continue;
+                for(int k=0;k<3;k++)
+                {
+                    // Follow the CHANGE in the curved lap reference;
+                    // do not reapply its whole translation every frame.
+                    float delta=guide[n][k]-lapGuideOffset[n][k];
+                    if(POSE_AWARE_LAP_GUIDE)
+                    {
+                        float move=delta*.72F;
+                        position[n][k]+=move;
+                        previous[n][k]+=move;
+                    }
+                    lapGuideOffset[n][k]=guide[n][k];
+                    physicalTarget[n][k]+=guide[n][k];
+                }
+            }
             // Pausing must freeze integration, not freeze outdated pose
             // coordinates or leave an already collapsed silhouette behind.
             if(dt<1E-6F)
