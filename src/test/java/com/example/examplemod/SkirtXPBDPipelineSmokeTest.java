@@ -38,6 +38,7 @@ public final class SkirtXPBDPipelineSmokeTest
         raisedThighContactsSupportClothFromAbove();
         bilateralSittingFoldsWithoutBreakingWalking();
         seatedTriangleInteriorContactDoesNotRequireVertexPenetration();
+        pausedRepeatedDrawIsBitStableUntilLegPoseChanges();
         fractionalClockAdvancesOncePerSixtiethSecond();
         renderOnlyFramesStillCorrectFastThighContact();
         perAttachmentClothActivationDoesNotAffectAnotherRig();
@@ -670,6 +671,78 @@ public final class SkirtXPBDPipelineSmokeTest
                 java.util.Arrays.asList("emoticons.left_leg"));
         need(SkirtXPBDContacts.forMorph(bad)==null,
                 "single thigh shape must not masquerade as full collision set");
+    }
+
+    /**
+     * A paused 60Hz scene can be drawn many times for main viewport,
+     * shadows, mirrors and video. Every identical call must be bit-stable:
+     * no contact ping-pong, no spontaneous recalculation and no
+     * phantom Verlet velocity. A newly moved collider at the SAME tick
+     * must still get a legitimate one-time collision correction.
+     */
+    private static void pausedRepeatedDrawIsBitStableUntilLegPoseChanges()
+    {
+        Fixture f=new Fixture();
+        float[][] tint=new float[40][];
+        for(int i=0;i<40;i++)
+            tint[i]=new float[]{1F,1F,1F,1F,0F,0F};
+        Object morph=new Object();
+        float[] distantLeft={-5F,-5F,0F,0F,0F,0F,1F,
+                .10F,.20F,.10F};
+        float[] distantRight={5F,-5F,0F,0F,0F,0F,1F,
+                .10F,.20F,.10F};
+        float[][] far={distantLeft,distantRight};
+        java.util.List<String> owners=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        SkirtXPBDContacts.publish(morph,31,31D,identity(),far,owners);
+        SkirtXPBDRuntime.RenderFrame first=SkirtXPBDRuntime.sample(
+                morph,f.raw,f.shared,f.binding,f.topology,f.rest,tint,
+                SkirtXPBDContacts.forMorph(morph));
+        need(first!=null&&first.physicsSteps==1,
+                "first frame must initialize physics exactly once");
+        for(int repeat=0;repeat<12;repeat++)
+        {
+            SkirtXPBDContacts.publish(morph,31,31D,identity(),far,owners);
+            SkirtXPBDRuntime.RenderFrame again=SkirtXPBDRuntime.sample(
+                    morph,f.raw,f.shared,f.binding,f.topology,f.rest,tint,
+                    SkirtXPBDContacts.forMorph(morph));
+            need(again.physicsSteps==0&&again.solved.substeps==0,
+                    "same scene time must never integrate again");
+            for(int n=0;n<SkirtXPBDSolver.SIM_NODES;n++)
+                equal(again.solved.refinedParticles[n],
+                        first.solved.refinedParticles[n],0F,
+                        "unchanged paused frame drifted in repeated draw");
+        }
+
+        // New thigh location on the same paused timeline frame: still
+        // detect penetration rather than blindly caching all dt=0 calls.
+        int free=-1;
+        for(int n=0;n<60;n++)
+            if(f.shared.nodes.get(n).row>0){free=n;break;}
+        need(free>=0,"missing free cloth control node");
+        float[] p=first.solved.particles[free];
+        float[] nearLeft={p[0],p[1],p[2],
+                0F,0F,0F,1F,.09F,.12F,.09F};
+        float[] nearRight={p[0]+.28F,p[1],p[2],
+                0F,0F,0F,1F,.09F,.12F,.09F};
+        float[][] near={nearLeft,nearRight};
+        SkirtXPBDContacts.publish(morph,31,31D,identity(),near,owners);
+        SkirtXPBDRuntime.RenderFrame changed=SkirtXPBDRuntime.sample(
+                morph,f.raw,f.shared,f.binding,f.topology,f.rest,tint,
+                SkirtXPBDContacts.forMorph(morph));
+        need(changed.physicsSteps==0&&changed.solved.legContacts>0,
+                "new fitted thigh at paused tick was silently ignored");
+        for(int repeat=0;repeat<12;repeat++)
+        {
+            SkirtXPBDContacts.publish(morph,31,31D,identity(),near,owners);
+            SkirtXPBDRuntime.RenderFrame again=SkirtXPBDRuntime.sample(
+                    morph,f.raw,f.shared,f.binding,f.topology,f.rest,tint,
+                    SkirtXPBDContacts.forMorph(morph));
+            for(int n=0;n<SkirtXPBDSolver.SIM_NODES;n++)
+                equal(again.solved.refinedParticles[n],
+                        changed.solved.refinedParticles[n],0F,
+                        "contacted skirt oscillated on identical paused draws");
+        }
     }
 
     /**
