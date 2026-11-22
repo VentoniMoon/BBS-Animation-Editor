@@ -43,6 +43,10 @@ public final class SkirtXPBDContacts
     /** Rollback: ordinary tapered OBBs, optional bridge, no SKIN by default. */
     private static final boolean HIP_BRIDGE=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdHipBridge","true"));
+    /** Per-knee, cloth-only rounded bridge. Independent of the hip switch.
+     * A/B: -Dbbs.editor.physics.skirt.xpbdKneeBridge=false. */
+    private static final boolean KNEE_BRIDGE=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdKneeBridge","true"));
 
     public static final class Frame
     {
@@ -55,6 +59,8 @@ public final class SkirtXPBDContacts
         public final List<String> legOwners;
         /** Small rounded hip-gap contacts, stored in world coordinates. */
         public final List<HipBridge> hipBridges;
+        /** Rounded gaps between actual distal thigh and proximal shin OBBs. */
+        public final List<KneeBridge> kneeBridges;
         /** Actual animated thigh/pelvis triangles, or null for legacy OBBs. */
         public final SkinSurface skinSurface;
         /** 0 = proven walking OBB, 1 = real skinned thigh contact. */
@@ -80,6 +86,8 @@ public final class SkirtXPBDContacts
                     new ArrayList<String>(owners));
             hipBridges=Collections.unmodifiableList(
                     hipBridges(boxes,owners,pelvis));
+            kneeBridges=Collections.unmodifiableList(
+                    kneeBridges(boxes,owners));
             skinSurface=surface;
             this.surfaceStatus=surfaceStatus;
             leftThigh=left;rightThigh=right;
@@ -147,6 +155,18 @@ public final class SkirtXPBDContacts
         {
             this.a=a.clone();this.b=b.clone();radius=r;
             this.weight=weight;this.side=side;
+        }
+    }
+
+    public static final class KneeBridge
+    {
+        public final float[] a,b;
+        public final float radius,weight;
+        public final String side;
+        private KneeBridge(float[] a,float[] b,float r,float weight,String side)
+        {
+            this.a=a.clone();this.b=b.clone();
+            radius=r;this.weight=weight;this.side=side;
         }
     }
 
@@ -230,23 +250,148 @@ public final class SkirtXPBDContacts
         return out;
     }
 
+    /**
+     * Build ONE knee-gap capsule per side, and only from physically fitted
+     * Emoticons OBBs. Distal thigh = the real @skirt-lower box, proximal
+     * shin = nearest cap of the actual lower-leg box. The capsule does not
+     * stand in for an absent shin, nor does it run at straight-leg gait.
+     *
+     * Knee activation uses the RELATIVE thigh/shin axial angle. Unlike
+     * checking the shin against world vertical, this does not trigger
+     * merely because the entire actor leans or the hip rotates.
+     */
+    private static boolean lowerLeg(String name)
+    {
+        if(name==null||!name.startsWith("emoticons.")||
+                name.contains("foot")||name.contains("ankle"))return false;
+        return (name.contains("low_leg")||name.contains("lower_leg")||
+                name.contains("low_left_leg")||
+                name.contains("low_right_leg")||
+                name.contains("shin")) &&
+                (name.contains("leg")||name.contains("shin"));
+    }
+
+    private static float[] boneAxis(float[] box)
+    {
+        float[] q={box[3],box[4],box[5],box[6]};
+        normalizeQuat(q);
+        return rotate(q,new float[]{0F,1F,0F});
+    }
+
+    private static float sqDistance(float[] a,float[] b)
+    {
+        float d=0F;
+        for(int k=0;k<3;k++)
+        {float t=a[k]-b[k];d+=t*t;}
+        return d;
+    }
+
+    private static float[] axialEnd(float[] box,float[] axis,
+            float sign)
+    {
+        return new float[]{
+            box[0]+sign*box[8]*axis[0],
+            box[1]+sign*box[8]*axis[1],
+            box[2]+sign*box[8]*axis[2]};
+    }
+
+    private static List<KneeBridge> kneeBridges(List<float[]> boxes,
+            List<String> owners)
+    {
+        List<KneeBridge> result=new ArrayList<KneeBridge>();
+        if(!KNEE_BRIDGE)return result;
+        for(String side:new String[]{"left","right"})
+        {
+            float[] thigh=null;
+            // Prefer the actual DISTAL of three tapered zones. A single
+            // unsplit upper leg is supported when no taper fit is present.
+            for(int i=0;i<boxes.size();i++)
+            {
+                String n=owners.get(i);
+                if(!isUpperThigh(n)||!n.contains(side))continue;
+                if(n.endsWith("@skirt-lower"))
+                {thigh=boxes.get(i);break;}
+                if(!n.contains("@skirt-")&&thigh==null)
+                    thigh=boxes.get(i);
+            }
+            if(thigh==null)continue;
+            float[] axis=boneAxis(thigh);
+            float[] shin=null,nearEnd=null;
+            float best=Float.POSITIVE_INFINITY;
+            // Select a leg on the SAME side, then pair the physically
+            // nearest ends rather than guessing signs from world Y.
+            for(int i=0;i<boxes.size();i++)
+            {
+                String name=owners.get(i);
+                if(!name.contains(side)||!lowerLeg(name))continue;
+                float[] candidate=boxes.get(i);
+                float[] candidateAxis=boneAxis(candidate);
+                float[] tePlus=axialEnd(thigh,axis,1F);
+                float[] teMinus=axialEnd(thigh,axis,-1F);
+                for(float[] thighEnd:new float[][]{tePlus,teMinus})
+                    for(float shinSign:new float[]{-1F,1F})
+                    {
+                        float[] shinEnd=axialEnd(candidate,candidateAxis,shinSign);
+                        float d=sqDistance(thighEnd,shinEnd);
+                        if(d<best)
+                        {
+                            best=d;shin=candidate;nearEnd=thighEnd;
+                        }
+                    }
+            }
+            // A broken/missing shin fit must never synthesize a contact
+            // between far-away limbs or bridge left and right knees.
+            if(shin==null||best>.25F*.25F)continue;
+            float[] shinAxis=boneAxis(shin);
+            float alignment=Math.abs(axis[0]*shinAxis[0]+
+                    axis[1]*shinAxis[1]+axis[2]*shinAxis[2]);
+            // ~40 deg = 0 weight, ~75 deg = full. Separate per knee.
+            float blend=sat((.76604444F-alignment)/
+                    (.76604444F-.25881904F));
+            float weight=blend*blend*(3F-2F*blend);
+            if(weight<.01F)continue;
+            float[] endShinPlus=axialEnd(shin,shinAxis,1F);
+            float[] endShinMinus=axialEnd(shin,shinAxis,-1F);
+            float[] endShin=sqDistance(nearEnd,endShinPlus)<
+                    sqDistance(nearEnd,endShinMinus)?
+                    endShinPlus:endShinMinus;
+            float gap2=sqDistance(nearEnd,endShin);
+            // With coincident ends the source boxes already overlap.
+            // Keep debug and physics from receiving degenerate capsules.
+            if(gap2<.025F*.025F||gap2>.25F*.25F)continue;
+            float width=Math.min(Math.min(thigh[7],thigh[9]),
+                    Math.min(shin[7],shin[9]));
+            float radius=Math.min(.10F,width*.72F)*weight;
+            if(radius<.012F)continue;
+            result.add(new KneeBridge(nearEnd,endShin,radius,weight,side));
+        }
+        return result;
+    }
+
     /** Finite rounded capsule contact. Prefer the authored outward
      * direction if a cloth node fell inward through the medial seam. */
     private static float[] bridgeExit(float[] p,HipBridge bridge,
             float thickness,float[] outward)
     {
-        float dx=bridge.b[0]-bridge.a[0],
-                dy=bridge.b[1]-bridge.a[1],
-                dz=bridge.b[2]-bridge.a[2];
+        return roundedExit(p,bridge.a,bridge.b,bridge.radius,
+                thickness,outward);
+    }
+
+    private static float[] roundedExit(float[] p,float[] a,float[] b,
+            float radius,float thickness,float[] outward)
+    {
+        float dx=b[0]-a[0],
+                dy=b[1]-a[1],
+                dz=b[2]-a[2];
         float length2=dx*dx+dy*dy+dz*dz;
         if(length2<1E-7F)return p;
-        float t=sat(((p[0]-bridge.a[0])*dx+
-                (p[1]-bridge.a[1])*dy+(p[2]-bridge.a[2])*dz)/length2);
-        float x=p[0]-bridge.a[0]-t*dx,
-                y=p[1]-bridge.a[1]-t*dy,
-                z=p[2]-bridge.a[2]-t*dz;
+        float t=sat(((p[0]-a[0])*dx+
+                (p[1]-a[1])*dy+(p[2]-a[2])*dz)/length2);
+        float x=p[0]-a[0]-t*dx,
+                y=p[1]-a[1]-t*dy,
+                z=p[2]-a[2]-t*dz;
         float dist=(float)Math.sqrt(x*x+y*y+z*z);
-        float limit=bridge.radius+thickness;
+        float limit=radius+thickness;
         if(dist>=limit)return p;
         float[] normal=dist>1E-6F?
                 new float[]{x/dist,y/dist,z/dist}:
@@ -983,6 +1128,14 @@ public final class SkirtXPBDContacts
     public static float[] corrected(float[] clothLocal,Frame frame,
             float thickness,float[] posedOutwardLocal)
     {
+        return corrected(clothLocal,frame,thickness,posedOutwardLocal,1F);
+    }
+
+    /** Knee clearance acts only on the intended cloth latitudes.
+     * Pass 0 for upper/belt rows; direct callers retain 1 for parity. */
+    public static float[] corrected(float[] clothLocal,Frame frame,
+            float thickness,float[] posedOutwardLocal,float kneeWeight)
+    {
         if(clothLocal==null||clothLocal.length!=3||
                 frame==null||!matrixValid(frame.modelToWorld))
             return clothLocal==null?null:clothLocal.clone();
@@ -1090,8 +1243,15 @@ public final class SkirtXPBDContacts
             point[2]=b[2]+moved[2];
         }
         if(mix<=0F)
+        {
             for(HipBridge bridge:frame.hipBridges)
                 point=bridgeExit(point,bridge,thickness,outwardWorld);
+            if(kneeWeight>0F)
+                for(KneeBridge bridge:frame.kneeBridges)
+                    point=roundedExit(point,bridge.a,bridge.b,
+                            bridge.radius*sat(kneeWeight),
+                            thickness,outwardWorld);
+        }
         if(skinExit!=null&&mix>0F&&mix<.99999F)
             for(int k=0;k<3;k++)
                 // Between moderate and deep sitting, interpolate the
