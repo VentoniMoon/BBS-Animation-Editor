@@ -36,6 +36,7 @@ public final class SkirtXPBDPipelineSmokeTest
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
+        bilateralSittingFoldsWithoutBreakingWalking();
         fractionalClockAdvancesOncePerSixtiethSecond();
         renderOnlyFramesStillCorrectFastThighContact();
         perAttachmentClothActivationDoesNotAffectAnotherRig();
@@ -461,6 +462,86 @@ public final class SkirtXPBDPipelineSmokeTest
                 point,stood,.018F,new float[]{-1F,0F,0F});
         need(walking[0]<point[0]-.08F,
                 "vertical thigh should preserve outward walking contact");
+    }
+
+
+    /**
+     * Real seated draping is not synonymous with one raised leg. Compare
+     * two rotated upper thighs against walking, test finite 60Hz stepping,
+     * then return to upright with the normal .37-block cloth limit.
+     */
+    private static void bilateralSittingFoldsWithoutBreakingWalking()
+    {
+        float[] id=identity();
+        float sine=(float)Math.sin(Math.toRadians(80D)/2D);
+        float cosine=(float)Math.cos(Math.toRadians(80D)/2D);
+        float[] leftBent={-.16F,.46F,0F,sine,0F,0F,cosine,
+                .13F,.28F,.14F};
+        float[] rightBent={.16F,.46F,0F,sine,0F,0F,cosine,
+                .13F,.28F,.14F};
+        float[] upright={-.16F,.46F,0F,0F,0F,0F,1F,
+                .13F,.28F,.14F};
+        java.util.List<String> labels=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        Object seated=new Object(),stepping=new Object(),
+                walking=new Object();
+        SkirtXPBDContacts.publish(seated,20,id,
+                new float[][]{leftBent,rightBent},labels);
+        SkirtXPBDContacts.publish(stepping,20,id,
+                new float[][]{leftBent,
+                        new float[]{.16F,.46F,0F,0F,0F,0F,1F,
+                                .13F,.28F,.14F}},labels);
+        SkirtXPBDContacts.publish(walking,20,id,
+                new float[][]{upright,
+                        new float[]{.16F,.46F,0F,0F,0F,0F,1F,
+                                .13F,.28F,.14F}},labels);
+        SkirtXPBDContacts.Frame bent=SkirtXPBDContacts.forMorph(seated);
+        SkirtXPBDContacts.Frame one=SkirtXPBDContacts.forMorph(stepping);
+        SkirtXPBDContacts.Frame straight=SkirtXPBDContacts.forMorph(walking);
+        need(bent!=null&&bent.seatedBlend>.85F,
+                "both horizontal thighs must activate deep seated folds");
+        need(one!=null&&one.seatedBlend==0F,
+                "one high walking step must retain standing cloth limits");
+        need(straight!=null&&straight.seatedBlend==0F,
+                "upright gait must not activate seated cloth limits");
+
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State cloth=
+                SkirtXPBDSolver.create(f.raw,f.shared,f.rest);
+        SkirtXPBDSolver.Result result=null;
+        for(int t=0;t<24;t++)
+            result=cloth.advance(1F/60F,f.rest,bent);
+        need(result!=null&&result.refinedParticles.length==
+                SkirtXPBDSolver.SIM_NODES,
+                "seated simulation did not preserve refined cloth");
+        for(int n=0;n<60;n++)
+        {
+            float[] point=result.particles[n];
+            for(float value:point)
+                need(Float.isFinite(value),
+                        "sitting generated a non-finite skirt vertex");
+            if(f.shared.nodes.get(n).row==0)
+                equal(point,f.rest.target[n],1E-6F,
+                        "seated simulation moved the locked waistband");
+        }
+        // Recover without residual seated radial expansion.
+        Object recovered=new Object();
+        float[] l={-.16F,-2F,0F,0F,0F,0F,1F,
+                .13F,.28F,.14F};
+        float[] r={.16F,-2F,0F,0F,0F,0F,1F,
+                .13F,.28F,.14F};
+        SkirtXPBDContacts.publish(recovered,21,id,
+                new float[][]{l,r},labels);
+        SkirtXPBDContacts.Frame after=
+                SkirtXPBDContacts.forMorph(recovered);
+        need(after!=null&&after.seatedBlend==0F,
+                "standing frame should restore original cloth limits");
+        for(int t=0;t<24;t++)
+            result=cloth.advance(1F/60F,f.rest,after);
+        for(int n=0;n<60;n++)
+            if(f.shared.nodes.get(n).row>0)
+                need(distance(result.particles[n],f.rest.target[n])<=.371F,
+                        "standing cloth did not recover bounded gait");
     }
 
     private static void actualBodyObbsProjectWithoutInventedContacts()
