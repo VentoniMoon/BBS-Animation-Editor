@@ -271,6 +271,60 @@ public final class SkirtXPBDSolver
                 before[2]+(proposed[2]-before[2])*(1F-t)+dz*t};
     }
 
+    /** Filter a proposed collision exit from an interior triangle or
+     * edge sample. Outward displacement is always permitted; a SHORT
+     * upward exit onto the upper thigh is permitted only when the sample
+     * is on the physically upper side. Never force the sample backward
+     * through the leg or up into the pinned waistband.
+     *
+     * This does not teleport tissue across the thigh. Deep penetration
+     * remains gradual because one material node moves <=.012 per frame.
+     */
+    static float[] safePanelExit(float[] original,float[] proposed,
+            float[] waist,boolean supportedAboveThigh,float seated)
+    {
+        if(original==null||proposed==null||waist==null)
+            throw new IllegalArgumentException("Missing panel contact");
+        float dx=proposed[0]-original[0];
+        float dy=proposed[1]-original[1];
+        float dz=proposed[2]-original[2];
+        float rx=original[0]-waist[0];
+        float rz=original[2]-waist[2];
+        float radial=(float)Math.sqrt(rx*rx+rz*rz);
+        if(radial>1E-5F)
+        {
+            float nx=rx/radial,nz=rz/radial;
+            float inward=dx*nx+dz*nz;
+            if(inward<0F)
+            {
+                dx-=inward*nx;
+                dz-=inward*nz;
+            }
+        }
+        // Do not revive the old blanket no-upward rule: a vertex that
+        // is physically above a raised thigh may need a modest UPWARD
+        // correction to land on its top instead of escaping behind it.
+        // The final solved cloth is still guarded by waist separation.
+        float blend=Math.max(0F,Math.min(1F,
+                (seated-.55F)/.30F));
+        if(!supportedAboveThigh||blend<=0F)
+            dy=Math.min(0F,dy);
+        else
+            // A sample on the upper/lap side must NEVER be ejected
+            // downward through the thigh's back face.
+            dy=Math.max(0F,Math.min(dy,.014F*blend));
+        if(!Float.isFinite(dx)||!Float.isFinite(dy)||
+                !Float.isFinite(dz))
+            return new float[]{0F,0F,0F};
+        float magnitude=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(magnitude>SAFE_PANEL_MAX_NODE_STEP)
+        {
+            float gain=SAFE_PANEL_MAX_NODE_STEP/magnitude;
+            dx*=gain;dy*=gain;dz*=gain;
+        }
+        return new float[]{dx,dy,dz};
+    }
+
     private static final float CONTACT_RADIUS=.018F;
     private static final float SELF_RADIUS=.030F;
     private static final float MAX_OFFSET=.37F;
@@ -323,6 +377,29 @@ public final class SkirtXPBDSolver
                     "bbs.editor.physics.skirt.xpbdSeatedSurfaceContacts","true"))&&
             !CLEAN_THREE_ROW;
     private static final float MAX_SURFACE_CORRECTION=.045F;
+    /**
+     * Replacement for the old repeated Gauss-Seidel triangle pushes on
+     * the minimal three-row skirt. The old contact ONLY checked vertices;
+     * a whole large polygon can tunnel through a raised thigh without a
+     * single vertex intersecting it.
+     *
+     * Apply once per distinct timeline sample, with Jacobi-averaged,
+     * outward/top-only displacements limited to 0.012 model units per
+     * free node. This is deliberately NOT the old repeated per-iteration
+     * seated triangle pressure that caused bell shapes and jitter.
+     *
+     * Switch off for exact PR #253 behavior:
+     * -Dbbs.editor.physics.skirt.xpbdSafePanelContacts=false
+     */
+    public static final boolean SAFE_PANEL_CONTACTS=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSafePanelContacts",
+                    "true"))&&CLEAN_THREE_ROW;
+    private static final float SAFE_PANEL_MAX_NODE_STEP=.012F;
+    private static final boolean SAFE_PANEL_AUDIT=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSafePanelAudit",
+                    "false"));
     private static final boolean RADIAL_GUARD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"))&&
             !CLEAN_THREE_ROW;
@@ -388,6 +465,10 @@ public final class SkirtXPBDSolver
         private float lastGuideMaximum,lastGuideFollow;
         private int lastHipBridgeCount;
         private double lastAuditSample=Double.NaN;
+        /** Do not re-apply a panel projection on extra shadow, mirror,
+         * paused frame or FBO passes with an unchanged pose. */
+        private double lastSafePanelSample=Double.NaN;
+        private int lastSafePanelProbes;
         private final float[][] restFine=new float[SIM_NODES][3];
         private final boolean[] pinned=new boolean[SIM_NODES];
         private final int[] column=new int[SIM_NODES];
@@ -906,6 +987,10 @@ public final class SkirtXPBDSolver
                         seated,maxOffset);
                 stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
                 keepFabricOutOfWaist(fineTarget,seated);
+                // Do this last: previous vertex/edge relaxation must not
+                // pull a just-lifted interior panel back through the leg.
+                contacts+=resolveSafePanelContacts(
+                        physicalTarget,bodies,waistCenter,seated);
                 measureGuide(physicalTarget,guide);
                 auditSeat(bodies,0,contacts);
                 return result(contacts,0,0);
@@ -1040,10 +1125,141 @@ public final class SkirtXPBDSolver
             protectRadialSilhouette(physicalTarget,waistCenter,seated,maxOffset);
             stabilizeUpperRings(physicalTarget,waistCenter,bodies,seated);
             keepFabricOutOfWaist(fineTarget,seated);
+            legs+=resolveSafePanelContacts(
+                    physicalTarget,bodies,waistCenter,seated);
             measureGuide(physicalTarget,guide);
             auditSeat(bodies,SUBSTEPS,legs);
             stepCount++;
             return result(legs,self,SUBSTEPS);
+        }
+
+        /**
+         * Lightweight 3-row area contact: sample the barycenter AND three
+         * edge midpoints of the actual visible cloth triangles. Existing
+         * node contacts cannot detect a small OBB piercing this interior.
+         *
+         * Corrections are evaluated against an immutable per-frame node
+         * snapshot and accumulated Jacobi-style. Each free vertex receives
+         * one averaged contactMove (which also shifts Verlet previous[]),
+         * with a strict .012 cap. This runs ONCE per distinct scene tick,
+         * not eight times per XPBD constraint iteration or six times in
+         * paused FBO display. Walking and unilateral leg lifts are exact
+         * legacy behavior.
+         */
+        private int resolveSafePanelContacts(float[][] fineTarget,
+                SkirtXPBDContacts.Frame bodies,float[] waist,
+                float seated)
+        {
+            if(!SAFE_PANEL_CONTACTS||bodies==null||seated<=.55F)
+                return 0;
+            if(Double.isFinite(lastSafePanelSample)&&
+                    Math.abs(lastSafePanelSample-bodies.sampleTick)<1E-5D)
+                return 0;
+            lastSafePanelSample=bodies.sampleTick;
+            lastSafePanelProbes=0;
+            float[][] snapshot=copy(position);
+            float[][] accumulated=new float[SIM_NODES][3];
+            float[] weights=new float[SIM_NODES];
+            final float[][] probes={
+                    {1F/3F,1F/3F,1F/3F},
+                    {.5F,.5F,0F},
+                    {0F,.5F,.5F},
+                    {.5F,0F,.5F}};
+            float[] m=bodies.modelToWorld;
+            float wx=m[0]*waist[0]+m[4]*waist[1]+m[8]*waist[2]+m[12];
+            float wy=m[1]*waist[0]+m[5]*waist[1]+m[9]*waist[2]+m[13];
+            float wz=m[2]*waist[0]+m[6]*waist[1]+m[10]*waist[2]+m[14];
+            for(int[] tri:triangles)
+                for(float[] weights3:probes)
+                {
+                    float[] sample=new float[3];
+                    float[] outward=new float[3];
+                    float denom=0F;
+                    for(int j=0;j<3;j++)
+                    {
+                        int n=tri[j];
+                        float w=weights3[j];
+                        if(!pinned[n])denom+=w*w;
+                        for(int k=0;k<3;k++)
+                        {
+                            sample[k]+=snapshot[n][k]*w;
+                            outward[k]+=fineTarget[n][k]*w;
+                        }
+                    }
+                    if(denom<1E-8F)continue;
+                    outward[0]-=waist[0];outward[1]=0F;
+                    outward[2]-=waist[2];
+                    // Resolve the same real Jolt-fitted leg OBBs that
+                    // the visible three-ring skirt already uses.
+                    float[] corrected=SkirtXPBDContacts.corrected(
+                            sample,bodies,CONTACT_RADIUS,outward,0F);
+                    float depth=distance(sample,corrected);
+                    if(!Float.isFinite(depth)||depth<.0002F)continue;
+                    float sx=m[0]*sample[0]+m[4]*sample[1]+
+                            m[8]*sample[2]+m[12];
+                    float sy=m[1]*sample[0]+m[5]*sample[1]+
+                            m[9]*sample[2]+m[13];
+                    float sz=m[2]*sample[0]+m[6]*sample[1]+
+                            m[10]*sample[2]+m[14];
+                    boolean overThigh=false;
+                    // Above a raised upper-thigh OBB, not above the knee
+                    // or beneath the leg. Use the real world-space top,
+                    // independent of camera orientation.
+                    if(sy<wy-.025F)
+                        for(int box=0;box<bodies.legBoxes.size();box++)
+                        {
+                            String owner=bodies.legOwners.get(box);
+                            int suffix=owner.indexOf('@');
+                            String base=suffix<0?owner:
+                                    owner.substring(0,suffix);
+                            if(!BodyPartJoltContactBudget.isUpperThigh(base))
+                                continue;
+                            float[] b=bodies.legBoxes.get(box);
+                            float ax=sx-b[0],az=sz-b[2];
+                            float near=b[7]+b[9]+.10F;
+                            if(ax*ax+az*az<=near*near &&
+                                    sy>=b[1]-.045F)
+                            {overThigh=true;break;}
+                        }
+                    float[] delta=safePanelExit(sample,corrected,
+                            waist,overThigh,seated);
+                    float magnitude=length(delta);
+                    if(magnitude<.00001F)continue;
+                    for(int j=0;j<3;j++)
+                    {
+                        int n=tri[j];
+                        if(pinned[n]||weights3[j]<=0F)continue;
+                        float gain=weights3[j]/denom;
+                        for(int k=0;k<3;k++)
+                            accumulated[n][k]+=delta[k]*gain;
+                        weights[n]+=1F;
+                    }
+                    lastSafePanelProbes++;
+                }
+            int moved=0;
+            for(int n=0;n<SIM_NODES;n++)
+            {
+                if(pinned[n]||weights[n]<.5F)continue;
+                float[] shift=accumulated[n];
+                float dx=shift[0]/weights[n],dy=shift[1]/weights[n],
+                        dz=shift[2]/weights[n];
+                float length=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+                if(length<1E-6F)continue;
+                if(length>SAFE_PANEL_MAX_NODE_STEP)
+                {
+                    float scale=SAFE_PANEL_MAX_NODE_STEP/length;
+                    dx*=scale;dy*=scale;dz*=scale;
+                }
+                contactMove(position[n],previous[n],dx,dy,dz);
+                moved++;
+            }
+            if(SAFE_PANEL_AUDIT)
+                System.out.println("[BBS Editor][SkirtSafePanel] tick="+
+                        bodies.sampleTick+" seated="+seated+
+                        " panelProbes="+lastSafePanelProbes+
+                        " movedVertices="+moved+" maxStep="+
+                        SAFE_PANEL_MAX_NODE_STEP);
+            return moved;
         }
 
         /**
