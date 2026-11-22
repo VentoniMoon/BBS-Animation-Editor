@@ -58,15 +58,18 @@ public final class SkirtXPBDSolver
         public final float[][] particles;
         /** All solver particles, including interpolated height rows. */
         public final float[][] refinedParticles,refinedTarget;
+        /** Native source node index -> refined solver particle index. */
+        public final int[] sourceToRefined;
         public final int legContacts,selfContacts,substeps;
         public final float maxDistanceError;
         private Result(float[][] nativePoints,float[][] finePoints,
-                float[][] fineTargets,int legs,int self,int steps,
+                float[][] fineTargets,int[] map,int legs,int self,int steps,
                 float stretch)
         {
             particles=copy(nativePoints);
             refinedParticles=copy(finePoints);
             refinedTarget=copy(fineTargets);
+            sourceToRefined=map.clone();
             legContacts=legs;selfContacts=self;substeps=steps;
             maxDistanceError=stretch;
         }
@@ -524,7 +527,7 @@ public final class SkirtXPBDSolver
             for(int n=0;n<N;n++)
                 System.arraycopy(position[sourceToFine[n]],0,nativeNodes[n],0,3);
             return new Result(nativeNodes,position,previousPoseTarget,
-                    contacts,self,steps,max);
+                    sourceToFine,contacts,self,steps,max);
         }
 
         private void project(Constraint c,float dt)
