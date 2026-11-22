@@ -41,8 +41,17 @@ public final class SkirtXPBDContacts
     private static final boolean BILATERAL_DRAPE=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdBilateralDrape","true"));
     /** Rollback: ordinary tapered OBBs, optional bridge, no SKIN by default. */
-    private static final boolean HIP_BRIDGE=Boolean.parseBoolean(
-            System.getProperty("bbs.editor.physics.skirt.xpbdHipBridge","false"));
+    /** In this diagnostic build the two rounded pelvis-to-upper-thigh
+     * capsules are HARD OFF even if older launcher arguments contain
+     * xpbdHipBridge=true. True A/B can re-enable by explicitly setting
+     * xpbdDisableHipBridges=false AND xpbdHipBridge=true together.
+     * This does not disable the real thigh OBBs, shin OBBs, or skirt mesh.
+     */
+    private static final boolean HIP_BRIDGE=
+            !Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdDisableHipBridges","true")) &&
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdHipBridge","false"));
     /** Per-knee, cloth-only rounded bridge. Independent of the hip switch.
      * A/B: -Dbbs.editor.physics.skirt.xpbdKneeBridge=false. */
     private static final boolean KNEE_BRIDGE=Boolean.parseBoolean(
