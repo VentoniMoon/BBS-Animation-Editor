@@ -300,9 +300,12 @@ public final class SkirtXPBDRuntime
             simVertical+=Math.abs(sdy);
             maxSimY=Math.max(maxSimY,hem[1]);
         }
-        CameraExportPlan.Sample film=CameraExportRenderClock.current();
-        String mode=film==null?"PREVIEW":"EXPORT";
-        String frame=film==null?"-":Integer.toString(film.outputFrame);
+        // Do not introduce dependencies from this Minecraft-free Java 8
+        // cloth core to the camera export module. The reflective read is
+        // diagnostic-only and never changes physics or timing.
+        Integer filmFrame=exportFrameOrNull();
+        String mode=filmFrame==null?"PREVIEW":"EXPORT";
+        String frame=filmFrame==null?"-":filmFrame.toString();
         System.out.println("[BBS Editor][SkirtClockTrace] "+
                 "mode="+mode+" outputFrame="+frame+
                 " owner="+Integer.toHexString(System.identityHashCode(owner))+
@@ -319,6 +322,23 @@ public final class SkirtXPBDRuntime
                 " legContacts="+result.legContacts+
                 " selfContacts="+result.selfContacts+
                 " maxLinkError="+round3(result.maxDistanceError));
+    }
+
+    private static Integer exportFrameOrNull()
+    {
+        try
+        {
+            Class<?> clock=Class.forName(
+                    "com.example.examplemod.CameraExportRenderClock");
+            Object sample=clock.getMethod("current").invoke(null);
+            return sample==null?null:(Integer)sample.getClass()
+                    .getField("outputFrame").get(sample);
+        }
+        catch(ReflectiveOperationException missingCameraRuntime)
+        {
+            // Java 8 pure cloth tests have no camera export classes.
+            return null;
+        }
     }
 
     private static float round3(double v)
