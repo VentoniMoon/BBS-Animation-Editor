@@ -508,18 +508,19 @@ public final class SkirtXPBDSolver
             int contacts=0;
             for(int[] tri:triangles)
             {
-                int free=0;
+                float freeWeight=0F;
                 float[] sample=new float[3];
                 float[] outward=new float[3];
                 for(int index:tri)
                 {
-                    if(!pinned[index])free++;
+                    if(!pinned[index])
+                        freeWeight+=seatedContactWeight(index);
                     for(int k=0;k<3;k++)
                         sample[k]+=position[index][k]/3F;
                     outward[0]+=fineTarget[index][0]/3F;
                     outward[2]+=fineTarget[index][2]/3F;
                 }
-                if(free==0)continue;
+                if(freeWeight<=0F)continue;
                 outward[0]-=center[0];
                 outward[2]-=center[2];
                 float[] clearance=SkirtXPBDContacts.corrected(
@@ -530,13 +531,14 @@ public final class SkirtXPBDSolver
                 // Three barycentric weights; fixed contact cap, and an
                 // averaged single update per cloth node, not per triangle.
                 float ratio=Math.min(depth,MAX_SURFACE_CORRECTION)*
-                        strength/depth*(3F/free);
+                        strength/depth*(3F/freeWeight);
                 for(int index:tri)
                 {
                     if(pinned[index])continue;
                     for(int k=0;k<3;k++)
                         accumulated[index][k]+=
-                                (clearance[k]-sample[k])*ratio;
+                                (clearance[k]-sample[k])*ratio*
+                                seatedContactWeight(index);
                     samples[index]++;
                 }
                 contacts++;
@@ -561,6 +563,21 @@ public final class SkirtXPBDSolver
                 }
             }
             return contacts;
+        }
+
+        /**
+         * First cloth latitude is close to the pinned belt: let the
+         * lower latitudes absorb more of a thigh surface displacement.
+         * Weight is used only for the seated triangle contact correction;
+         * direct vertex-OBB clearance remains authoritative.
+         */
+        private float seatedContactWeight(int index)
+        {
+            if(!SEATED_UPPER_CONTROL)return 1F;
+            int row=index/SEGMENTS;
+            if(row==1)return .30F;
+            if(row==2&&ROWS==5)return .65F;
+            return 1F;
         }
 
         private int resolveDisplayContacts(float[][] fineTarget,
