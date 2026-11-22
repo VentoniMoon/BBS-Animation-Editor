@@ -130,7 +130,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: zulu
           java-version: '8'
       - name: Verify 3+2+2 chain topology without Minecraft/JNI
         run: |
@@ -218,6 +218,20 @@ jobs:
             -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # Previous PR #248 lap target, still with the two pelvis
+          # capsule bridges disabled, to isolate the old native-pose issue.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdRestLengthLapGuide=false \
+            -Dbbs.editor.physics.skirt.xpbdDisableHipBridges=true \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # Explicit legacy flag may request hip bridges, but the NEW
+          # safety switch must override it unless BOTH are opted in.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=true \
+            -Dbbs.editor.physics.skirt.xpbdDisableHipBridges=true \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
           # A/B: switch off only posterior gravity relief.
           java -ea -Dbbs.editor.physics.skirt.xpbd=true \
             -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity=false \
@@ -262,6 +276,7 @@ jobs:
           java -ea -Dbbs.editor.physics.skirt.xpbd=true \
             -Dbbs.editor.physics.skirt.xpbdSeatedPoseIsolation=true \
             -Dbbs.editor.physics.skirt.xpbdHipBridge=true \
+            -Dbbs.editor.physics.skirt.xpbdDisableHipBridges=false \
             -Dbbs.editor.physics.skirt.xpbdKneeBridge=true \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest

@@ -33,6 +33,7 @@ public final class SkirtXPBDPipelineSmokeTest
         xpbdHasPinnedWaistGravityAndBounds();
         adaptiveSeatedRearDrapeKeepsWalkingAndEdges();
         poseAwareLapGuideChangesSeatedReferenceNotWalking();
+        restLengthLapGuideSurvivesAlreadyFoldedNativeHem();
         refinedGridRetainsNativeSkinCorrespondence();
         pausedPoseChangePreservesClothRelativeMotion();
         seatedDrapePoseDeltaDoesNotFoldHemIntoWaist();
@@ -522,6 +523,63 @@ public final class SkirtXPBDPipelineSmokeTest
     }
 
     /**
+     * Reproduce the user's frame ~35: the Chameleon lower panels may
+     * already be raised toward the waist before a skirt state is created.
+     * PR #248 used THAT deformed pose as the amount of hanging cloth and
+     * silently lost its guide. The original rest skirt still has two
+     * full sections and must produce a nonzero target at the same bend.
+     */
+    private static void restLengthLapGuideSurvivesAlreadyFoldedNativeHem()
+    {
+        if(!SkirtXPBDSolver.POSE_AWARE_LAP_GUIDE||
+                !SkirtXPBDSolver.REST_LENGTH_LAP_GUIDE)return;
+        Fixture f=new Fixture();
+        java.util.List<SkirtXPBDPoseSkin.Transform> poses=
+                new java.util.ArrayList<SkirtXPBDPoseSkin.Transform>();
+        for(SkirtClothSurfaceMesh.Patch patch:f.raw.patches)
+        {
+            float[] posed=identity();
+            if(patch.lower)posed[13]+=.28F;
+            poses.add(new SkirtXPBDPoseSkin.Transform(
+                    patch.bone,identity(),posed));
+        }
+        SkirtXPBDPoseSkin.Frame raisedNative=
+                SkirtXPBDPoseSkin.follow(f.binding,poses);
+        float qx=(float)Math.sin(Math.toRadians(80D)/2D),
+                qw=(float)Math.cos(Math.toRadians(80D)/2D);
+        Object morph=new Object();
+        SkirtXPBDContacts.publish(morph,35,identity(),
+                new float[][]{
+                    {-5F,-5F,-.5F,qx,0F,0F,qw,.11F,.20F,.12F},
+                    {5F,-5F,-.5F,qx,0F,0F,qw,.11F,.20F,.12F}
+                },java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"));
+        SkirtXPBDContacts.Frame body=SkirtXPBDContacts.forMorph(morph);
+        need(body!=null&&body.seatedBlend>.99F,
+                "collapsed-native fixture needs both thighs bent");
+        need(body.hipBridges.isEmpty(),
+                "explicit pelvis bridge disable must leave zero capsules");
+        SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
+                f.raw,f.shared,raisedNative);
+        SkirtXPBDSolver.Result result=state.advance(
+                0F,raisedNative,body);
+        need(result.maxGuideTargetMotion>.045F,
+                "rest-based seated shape must survive folded native hem");
+        need(Float.isFinite(result.meanGuideFollow)&&
+                result.meanGuideFollow>-.25F,
+                "contact/shape constraints oppose all guide movement");
+        for(int i=0;i<SkirtXPBDSolver.SEGMENTS;i++)
+            equal(result.refinedParticles[i],result.refinedTarget[i],
+                    1E-6F,"lap guide must never move pinned waist");
+        SkirtXPBDSolver.Result repeat=state.advance(
+                0F,raisedNative,body);
+        for(int i=0;i<SkirtXPBDSolver.SIM_NODES;i++)
+            equal(result.refinedParticles[i],
+                    repeat.refinedParticles[i],1E-6F,
+                    "rest-based target reapplied on a duplicate FBO pass");
+    }
+
+    /**
      * A finer internal fabric lattice must NOT reorder the original 60
      * Chameleon skin/UV anchors. Original pose reproduction stays exact.
      */
@@ -861,9 +919,11 @@ public final class SkirtXPBDPipelineSmokeTest
      */
     private static void roundedHipGapBridgeAppearsOnlyWithRealBentThigh()
     {
-        if(!Boolean.parseBoolean(System.getProperty(
-                "bbs.editor.physics.skirt.xpbdHipBridge","false")))
-            return; // Enabled-bridge test runs as a separate CI mode.
+        if(Boolean.parseBoolean(System.getProperty(
+                "bbs.editor.physics.skirt.xpbdDisableHipBridges","true"))||
+                !Boolean.parseBoolean(System.getProperty(
+                        "bbs.editor.physics.skirt.xpbdHipBridge","false")))
+            return; // Old capsule fixture runs only in explicit CI A/B.
         float[] hip={0F,.86F,0F,0F,0F,0F,1F,.28F,.17F,.24F};
         float[] left={-.18F,.62F,0F,0F,0F,0F,1F,
                 .13F,.09F,.12F};
