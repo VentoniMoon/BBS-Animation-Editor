@@ -138,8 +138,12 @@ public final class JoltContactGuiOverlay
                     {
                         if(!chainShown(shapes.get(i)))continue;
                         int before=segmentCount;
-                        segmentCount+=drawCapsule(buf,shapes.get(i),camera,
-                                x,y,width,height,actorX,actorY,actorZ);
+                        JoltContactOverlaySnapshot.Shape sh=shapes.get(i);
+                        boolean skinned=snapshot.worldSpace&&
+                                sh.source.startsWith("[SKIN]");
+                        segmentCount+=drawCapsule(buf,sh,camera,
+                                x,y,width,height,skinned?0D:actorX,
+                                skinned?0D:actorY,skinned?0D:actorZ);
                         if(segmentCount>before)visibleBodies++;
                     }
                     // Native kinematic boxes of additional BodyParts, including
@@ -326,6 +330,17 @@ public final class JoltContactGuiOverlay
             double actorX,double actorY,double actorZ)
     {
         float[] a=shape.a,b=shape.b;
+        if(shape.source.startsWith("[SKIN]"))
+        {
+            // The actual skinned Emoticons hull is rendered as straight
+            // triangle wires, never as fake capsule collision geometry.
+            float[] p=project(a[0]+actorX,a[1]+actorY,a[2]+actorZ,
+                    camera,x,y,width,height);
+            float[] q=project(b[0]+actorX,b[1]+actorY,b[2]+actorZ,
+                    camera,x,y,width,height);
+            return emitLine(buf,p,q,0x39D7D0,220,1.65F,
+                    x,y,width,height)?1:0;
+        }
         double dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
         double length=Math.sqrt(dx*dx+dy*dy+dz*dz);
         if(!(length>1E-6D && length<5D))return 0;
