@@ -32,6 +32,7 @@ public final class SkirtXPBDPipelineSmokeTest
         originalUvsAndSeamBridgesAreConnected();
         xpbdHasPinnedWaistGravityAndBounds();
         adaptiveSeatedRearDrapeKeepsWalkingAndEdges();
+        poseAwareLapGuideChangesSeatedReferenceNotWalking();
         refinedGridRetainsNativeSkinCorrespondence();
         pausedPoseChangePreservesClothRelativeMotion();
         seatedDrapePoseDeltaDoesNotFoldHemIntoWaist();
@@ -373,9 +374,12 @@ public final class SkirtXPBDPipelineSmokeTest
         float hoopSit=SkirtXPBDSolver.upperHoopComplianceScale(1F);
         need(hoopWalk==1F&&hoopSit>.14F&&hoopSit<1F,
                 "seated first-ring material springs escaped bounded range");
-        if(SkirtXPBDSolver.ADAPTIVE_SEATED_SHAPE)
+        if(SkirtXPBDSolver.POSE_AWARE_LAP_GUIDE)
+            need(hoopSit>.95F,
+                    "pose-aware guide must not fight an artificial rigid hoop");
+        else if(SkirtXPBDSolver.ADAPTIVE_SEATED_SHAPE)
             need(hoopSit>.70F,
-                    "new seated mode must release extra rigid-hoop stiffness");
+                    "adaptive shape must release extra rigid-hoop stiffness");
         else
             need(Math.abs(hoopSit-.15F)<.0001F,
                     "shape A/B OFF must preserve old hoop stiffness");
@@ -417,6 +421,104 @@ public final class SkirtXPBDPipelineSmokeTest
                 equal(result.particles[n],f.rest.target[n],1E-6F,
                         "adaptive seated gravity displaced pinned belt");
         }
+    }
+
+    /**
+     * User's sit-side schematics: the hem should leave its horizontal
+     * standing outline and rotate smoothly around the raised thighs.
+     * Walking/unilateral gait must be bit-for-bit the old reference,
+     * and a paused repeated render must never move particles twice.
+     */
+    private static void poseAwareLapGuideChangesSeatedReferenceNotWalking()
+    {
+        need(SkirtXPBDSolver.lapGuideAngle(0F,1F,
+                SkirtXPBDSolver.ROWS-1)==0F,
+                "standing hem must preserve unmodified reference");
+        need(SkirtXPBDSolver.lapGuideAngle(.05F,1F,
+                SkirtXPBDSolver.ROWS-1)==0F,
+                "ordinary gait must not tilt cloth toward the knee");
+        need(SkirtXPBDSolver.lapGuideAngle(1F,1F,0)==0F,
+                "pose-aware guide cannot move the pinned belt");
+        float rear=SkirtXPBDSolver.lapGuideAngle(
+                1F,1F,SkirtXPBDSolver.ROWS-1);
+        float front=SkirtXPBDSolver.lapGuideAngle(
+                1F,0F,SkirtXPBDSolver.ROWS-1);
+        if(SkirtXPBDSolver.POSE_AWARE_LAP_GUIDE)
+            need(rear>.95F&&rear<1.15F&&front>0F&&front<rear,
+                    "rear hem should tilt farther toward raised thighs");
+        else
+            need(rear==0F&&front==0F,
+                    "lap reference A/B disabled must match old solver");
+
+        Fixture f=new Fixture();
+        float qx=(float)Math.sin(Math.toRadians(80D)/2D);
+        float qw=(float)Math.cos(Math.toRadians(80D)/2D);
+        java.util.List<String> names=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        float[] left={-5F,-5F,-.5F,qx,0F,0F,qw,.11F,.20F,.12F};
+        float[] right={5F,-5F,-.5F,qx,0F,0F,qw,.11F,.20F,.12F};
+        float[] idleL={-5F,-5F,-.5F,0F,0F,0F,1F,.11F,.20F,.12F};
+        float[] idleR={5F,-5F,-.5F,0F,0F,0F,1F,.11F,.20F,.12F};
+        Object bent=new Object(),walking=new Object(),one=new Object();
+        SkirtXPBDContacts.publish(bent,94,identity(),
+                new float[][]{left,right},names);
+        SkirtXPBDContacts.publish(walking,94,identity(),
+                new float[][]{idleL,idleR},names);
+        SkirtXPBDContacts.publish(one,94,identity(),
+                new float[][]{left,idleR},names);
+        SkirtXPBDContacts.Frame deep=SkirtXPBDContacts.forMorph(bent);
+        SkirtXPBDContacts.Frame upright=SkirtXPBDContacts.forMorph(walking);
+        SkirtXPBDContacts.Frame single=SkirtXPBDContacts.forMorph(one);
+        need(deep!=null&&deep.seatedBlend>.99F&&
+                upright!=null&&upright.seatedBlend==0F&&
+                single!=null&&single.seatedBlend==0F,
+                "test needs real fully bent and walking thigh frames");
+        SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        float[][] baseline=state.current().refinedParticles;
+        SkirtXPBDSolver.Result during=state.advance(0F,f.rest,deep);
+        float moved=0F,raised=0F;
+        for(int n=20;n<SkirtXPBDSolver.SIM_NODES;n++)
+        {
+            moved=Math.max(moved,distance(
+                    during.refinedParticles[n],baseline[n]));
+            raised=Math.max(raised,
+                    during.refinedParticles[n][1]-baseline[n][1]);
+        }
+        if(SkirtXPBDSolver.POSE_AWARE_LAP_GUIDE)
+            need(moved>.03F&&raised>.01F,
+                    "sitting geometry did not guide the hem toward the lap");
+        else
+            need(moved<.0001F,
+                    "lap guide off must preserve the standing reference");
+
+        SkirtXPBDSolver.Result repeat=state.advance(0F,f.rest,deep);
+        for(int n=0;n<SkirtXPBDSolver.SIM_NODES;n++)
+            equal(during.refinedParticles[n],repeat.refinedParticles[n],
+                    1E-6F,
+                    "repeated render must not re-advect pose-aware guide");
+        SkirtXPBDSolver.Result stand=state.advance(0F,f.rest,upright);
+        for(int c=0;c<20;c++)
+            equal(stand.refinedParticles[c],f.rest.target[c],1E-6F,
+                    "returning to standing altered the waist");
+        SkirtXPBDSolver.Result again=state.advance(0F,f.rest,upright);
+        for(int n=0;n<SkirtXPBDSolver.SIM_NODES;n++)
+            equal(stand.refinedParticles[n],again.refinedParticles[n],
+                    1E-6F,"repeat standing render drifted");
+        // The solver's true fabric bonds remain the same across the bend.
+        SkirtXPBDSolver.State moving=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        SkirtXPBDSolver.Result simulated=null;
+        for(int i=0;i<24;i++)
+            simulated=moving.advance(1F/60F,f.rest,deep);
+        need(simulated!=null&&
+                Float.isFinite(simulated.maxDistanceError)&&
+                simulated.maxDistanceError<.30F,
+                "sitting reference over-stretched the physical fabric");
+        for(int c=0;c<20;c++)
+            equal(simulated.refinedParticles[c],
+                    simulated.refinedTarget[c],1E-6F,
+                    "physical solve moved the pinned belt");
     }
 
     /**
