@@ -37,6 +37,7 @@ public final class SkirtXPBDPipelineSmokeTest
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
         bilateralSittingFoldsWithoutBreakingWalking();
+        seatedUpperHoopGuardDoesNotFreezeTheHem();
         seatedTriangleInteriorContactDoesNotRequireVertexPenetration();
         pausedRepeatedDrawIsBitStableUntilLegPoseChanges();
         fractionalClockAdvancesOncePerSixtiethSecond();
@@ -541,6 +542,99 @@ public final class SkirtXPBDPipelineSmokeTest
             if(f.shared.nodes.get(n).row==0)
                 equal(after.particles[n],f.rest.target[n],1E-6F,
                         "seated panel correction displaced a waist pin");
+    }
+
+    /**
+     * Deep bend: the first free horizontal latitudes must not balloon
+     * beyond their native circumference. A fake root inertial offset
+     * creates an over-expanded upper hoop without moving any actual
+     * Emoticons thighs. Contrast seated and walking; the unprotected hem
+     * remains free to drape. No authoring bone/UV is modified.
+     */
+    private static void seatedUpperHoopGuardDoesNotFreezeTheHem()
+    {
+        if(!Boolean.parseBoolean(System.getProperty(
+                "bbs.editor.physics.skirt.xpbdSeatedUpperControl","true")))
+            return;
+        Fixture f=new Fixture();
+        float t=(float)Math.sin(Math.toRadians(80D)/2D),
+                w=(float)Math.cos(Math.toRadians(80D)/2D);
+        float[] seatedLeft={-5F,-5F,0F,t,0F,0F,w,
+                .12F,.20F,.12F};
+        float[] seatedRight={5F,-5F,0F,t,0F,0F,w,
+                .12F,.20F,.12F};
+        float[] walkingLeft={-5F,-5F,0F,0F,0F,0F,1F,
+                .12F,.20F,.12F};
+        float[] walkingRight={5F,-5F,0F,0F,0F,0F,1F,
+                .12F,.20F,.12F};
+        java.util.List<String> owners=java.util.Arrays.asList(
+                "emoticons.left_leg","emoticons.right_leg");
+        Object bent=new Object(),straight=new Object();
+        SkirtXPBDContacts.publish(bent,120,identity(),
+                new float[][]{seatedLeft,seatedRight},owners);
+        SkirtXPBDContacts.publish(straight,120,identity(),
+                new float[][]{walkingLeft,walkingRight},owners);
+        SkirtXPBDContacts.Frame seated=SkirtXPBDContacts.forMorph(bent);
+        SkirtXPBDContacts.Frame walking=SkirtXPBDContacts.forMorph(straight);
+        need(seated!=null&&seated.seatedBlend>.99F&&
+                walking!=null&&walking.seatedBlend==0F,
+                "upper-hoop regression requires isolated sitting and walking");
+        SkirtXPBDSolver.State sat=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        SkirtXPBDSolver.State walk=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        for(int i=0;i<4;i++)
+        {
+            sat.rootMotion(new float[]{.32F,0F,0F},identity());
+            walk.rootMotion(new float[]{.32F,0F,0F},identity());
+        }
+        SkirtXPBDSolver.Result s0=sat.current();
+        SkirtXPBDSolver.Result s1=sat.advance(0F,f.rest,seated);
+        SkirtXPBDSolver.Result w1=walk.advance(0F,f.rest,walking);
+        float[] center=new float[3];
+        // The waist center is defined by the solver's zero-th ring.
+        for(int c=0;c<20;c++)
+            for(int k=0;k<3;k++)
+                center[k]+=s1.refinedTarget[c][k]/20F;
+        float maxWalking=0F, maxSeated=0F;
+        for(int c=0;c<20;c++)
+        {
+            int row=1,n=row*20+c;
+            float original=horizontalDistance(
+                    s1.refinedTarget[n],center);
+            float before=horizontalDistance(
+                    s0.refinedParticles[n],center);
+            float after=horizontalDistance(
+                    s1.refinedParticles[n],center);
+            float walkAfter=horizontalDistance(
+                    w1.refinedParticles[n],center);
+            maxWalking=Math.max(maxWalking,walkAfter-original);
+            maxSeated=Math.max(maxSeated,after-original);
+            need(after<=original*1.08F+.019F,
+                    "sitting must contain upper hoop expansion");
+            if(before>original*1.08F+.02F)
+                need(after<before-.005F,
+                        "sitting failed to retract the inflated upper ring");
+            equal(s1.refinedParticles[c],s1.refinedTarget[c],
+                    1E-6F,"upper hoop stabilizer moved waist");
+        }
+        need(maxWalking>maxSeated+.015F,
+                "new upper control altered ordinary walking contacts");
+        if(SkirtXPBDSolver.ROWS==5)
+        {
+            float bottomDrift=0F;
+            for(int c=0;c<20;c++)
+                bottomDrift=Math.max(bottomDrift,distance(
+                        s1.refinedParticles[4*20+c],
+                        s1.refinedTarget[4*20+c]));
+            need(bottomDrift>.10F,
+                    "lower hem should remain free to fold after a seated cap");
+        }
+    }
+    private static float horizontalDistance(float[] a,float[] b)
+    {
+        float dx=a[0]-b[0],dz=a[2]-b[2];
+        return (float)Math.sqrt(dx*dx+dz*dz);
     }
 
     private static void bilateralSittingFoldsWithoutBreakingWalking()
