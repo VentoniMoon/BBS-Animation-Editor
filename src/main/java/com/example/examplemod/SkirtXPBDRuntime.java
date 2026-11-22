@@ -74,6 +74,7 @@ public final class SkirtXPBDRuntime
         float[][] lastLegBoxes;
         float[] lastModelToWorld;
         float lastSeatedBlend;
+        long lastSkinSurfaceFingerprint;
     }
 
     private SkirtXPBDRuntime(){}
@@ -124,6 +125,7 @@ public final class SkirtXPBDRuntime
             actor.lastPose=null;
             actor.lastLegBoxes=null;
             actor.lastModelToWorld=null;
+            actor.lastSkinSurfaceFingerprint=0L;
         }
 
         // Same scene tick, same pose and same fitted collision hull must
@@ -137,7 +139,10 @@ public final class SkirtXPBDRuntime
                 samePose(actor.lastPose,posed.target)&&
                 samePose(actor.lastLegBoxes,collisions.legBoxes)&&
                 samePose(actor.lastModelToWorld,collisions.modelToWorld)&&
-                Math.abs(actor.lastSeatedBlend-collisions.seatedBlend)<1E-5F)
+                Math.abs(actor.lastSeatedBlend-collisions.seatedBlend)<1E-5F&&
+                actor.lastSkinSurfaceFingerprint==
+                        (collisions.skinSurface==null?0L:
+                                collisions.skinSurface.fingerprint))
         {
             actor.lastUpdate=now;
             return new RenderFrame(raw,binding,topology,posed,
@@ -232,6 +237,9 @@ public final class SkirtXPBDRuntime
             actor.lastLegBoxes=copy(collisions.legBoxes);
             actor.lastModelToWorld=collisions.modelToWorld.clone();
             actor.lastSeatedBlend=collisions.seatedBlend;
+            actor.lastSkinSurfaceFingerprint=
+                    collisions.skinSurface==null?0L:
+                            collisions.skinSurface.fingerprint;
         }
         return new RenderFrame(raw,binding,topology,posed,output,
                 materials,collisions==null?0:collisions.legBoxes.size(),
