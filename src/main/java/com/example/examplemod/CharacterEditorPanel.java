@@ -403,12 +403,15 @@ public class CharacterEditorPanel
     {
         if (key == null)
         {
+            // A BODY PART timeline key selects a BodyPartModelData, not a
+            // main-track CharacterKey. The owner syncs both independently.
+            // Clearing the part here caused setSelectedBodyPartModel() to
+            // reopen ANIMATION SETUP on every draw, making all other
+            // CHARACTER accordions appear unclickable.
+            if (this.selectedKey != null)
+                resetBodyPartScroll();
             this.selectedKey = null;
             anchorsPanel.setSelectedKey(null);
-            this.setSelectedBodyPartModel(null);
-
-            resetBodyPartScroll();
-
             return;
         }
 

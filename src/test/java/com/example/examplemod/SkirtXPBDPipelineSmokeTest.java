@@ -34,6 +34,7 @@ public final class SkirtXPBDPipelineSmokeTest
         pausedPoseChangePreservesClothRelativeMotion();
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
+        raisedThighContactsSupportClothFromAbove();
         fractionalClockAdvancesOncePerSixtiethSecond();
         renderOnlyFramesStillCorrectFastThighContact();
         perAttachmentClothActivationDoesNotAffectAnotherRig();
@@ -343,6 +344,45 @@ public final class SkirtXPBDPipelineSmokeTest
         equal(SkirtXPBDContacts.corrected(
                 noHit,frame,.018F,new float[]{1F,0F,1F}),
                 noHit,1E-6F,"outside cloth must remain unchanged");
+    }
+
+    /** A horizontal thigh should carry the front hem from beneath instead
+     * of throwing the cloth forward, while ordinary upright thighs continue
+     * using the familiar outward exit. */
+    private static void raisedThighContactsSupportClothFromAbove()
+    {
+        Object morph=new Object();
+        float[] left={-.16F,.46F,0F,0F,0F,0F,1F,
+                .34F,.12F,.13F}; // long axis along X: raised thigh
+        float[] right={.45F,.46F,0F,0F,0F,0F,1F,
+                .34F,.12F,.13F};
+        SkirtXPBDContacts.publish(morph,45,identity(),
+                new float[][]{left,right},
+                java.util.Arrays.asList("emoticons.left_thigh",
+                        "emoticons.right_thigh"));
+        SkirtXPBDContacts.Frame frame=SkirtXPBDContacts.forMorph(morph);
+        need(frame!=null,"raised real thigh collider missing");
+        float[] point={-.16F,.51F,0F};
+        float[] supported=SkirtXPBDContacts.corrected(
+                point,frame,.018F,new float[]{-1F,0F,0F});
+        need(supported[1]>.59F&&
+                Math.abs(supported[0]-point[0])<.01F,
+                "seated thigh should project cloth UP, not sideways");
+        // A vertical leg must still push toward the skirt's OUTER side.
+        Object standing=new Object();
+        float[] upright={-.16F,.46F,0F,0F,0F,0F,1F,
+                .12F,.34F,.13F};
+        float[] other={.45F,.46F,0F,0F,0F,0F,1F,
+                .12F,.34F,.13F};
+        SkirtXPBDContacts.publish(standing,45,identity(),
+                new float[][]{upright,other},
+                java.util.Arrays.asList("emoticons.left_thigh",
+                        "emoticons.right_thigh"));
+        SkirtXPBDContacts.Frame stood=SkirtXPBDContacts.forMorph(standing);
+        float[] walking=SkirtXPBDContacts.corrected(
+                point,stood,.018F,new float[]{-1F,0F,0F});
+        need(walking[0]<point[0]-.08F,
+                "vertical thigh should preserve outward walking contact");
     }
 
     private static void actualBodyObbsProjectWithoutInventedContacts()
