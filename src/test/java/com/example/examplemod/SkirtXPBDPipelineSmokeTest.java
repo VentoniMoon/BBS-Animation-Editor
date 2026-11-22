@@ -592,10 +592,28 @@ public final class SkirtXPBDPipelineSmokeTest
         float[] seam=SkirtXPBDContacts.corrected(onEdge,scene,.018F);
         need(seam[1]>.505F,
                 "shared skinned triangle edge introduced collider gap");
+        // A seated top panel can extend a few centimeters beyond the
+        // actual thigh triangle while overlapping its vertical support.
+        // The original tiny edge band missed that intersection and let a
+        // whole cloth polygon slip down into the lap. Recover ONLY in the
+        // deep seated path; the ordinary walking geometry stays unchanged.
+        float[] seamLip={-.25F,.49F,.153F};
+        float[] seamLipWorld={2.75F,.49F,-1.847F};
+        equal(skin.correctedWorld(seamLipWorld,.018F),
+                seamLipWorld,1E-6F,
+                "standing top contact edge tolerance regressed");
+        float[] seatLip=SkirtXPBDContacts.corrected(
+                seamLip,scene,.018F);
+        need(seatLip[1]>.49F+.005F,
+                "seated real thigh top edge failed to recover cloth");
         float[] free={0F,.49F,0F};
         equal(SkirtXPBDContacts.corrected(free,scene,.018F),
                 free,1E-6F,
                 "mesh collision invented a bridge between the two legs");
+        float[] gapEdge={0F,.49F,.153F};
+        equal(SkirtXPBDContacts.corrected(gapEdge,scene,.018F),
+                gapEdge,1E-6F,
+                "seated top-edge tolerance bridged the inner thigh gap");
         float[] above={-.25F,.63F,0F};
         equal(SkirtXPBDContacts.corrected(above,scene,.018F),
                 above,1E-6F,

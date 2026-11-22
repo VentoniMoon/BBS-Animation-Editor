@@ -4,7 +4,6 @@ import java.util.List;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
-import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -82,13 +81,23 @@ public final class JoltContactGuiOverlay
     {
         if(mc==null || camera==null || snapshot==null ||
                 width<=0 || height<=0)return;
-        ScaledResolution res=new ScaledResolution(mc);
-        int scale=Math.max(1,res.getScaleFactor());
-        int viewportX=Math.max(0,x*scale);
-        int viewportY=Math.max(0,mc.displayHeight-(y+height)*scale);
-        int viewportW=Math.max(0,Math.min(width*scale,mc.displayWidth-viewportX));
-        int viewportH=Math.max(0,Math.min(height*scale,mc.displayHeight-viewportY));
-        if(viewportW==0 || viewportH==0)return;
+        // AnimationEditorScreen owns a resolution INDEPENDENT of vanilla
+        // ScaledResolution. Mixing the two scales projected world contacts
+        // into unrelated GUI pixels; the error changed with camera motion.
+        // Use the exact virtual canvas and pixel edges of the film viewport.
+        int guiWidth=EditorGuiScale.width(mc.displayWidth,mc.displayHeight);
+        int guiHeight=EditorGuiScale.height(mc.displayWidth,mc.displayHeight);
+        int viewportX=EditorGuiScale.pixelEdge(x,mc.displayWidth,guiWidth);
+        int viewportRight=EditorGuiScale.pixelEdge(x+width,
+                mc.displayWidth,guiWidth);
+        int viewportTop=EditorGuiScale.pixelEdge(y,
+                mc.displayHeight,guiHeight);
+        int viewportBottom=EditorGuiScale.pixelEdge(y+height,
+                mc.displayHeight,guiHeight);
+        int viewportY=mc.displayHeight-viewportBottom;
+        int viewportW=viewportRight-viewportX;
+        int viewportH=viewportBottom-viewportTop;
+        if(viewportW<=0 || viewportH<=0)return;
 
         int mode=GL11.glGetInteger(GL11.GL_MATRIX_MODE);
         int program=GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
@@ -112,8 +121,7 @@ public final class JoltContactGuiOverlay
             try
             {
                 GL11.glLoadIdentity();
-                GL11.glOrtho(0,res.getScaledWidth(),res.getScaledHeight(),
-                        0,-1,1);
+                GL11.glOrtho(0,guiWidth,guiHeight,0,-1,1);
                 GL11.glMatrixMode(GL11.GL_MODELVIEW);
                 GL11.glPushMatrix();
                 try

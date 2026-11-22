@@ -41,6 +41,13 @@ public final class SkirtXPBDSolver
     // when the actual two fitted upper-leg bones agree on a seated pose.
     private static final float SEATED_EXTRA_OFFSET=.28F;
     private static final float SEATED_RADIAL_RELIEF=.38F;
+    // When both thighs are horizontal, the generic .47x radial minimum
+    // allows the upper rows to fold INSIDE the lap. Preserve the waist-to-
+    // cloth direction without freezing the hem or widening the standing
+    // pose. A/B: -Dbbs.editor.physics.skirt.xpbdSeatedCollapseGuard=false
+    private static final boolean SEATED_COLLAPSE_GUARD=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSeatedCollapseGuard","true"));
     private static final boolean SEATED_FOLD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdSeatedFold","true"));
     // Keep the first free ring below the belt from expanding when the
@@ -679,6 +686,18 @@ public final class SkirtXPBDSolver
                 float radius=(float)Math.sqrt(dx*dx+dz*dz);
                 float fraction=Math.max(.45F,
                         MIN_RADIAL_FRACTION-SEATED_RADIAL_RELIEF*seated);
+                if(SEATED_COLLAPSE_GUARD&&seated>.60F)
+                {
+                    // Keep the first two free latitudes outside the lap,
+                    // while the lower fabric still has room to gather and
+                    // drape over the knees. This is a MINIMUM, never an
+                    // expansion beyond the garment's own posed outline.
+                    int row=n/SEGMENTS;
+                    float floor=row==1?.79F:row==2?.70F:.61F;
+                    float blend=Math.min(1F,(seated-.60F)/.35F);
+                    fraction=Math.max(fraction,
+                            .47F+(floor-.47F)*blend);
+                }
                 float deficit=sourceRadius*fraction-radius;
                 if(deficit<=0F)continue;
                 // Limit per-frame correction and preserve the existing
