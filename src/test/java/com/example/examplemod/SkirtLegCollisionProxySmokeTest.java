@@ -10,6 +10,7 @@ public final class SkirtLegCollisionProxySmokeTest
         threeZonesAreProximalToDistal();
         tiltFollowsBoneInsteadOfWorldAxis();
         raisedThighShrinksOnlyDistalZone();
+        raisedThighReleasesUpperPelvisClearance();
         pelvisAnchorIdentifiesUpperEvenWhenLocalYIsInverted();
         onlySkirtSelectionChanges();
         duplicateFittedBoxesDoNotTriplePressure();
@@ -44,7 +45,9 @@ public final class SkirtLegCollisionProxySmokeTest
         rotated[5]=.70710677F;rotated[6]=.70710677F;
         float[][] p=SkirtLegCollisionProxy.split(rotated);
         require(p!=null,"rotated leg must produce zones");
-        near(p[0][0],2F-.16F,"proximal follows rotated local Y");
+        near(p[0][0],2F-.16F+
+                (SkirtLegCollisionProxy.PROXIMAL_SHRINK?.24F*.12F:0F),
+                "proximal follows rotated local Y and frees the belt");
         near(p[1][0],2F,"middle remains centered");
         near(p[2][0],2F+.16F,"distal follows rotated local -Y");
         near(p[0][1],5F,"raised thigh must not use world Y slices");
@@ -76,10 +79,26 @@ public final class SkirtLegCollisionProxySmokeTest
         setThighAngle(eighty,80F);
         float[][] transition=SkirtLegCollisionProxy.split(sixtyFive);
         float[][] seated=SkirtLegCollisionProxy.split(eighty);
+        // PR #253 allows intentional extra relief at the upper and
+        // middle thigh on sitting; their bone-axis length is unchanged.
         for(int zone=0;zone<2;zone++)
-            for(int dimension=7;dimension<10;dimension++)
-                near(seated[zone][dimension],upright[zone][dimension],
-                        "only the knee-side THIRD may shrink");
+        {
+            float target=zone==0?.82F:.88F;
+            if(!SkirtLegCollisionProxy.PROXIMAL_SHRINK)target=1F;
+            near(seated[zone][7],upright[zone][7]*target,
+                    "top/middle radius should follow independent A/B");
+            near(seated[zone][9],upright[zone][9]*target,
+                    "top/middle depth should follow independent A/B");
+            near(seated[zone][8],upright[zone][8],
+                    "top/middle axis length must keep adjacent overlap");
+            if(SkirtLegCollisionProxy.PROXIMAL_SHRINK)
+                require(transition[zone][7]<upright[zone][7]&&
+                        transition[zone][7]>seated[zone][7],
+                        "hip-zone shrink must activate smoothly");
+            else
+                near(transition[zone][7],upright[zone][7],
+                        "hip-zone A/B disabled must match old dimensions");
+        }
         if(SkirtLegCollisionProxy.DISTAL_SHRINK)
         {
             require(transition[2][7]<upright[2][7]&&
@@ -115,6 +134,71 @@ public final class SkirtLegCollisionProxySmokeTest
                 "Jolt and XPBD should receive the same reduced OBB");
         near(result.shapes[2][7],result.boxes[2][7],
                 "native and skirt renderer must share reduced dimensions");
+    }
+
+    /** The enlarged rotated upper thigh used to enter the pinned
+     * waistband. Shift the TOP box away from the pelvis along the
+     * genuine bone axis, not the camera- or world-Y axis, and keep
+     * contact overlap with the middle/last boxes. */
+    private static void raisedThighReleasesUpperPelvisClearance()
+    {
+        float[] thigh=box(.14F,.36F,.27F,.20F,.24F,.19F);
+        setThighAngle(thigh,80F);
+        float sin80=(float)Math.sin(Math.toRadians(80D));
+        float cos80=(float)Math.cos(Math.toRadians(80D));
+        float[] pelvis={
+                thigh[0],thigh[1]+cos80*.32F,
+                thigh[2]+sin80*.32F};
+        float[][] zones=SkirtLegCollisionProxy.split(thigh,pelvis);
+        require(zones!=null&&zones.length==3,
+                "two thigh joints should still have exactly 3 OBB zones");
+        float fullHalf=.24F;
+        float expectedTopOffset=fullHalf*(2F/3F-
+                (SkirtLegCollisionProxy.PROXIMAL_SHRINK?.12F:0F));
+        float oldTopOffset=fullHalf*2F/3F;
+        float dotTop=(zones[0][1]-thigh[1])*cos80+
+                (zones[0][2]-thigh[2])*sin80;
+        near(dotTop,expectedTopOffset,
+                "upper OBB must withdraw toward the knee on raised leg");
+        if(SkirtLegCollisionProxy.PROXIMAL_SHRINK)
+            require(dotTop<oldTopOffset-.02F,
+                    "deep hip bend should clear material near the belt");
+        near(zones[1][1],thigh[1],
+                "middle box must stay at the original thigh center");
+        float topMiddleDistance=Math.abs(dotTop);
+        require(zones[0][8]+zones[1][8]>topMiddleDistance+.001F,
+                "waist-side clearance created a new collider gap");
+        float middleDistalDistance=Math.abs(
+                (zones[2][1]-thigh[1])*cos80+
+                (zones[2][2]-thigh[2])*sin80);
+        require(zones[1][8]+zones[2][8]>
+                middleDistalDistance+.001F,
+                "lower overlap must remain even with distal taper");
+        require(zones[0][7]<zones[1][7]&&
+                zones[1][7]<zones[2][7],
+                "hip-to-knee taper should never form an outward ridge");
+
+        // The same selected OBB is passed to the native/Jolt shape,
+        // skirt preview overlay and XPBD collision responses.
+        BodyPartJoltContactBudget budget=new BodyPartJoltContactBudget();
+        budget.add(thigh,typed(thigh),"emoticons.left_leg");
+        float[] pelvisBox=box(
+                pelvis[0],pelvis[1],pelvis[2],.12F,.09F,.12F);
+        budget.add(pelvisBox,typed(pelvisBox),"emoticons.low_body");
+        BodyPartJoltContactBudget.Selection selected=
+                budget.select(true,true);
+        require(selected.boxes.length==4,
+                "fitted thigh + pelvis selection must stay in budget");
+        for(int zone=0;zone<3;zone++)
+            for(int axis=0;axis<10;axis++)
+            {
+                near(selected.boxes[zone][axis],
+                        zones[zone][axis],
+                        "physical skirt OBB must match preview selection");
+                near(selected.shapes[zone][axis],
+                        selected.boxes[zone][axis],
+                        "Jolt collider must match XPBD and overlay OBB");
+            }
     }
 
     private static void setThighAngle(float[] box,float degrees)
