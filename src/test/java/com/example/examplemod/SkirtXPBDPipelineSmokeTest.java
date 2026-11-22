@@ -37,6 +37,7 @@ public final class SkirtXPBDPipelineSmokeTest
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
         taperedThighUsesBoneAxisEvenWhenZoneIsWiderThanLong();
+        skinnedThighMeshProvidesContinuousContact();
         bilateralSittingFoldsWithoutBreakingWalking();
         seatedUpperHoopGuardDoesNotFreezeTheHem();
         seatedTriangleInteriorContactDoesNotRequireVertexPenetration();
@@ -471,6 +472,86 @@ public final class SkirtXPBDPipelineSmokeTest
                 point,walk,.018F,new float[]{-1F,0F,0F});
         need(side[0]<point[0]-.08F,
                 "standing taper zone lost normal outward contact");
+    }
+
+    /**
+     * Genuine CPU-skinned thigh triangles form ONE collision surface even
+     * when coarse OBB zones are discontinuous. Verify both world/cloth
+     * transforms and the contact normal at a shared triangle edge. No
+     * Minecraft runtime, native Jolt, or synthesized boxes are needed.
+     */
+    private static void skinnedThighMeshProvidesContinuousContact()
+    {
+        float[] world=identity();
+        world[12]=3F;
+        world[14]=-2F;
+        java.util.List<SkirtXPBDContacts.SkinRegion> regions=
+                new java.util.ArrayList<SkirtXPBDContacts.SkinRegion>();
+        for(int side=0;side<2;side++)
+        {
+            float middle=side==0?-.25F:.25F;
+            float[] vertices=new float[27];
+            int p=0;
+            for(int row=0;row<3;row++)
+                for(int col=0;col<3;col++)
+                {
+                    vertices[p++]=middle+(col-1)*.12F;
+                    vertices[p++]=.50F;
+                    vertices[p++]=(row-1)*.12F;
+                }
+            int[] indices=new int[24];
+            int o=0;
+            for(int row=0;row<2;row++)
+                for(int col=0;col<2;col++)
+                {
+                    int a=row*3+col,b=a+1,c=a+3,d=c+1;
+                    // +Y outward normal. Shared seams must be seamless.
+                    indices[o++]=a;indices[o++]=c;indices[o++]=b;
+                    indices[o++]=b;indices[o++]=c;indices[o++]=d;
+                }
+            regions.add(new SkirtXPBDContacts.SkinRegion(
+                    side==0?"emoticons.left_leg":
+                            "emoticons.right_leg",vertices,indices));
+        }
+        SkirtXPBDContacts.SkinSurface skin=
+                SkirtXPBDContacts.SkinSurface.build(world,regions);
+        if(!SkirtXPBDContacts.SKINNED_MESH_CONTACTS)return;
+        need(skin!=null&&skin.triangleCount==16&&
+                skin.leftCount==8&&skin.rightCount==8,
+                "real triangle thigh hull did not publish both legs");
+        need(skin.bounds[0]>2F&&skin.bounds[5]<-1F,
+                "skinned Emoticons vertices were not transformed to actor world");
+        float[] left={2.75F,.50F,-2F,0F,0F,0F,1F,
+                .11F,.15F,.11F};
+        float[] right={3.25F,.50F,-2F,0F,0F,0F,1F,
+                .11F,.15F,.11F};
+        Object morph=new Object();
+        SkirtXPBDContacts.publish(morph,77,77D,world,
+                new float[][]{left,right},
+                java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"),skin);
+        SkirtXPBDContacts.Frame scene=SkirtXPBDContacts.forMorph(morph);
+        need(scene!=null&&scene.skinSurface==skin,
+                "published skirt sample ignored animated triangle mesh");
+
+        float[] cloth={-.25F,.49F,0F};
+        float[] corrected=SkirtXPBDContacts.corrected(cloth,scene,
+                .018F,new float[]{-1F,0F,0F});
+        need(corrected[1]>.51F&&
+                Math.abs(corrected[0]-cloth[0])<.002F,
+                "mesh did not project fabric along REAL thigh top normal");
+        float[] onEdge={-.25F,.485F,0F};
+        float[] seam=SkirtXPBDContacts.corrected(onEdge,scene,.018F);
+        need(seam[1]>.505F,
+                "shared skinned triangle edge introduced collider gap");
+        float[] free={0F,.49F,0F};
+        equal(SkirtXPBDContacts.corrected(free,scene,.018F),
+                free,1E-6F,
+                "mesh collision invented a bridge between the two legs");
+        float[] above={-.25F,.63F,0F};
+        equal(SkirtXPBDContacts.corrected(above,scene,.018F),
+                above,1E-6F,
+                "cloth above the actual Emoticons skin got pushed again");
     }
 
     /** A horizontal thigh should carry the front hem from beneath instead
