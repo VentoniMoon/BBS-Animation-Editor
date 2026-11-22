@@ -308,7 +308,14 @@ public final class SkirtXPBDContacts
             for(int i=0;i<boxes.size();i++)
             {
                 String n=owners.get(i);
-                if(!isUpperThigh(n)||!n.contains(side))continue;
+                // The suffix @skirt-lower names the DISTAL zone of an
+                // UPPER thigh. Strip only the proxy-zone suffix before
+                // checking bone identity: the generic isUpperThigh()
+                // rightly rejects lower-leg BONES containing "lower".
+                String bone=n;
+                int zone=bone.indexOf("@skirt-");
+                if(zone>=0)bone=bone.substring(0,zone);
+                if(!isUpperThigh(bone)||!n.contains(side))continue;
                 if(n.endsWith("@skirt-lower"))
                 {thigh=boxes.get(i);break;}
                 if(!n.contains("@skirt-")&&thigh==null)
