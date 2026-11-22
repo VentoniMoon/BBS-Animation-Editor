@@ -1230,12 +1230,10 @@ public final class SkirtXPBDSolver
                     float limit=original*(1F+extra+
                             .05F*(1F-seated))+margin;
                     if(actual<=limit)continue;
-                    float upperControl=seated;
-                    if(POSE_AWARE_LAP_GUIDE&&REST_LENGTH_LAP_GUIDE)
-                        // Relax only the extra seated cosmetic upper-hoop
-                        // cap; all actual circumference links survive.
-                        upperControl*=1F-.85F*seatedRelief(seated);
-                    float desired=actual-(actual-limit)*upperControl;
+                    // Keep the proven upper hoop perimeter cap. Unlike
+                    // the old vertical-target guide, this cap prevents a
+                    // seated bell without restricting actual Y/folds.
+                    float desired=actual-(actual-limit)*seated;
                     float scale=desired/actual;
                     float nx=center[0]+px*scale,
                             nz=center[2]+pz*scale;
