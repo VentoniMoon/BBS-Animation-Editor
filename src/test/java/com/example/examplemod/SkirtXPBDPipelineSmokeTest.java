@@ -27,6 +27,7 @@ public final class SkirtXPBDPipelineSmokeTest
     }
     public static void main(String[] args)
     {
+        cleanThreeRowThighPinchRegression();
         exactlyFollowAnimatedNativeBonePoses();
         nativeVolumeFollowsXPBDWithoutDestroyingTextureFaces();
         originalUvsAndSeamBridgesAreConnected();
@@ -57,6 +58,56 @@ public final class SkirtXPBDPipelineSmokeTest
         perAttachmentClothActivationDoesNotAffectAnotherRig();
         clonedMorphFramesShareOneLiveXPBDState();
         System.out.println("SkirtXPBDPipelineSmokeTest OK");
+    }
+
+    /**
+     * The minimum three-row profile is deliberately the user's known
+     * good walking appearance. No extra ring, fake seat or native hem
+     * lifting may affect it. A strongly bent thigh is only allowed a
+     * short, outward contact projection, never a large kick toward
+     * the waist. Test exact A/B of the conservative collision correction.
+     */
+    private static void cleanThreeRowThighPinchRegression()
+    {
+        if(!SkirtXPBDSolver.CLEAN_THREE_ROW)return;
+        need(SkirtXPBDSolver.ROWS==3 ||
+                System.getProperty("bbs.editor.physics.skirt.xpbdRowCount")!=null,
+                "minimal profile must default to original 3 rows");
+        need(!SkirtXPBDSolver.POSE_AWARE_LAP_GUIDE &&
+                !SkirtXPBDSolver.ADAPTIVE_SEATED_GRAVITY &&
+                !SkirtXPBDSolver.ADAPTIVE_SEATED_SHAPE,
+                "minimal 3-row gait must not inherit experimental forces");
+        float[] before={.20F,-.48F,0F};
+        float[] pushed={.05F,-.13F,0F};
+        float[] waist={0F,0F,0F};
+        float[] walking=SkirtXPBDSolver.boundedThighExit(
+                before,pushed,waist,0F);
+        equal(walking,pushed,0F,
+                "walking must preserve the original exact thigh contacts");
+        float[] seated=SkirtXPBDSolver.boundedThighExit(
+                before,pushed,waist,1F);
+        if(SkirtXPBDSolver.ANTI_PINCH_CONTACTS)
+        {
+            need(seated[1]<=before[1]+1E-6F,
+                    "seated thigh contact pushed cloth up to the waistband");
+            need(seated[0]>=before[0]-1E-6F,
+                    "seated thigh contact pulled cloth into the actor");
+            need(distance(seated,before)<=.01801F,
+                    "seated OBB contact made an unbounded position jump");
+            float[] again=SkirtXPBDSolver.boundedThighExit(
+                    before,pushed,waist,1F);
+            equal(again,seated,0F,
+                    "conservative thigh collision is not deterministic");
+        }
+        else equal(seated,pushed,0F,
+                "anti-pinch A/B OFF must preserve exact old projection");
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State state=SkirtXPBDSolver.create(
+                f.raw,f.shared,f.rest);
+        SkirtXPBDSolver.Result neutral=state.current();
+        need(neutral.particles.length==60&&
+                neutral.refinedParticles.length==SkirtXPBDSolver.SIM_NODES,
+                "three-row profile broke the native 60-node UV binding");
     }
 
     private static void exactlyFollowAnimatedNativeBonePoses()
