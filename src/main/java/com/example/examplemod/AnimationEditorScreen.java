@@ -77,7 +77,7 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorAssistantPanel assistantPanel =
             new EditorAssistantPanel();
     /** World pins are per-scene and session-only until native rig acceptance. */
-    private final EditorWorldBonePinRegistry worldBonePins =
+    private EditorWorldBonePinRegistry worldBonePins =
             new EditorWorldBonePinRegistry();
     private EditorSceneState worldPinSceneState;
     private int worldPinSceneIndex=Integer.MIN_VALUE;
@@ -772,7 +772,10 @@ public class AnimationEditorScreen extends GuiScreen
         int sceneIndex=sceneState==null?-1:sceneState.getSelectedScene();
         if(worldPinSceneState!=sceneState||worldPinSceneIndex!=sceneIndex)
         {
-            worldBonePins.clear();
+            worldBonePins=sceneState==null?
+                    new EditorWorldBonePinRegistry():
+                    sceneState.getWorldBonePins();
+            this.multiActorPreview.setWorldPinRegistry(worldBonePins);
             worldPinSceneState=sceneState;
             worldPinSceneIndex=sceneIndex;
             worldPinMessage="";
@@ -785,14 +788,19 @@ public class AnimationEditorScreen extends GuiScreen
      * It is an experimental render-only IK correction, never authored key
      * multiplication or translation of a pinned mesh.
      */
-    private boolean worldPinSupported()
+    private boolean worldPinRigSupported()
     {
         BlockbusterSceneActorData actor=getSelectedActor();
-        return editorModeController.getMode()==EditorModeController.EditorMode.POSE
-                &&actor!=null&&actor.getMorphName()!=null
+        return actor!=null&&actor.getMorphName()!=null
                 &&actor.getMorphName().startsWith("blockbuster.")
                 &&!BetterLightsActorInspector.isLightActor(actor)
                 &&!ParticleActorRig.isParticleActor(actor);
+    }
+
+    private boolean worldPinSupported()
+    {
+        return editorModeController.getMode()==
+                EditorModeController.EditorMode.POSE&&worldPinRigSupported();
     }
 
     public boolean setWorldBonePinned(String actorId,String boneName,
@@ -823,6 +831,7 @@ public class AnimationEditorScreen extends GuiScreen
             if(changed)
             {
                 worldPinMessage="World pin removed";
+                markEditorDirty();
                 applyAdapters();
             }
             return changed;
@@ -853,7 +862,8 @@ public class AnimationEditorScreen extends GuiScreen
                 worldBonePins.unpin(existing.actorId,existing.boneName);
         }
         if(!worldBonePins.pin(actorId,boneName,nativePivot))return false;
-        worldPinMessage="WORLD PIN: "+boneName+" (session-only)";
+        worldPinMessage="WORLD PIN: "+boneName+" (saved in editor.dat)";
+        markEditorDirty();
         applyAdapters();
         return true;
     }
@@ -909,7 +919,7 @@ public class AnimationEditorScreen extends GuiScreen
     private void applyWorldPinSnapshot(float animationFrame)
     {
         ensureWorldPinScene();
-        if(worldBonePins.size()==0||!worldPinSupported())return;
+        if(worldBonePins.size()==0||!worldPinRigSupported())return;
         BlockbusterSceneActorData actor=getSelectedActor();
         BlockbusterRecordFrame record=getCurrentRecordFrame();
         if(actor==null||record==null)return;
@@ -925,10 +935,11 @@ public class AnimationEditorScreen extends GuiScreen
             return;
         }
         worldPinResidual=result.residualWorld;
-        if(result.residualWorld>.04F)
-            worldPinMessage=result.reachable?
-                    "World IK residual too high; check skeleton":
-                    "World pin beyond limb reach (no stretching)";
+        worldPinMessage=result.residualWorld>.04F
+                ?(result.reachable
+                    ?"World IK residual high: check skeleton"
+                    :"Pin out of reach; limb length preserved")
+                :"WORLD PIN ACTIVE";
         java.util.List<AnimationBoneSnapshot> snapshots=
                 EditorWorldBoneSnapshotAdapter.snapshots(
                         bones,animationFrame,result);
@@ -5237,7 +5248,6 @@ public class AnimationEditorScreen extends GuiScreen
     public void onGuiClosed()
     {
         assistantPanel.close();
-        worldBonePins.clear();
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
         BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(false);
