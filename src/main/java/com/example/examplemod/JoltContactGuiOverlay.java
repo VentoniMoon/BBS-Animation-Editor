@@ -294,6 +294,10 @@ public final class JoltContactGuiOverlay
 
     private static int boxColor(JoltContactOverlaySnapshot.Box box)
     {
+        // Orange = OBB actually sent to the skirt XPBD cloth solver.
+        // Purple = ordinary parent Jolt thigh contact. This makes
+        // overlapping or misaligned collider sets easy to distinguish.
+        if(box.source.endsWith(" [XPBD]"))return 0xFFB24A;
         if(!isParent(box))return 0xFFD66B;
         String n=box.source.toLowerCase(java.util.Locale.ROOT);
         if(n.contains("head") || n.contains("neck"))return 0x74F1FF;
