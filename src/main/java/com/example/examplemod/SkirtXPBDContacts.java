@@ -113,6 +113,293 @@ public final class SkirtXPBDContacts
         return Math.min(left,right);
     }
 
+
+    /**
+     * Read-only, CPU-skinned Emoticons thigh/pelvis collision surface.
+     * This is NOT a second Jolt rigid-body world. The surface is captured
+     * only after Emoticons finishes its normal skinning pass, and built
+     * once for a published editor sample. No new box joints or synthetic
+     * bridge volumes can introduce the artificial three-zone cracks.
+     *
+     * The 3-D spatial hash contains ONLY triangles whose AABBs overlap
+     * its cell; expanded AABBs cover a conservative contact search band.
+     * Queries are thus bounded by the nearby surface, not all body mesh
+     * triangles x 100 cloth particles x 8 XPBD iterations.
+     */
+    public static final boolean SKINNED_MESH_CONTACTS=Boolean.parseBoolean(
+            System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSkinnedMeshContacts","true"));
+
+    /** One CPU-skinned Emoticons submesh, selected by dominant bone weights. */
+    public static final class SkinRegion
+    {
+        public final String owner;
+        public final float[] vertices;
+        public final int[] triangles;
+        public SkinRegion(String owner,float[] vertices,int[] triangles)
+        {
+            if(owner==null||vertices==null||triangles==null||
+                    vertices.length%3!=0||triangles.length%3!=0)
+                throw new IllegalArgumentException("Invalid skinned region");
+            this.owner=owner;
+            this.vertices=vertices.clone();
+            this.triangles=triangles.clone();
+        }
+    }
+
+    public static final class SkinSurface
+    {
+        private static final float CELL=.22F;
+        private static final float BAND=.16F;
+        private static final float MAX_CONTACT_STEP=.065F;
+        private static final int MAX_TRIANGLES=4500;
+        public final int triangleCount,leftCount,rightCount,pelvisCount;
+        /** Stable hash of the EXACT current skinned surface and actor yaw. */
+        public final long fingerprint;
+        public final float[] bounds;
+        private final java.util.Map<Cell,java.util.List<Face>> grid;
+
+        private SkinSurface(java.util.Map<Cell,java.util.List<Face>> cells,
+                int count,int left,int right,int pelvis,long stamp,
+                float[] range)
+        {
+            grid=java.util.Collections.unmodifiableMap(cells);
+            triangleCount=count;leftCount=left;rightCount=right;
+            pelvisCount=pelvis;fingerprint=stamp;bounds=range;
+        }
+
+        private static final class Cell
+        {
+            final int x,y,z;
+            Cell(int x,int y,int z){this.x=x;this.y=y;this.z=z;}
+            @Override public int hashCode()
+            {return (x*73856093)^(y*19349663)^(z*83492791);}
+            @Override public boolean equals(Object other)
+            {
+                if(!(other instanceof Cell))return false;
+                Cell c=(Cell)other;
+                return x==c.x&&y==c.y&&z==c.z;
+            }
+        }
+        private static final class Face
+        {
+            final float[] a,b,c,normal;
+            Face(float[] a,float[] b,float[] c,float[] n)
+            {this.a=a;this.b=b;this.c=c;normal=n;}
+        }
+        private static int cell(float value)
+        {return (int)Math.floor(value/CELL);}
+        private static float[] minus(float[] a,float[] b)
+        {return new float[]{a[0]-b[0],a[1]-b[1],a[2]-b[2]};}
+        private static float dot(float[] a,float[] b)
+        {return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+        private static float[] cross(float[] a,float[] b)
+        {
+            return new float[]{a[1]*b[2]-a[2]*b[1],
+                    a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]};
+        }
+        private static float[] mix(float[] a,float[] b,float t)
+        {
+            return new float[]{a[0]+(b[0]-a[0])*t,
+                    a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t};
+        }
+        private static float clamp(float v)
+        {return Math.max(0F,Math.min(1F,v));}
+
+        /**
+         * Returns null if a real skinned surface is incomplete. Old OBBs
+         * remain the fallback; no guessed actor geometry is ever created.
+         * Vertex coordinates are Emoticons' CPU-skinned render-local data.
+         * The actor-world transform must be applied ONCE (not the child
+         * Chameleon attachment transform, which belongs only to cloth).
+         */
+        public static SkinSurface build(float[] actorWorld,
+                java.util.List<SkinRegion> regions)
+        {
+            if(!SKINNED_MESH_CONTACTS||!matrixValid(actorWorld)||
+                    regions==null||regions.isEmpty())return null;
+            java.util.Map<Cell,java.util.List<Face>> cells=
+                    new java.util.HashMap<Cell,java.util.List<Face>>();
+            float[] bounds={Float.POSITIVE_INFINITY,
+                    Float.POSITIVE_INFINITY,Float.POSITIVE_INFINITY,
+                    Float.NEGATIVE_INFINITY,Float.NEGATIVE_INFINITY,
+                    Float.NEGATIVE_INFINITY};
+            int accepted=0,left=0,right=0,pelvis=0;
+            long hash=1469598103934665603L;
+            for(SkinRegion region:regions)
+            {
+                if(region==null||region.triangles.length==0)continue;
+                float[] source=region.vertices;
+                float[][] world=new float[source.length/3][];
+                for(int i=0;i<world.length;i++)
+                {
+                    float[] p={source[3*i],source[3*i+1],source[3*i+2]};
+                    if(!finite(p))return null;
+                    world[i]=point(actorWorld,p);
+                }
+                // Compute the owning bone surface centroid from referenced
+                // vertices, not from the whole (multi-bone) Emoticons mesh.
+                boolean[] used=new boolean[world.length];
+                float[] center=new float[3];
+                int count=0;
+                for(int index:region.triangles)
+                {
+                    if(index<0||index>=world.length)return null;
+                    if(used[index])continue;
+                    used[index]=true;count++;
+                    for(int k=0;k<3;k++)center[k]+=world[index][k];
+                }
+                if(count<3)continue;
+                for(int k=0;k<3;k++)center[k]/=count;
+                int regionAccepted=0;
+                for(int j=0;j<region.triangles.length;j+=3)
+                {
+                    float[] a=world[region.triangles[j]];
+                    float[] b=world[region.triangles[j+1]];
+                    float[] c=world[region.triangles[j+2]];
+                    float[] ab=minus(b,a),ac=minus(c,a);
+                    float[] normal=cross(ab,ac);
+                    float length=(float)Math.sqrt(dot(normal,normal));
+                    if(length<1E-7F||!Float.isFinite(length))continue;
+                    for(int k=0;k<3;k++)normal[k]/=length;
+                    float[] middle={(a[0]+b[0]+c[0])/3F,
+                            (a[1]+b[1]+c[1])/3F,
+                            (a[2]+b[2]+c[2])/3F};
+                    // A dominant-bone triangle set can be open at joints,
+                    // but most surface faces still point away from the
+                    // owning bone's centroid. Repair inverted winding.
+                    float outward=dot(normal,minus(middle,center));
+                    if(outward < -1E-5F)
+                        for(int k=0;k<3;k++)normal[k]=-normal[k];
+                    float[] min=new float[3],max=new float[3];
+                    for(int k=0;k<3;k++)
+                    {
+                        min[k]=Math.min(a[k],Math.min(b[k],c[k]));
+                        max[k]=Math.max(a[k],Math.max(b[k],c[k]));
+                        // Reject malformed skinned geometry/units.
+                        if(max[k]-min[k]>1.5F)return null;
+                    }
+                    Face face=new Face(a,b,c,normal);
+                    int[] lo=new int[3],hi=new int[3];
+                    for(int k=0;k<3;k++)
+                    {
+                        bounds[k]=Math.min(bounds[k],min[k]);
+                        bounds[k+3]=Math.max(bounds[k+3],max[k]);
+                        lo[k]=cell(min[k]-BAND);
+                        hi[k]=cell(max[k]+BAND);
+                    }
+                    for(int ix=lo[0];ix<=hi[0];ix++)
+                        for(int iy=lo[1];iy<=hi[1];iy++)
+                            for(int iz=lo[2];iz<=hi[2];iz++)
+                            {
+                                Cell key=new Cell(ix,iy,iz);
+                                java.util.List<Face> entry=cells.get(key);
+                                if(entry==null)
+                                {
+                                    entry=new java.util.ArrayList<Face>();
+                                    cells.put(key,entry);
+                                }
+                                entry.add(face);
+                            }
+                    for(float value:middle)
+                        hash=(hash^Float.floatToIntBits(value))*
+                                1099511628211L;
+                    regionAccepted++;
+                    if(++accepted>MAX_TRIANGLES)return null;
+                }
+                String owner=region.owner.toLowerCase(java.util.Locale.ROOT);
+                if(owner.contains("left"))left+=regionAccepted;
+                if(owner.contains("right"))right+=regionAccepted;
+                if(owner.contains("pelvis")||owner.contains("hip")||
+                        owner.contains("low_body"))pelvis+=regionAccepted;
+            }
+            // Partial hulls are unsafe: falling back to OBBs is preferable
+            // to leaving one leg without collisions.
+            if(left<8||right<8)return null;
+            return new SkinSurface(cells,accepted,left,right,pelvis,
+                    hash,bounds);
+        }
+
+        private static boolean finite(float[] point)
+        {
+            for(float value:point)if(!Float.isFinite(value))return false;
+            return true;
+        }
+        /**
+         * Nearest point on triangle (Ericson / real-time collision).
+         * Handles all edges/corners, unlike plane-only projection that
+         * pushes fabric through gaps along a triangle's infinite plane.
+         */
+        private static float[] closest(float[] p,Face t)
+        {
+            float[] ab=minus(t.b,t.a),ac=minus(t.c,t.a),
+                    ap=minus(p,t.a);
+            float d1=dot(ab,ap),d2=dot(ac,ap);
+            if(d1<=0F&&d2<=0F)return t.a;
+            float[] bp=minus(p,t.b);
+            float d3=dot(ab,bp),d4=dot(ac,bp);
+            if(d3>=0F&&d4<=d3)return t.b;
+            float vc=d1*d4-d3*d2;
+            if(vc<=0F&&d1>=0F&&d3<=0F)
+                return mix(t.a,t.b,d1/(d1-d3));
+            float[] cp=minus(p,t.c);
+            float d5=dot(ab,cp),d6=dot(ac,cp);
+            if(d6>=0F&&d5<=d6)return t.c;
+            float vb=d5*d2-d1*d6;
+            if(vb<=0F&&d2>=0F&&d6<=0F)
+                return mix(t.a,t.c,d2/(d2-d6));
+            float va=d3*d6-d5*d4;
+            if(va<=0F&&(d4-d3)>=0F&&(d5-d6)>=0F)
+                return mix(t.b,t.c,(d4-d3)/
+                        ((d4-d3)+(d5-d6)));
+            float total=va+vb+vc;
+            if(Math.abs(total)<1E-9F)return t.a;
+            float v=vb/total,w=vc/total;
+            return new float[]{t.a[0]+ab[0]*v+ac[0]*w,
+                    t.a[1]+ab[1]*v+ac[1]*w,
+                    t.a[2]+ab[2]*v+ac[2]*w};
+        }
+
+        /**
+         * Single smooth contact against the nearest ACTUAL skinned face.
+         * Never project sequentially against overlapping boxes. The
+         * outward normal comes from the CPU-skinned surface, not the
+         * artificial hip-up / thigh-radial switches.
+         *
+         * A conservative one-step cap avoids teleporting skirt vertices
+         * to the waist when a rendered pose changes suddenly.
+         */
+        public float[] correctedWorld(float[] world,float thickness)
+        {
+            if(world==null||world.length!=3||!finite(world))
+                return world==null?null:world.clone();
+            java.util.List<Face> nearby=grid.get(new Cell(
+                    cell(world[0]),cell(world[1]),cell(world[2])));
+            if(nearby==null||nearby.isEmpty())return world.clone();
+            Face best=null;
+            float[] bestPoint=null;
+            float best2=BAND*BAND;
+            for(Face f:nearby)
+            {
+                float[] closest=closest(world,f);
+                float[] delta=minus(world,closest);
+                float d2=dot(delta,delta);
+                if(d2<best2)
+                {
+                    best2=d2;best=f;bestPoint=closest;
+                }
+            }
+            if(best==null)return world.clone();
+            float signed=dot(minus(world,bestPoint),best.normal);
+            float need=thickness+0.004F-signed;
+            if(need<=0F)return world.clone();
+            float step=Math.min(MAX_CONTACT_STEP,need);
+            return new float[]{world[0]+best.normal[0]*step,
+                    world[1]+best.normal[1]*step,
+                    world[2]+best.normal[2]*step};
+        }
+    }
+
     private SkirtXPBDContacts(){}
 
     public static synchronized void registerOwner(Object morph,Object track)
