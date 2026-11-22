@@ -745,12 +745,15 @@ public class BodyPartsPreviewRenderer
                             subset.vertices,subset.triangles));
                 }
             }
+            String[] buildReport={"unavailable"};
             SkirtXPBDContacts.SkinSurface skin=
-                    SkirtXPBDContacts.SkinSurface.build(actorWorld,regions);
+                    SkirtXPBDContacts.SkinSurface.build(
+                            actorWorld,regions,buildReport);
             status[0]=skin==null?
-                    "mesh rejected: L="+foundLeft+" R="+foundRight+
-                    " pelvis="+foundPelvis:
-                    "ready: "+skin.triangleCount+" triangles";
+                    buildReport[0]+" (L="+foundLeft+" R="+foundRight+
+                    " pelvis="+foundPelvis+")":
+                    "ready: "+skin.triangleCount+" triangles ("+
+                            buildReport[0]+")";
             return skin;
         }
         catch(RuntimeException invalid)
