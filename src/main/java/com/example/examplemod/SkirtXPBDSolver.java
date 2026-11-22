@@ -330,18 +330,21 @@ public final class SkirtXPBDSolver
     private static final float MAX_OFFSET=.37F;
     private static final float POSE_JUMP_RESET=.40F;
     /**
-     * Controlled A/B: free skirt latitudes should not inherit the full
-     * vertical rotation/translation of their authored Chameleon bones
-     * when BOTH real thighs are deeply seated. The belt stays pinned to
-     * the native pose; the simulated cloth follows the belt displacement
-     * and its own constraints/collisions.
+     * Manual BODY PARTS pose A/B: default OFF for this test JAR, so
+     * authored skirt-part rotations continue to affect the native cloth
+     * pose even after BOTH thighs raise into the seated regime.
      *
-     * Original solver: -Dbbs.editor.physics.skirt.xpbdSeatedPoseIsolation=false
+     * The production seated-isolation behavior can be restored with
+     * -Dbbs.editor.physics.skirt.xpbdSeatedPoseIsolation=true
+     *
+     * Changing the default does not alter cloth nodes, colliders,
+     * pinned waist, collisions, or Jolt; it only changes whether the
+     * solver follows the garment's authored pose vs. its cached drape.
      */
     public static final boolean SEATED_POSE_ISOLATION=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdSeatedPoseIsolation",
-                    "true"));
+                    "false"));
     private static final float MIN_RADIAL_FRACTION=.85F;
     // The normal 0.37-block leash and 85% radial silhouette work for
     // walking, but forbid folds over both horizontal thighs. Relax only
