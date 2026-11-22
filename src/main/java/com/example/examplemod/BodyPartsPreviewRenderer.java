@@ -283,6 +283,14 @@ public class BodyPartsPreviewRenderer
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdColliderOverlay","true"));
     private int parentEmoticonsColliderFrame=-1;
+    /** Most recent real Emoticons CPU-skinned collision surface, captured
+     * after normal actor rendering. Never store mesh snapshots globally:
+     * background actors and skin changes have independent geometry. */
+    private SkirtXPBDContacts.SkinSurface skirtSkinSurface;
+    private Object skirtSkinParent;
+    private int skirtSkinFrame=-1;
+    private String skirtSkinReport="";
+
     private String reportedParentColliderState="";
 
     /* Emoticons provides model-local bone transforms. The renderer then
@@ -447,6 +455,30 @@ public class BodyPartsPreviewRenderer
                 reportedParentColliderState=report.substring(
                         0,report.indexOf(" frame="));
                 System.out.println("[BBS Animation Editor][Jolt][ParentSkin] "+report);
+            }
+        }
+        // Build once from the REAL CPU-skinned Emoticons triangles of
+        // this actor render. WORLD coordinates here must use actorFrame,
+        // not the later Chameleon child attachment transform.
+        skirtSkinSurface=SkirtXPBDContacts.SKINNED_MESH_CONTACTS?
+                captureSkirtSkinSurface(morph,actorFrameFor(frame)):null;
+        skirtSkinParent=morph;
+        skirtSkinFrame=frame;
+        if(SkirtXPBDContacts.SKINNED_MESH_CONTACTS&&frame%20==0)
+        {
+            String report=skirtSkinSurface==null?
+                    "fallback=fitted OBB (missing or invalid skin mesh)":
+                    "triangles="+skirtSkinSurface.triangleCount+
+                    " left="+skirtSkinSurface.leftCount+
+                    " right="+skirtSkinSurface.rightCount+
+                    " pelvis="+skirtSkinSurface.pelvisCount+
+                    " bounds="+java.util.Arrays.toString(
+                            skirtSkinSurface.bounds);
+            if(!report.equals(skirtSkinReport))
+            {
+                skirtSkinReport=report;
+                System.out.println("[BBS Editor][SkirtSkinMesh] "+
+                        report+" frame="+frame);
             }
         }
         captureAttachedChameleonColliders(morph,frame);
@@ -637,6 +669,69 @@ public class BodyPartsPreviewRenderer
         }
     }
 
+    /**
+     * Adapt directly to the currently posed Emoticons vertex surface.
+     * Each face belongs to exactly ONE dominant-weight skeleton bone;
+     * neighboring faces nevertheless retain their shared source vertices.
+     * Only two upper thighs and the lowest pelvis bone are included.
+     * Hair/ragdoll continue to receive their original Jolt primitives.
+     */
+    private static SkirtXPBDContacts.SkinSurface captureSkirtSkinSurface(
+            Object morph,float[] actorWorld)
+    {
+        if(!(morph instanceof AnimatedMorph) ||
+                !SkirtXPBDContacts.matrixValid(actorWorld))return null;
+        try
+        {
+            List<mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone> bones=
+                    EmoticonsModelAccess.getBones((AnimatedMorph)morph);
+            if(bones==null)return null;
+            String left=null,right=null,pelvis=null;
+            int pelvisRank=Integer.MAX_VALUE;
+            for(mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone bone:bones)
+            {
+                if(bone==null||bone.name==null)continue;
+                String n=bone.name.toLowerCase(java.util.Locale.ROOT)
+                        .replace('-','_').replace(' ','_');
+                if(BodyPartJoltContactBudget.isUpperThigh(
+                        "emoticons."+n))
+                {
+                    if(n.contains("left")&&left==null)left=bone.name;
+                    if(n.contains("right")&&right==null)right=bone.name;
+                }
+                int rank=n.equals("low_body")?0:
+                        n.equals("pelvis")||n.equals("hips")?1:
+                        n.equals("hip")?2:Integer.MAX_VALUE;
+                if(rank<pelvisRank)
+                {pelvis=bone.name;pelvisRank=rank;}
+            }
+            if(left==null||right==null)return null;
+            java.util.List<SkirtXPBDContacts.SkinRegion> regions=
+                    new java.util.ArrayList<SkirtXPBDContacts.SkinRegion>();
+            for(EmoticonsCollisionGeometryProvider.MeshSnapshot source:
+                    EmoticonsCollisionGeometryProvider.snapshot(morph))
+            {
+                for(String bone:new String[]{left,right,pelvis})
+                {
+                    if(bone==null)continue;
+                    EmoticonsCollisionGeometryProvider.MeshSnapshot subset=
+                            EmoticonsSkinCollisionGroups.selectBone(
+                                    morph,source,bone);
+                    if(subset==null||subset.triangleCount()<8)continue;
+                    regions.add(new SkirtXPBDContacts.SkinRegion(
+                            "emoticons."+bone,
+                            subset.vertices,subset.triangles));
+                }
+            }
+            return SkirtXPBDContacts.SkinSurface.build(actorWorld,regions);
+        }
+        catch(RuntimeException invalid)
+        {
+            // A missing/updated Emoticons mesh never blocks scene drawing.
+            return null;
+        }
+    }
+
     private void publishClothContactFrames(Object actorMorph,int frame)
     {
         for(BodyPartModelData data:collisionPartOrder)
@@ -667,7 +762,9 @@ public class BodyPartsPreviewRenderer
                             net.minecraft.client.Minecraft.getMinecraft()
                                     .getRenderPartialTicks());
                 SkirtXPBDContacts.publish(part.morph.get(),frame,tick,
-                        attached,fitted.boxes,fitted.owners);
+                        attached,fitted.boxes,fitted.owners,
+                        skirtSkinParent==actorMorph&&skirtSkinFrame==frame?
+                                skirtSkinSurface:null);
             }
             catch(RuntimeException invalid)
             {
@@ -2337,7 +2434,9 @@ public class BodyPartsPreviewRenderer
                                 frame,net.minecraft.client.Minecraft
                                         .getMinecraft().getRenderPartialTicks());
                     SkirtXPBDContacts.publish(part.morph.get(),frame,
-                            sampleTick,attached,fitted.boxes,fitted.owners);
+                            sampleTick,attached,fitted.boxes,fitted.owners,
+                            skirtSkinParent==morph&&skirtSkinFrame==frame?
+                                    skirtSkinSurface:null);
                 }
                 Map<String,Float> thighContactDepths=
                         java.util.Collections.<String,Float>emptyMap();
