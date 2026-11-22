@@ -37,6 +37,7 @@ public final class SkirtXPBDPipelineSmokeTest
         outwardThighContactsPreserveHemSide();
         raisedThighContactsSupportClothFromAbove();
         bilateralSittingFoldsWithoutBreakingWalking();
+        seatedTriangleInteriorContactDoesNotRequireVertexPenetration();
         fractionalClockAdvancesOncePerSixtiethSecond();
         renderOnlyFramesStillCorrectFastThighContact();
         perAttachmentClothActivationDoesNotAffectAnotherRig();
@@ -470,6 +471,77 @@ public final class SkirtXPBDPipelineSmokeTest
      * two rotated upper thighs against walking, test finite 60Hz stepping,
      * then return to upright with the normal .37-block cloth limit.
      */
+
+    /**
+     * Regression: a thin thigh can intersect the INSIDE of a 20x5 panel
+     * even with all 100 physics vertices outside the OBB. This case was
+     * previously invisible to the point-only contact solver.
+     */
+    private static void seatedTriangleInteriorContactDoesNotRequireVertexPenetration()
+    {
+        if(SkirtXPBDSolver.ROWS!=5)return;
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State state=
+                SkirtXPBDSolver.create(f.raw,f.shared,f.rest);
+        float[][] mesh=state.current().refinedParticles;
+        float best=-1F;
+        float[] middle=null;
+        for(int row=1;row<4;row++)
+            for(int c=0;c<20;c++)
+            {
+                int a=row*20+c,b=(row+1)*20+c,
+                        d=(row+1)*20+(c+1)%20;
+                float[] centroid=new float[3];
+                for(int k=0;k<3;k++)
+                    centroid[k]=(mesh[a][k]+mesh[b][k]+mesh[d][k])/3F;
+                float nearest=Float.POSITIVE_INFINITY;
+                for(float[] vertex:mesh)
+                    nearest=Math.min(nearest,distance(centroid,vertex));
+                if(nearest>best)
+                {
+                    best=nearest;
+                    middle=centroid;
+                }
+            }
+        need(middle!=null&&best>.038F,
+                "fixture needs a triangle interior clear of all vertices");
+        float s=(float)Math.sin(Math.toRadians(80D)/2D);
+        float c=(float)Math.cos(Math.toRadians(80D)/2D);
+        float[] left={middle[0],middle[1],middle[2],
+                s,0F,0F,c,.016F,.016F,.016F};
+        float[] right={middle[0]+5F,middle[1],middle[2],
+                s,0F,0F,c,.016F,.016F,.016F};
+        Object morph=new Object();
+        SkirtXPBDContacts.publish(morph,27,identity(),
+                new float[][]{left,right},java.util.Arrays.asList(
+                        "emoticons.left_leg","emoticons.right_leg"));
+        SkirtXPBDContacts.Frame bodies=
+                SkirtXPBDContacts.forMorph(morph);
+        need(bodies!=null&&bodies.seatedBlend>.80F,
+                "surface regression requires a deeply seated bilateral pose");
+        float[] midpointAfter=SkirtXPBDContacts.corrected(
+                middle,bodies,.018F);
+        need(distance(middle,midpointAfter)>.01F,
+                "triangle center must actually overlap a fitted OBB");
+        for(float[] v:mesh)
+            need(distance(v,SkirtXPBDContacts.corrected(
+                    v,bodies,.018F))<.00001F,
+                    "test fixture accidentally penetrates at a vertex");
+        SkirtXPBDSolver.Result after=state.advance(0F,f.rest,bodies);
+        need(after.substeps==0&&after.legContacts>0,
+                "seated polygon interior contact was not detected");
+        float moved=0F;
+        for(int n=0;n<mesh.length;n++)
+            moved=Math.max(moved,
+                    distance(after.refinedParticles[n],mesh[n]));
+        need(moved>.0001F,
+                "polygon collision failed to reposition any cloth vertices");
+        for(int n=0;n<60;n++)
+            if(f.shared.nodes.get(n).row==0)
+                equal(after.particles[n],f.rest.target[n],1E-6F,
+                        "seated panel correction displaced a waist pin");
+    }
+
     private static void bilateralSittingFoldsWithoutBreakingWalking()
     {
         float[] id=identity();
