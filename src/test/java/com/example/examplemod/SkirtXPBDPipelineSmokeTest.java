@@ -31,6 +31,7 @@ public final class SkirtXPBDPipelineSmokeTest
         nativeVolumeFollowsXPBDWithoutDestroyingTextureFaces();
         originalUvsAndSeamBridgesAreConnected();
         xpbdHasPinnedWaistGravityAndBounds();
+        refinedGridRetainsNativeSkinCorrespondence();
         pausedPoseChangePreservesClothRelativeMotion();
         actualBodyObbsProjectWithoutInventedContacts();
         outwardThighContactsPreserveHemSide();
@@ -173,6 +174,29 @@ public final class SkirtXPBDPipelineSmokeTest
                             "XPBD may not deform source waist cuboids");
             }
         }
+        // Native volume render now samples TWO intermediate physical rings
+        // without replacing original UV corners or waistband cubes.
+        SkirtXPBDSolver.Result neutralFine=
+                SkirtXPBDSolver.create(f.raw,f.shared,posed).current();
+        SkirtXPBDVolumeSkin.Mesh refined=SkirtXPBDVolumeSkin.build(
+                rest,current,f.raw,f.binding,posed,neutralFine);
+        if(SkirtXPBDSolver.ROWS==5)
+        {
+            need(refined.quads==978&&refined.waistQuads==18&&
+                    refined.fabricQuads==960,
+                    "20x5 skirt must subdivide 240 fabric faces into 960");
+            for(SkirtXPBDVolumeSkin.Face face:refined.faces)
+            {
+                for(float[] uv:face.uv)
+                    for(float coord:uv)
+                        need(Float.isFinite(coord),
+                                "UV subdivision created non-finite coordinates");
+                for(float[] xyz:face.world)
+                    for(float coord:xyz)
+                        need(Float.isFinite(coord),
+                                "refined volumetric fabric is non-finite");
+            }
+        }
         boolean rejected=false;
         try{SkirtXPBDVolumeSkin.build(
                 rest,null,f.raw,f.binding,posed,dynamic);}
@@ -280,6 +304,55 @@ public final class SkirtXPBDPipelineSmokeTest
         need(rejected,"unbounded time step must fail closed");
     }
 
+    /**
+     * A finer internal fabric lattice must NOT reorder the original 60
+     * Chameleon skin/UV anchors. Original pose reproduction stays exact.
+     */
+    private static void refinedGridRetainsNativeSkinCorrespondence()
+    {
+        Fixture f=new Fixture();
+        SkirtXPBDSolver.State state=
+                SkirtXPBDSolver.create(f.raw,f.shared,f.rest);
+        SkirtXPBDSolver.Result initial=state.current();
+        need(initial.particles.length==60&&
+                initial.refinedParticles.length==
+                        SkirtXPBDSolver.SIM_NODES,
+                "refined solver changed native 60-node binding");
+        for(int n=0;n<60;n++)
+        {
+            int fine=initial.sourceToRefined[n];
+            need(fine>=0&&fine<SkirtXPBDSolver.SIM_NODES,
+                    "source node is not mapped to refined grid");
+            equal(initial.particles[n],f.rest.target[n],1E-6F,
+                    "fine grid moved authored source anchor");
+            equal(initial.refinedParticles[fine],
+                    initial.particles[n],1E-6F,
+                    "fine grid remapping differs from native skin");
+        }
+        if(SkirtXPBDSolver.ROWS==5)
+        {
+            need(initial.refinedParticles.length==100,
+                    "20x5 skirt lattice must contain 100 nodes");
+            for(int c=0;c<20;c++)
+                for(int r=1;r<5;r+=2)
+                {
+                    float[] a=initial.refinedParticles[(r-1)*20+c];
+                    float[] b=initial.refinedParticles[(r+1)*20+c];
+                    float[] mid=initial.refinedParticles[r*20+c];
+                    for(int k=0;k<3;k++)
+                        need(Math.abs(mid[k]-(a[k]+b[k])*.5F)<1E-5F,
+                                "extra cloth latitude has incorrect rest pose");
+                }
+        }
+        for(int i=0;i<3;i++)
+            state.advance(1F/60F,f.rest,null);
+        SkirtXPBDSolver.Result moved=state.current();
+        for(int n=0;n<60;n++)
+            for(float v:moved.particles[n])
+                need(Float.isFinite(v),
+                        "new fine solver produced nonfinite native geometry");
+    }
+
     /** A newly posed Chameleon frame must carry existing XPBD dynamics
      * into the CURRENT pose even if that render has dt=0 (pause/seek).
      * The same paused frame twice must not move the nodes a second time. */
@@ -365,9 +438,14 @@ public final class SkirtXPBDPipelineSmokeTest
         float[] point={-.16F,.51F,0F};
         float[] supported=SkirtXPBDContacts.corrected(
                 point,frame,.018F,new float[]{-1F,0F,0F});
-        need(supported[1]>.59F&&
-                Math.abs(supported[0]-point[0])<.01F,
-                "seated thigh should project cloth UP, not sideways");
+        if(Boolean.parseBoolean(System.getProperty(
+                "bbs.editor.physics.skirt.xpbdSeatedContacts","false")))
+            need(supported[1]>.59F&&
+                    Math.abs(supported[0]-point[0])<.01F,
+                    "opt-in raised-thigh projection should exit UP");
+        else
+            need(supported[0]<point[0]-.01F,
+                    "disabled seated experiment must retain radial exit");
         // A vertical leg must still push toward the skirt's OUTER side.
         Object standing=new Object();
         float[] upright={-.16F,.46F,0F,0F,0F,0F,1F,
