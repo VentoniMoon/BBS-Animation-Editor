@@ -534,6 +534,21 @@ public final class SkirtXPBDPipelineSmokeTest
         SkirtXPBDContacts.Frame scene=SkirtXPBDContacts.forMorph(morph);
         need(scene!=null&&scene.skinSurface==skin,
                 "published skirt sample ignored animated triangle mesh");
+        // Coordinate parity is a physical requirement, not just a HUD
+        // issue: a mesh positioned several blocks from the skirt must
+        // never push its cloth while the actor stands or sits.
+        float[] wrongWorld=world.clone();
+        wrongWorld[12]+=4F;
+        Object misplaced=new Object();
+        SkirtXPBDContacts.publish(misplaced,77,77D,wrongWorld,
+                new float[][]{left,right},
+                java.util.Arrays.asList("emoticons.left_leg",
+                        "emoticons.right_leg"),skin);
+        SkirtXPBDContacts.Frame rejected=
+                SkirtXPBDContacts.forMorph(misplaced);
+        need(rejected!=null&&rejected.skinSurface==null&&
+                rejected.surfaceStatus.contains("world-space mismatch"),
+                "detached Emoticons skin escaped world-space parity guard");
 
         float[] cloth={-.25F,.49F,0F};
         float[] corrected=SkirtXPBDContacts.corrected(cloth,scene,
