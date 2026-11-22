@@ -76,6 +76,13 @@ public class AnimationEditorScreen extends GuiScreen
     /** Offline assistant console; all mutations require a second click. */
     private final EditorAssistantPanel assistantPanel =
             new EditorAssistantPanel();
+    /** World pins are per-scene and session-only until native rig acceptance. */
+    private final EditorWorldBonePinRegistry worldBonePins =
+            new EditorWorldBonePinRegistry();
+    private EditorSceneState worldPinSceneState;
+    private int worldPinSceneIndex=Integer.MIN_VALUE;
+    private String worldPinMessage="";
+    private float worldPinResidual=0F;
 
     private final EditorModeController editorModeController =
             new EditorModeController();
@@ -758,6 +765,192 @@ public class AnimationEditorScreen extends GuiScreen
         return true;
     }
 
+    private void ensureWorldPinScene()
+    {
+        int sceneIndex=sceneState==null?-1:sceneState.getSelectedScene();
+        if(worldPinSceneState!=sceneState||worldPinSceneIndex!=sceneIndex)
+        {
+            worldBonePins.clear();
+            worldPinSceneState=sceneState;
+            worldPinSceneIndex=sceneIndex;
+            worldPinMessage="";
+            worldPinResidual=0F;
+        }
+    }
+
+    /**
+     * World pin currently supports native Blockbuster POSE rigs only.
+     * It is an experimental render-only IK correction, never authored key
+     * multiplication or translation of a pinned mesh.
+     */
+    private boolean worldPinSupported()
+    {
+        BlockbusterSceneActorData actor=getSelectedActor();
+        return editorModeController.getMode()==EditorModeController.EditorMode.POSE
+                &&actor!=null&&actor.getMorphName()!=null
+                &&actor.getMorphName().startsWith("blockbuster.")
+                &&!BetterLightsActorInspector.isLightActor(actor)
+                &&!ParticleActorRig.isParticleActor(actor);
+    }
+
+    public boolean setWorldBonePinned(String actorId,String boneName,
+            boolean pinned)
+    {
+        ensureWorldPinScene();
+        BlockbusterSceneActorData actor=getSelectedActor();
+        if(actor==null||actorId==null||!actor.getId().equals(actorId)||
+                boneName==null||!worldPinSupported())
+        {
+            worldPinMessage="World IK: Blockbuster POSE only";
+            return false;
+        }
+        AnimationBone selected=null;
+        for(AnimationBone candidate:actorPreviewController.getBones())
+            if(candidate!=null&&boneName.equals(candidate.getName()))
+            {
+                selected=candidate;break;
+            }
+        if(selected==null||!EditorWorldBonePoseRetarget.supports(selected))
+        {
+            worldPinMessage="Select a non-root bone with a valid parent chain";
+            return false;
+        }
+        if(!pinned)
+        {
+            boolean changed=worldBonePins.unpin(actorId,boneName);
+            if(changed)
+            {
+                worldPinMessage="World pin removed";
+                applyAdapters();
+            }
+            return changed;
+        }
+        if(worldBonePins.find(actorId,boneName)!=null)return true;
+        BlockbusterRecordFrame record=getCurrentRecordFrame();
+        if(record==null)
+        {
+            worldPinMessage="No current actor Record frame";
+            return false;
+        }
+        prepareGizmoTarget();
+        float[] nativePivot=gizmoController.getWorldBonePivot(selected,record);
+        float frame=(float)playbackController.getCurrentFrame();
+        if(nativePivot==null||
+                !EditorWorldBonePoseRetarget.pivotMatches(
+                        selected,frame,record,nativePivot,.20F))
+        {
+            worldPinMessage="Unsupported native pivot / IK rig mismatch";
+            return false;
+        }
+        // The first native adapter accepts one pinned chain per actor:
+        // two simultaneous pins may impose contradictory constraints.
+        for(EditorWorldBonePinRegistry.Pin existing:
+                worldBonePins.snapshot().values())
+        {
+            if(actorId.equals(existing.actorId))
+                worldBonePins.unpin(existing.actorId,existing.boneName);
+        }
+        if(!worldBonePins.pin(actorId,boneName,nativePivot))return false;
+        worldPinMessage="WORLD PIN: "+boneName+" (session-only)";
+        applyAdapters();
+        return true;
+    }
+
+    private void toggleSelectedWorldPin()
+    {
+        BlockbusterSceneActorData actor=getSelectedActor();
+        AnimationBone bone=getGizmoBone();
+        if(actor==null||bone==null)
+        {
+            worldPinMessage="Select actor and bone first";
+            return;
+        }
+        ensureWorldPinScene();
+        boolean already=worldBonePins.find(actor.getId(),bone.getName())!=null;
+        setWorldBonePinned(actor.getId(),bone.getName(),!already);
+    }
+
+    /** Small click target separate from the three native gizmo buttons. */
+    public boolean clickWorldPinControl(int mx,int my,int button)
+    {
+        if(button!=0||sceneViewport==null||!worldPinSupported())return false;
+        int x=sceneViewport.getX()+9,y=sceneViewport.getY()+9;
+        if(mx<x||mx>=x+112||my<y||my>=y+19)return false;
+        toggleSelectedWorldPin();
+        return true;
+    }
+
+    private void drawWorldPinControl()
+    {
+        if(!worldPinSupported()||sceneViewport==null)return;
+        ensureWorldPinScene();
+        int x=sceneViewport.getX()+9,y=sceneViewport.getY()+9;
+        AnimationBone bone=getGizmoBone();
+        BlockbusterSceneActorData actor=getSelectedActor();
+        boolean pinned=bone!=null&&actor!=null&&
+                worldBonePins.find(actor.getId(),bone.getName())!=null;
+        drawRect(x,y,x+112,y+19,pinned?0xE8295945:0xE7282937);
+        drawRect(x,y,x+112,y+1,pinned?0xFF60E19A:0xFF9578CE);
+        fontRenderer.drawString(pinned?"UNPIN WORLD":"PIN WORLD XYZ",
+                x+8,y+6,0xFFF4F3FF);
+        if(worldPinMessage!=null&&!worldPinMessage.isEmpty())
+            fontRenderer.drawString(fontRenderer.trimStringToWidth(
+                    worldPinMessage,Math.max(100,sceneViewport.getWidth()-22)),
+                    x,y+24,0xFFFFD6A1);
+    }
+
+    /**
+     * Apply IK to a temporary POSE snapshot only. Never write rotation keys
+     * on mouse movement or every frame. The native renderer reads the same
+     * snapshot channels already used for normal POSE.
+     */
+    private void applyWorldPinSnapshot(float animationFrame)
+    {
+        ensureWorldPinScene();
+        if(worldBonePins.size()==0||!worldPinSupported())return;
+        BlockbusterSceneActorData actor=getSelectedActor();
+        BlockbusterRecordFrame record=getCurrentRecordFrame();
+        if(actor==null||record==null)return;
+        java.util.List<AnimationBone> bones=actorPreviewController.getBones();
+        if(bones==null||bones.isEmpty())return;
+
+        EditorWorldBonePoseRetarget.Result result=null;
+        for(AnimationBone bone:bones)
+        {
+            if(bone==null)continue;
+            EditorWorldBonePinRegistry.Pin pin=worldBonePins.find(
+                    actor.getId(),bone.getName());
+            if(pin==null)continue;
+            result=EditorWorldBonePoseRetarget.retarget(bone,
+                    animationFrame,record,pin.world);
+            break;
+        }
+        if(result==null)
+        {
+            worldPinMessage="World pin paused: native rig is not solvable";
+            return;
+        }
+        worldPinResidual=result.residualWorld;
+        if(result.residualWorld>.04F)
+            worldPinMessage=result.reachable?
+                    "World IK residual too high; check skeleton":
+                    "World pin beyond limb reach (no stretching)";
+        java.util.List<AnimationBoneSnapshot> snapshots=
+                new java.util.ArrayList<AnimationBoneSnapshot>();
+        for(AnimationBone bone:bones)
+        {
+            if(bone==null)continue;
+            AnimationTransform t=result.overrides.get(bone);
+            if(t==null)t=bone.getTransformAt(animationFrame);
+            if(t==null)continue;
+            snapshots.add(new AnimationBoneSnapshot(bone.getName(),
+                    bone.getParent()==null?null:bone.getParent().getName(),t));
+        }
+        // Keep normal native rendering, morph layers and mirrors intact.
+        BlockbusterPreviewAnimationState.set(snapshots,(int)animationFrame);
+        EmoticonsPreviewAnimationState.set(snapshots,(int)animationFrame);
+    }
+
     public AnimationBone getGizmoBone()
     {
         if (!isGizmoEnabled())
@@ -1270,9 +1463,7 @@ public class AnimationEditorScreen extends GuiScreen
                     public boolean setWorldPin(String actorId,
                             String boneName,boolean pinned)
                     {
-                        // Do not expose a decorative pin that leaves the
-                        // actual actor limb free to move with the root.
-                        return false;
+                        return setWorldBonePinned(actorId,boneName,pinned);
                     }
                 });
     }
@@ -1914,6 +2105,7 @@ public class AnimationEditorScreen extends GuiScreen
         this.actorPreviewController.applyAdapters(
                 this.playbackController.getCurrentFrame()
         );
+        applyWorldPinSnapshot((float)this.playbackController.getCurrentFrame());
     }
 
     public void applyAdapters(float animationFrame)
@@ -1921,6 +2113,7 @@ public class AnimationEditorScreen extends GuiScreen
         this.actorPreviewController.applyAdapters(
                 animationFrame
         );
+        applyWorldPinSnapshot(animationFrame);
     }
 
     private void resetTimeline(int length)
@@ -3676,6 +3869,7 @@ public class AnimationEditorScreen extends GuiScreen
         // after FBO compositing, so it is never baked into video output.
         updateViewportBoneHover(mouseX,mouseY,filmX,filmY,filmW,filmH);
         boneViewportPicker.drawHover();
+        drawWorldPinControl();
 
         drawPreviewFrame(left,top,previewRight,bottom);
         if(outputView)
@@ -4703,6 +4897,12 @@ public class AnimationEditorScreen extends GuiScreen
             assistantPanel.keyTyped(this,typedChar,keyCode);
             return;
         }
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_P
+                &&isCtrlKeyDown()&&isShiftKeyDown())
+        {
+            toggleSelectedWorldPin();
+            return;
+        }
         if(keyCode==org.lwjgl.input.Keyboard.KEY_A
                 &&isCtrlKeyDown()&&isShiftKeyDown()
                 &&!cameraExportDialog.isOpen()
@@ -5051,6 +5251,7 @@ public class AnimationEditorScreen extends GuiScreen
     public void onGuiClosed()
     {
         assistantPanel.close();
+        worldBonePins.clear();
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
         BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(false);
