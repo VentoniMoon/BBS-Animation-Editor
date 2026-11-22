@@ -588,6 +588,29 @@ public final class SkirtXPBDPipelineSmokeTest
         need(corrected[1]>.51F&&
                 Math.abs(corrected[0]-cloth[0])<.002F,
                 "mesh did not project fabric along REAL thigh top normal");
+
+        // Narrower collider without changing real skin triangles: permit
+        // ~0.030 blocks of local visual-surface overlap in the seated mode.
+        // Top-face candidate selection remains based on the ORIGINAL
+        // nonnegative shell, and deeper entry still gets pushed outward.
+        float[] inset=SkirtXPBDContacts.corrected(cloth,scene,.018F,
+                new float[]{-1F,0F,0F},.030F);
+        need(inset[1]<corrected[1]-.020F&&
+                inset[1]>=cloth[1]-.0001F,
+                "seated skinned inset failed to make more room for cloth");
+        equal(SkirtXPBDContacts.corrected(cloth,scene,.018F,
+                new float[]{-1F,0F,0F},0F),corrected,1E-6F,
+                "zero inset did not restore baseline skin contact");
+        float[] deep={-.25F,.40F,0F};
+        float[] deepAfter=SkirtXPBDContacts.corrected(deep,scene,.018F,
+                new float[]{-1F,0F,0F},.030F);
+        need(deepAfter[1]>deep[1]+.025F,
+                "deep-seated skinned penetration stopped correcting");
+        equal(SkirtXPBDContacts.corrected(cloth,blended,.018F,
+                new float[]{-1F,0F,0F},.030F),
+                SkirtXPBDContacts.corrected(cloth,original,.018F,
+                new float[]{-1F,0F,0F}),0F,
+                "inset modified standing OBB path");
         float[] onEdge={-.25F,.485F,0F};
         float[] seam=SkirtXPBDContacts.corrected(onEdge,scene,.018F);
         need(seam[1]>.505F,
