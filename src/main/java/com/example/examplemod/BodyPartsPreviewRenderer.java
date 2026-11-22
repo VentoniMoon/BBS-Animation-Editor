@@ -1086,8 +1086,16 @@ public class BodyPartsPreviewRenderer
                                 cloth.surfaceStatus:
                                 skirtSkinFrame==frame?skirtSkinDiagnostic:
                                         "mesh not captured this frame"):
-                        "XPBD SKIN: "+
-                        cloth.skinSurface.triangleCount+" triangles";
+                        cloth.meshContactBlend<.001F?
+                                "XPBD OBB walking | SKIN ready: "+
+                                cloth.skinSurface.triangleCount:
+                        cloth.meshContactBlend>.999F?
+                                "XPBD SKIN seated: "+
+                                cloth.skinSurface.triangleCount+" triangles":
+                                "XPBD MIX skin "+
+                                Math.round(100F*cloth.meshContactBlend)+
+                                "% | "+cloth.skinSurface.triangleCount+
+                                " triangles";
                 if(cloth.skinSurface!=null)
                 {
                     // Show the ACTUAL animated collision mesh. The old
@@ -1105,7 +1113,30 @@ public class BodyPartsPreviewRenderer
                         {
                             // Degenerate mesh edge ignored in debug only.
                         }
-                    continue;
+                    // Gold cross is the garment's ACTUAL attached
+                    // origin (world space). Cyan triangles should surround
+                    // the legs next to this reference, never float beside
+                    // the actor as the editor camera moves.
+                    float[] m=cloth.modelToWorld;
+                    float[] origin={m[12],m[13],m[14]};
+                    float[][] axis={{.085F,0F,0F},
+                            {0F,.085F,0F},{0F,0F,.085F}};
+                    for(float[] delta:axis)
+                        try
+                        {
+                            float[] p={origin[0]-delta[0],
+                                    origin[1]-delta[1],
+                                    origin[2]-delta[2]};
+                            float[] q={origin[0]+delta[0],
+                                    origin[1]+delta[1],
+                                    origin[2]+delta[2]};
+                            shapes.add(new JoltContactOverlaySnapshot.Shape(
+                                    JoltContactOverlaySnapshot.Kind.ADDED,
+                                    p,q,.002F,"[ANCHOR] cloth world"));
+                        }
+                        catch(IllegalArgumentException ignored) {}
+                    if(cloth.meshContactBlend>.999F)
+                        continue; // full skin contact; OBB no longer active
                 }
                 for(int n=0;n<cloth.legBoxes.size();n++)
                     try
