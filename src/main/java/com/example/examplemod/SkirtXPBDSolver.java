@@ -258,6 +258,32 @@ public final class SkirtXPBDSolver
                 // This pass does not integrate gravity, change constraints,
                 // or inject Verlet velocity on a repeated FBO render.
                 int contacts=resolveDisplayContacts(pose,bodies,waistCenter);
+                if(contacts>0)
+                {
+                    // The earlier display-only path displaced individual
+                    // vertices but never projected the shared fabric links:
+                    // a bent leg could leave spikes and split-looking panels
+                    // while the timeline was paused. Relax the full graph
+                    // WITHOUT gravity/Verlet integration.
+                    final float relaxDt=1F/120F;
+                    for(int settle=0;settle<5;settle++)
+                    {
+                        for(Constraint c:links)c.lambda=0F;
+                        for(Constraint c:links)project(c,relaxDt);
+                        for(int n=0;n<N;n++)
+                            if(pinned[n])
+                                System.arraycopy(pose.target[n],0,
+                                        position[n],0,3);
+                        // Finish every pass with body contact projection,
+                        // not a link correction that pushes cloth into legs.
+                        contacts+=resolveDisplayContacts(pose,bodies,waistCenter);
+                    }
+                    // Paused FBO, mirror and shadow passes must not turn
+                    // these collision corrections into physical velocity.
+                    for(int n=0;n<N;n++)
+                        if(!pinned[n])
+                            System.arraycopy(position[n],0,previous[n],0,3);
+                }
                 protectRadialSilhouette(pose,waistCenter);
                 return result(contacts,0,0);
             }
