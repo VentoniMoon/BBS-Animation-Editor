@@ -162,12 +162,15 @@ public final class SkirtXPBDContacts
         public final long fingerprint;
         public final float[] bounds;
         private final java.util.Map<Cell,java.util.List<Face>> grid;
+        private final java.util.List<Face> faces;
 
         private SkinSurface(java.util.Map<Cell,java.util.List<Face>> cells,
+                java.util.List<Face> selected,
                 int count,int left,int right,int pelvis,long stamp,
                 float[] range)
         {
             grid=java.util.Collections.unmodifiableMap(cells);
+            faces=java.util.Collections.unmodifiableList(selected);
             triangleCount=count;leftCount=left;rightCount=right;
             pelvisCount=pelvis;fingerprint=stamp;bounds=range;
         }
@@ -224,6 +227,8 @@ public final class SkirtXPBDContacts
                     regions==null||regions.isEmpty())return null;
             java.util.Map<Cell,java.util.List<Face>> cells=
                     new java.util.HashMap<Cell,java.util.List<Face>>();
+            java.util.List<Face> allFaces=
+                    new java.util.ArrayList<Face>();
             float[] bounds={Float.POSITIVE_INFINITY,
                     Float.POSITIVE_INFINITY,Float.POSITIVE_INFINITY,
                     Float.NEGATIVE_INFINITY,Float.NEGATIVE_INFINITY,
@@ -284,6 +289,7 @@ public final class SkirtXPBDContacts
                         if(max[k]-min[k]>1.5F)return null;
                     }
                     Face face=new Face(a,b,c,normal);
+                    allFaces.add(face);
                     int[] lo=new int[3],hi=new int[3];
                     for(int k=0;k<3;k++)
                     {
@@ -320,7 +326,7 @@ public final class SkirtXPBDContacts
             // Partial hulls are unsafe: falling back to OBBs is preferable
             // to leaving one leg without collisions.
             if(left<8||right<8)return null;
-            return new SkinSurface(cells,accepted,left,right,pelvis,
+            return new SkinSurface(cells,allFaces,accepted,left,right,pelvis,
                     hash,bounds);
         }
 
@@ -362,6 +368,24 @@ public final class SkirtXPBDContacts
             return new float[]{t.a[0]+ab[0]*v+ac[0]*w,
                     t.a[1]+ab[1]*v+ac[1]*w,
                     t.a[2]+ab[2]*v+ac[2]*w};
+        }
+
+        /** Subsample read-only REAL skinned triangle edges for GUI.
+         * The preview never feeds them back into collision or Jolt. */
+        public java.util.List<float[][]> debugEdges(int maxFaces)
+        {
+            int limit=Math.max(1,maxFaces);
+            int stride=Math.max(1,(faces.size()+limit-1)/limit);
+            java.util.List<float[][]> output=
+                    new java.util.ArrayList<float[][]>();
+            for(int i=0;i<faces.size();i+=stride)
+            {
+                Face f=faces.get(i);
+                output.add(new float[][]{f.a.clone(),f.b.clone()});
+                output.add(new float[][]{f.b.clone(),f.c.clone()});
+                output.add(new float[][]{f.c.clone(),f.a.clone()});
+            }
+            return output;
         }
 
         /**
