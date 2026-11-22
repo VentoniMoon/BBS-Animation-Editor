@@ -62,6 +62,23 @@ public final class SkirtXPBDSolver
     public static final boolean POSE_AWARE_LAP_GUIDE=
             Boolean.parseBoolean(System.getProperty(
                     "bbs.editor.physics.skirt.xpbdPoseAwareLapGuide","true"));
+    /**
+     * PR #248 used the CURRENT animated hem to measure the amount of cloth
+     * available to rotate around the lap. That measurement collapses near
+     * zero on the exact seated frames where the native bones have already
+     * hoisted the hem toward the belt. Use the original garment latitudes
+     * and anchored waist instead. Structural XPBD rest LENGTHS are not
+     * retuned or replaced.
+     *
+     * A/B with previous PR #248:
+     * -Dbbs.editor.physics.skirt.xpbdRestLengthLapGuide=false
+     */
+    public static final boolean REST_LENGTH_LAP_GUIDE=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdRestLengthLapGuide","true"));
+    private static final boolean SEATED_GEOMETRY_AUDIT=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.xpbdSeatedGeometryAudit","true"));
 
     /** Gradual rotation of the hanging cloth latitude, up to ~60 degrees
      * on the rear hem. Ordinary walking or unilateral leg lift returns 0.
@@ -264,6 +281,8 @@ public final class SkirtXPBDSolver
         /** Last pose-aware guide offsets are stored separately from the
          * native pose advection so neither movement is applied twice. */
         private final float[][] lapGuideOffset=new float[SIM_NODES][3];
+        private float lastGuideMaximum;
+        private int lastHipBridgeCount;
         private final float[][] restFine=new float[SIM_NODES][3];
         private final boolean[] pinned=new boolean[SIM_NODES];
         private final int[] column=new int[SIM_NODES];
@@ -373,22 +392,66 @@ public final class SkirtXPBDSolver
             float[] forward=localLapDirection(
                     seatedForward(bodies,waist),bodies);
             if(forward==null)return;
-            for(int row=1;row<ROWS;row++)
-                for(int c=0;c<SEGMENTS;c++)
+            if(!REST_LENGTH_LAP_GUIDE)
+            {
+                // Exact old PR #248 behavior for A/B comparison.
+                for(int row=1;row<ROWS;row++)
+                    for(int c=0;c<SEGMENTS;c++)
+                    {
+                        int n=ring[row][c];
+                        float[] belt=physicalTarget[ring[0][c]];
+                        float hang=belt[1]-physicalTarget[n][1];
+                        if(hang<=.01F)continue;
+                        float angle=lapGuideAngle(
+                                bodies.seatedBlend,rearWeight[n],row);
+                        if(angle<=1E-5F)continue;
+                        float run=hang*(float)Math.sin(angle);
+                        float rise=hang*(1F-(float)Math.cos(angle));
+                        desiredOffsets[n][0]=forward[0]*run;
+                        desiredOffsets[n][1]=rise;
+                        desiredOffsets[n][2]=forward[2]*run;
+                    }
+                return;
+            }
+            // Unlike the animated/current pose, restFine cannot collapse
+            // when the actor suddenly bends at hip angle ~75 degrees.
+            // Build each longitudinal row by accumulating its ORIGINAL
+            // physical segments (two original vertical panels, now split
+            // into four). Turning each descending segment toward the
+            // actual lap makes a curved reference without shortening any
+            // standing vertical section or moving the pinned top ring.
+            float seatedGain=seatedRelief(bodies.seatedBlend);
+            for(int c=0;c<SEGMENTS;c++)
+            {
+                int waistNode=ring[0][c];
+                float[] accumulated=physicalTarget[waistNode].clone();
+                for(int row=1;row<ROWS;row++)
                 {
-                    int n=ring[row][c];
-                    float[] belt=physicalTarget[ring[0][c]];
-                    float hang=belt[1]-physicalTarget[n][1];
-                    if(hang<=.01F)continue;
+                    int n=ring[row][c],above=ring[row-1][c];
+                    float[] rest=restFine[n],prior=restFine[above];
+                    float radialX=rest[0]-restFine[waistNode][0];
+                    float radialZ=rest[2]-restFine[waistNode][2];
+                    float rear=rearSector(radialX,radialZ,
+                            forward[0],forward[2]);
                     float angle=lapGuideAngle(
-                            bodies.seatedBlend,rearWeight[n],row);
-                    if(angle<=1E-5F)continue;
-                    float run=hang*(float)Math.sin(angle);
-                    float rise=hang*(1F-(float)Math.cos(angle));
-                    desiredOffsets[n][0]=forward[0]*run;
-                    desiredOffsets[n][1]=rise;
-                    desiredOffsets[n][2]=forward[2]*run;
+                            bodies.seatedBlend,rear,row);
+                    float hanging=Math.max(0F,prior[1]-rest[1]);
+                    for(int k=0;k<3;k++)
+                        accumulated[k]+=rest[k]-prior[k];
+                    accumulated[0]+=forward[0]*hanging*
+                            (float)Math.sin(angle);
+                    accumulated[1]+=hanging*(1F-(float)Math.cos(angle));
+                    accumulated[2]+=forward[2]*hanging*
+                            (float)Math.sin(angle);
+                    // No abrupt teleport when going from walking to
+                    // seating: native pose remains primary while the real
+                    // two-thigh bend grows. The offset is toward this
+                    // independent supported drape reference.
+                    for(int k=0;k<3;k++)
+                        desiredOffsets[n][k]=seatedGain*
+                                (accumulated[k]-physicalTarget[n][k]);
                 }
+            }
         }
 
         private int stepCount;
@@ -622,6 +685,7 @@ public final class SkirtXPBDSolver
                     System.arraycopy(fineTarget[n],0,position[n],0,3);
                     System.arraycopy(fineTarget[n],0,previous[n],0,3);
                     System.arraycopy(fineTarget[n],0,seatedReference[n],0,3);
+                    for(int k=0;k<3;k++)lapGuideOffset[n][k]=0F;
                 }
                 else if(!pinned[n])
                 {
@@ -669,9 +733,13 @@ public final class SkirtXPBDSolver
             float[][] guide=new float[SIM_NODES][3];
             lapReference(physicalTarget,waistCenter,bodies,
                     rearWeight,guide);
+            lastGuideMaximum=0F;
+            lastHipBridgeCount=bodies==null?0:bodies.hipBridges.size();
             for(int n=0;n<SIM_NODES;n++)
             {
                 if(pinned[n])continue;
+                lastGuideMaximum=Math.max(lastGuideMaximum,
+                        length(guide[n]));
                 for(int k=0;k<3;k++)
                 {
                     // Follow the CHANGE in the curved lap reference;
@@ -768,6 +836,12 @@ public final class SkirtXPBDSolver
                     // Keep actual distance/shear links intact.
                     float pull=.012F*(1F-.75F*seated);
                     pull*=1F-shapeRelief*(.45F+.40F*rearWeight[n]);
+                    if(POSE_AWARE_LAP_GUIDE&&REST_LENGTH_LAP_GUIDE)
+                        // The standing silhouette had almost no influence
+                        // when first seated. The new rest-based lap guide
+                        // needs modest, soft attraction through successive
+                        // 60 Hz frames, not just one initial position jump.
+                        pull=Math.max(pull,.025F*seatedRelief(seated));
                     for(int k=0;k<3;k++)
                         p[k]+=(physicalTarget[n][k]-p[k])*pull;
                 }
@@ -1084,6 +1158,12 @@ public final class SkirtXPBDSolver
                 if(ADAPTIVE_SEATED_SHAPE)
                     fraction=Math.max(.45F,
                             fraction-.10F*seatedRelief(seated));
+                if(POSE_AWARE_LAP_GUIDE&&REST_LENGTH_LAP_GUIDE)
+                    // An aesthetic standing-radius floor must not re-pin
+                    // the seated hem to its previous vertical silhouette.
+                    // Real leg contact and structural fabric links remain.
+                    fraction=Math.max(.45F,
+                            fraction-.14F*seatedRelief(seated));
                 float deficit=sourceRadius*fraction-radius;
                 if(deficit<=0F)continue;
                 // Limit per-frame correction and preserve the existing
@@ -1133,7 +1213,12 @@ public final class SkirtXPBDSolver
                     float limit=original*(1F+extra+
                             .05F*(1F-seated))+margin;
                     if(actual<=limit)continue;
-                    float desired=actual-(actual-limit)*seated;
+                    float upperControl=seated;
+                    if(POSE_AWARE_LAP_GUIDE&&REST_LENGTH_LAP_GUIDE)
+                        // Relax only the extra seated cosmetic upper-hoop
+                        // cap; all actual circumference links survive.
+                        upperControl*=1F-.85F*seatedRelief(seated);
+                    float desired=actual-(actual-limit)*upperControl;
                     float scale=desired/actual;
                     float nx=center[0]+px*scale,
                             nz=center[2]+pz*scale;
