@@ -426,7 +426,7 @@ public final class SkirtXPBDSolver
                                     clothContactRadius(n,bodies),outward);
                             if(distance(corrected,position[n])>1E-7F)
                             {
-                                if(bodies.skinSurface!=null)
+                                if(bodies.meshContactBlend>0F)
                                     for(int k=0;k<3;k++)
                                         // Contact correction is not an
                                         // acceleration. Otherwise every
@@ -603,12 +603,13 @@ public final class SkirtXPBDSolver
         private float clothContactRadius(int index,
                 SkirtXPBDContacts.Frame bodies)
         {
-            if(bodies==null||bodies.skinSurface==null)
+            if(bodies==null||bodies.meshContactBlend<=0F)
                 return CONTACT_RADIUS;
             int row=index/SEGMENTS;
-            if(row==1)return .008F;
-            if(row==2)return .013F;
-            return CONTACT_RADIUS;
+            float skinRadius=row==1?.008F:row==2?.013F:
+                    CONTACT_RADIUS;
+            return CONTACT_RADIUS+
+                    bodies.meshContactBlend*(skinRadius-CONTACT_RADIUS);
         }
 
         private int resolveDisplayContacts(float[][] fineTarget,
