@@ -98,6 +98,7 @@ public final class ChameleonSkirtXPBDVolumeRenderer
                         "maxNodeMotion="+mesh.maxNodeDisplacement+
                         " maxVisualMotion="+mesh.maxVisualDisplacement+
                         " boxes="+frame.legBoxCount+
+                        " seatedBlend="+frame.seatedBlend+
                         " sampleTick="+frame.sampleTick+
                         " physicsSteps="+frame.physicsSteps+
                         " legs="+frame.solved.legContacts+
