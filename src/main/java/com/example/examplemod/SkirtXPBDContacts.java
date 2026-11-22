@@ -412,6 +412,16 @@ public final class SkirtXPBDContacts
                 float[] closest=closest(world,f);
                 float[] delta=minus(world,closest);
                 float d2=dot(delta,delta);
+                // Do not collide with the infinite extrusion of the
+                // nearest triangle. A point in the actual gap between
+                // two thighs can be close to BOTH triangle edges without
+                // lying above either leg (the previous code built an
+                // artificial collision bridge through that gap).
+                float signedDistance=dot(delta,f.normal);
+                float lateral2=Math.max(0F,
+                        d2-signedDistance*signedDistance);
+                float lateralBand=thickness+.008F;
+                if(lateral2>lateralBand*lateralBand)continue;
                 if(d2<best2)
                 {
                     best2=d2;best=f;bestPoint=closest;
