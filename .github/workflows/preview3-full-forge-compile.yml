@@ -45,6 +45,7 @@ jobs:
           patched={
               "com/example/examplemod/CharacterEditorPanel.class",
               "com/example/examplemod/SkirtXPBDContacts.class",
+              "com/example/examplemod/SkirtXPBDRuntime.class",
           }
           with zipfile.ZipFile(base) as released, zipfile.ZipFile(compiled) as updated:
               old_names=set(released.namelist())
