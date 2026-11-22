@@ -149,7 +149,8 @@ public final class JoltContactGuiOverlay
                         JoltContactOverlaySnapshot.Shape sh=shapes.get(i);
                         boolean skinned=snapshot.worldSpace&&
                                 (sh.source.startsWith("[SKIN]")||
-                                sh.source.startsWith("[ANCHOR]"));
+                                sh.source.startsWith("[ANCHOR]")||
+                                sh.source.startsWith("[BRIDGE]"));
                         segmentCount+=drawCapsule(buf,sh,camera,
                                 x,y,width,height,skinned?0D:actorX,
                                 skinned?0D:actorY,skinned?0D:actorZ);
