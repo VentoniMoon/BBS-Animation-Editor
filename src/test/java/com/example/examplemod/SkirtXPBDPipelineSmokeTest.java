@@ -1606,6 +1606,11 @@ public final class SkirtXPBDPipelineSmokeTest
      */
     private static void seatedTriangleInteriorContactDoesNotRequireVertexPenetration()
     {
+        // Minimal 3-ring cloth deliberately disables the additional
+        // triangle-area correction: it double-pushed the same fitted thigh
+        // and caused jerky gait / waistband bunching. Preserve this
+        // contact regression for the legacy experimental profile.
+        if(SkirtXPBDSolver.CLEAN_THREE_ROW)return;
         // This fixture explicitly places a microscopic collider inside a
         // triangle of the OLD standing lattice. The new seated lap guide
         // deliberately moves the lattice before collision, making that
