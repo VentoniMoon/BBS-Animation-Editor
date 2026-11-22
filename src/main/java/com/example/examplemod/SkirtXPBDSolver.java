@@ -36,6 +36,13 @@ public final class SkirtXPBDSolver
     private static final float MAX_OFFSET=.37F;
     private static final float POSE_JUMP_RESET=.40F;
     private static final float MIN_RADIAL_FRACTION=.85F;
+    // The normal 0.37-block leash and 85% radial silhouette work for
+    // walking, but forbid folds over both horizontal thighs. Relax only
+    // when the actual two fitted upper-leg bones agree on a seated pose.
+    private static final float SEATED_EXTRA_OFFSET=.28F;
+    private static final float SEATED_RADIAL_RELIEF=.38F;
+    private static final boolean SEATED_FOLD=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbdSeatedFold","true"));
     private static final boolean RADIAL_GUARD=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdRadialGuard","true"));
     private static final float PIN_EPS=1E-8F;
@@ -273,6 +280,8 @@ public final class SkirtXPBDSolver
                     !Float.isFinite(dt)||dt<0F||dt>.1F)
                 throw new IllegalArgumentException("Invalid cloth time/pose");
             float[][] fineTarget=refine(pose.target);
+            float seated=SEATED_FOLD&&bodies!=null?bodies.seatedBlend:0F;
+            float maxOffset=MAX_OFFSET+SEATED_EXTRA_OFFSET*seated;
             float maxWaist=0F,maxPoseShift=0F;
             for(int n=0;n<SIM_NODES;n++)
             {
@@ -346,7 +355,8 @@ public final class SkirtXPBDSolver
                         if(!pinned[n])
                             System.arraycopy(position[n],0,previous[n],0,3);
                 }
-                protectRadialSilhouette(fineTarget,waistCenter);
+                protectRadialSilhouette(fineTarget,waistCenter,
+                        seated,maxOffset);
                 return result(contacts,0,0);
             }
             int legs=0,self=0;
@@ -373,7 +383,8 @@ public final class SkirtXPBDSolver
                     // Weak pose following, not an independent second bone
                     // animation. Waist follows the actor exactly.
                     for(int k=0;k<3;k++)
-                        p[k]+=(fineTarget[n][k]-p[k])*.012F;
+                        p[k]+=(fineTarget[n][k]-p[k])*
+                                (.012F*(1F-.75F*seated));
                 }
 
                 for(Constraint c:links)c.lambda=0F;
@@ -419,16 +430,21 @@ public final class SkirtXPBDSolver
                     float gap=distance(p,ref);
                     if(!Float.isFinite(gap))
                         throw new IllegalStateException("XPBD divergence");
-                    if(gap>MAX_OFFSET)
+                    if(gap>maxOffset)
                     {
-                        float gain=MAX_OFFSET/gap;
+                        float gain=maxOffset/gap;
                         for(int k=0;k<3;k++)
                             p[k]=ref[k]+(p[k]-ref[k])*gain;
                         for(int k=0;k<3;k++)previous[n][k]=p[k];
                     }
                 }
             }
-            protectRadialSilhouette(fineTarget,waistCenter);
+            // The bounded pose leash must not undo contacts on the final
+            // substep of a seated pose. Unlike walking, deeply folded
+            // cloth often needs to travel beyond its original silhouette.
+            if(seated>.50F&&bodies!=null)
+                legs+=resolveDisplayContacts(fineTarget,bodies,waistCenter);
+            protectRadialSilhouette(fineTarget,waistCenter,seated,maxOffset);
             stepCount++;
             return result(legs,self,SUBSTEPS);
         }
@@ -484,7 +500,7 @@ public final class SkirtXPBDSolver
          * authored silhouette. No waist anchor or model bone is changed.
          * Disabled with -Dbbs.editor.physics.skirt.xpbdRadialGuard=false. */
         private void protectRadialSilhouette(float[][] fineTarget,
-                float[] center)
+                float[] center,float seated,float maxOffset)
         {
             if(!RADIAL_GUARD)return;
             for(int n=0;n<SIM_NODES;n++)
@@ -497,12 +513,14 @@ public final class SkirtXPBDSolver
                 float dx=position[n][0]-center[0];
                 float dz=position[n][2]-center[2];
                 float radius=(float)Math.sqrt(dx*dx+dz*dz);
-                float deficit=sourceRadius*MIN_RADIAL_FRACTION-radius;
+                float fraction=Math.max(.45F,
+                        MIN_RADIAL_FRACTION-SEATED_RADIAL_RELIEF*seated);
+                float deficit=sourceRadius*fraction-radius;
                 if(deficit<=0F)continue;
                 // Limit per-frame correction and preserve the existing
                 // maximum pose offset even with deep thigh contact.
                 float allowance=Math.max(0F,
-                        MAX_OFFSET-distance(position[n],fineTarget[n]));
+                        maxOffset-distance(position[n],fineTarget[n]));
                 float shift=Math.min(.08F,Math.min(deficit,allowance));
                 if(shift<=0F)continue;
                 position[n][0]+=tx/sourceRadius*shift;

@@ -40,6 +40,8 @@ public final class SkirtXPBDRuntime
         public final SkirtXPBDSolver.Result solved;
         public final float[][] materials;
         public final int legBoxCount;
+        /** Both real upper thighs bent: 0 walking, 1 deep seated. */
+        public final float seatedBlend;
         /** Number of fixed 60Hz integration steps in this render sample. */
         public final int physicsSteps;
         public final double sampleTick;
@@ -48,12 +50,13 @@ public final class SkirtXPBDRuntime
                 SkirtXPBDSurfaceTopology.Topology topology,
                 SkirtXPBDPoseSkin.Frame pose,
                 SkirtXPBDSolver.Result solved,float[][] materials,
-                int legBoxCount,int steps,double tick)
+                int legBoxCount,float seated,int steps,double tick)
         {
             this.source=source;this.binding=binding;
             this.topology=topology;this.pose=pose;this.solved=solved;
             this.materials=materials;
             this.legBoxCount=legBoxCount;
+            seatedBlend=seated;
             physicsSteps=steps;
             sampleTick=tick;
         }
@@ -195,6 +198,7 @@ public final class SkirtXPBDRuntime
         if(steps>0)actor.lastUpdate=now;
         return new RenderFrame(raw,binding,topology,posed,output,
                 materials,collisions==null?0:collisions.legBoxes.size(),
+                collisions==null?0F:collisions.seatedBlend,
                 steps,renderTick);
     }
 
