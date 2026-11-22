@@ -208,6 +208,30 @@ jobs:
             -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
             -cp "$RUNNER_TEMP/skirt-test" \
             com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # A/B: switch off only posterior gravity relief.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity=false \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedShape=true \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=false \
+            -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # A/B: switch off only standing-silhouette relaxation.
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity=true \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedShape=false \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=false \
+            -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
+          # Exact legacy gravity and shape A/B (walking parity).
+          java -ea -Dbbs.editor.physics.skirt.xpbd=true \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedGravity=false \
+            -Dbbs.editor.physics.skirt.xpbdAdaptiveSeatedShape=false \
+            -Dbbs.editor.physics.skirt.xpbdHipBridge=false \
+            -Dbbs.editor.physics.skirt.xpbdKneeBridge=false \
+            -cp "$RUNNER_TEMP/skirt-test" \
+            com.example.examplemod.SkirtXPBDPipelineSmokeTest
           # Isolate original OBB contact momentum on the same 80-degree
           # collision fixtures; never combine it with the default mode.
           java -ea -Dbbs.editor.physics.skirt.xpbd=true \
