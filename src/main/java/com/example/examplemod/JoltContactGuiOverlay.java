@@ -192,15 +192,23 @@ public final class JoltContactGuiOverlay
                         detail+=" [chain:"+CHAIN_FILTER+"]";
                     if(visibleBodies==0)
                         detail+=" [outside camera]";
-                    int captionWidth=Math.max(mc.fontRenderer.getStringWidth(title),
-                            mc.fontRenderer.getStringWidth(detail));
+                    int captionWidth=Math.max(
+                            Math.max(mc.fontRenderer.getStringWidth(title),
+                                    mc.fontRenderer.getStringWidth(detail)),
+                            mc.fontRenderer.getStringWidth(
+                                    snapshot.clothContactInfo));
                     Gui.drawRect(labelX-4,labelY-4,labelX+captionWidth+5,
-                            labelY+mc.fontRenderer.FONT_HEIGHT*2+7,0xA9001016);
+                            labelY+mc.fontRenderer.FONT_HEIGHT*3+11,0xA9001016);
                     mc.fontRenderer.drawStringWithShadow(title,
                             labelX,labelY,0xFFBDF8C6);
                     mc.fontRenderer.drawStringWithShadow(detail,
                             labelX,labelY+mc.fontRenderer.FONT_HEIGHT+2,
                             0xFFFFD66B);
+                    mc.fontRenderer.drawStringWithShadow(
+                            snapshot.clothContactInfo,labelX,
+                            labelY+mc.fontRenderer.FONT_HEIGHT*2+4,
+                            snapshot.clothContactInfo.startsWith("XPBD SKIN")
+                                    ?0xFF39D7D0:0xFFFFAB65);
                     // In filtered mode put provenance directly onto the
                     // cube. The boxes are GUI-projected; depth is deliberately
                     // disabled, so this is not an occlusion test.

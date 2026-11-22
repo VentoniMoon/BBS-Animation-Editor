@@ -290,6 +290,7 @@ public class BodyPartsPreviewRenderer
     private Object skirtSkinParent;
     private int skirtSkinFrame=-1;
     private String skirtSkinReport="";
+    private String skirtSkinDiagnostic="not sampled";
 
     private String reportedParentColliderState="";
 
@@ -460,14 +461,18 @@ public class BodyPartsPreviewRenderer
         // Build once from the REAL CPU-skinned Emoticons triangles of
         // this actor render. WORLD coordinates here must use actorFrame,
         // not the later Chameleon child attachment transform.
+        String[] skinReason={SkirtXPBDContacts.SKINNED_MESH_CONTACTS?
+                "pending capture":"mesh flag disabled"};
         skirtSkinSurface=SkirtXPBDContacts.SKINNED_MESH_CONTACTS?
-                captureSkirtSkinSurface(morph,actorFrameFor(frame)):null;
+                captureSkirtSkinSurface(morph,actorFrameFor(frame),
+                        skinReason):null;
+        skirtSkinDiagnostic=skinReason[0];
         skirtSkinParent=morph;
         skirtSkinFrame=frame;
         if(SkirtXPBDContacts.SKINNED_MESH_CONTACTS&&frame%20==0)
         {
             String report=skirtSkinSurface==null?
-                    "fallback=fitted OBB (missing or invalid skin mesh)":
+                    "fallback=fitted OBB ("+skirtSkinDiagnostic+")":
                     "triangles="+skirtSkinSurface.triangleCount+
                     " left="+skirtSkinSurface.leftCount+
                     " right="+skirtSkinSurface.rightCount+
@@ -677,15 +682,24 @@ public class BodyPartsPreviewRenderer
      * Hair/ragdoll continue to receive their original Jolt primitives.
      */
     private static SkirtXPBDContacts.SkinSurface captureSkirtSkinSurface(
-            Object morph,float[] actorWorld)
+            Object morph,float[] actorWorld,String[] status)
     {
-        if(!(morph instanceof AnimatedMorph) ||
-                !SkirtXPBDContacts.matrixValid(actorWorld))return null;
+        if(!(morph instanceof AnimatedMorph))
+        {
+            status[0]="not an Emoticons morph";return null;
+        }
+        if(!SkirtXPBDContacts.matrixValid(actorWorld))
+        {
+            status[0]="actor world transform unavailable";return null;
+        }
         try
         {
             List<mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone> bones=
                     EmoticonsModelAccess.getBones((AnimatedMorph)morph);
-            if(bones==null)return null;
+            if(bones==null||bones.isEmpty())
+            {
+                status[0]="skeleton has no bones";return null;
+            }
             String left=null,right=null,pelvis=null;
             int pelvisRank=Integer.MAX_VALUE;
             for(mchorse.emoticons.skin_n_bones.api.bobj.BOBJBone bone:bones)
@@ -705,9 +719,14 @@ public class BodyPartsPreviewRenderer
                 if(rank<pelvisRank)
                 {pelvis=bone.name;pelvisRank=rank;}
             }
-            if(left==null||right==null)return null;
+            if(left==null||right==null)
+            {
+                status[0]="missing upper thigh bones: L="+left+
+                        " R="+right;return null;
+            }
             java.util.List<SkirtXPBDContacts.SkinRegion> regions=
                     new java.util.ArrayList<SkirtXPBDContacts.SkinRegion>();
+            int foundLeft=0,foundRight=0,foundPelvis=0;
             for(EmoticonsCollisionGeometryProvider.MeshSnapshot source:
                     EmoticonsCollisionGeometryProvider.snapshot(morph))
             {
@@ -718,15 +737,26 @@ public class BodyPartsPreviewRenderer
                             EmoticonsSkinCollisionGroups.selectBone(
                                     morph,source,bone);
                     if(subset==null||subset.triangleCount()<8)continue;
+                    if(bone.equals(left))foundLeft+=subset.triangleCount();
+                    if(bone.equals(right))foundRight+=subset.triangleCount();
+                    if(bone.equals(pelvis))foundPelvis+=subset.triangleCount();
                     regions.add(new SkirtXPBDContacts.SkinRegion(
                             "emoticons."+bone,
                             subset.vertices,subset.triangles));
                 }
             }
-            return SkirtXPBDContacts.SkinSurface.build(actorWorld,regions);
+            SkirtXPBDContacts.SkinSurface skin=
+                    SkirtXPBDContacts.SkinSurface.build(actorWorld,regions);
+            status[0]=skin==null?
+                    "mesh rejected: L="+foundLeft+" R="+foundRight+
+                    " pelvis="+foundPelvis:
+                    "ready: "+skin.triangleCount+" triangles";
+            return skin;
         }
         catch(RuntimeException invalid)
         {
+            status[0]="capture error: "+
+                    invalid.getClass().getSimpleName();
             // A missing/updated Emoticons mesh never blocks scene drawing.
             return null;
         }
@@ -1019,6 +1049,11 @@ public class BodyPartsPreviewRenderer
                     catch(IllegalArgumentException ignored) {}
             }
         }
+        // A truthful indicator of the ACTIVE cloth contact source, not
+        // the separate Jolt native parent boxes drawn on the first lines.
+        String clothInfo=!SkirtXPBDRuntime.ENABLED?
+                "XPBD: global solver disabled":
+                "XPBD: no current cloth contact frame";
         // These are the ACTUAL selected, tapered, and filtered OBBs
         // consumed by SkirtXPBDContacts.corrected(). The earlier native
         // Jolt overlay could show only hair-chain colliders and made the
@@ -1034,7 +1069,17 @@ public class BodyPartsPreviewRenderer
                     continue;
                 SkirtXPBDContacts.Frame cloth=
                         SkirtXPBDContacts.forMorph(part.morph.get());
-                if(cloth==null||cloth.timelineFrame!=frame)continue;
+                if(cloth==null||cloth.timelineFrame!=frame)
+                {
+                    clothInfo="XPBD: no contact sample (cloth/pose not ready)";
+                    continue;
+                }
+                clothInfo=cloth.skinSurface==null?
+                        "XPBD OBB fallback: "+
+                        (skirtSkinFrame==frame?skirtSkinDiagnostic:
+                                "mesh not captured this frame"):
+                        "XPBD SKIN: "+
+                        cloth.skinSurface.triangleCount+" triangles";
                 if(cloth.skinSurface!=null)
                 {
                     // Show the ACTUAL animated collision mesh. The old
@@ -1068,7 +1113,7 @@ public class BodyPartsPreviewRenderer
                     }
             }
         return new JoltContactOverlaySnapshot(frame,activeScenes,shapes,boxes,
-                actorFrameFor(frame)!=null);
+                actorFrameFor(frame)!=null,clothInfo);
     }
 
     /**
