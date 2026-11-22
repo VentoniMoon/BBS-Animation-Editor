@@ -343,8 +343,8 @@ public final class SkirtXPBDSolver
                     g=m[2],h=m[6],i=m[10];
             float A=e*i-f*h,D=f*g-d*i,G=d*h-e*g;
             float determinant=a*A+b*D+c*G;
-            if(!Float.isFinite(determin)||
-                    Math.abs(determin)<1E-8F)return null;
+            if(!Float.isFinite(determinant)||
+                    Math.abs(determinant)<1E-8F)return null;
             float x=(A*world[0]+(b*f-c*e)*world[1])/determinant;
             float z=(G*world[0]+(a*e-b*d)*world[1])/determinant;
             float size=(float)Math.sqrt(x*x+z*z);
