@@ -17,8 +17,10 @@ public final class SkirtXPBDRuntime
 {
     private static final WeakHashMap<Object,Actor> ACTORS=
             new WeakHashMap<Object,Actor>();
-    public static final boolean ENABLED=Boolean.getBoolean(
-            "bbs.editor.physics.skirt.xpbd");
+    // Enable the production test cloth by default in mod JAR launches.
+    // Java/Gradle opt-out remains available for baseline comparison.
+    public static final boolean ENABLED=Boolean.parseBoolean(
+            System.getProperty("bbs.editor.physics.skirt.xpbd","true"));
     public static final boolean REPLACE=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdReplace","true"));
 
