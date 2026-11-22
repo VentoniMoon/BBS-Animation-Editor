@@ -58,6 +58,11 @@ public class EditorGizmoController
 
     private int activePart = -1;
     private boolean dragging;
+    /** BBS-style limb-body drag, reusing the exact existing gizmo math.
+     * Unlike axis-handle clicks, direct selection defaults to screen XY
+     * translation or local Z rotation. */
+    private boolean directBonePickRequested;
+    private boolean directBoneDragging;
     /* Rotation is accumulated as an unwrapped angle around the projected pivot. */
     private double rotationDragCenterX;
     private double rotationDragCenterY;
@@ -217,6 +222,53 @@ public class EditorGizmoController
     /**
      * Handles the three editor buttons and gizmo hit testing.
      */
+    /** The picker uses this exact native joint projection for all
+     * Emoticons, Blockbuster and Chameleon rigs, never a guessed radius
+     * from a screenshot. Return null when the renderer has no valid pose. */
+    public float[] projectBonePivot(AnimationBone bone,
+            BlockbusterRecordFrame recordFrame,EditorCamera camera,
+            int viewportX,int viewportY,int viewportWidth,
+            int viewportHeight)
+    {
+        if(bone==null||camera==null||recordFrame==null)return null;
+        AnimationKeyframe key=bone.getKeyframeAt(gizmoFrame);
+        double[] world=getNativeBoneWorldPosition(bone,key,recordFrame);
+        if(world==null)return null;
+        ScreenPoint point=project(world[0],world[1],world[2],
+                viewportX,viewportY,viewportWidth,viewportHeight,camera);
+        return point==null?null:new float[]{
+                (float)point.x,(float)point.y};
+    }
+
+    /**
+     * Start the same gizmo drag when LMB begins directly on the
+     * highlighted limb instead of on a colored axis handle. No extra
+     * transform representation or force/scale is introduced.
+     */
+    public boolean beginDirectBoneDrag(int mouseX,int mouseY,
+            int viewportX,int viewportY,int viewportWidth,
+            int viewportHeight,AnimationBone bone,
+            AnimationKeyframe keyframe,
+            BlockbusterRecordFrame recordFrame,
+            EditorCamera camera)
+    {
+        if(bone==null||keyframe==null||this.mode==Mode.SCALE)
+            return false;
+        directBonePickRequested=true;
+        try
+        {
+            boolean started=mouseClicked(mouseX,mouseY,0,
+                    viewportX,viewportY,viewportWidth,viewportHeight,
+                    bone,keyframe,recordFrame,camera,true);
+            directBoneDragging=started;
+            return started;
+        }
+        finally
+        {
+            directBonePickRequested=false;
+        }
+    }
+
     public boolean mouseClicked(
             int mouseX,
             int mouseY,
@@ -329,6 +381,9 @@ public class EditorGizmoController
                         displayAxes
                 );
 
+        if(hit<0&&directBonePickRequested)
+            hit=this.mode==Mode.POSITION?PLANE_XY:
+                    this.mode==Mode.ROTATION?AXIS_Z:-1;
         if (hit < 0)
         {
             return false;
@@ -580,7 +635,29 @@ public class EditorGizmoController
         }
         else if (this.mode == Mode.ROTATION)
         {
-            if (isBodyPartInternalBoneTarget(this.activeBone)
+            if(directBoneDragging)
+            {
+                // A direct click can start exactly at the ring CENTER:
+                // atan2(center, center) is undefined. Use a bounded
+                // screen drag measured in degrees, keeping the native
+                // Emoticons/BB rotation adapters for the selected axis.
+                float amount=(float)Math.max(-180D,Math.min(180D,
+                        (mouseDX-mouseDY)*.45D));
+                if(this.dragStartNativeEmoticonsEuler!=null)
+                    applyPoseEmoticonsLocalRotation(
+                            transform,this.activePart,amount);
+                else if(this.dragStartNativeBlockbusterEuler!=null)
+                    applyPoseBlockbusterLocalRotation(
+                            transform,this.activePart,amount);
+                else if(this.bodyPartTarget!=null||
+                        this.globalTransformTarget!=null)
+                    applyBodyPartLocalRotationDelta(transform,
+                            this.activeBone,this.activePart,amount);
+                else
+                    transform.setRotation(this.dragStartRX,
+                            this.dragStartRY,this.dragStartRZ+amount);
+            }
+            else if (isBodyPartInternalBoneTarget(this.activeBone)
                     && isBlockbusterBodyPartTarget())
             {
                 applyBlockbusterBodyPartRotation(
@@ -651,6 +728,8 @@ public class EditorGizmoController
         }
 
         this.dragging = false;
+        this.directBoneDragging=false;
+        this.directBonePickRequested=false;
         this.activePart = -1;
         this.activeKeyframe = null;
         this.activeBone = null;
