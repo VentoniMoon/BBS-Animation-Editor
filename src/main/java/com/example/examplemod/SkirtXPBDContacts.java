@@ -644,6 +644,22 @@ public final class SkirtXPBDContacts
          */
         public float[] correctedWorld(float[] world,float thickness)
         {
+            return correctedWorld(world,thickness,0F);
+        }
+
+        /**
+         * A seated thigh is nearly horizontal. The cloth may straddle
+         * the REAL top-face edge while no particle sits directly above
+         * a triangle interior. Expand ONLY the top-face edge capture band;
+         * keep vertical/medial side edges narrow so separate left/right
+         * thighs never acquire a fictitious collision bridge.
+         *
+         * This affects only candidate selection against finite triangles;
+         * neither normals nor collision hull dimensions are enlarged.
+         */
+        public float[] correctedWorld(float[] world,float thickness,
+                float seatedTopEdgeAllowance)
+        {
             if(world==null||world.length!=3||!finite(world))
                 return world==null?null:world.clone();
             java.util.List<Face> nearby=grid.get(new Cell(
@@ -665,7 +681,9 @@ public final class SkirtXPBDContacts
                 float signedDistance=dot(delta,f.normal);
                 float lateral2=Math.max(0F,
                         d2-signedDistance*signedDistance);
-                float lateralBand=thickness+.008F;
+                float topAllowance=f.normal[1]>.50F?
+                        Math.max(0F,Math.min(.045F,seatedTopEdgeAllowance)):0F;
+                float lateralBand=thickness+.008F+topAllowance;
                 if(lateral2>lateralBand*lateralBand)continue;
                 if(d2<best2)
                 {
@@ -848,7 +866,8 @@ public final class SkirtXPBDContacts
         }
         final float mix=frame.meshContactBlend;
         final float[] skinExit=frame.skinSurface!=null&&mix>0F?
-                frame.skinSurface.correctedWorld(point,thickness):null;
+                frame.skinSurface.correctedWorld(point,thickness,
+                        .045F*frame.seatedBlend):null;
         if(mix>=.99999F&&skinExit!=null)
         {
             // Deep sitting: one true continuous surface, no OBB seams.
