@@ -9,6 +9,7 @@ public final class SkirtLegCollisionProxySmokeTest
     {
         threeZonesAreProximalToDistal();
         tiltFollowsBoneInsteadOfWorldAxis();
+        raisedThighShrinksOnlyDistalZone();
         pelvisAnchorIdentifiesUpperEvenWhenLocalYIsInverted();
         onlySkirtSelectionChanges();
         duplicateFittedBoxesDoNotTriplePressure();
@@ -48,6 +49,79 @@ public final class SkirtLegCollisionProxySmokeTest
         near(p[2][0],2F+.16F,"distal follows rotated local -Y");
         near(p[0][1],5F,"raised thigh must not use world Y slices");
         near(p[2][1],5F,"raised thigh must not flip contact profile");
+    }
+
+    /**
+     * User's frame 26: skirt cloth already rests acceptably on the lap,
+     * but the LAST third of each upper-thigh OBB is still full width
+     * near the knee. Test a per-thigh progressive taper with no change
+     * to the upper/middle zones, standing gait or other collision types.
+     */
+    private static void raisedThighShrinksOnlyDistalZone()
+    {
+        final float[] base=box(.13F,-.3F,.04F,.19F,.24F,.18F);
+        float[][] upright=SkirtLegCollisionProxy.split(base);
+        float[] walking=base.clone();
+        setThighAngle(walking,45F);
+        float[][] gait=SkirtLegCollisionProxy.split(walking);
+        near(gait[2][7],upright[2][7],
+                "normal 45-degree stride must keep distal thigh X radius");
+        near(gait[2][8],upright[2][8],
+                "normal 45-degree stride must keep zone axial overlap");
+        near(gait[2][9],upright[2][9],
+                "normal 45-degree stride must keep distal thigh Z radius");
+
+        float[] sixtyFive=base.clone(),eighty=base.clone();
+        setThighAngle(sixtyFive,65F);
+        setThighAngle(eighty,80F);
+        float[][] transition=SkirtLegCollisionProxy.split(sixtyFive);
+        float[][] seated=SkirtLegCollisionProxy.split(eighty);
+        for(int zone=0;zone<2;zone++)
+            for(int dimension=7;dimension<10;dimension++)
+                near(seated[zone][dimension],upright[zone][dimension],
+                        "only the knee-side THIRD may shrink");
+        if(SkirtLegCollisionProxy.DISTAL_SHRINK)
+        {
+            require(transition[2][7]<upright[2][7]&&
+                    transition[2][7]>seated[2][7],
+                    "knee-facing zone must taper smoothly from 50 to 80");
+            near(seated[2][7],base[7]*.85F,
+                    "deep seated distal X shrink must be bounded to 15%");
+            near(seated[2][9],base[9]*.85F,
+                    "deep seated distal Z shrink must be bounded to 15%");
+            near(seated[2][8],upright[2][8]*.95F,
+                    "deep seated axial shrink must be at most five percent");
+            require(seated[2][8]+seated[1][8]>
+                    2F*base[8]/3F,
+                    "distal taper broke the overlap with middle third");
+        }
+        else
+            for(int dimension=7;dimension<10;dimension++)
+                near(seated[2][dimension],upright[2][dimension],
+                        "distal shrink A/B disabled must preserve old OBB");
+        for(int dimension=0;dimension<10;dimension++)
+            near(base[dimension],box(.13F,-.3F,.04F,
+                    .19F,.24F,.18F)[dimension],
+                    "source thigh collider must stay unchanged");
+
+        BodyPartJoltContactBudget selected=
+                new BodyPartJoltContactBudget();
+        selected.add(eighty,typed(eighty),"emoticons.left_leg");
+        BodyPartJoltContactBudget.Selection result=
+                selected.select(true,true);
+        require(result.boxes.length==3,
+                "one bent upper thigh should produce three OBB zones");
+        near(result.boxes[2][7],seated[2][7],
+                "Jolt and XPBD should receive the same reduced OBB");
+        near(result.shapes[2][7],result.boxes[2][7],
+                "native and skirt renderer must share reduced dimensions");
+    }
+
+    private static void setThighAngle(float[] box,float degrees)
+    {
+        double half=Math.toRadians(degrees)*.5D;
+        box[3]=(float)Math.sin(half);
+        box[4]=0F;box[5]=0F;box[6]=(float)Math.cos(half);
     }
 
     private static void pelvisAnchorIdentifiesUpperEvenWhenLocalYIsInverted()

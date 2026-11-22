@@ -17,6 +17,44 @@ public final class SkirtLegCollisionProxy
     private static final float TOP_WIDTH=.70F;
     private static final float MIDDLE_WIDTH=.85F;
     private static final float LOWER_WIDTH=1F;
+    /**
+     * A/B experiment: the distal (knee-facing) third of each TRUE upper
+     * thigh collider is slightly too broad once the thigh lifts almost
+     * horizontal. Leave the pelvis-facing and middle zones untouched.
+     * This applies to the EXACT SAME selected OBBs for Jolt and XPBD.
+     *
+     * Disable and restore the previous three-zone fit with:
+     * -Dbbs.editor.physics.skirt.taperedDistalShrink=false
+     */
+    public static final boolean DISTAL_SHRINK=
+            Boolean.parseBoolean(System.getProperty(
+                    "bbs.editor.physics.skirt.taperedDistalShrink","true"));
+
+    /** From >50 degrees to ~80 degrees of thigh raise. Vertical walking
+     * legs have factor 1 exactly; at deep sit, lower radius becomes
+     * 85%, matching the middle zone rather than protruding beyond it.
+     * Only bone tilt is used here, no camera direction or scene time. */
+    static float distalWidthFactor(float boneAxisVertical)
+    {
+        if(!DISTAL_SHRINK)return 1F;
+        float v=Math.abs(boneAxisVertical);
+        if(!Float.isFinite(v))return 1F;
+        float start=.6427876F; // cos(50 degrees)
+        float full=.1736482F; // cos(80 degrees)
+        float t=Math.max(0F,Math.min(1F,(start-v)/(start-full)));
+        t=t*t*(3F-2F*t);
+        return 1F-.15F*t;
+    }
+
+    static float distalAxialFactor(float boneAxisVertical)
+    {
+        if(!DISTAL_SHRINK)return 1F;
+        float width=distalWidthFactor(boneAxisVertical);
+        // Maximum 5% longitudinal shrink; the existing 6% axial
+        // overlap keeps zone 2 touching zone 1 even at full sit.
+        return 1F-(1F-width)/3F;
+    }
+
     /** Small axial overlap prevents seams in the otherwise discrete taper. */
     private static final float AXIAL_OVERLAP=1.06F;
 
@@ -84,9 +122,11 @@ public final class SkirtLegCollisionProxy
             b[1]+=axisY*offset;
             b[2]+=axisZ*offset;
             float width=zone==0?TOP_WIDTH:
-                    zone==1?MIDDLE_WIDTH:LOWER_WIDTH;
+                    zone==1?MIDDLE_WIDTH:
+                    LOWER_WIDTH*distalWidthFactor(axisY);
             b[7]*=width;
-            b[8]=halfY/3F*AXIAL_OVERLAP;
+            b[8]=halfY/3F*AXIAL_OVERLAP*
+                    (zone==2?distalAxialFactor(axisY):1F);
             b[9]*=width;
             parts[zone]=b;
         }
