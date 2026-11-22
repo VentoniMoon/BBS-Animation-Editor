@@ -644,7 +644,7 @@ public final class SkirtXPBDContacts
          */
         public float[] correctedWorld(float[] world,float thickness)
         {
-            return correctedWorld(world,thickness,0F);
+            return correctedWorld(world,thickness,0F,0F);
         }
 
         /**
@@ -659,6 +659,24 @@ public final class SkirtXPBDContacts
          */
         public float[] correctedWorld(float[] world,float thickness,
                 float seatedTopEdgeAllowance)
+        {
+            return correctedWorld(world,thickness,seatedTopEdgeAllowance,0F);
+        }
+
+        /**
+         * Effective collider inset: the mesh triangles stay at their true
+         * rendered positions, but the target signed distance can be slightly
+         * INSIDE the visual thigh. This restores the clearance provided by
+         * narrower legacy OBB zones without changing the broadphase or
+         * making new geometry. Inset is a soft contact margin, NOT a
+         * guarantee that deep collisions will resolve in one iteration.
+         *
+         * IMPORTANT: keep the candidate search band based on the ORIGINAL
+         * nonnegative thickness. A negative search radius would miss top
+         * edges and trap the cloth in gaps between faces.
+         */
+        public float[] correctedWorld(float[] world,float thickness,
+                float seatedTopEdgeAllowance,float inset)
         {
             if(world==null||world.length!=3||!finite(world))
                 return world==null?null:world.clone();
@@ -693,7 +711,9 @@ public final class SkirtXPBDContacts
             if(best==null)return world.clone();
             float[] normal=smoothNormal(best,bestPoint);
             float signed=dot(minus(world,bestPoint),normal);
-            float need=thickness+0.004F-signed;
+            float inward=Float.isFinite(inset)?
+                    Math.max(0F,Math.min(.04F,inset)):0F;
+            float need=thickness+0.004F-inward-signed;
             if(need<=0F)return world.clone();
             float step=Math.min(MAX_CONTACT_STEP,need);
             return new float[]{world[0]+normal[0]*step,
@@ -848,6 +868,18 @@ public final class SkirtXPBDContacts
     public static float[] corrected(float[] clothLocal,Frame frame,
             float thickness,float[] posedOutwardLocal)
     {
+        return corrected(clothLocal,frame,thickness,posedOutwardLocal,0F);
+    }
+
+    /**
+     * A/B-tunable inset is applied to real CPU-skinned contacts only.
+     * In upright walking, meshContactBlend=0 and the legacy three-zone
+     * OBB correction remains bit-for-bit unchanged. During a seated pose
+     * the inset grows smoothly with the same bilateral bend weight.
+     */
+    public static float[] corrected(float[] clothLocal,Frame frame,
+            float thickness,float[] posedOutwardLocal,float skinInset)
+    {
         if(clothLocal==null||clothLocal.length!=3||
                 frame==null||!matrixValid(frame.modelToWorld))
             return clothLocal==null?null:clothLocal.clone();
@@ -865,9 +897,12 @@ public final class SkirtXPBDContacts
                 outwardWorld=new float[]{ox/radial,0F,oz/radial};
         }
         final float mix=frame.meshContactBlend;
+        final float inset=Float.isFinite(skinInset)?
+                Math.max(0F,Math.min(.04F,skinInset))*
+                frame.seatedBlend*mix:0F;
         final float[] skinExit=frame.skinSurface!=null&&mix>0F?
                 frame.skinSurface.correctedWorld(point,thickness,
-                        .045F*frame.seatedBlend):null;
+                        .045F*frame.seatedBlend,inset):null;
         if(mix>=.99999F&&skinExit!=null)
         {
             // Deep sitting: one true continuous surface, no OBB seams.
