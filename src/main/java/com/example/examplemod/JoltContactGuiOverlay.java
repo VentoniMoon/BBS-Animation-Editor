@@ -148,8 +148,17 @@ public final class JoltContactGuiOverlay
                     {
                         if(!boxModelShown(box))continue;
                         int before=segmentCount;
+                        // XPBD selected boxes are already in actor-world
+                        // coordinates. Previous debug rendering added actor
+                        // position AGAIN, showing a cluster beside the
+                        // character even though the physics data was correct.
+                        boolean worldBox=snapshot.worldSpace&&
+                                box.source.endsWith(" [XPBD]");
                         segmentCount+=drawAddedCollider(buf,box,camera,
-                                x,y,width,height,actorX,actorY,actorZ);
+                                x,y,width,height,
+                                worldBox?0D:actorX,
+                                worldBox?0D:actorY,
+                                worldBox?0D:actorZ);
                         if(segmentCount>before)
                         {
                             visibleBodies++;
@@ -198,8 +207,12 @@ public final class JoltContactGuiOverlay
                         {
                             if(!boxModelShown(box))continue;
                             number++;
-                            float[] center=project(box.pose[0]+actorX,
-                                    box.pose[1]+actorY,box.pose[2]+actorZ,
+                            boolean worldBox=snapshot.worldSpace&&
+                                    box.source.endsWith(" [XPBD]");
+                            float[] center=project(
+                                    box.pose[0]+(worldBox?0D:actorX),
+                                    box.pose[1]+(worldBox?0D:actorY),
+                                    box.pose[2]+(worldBox?0D:actorZ),
                                     camera,x,y,width,height);
                             if(center!=null && center[0]>=x &&
                                     center[0]<=x+width &&
