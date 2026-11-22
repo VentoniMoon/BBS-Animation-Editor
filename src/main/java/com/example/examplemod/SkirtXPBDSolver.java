@@ -77,6 +77,15 @@ public final class SkirtXPBDSolver
         return row==1?.50F:1F;
     }
 
+    /** The seated mode releases only ADDITIONAL artificial stiffness
+     * imposed on the first free hoop. Native distance constraints and
+     * circumference rest lengths are never dropped. */
+    static float upperHoopComplianceScale(float seated)
+    {
+        float shape=ADAPTIVE_SEATED_SHAPE?seatedRelief(seated):0F;
+        return 1F-.85F*seated*(1F-.80F*shape);
+    }
+
     /** At maximal sitting the back hem retains at least 20% of gravity.
      * Front fabric retains its full weight to settle onto the thigh. */
     static float seatedGravityScale(float seated,int row,float rear)
@@ -1064,8 +1073,7 @@ public final class SkirtXPBDSolver
                 if(SEATED_UPPER_CONTROL&&rowA==1&&rowB==1)
                     // Remove the EXTRA artificial seated hoop stiffening
                     // while keeping original circumference edge lengths.
-                    compliance*=1F-.85F*seated*
-                            (1F-.80F*shapeRelief);
+                    compliance*=upperHoopComplianceScale(seated);
                 // Make the lower TWO-row bending constraints softer.
                 // Stretch/shear links stay intact; no torn seams.
                 if(SEATED_BEND_RELIEF&&Math.abs(rowA-rowB)==2&&
