@@ -59,6 +59,7 @@ jobs:
           find "$OUT/src" \
             jolt-java8-port/src/main/java/com/example/examplemod/physics \
             src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java \
+            src/main/java/com/example/examplemod/EditorPhysicsRuntimeDefaults.java \
             src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java \
             src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java \
