@@ -34,6 +34,10 @@ repositories {
         // Forge's public Scala/Java transitive dependencies should resolve
         // from Maven Central, not through CurseMaven (which can time out).
         mavenCentral()
+        // Mojang's own Forge 1.12.2 transitive libraries such as
+        // com.mojang:patchy are published here; resolving them via
+        // CurseMaven causes unnecessary HEAD timeouts in Actions.
+        maven { url 'https://libraries.minecraft.net/' }
         // McHorse runtime mod artifacts are available through CurseMaven.
         maven { url 'https://cursemaven.com/' }
     }
