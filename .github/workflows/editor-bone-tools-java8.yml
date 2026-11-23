@@ -115,11 +115,15 @@ jobs:
                            "linux/x86-64/com/github/stephengold/libjoltjni.so"):
                   assert path in z.namelist(),path
           PY
-      - name: Java 8 Forge runtime/build
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '8'
+      - name: Restore already-installed Java 8 for native smoke and Forge
+        run: |
+          # The first step installed Zulu Java 8. Avoid a second JDK8
+          # download after Java 21: setup-java sometimes fails extracting
+          # its archive on hosted runners, before any physics test runs.
+          test -n "${JAVA_HOME_8_X64:-}"
+          test -x "$JAVA_HOME_8_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_8_X64/bin" >> "$GITHUB_PATH"
       - name: Verify native Jolt ABI on Java 8 and automatic-activation contract
         run: |
           set -euo pipefail
