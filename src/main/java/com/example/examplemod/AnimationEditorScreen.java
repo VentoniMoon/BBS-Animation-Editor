@@ -68,6 +68,22 @@ public class AnimationEditorScreen extends GuiScreen
     private final EditorPreviewAutoFocusController previewAutoFocus =
             new EditorPreviewAutoFocusController();
 
+    /** BBS-style viewport hover/click: never changes the real morph
+     * or starts a gizmo until the user explicitly presses LMB. */
+    private final EditorBoneViewportPicker boneViewportPicker =
+            new EditorBoneViewportPicker();
+
+    /** Offline assistant console; all mutations require a second click. */
+    private final EditorAssistantPanel assistantPanel =
+            new EditorAssistantPanel();
+    /** World pins are per-scene and session-only until native rig acceptance. */
+    private EditorWorldBonePinRegistry worldBonePins =
+            new EditorWorldBonePinRegistry();
+    private EditorSceneState worldPinSceneState;
+    private int worldPinSceneIndex=Integer.MIN_VALUE;
+    private String worldPinMessage="";
+    private float worldPinResidual=0F;
+
     private final EditorModeController editorModeController =
             new EditorModeController();
 
@@ -442,6 +458,8 @@ public class AnimationEditorScreen extends GuiScreen
     public void initGui()
     {
         super.initGui();
+        // Background actors use their OWN pinned chains when not selected.
+        this.multiActorPreview.setWorldPinRegistry(this.worldBonePins);
         // Minecraft's ru_ru forces its small Unicode font on Latin text too.
         // The editor uses its own font instance; all other GUI screens keep
         // their original font after onGuiClosed().
@@ -672,6 +690,288 @@ public class AnimationEditorScreen extends GuiScreen
                 ||
                 mode ==
                 EditorModeController.EditorMode.BODY_PARTS;
+    }
+
+    private List<AnimationBone> viewportSelectableBones()
+    {
+        if(!isGizmoEnabled())return null;
+        if(editorModeController.getMode()==EditorModeController.EditorMode.BODY_PARTS)
+        {
+            BodyPartModelData model=bodyPartsController.getSelectedModel();
+            // A Body Part model's internal bones are independent of the
+            // actor's attachment point. Only pick inside the active model.
+            return model==null?null:model.getBones();
+        }
+        return actorPreviewController.getBones();
+    }
+
+    private AnimationBone updateViewportBoneHover(int mouseX,int mouseY,
+            int x,int y,int width,int height)
+    {
+        if(!isGizmoEnabled()||getSelectedActor()==null||
+                sceneViewport==null||isCrossModeCameraView()||
+                playbackController.isPlaying())
+        {
+            boneViewportPicker.clear();
+            return null;
+        }
+        prepareGizmoTarget();
+        return boneViewportPicker.update(mouseX,mouseY,
+                viewportSelectableBones(),gizmoController,
+                getCurrentRecordFrame(),getPreviewInteractionCamera(),
+                x,y,width,height);
+    }
+
+    /** Called AFTER the gizmo handle hit test but BEFORE any camera
+     * movement. Click creates/selects exactly one key on this frame and
+     * starts a body drag in position/angle mode without an axis click. */
+    public boolean clickViewportBone(int mouseX,int mouseY,int button)
+    {
+        if(button!=0||sceneViewport==null||!isGizmoEnabled()||
+                isCrossModeCameraView()||playbackController.isPlaying())
+            return false;
+        int vx=sceneViewport.getX(),vy=sceneViewport.getY();
+        int vw=sceneViewport.getWidth(),vh=sceneViewport.getHeight();
+        AnimationBone picked=updateViewportBoneHover(
+                mouseX,mouseY,vx,vy,vw,vh);
+        List<AnimationBone> bones=viewportSelectableBones();
+        if(picked==null||bones==null)return false;
+        int index=bones.indexOf(picked);
+        if(index<0)return false;
+
+        EditorKeyframeController keys=
+                editorModeController.getMode()==EditorModeController.EditorMode.BODY_PARTS?
+                bodyPartsController.getKeyframeController():keyframeController;
+        int frame=playbackController.getCurrentFrame();
+        AnimationTransform evaluated=picked.getTransformAt((float)frame);
+        boolean newKey=keys.findKeyframe(picked,frame)==null;
+        keys.setSelectedBoneIndex(index,bones);
+        AnimationKeyframe key=keys.createKeyframe(picked,frame);
+        if(key==null)return false;
+        if(newKey&&evaluated!=null)
+        {
+            AnimationTransform to=key.getTransform();
+            to.setPosition(evaluated.getPositionX(),
+                    evaluated.getPositionY(),evaluated.getPositionZ());
+            to.setRotation(evaluated.getRotationX(),
+                    evaluated.getRotationY(),evaluated.getRotationZ());
+            to.setScale(evaluated.getScaleX(),
+                    evaluated.getScaleY(),evaluated.getScaleZ());
+        }
+
+        prepareGizmoTarget();
+        gizmoController.beginDirectBoneDrag(mouseX,mouseY,
+                vx,vy,vw,vh,picked,key,getCurrentRecordFrame(),
+                getPreviewInteractionCamera());
+        markEditorDirty();
+        return true;
+    }
+
+    private void ensureWorldPinScene()
+    {
+        int sceneIndex=sceneState==null?-1:sceneState.getSelectedScene();
+        if(worldPinSceneState!=sceneState||worldPinSceneIndex!=sceneIndex)
+        {
+            worldBonePins=sceneState==null?
+                    new EditorWorldBonePinRegistry():
+                    sceneState.getWorldBonePins();
+            this.multiActorPreview.setWorldPinRegistry(worldBonePins);
+            worldPinSceneState=sceneState;
+            worldPinSceneIndex=sceneIndex;
+            worldPinMessage="";
+            worldPinResidual=0F;
+        }
+    }
+
+    /**
+     * World pin currently supports native Blockbuster POSE rigs only.
+     * It is an experimental render-only IK correction, never authored key
+     * multiplication or translation of a pinned mesh.
+     */
+    private boolean worldPinRigSupported()
+    {
+        BlockbusterSceneActorData actor=getSelectedActor();
+        return actor!=null&&actor.getMorphName()!=null
+                &&actor.getMorphName().startsWith("blockbuster.")
+                &&!BetterLightsActorInspector.isLightActor(actor)
+                &&!ParticleActorRig.isParticleActor(actor);
+    }
+
+    private boolean worldPinSupported()
+    {
+        return editorModeController.getMode()==
+                EditorModeController.EditorMode.POSE&&worldPinRigSupported();
+    }
+
+    public boolean setWorldBonePinned(String actorId,String boneName,
+            boolean pinned)
+    {
+        ensureWorldPinScene();
+        BlockbusterSceneActorData actor=getSelectedActor();
+        if(actor==null||actorId==null||!actor.getId().equals(actorId)||
+                boneName==null||!worldPinSupported())
+        {
+            worldPinMessage="World IK: Blockbuster POSE only";
+            return false;
+        }
+        AnimationBone selected=null;
+        for(AnimationBone candidate:actorPreviewController.getBones())
+            if(candidate!=null&&boneName.equals(candidate.getName()))
+            {
+                selected=candidate;break;
+            }
+        if(selected==null||!EditorWorldBonePoseRetarget.supports(selected))
+        {
+            worldPinMessage="Select a non-root bone with a valid parent chain";
+            return false;
+        }
+        if(!pinned)
+        {
+            boolean changed=worldBonePins.unpin(actorId,boneName);
+            if(changed)
+            {
+                worldPinMessage="World pin removed";
+                markEditorDirty();
+                applyAdapters();
+            }
+            return changed;
+        }
+        if(worldBonePins.find(actorId,boneName)!=null)return true;
+        BlockbusterRecordFrame record=getCurrentRecordFrame();
+        if(record==null)
+        {
+            worldPinMessage="No current actor Record frame";
+            return false;
+        }
+        prepareGizmoTarget();
+        float[] nativePivot=gizmoController.getWorldBonePivot(selected,record);
+        float frame=(float)playbackController.getCurrentFrame();
+        float[] worldScale=EditorWorldBonePoseRetarget.worldScale(actor);
+        float pivotError=EditorWorldBonePoseRetarget.pivotDifference(
+                selected,frame,record,nativePivot,worldScale);
+        if(nativePivot==null||worldScale==null||
+                !Float.isFinite(pivotError)||pivotError>.20F)
+        {
+            worldPinMessage=Float.isFinite(pivotError)
+                    ?"Native IK pivot mismatch: "+
+                        String.format(java.util.Locale.ROOT,"%.3f",pivotError)+
+                        " blocks"
+                    :"World IK: native pivot or model scale unavailable";
+            System.err.println("[BBS Editor][WorldPin] capture refused"
+                    +" actor="+actorId+" bone="+boneName
+                    +" frame="+frame+" pivotError="+pivotError
+                    +" native="+java.util.Arrays.toString(nativePivot)
+                    +" scale="+java.util.Arrays.toString(worldScale));
+            return false;
+        }
+        // The first native adapter accepts one pinned chain per actor:
+        // two simultaneous pins may impose contradictory constraints.
+        for(EditorWorldBonePinRegistry.Pin existing:
+                worldBonePins.snapshot().values())
+        {
+            if(actorId.equals(existing.actorId))
+                worldBonePins.unpin(existing.actorId,existing.boneName);
+        }
+        if(!worldBonePins.pin(actorId,boneName,nativePivot))return false;
+        worldPinMessage="WORLD PIN: "+boneName+" (saved in editor.dat)";
+        markEditorDirty();
+        applyAdapters();
+        return true;
+    }
+
+    private void toggleSelectedWorldPin()
+    {
+        BlockbusterSceneActorData actor=getSelectedActor();
+        AnimationBone bone=getGizmoBone();
+        if(actor==null||bone==null)
+        {
+            worldPinMessage="Select actor and bone first";
+            return;
+        }
+        ensureWorldPinScene();
+        boolean already=worldBonePins.find(actor.getId(),bone.getName())!=null;
+        setWorldBonePinned(actor.getId(),bone.getName(),!already);
+    }
+
+    /** Small click target separate from the three native gizmo buttons. */
+    public boolean clickWorldPinControl(int mx,int my,int button)
+    {
+        if(button!=0||sceneViewport==null||!worldPinSupported())return false;
+        int x=sceneViewport.getX()+9,y=sceneViewport.getY()+9;
+        if(mx<x||mx>=x+112||my<y||my>=y+19)return false;
+        toggleSelectedWorldPin();
+        return true;
+    }
+
+    private void drawWorldPinControl()
+    {
+        if(!worldPinSupported()||sceneViewport==null)return;
+        ensureWorldPinScene();
+        int x=sceneViewport.getX()+9,y=sceneViewport.getY()+9;
+        AnimationBone bone=getGizmoBone();
+        BlockbusterSceneActorData actor=getSelectedActor();
+        boolean pinned=bone!=null&&actor!=null&&
+                worldBonePins.find(actor.getId(),bone.getName())!=null;
+        drawRect(x,y,x+112,y+19,pinned?0xE8295945:0xE7282937);
+        drawRect(x,y,x+112,y+1,pinned?0xFF60E19A:0xFF9578CE);
+        fontRenderer.drawString(pinned?"UNPIN WORLD":"PIN WORLD XYZ",
+                x+8,y+6,0xFFF4F3FF);
+        if(worldPinMessage!=null&&!worldPinMessage.isEmpty())
+            fontRenderer.drawString(fontRenderer.trimStringToWidth(
+                    worldPinMessage,Math.max(100,sceneViewport.getWidth()-22)),
+                    x,y+24,0xFFFFD6A1);
+    }
+
+    /**
+     * Apply IK to a temporary POSE snapshot only. Never write rotation keys
+     * on mouse movement or every frame. The native renderer reads the same
+     * snapshot channels already used for normal POSE.
+     */
+    private void applyWorldPinSnapshot(float animationFrame)
+    {
+        ensureWorldPinScene();
+        if(worldBonePins.size()==0||!worldPinRigSupported())return;
+        BlockbusterSceneActorData actor=getSelectedActor();
+        BlockbusterRecordFrame record=getCurrentRecordFrame();
+        BlockbusterRecord source=getSelectedActorRecord();
+        // A pin is a true WORLD XYZ anchor. When rendering sub-tick frames
+        // (including offline 60 FPS export), its inverse actor transform
+        // must use the SAME interpolated Record position/yaw as the actor.
+        // Otherwise feet appear to drift despite a stable FABRIK target.
+        if(source!=null&&Float.isFinite(animationFrame)&&
+                animationFrame>=0F)
+        {
+            int tick=(int)Math.floor(animationFrame);
+            double fraction=animationFrame-tick;
+            BlockbusterRecordFrame sampled=
+                    CameraExportActorFrameSampler.sample(
+                            source,tick,fraction);
+            if(sampled!=null)record=sampled;
+        }
+        if(actor==null||record==null)return;
+        java.util.List<AnimationBone> bones=actorPreviewController.getBones();
+        if(bones==null||bones.isEmpty())return;
+
+        EditorWorldBonePoseRetarget.Result result=
+                EditorWorldBoneSnapshotAdapter.solve(worldBonePins,
+                        actor.getId(),bones,animationFrame,record,actor);
+        if(result==null)
+        {
+            worldPinMessage="World pin paused: native rig is not solvable";
+            return;
+        }
+        worldPinResidual=result.residualWorld;
+        worldPinMessage=result.residualWorld>.04F
+                ?(result.reachable
+                    ?"World IK residual high: check skeleton"
+                    :"Pin out of reach; limb length preserved")
+                :"WORLD PIN ACTIVE";
+        java.util.List<AnimationBoneSnapshot> snapshots=
+                EditorWorldBoneSnapshotAdapter.snapshots(
+                        bones,animationFrame,result);
+        // Keep normal native rendering, morph layers and mirrors intact.
+        BlockbusterPreviewAnimationState.set(snapshots,(int)animationFrame);
+        EmoticonsPreviewAnimationState.set(snapshots,(int)animationFrame);
     }
 
     public AnimationBone getGizmoBone()
@@ -1090,6 +1390,105 @@ public class AnimationEditorScreen extends GuiScreen
         }
 
         return null;
+    }
+
+    /**
+     * Read-only assistant proposal. This is deliberately NOT a language
+     * model connection and is safe for later in-editor chat integration.
+     * It snapshots the current actor/selected bone, never editor secrets.
+     */
+    public EditorAssistantCore.Proposal previewAssistantCommand(
+            String request)
+    {
+        BlockbusterSceneActorData actor=getSelectedActor();
+        AnimationBone bone=getGizmoBone();
+        return EditorAssistantCore.propose(request,
+                new EditorAssistantCore.Context(
+                        playbackController.getCurrentFrame(),
+                        actor==null?"":actor.getId(),
+                        bone==null?"":bone.getName(),
+                        editorModeController.getMode().name()));
+    }
+
+    /**
+     * Explicit user approval is required for all typed assistant writes.
+     * The rig-specific world pin adapter is not finished yet, therefore
+     * PIN/UNPIN safely return false instead of claiming to lock a limb.
+     */
+    public boolean executeAssistantCommand(
+            EditorAssistantCore.Proposal proposal,boolean approved)
+    {
+        return EditorAssistantCore.execute(proposal,approved,
+                new EditorAssistantCore.EditorActions()
+                {
+                    @Override
+                    public boolean gotoFrame(int frame)
+                    {
+                        if(frame<0||frame>=getSceneLength())return false;
+                        playbackController.setCurrentFrame(frame);
+                        applyRecordFrame();
+                        applyAdapters();
+                        return true;
+                    }
+
+                    @Override
+                    public boolean createBoneKey(String actorId,
+                            String boneName,int frame)
+                    {
+                        BlockbusterSceneActorData actor=getSelectedActor();
+                        if(actor==null||!actor.getId().equals(actorId)||
+                                frame<0||frame>=getSceneLength()||
+                                !isGizmoEnabled())return false;
+                        List<AnimationBone> bones=viewportSelectableBones();
+                        if(bones==null)return false;
+                        for(int i=0;i<bones.size();i++)
+                        {
+                            AnimationBone bone=bones.get(i);
+                            if(bone==null||
+                                    !bone.getName().equals(boneName))
+                                continue;
+                            EditorKeyframeController keys=
+                                    editorModeController.getMode()==
+                                            EditorModeController.EditorMode.BODY_PARTS?
+                                            bodyPartsController.getKeyframeController():
+                                            keyframeController;
+                            AnimationTransform before=bone.getTransformAt(
+                                    (float)frame);
+                            boolean missing=keys.findKeyframe(
+                                    bone,frame)==null;
+                            keys.setSelectedBoneIndex(i,bones);
+                            AnimationKeyframe key=keys.createKeyframe(
+                                    bone,frame);
+                            if(key==null)return false;
+                            if(missing&&before!=null)
+                            {
+                                key.getTransform().setPosition(
+                                        before.getPositionX(),
+                                        before.getPositionY(),
+                                        before.getPositionZ());
+                                key.getTransform().setRotation(
+                                        before.getRotationX(),
+                                        before.getRotationY(),
+                                        before.getRotationZ());
+                                key.getTransform().setScale(
+                                        before.getScaleX(),
+                                        before.getScaleY(),
+                                        before.getScaleZ());
+                            }
+                            markEditorDirty();
+                            applyAdapters();
+                            return true;
+                        }
+                        return false;
+                    }
+
+                    @Override
+                    public boolean setWorldPin(String actorId,
+                            String boneName,boolean pinned)
+                    {
+                        return setWorldBonePinned(actorId,boneName,pinned);
+                    }
+                });
     }
 
     /*
@@ -1729,6 +2128,7 @@ public class AnimationEditorScreen extends GuiScreen
         this.actorPreviewController.applyAdapters(
                 this.playbackController.getCurrentFrame()
         );
+        applyWorldPinSnapshot((float)this.playbackController.getCurrentFrame());
     }
 
     public void applyAdapters(float animationFrame)
@@ -1736,6 +2136,7 @@ public class AnimationEditorScreen extends GuiScreen
         this.actorPreviewController.applyAdapters(
                 animationFrame
         );
+        applyWorldPinSnapshot(animationFrame);
     }
 
     private void resetTimeline(int length)
@@ -2236,6 +2637,7 @@ public class AnimationEditorScreen extends GuiScreen
         if(this.editorModeController.getMode()
                 ==EditorModeController.EditorMode.CAMERA)
             cameraExportDialog.draw(this,mouseX,mouseY);
+        assistantPanel.draw(this);
     }
 
     private void drawTopBar()
@@ -3485,6 +3887,13 @@ public class AnimationEditorScreen extends GuiScreen
                 isGizmoEnabled()
         );
 
+        // Green projected limb/pivot highlight follows the same camera
+        // and native bone matrices as the gizmo. The draw happens in GUI,
+        // after FBO compositing, so it is never baked into video output.
+        updateViewportBoneHover(mouseX,mouseY,filmX,filmY,filmW,filmH);
+        boneViewportPicker.drawHover();
+        drawWorldPinControl();
+
         drawPreviewFrame(left,top,previewRight,bottom);
         if(outputView)
         {
@@ -4250,6 +4659,11 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseButton)
             throws java.io.IOException
     {
+        if(assistantPanel.isOpen())
+        {
+            assistantPanel.mouseClicked(this,mouseX,mouseY,mouseButton);
+            return;
+        }
         // Modal Export must intercept clicks before the timeline, preview or
         // normal editor toolbars; cancellation stays available in this panel.
         if(cameraExportDialog.isOpen())
@@ -4369,6 +4783,7 @@ public class AnimationEditorScreen extends GuiScreen
             int clickedMouseButton,
             long timeSinceLastClick)
     {
+        if(assistantPanel.isOpen())return;
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         if(clickedMouseButton==0&&
                 editorModeController.getMode()==EditorModeController.EditorMode.POSE
@@ -4417,6 +4832,7 @@ public class AnimationEditorScreen extends GuiScreen
             int mouseY,
             int state)
     {
+        if(assistantPanel.isOpen())return;
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())return;
         betterLightsInspector.mouseReleased();
         physicsWorkspace.releaseImpulseDrag();
@@ -4444,6 +4860,13 @@ public class AnimationEditorScreen extends GuiScreen
     public void handleMouseInput()
             throws java.io.IOException
     {
+        if(assistantPanel.isOpen())
+        {
+            // Modal assistant must not zoom, scrub or scroll the editor.
+            // GuiScreen still dispatches click events to our modal handler.
+            super.handleMouseInput();
+            return;
+        }
         if(cameraExportDialog.isOpen()||cameraVideoExport.isExporting())
         {
             // Keep the authored scene immutable while native frames are
@@ -4498,6 +4921,26 @@ public class AnimationEditorScreen extends GuiScreen
             int keyCode)
             throws java.io.IOException
     {
+        // Consume modal text input BEFORE editor shortcuts and global hotkeys.
+        if(assistantPanel.isOpen())
+        {
+            assistantPanel.keyTyped(this,typedChar,keyCode);
+            return;
+        }
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_P
+                &&isCtrlKeyDown()&&isShiftKeyDown())
+        {
+            toggleSelectedWorldPin();
+            return;
+        }
+        if(keyCode==org.lwjgl.input.Keyboard.KEY_A
+                &&isCtrlKeyDown()&&isShiftKeyDown()
+                &&!cameraExportDialog.isOpen()
+                &&!cameraVideoExport.isExporting())
+        {
+            assistantPanel.open(this);
+            return;
+        }
         // A/B actor render order: selects whether the chosen character is
         // drawn before or after the background actors. This tests for
         // cross-morph state leaks without changing the actual scene.
@@ -4837,6 +5280,7 @@ public class AnimationEditorScreen extends GuiScreen
     @Override
     public void onGuiClosed()
     {
+        assistantPanel.close();
         // Preview-only lights are not Minecraft entities: release them
         // explicitly even if no further native world pass is rendered.
         BlockbusterActorPreviewRenderer.setMixedActorDiagnostics(false);

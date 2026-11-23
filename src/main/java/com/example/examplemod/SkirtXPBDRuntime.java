@@ -17,8 +17,8 @@ public final class SkirtXPBDRuntime
 {
     private static final WeakHashMap<Object,Actor> ACTORS=
             new WeakHashMap<Object,Actor>();
-    public static final boolean ENABLED=Boolean.getBoolean(
-            "bbs.editor.physics.skirt.xpbd");
+    public static final boolean ENABLED=
+            EditorPhysicsRuntimeDefaults.enabled("bbs.editor.physics.skirt.xpbd");
     public static final boolean REPLACE=Boolean.parseBoolean(
             System.getProperty("bbs.editor.physics.skirt.xpbdReplace","true"));
 

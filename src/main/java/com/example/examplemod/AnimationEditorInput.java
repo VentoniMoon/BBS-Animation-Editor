@@ -343,6 +343,10 @@ public class AnimationEditorInput
             return;
         }
 
+        /* World-pin control is a viewport UI element, not a bone hit. */
+        if(this.screen.clickWorldPinControl(mouseX,mouseY,mouseButton))
+            return;
+
         /*
          * =========================================================
          * STAGE 5 - GIZMO
@@ -373,6 +377,17 @@ public class AnimationEditorInput
                         this.screen.isGizmoEnabled()
                 ))
         {
+            return;
+        }
+
+        // BBS-style viewport picking is separate from existing colored
+        // gizmo handles. A direct LMB click highlights/selects the true
+        // native bone and creates its key at the current editor frame.
+        // The active gizmo then owns the same drag/release path as before.
+        if(this.screen.clickViewportBone(mouseX,mouseY,mouseButton))
+        {
+            this.markDirty();
+            this.screen.applyAdapters();
             return;
         }
 

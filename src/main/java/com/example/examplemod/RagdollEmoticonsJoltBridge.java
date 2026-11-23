@@ -36,7 +36,7 @@ import net.minecraft.client.Minecraft;
 public final class RagdollEmoticonsJoltBridge
 {
     private static final boolean ENABLED=
-            Boolean.getBoolean("bbs.editor.physics.jolt.ragdoll");
+            EditorPhysicsRuntimeDefaults.enabled("bbs.editor.physics.jolt.ragdoll");
     private static final String NATIVE=
             "com.example.examplemod.physics.JoltHumanoidRagdoll";
     private static boolean attempted,available,logged,reportedHierarchy;

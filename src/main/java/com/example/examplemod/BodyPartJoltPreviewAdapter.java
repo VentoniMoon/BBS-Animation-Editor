@@ -24,7 +24,7 @@ import java.util.Map;
  */
 public final class BodyPartJoltPreviewAdapter {
     private static final boolean REQUESTED =
-            Boolean.getBoolean("bbs.editor.physics.jolt.preview");
+            EditorPhysicsRuntimeDefaults.enabled("bbs.editor.physics.jolt.preview");
     private static final boolean RAW_DIAGNOSTIC =
             Boolean.getBoolean("bbs.editor.physics.jolt.diagnostic");
     /** Jolt preview body contacts default ON; opt out explicitly for A/B. */

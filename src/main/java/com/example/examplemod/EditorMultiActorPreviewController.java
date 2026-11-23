@@ -27,6 +27,14 @@ public final class EditorMultiActorPreviewController
 
     private boolean showAllActors = true;
 
+    /** World-space locks are scoped to the editor scene and actor IDs. */
+    private EditorWorldBonePinRegistry worldPinRegistry;
+
+    public void setWorldPinRegistry(EditorWorldBonePinRegistry registry)
+    {
+        this.worldPinRegistry=registry;
+    }
+
     /** Do not reuse native EntityActor render state across scene loads. */
     private EditorSceneState previousScene;
     private int previousSceneIndex=-1;
@@ -144,6 +152,26 @@ public final class EditorMultiActorPreviewController
                             : bone.getParent().getName();
                     own.add(new AnimationBoneSnapshot(bone.getName(), parent, value));
                 }
+            }
+
+            /*
+             * A deselected actor must retain its world-pinned limb.
+             * Evaluate the same temporary POSE snapshot against THIS actor's
+             * own Record and hierarchy; never reuse the selected actor's
+             * morph or render state, and never alter persisted keyframes.
+             */
+            if(worldPinRegistry!=null&&actorAnimation!=null&&
+                    data.getMorphName()!=null&&
+                    data.getMorphName().startsWith("blockbuster."))
+            {
+                EditorWorldBonePoseRetarget.Result pinned=
+                        EditorWorldBoneSnapshotAdapter.solve(
+                                worldPinRegistry,data.getId(),
+                                actorAnimation.getBones(),(float)sceneTime,
+                                current,data);
+                if(pinned!=null)
+                    own=EditorWorldBoneSnapshotAdapter.snapshots(
+                            actorAnimation.getBones(),(float)sceneTime,pinned);
             }
 
             /*

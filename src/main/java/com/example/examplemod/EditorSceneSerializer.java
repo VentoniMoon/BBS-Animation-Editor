@@ -175,6 +175,11 @@ public final class EditorSceneSerializer
         scene.setTag("BodyParts",
                 BodyPartsPersistence.write(state.getBodyPartsController()));
 
+        // Optional per-scene WORLD XYZ bone anchors (old editor.dat reads
+        // without this tag, and no Blockbuster Record is modified).
+        scene.setTag("WorldBonePins",
+                EditorWorldBonePinPersistence.write(state.getWorldBonePins()));
+
         /*
          * CAMERA is scene-wide and editor-only. JSON is embedded as an
          * optional NBT string so old editor.dat files and Blockbuster
@@ -359,6 +364,10 @@ public final class EditorSceneSerializer
          * POSE / ANIMATION DATA
          * =====================================================
          */
+
+        EditorWorldBonePinPersistence.read(state.getWorldBonePins(),
+                scene.hasKey("WorldBonePins",10)
+                    ?scene.getCompoundTag("WorldBonePins"):null);
 
         state.getAnimationData().clear();
 

@@ -1,0 +1,203 @@
+name: Editor bone picker, world pin math and assistant Java 8
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/**'
+      - 'src/test/java/**'
+      - '.github/workflows/editor-bone-tools-java8.yml'
+  workflow_dispatch:
+
+jobs:
+  editor-bone-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '8'
+      - name: Check pure world IK and assistant safety (Java 8)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/editor-bone-tests"
+          javac -source 8 -target 8 -encoding UTF-8 \
+            -d "$RUNNER_TEMP/editor-bone-tests" \
+            src/main/java/com/example/examplemod/EditorWorldBoneIK.java \
+            src/main/java/com/example/examplemod/EditorWorldBoneRetargetMath.java \
+            src/main/java/com/example/examplemod/EditorWorldBonePinRegistry.java \
+            src/main/java/com/example/examplemod/EditorAssistantCore.java \
+            src/test/java/com/example/examplemod/EditorWorldBoneIKSmokeTest.java \
+            src/test/java/com/example/examplemod/EditorWorldBoneRetargetMathSmokeTest.java \
+            src/test/java/com/example/examplemod/EditorAssistantCoreSmokeTest.java
+          java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
+            com.example.examplemod.EditorWorldBoneIKSmokeTest
+          java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
+            com.example.examplemod.EditorWorldBoneRetargetMathSmokeTest
+          java -ea -cp "$RUNNER_TEMP/editor-bone-tests" \
+            com.example.examplemod.EditorAssistantCoreSmokeTest
+      - name: Prepare pinned Jolt 6.0.0 Java 8 source
+        uses: actions/checkout@v4
+        with:
+          repository: stephengold/jolt-jni
+          ref: '6.0.0'
+          path: upstream-jolt
+          persist-credentials: false
+      - name: Java 21 compiler for Java 8 compatible JNI
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build up-to-date bundled Jolt JNI and hair/ragdoll prototype
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/jolt-java8"
+          python3 jolt-java8-port/tools/prepare_sources.py \
+            --upstream upstream-jolt --output "$OUT"
+          find "$OUT/src" \
+            jolt-java8-port/src/main/java/com/example/examplemod/physics \
+            src/main/java/com/example/examplemod/BodyPartJoltPreviewAdapter.java \
+            src/main/java/com/example/examplemod/EditorPhysicsRuntimeDefaults.java \
+            src/main/java/com/example/examplemod/BodyPartJoltTorsoFit.java \
+            src/main/java/com/example/examplemod/BodyPartJoltMultiTorsoFit.java \
+            src/main/java/com/example/examplemod/BodyPartJoltActorSpace.java \
+            src/main/java/com/example/examplemod/BodyPartPhysicsMatrixSpace.java \
+            src/main/java/com/example/examplemod/JoltColliderPrimitives.java \
+            src/main/java/com/example/examplemod/JoltPhysicsDiscontinuity.java \
+            src/main/java/com/example/examplemod/JoltStaticPoseChange.java \
+            src/main/java/com/example/examplemod/JoltKinematicColliderSizing.java \
+            src/main/java/com/example/examplemod/JoltPhysicsTimeline.java \
+            src/main/java/com/example/examplemod/JoltPhysicsOfflineRunner.java \
+            -type f -name '*.java' | sort > "$OUT/sources.txt"
+          mkdir -p "$OUT/classes" libs
+          javac --release 8 -encoding UTF-8 \
+            -d "$OUT/classes" @"$OUT/sources.txt"
+          jar cf libs/jolt-jni-6.0.0-java8-bundled.jar \
+            -C "$OUT/classes" com/github/stephengold/joltjni
+          jar uf libs/jolt-jni-6.0.0-java8-bundled.jar \
+            -C "$OUT" UPSTREAM-LICENSE.txt
+          jar cf libs/jolt-hair-prototype-java8.jar \
+            -C "$OUT/classes" com/example/examplemod/physics
+          for platform in Linux64 Windows64; do
+            if [ "$platform" = Linux64 ]; then
+              target="$OUT/linux-native.jar"
+              dest="$OUT/native-linux"
+            else
+              target="$OUT/windows-native.jar"
+              dest="$OUT/native-win"
+            fi
+            curl --fail --location --retry 4 --retry-all-errors \
+              --retry-delay 2 --silent --show-error \
+              "https://repo.maven.apache.org/maven2/com/github/stephengold/jolt-jni-$platform/6.0.0/jolt-jni-$platform-6.0.0-ReleaseSp.jar" \
+              -o "$target"
+            mkdir -p "$dest"
+            (cd "$dest" && jar xf "$target")
+          done
+          test -s "$OUT/native-linux/linux/x86-64/com/github/stephengold/libjoltjni.so"
+          test -s "$OUT/native-win/windows/x86-64/com/github/stephengold/joltjni.dll"
+          jar uf libs/jolt-jni-6.0.0-java8-bundled.jar \
+            -C "$OUT/native-linux" linux -C "$OUT/native-win" windows
+          # Sidecar classes are compiled from THIS checkout, not a
+          # pre-feature release; fail rather than silently use an old Jolt.
+          python3 - <<'PY'
+          import pathlib,zipfile
+          a=zipfile.ZipFile("libs/jolt-hair-prototype-java8.jar")
+          names=set(a.namelist())
+          for path in ("com/example/examplemod/physics/JoltChameleonPreviewRig.class",
+                       "com/example/examplemod/physics/JoltHumanoidRagdoll.class",
+                       "com/example/examplemod/physics/JoltJava8Bootstrap.class"):
+              assert path in names,path
+          with zipfile.ZipFile("libs/jolt-jni-6.0.0-java8-bundled.jar") as z:
+              for path in ("com/github/stephengold/joltjni/Jolt.class",
+                           "windows/x86-64/com/github/stephengold/joltjni.dll",
+                           "linux/x86-64/com/github/stephengold/libjoltjni.so"):
+                  assert path in z.namelist(),path
+          PY
+      - name: Restore already-installed Java 8 for native smoke and Forge
+        run: |
+          # The first step installed Zulu Java 8. Avoid a second JDK8
+          # download after Java 21: setup-java sometimes fails extracting
+          # its archive on hosted runners, before any physics test runs.
+          test -n "${JAVA_HOME_8_X64:-}"
+          test -x "$JAVA_HOME_8_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_8_X64/bin" >> "$GITHUB_PATH"
+      - name: Verify native Jolt ABI on Java 8 and automatic-activation contract
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/jolt-java8"
+          javac -source 8 -target 8 -encoding UTF-8 \
+            -cp "$OUT/classes" -d "$OUT/classes" \
+            jolt-java8-port/src/test/java/com/github/stephengold/joltjni/JoltNativeSmoke.java \
+            jolt-java8-port/src/test/java/com/example/examplemod/physics/JoltJava8BootstrapSmoke.java
+          java -ea -Djolt.native.path="$OUT/native-linux/linux/x86-64/com/github/stephengold/libjoltjni.so" \
+            -cp "$OUT/classes" com.github.stephengold.joltjni.JoltNativeSmoke
+          java -ea -Dbbs.editor.jolt.native="$OUT/native-linux/linux/x86-64/com/github/stephengold/libjoltjni.so" \
+            -cp "$OUT/classes" com.example.examplemod.physics.JoltJava8BootstrapSmoke
+          mkdir -p "$RUNNER_TEMP/physics-defaults-test"
+          javac -source 8 -target 8 -encoding UTF-8 \
+            -d "$RUNNER_TEMP/physics-defaults-test" \
+            src/main/java/com/example/examplemod/EditorPhysicsRuntimeDefaults.java \
+            src/test/java/com/example/examplemod/EditorPhysicsRuntimeDefaultsSmokeTest.java
+          java -ea -cp "$RUNNER_TEMP/physics-defaults-test" \
+            com.example.examplemod.EditorPhysicsRuntimeDefaultsSmokeTest
+      - name: Compile complete Forge editor with THE CURRENT native Jolt runtime
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace \
+            -PciDependencies -PenableJoltExperimental compileJava jar
+          test -s build/libs/bbs-animation-editor-0.0.2.jar
+      - name: Verify production Jolt, XPBD and ragdoll JAR; add verified activation marker
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,zipfile,os
+          source=pathlib.Path("build/libs/bbs-animation-editor-0.0.2.jar")
+          output=pathlib.Path("build/libs/bbs-animation-editor-bone-tools-jolt-restored.jar")
+          marker="META-INF/bbsanimationeditor-verified-jolt6-java8.marker"
+          required=[
+             "com/example/examplemod/AnimationEditorScreen.class",
+             "com/example/examplemod/EditorAssistantPanel.class",
+             "com/example/examplemod/EditorPhysicsRuntimeDefaults.class",
+             "com/example/examplemod/EditorWorldBonePoseRetarget.class",
+             "com/example/examplemod/BodyPartJoltPreviewAdapter.class",
+             "com/example/examplemod/SkirtXPBDRuntime.class",
+             "com/example/examplemod/SkirtXPBDSolver.class",
+             "com/example/examplemod/ChameleonSkirtXPBDRenderer.class",
+             "com/example/examplemod/ChameleonSkirtXPBDVolumeRenderer.class",
+             "com/example/examplemod/RagdollEmoticonsJoltBridge.class",
+             "com/example/examplemod/physics/JoltChameleonPreviewRig.class",
+             "com/example/examplemod/physics/JoltHumanoidRagdoll.class",
+             "com/example/examplemod/physics/JoltJava8Bootstrap.class",
+             "com/github/stephengold/joltjni/Jolt.class",
+             "windows/x86-64/com/github/stephengold/joltjni.dll",
+             "linux/x86-64/com/github/stephengold/libjoltjni.so",
+          ]
+          with zipfile.ZipFile(source) as src:
+              names=set(src.namelist())
+              for name in required:
+                  assert name in names, "MISSING physics component: "+name
+              assert sum(n.startswith("com/github/stephengold/joltjni/") and n.endswith(".class")
+                         for n in names)>400, "Incomplete Jolt JNI Java8 library"
+              assert sum(n.startswith("com/example/examplemod/physics/") and n.endswith(".class")
+                         for n in names)>=5, "Incomplete Jolt hair/ragdoll prototype"
+              assert marker not in names, "Marker must be added only after validation"
+              with zipfile.ZipFile(output,"w") as dst:
+                  for info in src.infolist():
+                      dst.writestr(info,src.read(info.filename))
+                  dst.writestr(marker,b"JOLT-6.0.0-JAVA8-PREVIEW-XPBD-RAGDOLL\\n")
+          with zipfile.ZipFile(output) as ready:
+              assert ready.testzip() is None,"Corrupt physics JAR"
+              assert ready.read(marker).startswith(b"J")
+          print("Verified, installable Jolt+XPBD+bone tools:",output,
+                output.stat().st_size,"bytes")
+          PY
+          sha256sum build/libs/bbs-animation-editor-bone-tools-jolt-restored.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bbs-editor-bone-tools-jolt-xpbd-ragdoll-java8-restored
+          path: build/libs/bbs-animation-editor-bone-tools-jolt-restored.jar
+          if-no-files-found: error
+          retention-days: 30

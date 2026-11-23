@@ -16,6 +16,15 @@ public class EditorSceneState
     private final BlockbusterSceneManager sceneManager;
     private final SceneAnimationData animationData;
 
+    /** Absolute world bone pins belong to the loaded scene, not the GUI. */
+    private final EditorWorldBonePinRegistry worldBonePins =
+            new EditorWorldBonePinRegistry();
+
+    public EditorWorldBonePinRegistry getWorldBonePins()
+    {
+        return worldBonePins;
+    }
+
     /** Scene-wide camera clips are editor data, never a selected actor. */
     private final CameraClipDocument cameraClips=new CameraClipDocument();
     /** Keyless CAMERA scene sources, never regular Blockbuster actors. */
@@ -385,6 +394,7 @@ public class EditorSceneState
          * от одной сцены к другой.
          */
         this.animationData.clear();
+        this.worldBonePins.clear();
         this.cameraClips.clear();
         this.cameraLights.clear();
         this.cameraMirrors.clear();
