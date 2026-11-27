@@ -78,7 +78,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
         physicalSettings.setNumPositionSteps(16);
         world.setPhysicsSettings(physicalSettings);
         interfaceBodies=world.getBodyInterface();
-        allocator=new TempAllocatorImpl(2*1024*1024);
+        allocator=new TempAllocatorImpl(16*1024*1024);
         jobs=new JobSystemSingleThreaded(1024);
         body=new Body[count];
         joint=new TwoBodyConstraint[count];

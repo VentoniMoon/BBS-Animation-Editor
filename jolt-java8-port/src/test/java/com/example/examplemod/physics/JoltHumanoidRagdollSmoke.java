@@ -103,6 +103,7 @@ public final class JoltHumanoidRagdollSmoke
         catch(IllegalArgumentException expected){rejected=true;}
         check(rejected,"Self-parent topology accepted");
 
+        System.out.println("[Ragdoll smoke] Testing base impact");
         try(JoltHumanoidRagdoll ragdoll=
                 JoltHumanoidRagdoll.create(heads,tails,radii,
                         parents,kind,limits,-.1F))
@@ -126,6 +127,7 @@ public final class JoltHumanoidRagdollSmoke
                 moved+=Math.abs(before[2][k]-after[2][k]);
             check(moved>.01F,"Head did not react to applied impulse");
         }
+        System.out.println("[Ragdoll smoke] Testing fitted biped");
         // Fitted native hinge frames: keep a stationary balanced biped
         // upright, then tip it and verify a continuous, stable fall.
         float[][] frames=new float[11][6];
@@ -158,6 +160,7 @@ public final class JoltHumanoidRagdollSmoke
             check(end[2][1]<0.9F && end[2][2]>.15F,
                     "Body did not tip before landing");
         }
+        System.out.println("[Ragdoll smoke] Testing empty terrain and lower platform");
         // Real terrain must replace the artificial floor, including empty space.
         try(JoltHumanoidRagdoll rig=JoltHumanoidRagdoll.createFitted(
                 heads,tails,radii,parents,kind,limits,frames,-.03F))
