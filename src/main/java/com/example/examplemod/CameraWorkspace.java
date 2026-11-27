@@ -1516,7 +1516,7 @@ public final class CameraWorkspace
                 if(i++==row)
                 {
                     CameraClipDocument.Clip made=CameraClipParameters.create(
-                            kind,pendingTick,Math.max(1,Math.min(40,length-pendingTick)),
+                            kind,pendingTick,Math.max(1,Math.min(kind==CameraClipDocument.Kind.ENVIRONMENT?101:40,length-pendingTick)),
                             pendingLayer);
                     if(kind==CameraClipDocument.Kind.IDLE
                             ||kind==CameraClipDocument.Kind.DOLLY)

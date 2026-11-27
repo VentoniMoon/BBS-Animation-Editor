@@ -474,6 +474,7 @@ public final class BbsFsWorldCameraDriver
 
     private void release()
     {
+        CameraEnvironmentWorld.restore();
         BbsFsNativeActorPass.release();
         CameraBetterLightsCameraOrigin.end();
         CameraShaderCurves.clearFrame();

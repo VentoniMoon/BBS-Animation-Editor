@@ -23,8 +23,30 @@ public final class CameraClipDocumentSmokeTest
     }
     public static void main(String[] args)
     {
-        check(CameraClipDocument.Kind.values().length==20,
-                "BBS FS catalog must include all 20 clip types");
+        check(CameraClipDocument.Kind.values().length==21,
+                "BBS FS catalog plus Environment must contain 21 clip types");
+        CameraClipDocument envDoc=new CameraClipDocument();
+        CameraClipDocument.Clip env=CameraClipParameters.create(
+                CameraClipDocument.Kind.ENVIRONMENT,0,101,0);
+        envDoc.add(env);
+        envDoc.keyAt(env,0,BASE);
+        envDoc.keyAt(env,100,BASE);
+        env.keys.get(1).x=10000D;
+        envDoc.keyAt(env,20,BASE);
+        env.keys.get(1).mask=CameraEnvironmentClip.WEATHER;
+        env.keys.get(1).y=1D;
+        near(CameraEnvironmentClip.sample(envDoc.clips(),50D).time,5000D,"Five second world time");
+        near(CameraEnvironmentClip.sample(envDoc.clips(),50.5D).time,5050D,"Fractional world time");
+        check(CameraEnvironmentClip.sample(envDoc.clips(),19.9D).weather==null,"Weather before key");
+        check(CameraEnvironmentClip.sample(envDoc.clips(),20D).weather==1,"Rain at key");
+        env.keys.get(0).interpolation="quad_in";
+        near(CameraEnvironmentClip.sample(envDoc.clips(),50D).time,2500D,"Accelerating time");
+        near(CameraEnvironmentClip.sample(envDoc.clips(),100D).time,10000D,"Time endpoint");
+        CameraClipDocument.Clip envCopy=CameraClipDocument.clipFromJson(CameraClipDocument.clipToJson(env));
+        near(CameraEnvironmentClip.time(envCopy,50D),2500D,"World time after serialization");
+        check(CameraEnvironmentClip.weather(envCopy,20D)==1,"Weather after serialization");
+        check(CameraEnvironmentClip.sample(envDoc.clips(),101D).time==null,"Outside environment clip");
+        near(envDoc.sample(50,BASE).x,BASE.x,"Environment must not move camera");
         CameraClipDocument doc=new CameraClipDocument();
         CameraClipDocument.Clip move=new CameraClipDocument.Clip(
                 CameraClipDocument.Kind.KEYFRAME,10,50,0);

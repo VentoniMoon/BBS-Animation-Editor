@@ -42,6 +42,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
     private boolean surfaceEnabled;
     private float surfaceY=63F;
     private Body ground;
+    private final java.util.List<Body> terrain=new java.util.ArrayList<Body>();
     private boolean closed;
 
     private JoltHumanoidRagdoll(float[][] head,float[][] tail,float[] radius,
@@ -68,7 +69,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
                     (parents[i]>=0&&parents[i]==parents[j]))
                 selfFilter.disableCollision(i,j);
         world=new PhysicsSystem();
-        world.init(Math.max(128,count*4),0,512,512,
+        world.init(Math.max(1024,count*4),0,8192,8192,
                 broadLayers,broadFilter,pairFilter);
         world.setGravity(0F,-9.81F,0F);
         PhysicsSettings physicalSettings=world.getPhysicsSettings();
@@ -316,6 +317,57 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
      * Bounded one-shot loss-of-balance impulse, applied to upper torso
      * once when a ragdoll starts. Do not call on every render frame.
      */
+    /** Replace the compatibility test floor with bounded, real block proxies.
+     * Each box is center xyz, half-extents xyz, quaternion xyzw in rig space.
+     * An empty array deliberately leaves no support (fall into open space). */
+    public void setWorldCollisionBoxes(float[][] boxes)
+    {
+        if(boxes==null||boxes.length>384)throw new IllegalArgumentException("Terrain box budget");
+        for(float[] b:boxes)
+        {
+            if(b==null||b.length!=10)throw new IllegalArgumentException("Bad terrain box");
+            for(float v:b)if(!Float.isFinite(v))throw new IllegalArgumentException("Nonfinite terrain box");
+            if(b[3]<=0F||b[4]<=0F||b[5]<=0F)throw new IllegalArgumentException("Empty terrain box");
+        }
+        clearTerrain();
+        if(ground!=null)
+        {
+            interfaceBodies.removeBody(ground.getId());
+            interfaceBodies.destroyBody(ground.getId());
+            ground=null;
+        }
+        for(float[] b:boxes)
+        {
+            float convex=Math.min(.01F,Math.min(b[3],Math.min(b[4],b[5]))*.2F);
+            BoxShape shape=new BoxShape(new Vec3(b[3],b[4],b[5]),convex);
+            BodyCreationSettings spec=new BodyCreationSettings(shape,
+                    new RVec3(b[0],b[1],b[2]),new Quat(b[6],b[7],b[8],b[9]),
+                    EMotionType.Static,1);
+            try
+            {
+                spec.setFriction(.95F);
+                spec.setRestitution(0F);
+                Body block=interfaceBodies.createBody(spec);
+                if(block==null)throw new IllegalStateException("Cannot allocate terrain body");
+                interfaceBodies.addBody(block.getId(),EActivation.DontActivate);
+                terrain.add(block);
+            }
+            finally
+            {
+                spec.close();shape.close();
+            }
+        }
+    }
+    private void clearTerrain()
+    {
+        for(Body block:terrain)
+        {
+            interfaceBodies.removeBody(block.getId());
+            interfaceBodies.destroyBody(block.getId());
+        }
+        terrain.clear();
+    }
+
     public void startFall(float x,float z)
     {
         if(closed)throw new IllegalStateException("Closed ragdoll");
@@ -520,6 +572,7 @@ public final class JoltHumanoidRagdoll implements AutoCloseable
             interfaceBodies.destroyBody(ground.getId());
             ground=null;
         }
+        clearTerrain();
         world.close();jobs.close();allocator.close();selfFilter.close();
         broadFilter.close();
         broadLayers.close();pairFilter.close();

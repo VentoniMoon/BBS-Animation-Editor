@@ -158,6 +158,23 @@ public final class JoltHumanoidRagdollSmoke
             check(end[2][1]<0.9F && end[2][2]>.15F,
                     "Body did not tip before landing");
         }
+        // Real terrain must replace the artificial floor, including empty space.
+        try(JoltHumanoidRagdoll rig=JoltHumanoidRagdoll.createFitted(
+                heads,tails,radii,parents,kind,limits,frames,-.03F))
+        {
+            rig.setWorldCollisionBoxes(new float[0][]);
+            for(int tick=0;tick<20;tick++)rig.step();
+            check(rig.poses()[0][1]<-1F,"Empty space retained the test floor");
+        }
+        try(JoltHumanoidRagdoll rig=JoltHumanoidRagdoll.createFitted(
+                heads,tails,radii,parents,kind,limits,frames,-.03F))
+        {
+            rig.setWorldCollisionBoxes(new float[][]{{0F,-2.5F,0F,3F,.5F,3F,0F,0F,0F,1F}});
+            for(int tick=0;tick<60;tick++)rig.step();
+            float lowest=Float.POSITIVE_INFINITY;
+            for(float[] part:rig.poses())lowest=Math.min(lowest,part[1]);
+            check(lowest>-2.15F&&lowest<-.1F,"Ragdoll missed the lower block platform");
+        }
         // Regression: actual Jolt 6.0.0 constrains *both* knees
         // to bend backward (+Z), and *both* elbows forward (-Z).
         // This caught the sign error that pure vector tests missed.
