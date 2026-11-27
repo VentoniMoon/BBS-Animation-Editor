@@ -957,7 +957,7 @@ public final class CameraClipInspector
         field("@layer","Layer",Integer.toString(selectedClip.layer),false);
         field("@enabled","Enabled",Boolean.toString(selectedClip.enabled),false);
         clipSpecific(keyframe);
-        envelope();
+        if(clip.kind!=CameraClipDocument.Kind.ENVIRONMENT)envelope();
     }
 
 }
