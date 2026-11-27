@@ -535,6 +535,8 @@ public final class CameraWorkspace
         Double parsed=finiteDouble(value);
         if(parsed==null)return false;
         double n=parsed;
+        if(keyOwner.kind==CameraClipDocument.Kind.ENVIRONMENT&&
+                "x".equals(name)&&(n<0D||n>9007199254740991D))return false;
         if(name.startsWith("media."))
         {
             if(!CameraMediaAnimation.supports(keyOwner))return false;
@@ -1725,6 +1727,42 @@ public final class CameraWorkspace
                     inspector.closeInterpolation();
                     saveScene();return true;
                 }
+            }
+            if(hit.key.startsWith("@environment:")&&
+                    clip.kind==CameraClipDocument.Kind.ENVIRONMENT)
+            {
+                String action=hit.key.substring("@environment:".length());
+                if("time".equals(action)||"weather".equals(action))
+                {
+                    int at=Math.min(clip.tick+clip.duration-1,Math.max(clip.tick,frame));
+                    int mask="time".equals(action)?CameraEnvironmentClip.TIME:CameraEnvironmentClip.WEATHER;
+                    CameraClipDocument.Key found=null;
+                    for(CameraClipDocument.Key k:clip.keys)
+                        if(k.tick==at-clip.tick){found=k;break;}
+                    if(found==null)
+                    {
+                        document.keyAt(clip,at,screen.getCameraWorkspacePose());
+                        for(CameraClipDocument.Key k:clip.keys)
+                            if(k.tick==at-clip.tick){found=k;break;}
+                        if(found!=null)found.mask=0;
+                    }
+                    if(found!=null)
+                    {
+                        found.mask|=mask;
+                        selectedKey=found;keyOwner=clip;
+                        saveScene();
+                    }
+                }
+                else if(selectedKey!=null&&keyOwner==clip&&
+                        (selectedKey.mask&CameraEnvironmentClip.WEATHER)!=0)
+                {
+                    if("clear".equals(action))selectedKey.y=0D;
+                    else if("rain".equals(action))selectedKey.y=1D;
+                    else if("thunder".equals(action))selectedKey.y=2D;
+                    else if("cycle".equals(action))selectedKey.y=(Math.round(selectedKey.y)+1)%3;
+                    saveScene();
+                }
+                return true;
             }
             if(hit.key.startsWith("@key:"))
             {

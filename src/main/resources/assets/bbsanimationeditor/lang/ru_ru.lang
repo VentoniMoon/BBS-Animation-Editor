@@ -515,3 +515,17 @@ bbsanimationeditor.ui.character.anchors.invalid_world=ОШИБКА МИРОВО�
 bbsanimationeditor.ui.character.anchors.no_local=НЕТ ЛОКАЛЬНОЙ ТРАНСФОРМАЦИИ
 bbsanimationeditor.ui.character.anchors.held=В РУКЕ
 bbsanimationeditor.ui.character.anchors.world=В МИРЕ
+
+bbsanimationeditor.ui.camera.environment_environment=Окружение
+bbsanimationeditor.ui.camera.environment_world_time=ВРЕМЯ МИРА
+bbsanimationeditor.ui.camera.environment_weather=ПОГОДА
+bbsanimationeditor.ui.camera.environment_keys=КЛЮЧИ ОКРУЖЕНИЯ
+bbsanimationeditor.ui.camera.environment_add_time=Добавить ключ времени
+bbsanimationeditor.ui.camera.environment_add_weather=Добавить ключ погоды
+bbsanimationeditor.ui.camera.environment_ticks=Тики мира
+bbsanimationeditor.ui.camera.environment_weather_clear=Погода: ясно
+bbsanimationeditor.ui.camera.environment_weather_rain=Погода: дождь
+bbsanimationeditor.ui.camera.environment_weather_thunder=Погода: гроза
+bbsanimationeditor.ui.camera.environment_clear=Ясно
+bbsanimationeditor.ui.camera.environment_rain=Дождь
+bbsanimationeditor.ui.camera.environment_thunder=Гроза

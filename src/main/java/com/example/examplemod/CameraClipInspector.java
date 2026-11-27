@@ -688,6 +688,38 @@ public final class CameraClipInspector
                         value("interp","linear"));
                 singleChannelEditor(key,"TIME REMAPPING");
                 break;
+            case ENVIRONMENT:
+                section("WORLD TIME");
+                interpolation("interp","Interpolation",value("interp","linear"));
+                button("Add time key","@environment:time");
+                section("WEATHER");
+                button("Add weather key","@environment:weather");
+                section("ENVIRONMENT KEYS");
+                int envAt=y-scroll;
+                if(!measuring&&visible(envAt,13))
+                    text("Keys: "+selectedClip.keys.size(),right+12,envAt+2,
+                            0xFFB7C5CC,width-right-24);
+                y+=14;
+                if(key!=null)
+                {
+                    keyNav();
+                    keyField(key,"tick","Frame",Integer.toString(key.tick));
+                    if((key.mask&CameraEnvironmentClip.TIME)!=0)
+                    {
+                        keyField(key,"x","World ticks",Double.toString(key.x));
+                        interpolation("@key","Key interpolation",
+                                key.interpolation.isEmpty()?value("interp","linear"):key.interpolation);
+                    }
+                    if((key.mask&CameraEnvironmentClip.WEATHER)!=0)
+                    {
+                        button("Weather: "+CameraEnvironmentClip.weatherName(key.y),
+                                "@environment:cycle");
+                        button("Clear","@environment:clear");
+                        button("Rain","@environment:rain");
+                        button("Thunder","@environment:thunder");
+                    }
+                }
+                break;
             case CURVE:
                 section("CURVE CHANNEL");
                 curveChannelField();

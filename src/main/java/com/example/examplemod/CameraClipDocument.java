@@ -37,7 +37,8 @@ public final class CameraClipDocument
         CURVE("Curve",Family.MISC,0xFFFF1493,true),
         SUBTITLE("Subtitle",Family.MISC,0xFF888899,false),
         IMAGE("Image",Family.MISC,0xFF5278CD,true),
-        VIDEO("Video",Family.MISC,0xFFD21F3C,true);
+        VIDEO("Video",Family.MISC,0xFFD21F3C,true),
+        ENVIRONMENT("Environment",Family.MISC,0xFF429CA5,true);
 
         public final String label;
         public final Family family;
@@ -323,7 +324,9 @@ public final class CameraClipDocument
         if(clip==null||!clip.kind.keyed||!clip.contains(absoluteFrame)||pose==null)return;
         int relative=absoluteFrame-clip.tick;
         Key created=new Key(relative,pose);
-        if(CameraMediaAnimation.supports(clip))
+        if(clip.kind==Kind.ENVIRONMENT)
+            CameraEnvironmentClip.capture(clip,created,absoluteFrame);
+        else if(CameraMediaAnimation.supports(clip))
             CameraMediaAnimation.capture(clip,created,absoluteFrame);
         else if(clip.kind==Kind.CURVE)
         {
