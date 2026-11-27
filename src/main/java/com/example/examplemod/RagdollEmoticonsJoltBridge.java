@@ -42,7 +42,7 @@ public final class RagdollEmoticonsJoltBridge
     private static boolean attempted,available,logged,reportedHierarchy;
     private static Method create,step,poses,startFall;
     private static Method nativeImpulse,nativeEnvironment;
-    private static Method nativeEnvironmentSurface;
+    private static Method nativeEnvironmentSurface,nativeTerrain;
     private static boolean reportedOldPhysicsJar;
     private static boolean fitted;
     private static final Map<String,State> scenes=
@@ -57,6 +57,8 @@ public final class RagdollEmoticonsJoltBridge
         final float[] lengths;
         int frame;
         int lastImpulseFrame;
+        float[][] terrain;
+        int terrainFrame=Integer.MIN_VALUE;
 
         State(AutoCloseable nativeRig,String signature,
                 RagdollSkeletonDefinition definition,
@@ -151,6 +153,15 @@ public final class RagdollEmoticonsJoltBridge
                         int[].class,float[][].class,float.class);
                 fitted=false;
                 startFall=null;
+            }
+            try
+            {
+                nativeTerrain=clazz.getMethod("setWorldCollisionBoxes",float[][].class);
+            }
+            catch(NoSuchMethodException oldJar)
+            {
+                nativeTerrain=null;
+                System.err.println("[BBS Editor][Ragdoll] Block collisions require the updated Jolt prototype JAR");
             }
             step=clazz.getMethod("step");
             poses=clazz.getMethod("poses");
@@ -268,12 +279,14 @@ public final class RagdollEmoticonsJoltBridge
             }
             // Apply exactly once at activation, not on repeated preview,
             // mirror or screenshot passes for this same frame.
+            applyTerrain(state,actor,state.frame);
             applyEnvironment(state,actor,state.frame);
             applyImpulse(state,actor.getCharacterTimeline(),state.frame);
             // Fixed-step replay: impulses fire once on the frame crossing.
             while(state.frame<frame)
             {
                 int next=state.frame+1;
+                applyTerrain(state,actor,next);
                 applyEnvironment(state,actor,next);
                 applyImpulse(state,actor.getCharacterTimeline(),next);
                 step.invoke(state.nativeRig);
@@ -295,6 +308,29 @@ public final class RagdollEmoticonsJoltBridge
             }
         }
         return false;
+    }
+
+    /** The renderer uses model-local bones; inverse actor yaw places actual
+     * Minecraft collision boxes in the same coordinate space as the rig. */
+    private static void applyTerrain(State state,BlockbusterSceneActorData actor,int frame)
+            throws Exception
+    {
+        if(nativeTerrain==null||state.terrainFrame==frame)return;
+        if(actor.getRecord()==null)return;
+        BlockbusterRecordFrame sample=actor.getRecord().getFrame(frame);
+        Minecraft mc=Minecraft.getMinecraft();
+        if(sample==null||mc==null||mc.world==null)return;
+        double x=sample.getX(),y=sample.getY(),z=sample.getZ();
+        float yaw=sample.hasBodyYaw()?sample.getBodyYaw():sample.getYaw();
+        float[][] boxes=RagdollBlockCollision.capture(mc.world,x,y,z,yaw);
+        if(!java.util.Arrays.deepEquals(state.terrain,boxes))
+        {
+            nativeTerrain.invoke(state.nativeRig,(Object)boxes);
+            if(state.terrain==null)
+                System.out.println("[BBS Editor][Ragdoll] Minecraft block collision proxies: "+boxes.length);
+            state.terrain=boxes;
+        }
+        state.terrainFrame=frame;
     }
 
     /** Independent gravity + water channels for an actor's Jolt world. */

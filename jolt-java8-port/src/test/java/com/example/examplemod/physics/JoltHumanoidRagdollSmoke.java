@@ -103,6 +103,7 @@ public final class JoltHumanoidRagdollSmoke
         catch(IllegalArgumentException expected){rejected=true;}
         check(rejected,"Self-parent topology accepted");
 
+        System.out.println("[Ragdoll smoke] Testing base impact");
         try(JoltHumanoidRagdoll ragdoll=
                 JoltHumanoidRagdoll.create(heads,tails,radii,
                         parents,kind,limits,-.1F))
@@ -126,6 +127,7 @@ public final class JoltHumanoidRagdollSmoke
                 moved+=Math.abs(before[2][k]-after[2][k]);
             check(moved>.01F,"Head did not react to applied impulse");
         }
+        System.out.println("[Ragdoll smoke] Testing fitted biped");
         // Fitted native hinge frames: keep a stationary balanced biped
         // upright, then tip it and verify a continuous, stable fall.
         float[][] frames=new float[11][6];
@@ -157,6 +159,24 @@ public final class JoltHumanoidRagdollSmoke
             float[][] end=rig.poses();
             check(end[2][1]<0.9F && end[2][2]>.15F,
                     "Body did not tip before landing");
+        }
+        System.out.println("[Ragdoll smoke] Testing empty terrain and lower platform");
+        // Real terrain must replace the artificial floor, including empty space.
+        try(JoltHumanoidRagdoll rig=JoltHumanoidRagdoll.createFitted(
+                heads,tails,radii,parents,kind,limits,frames,-.03F))
+        {
+            rig.setWorldCollisionBoxes(new float[0][]);
+            for(int tick=0;tick<20;tick++)rig.step();
+            check(rig.poses()[0][1]<-1F,"Empty space retained the test floor");
+        }
+        try(JoltHumanoidRagdoll rig=JoltHumanoidRagdoll.createFitted(
+                heads,tails,radii,parents,kind,limits,frames,-.03F))
+        {
+            rig.setWorldCollisionBoxes(new float[][]{{0F,-2.5F,0F,3F,.5F,3F,0F,0F,0F,1F}});
+            for(int tick=0;tick<60;tick++)rig.step();
+            float lowest=Float.POSITIVE_INFINITY;
+            for(float[] part:rig.poses())lowest=Math.min(lowest,part[1]);
+            check(lowest>-2.15F&&lowest<-.1F,"Ragdoll missed the lower block platform");
         }
         // Regression: actual Jolt 6.0.0 constrains *both* knees
         // to bend backward (+Z), and *both* elbows forward (-Z).

@@ -100,6 +100,7 @@ public final class BbsFsWorldCameraDriver
         {
             // Fail-safe: never leave an export-size world target active after
             // a skipped/failed GUI pass.
+            CameraEnvironmentWorld.restore();
             CameraVisualFrameClock.clearPreview();
             CameraShaderCurves.clearFrame();
             CameraBetterLightsCameraOrigin.end();
@@ -113,6 +114,7 @@ public final class BbsFsWorldCameraDriver
         }
         if (event.phase != TickEvent.Phase.START) return;
 
+        CameraEnvironmentWorld.restore();
         BbsFsWorldProjection.beginFrame();
         BbsFsWorldFrameCapture.beginNativeFrame();
         BbsFsNativeActorPass.beginFrame();
@@ -157,6 +159,9 @@ public final class BbsFsWorldCameraDriver
         // Upload shader-curve values before OptiFine's native world pass.
         // CAMERA export uses its exact sub-tick sample from the same clock.
         CameraShaderCurves.prepare(
+                editor.getSceneState().getCameraClips().clips(),
+                CameraVisualFrameClock.sceneTime(editor.getCurrentFrame()));
+        CameraEnvironmentWorld.prepare(mc.world,
                 editor.getSceneState().getCameraClips().clips(),
                 CameraVisualFrameClock.sceneTime(editor.getCurrentFrame()));
         PreviewCameraPose pose=editor.getCameraWorkspaceNativePose();
@@ -469,6 +474,7 @@ public final class BbsFsWorldCameraDriver
 
     private void release()
     {
+        CameraEnvironmentWorld.restore();
         BbsFsNativeActorPass.release();
         CameraBetterLightsCameraOrigin.end();
         CameraShaderCurves.clearFrame();

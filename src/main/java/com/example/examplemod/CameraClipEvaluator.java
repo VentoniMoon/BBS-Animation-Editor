@@ -346,6 +346,7 @@ public final class CameraClipEvaluator
                     (mask&64)!=0?math.fov:current.fov,
                     current.nearPlane,current.farPlane);
             }
+            case ENVIRONMENT:
             case AUDIO:
             case CURVE:
             case SUBTITLE:

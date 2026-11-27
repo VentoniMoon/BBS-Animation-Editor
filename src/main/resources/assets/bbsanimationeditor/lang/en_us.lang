@@ -515,3 +515,17 @@ bbsanimationeditor.ui.character.anchors.invalid_world=INVALID WORLD TRANSFORM
 bbsanimationeditor.ui.character.anchors.no_local=ITEM HAS NO LOCAL TRANSFORM
 bbsanimationeditor.ui.character.anchors.held=HELD
 bbsanimationeditor.ui.character.anchors.world=WORLD
+
+bbsanimationeditor.ui.camera.environment_environment=Environment
+bbsanimationeditor.ui.camera.environment_world_time=WORLD TIME
+bbsanimationeditor.ui.camera.environment_weather=WEATHER
+bbsanimationeditor.ui.camera.environment_keys=ENVIRONMENT KEYS
+bbsanimationeditor.ui.camera.environment_add_time=Add time key
+bbsanimationeditor.ui.camera.environment_add_weather=Add weather key
+bbsanimationeditor.ui.camera.environment_ticks=World ticks
+bbsanimationeditor.ui.camera.environment_weather_clear=Weather: Clear
+bbsanimationeditor.ui.camera.environment_weather_rain=Weather: Rain
+bbsanimationeditor.ui.camera.environment_weather_thunder=Weather: Thunder
+bbsanimationeditor.ui.camera.environment_clear=Clear
+bbsanimationeditor.ui.camera.environment_rain=Rain
+bbsanimationeditor.ui.camera.environment_thunder=Thunder

@@ -289,7 +289,7 @@ jobs:
           java -ea -cp build/camera/math \
             com.example.examplemod.CameraMathExpressionSmokeTest
 
-      - name: CAMERA 20-type registry, layer, presets and actor tracking math
+      - name: CAMERA registry, environment keys, layers, presets and actor tracking math
         run: |
           mkdir -p build/camera/clips
           javac -source 8 -target 8 -encoding UTF-8 -d build/camera/clips \
@@ -299,6 +299,7 @@ jobs:
             src/main/java/com/example/examplemod/PreviewCameraPose.java \
             src/main/java/com/example/examplemod/CameraMathExpression.java \
             src/main/java/com/example/examplemod/CameraClipDocument.java \
+            src/main/java/com/example/examplemod/CameraEnvironmentClip.java \
             src/main/java/com/example/examplemod/CameraMediaAnimation.java \
             src/main/java/com/example/examplemod/CameraClipChannels.java \
             src/main/java/com/example/examplemod/CameraInterpolation.java \
